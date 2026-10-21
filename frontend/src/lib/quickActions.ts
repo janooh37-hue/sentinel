@@ -1,5 +1,5 @@
 /**
- * Quick-action metadata — single source of truth for the 18 dashboard
+ * Quick-action metadata — single source of truth for the dashboard
  * quick-action tiles (one tile per selectable service form).
  *
  * Each entry maps a {@link QuickActionId} to:

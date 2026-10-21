@@ -756,6 +756,36 @@
       }
     ]
   },
+  "Material Request Form (Arabic)": {
+    "category": "admin",
+    "name_en": "Material Request Form (Arabic)",
+    "name_ar": "طلب مواد (عربي)",
+    "form_number": "300-001",
+    "fields": [
+      {
+        "key": "delivery_date",
+        "type": "date",
+        "label_en": "Required Delivery Date",
+        "label_ar": "تاريخ التسليم المطلوب",
+        "required": false
+      },
+      {
+        "key": "items",
+        "type": "items_table",
+        "label_en": "Requested Items",
+        "label_ar": "المواد المطلوبة",
+        "required": true,
+        "max_rows": 17
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Verifier / Project Manager",
+        "label_ar": "المراجع / مدير المشروع",
+        "required": false
+      }
+    ]
+  },
   "Leave Permit Form": {
     "category": "personnel",
     "name_en": "Leave Permit Form",

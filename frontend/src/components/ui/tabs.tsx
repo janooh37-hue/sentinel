@@ -46,13 +46,16 @@ export function Tabs({ value, onValueChange, className, children }: TabsProps): 
 export function TabsList({
   className,
   children,
+  'aria-label': ariaLabel,
 }: {
   className?: string
   children: React.ReactNode
+  'aria-label'?: string
 }): React.JSX.Element {
   return (
     <div
       role="tablist"
+      aria-label={ariaLabel}
       className={cn(
         'flex items-center gap-6 border-b border-border',
         className,

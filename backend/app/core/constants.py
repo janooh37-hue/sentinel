@@ -48,6 +48,7 @@ TEMPLATE_FILES: Final[Mapping[str, str]] = MappingProxyType(
         "Passport Release Form": "GSSG-HR_300-004_Passport_Release_Form.docx",
         "Duty Resumption Form": "GSSG-HR_300-016_Duty_Resumption_Form.docx",
         "Material Request Form": "GSSG-NAT_300-004_Material_Request_Form__MRF__.docx",
+        "Material Request Form (Arabic)": "GSSG-NAT_300-004_Material_Request_Form_AR.docx",
         "General Book": "GSSG-GS_300-003_General_Book.docx",
         # The security-permit letter (classification 5/1) is a General Book on
         # its OWN paper: same tokens, same header/footer structure, separate
@@ -288,6 +289,7 @@ VIOLATION_STATUS_LIST: Final[tuple[str, ...]] = (
 ADMIN_TYPES: Final[tuple[str, ...]] = (
     "Acknowledgment Form - استلام المواد",
     "Material Request Form - طلب مواد",
+    "Material Request Form (Arabic) - طلب مواد (عربي)",
     "Leave Permit Form - تصريح خروج",
     "Administrative Leave Form - طلب إجازة إدارية",
     "General Book - كتاب عام",

@@ -48,6 +48,8 @@ export const EXTRA_TEMPLATE_EMOJI: Record<string, string> = {
   'Allowance Request Form': '🪙',
   'Employee Overtime Form': '🌙',
   'Expense Claim Form': '🧾',
+  // The Arabic paper of the Material Request service: no tile of its own.
+  'Material Request Form (Arabic)': '🗃️',
 }
 
 /** Calibrated artwork for templates that are not dashboard quick actions. */
@@ -74,6 +76,7 @@ export const EXTRA_TEMPLATE_ARTWORK: Record<string, ServiceArtworkId> = {
   'Allowance Request Form': 'allowance-request',
   'Employee Overtime Form': 'employee-overtime',
   'Expense Claim Form': 'expense-claim',
+  'Material Request Form (Arabic)': 'material-request',
 }
 
 /**

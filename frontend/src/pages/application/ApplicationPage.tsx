@@ -23,6 +23,8 @@
  *   - ?employee_id=<G-id>  pre-selects an employee
  *   - ?revise=<bookId>     revise mode (regenerates a new version of that book)
  *   - ?mode=stats&stats_month=YYYY-MM → inmate violations monthly register
+ *   - ?mode=upload → Inmate Conduct Violations opens on "import a signed paper violation"
+ *   - ?group=<id> → gallery opened inside that service folder (see serviceGroups.ts)
  *
  * The RHF useForm instance is reset whenever the selected template changes.
  */
@@ -61,6 +63,7 @@ import type { TemplateDetailResponse, TemplateField } from '@/components/applica
 import { buildZodSchema } from '@/lib/applicationFormSchema'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ServiceArtwork, type ServiceArtworkId } from '@/components/ui/service-artwork'
 import { TemplateForm } from '@/components/application/TemplateForm'
 import { AttachmentsBlock } from '@/components/application/AttachmentsBlock'
@@ -93,6 +96,16 @@ import {
 import { useSearchParam } from '@/lib/urlState'
 import { serviceHref } from '@/lib/quickActions'
 import {
+  DUTY_LOCATIONS_ID,
+  EMPLOYEE_ABSENCE_ID,
+  INMATE_IMPORT_SIGNED_ID,
+  INMATE_MONTHLY_STATS_ID,
+  NATIONAL_SERVICE_ID,
+  OTHER_GROUP_ICON,
+  OTHER_GROUP_ID,
+  SERVICE_GROUPS,
+} from './serviceGroups'
+import {
   nowHM,
   restoreThenSeedResignationDate,
   seedReportDateTime,
@@ -102,6 +115,33 @@ import {
 type TabValue = 'fields' | 'preview'
 
 type InmateEntryMode = 'create' | 'upload' | 'stats'
+
+/** One openable tile of the Services gallery (a template form or a shortcut). */
+interface GalleryTile {
+  id: string
+  name: string
+  /** Lower-cased on match; template tiles match either language and the id. */
+  searchText: string
+  category: string
+  emoji: string
+  artwork?: ServiceArtworkId
+  basketCount?: number
+  hasCode?: boolean
+  onSelect: () => void
+}
+
+/** Services printed on an English or an Arabic paper: one gallery tile, and a
+ *  language tab in the form choosing which backend form kind is generated. */
+const PAPER_LANGUAGES = [
+  { en: 'Material Request Form', ar: 'Material Request Form (Arabic)' },
+] as const
+
+/** Segmented tab: the shared underline trigger reshaped into a pill (as on Permits). */
+const paperTabCls =
+  'mb-0 h-11 rounded-md border-0 px-4 focus-visible:ring-offset-0 motion-reduce:transition-none md:h-8 md:text-[0.86em] ' +
+  'data-[state=inactive]:hover:bg-surface/60 ' +
+  'data-[state=active]:bg-surface data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-sm ' +
+  '[[data-theme=dark]_&]:data-[state=active]:bg-surface-tinted [[data-theme=dark]_&]:data-[state=active]:text-foreground [[data-theme=dark]_&]:data-[state=active]:shadow-none'
 
 // Adapter: translate the api response into the shape TemplateForm expects
 function adaptSchema(raw: Awaited<ReturnType<typeof api.getTemplateFields>>): TemplateDetailResponse {
@@ -204,6 +244,9 @@ function StandardApplicationPage(): React.JSX.Element {
     useState<JobStatusResponse['status'] | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [query, setQuery] = useSearchParam('q')
+  // Folder currently open in the gallery (no value = the folder grid). Pushed so Back
+  // from a service returns to the folder the user came from.
+  const [groupId, setGroupId] = useSearchParam('group', { push: true })
   // General Book: classification code selected by the picker. Required for
   // every ref-allocating submit (both body modes); null only while unpicked.
   const [classificationCode, setClassificationCode] = useState<string | null>(null)
@@ -228,8 +271,11 @@ function StandardApplicationPage(): React.JSX.Element {
   const [lastSaved, setLastSaved] = useState<
     (SavedGeneration & { notification?: NotificationChoice }) | null
   >(null)
-  const requestedStatsMode =
-    slug === 'inmate_conduct_violations' && searchParams.get('mode') === 'stats'
+  const requestedInmateMode: 'stats' | 'upload' | null =
+    slug === 'inmate_conduct_violations' &&
+    (searchParams.get('mode') === 'stats' || searchParams.get('mode') === 'upload')
+      ? (searchParams.get('mode') as 'stats' | 'upload')
+      : null
   const hydratedStatsNavigationRef = useRef<string | null>(null)
   const [inmateEntryMode, setInmateEntryMode] = useState<InmateEntryMode>('create')
   const [approvedImport, setApprovedImport] = useState<ApprovedViolationImportRead | null>(null)
@@ -290,6 +336,16 @@ function StandardApplicationPage(): React.JSX.Element {
   })
   const schema = schemaQuery.data ? adaptSchema(schemaQuery.data) : null
   const selectedMeta = templates.find((tpl) => tpl.id === selectedTemplate) ?? null
+  const paperPair =
+    PAPER_LANGUAGES.find((p) => p.en === selectedTemplate || p.ar === selectedTemplate) ?? null
+  // The tab needs both papers allowed; a revision stays on its book's paper.
+  const paperChoice =
+    paperPair &&
+    reviseBookId === null &&
+    templates.some((tpl) => tpl.id === paperPair.en) &&
+    templates.some((tpl) => tpl.id === paperPair.ar)
+      ? paperPair
+      : null
   const showNotifyEmployee = shouldShowNotifyToggle({
     notifiesEmployee: selectedMeta?.notifies_employee ?? false,
     autosendEnabled: settingsQuery.data?.sms_autosend_enabled ?? false,
@@ -688,7 +744,7 @@ function StandardApplicationPage(): React.JSX.Element {
   // Keep the canonical form parameter so reloads retain the statistics service.
   useEffect(() => {
     if (
-      !requestedStatsMode ||
+      requestedInmateMode === null ||
       capabilitiesLoading ||
       approvedImportBusy ||
       hydratedStatsNavigationRef.current === location.key
@@ -699,10 +755,10 @@ function StandardApplicationPage(): React.JSX.Element {
     if (!id) return
     hydratedStatsNavigationRef.current = location.key
     if (selectedTemplate !== id) handleSelectTemplate(id)
-    setInmateEntryMode(has('books.view') ? 'stats' : 'create')
+    setInmateEntryMode(requestedInmateMode === 'stats' && !has('books.view') ? 'create' : requestedInmateMode)
     setApprovedImport(null)
   }, [
-    requestedStatsMode,
+    requestedInmateMode,
     capabilitiesLoading,
     approvedImportBusy,
     location.key,
@@ -857,21 +913,37 @@ function StandardApplicationPage(): React.JSX.Element {
   // The URL owns which service is open: every navigation (tile, Back, bell,
   // direct load) lands here. The monthly register is selected by its own effect.
   useEffect(() => {
-    if (requestedStatsMode || capabilitiesLoading || templates.length === 0) return
+    if (requestedInmateMode !== null || capabilitiesLoading || templates.length === 0) return
     const id = slug ? resolveTemplateIdFromSlug(slug, templates) : null
     if (slug && !id) {
       navigate('/services', { replace: true })
       return
     }
     if (id === selectedTemplate) return
+    // A two-paper service opens on the UI language's paper, unless the user is
+    // switching from its other paper or revising a book.
+    const pair = PAPER_LANGUAGES.find((p) => p.en === id)
+    if (
+      pair &&
+      isAr &&
+      reviseBookId === null &&
+      selectedTemplate !== pair.ar &&
+      templates.some((tpl) => tpl.id === pair.ar)
+    ) {
+      navigate({ pathname: serviceHref(pair.ar), search: location.search }, { replace: true })
+      return
+    }
     if (id) handleSelectTemplate(id)
     else resetToGallery()
   }, [
-    requestedStatsMode,
+    requestedInmateMode,
     capabilitiesLoading,
     templates,
     slug,
     selectedTemplate,
+    isAr,
+    reviseBookId,
+    location.search,
     handleSelectTemplate,
     resetToGallery,
     navigate,
@@ -884,6 +956,30 @@ function StandardApplicationPage(): React.JSX.Element {
     },
     [employeeIdFromUrl, navigate],
   )
+
+  // Language tab: carry the values both papers print (items, delivery date,
+  // manager) into the other paper's draft, which the restore effect applies
+  // once that paper's fields load. Each paper keeps its own other fields.
+  const switchPaper = useCallback(
+    async (id: string) => {
+      if (!selectedTemplate || id === selectedTemplate) return
+      const target = await qc
+        .fetchQuery({
+          queryKey: ['template-fields', id],
+          queryFn: () => api.getTemplateFields(id),
+          staleTime: Infinity,
+        })
+        .catch(() => null)
+      const values = form.getValues() as Record<string, unknown>
+      saveDraft(selectedTemplate, { ...values, __attachments: attachmentsState })
+      const shared = Object.fromEntries(
+        (target?.fields ?? []).filter((f) => f.id in values).map((f) => [f.id, values[f.id]]),
+      )
+      saveDraft(id, { ...loadDraft(id), ...shared, __attachments: attachmentsState })
+      navigate({ pathname: serviceHref(id), search: location.search }, { replace: true })
+    },
+    [selectedTemplate, qc, form, attachmentsState, navigate, location.search],
+  )
   const openGallery = useCallback(() => {
     if (!approvedImportBusy) navigate('/services')
   }, [approvedImportBusy, navigate])
@@ -892,47 +988,142 @@ function StandardApplicationPage(): React.JSX.Element {
   useShortcutAction('newItem', openGallery)
 
   const previewTabLabel = t('application.tabs.preview')
-  const selectedTemplateName = selectedMeta
-    ? isAr
-      ? selectedMeta.name_ar
-      : selectedMeta.name_en
-    : ''
+  // A two-paper service is titled by its English entry's catalog name.
+  const titleMeta =
+    (paperPair && templates.find((tpl) => tpl.id === paperPair.en)) || selectedMeta
+  const selectedTemplateName = titleMeta ? (isAr ? titleMeta.name_ar : titleMeta.name_en) : ''
   const selectedTemplateArtwork = selectedTemplate
     ? artworkForTemplate(selectedTemplate)
     : undefined
 
-  // Gallery filter — match on either language's name or the canonical id.
-  const galleryItems = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return templates
-    return templates.filter(
-      (tpl) =>
-        tpl.name_en.toLowerCase().includes(q) ||
-        tpl.name_ar.toLowerCase().includes(q) ||
-        tpl.id.toLowerCase().includes(q),
-    )
-  }, [templates, query])
+  // Gallery tiles: the Arabic paper of a two-paper service hides behind its
+  // English tile (when both are allowed) and is reached through the form's tab.
+  const galleryTemplates = useMemo(
+    () =>
+      templates.filter(
+        (tpl) =>
+          !PAPER_LANGUAGES.some(
+            (p) => p.ar === tpl.id && templates.some((other) => other.id === p.en),
+          ),
+      ),
+    [templates],
+  )
 
-  // Synthetic tiles show only when their destination would let the user act.
-  // National Service — record shortcut (no DOCX form).
+  // Every tile the user can open, by id. Synthetic tiles (record shortcuts and the
+  // Inmate Conduct Violations entry modes) show only when their destination would
+  // let the user act. Insertion order is the flat search-result order.
+  const tileMap = new Map<string, GalleryTile>()
   const nsTitle = t('leaves.type.National Service')
-  const nsShown =
-    has('leaves.view') &&
-    has('leaves.create') &&
-    (!query.trim() || nsTitle.toLowerCase().includes(query.trim().toLowerCase()))
-
-  // Duty Locations — generates a General Book transfer letter.
   const dlTitle = t('dutyLocations.tile.name')
-  const dlShown =
-    isQuickActionAllowed('General Book', has) &&
-    has('documents.duty_transfer') &&
-    (!query.trim() || dlTitle.toLowerCase().includes(query.trim().toLowerCase()))
-  // Employee Absence — record-only service (no DOCX form).
   const absTitle = t('absences.tile.name')
-  const absShown =
-    has('leaves.view') &&
-    has('leaves.edit') &&
-    (!query.trim() || absTitle.toLowerCase().includes(query.trim().toLowerCase()))
+  if (has('leaves.view') && has('leaves.create')) {
+    tileMap.set(NATIONAL_SERVICE_ID, {
+      id: NATIONAL_SERVICE_ID,
+      name: nsTitle,
+      searchText: nsTitle,
+      category: t('application.nsCategory'),
+      emoji: '🎖️',
+      artwork: 'national-service',
+      onSelect: () => navigate('/leaves?action=ns-new'),
+    })
+  }
+  if (isQuickActionAllowed('General Book', has) && has('documents.duty_transfer')) {
+    tileMap.set(DUTY_LOCATIONS_ID, {
+      id: DUTY_LOCATIONS_ID,
+      name: dlTitle,
+      searchText: dlTitle,
+      category: t('dutyLocations.tile.category'),
+      emoji: '🚚',
+      artwork: 'duty-locations',
+      onSelect: () => navigate('/duty-locations'),
+    })
+  }
+  if (has('leaves.view') && has('leaves.edit')) {
+    tileMap.set(EMPLOYEE_ABSENCE_ID, {
+      id: EMPLOYEE_ABSENCE_ID,
+      name: absTitle,
+      searchText: absTitle,
+      category: t('dutyLocations.tile.category'),
+      emoji: '🚫',
+      artwork: 'employee-absence',
+      onSelect: () => navigate('/absences'),
+    })
+  }
+  for (const tpl of galleryTemplates) {
+    const name = isAr ? tpl.name_ar : tpl.name_en
+    tileMap.set(tpl.id, {
+      id: tpl.id,
+      name,
+      searchText: `${tpl.name_en} ${tpl.name_ar} ${tpl.id}`,
+      category: t(`application.formList.${tpl.category}`),
+      emoji: emojiForTemplate(tpl.id),
+      artwork: artworkForTemplate(tpl.id),
+      basketCount: basketCounts[tpl.id] ?? 0,
+      hasCode: tpl.has_code,
+      onSelect: () => openService(tpl.id),
+    })
+    if (tpl.id === 'Inmate Conduct Violations') {
+      // The entry modes that used to hide behind this form's tabs are services of their own.
+      const inmateHref = serviceHref(tpl.id)
+      const importTitle = t('application.importSignedViolation')
+      tileMap.set(INMATE_IMPORT_SIGNED_ID, {
+        id: INMATE_IMPORT_SIGNED_ID,
+        name: importTitle,
+        searchText: importTitle,
+        category: t('application.formList.admin'),
+        emoji: '📥',
+        artwork: 'inmate-approved-upload',
+        onSelect: () => navigate(`${inmateHref}?mode=upload`),
+      })
+      if (has('books.view')) {
+        const statsTitle = t('application.approvedViolation.monthlyStatistics')
+        tileMap.set(INMATE_MONTHLY_STATS_ID, {
+          id: INMATE_MONTHLY_STATS_ID,
+          name: statsTitle,
+          searchText: statsTitle,
+          category: t('application.formList.admin'),
+          emoji: '📊',
+          artwork: 'inmate-monthly-statistics',
+          onSelect: () => navigate(`${inmateHref}?mode=stats`),
+        })
+      }
+    }
+  }
+
+  // Search is global: while the box has text, results ignore the folders.
+  const searchQuery = query.trim().toLowerCase()
+  const searching = searchQuery !== ''
+  const searchTiles = [...tileMap.values()].filter((tile) =>
+    tile.searchText.toLowerCase().includes(searchQuery),
+  )
+
+  // Folders: configured groups with at least one openable tile, then an "Other"
+  // folder for any tile no group lists so a new service is never invisible.
+  const galleryGroups = SERVICE_GROUPS.map((g) => ({
+    id: g.id,
+    icon: g.icon,
+    tiles: g.items.flatMap((id) => tileMap.get(id) ?? []),
+  })).filter((g) => g.tiles.length > 0)
+  const groupedIds = new Set(SERVICE_GROUPS.flatMap((g) => g.items))
+  const ungroupedTiles = [...tileMap.values()].filter((tile) => !groupedIds.has(tile.id))
+  if (ungroupedTiles.length > 0) {
+    galleryGroups.push({ id: OTHER_GROUP_ID, icon: OTHER_GROUP_ICON, tiles: ungroupedTiles })
+  }
+  const activeGroup = galleryGroups.find((g) => g.id === groupId) ?? null
+  const galleryGridCls =
+    'grid grid-cols-2 gap-3 [grid-auto-rows:1fr] sm:grid-cols-3 lg:grid-cols-4'
+  const renderTile = (tile: GalleryTile): React.JSX.Element => (
+    <ServiceCell
+      key={tile.id}
+      name={tile.name}
+      category={tile.category}
+      emoji={tile.emoji}
+      artwork={tile.artwork}
+      basketCount={tile.basketCount}
+      hasCode={tile.hasCode}
+      onSelect={tile.onSelect}
+    />
+  )
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
@@ -948,7 +1139,7 @@ function StandardApplicationPage(): React.JSX.Element {
                 {t('application.servicesTitle')}
               </h2>
               <div className="mt-1 text-[0.86em] text-muted-foreground">
-                {t('application.meta', { count: templates.length })}
+                {t('application.meta', { count: galleryTemplates.length })}
               </div>
             </header>
 
@@ -979,52 +1170,45 @@ function StandardApplicationPage(): React.JSX.Element {
                     <Skeleton key={i} className="h-[120px] w-full rounded-2xl" />
                   ))}
                 </div>
-              ) : galleryItems.length === 0 && !nsShown && !dlShown && !absShown ? (
+              ) : (searching ? searchTiles.length : galleryGroups.length) === 0 ? (
                 <p className="py-12 text-center text-[0.86em] text-muted-foreground">
                   {t('application.noServicesMatch')}
                 </p>
+              ) : searching ? (
+                <div className={galleryGridCls}>{searchTiles.map(renderTile)}</div>
+              ) : activeGroup ? (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setGroupId(null)}
+                    className="mb-3 inline-flex items-center gap-1.5 text-[0.86em] font-medium text-primary transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    {isAr ? (
+                      <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                    ) : (
+                      <ChevronLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                    )}
+                    {t('application.backToAllServices')}
+                  </button>
+                  <div className="mb-4 flex items-center gap-3">
+                    <img src={activeGroup.icon} alt="" draggable={false} className="h-12 w-12 object-contain" />
+                    <h3 className="text-[1.25em] font-semibold tracking-tight text-foreground">
+                      {t(`application.serviceGroups.${activeGroup.id}`)}
+                    </h3>
+                  </div>
+                  <div className={galleryGridCls}>{activeGroup.tiles.map(renderTile)}</div>
+                </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3 [grid-auto-rows:1fr] sm:grid-cols-3 lg:grid-cols-4">
-                  {nsShown && (
-                    <ServiceCell
-                      key="national-service-record"
-                      name={nsTitle}
-                      category={t('application.nsCategory')}
-                      emoji="🎖️"
-                      artwork="national-service"
-                      onSelect={() => navigate('/leaves?action=ns-new')}
-                    />
-                  )}
-                  {dlShown && (
-                    <ServiceCell
-                      key="duty-locations"
-                      name={dlTitle}
-                      category={t('dutyLocations.tile.category')}
-                      emoji="🚚"
-                      artwork="duty-locations"
-                      onSelect={() => navigate('/duty-locations')}
-                    />
-                  )}
-                  {absShown && (
-                    <ServiceCell
-                      key="employee-absence"
-                      name={absTitle}
-                      category={t('dutyLocations.tile.category')}
-                      artwork="employee-absence"
-                      emoji="🚫"
-                      onSelect={() => navigate('/absences')}
-                    />
-                  )}
-                  {galleryItems.map((tpl) => (
-                    <ServiceCell
-                      key={tpl.id}
-                      name={isAr ? tpl.name_ar : tpl.name_en}
-                      category={t(`application.formList.${tpl.category}`)}
-                      emoji={emojiForTemplate(tpl.id)}
-                      artwork={artworkForTemplate(tpl.id)}
-                      basketCount={basketCounts[tpl.id] ?? 0}
-                      hasCode={tpl.has_code}
-                      onSelect={() => openService(tpl.id)}
+                <div className={galleryGridCls}>
+                  {galleryGroups.map((g) => (
+                    <FolderCell
+                      key={g.id}
+                      name={t(`application.serviceGroups.${g.id}`)}
+                      description={t(`application.serviceGroupDescriptions.${g.id}`)}
+                      count={t('application.groupCount', { count: g.tiles.length })}
+                      icon={g.icon}
+                      tiles={g.tiles}
+                      onSelect={() => setGroupId(g.id)}
                     />
                   ))}
                 </div>
@@ -1069,6 +1253,22 @@ function StandardApplicationPage(): React.JSX.Element {
                 </div>
               </div>
             </header>
+
+            {paperChoice && selectedTemplate && (
+              <Tabs value={selectedTemplate} onValueChange={(id) => void switchPaper(id)} className="mb-4">
+                <TabsList
+                  aria-label={t('application.paperLanguage')}
+                  className="inline-flex gap-1 rounded-lg border border-border bg-surface-tinted p-1 [[data-theme=dark]_&]:bg-background"
+                >
+                  <TabsTrigger value={paperChoice.en} lang="en" className={paperTabCls}>
+                    English
+                  </TabsTrigger>
+                  <TabsTrigger value={paperChoice.ar} lang="ar" className={paperTabCls}>
+                    العربية
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            )}
 
             {isInmateService && (
               <div data-print-hide className="mb-4 inline-flex rounded-xl border border-border bg-surface-tinted p-1">
@@ -1461,6 +1661,69 @@ function StandardApplicationPage(): React.JSX.Element {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+/** One folder in the Services gallery, with a decorative preview of its visible services. */
+function FolderCell({
+  name,
+  description,
+  count,
+  icon,
+  tiles,
+  onSelect,
+}: {
+  name: string
+  description: string
+  count: string
+  icon: string
+  tiles: readonly GalleryTile[]
+  onSelect: () => void
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label={`${name} ${count}`}
+      className="service-tile group relative flex h-full min-h-[170px] w-full flex-col items-start rounded-2xl border-t-4 border-primary bg-surface p-4 text-start shadow-sm ring-1 ring-hairline transition-[transform,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:shadow-md focus-visible:-translate-y-1 focus-visible:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:!translate-none motion-reduce:transition-none"
+    >
+      <span className="flex min-h-[5.125rem] w-full items-start gap-3">
+        <img
+          src={icon}
+          alt=""
+          draggable={false}
+          className="h-[4.5rem] w-[4.5rem] min-w-0 object-contain transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1.5 group-focus-visible:-translate-y-1.5 motion-reduce:!translate-none motion-reduce:transition-none"
+        />
+        <span
+          aria-hidden="true"
+          className="pointer-events-none ms-auto grid shrink-0 grid-cols-2 gap-[0.3rem] rounded-[0.8rem] bg-surface-tinted p-[0.4rem] opacity-55 transition-opacity duration-200 group-hover:opacity-85 group-focus-visible:opacity-85 motion-reduce:transition-none"
+        >
+          {tiles.slice(0, tiles.length === 4 ? 4 : 3).map((tile) => (
+            <span key={tile.id} className="grid h-8 w-8 place-items-center rounded-lg bg-surface p-1">
+              {tile.artwork ? (
+                <ServiceArtwork artwork={tile.artwork} size="row" />
+              ) : (
+                <span className="text-lg leading-none">{tile.emoji}</span>
+              )}
+            </span>
+          ))}
+          {tiles.length > 4 && (
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-surface text-[0.7em] font-bold text-muted-foreground">
+              <bdi dir="ltr">+{tiles.length - 3}</bdi>
+            </span>
+          )}
+        </span>
+      </span>
+      <span className="mt-2.5 line-clamp-2 text-[0.95em] font-semibold leading-snug text-foreground">
+        {name}
+      </span>
+      <span className="mt-1 block w-full line-clamp-2 text-[0.72em] leading-relaxed text-muted-foreground">
+        {description}
+      </span>
+      <span className="mt-auto pt-1.5 text-[0.68em] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+        {count}
+      </span>
+    </button>
+  )
+}
 
 /** One service card in the Services gallery.
  *

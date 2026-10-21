@@ -49,3 +49,13 @@ description: "Fix bugs and add features on the laptop dev channel (branch dev, r
 - Word COM: one conversion at a time; kill only your WINWORD.
 - `.docx`: edit XML; never resave in Word.
 - Other sessions' hunks: leave alone.
+
+## Work 
+
+- Always Auto-plan 
+- Use Herdr skill and send work to another agent
+- Give Agent instruction to use subagents to keep context window clean
+- if task is large you can delegate to multiple agent in parallel 
+- keep your context window clean by delegating 
+- close the tab or pane of the agent work after he report back to you and he is done working 
+- after done working create a PR in github 
