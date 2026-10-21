@@ -612,6 +612,12 @@ class BookRead(ORMBase):
     sms: list[NotifyMessageRead] = Field(default_factory=list)
     # Set only when the row matched via FTS body search (not on ilike-only hits).
     search_snippet: str | None = None
+    # Ledger desk list rows only (inbox scopes): active recipients the caller
+    # may see (same rule as GET /books/{id}/recipients) and whose signature the
+    # paper carries (the signer once signed, else the doc's named manager).
+    recipients: list[BookRecipientRead] | None = None
+    signer_name: str | None = None
+    signer_name_ar: str | None = None
 
 
 class BookListResponse(BaseModel):

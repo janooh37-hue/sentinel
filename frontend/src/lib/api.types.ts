@@ -8630,6 +8630,12 @@ export interface components {
             sms?: components["schemas"]["NotifyMessageRead"][];
             /** Search Snippet */
             search_snippet?: string | null;
+            /** Recipients */
+            recipients?: components["schemas"]["BookRecipientRead"][] | null;
+            /** Signer Name */
+            signer_name?: string | null;
+            /** Signer Name Ar */
+            signer_name_ar?: string | null;
             /**
              * Current Template Id
              * @description Selected revision's template_id — current unless an older revision was requested.
@@ -22030,7 +22036,7 @@ export interface operations {
         parameters: {
             query?: {
                 created_by_me?: boolean;
-                inbox?: ("received" | "done" | "sent" | "archived") | null;
+                inbox?: ("received" | "done" | "sent" | "archived" | "any") | null;
             };
             header?: never;
             path?: never;
@@ -22782,7 +22788,8 @@ export interface operations {
                 to_date?: string | null;
                 include_deleted?: boolean;
                 created_by_me?: boolean;
-                inbox?: ("received" | "done" | "sent" | "archived") | null;
+                inbox?: ("received" | "done" | "sent" | "archived" | "any") | null;
+                sort?: "newest" | "oldest" | "secret" | "urgent";
                 limit?: number;
                 offset?: number;
             };

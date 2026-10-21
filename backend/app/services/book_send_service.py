@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, NamedTuple
@@ -564,6 +565,33 @@ def list_recipients(db: Session, user: User, book: Book) -> list[BookRecipientRe
         )
     rows = list(db.scalars(stmt.order_by(BookRecipient.created_at, BookRecipient.id)))
     return _recipient_reads(db, user, rows)
+
+
+def recipients_by_book(
+    db: Session, user: User, books: Sequence[Book]
+) -> dict[int, list[BookRecipientRead]]:
+    """Active rows per listed book, under ``list_recipients``' visibility rule."""
+    if not books:
+        return {}
+    sees_all = {
+        b.id for b in books if _is_manager_or_admin(user) or b.created_by_user_id == user.id
+    }
+    rows = [
+        r
+        for r in db.scalars(
+            select(BookRecipient)
+            .where(
+                BookRecipient.book_id.in_([b.id for b in books]),
+                BookRecipient.revoked_at.is_(None),
+            )
+            .order_by(BookRecipient.created_at, BookRecipient.id)
+        )
+        if r.book_id in sees_all or user.id in (r.sent_by_user_id, r.user_id)
+    ]
+    out: dict[int, list[BookRecipientRead]] = {b.id: [] for b in books}
+    for row, read in zip(rows, _recipient_reads(db, user, rows), strict=True):
+        out[row.book_id].append(read)
+    return out
 
 
 # ---------------------------------------------------------------------------

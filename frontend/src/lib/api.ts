@@ -2110,7 +2110,8 @@ export const api = {
     limit?: number
     offset?: number
     created_by_me?: boolean
-    inbox?: 'received' | 'done' | 'sent' | 'archived'
+    inbox?: 'received' | 'done' | 'sent' | 'archived' | 'any'
+    sort?: 'newest' | 'oldest' | 'secret' | 'urgent'
   } = {}) => request<BookListResponse>('GET', `/books${qs({ ...params })}`),
   getBook: (id: number, versionId?: number, options: { markRead?: boolean } = {}) =>
     request<BookRead>('GET', `/books/${id}${qs({ version_id: versionId, mark_read: options.markRead })}`),

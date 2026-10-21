@@ -42,6 +42,7 @@ from app.db.models import (
     BookRevisionAccess,
     BookVersion,
     Document,
+    Manager,
     User,
 )
 from app.db.session import get_db
@@ -743,6 +744,7 @@ def list_books(
     include_deleted: bool = False,
     created_by_me: bool = False,
     inbox: book_service.InboxFilter | None = None,
+    sort: book_service.BookSort = "newest",
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
     offset: int = Query(0, ge=0),
 ) -> BookListResponse:
@@ -760,6 +762,7 @@ def list_books(
         include_deleted=include_deleted,
         created_by_me=created_by_me,
         inbox=inbox,
+        sort=sort,
         limit=limit,
         offset=offset,
     )
@@ -784,6 +787,8 @@ def list_books(
         _fill_draft_fields(item, row, db, by_book=by_book)
         items.append(item)
     _attach_creator_names(db, rows, items)
+    if inbox is not None:
+        _attach_desk_fields(db, user, rows, items)
     return BookListResponse(
         items=items,
         total=total,
@@ -809,6 +814,37 @@ def _attach_creator_names(db: Session, rows: Sequence[Book], items: Sequence[Boo
         item.created_by_name_ar = names_ar.get(row.created_by_user_id)
         if item.edit_session is not None:
             item.edit_session.user_name_ar = names_ar.get(item.edit_session.user_id)
+
+
+def _attach_desk_fields(
+    db: Session, user: User, rows: Sequence[Book], items: Sequence[BookRead]
+) -> None:
+    """Ledger desk rows: visible recipients and whose signature each paper carries.
+
+    The signatory is the doc's named manager (the signature block printed on the
+    paper); without one, whoever signed the current version."""
+    recipients = book_send_service.recipients_by_book(db, user, rows)
+    manager_ids = {r.doc_manager_id for r in rows if r.doc_manager_id is not None}
+    managers = (
+        {m.id: m for m in db.scalars(select(Manager).where(Manager.id.in_(manager_ids)))}
+        if manager_ids
+        else {}
+    )
+    signed_by = {
+        r.id: r.versions[-1].signed_by_user_id
+        for r in rows
+        if r.versions and r.versions[-1].signed_by_user_id is not None
+    }
+    names = book_service.resolve_names_by_ids(db, set(signed_by.values()))
+    names_ar = book_service.resolve_names_ar_by_ids(db, set(signed_by.values()))
+    for row, item in zip(rows, items, strict=True):
+        item.recipients = recipients.get(row.id, [])
+        manager = managers.get(row.doc_manager_id) if row.doc_manager_id is not None else None
+        if manager is not None and (manager.name_en or manager.name_ar):
+            item.signer_name, item.signer_name_ar = manager.name_en, manager.name_ar
+        elif row.id in signed_by:
+            item.signer_name = names.get(signed_by[row.id])
+            item.signer_name_ar = names_ar.get(signed_by[row.id])
 
 
 def _enrich_path_fields(

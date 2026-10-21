@@ -19,7 +19,7 @@ from pathlib import Path, PurePath
 from typing import Any, Final, Literal, NamedTuple
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Integer, and_, exists, false, func, not_, or_, select, text, true
+from sqlalchemy import Integer, and_, case, exists, false, func, not_, or_, select, text, true
 from sqlalchemy.orm import Session, aliased, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -908,7 +908,39 @@ def _created_by_clause(user: User | None) -> ColumnElement[bool]:
     return false() if user is None else Book.created_by_user_id == user.id
 
 
-InboxFilter = Literal["received", "done", "sent", "archived"]
+InboxFilter = Literal["received", "done", "sent", "archived", "any"]
+BookSort = Literal["newest", "oldest", "secret", "urgent"]
+
+# Purpose words a desk search can name (Arabic + English labels).
+_PURPOSE_WORDS: Final[dict[str, tuple[str, ...]]] = {
+    "info": ("للاطلاع", "for information", "info"),
+    "action": ("للتنفيذ", "for action", "action"),
+    "reply": ("للإفادة", "for reply", "reply"),
+    "circulate": ("للتعميم", "for circulation", "circulate"),
+}
+_CONFIDENTIALITY_RANK: Final[dict[str, int]] = {"secret": 3, "personal": 2, "directed": 1}
+
+
+def _purposes_named(q: str) -> list[str]:
+    from app.core.book_text import normalize_ar
+
+    needle = normalize_ar(q.strip()).lower()
+    return [
+        purpose
+        for purpose, words in _PURPOSE_WORDS.items()
+        if any(needle in normalize_ar(word) for word in words)
+    ]
+
+
+def _my_send_rows(user: User, inbox: InboxFilter | None) -> Any:
+    """Correlated select over the caller's active sends of ``Book`` for ``inbox``."""
+    mine = {
+        "sent": BookRecipient.sent_by_user_id == user.id,
+        "any": or_(BookRecipient.user_id == user.id, BookRecipient.sent_by_user_id == user.id),
+    }.get(inbox or "any", BookRecipient.user_id == user.id)
+    return select(BookRecipient.id).where(
+        BookRecipient.book_id == Book.id, BookRecipient.revoked_at.is_(None), mine
+    )
 
 
 def inbox_clause(user: User | None, inbox: InboxFilter) -> ColumnElement[bool]:
@@ -934,6 +966,8 @@ def inbox_clause(user: User | None, inbox: InboxFilter) -> ColumnElement[bool]:
             )
             return exists(unarchived_stmt.where(done_clause))
         return active_recipient_clause(user.id) & ~exists(unarchived_stmt)
+    if inbox == "any":
+        return active_recipient_clause(user.id) | inbox_clause(user, "sent")
     return exists(
         select(BookRecipient.id)
         .where(
@@ -1051,6 +1085,7 @@ def list_books(
     include_deleted: bool = False,
     created_by_me: bool = False,
     inbox: InboxFilter | None = None,
+    sort: BookSort = "newest",
 ) -> tuple[list[Book], int, dict[int, str]]:
     """Paginated list with optional filters.
 
@@ -1112,12 +1147,37 @@ def list_books(
 
     if q:
         needle = f"%{q.strip()}%"
-        ilike_clause = or_(
+        branches: list[ColumnElement[bool]] = [
             Book.subject.ilike(needle),
             Book.ref_number.ilike(needle),
-        )
-        # Union: ilike OR FTS body match (ternary; fts_ids empty = ilike only).
-        clause = or_(ilike_clause, Book.id.in_(fts_ids)) if fts_ids else ilike_clause
+        ]
+        # Union: ilike OR FTS body match (fts_ids empty = ilike only).
+        if fts_ids:
+            branches.append(Book.id.in_(fts_ids))
+        if user is not None:
+            # The caller's own sends: routing note, purpose, and the person on
+            # the other end (sender of a received book, recipient of a sent one).
+            people = (
+                select(User.id)
+                .outerjoin(Employee, User.employee_id == Employee.id)
+                .where(
+                    or_(
+                        User.display_name.ilike(needle),
+                        Employee.name_en.ilike(needle),
+                        Employee.name_ar.ilike(needle),
+                    )
+                )
+            )
+            sends = _my_send_rows(user, "any").correlate_except(BookRecipient)
+            send_match = [
+                BookRecipient.note.ilike(needle),
+                BookRecipient.sent_by_user_id.in_(people),
+                BookRecipient.user_id.in_(people),
+            ]
+            if purposes := _purposes_named(q):
+                send_match.append(BookRecipient.purpose.in_(purposes))
+            branches += [exists(sends.where(or_(*send_match))), Book.created_by_user_id.in_(people)]
+        clause = or_(*branches)
         stmt = stmt.where(clause)
         count_stmt = count_stmt.where(clause)
 
@@ -1133,12 +1193,31 @@ def list_books(
         stmt = stmt.where(Book.created_at < upper)
         count_stmt = count_stmt.where(Book.created_at < upper)
 
+    # Inbox scopes order by when the book reached (or left) the caller, which is
+    # the date the desk shows; other lists keep the record's creation time.
+    when: Any = Book.created_at
+    if inbox is not None and user is not None:
+        last_send = (
+            _my_send_rows(user, inbox)
+            .with_only_columns(func.max(BookRecipient.created_at))
+            .correlate_except(BookRecipient)
+            .scalar_subquery()
+        )
+        when = func.coalesce(last_send, Book.created_at)
+    order: list[Any] = (
+        [when.asc(), Book.id.asc()] if sort == "oldest" else [when.desc(), Book.id.desc()]
+    )
+    if sort == "secret":
+        rank = case(_CONFIDENTIALITY_RANK, value=Book.confidentiality, else_=0)
+        order.insert(0, rank.desc())
+    elif sort == "urgent":
+        order.insert(0, case((Book.priority == "High", 1), else_=0).desc())
     stmt = (
         stmt.options(
             selectinload(Book.category),
             selectinload(Book.versions).selectinload(BookVersion.approval_steps),
         )
-        .order_by(Book.created_at.desc(), Book.id.desc())
+        .order_by(*order)
         .limit(limit)
         .offset(offset)
     )
