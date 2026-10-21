@@ -4,15 +4,14 @@ One feature worktree at a time uses the shared, throwaway `C:\Users\GSSG\gssg-de
 
 ## Daily channel
 
-The worktree `.worktrees\160-laptop-dev` holds branch `dev`, whose upstream is `origin/main`, so `git status -sb` shows unpromoted work (ahead) and new main commits (behind). `scripts\dev-channel.ps1` drives it:
+The worktree `.worktrees\160-laptop-dev` holds branch `dev` = `origin/main` + the work branches under test. It is disposable: never commit on it or PR from it. Each work item gets its own worktree and `work/<x>` branch cut from `origin/main`, with a draft PR opened at start and kept updated. The branch is merged into `dev` to test; the PR is marked ready only when the user says so. `scripts\dev-channel.ps1` drives `dev`:
 
 | Verb | Effect |
 | --- | --- |
-| `open` (default) | Sync if behind and clean, start the server if down, launch the agent (`-Agent omp`, `claude`, or `codex`) in the worktree. |
-| `sync` | Rebase `dev` on `origin/main`; reinstall deps if `requirements.txt`/lockfile changed; rebuild the frontend if `frontend/` changed; `alembic upgrade head`; restart. Refuses on uncommitted changes and aborts on conflicts. |
-| `publish` | Build the frontend, migrate, restart. Use after local edits. |
+| `open` (default) | Show status, start the server if down, launch the agent (`-Agent omp`, `claude`, or `codex`) in the worktree. |
+| `rebuild [work/x ...]` | Reset `dev` to `origin/main` and merge the listed work branches; reinstall deps if `requirements.txt`/lockfile changed; rebuild the frontend if `frontend/` changed; `alembic upgrade head`; restart. Refuses on uncommitted changes and aborts on merge conflicts. Run after main moves or a work branch is promoted. |
+| `publish` | Build the frontend, migrate, restart. Use after merging a work branch into `dev`. |
 | `restart` / `status` | Restart the detached `backend\serve.py` on 8765 / show branch and server health. |
-| `promote` | Push `dev` commits to `origin/main` after confirmation. Refuses if main moved since the last sync. Then run `scripts\mng.ps1 update` on GSSGAPP. |
 
 The server log is `.tmp\dev-server.log.err`. The `tailscale serve` proxy below should point at `http://127.0.0.1:8765`.
 
