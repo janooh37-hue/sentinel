@@ -1,11 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Archive, ArrowDownUp, ArrowLeft, BookText, CheckCheck, Eye, FileText, Flag, FolderArchive, FolderCheck,
-  FolderInput, FolderOutput, Maximize2, MessageSquareText, Minimize2, Search, Send, X,
+  Archive, ArrowDownUp, ArrowLeft, BookText, Check, CheckCheck, ChevronDown, ChevronUp, Eye, FileText, Flag,
+  Folder, FolderPlus, Maximize2, MessageSquareText, Minimize2, Search, Send, X,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { CheckboxItem, ItemIndicator } from '@radix-ui/react-dropdown-menu'
+import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 
@@ -19,13 +20,14 @@ import { useInboxActions } from '@/components/books/useInboxActions'
 import { useReplyActions } from '@/components/books/useReplyActions'
 import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Kbd } from '@/components/ui/kbd'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { api, apiErrorMessage } from '@/lib/api'
-import type { BookInboxRead, BookListResponse, BookRead, BookRecipientRead, SendPurpose } from '@/lib/api'
+import type { BookInboxRead, BookListResponse, BookRead, BookRecipientRead, BookSortKey, SendPurpose } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { formatDmy } from '@/lib/formatDmy'
@@ -33,40 +35,43 @@ import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
 import { cn } from '@/lib/utils'
-import { inboxSummaryKey, useInboxSummary } from '@/pages/books/useInboxCount'
+import { inboxSummaryKey } from '@/pages/books/useInboxCount'
 import { defaultPaperKey, paperCountOf, paperKey, papersOf } from '@/pages/books/recordPapers'
 import type { PaperKey } from '@/pages/books/recordPapers'
+import { BooksRail, ScopeIcon } from './BooksRail'
+import type { Scope } from './BooksRail'
+import { toastFolderError, useBookFolders } from './useBookFolders'
 
 const RecordPaperViewer = lazy(() => import('@/pages/books/RecordPaperViewer'))
 
-type Scope = 'incoming' | 'done' | 'outgoing' | 'archived'
-type ListScope = Scope | 'any'
-const SCOPES: readonly Scope[] = ['incoming', 'done', 'outgoing', 'archived']
-const INBOX_BY_SCOPE: Record<ListScope, 'received' | 'done' | 'sent' | 'archived' | 'any'> = {
+type ListScope = Scope | 'any' | 'folder'
+const INBOX_BY_SCOPE: Record<Exclude<ListScope, 'folder'>, 'received' | 'done' | 'sent' | 'archived' | 'any'> = {
   incoming: 'received', done: 'done', outgoing: 'sent', archived: 'archived', any: 'any',
 }
-// One folder family so the four places read as a set; in/out arrows mirror in RTL.
-const SCOPE_ICON: Record<Scope, { icon: LucideIcon; className?: string }> = {
-  incoming: { icon: FolderInput, className: 'rtl:-scale-x-100' },
-  done: { icon: FolderCheck },
-  outgoing: { icon: FolderOutput, className: 'rtl:-scale-x-100' },
-  archived: { icon: FolderArchive },
+type SortColumn = 'date' | 'ref' | 'subject' | 'purpose' | 'confidentiality' | 'status'
+const SORT_LABEL: Record<SortColumn, string> = {
+  date: 'ledger.booksDesk.sent', ref: 'ledger.booksDesk.columns.ref', subject: 'ledger.booksDesk.columns.subject',
+  purpose: 'books.send.purpose', confidentiality: 'ledger.booksDesk.confidentiality', status: 'ledger.booksDesk.columns.state',
 }
-const SORTS = ['newest', 'oldest', 'secret', 'urgent'] as const
-type Sort = (typeof SORTS)[number]
-const SORT_KEY: Record<Sort, string> = {
-  newest: 'ledger.booksDesk.sortNewest', oldest: 'ledger.booksDesk.sortOldest',
-  secret: 'ledger.booksDesk.sortSecret', urgent: 'ledger.booksDesk.sortUrgent',
-}
+const MOBILE_SORTS: readonly BookSortKey[] = ['-date', 'date', 'ref', 'subject', 'purpose', '-confidentiality', 'status']
 const PAGE_SIZE = 50
 
 function BookDate({ value }: { value: string }): React.JSX.Element {
   return <time dateTime={value} dir="ltr" className="font-mono tabular-nums">{formatDmy(value.slice(0, 10))}</time>
 }
 
-function ScopeIcon({ scope, className }: { scope: Scope; className?: string }): React.JSX.Element {
-  const { icon: Icon, className: flip } = SCOPE_ICON[scope]
-  return <Icon className={cn('h-4 w-4 shrink-0', flip, className)} strokeWidth={1.8} aria-hidden />
+function Person({ label, name, title, className, tooltip, extra }: {
+  label: string; name: string; title?: string | null; className?: string; tooltip?: string; extra?: ReactNode
+}): React.JSX.Element {
+  return (
+    <span className={cn('inline-flex min-w-0 max-w-full items-baseline gap-1 lg:block', className)} title={tooltip ?? (title ? `${title} (${name})` : name)}>
+      <span className="shrink-0 lg:sr-only">{label}: </span>
+      <span className="min-w-0">
+        <span className="text-foreground lg:line-clamp-2 lg:break-words"><bdi>{title || name}</bdi>{extra}</span>
+        {title && <span className="text-xs text-muted-foreground lg:mt-0.5 lg:block"><span className="lg:hidden"> (</span><bdi>{name}</bdi><span className="lg:hidden">)</span></span>}
+      </span>
+    </span>
+  )
 }
 
 /** Which desk place a search hit lives in, from the caller's own send row. */
@@ -76,19 +81,10 @@ function scopeOf(book: BookRead): Scope {
   return inbox.archived_at ? 'archived' : inbox.done_at ? 'done' : 'incoming'
 }
 
-/** A labelled fact: the label shows on stacked (mobile) rows; from lg the column header names it. */
-function Meta({ label, title, className, children }: { label: string; title?: string; className?: string; children: ReactNode }): React.JSX.Element {
-  return (
-    <span className={cn('inline-flex min-w-0 max-w-full items-baseline gap-1', className)} title={title}>
-      <span className="shrink-0 lg:sr-only">{label}</span>
-      <bdi className="min-w-0 truncate text-foreground">{children}</bdi>
-    </span>
-  )
-}
 
 // One template for the header and every row so columns align from lg up; below lg rows stack.
 // purpose | ref | subject | from | to | signatory | level | status | date
-const DESK_GRID = 'lg:grid-cols-[7rem_5.5rem_minmax(12rem,1fr)_minmax(6rem,10rem)_minmax(6rem,10rem)_minmax(6rem,10rem)_5rem_6rem_5.5rem]'
+const DESK_GRID = 'lg:grid-cols-[5.5rem_4.5rem_minmax(6rem,1fr)_minmax(9rem,15rem)_minmax(9rem,15rem)_minmax(8rem,13rem)_4.5rem_4.5rem_5rem]'
 
 function DeskLoading(): React.JSX.Element {
   return <div className="space-y-4 p-5" aria-busy="true"><Skeleton className="h-5 w-2/3" /><Skeleton className="h-5 w-full" /><Skeleton className="h-5 w-1/2" /></div>
@@ -114,15 +110,19 @@ function PaperCount({ count }: { count: number }): React.JSX.Element {
   )
 }
 
-export function BooksRoutingDesk(): React.JSX.Element {
+export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isMobile = useIsMobile()
   const qc = useQueryClient()
   const [params, setParams] = useSearchParams()
   const rawScope = params.get('scope')
   const scope: Scope = rawScope === 'done' || rawScope === 'outgoing' || rawScope === 'archived' ? rawScope : 'incoming'
-  const [rawSort, setSort] = useSearchParam('sort', { fallback: 'newest' })
-  const sort: Sort = (SORTS as readonly string[]).includes(rawSort) ? (rawSort as Sort) : 'newest'
+  const rawFolder = params.get('folder') ?? ''
+  const folderId = /^\d+$/.test(rawFolder) && Number(rawFolder) > 0 ? Number(rawFolder) : null
+  const folders = useBookFolders()
+  const [folderDrawerOpen, setFolderDrawerOpen] = useState(false)
+  const [rawSort, setSort] = useSearchParam('sort', { fallback: '-date' })
+  const sort: BookSortKey = /^-?(date|ref|subject|purpose|confidentiality|status)$/.test(rawSort) ? rawSort as BookSortKey : '-date'
   const [bookParam, setBookParam] = useSearchParam('book')
   // Opening pushes, so the toolbar Back and the browser Back both return to the list.
   const bookPage = useUrlOverlay('book', ['view'])
@@ -140,7 +140,7 @@ export function BooksRoutingDesk(): React.JSX.Element {
     return () => window.clearTimeout(timer)
   }, [search])
   // A search looks through every place at once; each hit shows where it lives.
-  const listScope: ListScope = query ? 'any' : scope
+  const listScope: ListScope = query ? 'any' : folderId ? 'folder' : scope
   const open = selectedId !== null
   useShortcutAction('focusSearch', useCallback(() => {
     if (open || !searchRef.current) return false
@@ -148,19 +148,18 @@ export function BooksRoutingDesk(): React.JSX.Element {
     searchRef.current.select()
   }, [open]))
   useEffect(() => {
-    // Back returns focus to the opened row, or to the scope tab (search box while searching) when that row left the list.
+    // Back restores the row, or the current rail place when that row left the list.
     if (selectedId !== null || lastOpenedId === null) return
     const desk = deskRef.current
     ;(desk?.querySelector<HTMLElement>(`[data-book-id="${lastOpenedId}"]`)
-      ?? desk?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+      ?? desk?.querySelector<HTMLElement>('nav [aria-current="page"]')
       ?? searchRef.current)?.focus()
   }, [selectedId, lastOpenedId])
-  const summary = useInboxSummary()
   const list = useQuery({
-    queryKey: ['books', 'routing', listScope, query, sort, offset],
-    queryFn: () => api.listBooks({ inbox: INBOX_BY_SCOPE[listScope], q: query || undefined, sort, limit: PAGE_SIZE, offset }),
+    queryKey: ['books', 'routing', listScope, query, sort, offset, listScope === 'folder' ? folderId : null],
+    queryFn: () => api.listBooks({ ...(listScope === 'folder' ? { folder_id: folderId! } : { inbox: INBOX_BY_SCOPE[listScope] }), q: query || undefined, sort, limit: PAGE_SIZE, offset }),
     staleTime: 30_000,
-    placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === listScope ? keepPreviousData(previous) : undefined,
+    placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === listScope && previousQuery.queryKey[6] === (listScope === 'folder' ? folderId : null) ? keepPreviousData(previous) : undefined,
   })
   const detail = useQuery({
     queryKey: ['books', 'detail', selectedId, null],
@@ -182,20 +181,37 @@ export function BooksRoutingDesk(): React.JSX.Element {
     placeholderData: () => list.data?.items.find((book) => book.id === selectedId),
   })
 
-  function selectScope(value: string): void {
+  function selectPlace(value: Scope | number): void {
     setOffset(0)
     setSearch('')
     setQuery('')
+    setFolderDrawerOpen(false)
     setParams((previous) => {
       const next = new URLSearchParams(previous)
-      next.set('scope', value)
+      next.delete(typeof value === 'number' ? 'scope' : 'folder')
+      next.set(typeof value === 'number' ? 'folder' : 'scope', String(value))
       next.delete('book')
       next.delete('view')
       return next
     }, { replace: true })
   }
+  function changeSort(value: BookSortKey): void {
+    setOffset(0)
+    setSort(value)
+  }
+  function sortHeader(column: SortColumn): ReactNode {
+    const active = sort.replace('-', '') === column
+    const next: BookSortKey = active ? (sort.startsWith('-') ? column : `-${column}`) : column === 'date' || column === 'confidentiality' ? `-${column}` : column
+    const descending = sort.startsWith('-')
+    return (
+      <button type="button" className={cn('inline-flex items-center gap-1 text-start hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', column === 'date' && 'justify-end')} aria-pressed={active} aria-label={t('ledger.booksDesk.sortBy', { column: t(SORT_LABEL[column]), direction: t(`ledger.booksDesk.${next.startsWith('-') ? 'descending' : 'ascending'}`) })} onClick={() => changeSort(next)}>
+        {t(SORT_LABEL[column])}
+        {active && (descending ? <ChevronDown className="h-3 w-3 shrink-0" aria-hidden /> : <ChevronUp className="h-3 w-3 shrink-0" aria-hidden />)}
+      </button>
+    )
+  }
   function updateInbox(id: number, inbox: BookInboxRead): void {
-    const staysInScope = (value: unknown): boolean => value === 'outgoing' || value === 'any'
+    const staysInScope = (value: unknown): boolean => value === 'outgoing' || value === 'any' || value === 'folder'
       || (value === 'archived' ? !!inbox.archived_at : !inbox.archived_at && (value === 'done' ? !!inbox.done_at : !inbox.done_at))
     const remaining = (list.data?.items ?? []).filter((row) => row.id !== id)
     if (selectedId === id && !staysInScope(listScope)) {
@@ -221,29 +237,31 @@ export function BooksRoutingDesk(): React.JSX.Element {
   const scopeLabel = (value: Scope): string => t(`ledger.booksDesk.${value}`)
   const rows = list.data?.items ?? []
   const reader = !isMobile && view === 'reader' && open
-  const unread = summary.data?.unread ?? 0
   const searching = listScope === 'any'
+  const asSent = !searching && !folderId && scope === 'outgoing'
+  const placeLabel = folderId ? folders.data?.find((folder) => folder.id === folderId)?.name ?? t('ledger.booksDesk.folders.folder') : scopeLabel(scope)
+  const rail = <BooksRail scope={searching || folderId ? null : scope} folderId={searching ? null : folderId} switcher={!isMobile ? switcher : undefined} onSelectScope={selectPlace} onSelectFolder={selectPlace} />
 
   return (
     <section ref={deskRef} dir={i18n.dir()} className="flex min-h-0 flex-1 flex-col bg-surface" aria-label={t('ledger.tabs.books')}>
       {/* Keep the list mounted while a book is open so Back restores search and scroll. */}
-      <div hidden={open} className={cn('min-h-0 flex-1 flex-col', open ? 'hidden' : 'flex')}>
-        <div className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-2 border-b border-border px-4 pb-3 sm:pb-0 lg:px-6">
-          <Tabs value={searching ? '' : scope} onValueChange={selectScope} className="min-w-0 max-w-full">
-            <TabsList className="gap-6 overflow-x-auto border-b-0">
-              {SCOPES.map((value) => (
-                <TabsTrigger key={value} value={value} className="gap-2">
-                  <ScopeIcon scope={value} />
-                  {scopeLabel(value)}
-                  {value === 'incoming' && unread > 0 && (
-                    <span className="font-mono text-xs font-semibold tabular-nums text-primary" aria-label={t('books.inbox.unread', { count: unread })}>{unread}</span>
-                  )}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-          <div className="flex w-full items-center gap-2 sm:ms-auto sm:w-auto sm:py-2">
-            <div className="relative min-w-0 flex-1 sm:w-96 sm:flex-none">
+      <div hidden={open} className={cn('min-h-0 min-w-0 flex-1', open ? 'hidden' : 'flex', isMobile && 'flex-col')}>
+        {isMobile ? (
+          <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+            {switcher}
+            <Sheet open={folderDrawerOpen} onOpenChange={setFolderDrawerOpen}>
+              <SheetTrigger asChild><Button variant="ghost" size="sm" className="min-w-0">{folderId ? <Folder className="h-4 w-4 shrink-0" aria-hidden /> : <ScopeIcon scope={scope} />}<span className="truncate">{placeLabel}</span></Button></SheetTrigger>
+              <SheetContent dir={i18n.dir()} className="w-[260px] bg-rail p-0 pt-10" aria-describedby={undefined}>
+                <SheetTitle className="sr-only">{t('ledger.booksDesk.folders.navigation')}</SheetTitle>
+                {rail}
+              </SheetContent>
+            </Sheet>
+          </div>
+        ) : rail}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="shrink-0 border-b border-border px-4 py-3 lg:px-6">
+          <div className="flex w-full flex-wrap items-center gap-2">
+            <div className="relative w-full max-w-2xl">
               <label htmlFor="routing-search" className="sr-only">{t('ledger.booksDesk.searchLabel')}</label>
               <Search className="pointer-events-none absolute inset-y-0 start-2.5 my-auto h-4 w-4 text-muted-foreground" aria-hidden />
               <Input
@@ -277,13 +295,14 @@ export function BooksRoutingDesk(): React.JSX.Element {
                 <span className="pointer-events-none absolute inset-y-0 end-2 my-auto hidden h-fit text-xs text-muted-foreground sm:inline-flex" aria-hidden><Kbd>Ctrl K</Kbd></span>
               )}
             </div>
-            <Select dir={i18n.dir()} value={sort} onValueChange={(value) => { setOffset(0); setSort(value) }}>
-              <SelectTrigger className="w-auto shrink-0 gap-2" aria-label={t('ledger.booksDesk.sortLabel')}>
+            {/* Below lg the column header is hidden, so sorting lives here. */}
+            <Select dir={i18n.dir()} value={sort} onValueChange={(value) => changeSort(value as BookSortKey)}>
+              <SelectTrigger className="w-auto shrink-0 gap-2 lg:hidden" aria-label={t('ledger.booksDesk.sortLabel')}>
                 <ArrowDownUp className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} aria-hidden />
-                <SelectValue />
+                <SelectValue>{t(sort === '-date' ? 'ledger.booksDesk.sortNewest' : sort === 'date' ? 'ledger.booksDesk.sortOldest' : SORT_LABEL[sort.replace('-', '') as SortColumn])}</SelectValue>
               </SelectTrigger>
               <SelectContent align="end">
-                {SORTS.map((value) => <SelectItem key={value} value={value}>{t(SORT_KEY[value])}</SelectItem>)}
+                {MOBILE_SORTS.filter((value) => !asSent || value !== 'status').map((value) => <SelectItem key={value} value={value}>{t(value === '-date' ? 'ledger.booksDesk.sortNewest' : value === 'date' ? 'ledger.booksDesk.sortOldest' : SORT_LABEL[value.replace('-', '') as SortColumn])}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -296,27 +315,27 @@ export function BooksRoutingDesk(): React.JSX.Element {
             <div role="alert" className="px-4 py-8 text-sm text-destructive lg:px-6"><p>{apiErrorMessage(list.error)}</p><Button variant="outline" className="mt-3" onClick={() => void list.refetch()}>{t('ledger.booksDesk.retry')}</Button></div>
           ) : rows.length === 0 ? (
             <div className="max-w-prose px-4 py-10 text-sm lg:px-6">
-              <h2 className="text-base font-semibold">{t(query ? 'ledger.booksDesk.noMatches' : `ledger.booksDesk.empty.${scope}`)}</h2>
-              <p className="mt-2 text-muted-foreground">{t(query ? 'ledger.booksDesk.searchHint' : `ledger.booksDesk.emptyHint.${scope}`)}</p>
+              <h2 className="text-base font-semibold">{t(query ? 'ledger.booksDesk.noMatches' : folderId ? 'ledger.booksDesk.emptyFolder' : `ledger.booksDesk.empty.${scope}`)}</h2>
+              <p className="mt-2 text-muted-foreground">{t(query ? 'ledger.booksDesk.searchHint' : folderId ? 'ledger.booksDesk.emptyFolderHint' : `ledger.booksDesk.emptyHint.${scope}`)}</p>
               {query && <Button variant="outline" className="mt-4" onClick={() => setSearch('')}>{t('ledger.booksDesk.clearSearch')}</Button>}
             </div>
           ) : (
             <>
-              <div aria-hidden className={cn('sticky top-0 z-10 hidden gap-x-4 border-b border-hairline bg-surface px-6 py-2 text-xs font-medium text-muted-foreground lg:grid', DESK_GRID)}>
-                <span>{t('books.send.purpose')}</span>
-                <span>{t('ledger.booksDesk.columns.ref')}</span>
-                <span>{t('ledger.booksDesk.columns.subject')}</span>
-                <span>{t(!searching && scope === 'outgoing' ? 'ledger.booksDesk.columns.createdBy' : 'ledger.booksDesk.from')}</span>
+              <div className={cn('sticky top-0 z-10 hidden gap-x-3 border-b border-hairline bg-surface px-6 py-2 text-xs font-medium text-muted-foreground lg:grid', DESK_GRID)}>
+                {sortHeader('purpose')}
+                {sortHeader('ref')}
+                {sortHeader('subject')}
+                <span>{t(asSent ? 'ledger.booksDesk.columns.createdBy' : 'ledger.booksDesk.from')}</span>
                 <span>{t('ledger.booksDesk.to')}</span>
                 <span>{t('ledger.booksDesk.signer')}</span>
-                <span>{t('ledger.booksDesk.confidentiality')}</span>
-                <span>{t('ledger.booksDesk.columns.state')}</span>
-                <span className="text-end">{t('ledger.booksDesk.sent')}</span>
+                {sortHeader('confidentiality')}
+                {asSent ? <span>{t('ledger.booksDesk.columns.state')}</span> : sortHeader('status')}
+                {sortHeader('date')}
               </div>
-              <ul className="divide-y divide-hairline" aria-label={searching ? t('ledger.booksDesk.searchLabel') : scopeLabel(scope)}>
+              <ul className="divide-y divide-hairline" aria-label={searching ? t('ledger.booksDesk.searchLabel') : placeLabel}>
                 {rows.map((book) => (
                   <li key={book.id}>
-                    <BookRow book={book} asSent={!searching && scope === 'outgoing'} showScope={searching} current={book.id === lastOpenedId} onOpen={() => bookPage.open(String(book.id))} />
+                    <BookRow book={book} asSent={asSent} showScope={searching} current={book.id === lastOpenedId} onOpen={() => bookPage.open(String(book.id))} />
                   </li>
                 ))}
               </ul>
@@ -329,6 +348,7 @@ export function BooksRoutingDesk(): React.JSX.Element {
             <Button variant="outline" size="sm" disabled={offset + PAGE_SIZE >= (list.data?.total ?? 0) || list.isFetching} onClick={() => setOffset(offset + PAGE_SIZE)}>{t('ledger.booksDesk.next')}</Button>
           </div>
         )}
+        </div>
       </div>
       {open && (
         detail.data ? (
@@ -373,6 +393,7 @@ function BookRow({ book, asSent, showScope, current, onOpen }: {
   const { t, i18n } = useTranslation()
   const me = useAuth().user?.id
   const name = (en: string | null | undefined, ar: string | null | undefined): string => pickEmployeeName({ name_en: en ?? '', name_ar: ar }, i18n.language)
+  const title = (en?: string | null, ar?: string | null): string | null => (i18n.language.startsWith('ar') ? ar || en : en || ar) || null
   const inbox = asSent ? null : book.my_inbox
   const place = scopeOf(book)
   const recipients = book.recipients ?? []
@@ -382,7 +403,8 @@ function BookRow({ book, asSent, showScope, current, onOpen }: {
   const purpose: SendPurpose | undefined = inbox?.purpose ?? mine[0]?.purpose
   const note = inbox ? inbox.note : mine.find((row) => row.note)?.note
   const sentAt = inbox?.sent_at ?? mine.at(-1)?.created_at ?? book.created_at
-  const toNames = toRows.map((row) => row.user_id === me ? t('ledger.booksDesk.you') : name(row.user_name, row.user_name_ar))
+  const toNames = toRows.map((row) => name(row.user_name, row.user_name_ar))
+  const toTitles = toRows.map((row) => title(row.user_title, row.user_title_ar))
   const listSep = i18n.language.startsWith('ar') ? '، ' : ', '
   const papers = paperCountOf(book, { inmateReporter: false })
   const category = book.category ? (i18n.language.startsWith('ar') ? book.category.name_ar : book.category.name_en) || book.category.name_en : null
@@ -398,7 +420,7 @@ function BookRow({ book, asSent, showScope, current, onOpen }: {
       aria-current={current ? 'true' : undefined}
       onClick={onOpen}
       className={cn(
-        'grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 px-4 py-3 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:px-6',
+        'grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-4 py-3 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:px-6',
         DESK_GRID,
         current && 'bg-primary-soft hover:bg-primary-soft',
       )}
@@ -431,15 +453,13 @@ function BookRow({ book, asSent, showScope, current, onOpen }: {
           <span className="sr-only">{t('ledger.booksDesk.columns.ref')}: </span><bdi dir="ltr" className="font-mono tabular-nums">{book.ref_number}</bdi>
         </span>
         {inbox
-          ? <Meta label={t('ledger.booksDesk.from')} title={name(inbox.sent_by_name, inbox.sent_by_name_ar)} className={cn(cell, 'lg:col-start-4')}>{name(inbox.sent_by_name, inbox.sent_by_name_ar)}</Meta>
-          : <Meta label={t('ledger.booksDesk.columns.createdBy')} title={name(book.created_by_name, book.created_by_name_ar)} className={cn(cell, 'lg:col-start-4')}>{name(book.created_by_name, book.created_by_name_ar)}</Meta>}
+          ? <Person label={t('ledger.booksDesk.from')} name={name(inbox.sent_by_name, inbox.sent_by_name_ar)} title={title(inbox.sent_by_title, inbox.sent_by_title_ar)} className={cn(cell, 'lg:col-start-4')} />
+          : <Person label={t('ledger.booksDesk.columns.createdBy')} name={name(book.created_by_name, book.created_by_name_ar)} title={title(book.created_by_title, book.created_by_title_ar)} className={cn(cell, 'lg:col-start-4')} />}
         {toNames.length > 0 && (
-          <Meta label={t('ledger.booksDesk.to')} title={toNames.join(listSep)} className={cn(cell, 'lg:col-start-5')}>
-            {toNames.slice(0, 2).join(listSep)}
-            {toNames.length > 2 && <bdi dir="ltr" className="ms-1 text-muted-foreground">{t('ledger.booksDesk.moreNames', { count: toNames.length - 2 })}</bdi>}
-          </Meta>
+          <Person label={t('ledger.booksDesk.to')} name={toNames[0]} title={toTitles[0]} tooltip={toNames.map((value, index) => toTitles[index] ? `${toTitles[index]} (${value})` : value).join(listSep)} className={cn(cell, 'lg:col-start-5')}
+            extra={toNames.length > 1 && <bdi dir="ltr" className="ms-1 text-xs text-muted-foreground">{t('ledger.booksDesk.moreNames', { count: toNames.length - 1 })}</bdi>} />
         )}
-        {signer && <Meta label={t('ledger.booksDesk.signer')} title={signer} className={cn(cell, 'lg:col-start-6')}>{signer}</Meta>}
+        {signer && <Person label={t('ledger.booksDesk.signer')} name={signer} title={title(book.signer_title, book.signer_title_ar)} className={cn(cell, 'lg:col-start-6')} />}
         <span className={cn('empty:hidden lg:col-start-7 lg:row-start-1 lg:empty:block')}><ConfidentialityMark level={book.confidentiality} /></span>
       </span>
       <span className={cn('col-start-2 row-start-2 flex justify-end text-xs text-muted-foreground lg:col-start-8 lg:justify-start', cell)}>
@@ -460,6 +480,52 @@ function BookRow({ book, asSent, showScope, current, onOpen }: {
         <span className="sr-only">{t(inbox || mine.length ? 'ledger.booksDesk.sent' : 'ledger.booksDesk.created')}: </span><BookDate value={sentAt} />
       </span>
     </button>
+  )
+}
+
+function BookFolderMenu({ bookId, disabled }: { bookId: number; disabled: boolean }): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+  const qc = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const folders = useQuery({
+    queryKey: ['books', 'folders', bookId],
+    queryFn: () => api.listBookFolders(bookId),
+    enabled: open && !disabled,
+  })
+  const filing = useMutation({
+    mutationFn: ({ id, hasBook }: { id: number; hasBook: boolean }) => hasBook ? api.removeBookFromFolder(bookId, id) : api.addBookToFolder(bookId, id),
+    onSuccess: async (_result, { hasBook }) => {
+      toast.success(t(hasBook ? 'ledger.booksDesk.folders.unfiled' : 'ledger.booksDesk.folders.filed'))
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['books', 'folders'] }),
+        qc.invalidateQueries({ queryKey: ['books', 'routing'] }),
+      ])
+    },
+    onError: (error) => toastFolderError(t, error, 'ledger.booksDesk.folders.fileError'),
+  })
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen} dir={i18n.dir()}>
+      <DropdownMenuTrigger asChild><Button variant="outline" size="sm" disabled={disabled}><FolderPlus className="h-4 w-4" aria-hidden />{t('ledger.booksDesk.folders.folder')}</Button></DropdownMenuTrigger>
+      <DropdownMenuContent className="max-h-80 max-w-xs overflow-y-auto" align="start">
+        {folders.isPending ? <DropdownMenuItem disabled>{t('common.loading')}</DropdownMenuItem> : folders.isError ? (
+          <DropdownMenuItem onSelect={(event) => { event.preventDefault(); void folders.refetch() }}>{t('ledger.booksDesk.folders.loadError')} {t('ledger.booksDesk.retry')}</DropdownMenuItem>
+        ) : !folders.data?.length ? <DropdownMenuItem disabled>{t('ledger.booksDesk.folders.createFirst')}</DropdownMenuItem> : (
+          [false, true].map((team) => {
+            const group = folders.data.filter((folder) => folder.team === team)
+            return group.length > 0 && <div key={String(team)}>
+              <p className="px-2.5 py-2 text-xs font-medium text-muted-foreground">{t(team ? 'ledger.booksDesk.folders.team' : 'ledger.booksDesk.folders.personal')}</p>
+              {group.map((folder) => (
+                <CheckboxItem key={folder.id} checked={!!folder.has_book} disabled={filing.isPending} onSelect={(event) => event.preventDefault()} onCheckedChange={() => filing.mutate({ id: folder.id, hasBook: !!folder.has_book })}
+                  className="relative flex cursor-pointer items-center gap-2 rounded-lg py-2 pe-3 ps-8 text-sm outline-none focus:bg-surface-tinted data-[disabled]:pointer-events-none data-[disabled]:opacity-50">
+                  <ItemIndicator className="absolute start-2"><Check className="h-4 w-4" aria-hidden /></ItemIndicator>
+                  <bdi className="break-words">{folder.name}</bdi>
+                </CheckboxItem>
+              ))}
+            </div>
+          })
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -500,6 +566,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
         {inboxActions.map((action) => <Button key={action.key} className="shrink-0" variant={action.key === 'done' ? 'default' : 'outline'} size="sm" disabled={action.pending} aria-busy={action.pending} onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
         {book.can_send && <Button className="shrink-0" variant="outline" size="sm" disabled={loading} onClick={() => setSendOpen(true)}><Send className="h-4 w-4 rtl:-scale-x-100" aria-hidden />{t('ledger.booksDesk.forward')}</Button>}
         {reply.actions.map((action) => <Button key={action.key} className="shrink-0" variant="outline" size="sm" onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
+        <BookFolderMenu bookId={book.id} disabled={loading} />
         <div className="ms-auto flex shrink-0 items-center gap-1 ps-2">
           {!isMobile && <Button variant="ghost" size="sm" onClick={onToggleReader}>{reader ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}{t(reader ? 'ledger.booksDesk.collapse' : 'ledger.booksDesk.expand')}</Button>}
           <Link to={`/books/${book.id}`} className={buttonVariants({ variant: 'ghost', size: 'sm' })}><BookText className="h-4 w-4" aria-hidden />{t('ledger.booksDesk.openInRecords')}</Link>

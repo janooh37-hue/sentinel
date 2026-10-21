@@ -28,7 +28,7 @@
  * CLAUDE.md's RTL note.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -75,6 +75,7 @@ type NavigatePage =
   | 'ledger'
 
 interface LedgerOutlookShellProps {
+  switcher?: ReactNode
   /** Smart-link navigation, passed down for Phase 5's reading pane. */
   onNavigate?: (page: NavigatePage, id?: string) => void
 }
@@ -104,7 +105,7 @@ interface ComposeState {
  */
 const UNDO_DELAY_MS = 6000
 
-export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {}): React.JSX.Element {
+export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellProps = {}): React.JSX.Element {
   const { t } = useTranslation()
   const isMobile = useIsMobile()
   const queryClient = useQueryClient()
@@ -546,8 +547,9 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
       <div
         data-ledger-chrome
         dir="ltr"
-        className="flex flex-1 items-center justify-center bg-background p-6"
+        className="flex flex-1 flex-col items-center justify-center gap-4 bg-background p-6"
       >
+        {switcher && <div className="w-full max-w-[236px]">{switcher}</div>}
         <div
           dir="auto"
           role="alert"
@@ -574,6 +576,11 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
       return (
         // RTL-no-mirror still applies — pin the chrome `dir="ltr"`.
         <div data-ledger-chrome dir="ltr" className="relative flex flex-1 flex-col overflow-hidden bg-background">
+          {switcher && (
+            <div className="flex-none border-b border-border bg-surface px-3 py-2">
+              <div className="max-w-[236px]">{switcher}</div>
+            </div>
+          )}
           <div className="flex flex-none items-center gap-2 border-b border-border bg-surface px-3 py-2">
             <button
               type="button"
@@ -629,6 +636,7 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
       // here even with no row selected.
       <div data-ledger-chrome dir="ltr" className="relative flex flex-1 flex-col overflow-hidden bg-background">
         <div className="flex flex-none items-center gap-2 border-b border-border bg-surface px-3 py-2">
+          {switcher && <div className="min-w-0 max-w-[236px] flex-1">{switcher}</div>}
           <Sheet open={folderDrawerOpen} onOpenChange={setFolderDrawerOpen}>
             <SheetTrigger
               type="button"
@@ -665,7 +673,7 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     >
       {/* Folder rail (desktop middle column is the list, right is the slot). */}
       <div className="flex min-h-0">
-        <FolderRail activeView={activeView} onSelectView={handleSelectView} onNewEmail={handleNewEmail} allMail={allMail} onToggleAllMail={setAllMail} onReviewSuggestions={() => setReviewOpen(true)} suggestionCount={suggestions.length} />
+        <FolderRail header={switcher} activeView={activeView} onSelectView={handleSelectView} onNewEmail={handleNewEmail} allMail={allMail} onToggleAllMail={setAllMail} onReviewSuggestions={() => setReviewOpen(true)} suggestionCount={suggestions.length} />
       </div>
 
       {/* Message list — the middle pane. */}

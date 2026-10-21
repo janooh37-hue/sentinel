@@ -47,6 +47,7 @@ function mount(url = '/ledger?tab=books'): QueryClient {
 }
 beforeEach(() => {
   vi.spyOn(api, 'listBooks').mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 })
+  vi.spyOn(api, 'listBookFolders').mockResolvedValue([])
   vi.spyOn(api, 'getInboxSummary').mockResolvedValue({ unread: 0, received: 0, sent: 0, archived: 0, by_purpose: { info: 0, action: 0, reply: 0, circulate: 0 } })
   vi.spyOn(api, 'listBookRecipients').mockResolvedValue([])
   vi.spyOn(api, 'getBookThread').mockResolvedValue([])
@@ -61,12 +62,75 @@ describe('Books routing desk', () => {
     await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith(expect.objectContaining({ inbox })))
   })
 
+
+  it('sorts by Reference on the server and flips the active direction', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [BOOK], total: 1, limit: 50, offset: 0 })
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'Sort by Reference, ascending' }))
+    await waitFor(() => expect(api.listBooks).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'ref' })))
+    expect(screen.getByLabelText('URL')).toHaveTextContent('sort=ref')
+    // Labels name what the click will do: the active ascending column now offers descending.
+    await userEvent.click(screen.getByRole('button', { name: 'Sort by Reference, descending' }))
+    await waitFor(() => expect(api.listBooks).toHaveBeenLastCalledWith(expect.objectContaining({ sort: '-ref' })))
+    expect(screen.getByLabelText('URL')).toHaveTextContent('sort=-ref')
+  })
+
+  it('selects a folder without retaining the scope filter', async () => {
+    vi.mocked(api.listBookFolders).mockResolvedValue([{ id: 3, name: 'Personnel', team: false, count: 2, can_manage: true }])
+    mount('/ledger?tab=books&scope=done')
+    await userEvent.click(await screen.findByRole('button', { name: /^Personnel/ }))
+    await waitFor(() => expect(api.listBooks).toHaveBeenLastCalledWith(expect.objectContaining({ folder_id: 3, sort: '-date' })))
+    expect(screen.getByLabelText('URL')).toHaveTextContent('folder=3')
+    expect(screen.getByLabelText('URL')).not.toHaveTextContent('scope=')
+    expect(vi.mocked(api.listBooks).mock.lastCall?.[0]).not.toHaveProperty('inbox')
+  })
+
+  it('shows the sender designation with the name below it', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, my_inbox: { ...BOOK.my_inbox!, sent_by_title: 'Operations manager', sent_by_title_ar: 'مدير العمليات' } }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    const cell = within(row).getByTitle('Operations manager (Khalid)')
+    expect(within(cell).getByText('Operations manager')).toBeInTheDocument()
+    expect(within(cell).getByText('Khalid')).toBeInTheDocument()
+  })
+
+  it('creates a personal folder inline with Enter', async () => {
+    vi.spyOn(api, 'createBookFolder').mockResolvedValue({ id: 4, name: 'Planning', team: false, count: 0, can_manage: true })
+    mount()
+    await userEvent.click(screen.getByRole('button', { name: 'New personal folder' }))
+    const input = screen.getByRole('textbox', { name: 'Folder name' })
+    await userEvent.type(input, 'Planning{Enter}')
+    await waitFor(() => expect(api.createBookFolder).toHaveBeenCalledWith({ name: 'Planning', team: false }))
+  })
+
+  it('files and unfiles an opened book without changing its inbox state', async () => {
+    let filed = false
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [BOOK], total: 1, limit: 50, offset: 0 })
+    vi.mocked(api.listBookFolders).mockImplementation(async (bookId) => [{ id: 3, name: 'Personnel', team: false, count: filed ? 1 : 0, can_manage: true, has_book: bookId ? filed : null }])
+    vi.spyOn(api, 'getBook').mockResolvedValue(BOOK)
+    vi.spyOn(api, 'addBookToFolder').mockImplementation(async () => { filed = true })
+    vi.spyOn(api, 'removeBookFromFolder').mockImplementation(async () => { filed = false })
+    const qc = mount()
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    await userEvent.click(await screen.findByRole('button', { name: /GS-7/ }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Folder' }))
+    const item = await screen.findByRole('menuitemcheckbox', { name: 'Personnel' })
+    expect(item).toHaveAttribute('aria-checked', 'false')
+    await userEvent.click(item)
+    await waitFor(() => expect(api.addBookToFolder).toHaveBeenCalledWith(7, 3))
+    await waitFor(() => expect(item).toHaveAttribute('aria-checked', 'true'))
+    await userEvent.click(item)
+    await waitFor(() => expect(api.removeBookFromFolder).toHaveBeenCalledWith(7, 3))
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books', 'folders'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books', 'routing'] })
+    expect(api.markBookInboxDone).not.toHaveBeenCalled()
+  })
   it('switches scope without mixing recipient inbox with record direction', async () => {
     mount()
     await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith(expect.objectContaining({ inbox: 'received' })))
-    await userEvent.click(screen.getByRole('tab', { name: 'Outgoing' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Outgoing' }))
     await waitFor(() => expect(api.listBooks).toHaveBeenLastCalledWith(expect.objectContaining({ inbox: 'sent' })))
-    await userEvent.click(screen.getByRole('tab', { name: 'Archived' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Archived' }))
     await waitFor(() => expect(api.listBooks).toHaveBeenLastCalledWith(expect.objectContaining({ inbox: 'archived' })))
   })
 
@@ -86,7 +150,7 @@ describe('Books routing desk', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books', 'inbox-summary'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['notifications', 'counts'] })
     expect(api.listBooks).toHaveBeenCalledTimes(1)
-    expect(qc.getQueryData<{ items: BookRead[] }>(['books', 'routing', 'incoming', '', 'newest', 0])?.items[0].my_inbox?.read_at).toBeTruthy()
+    expect(qc.getQueryData<{ items: BookRead[] }>(['books', 'routing', 'incoming', '', '-date', 0, null])?.items[0].my_inbox?.read_at).toBeTruthy()
   })
 
   it.each(['toolbar', 'browser'])('opens a book over the list and %s Back restores scope, search, scroll and focus', async (back) => {
@@ -148,13 +212,13 @@ describe('Books routing desk', () => {
     })
     mount('/ledger?tab=books&scope=done')
     await screen.findByText('No books marked done')
-    await userEvent.click(screen.getByRole('tab', { name: 'Incoming' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Incoming' }))
     await userEvent.click(await screen.findByRole('button', { name: /GS-7/ }))
     await userEvent.click(await screen.findByRole('button', { name: 'Mark as done' }))
     await screen.findByRole('heading', { name: 'Next instruction' })
     await waitFor(() => expect(api.getBook).toHaveBeenCalledWith(8))
     await userEvent.click(screen.getByRole('button', { name: 'Back to books' }))
-    await userEvent.click(screen.getByRole('tab', { name: 'Done' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }))
     expect(await screen.findByRole('button', { name: /GS-7/ })).toBeInTheDocument()
   })
 
@@ -173,8 +237,8 @@ describe('Books routing desk', () => {
     // The last book left the scope, so the view falls back to the list and focus to the scope tab.
     await waitFor(() => expect(screen.getByLabelText('URL').textContent).not.toContain('book='))
     expect(screen.queryByRole('button', { name: /GS-7/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Done' })).toHaveFocus()
-    await userEvent.click(screen.getByRole('tab', { name: 'Incoming' }))
+    expect(screen.getByRole('button', { name: 'Done' })).toHaveFocus()
+    await userEvent.click(screen.getByRole('button', { name: 'Incoming' }))
     expect(await screen.findByRole('button', { name: /GS-7/ })).toBeInTheDocument()
   })
 
@@ -207,15 +271,15 @@ describe('Books routing desk', () => {
     mount()
     const box = await screen.findByRole('searchbox', { name: 'Search books' })
     await userEvent.type(box, 'Staff')
-    await waitFor(() => expect(api.listBooks).toHaveBeenLastCalledWith(expect.objectContaining({ inbox: 'any', q: 'Staff', sort: 'newest' })))
+    await waitFor(() => expect(api.listBooks).toHaveBeenLastCalledWith(expect.objectContaining({ inbox: 'any', q: 'Staff', sort: '-date' })))
     expect(await screen.findByText('2 results across all books')).toHaveAttribute('role', 'status')
     // Place tag plus my own state: both read "Done".
     expect(within(screen.getByRole('button', { name: /GS-8/ })).getAllByText('Done')).toHaveLength(2)
     expect(within(screen.getByRole('button', { name: /GS-9/ })).getByText('Outgoing')).toBeInTheDocument()
-    expect(screen.queryByRole('tab', { selected: true })).not.toBeInTheDocument()
+    expect(document.querySelector('nav [aria-current="page"]')).not.toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
     expect(box).toHaveValue('')
-    expect(await screen.findByRole('tab', { name: 'Incoming', selected: true })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Incoming' })).toHaveAttribute('aria-current', 'page'))
     expect(await screen.findByRole('button', { name: /GS-7/ })).toBeInTheDocument()
   })
 
@@ -236,7 +300,7 @@ describe('Books routing desk', () => {
     })
     mount('/ledger?tab=books&scope=outgoing')
     const row = await screen.findByRole('button', { name: /GS-7/ })
-    expect(row).toHaveTextContent('Khalid, Salim+1')
+    expect(row).toHaveTextContent('Khalid+2')
     expect(row).not.toHaveTextContent('Forwarded')
     expect(row).toHaveTextContent('Count by Thursday')
     expect(row).toHaveTextContent('Juma Saadi')

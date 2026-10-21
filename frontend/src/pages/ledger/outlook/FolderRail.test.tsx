@@ -1,11 +1,13 @@
+import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import i18n from 'i18next'
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ar from '@/locales/ar.json'
 import en from '@/locales/en.json'
-import { FolderRail } from './FolderRail'
+import { FolderButton, FolderRail } from './FolderRail'
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -23,7 +25,7 @@ vi.mock('@/lib/useIdentity', () => ({
 
 vi.mock('./SmartFolders', () => ({ SmartFolders: () => null }))
 
-async function renderRail(language: 'en' | 'ar'): Promise<void> {
+async function renderRail(language: 'en' | 'ar', header?: ReactNode): Promise<void> {
   await i18n.changeLanguage(language)
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -32,6 +34,7 @@ async function renderRail(language: 'en' | 'ar'): Promise<void> {
   render(
     <QueryClientProvider client={queryClient}>
       <FolderRail
+        header={header}
         activeView={{ kind: 'folder', folder: 'inbox' }}
         onSelectView={vi.fn()}
       />
@@ -48,6 +51,8 @@ describe('FolderRail personal folders after the Outlook cutover', () => {
   beforeEach(() => {
     localStorage.clear()
   })
+
+  afterEach(cleanup)
 
   afterAll(async () => {
     await i18n.changeLanguage('en')
@@ -77,5 +82,47 @@ describe('FolderRail personal folders after the Outlook cutover', () => {
     const followups = screen.getByRole('button', { name: /^للمتابعة/ })
     expect(await within(followups).findByText('2')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'المسودّات' })).not.toBeInTheDocument()
+  })
+
+  it.each(['en', 'ar'] as const)('shows its header first only while expanded in %s', async (language) => {
+    await renderRail(language, <div data-testid="rail-header">Books | Email</div>)
+    const rail = screen.getByRole('navigation', { name: i18n.t('ledger.title') })
+    expect(rail.firstElementChild).toContainElement(screen.getByTestId('rail-header'))
+    await userEvent.click(screen.getByRole('button', { name: i18n.t('ledger.outlook.collapseFolders') }))
+    expect(screen.queryByTestId('rail-header')).not.toBeInTheDocument()
+    expect(localStorage.getItem('ledger.railCollapsed')).toBe('1')
+    await userEvent.click(screen.getByRole('button', { name: i18n.t('ledger.outlook.expandFolders') }))
+    expect(screen.getByTestId('rail-header')).toBeVisible()
+    expect(localStorage.getItem('ledger.railCollapsed')).toBe('0')
+  })
+
+  it('keeps the header hidden for a persisted collapsed rail', async () => {
+    localStorage.setItem('ledger.railCollapsed', '1')
+    await renderRail('en', <div data-testid="rail-header">Books | Email</div>)
+    expect(screen.queryByTestId('rail-header')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Expand folders' })).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it.each(['en', 'ar'] as const)('exports an icon button with a muted zero count and active semantics in %s', async (language) => {
+    await i18n.changeLanguage(language)
+    const onClick = vi.fn()
+    const label = i18n.t('ledger.outlook.folders.inbox')
+    render(<FolderButton icon={<svg data-testid="folder-icon" />} label={label} active count={0} onClick={onClick} />)
+    const button = screen.getByRole('button', { name: `${label} 0` })
+    expect(button).toHaveAttribute('aria-current', 'page')
+    expect(within(button).getByTestId('folder-icon').parentElement).toHaveAttribute('aria-hidden', 'true')
+    expect(within(button).getByText('0')).toHaveClass('text-rail-faint', 'tabular-nums')
+    await userEvent.click(button)
+    expect(onClick).toHaveBeenCalledOnce()
+  })
+
+  it('hides counts and keeps the accessible label and badge indicator when collapsed', () => {
+    render(<FolderButton icon={<svg data-testid="folder-icon" />} label="Inbox" active={false} count={15} badge={2} collapsed onClick={vi.fn()} />)
+    const button = screen.getByRole('button', { name: 'Inbox' })
+    expect(button).toHaveAttribute('title', 'Inbox')
+    expect(button).not.toHaveAttribute('aria-current')
+    expect(within(button).queryByText('15')).not.toBeInTheDocument()
+    expect(within(button).queryByText('2')).not.toBeInTheDocument()
+    expect(within(button).getByTestId('folder-icon').parentElement?.querySelector('.bg-info')).not.toBeNull()
   })
 })
