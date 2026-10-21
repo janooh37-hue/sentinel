@@ -9,8 +9,8 @@ const row: AbsenceEmailRow = {
 }
 
 const overrides = {
-  'absence:absent': { subject: 'Absent {name}', intro: 'Absent {names}\n{start} — {end}', closing: 'Absent closing' },
-  'absence:returned': { subject: 'Returned {name}', intro: 'Returned {date} {count}', closing: 'Returned closing' },
+  'absence:absent': { subject: 'Absent {names}', intro: 'Absent {names}\n{start_date} — {end_date}', closing: 'Absent closing' },
+  'absence:returned': { subject: 'Returned {names}', intro: 'Returned {return_date} {count}', closing: 'Returned closing' },
 }
 
 describe('absence draft overrides', () => {
@@ -32,10 +32,10 @@ describe('absence draft overrides', () => {
   })
 
   it('applies each section introduction in mixed batches; subject and closing follow the first selected case', () => {
-    const result = buildAbsenceEmail([row, { ...row, employee_id: 'G1002', case: 'returned' }], {
+    const result = buildAbsenceEmail([row, { ...row, employee_id: 'G1002', employee_name_ar: '', employee_name_en: 'Ali', case: 'returned' }], {
       violationAttached: false, overrides,
     })
-    expect(result.subject).toBe('Absent أحمد')
+    expect(result.subject).toBe('Absent أحمد، Ali')
     expect(result.bodyHtml).toContain('Absent أحمد<br>')
     expect(result.bodyHtml).toContain('Returned 16/06/2026 1')
     expect(result.bodyHtml).toContain('Absent closing')
@@ -43,15 +43,15 @@ describe('absence draft overrides', () => {
 
   it('falls back per field and escapes HTML and token values', () => {
     const opts = { violationAttached: false, overrides: { 'absence:absent': {
-      subject: '', intro: '<b>{name}</b>\n{unknown}', closing: '',
+      subject: null, intro: '<b>{names}</b>\n{unknown} {name} {employee_id} {start} {end} {days} {date}', closing: '',
     } } }
     const result = buildAbsenceEmail([{ ...row, employee_name_ar: '<img>' }], opts)
     expect(result.subject).toBe(ABSENCE_EMAIL_SUBJECT)
-    expect(result.bodyHtml).toContain('&lt;b&gt;&lt;img&gt;&lt;/b&gt;<br>{unknown}')
+    expect(result.bodyHtml).toContain('&lt;b&gt;&lt;img&gt;&lt;/b&gt;<br>{unknown} {name} {employee_id} {start} {end} {days} {date}')
     expect(result.bodyHtml).toContain('وأقبلوا فائق الإحترام والتقدير')
     expect(result.bodyHtml).not.toContain('<img>')
     expect(buildAbsenceEmail([row], { violationAttached: false, overrides: { 'absence:absent': {
-      subject: '', intro: '', closing: '',
+      subject: '', intro: null, closing: null,
     } } })).toEqual(buildAbsenceEmail([row], { violationAttached: false }))
   })
 })

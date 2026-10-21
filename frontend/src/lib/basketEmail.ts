@@ -44,15 +44,14 @@ interface DraftParts { intro: string; table: string; closing: string }
 function basketDraftValues(items: EmailBasketItem[]): Record<string, string> {
   const first = items[0]
   return {
-    ref: items.map((item) => item.ref).join('، '),
+    ref: first.ref,
     date: dmyPad(first.bookDate ?? ''),
-    name: nameArOf(first),
     names: items.map(nameArOf).join('، '),
     count: String(items.length),
-    bank: [...new Set(items.map((item) => item.bankName ?? '').filter(Boolean))].join('، '),
-    employee_id: first.employeeId,
-    start: dmyPad(first.startDate ?? ''),
-    end: dmyPad(first.endDate ?? ''),
+    detail: first.detail,
+    bank: [...new Set(items.map((item) => (item.bankName ?? '').trim()).filter(Boolean))].join('، '),
+    start_date: dmyPad(first.startDate ?? ''),
+    end_date: dmyPad(first.endDate ?? ''),
   }
 }
 
@@ -67,9 +66,9 @@ function basketOverride(items: EmailBasketItem[], overrides?: DraftOverrides): D
     ? overrides[`classification:${code}`] : undefined
   const generic = overrides['General Book']
   return {
-    subject: specific?.subject || generic?.subject,
-    intro: specific?.intro || generic?.intro,
-    closing: specific?.closing || generic?.closing,
+    subject: specific?.subject || (generic?.subject ?? ''),
+    intro: specific?.intro || (generic?.intro ?? ''),
+    closing: specific?.closing || (generic?.closing ?? ''),
   }
 }
 
@@ -428,13 +427,13 @@ function basketEmailParts(items: EmailBasketItem[]): DraftParts {
   return { ...body, closing }
 }
 
-export function defaultBasketDraftText(items: EmailBasketItem[]): Required<DraftTemplateFields> {
+export function defaultBasketDraftText(items: EmailBasketItem[]) {
   const parts = basketEmailParts(items)
   return { subject: defaultBasketSubject(items), intro: draftPlainText(parts.intro), closing: draftPlainText(parts.closing) }
 }
 
 export function buildBasketSubject(items: EmailBasketItem[], overrides?: DraftOverrides): string {
-  const subject = basketOverride(items, overrides).subject
+  const subject = basketOverride(items, overrides).subject ?? ''
   return subject ? substituteDraftText(subject, basketDraftValues(items)) : defaultBasketSubject(items)
 }
 

@@ -16,7 +16,7 @@ import { TemplateTokens } from './TemplateTokens'
 import { templateErrorMessage, useTokenInsertion } from './templateEditing'
 
 const fields = ['subject', 'intro', 'closing'] as const
-const editableValues = (value?: DraftTemplateFields): Required<DraftTemplateFields> => ({
+const editableValues = (value?: DraftTemplateFields) => ({
   subject: value?.subject ?? '', intro: value?.intro ?? '', closing: value?.closing ?? '',
 })
 
@@ -25,14 +25,14 @@ export function EmailDraftEditor({ draftKey, label }: { draftKey: string; label:
   const { t } = useTranslation()
   if (query.isPending) return <p role="status" className="text-sm text-muted-foreground">{t('msgTemplates.editor.loading')}</p>
   if (query.isError) return <div role="alert" className="space-y-2 text-sm"><p>{templateErrorMessage(query.error, t)}</p><Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" onClick={() => void query.refetch()}>{t('msgTemplates.editor.retry')}</Button></div>
-  return <DraftEditor key={JSON.stringify([draftKey, query.data.overrides[draftKey]])} draftKey={draftKey} label={label} data={query.data} />
+  return <DraftEditor key={JSON.stringify([draftKey, query.data.overrides?.[draftKey]])} draftKey={draftKey} label={label} data={query.data} />
 }
 
 function DraftEditor({ draftKey, label, data }: { draftKey: string; label: string; data: DraftTemplatesRead }) {
   const { t } = useTranslation()
   const id = useId()
   const canEdit = useCapabilities().has(TEMPLATES_CAP)
-  const [currentOverride, setCurrentOverride] = useState(data.overrides[draftKey])
+  const [currentOverride, setCurrentOverride] = useState(data.overrides?.[draftKey])
   const [values, setValues] = useState(() => editableValues(currentOverride))
   const [confirmReset, setConfirmReset] = useState(false)
   const baseline = editableValues(currentOverride)
@@ -44,11 +44,11 @@ function DraftEditor({ draftKey, label, data }: { draftKey: string; label: strin
   const dirty = fields.some((field) => values[field] !== baseline[field])
   const unsaved: DraftTemplateFields = {}
   for (const field of fields) if (values[field].trim()) unsaved[field] = values[field]
-  const preview = renderDraftSample(draftKey, { ...data.overrides, [draftKey]: unsaved })
+  const preview = renderDraftSample(draftKey, { ...(data.overrides ?? {}), [draftKey]: unsaved })
   const error = save.error ?? reset.error
   const accept = (next: DraftTemplatesRead) => {
-    setCurrentOverride(next.overrides[draftKey])
-    setValues(editableValues(next.overrides[draftKey]))
+    setCurrentOverride(next.overrides?.[draftKey])
+    setValues(editableValues(next.overrides?.[draftKey]))
     setConfirmReset(false)
     toast.success(t('msgTemplates.editor.saved'))
   }
@@ -88,7 +88,7 @@ function DraftEditor({ draftKey, label, data }: { draftKey: string; label: strin
               <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={pending} onClick={() => setConfirmReset(false)}>{t('msgTemplates.editor.cancel')}</Button>
               <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={pending} onClick={() => { save.reset(); reset.mutate(draftKey, { onSuccess: accept }) }}>{t('msgTemplates.editor.confirmReset')}</Button>
             </> : <Button type="button" variant="outline" className="min-h-11 w-full sm:me-auto sm:w-auto" disabled={pending || currentOverride === undefined} onClick={() => setConfirmReset(true)}>{t('msgTemplates.editor.reset')}</Button>}
-            <Button type="button" className="min-h-11 w-full sm:w-auto" disabled={pending || !dirty || confirmReset} onClick={() => { reset.reset(); save.mutate({ key: draftKey, body: unsaved }, { onSuccess: accept }) }}>{t(pending ? 'msgTemplates.editor.saving' : 'msgTemplates.editor.save')}</Button>
+            <Button type="button" className="min-h-11 w-full sm:w-auto" disabled={pending || !dirty || confirmReset} onClick={() => { reset.reset(); save.mutate({ key: draftKey, body: values }, { onSuccess: accept }) }}>{t(pending ? 'msgTemplates.editor.saving' : 'msgTemplates.editor.save')}</Button>
           </div>
         </div>
       )}

@@ -13,7 +13,6 @@ import {
 } from '@/lib/basketEmail'
 import { computeEndDate } from '@/lib/leaveDateMath'
 import type { DraftOverrides } from '@/lib/draftTemplates'
-import type { DraftTemplateFields } from '@/lib/messageTemplates'
 
 export type AbsenceCase = 'absent' | 'returned'
 export type AbsenceEmailRow = AbsenceRegisterRowRead & { case: AbsenceCase }
@@ -109,18 +108,15 @@ const ABSENCE_CLOSING = '<b>' + buildClosing([
 
 function absenceDraftValues(rows: AbsenceEmailRow[]): Record<string, string> {
   return {
-    name: letterName(rows[0]),
     names: rows.map(letterName).join('، '),
     count: String(rows.length),
-    employee_id: rows[0].employee_id,
-    start: dmyPad(rows[0].start_date),
-    end: dmyPad(rows[0].end_date),
-    date: dmyPad(returnDateIso(rows[0].end_date)),
-    days: String(rows[0].days),
+    start_date: dmyPad(rows[0].start_date),
+    end_date: dmyPad(rows[0].end_date),
+    return_date: dmyPad(returnDateIso(rows[0].end_date)),
   }
 }
 
-export function defaultAbsenceDraftText(rows: AbsenceEmailRow[]): Required<DraftTemplateFields> {
+export function defaultAbsenceDraftText(rows: AbsenceEmailRow[]) {
   return {
     subject: ABSENCE_EMAIL_SUBJECT,
     intro: rows.length ? draftPlainText(rows[0].case === 'returned'
@@ -143,7 +139,7 @@ export function buildAbsenceEmail(
     ? substituteDraftText(firstOverride.subject, absenceDraftValues(rows)) : ABSENCE_EMAIL_SUBJECT
 
   if (absent.length > 0) {
-    const intro = opts.overrides?.['absence:absent']?.intro
+    const intro = opts.overrides?.['absence:absent']?.intro ?? ''
     sections.push(
       p(intro ? draftTextHtml(substituteDraftText(intro, absenceDraftValues(absent)))
         : absent.length > 1 ? ABSENT_PLURAL : ABSENT_SINGULAR),
@@ -151,7 +147,7 @@ export function buildAbsenceEmail(
     )
   }
   if (returned.length > 0) {
-    const intro = opts.overrides?.['absence:returned']?.intro
+    const intro = opts.overrides?.['absence:returned']?.intro ?? ''
     sections.push(
       p(intro ? draftTextHtml(substituteDraftText(intro, absenceDraftValues(returned))) : returnedParagraph(returned)),
       buildAbsenceTableHtml(returned),

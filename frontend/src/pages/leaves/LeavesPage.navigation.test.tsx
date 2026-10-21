@@ -34,8 +34,8 @@ vi.mock('./NationalServiceDialog', () => ({
 }))
 vi.mock('./report/LeavesReport', () => ({ LeavesReport: () => null }))
 vi.mock('@/components/templates/ServiceNotificationTab', () => ({
-  ServiceNotificationTab: ({ service, groups }: { service: string; groups: string[] }) =>
-    <div data-testid="notification-templates" data-service={service} data-groups={groups.join(',')} />,
+  ServiceNotificationTab: ({ service }: { service: string }) =>
+    <div data-testid="notification-templates" data-service={service} />,
 }))
 vi.mock('@/components/templates/ServiceDraftTab', () => ({
   ServiceDraftTab: ({ service }: { service: string }) => <div data-testid="draft-templates" data-service={service} />,
@@ -84,7 +84,6 @@ describe('Leaves URL state', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Notification' }))
     expect(screen.getByRole('tab', { name: 'Notification' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByTestId('notification-templates')).toHaveAttribute('data-service', 'leaves')
-    expect(screen.getByTestId('notification-templates')).toHaveAttribute('data-groups', 'leaves,reminders')
     expect(screen.getByTestId('location')).toHaveTextContent('/leaves?tab=notification&q=care')
   })
 

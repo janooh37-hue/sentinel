@@ -117,7 +117,7 @@ describe('NotifyMessagePreview', () => {
   it('quietly reports that this form has no employee message', async () => {
     preview.mockResolvedValue({ ...response, event: null, text: null, segments: null })
     renderPreview()
-    expect(await screen.findByText('No message for this form')).toBeVisible()
+    expect(await screen.findByText('No message is sent to the employee for this form.')).toBeVisible()
     expect(screen.queryByRole('group', { name: 'Preview language' })).not.toBeInTheDocument()
   })
 

@@ -5,62 +5,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { request } from '@/lib/api'
+import type { components } from '@/lib/api.types'
 
-// TEMP: replace with api.types once generated
-export type MsgLang = 'ar' | 'en'
-// TEMP: replace with api.types once generated
-export type Bilingual = { ar: string; en: string }
-// TEMP: replace with api.types once generated
-export type MessageTiming = 'on_approval' | 'on_save' | 'on_status_change' | 'scheduled' | 'manual'
-// TEMP: replace with api.types once generated
-export interface MessageTemplateVariable {
-  name: string
-  label_en: string
-  label_ar: string
-  sample: string
-}
-// TEMP: replace with api.types once generated
-export interface MessageTemplateRead {
-  event: string
-  label: Bilingual
-  group: 'leaves' | 'forms' | 'violations' | 'reminders'
-  services: string[]
-  timing: MessageTiming
-  default: Bilingual
-  override: Bilingual | null
-  variables: MessageTemplateVariable[]
-}
-// TEMP: replace with api.types once generated
-export interface MessageRenderResponse {
-  text: Bilingual
-  segments: { ar: number; en: number }
-}
-// TEMP: replace with api.types once generated
-export interface NotifyPreviewRequest {
-  template_id: string
-  employee_id: string | null
-  fields: Record<string, unknown>
-  revise_of_book_id: number | null
-}
-// TEMP: replace with api.types once generated
-export interface NotifyPreviewResponse {
-  event: string | null
-  language: MsgLang
-  timing: MessageTiming | string
-  text: Bilingual | null
-  segments: { ar: number; en: number } | null
-}
-// TEMP: replace with api.types once generated
-export interface DraftTemplateFields {
-  subject?: string
-  intro?: string
-  closing?: string
-}
-// TEMP: replace with api.types once generated
-export interface DraftTemplatesRead {
-  overrides: Record<string, DraftTemplateFields>
-  tokens: Record<string, string[]>
-}
+type Schemas = components['schemas']
+export type MessageTemplateRead = Schemas['MessageTemplateRead']
+export type Bilingual = Schemas['MessageText']
+export type NotifyPreviewRequest = Schemas['NotifyPreviewRequest']
+export type NotifyPreviewResponse = Schemas['NotifyPreviewRead']
+export type MsgLang = NotifyPreviewResponse['language']
+export type DraftTemplateFields = Schemas['EmailDraftTemplateParts']
+export type DraftTemplatesRead = Schemas['EmailDraftTemplatesRead']
 
 /** Error codes the template writes return as 422 (`ApiError.code`). */
 export const TEMPLATE_ERROR_CODES = [
@@ -68,6 +22,7 @@ export const TEMPLATE_ERROR_CODES = [
   'EMPTY_TEMPLATE',
   'UNKNOWN_TOKEN',
   'HTML_NOT_ALLOWED',
+  'UNKNOWN_KEY',
 ] as const
 
 /** Capability that unlocks editing; viewing needs none. */
@@ -81,7 +36,7 @@ export const messageTemplatesApi = {
     request<MessageTemplateRead>('PUT', `/notify/templates/${enc(event)}`, body),
   reset: (event: string) => request<MessageTemplateRead>('DELETE', `/notify/templates/${enc(event)}`),
   render: (event: string, body: Bilingual) =>
-    request<MessageRenderResponse>('POST', `/notify/templates/${enc(event)}/render`, body),
+    request<Schemas['MessageRenderRead']>('POST', `/notify/templates/${enc(event)}/render`, body),
   preview: (body: NotifyPreviewRequest) =>
     request<NotifyPreviewResponse>('POST', '/notify/preview', body),
   drafts: () => request<DraftTemplatesRead>('GET', '/email/draft-templates'),
@@ -96,12 +51,6 @@ export const DRAFT_TEMPLATES_KEY = ['email-draft-templates'] as const
 
 export function useMessageTemplates() {
   return useQuery({ queryKey: MESSAGE_TEMPLATES_KEY, queryFn: messageTemplatesApi.list, staleTime: 60_000 })
-}
-
-/** Templates whose `services` include `service` (a template_id or page key). */
-export function useServiceMessageTemplates(service: string) {
-  const q = useMessageTemplates()
-  return { ...q, data: q.data?.filter((t) => t.services.includes(service)) }
 }
 
 export function useSaveMessageTemplate() {
@@ -150,9 +99,18 @@ export function useResetDraftTemplate() {
   })
 }
 
-/** Token whitelist for a draft key: exact key, then its family (text before the
- *  first `:`), else none. */
+/** Token whitelist for a draft key. The backend keys `tokens` by family:
+ *  `Salary Transfer Request` → salary_transfer, `leave:*` → leave,
+ *  `General Book:transfer` → transfer, `absence:*` → absence,
+ *  `classification:*` → classification, any other form id → form. */
 export function draftTokensFor(tokens: Record<string, string[]> | undefined, key: string): string[] {
   if (!tokens) return []
-  return tokens[key] ?? tokens[key.split(':')[0]] ?? []
+  return tokens[draftTokenFamily(key)] ?? []
+}
+
+export function draftTokenFamily(key: string): string {
+  if (key === 'Salary Transfer Request') return 'salary_transfer'
+  if (key === 'General Book:transfer') return 'transfer'
+  const prefix = key.split(':')[0]
+  return ['leave', 'absence', 'classification'].includes(prefix) ? prefix : 'form'
 }

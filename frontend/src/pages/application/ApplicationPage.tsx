@@ -1434,10 +1434,7 @@ function StandardApplicationPage(): React.JSX.Element {
 
               {/* Tab content */}
               {activeTab === 'notification' && selectedTemplate && (
-                <ServiceNotificationTab
-                  service={selectedTemplate}
-                  groups={selectedTemplate === 'Violation Form' ? ['violations'] : undefined}
-                />
+                <ServiceNotificationTab service={selectedTemplate} />
               )}
               {activeTab === 'email-draft' && selectedTemplate && (
                 <ServiceDraftTab service={selectedTemplate} />

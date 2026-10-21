@@ -1,8 +1,9 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import type { TFunction } from 'i18next'
+import i18n, { type TFunction } from 'i18next'
 
 import { ApiError } from '@/lib/api'
+import { bidi } from '@/lib/bidi'
 import { TEMPLATE_ERROR_CODES } from '@/lib/messageTemplates'
 
 /** Both editors insert tokens into the last focused field, including keyboard use. */
@@ -46,15 +47,34 @@ export function useTokenInsertion<K extends string>(
   }
 }
 
-/** Localized message for a template API failure; never raw server/browser text. */
+/** Offending names as a localized list, each bidi-isolated for Arabic sentences. */
+function tokenList(names: unknown): string {
+  if (!Array.isArray(names)) return ''
+  return new Intl.ListFormat(i18n.language, { type: 'conjunction' }).format(
+    names.map((name) => bidi(`{${String(name)}}`)),
+  )
+}
+
+/** Localized message for a template API failure; never raw server/browser text.
+ *  Lists the offending names: UNKNOWN_PLACEHOLDER details are `{ar: [...], en: [...]}`,
+ *  UNKNOWN_TOKEN details are `{tokens: [...]}`. */
 export function templateErrorMessage(error: unknown, t: TFunction): string {
-  if (
-    error instanceof ApiError &&
-    (TEMPLATE_ERROR_CODES.some((code) => code === error.code) || error.code === 'UNKNOWN_KEY')
-  ) {
-    const message = t(`msgTemplates.editor.errors.${error.code}`)
-    const offending = Object.values(error.details).flat().join(', ')
-    return offending ? `${message} (${offending})` : message
+  if (!(error instanceof ApiError) || !TEMPLATE_ERROR_CODES.some((code) => code === error.code)) {
+    return t('common.errorToast')
   }
-  return t('common.errorToast')
+  const message = t(`msgTemplates.editor.errors.${error.code}`)
+  const lines =
+    error.code === 'UNKNOWN_PLACEHOLDER'
+      ? (['ar', 'en'] as const)
+          .filter((lang) => tokenList(error.details[lang]))
+          .map((lang) =>
+            t('msgTemplates.editor.errors.unknownIn', {
+              language: t(`msgTemplates.editor.languages.${lang}`),
+              names: tokenList(error.details[lang]),
+            }),
+          )
+      : error.code === 'UNKNOWN_TOKEN' && tokenList(error.details.tokens)
+        ? [t('msgTemplates.editor.errors.unknownNames', { names: tokenList(error.details.tokens) })]
+        : []
+  return [message, ...lines].join(' ')
 }

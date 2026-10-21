@@ -25,22 +25,6 @@ const FORM_LABELS: Record<string, string> = {
   'Salary Deduction Form': 'deduction',
 }
 
-/** Renderer substitution vocabulary. The server's GET /email/draft-templates
- * tokens, not this map, is the authoritative save/editor whitelist.
- * `basket` is the shared vocabulary for every form template id, including
- * generic forms returned by /templates. Basket values come from the first
- * item (name/date/employee_id/start/end), the batch (ref/names/count), or unique
- * banks. Absence date is the next-day return date; start/end/days come from the
- * first row of its section. */
-const BASKET_TOKENS = ['ref', 'date', 'name', 'names', 'count', 'bank', 'employee_id', 'start', 'end']
-export const DRAFT_TOKENS: Record<string, readonly string[]> = {
-  ...Object.fromEntries(Object.keys(FORM_LABELS).map((key) => [key, BASKET_TOKENS])),
-  basket: BASKET_TOKENS,
-  leave: BASKET_TOKENS,
-  classification: BASKET_TOKENS,
-  absence: ['name', 'names', 'count', 'employee_id', 'start', 'end', 'date', 'days'],
-}
-
 export function useDraftVariants(): DraftVariant[] {
   const { t } = useTranslation()
   const classifications = useQuery({
@@ -117,7 +101,7 @@ export function renderDraftSample(key: string, overrides: DraftOverrides): { sub
   return { subject: buildBasketSubject(items, overrides), bodyHtml: buildBasketBodyHtml(items, overrides) }
 }
 
-export function defaultDraftText(key: string): Required<DraftTemplateFields> {
+export function defaultDraftText(key: string) {
   return key.startsWith('absence:')
     ? defaultAbsenceDraftText([sampleAbsenceRow(key)])
     : defaultBasketDraftText([sampleBasketItem(key)])

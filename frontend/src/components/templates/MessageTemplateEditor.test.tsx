@@ -82,16 +82,20 @@ describe('MessageTemplateEditor', () => {
     expect(screen.getByRole('button', { name: 'Save template' })).toBeDisabled()
   })
 
-  it('shows the localized placeholder error with server details without losing edits', async () => {
-    vi.mocked(messageTemplatesApi.save).mockRejectedValue(new ApiError(422, 'UNKNOWN_PLACEHOLDER', 'server message', { placeholder: 'missing' }))
+  it('lists the unknown placeholders per language without losing edits', async () => {
+    vi.mocked(messageTemplatesApi.save).mockRejectedValue(
+      new ApiError(422, 'UNKNOWN_PLACEHOLDER', 'server message', { ar: [], en: ['missing', 'other'] }),
+    )
     mount()
     const english = screen.getByRole('textbox', { name: 'English message' })
-    fireEvent.change(english, { target: { value: 'Hello {missing}' } })
+    fireEvent.change(english, { target: { value: 'Hello {missing} {other}' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save template' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Unknown placeholder. Use only the listed variables.')
-    expect(screen.getByRole('alert')).toHaveTextContent('missing')
-    expect(english).toHaveValue('Hello {missing}')
-    expect(messageTemplatesApi.save).toHaveBeenCalledWith(template.event, { ar: template.override!.ar, en: 'Hello {missing}' })
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Unknown placeholder. Use only the listed variables.')
+    expect(alert).toHaveTextContent('English message: \u2068{missing}\u2069 and \u2068{other}\u2069.')
+    expect(alert).not.toHaveTextContent('Arabic message')
+    expect(english).toHaveValue('Hello {missing} {other}')
+    expect(messageTemplatesApi.save).toHaveBeenCalledWith(template.event, { ar: template.override!.ar, en: 'Hello {missing} {other}' })
   })
 
   it('renders changed text after the debounce using the server segment counts', async () => {

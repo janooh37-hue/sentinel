@@ -6039,7 +6039,9 @@
         "EMPTY_TEMPLATE": "Both Arabic and English messages must contain text.",
         "UNKNOWN_TOKEN": "Unknown token. Use only the listed variables.",
         "HTML_NOT_ALLOWED": "HTML is not allowed. Enter plain text only.",
-        "UNKNOWN_KEY": "This email draft template is not available."
+        "UNKNOWN_KEY": "This email draft template is not available.",
+        "unknownIn": "{{language}}: {{names}}.",
+        "unknownNames": "Not recognised: {{names}}."
       }
     },
     "preview": {
@@ -6049,7 +6051,7 @@
       "en": "English",
       "loading": "Loading employee message preview",
       "error": "Message preview is unavailable. You can still save.",
-      "empty": "No message for this form",
+      "empty": "No message is sent to the employee for this form.",
       "notSending": "Will not be sent",
       "segments_one": "{{count}} SMS segment",
       "segments_other": "{{count}} SMS segments",

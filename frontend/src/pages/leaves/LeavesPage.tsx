@@ -88,7 +88,7 @@ export function LeavesPage(): React.JSX.Element {
           ) : (
             <div className="mx-auto w-full min-w-0 max-w-5xl p-4 md:p-6">
               {tab === 'notification' ? (
-                <ServiceNotificationTab service="leaves" groups={['leaves', 'reminders']} />
+                <ServiceNotificationTab service="leaves" />
               ) : (
                 <ServiceDraftTab service="leaves" />
               )}

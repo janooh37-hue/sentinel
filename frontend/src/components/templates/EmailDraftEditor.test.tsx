@@ -20,9 +20,9 @@ vi.mock('@/lib/messageTemplates', async (importOriginal) => {
   return original
 })
 
-function mount() {
+function mount(draftKey = 'leave:Annual') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><EmailDraftEditor draftKey="leave:Annual Leave" label="Annual leave" /></QueryClientProvider>)
+  return render(<QueryClientProvider client={client}><EmailDraftEditor draftKey={draftKey} label="Annual leave" /></QueryClientProvider>)
 }
 
 beforeEach(() => {
@@ -36,7 +36,9 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('EmailDraftEditor', () => {
-  it('uses defaults for empty fields and saves only non-empty fields', async () => {
+  it('uses defaults for missing fields and replaces all three parts on save', async () => {
+    vi.mocked(messageTemplatesApi.drafts).mockResolvedValue({ tokens: { leave: ['names'] } })
+    vi.mocked(messageTemplatesApi.saveDraft).mockResolvedValue({ overrides: { 'leave:Annual': { subject: 'عنوان خاص' } }, tokens: { leave: ['names'] } })
     mount()
     const subject = await screen.findByRole('textbox', { name: 'Subject' })
     expect(subject).toHaveAttribute('dir', 'rtl')
@@ -44,19 +46,31 @@ describe('EmailDraftEditor', () => {
     expect(screen.getAllByText('Default text is used when this field is empty.')).toHaveLength(3)
     fireEvent.change(subject, { target: { value: 'عنوان خاص' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save template' }))
-    await waitFor(() => expect(messageTemplatesApi.saveDraft).toHaveBeenCalledWith('leave:Annual Leave', { subject: 'عنوان خاص' }))
+    await waitFor(() => expect(messageTemplatesApi.saveDraft).toHaveBeenCalledWith('leave:Annual', {
+      subject: 'عنوان خاص', intro: '', closing: '',
+    }))
     expect(await screen.findByText('Modified')).toBeVisible()
+    expect(screen.getByRole('textbox', { name: 'Introduction' })).toHaveValue('')
+    expect(screen.getByRole('textbox', { name: 'Closing' })).toHaveValue('')
+    expect(sample).toHaveBeenLastCalledWith('leave:Annual', { 'leave:Annual': { subject: 'عنوان خاص' } })
     expect(screen.getByText('نص تجريبي').parentElement).toHaveAttribute('dir', 'rtl')
   })
 
   it('inserts family tokens into the focused field and previews unsaved values', async () => {
-    mount()
+    vi.mocked(messageTemplatesApi.drafts).mockResolvedValue({
+      overrides: {}, tokens: { classification: ['ref', 'date', 'names', 'count', 'detail'], form: ['wrong_family'] },
+    })
+    mount('classification:5/1')
     const intro = await screen.findByRole('textbox', { name: 'Introduction' }) as HTMLTextAreaElement
+    for (const token of ['ref', 'date', 'names', 'count', 'detail']) {
+      expect(screen.getByRole('button', { name: `{${token}}` })).toBeVisible()
+    }
+    expect(screen.queryByRole('button', { name: '{wrong_family}' })).not.toBeInTheDocument()
     fireEvent.focus(intro)
     fireEvent.click(screen.getByRole('button', { name: '{names}' }))
     expect(intro).toHaveValue('{names}')
     expect(intro).toHaveFocus()
-    expect(sample).toHaveBeenLastCalledWith('leave:Annual Leave', { 'leave:Annual Leave': { intro: '{names}' } })
+    expect(sample).toHaveBeenLastCalledWith('classification:5/1', { 'classification:5/1': { intro: '{names}' } })
   })
 
   it('shows localized plain-text validation errors', async () => {

@@ -35,7 +35,8 @@ describe('draft template rendering', () => {
     expect(buildBasketBodyHtml([unclassified], overrides)).toContain('generic closing')
     expect(buildBasketSubject([unclassified], {})).toBe('General Book')
     expect(buildBasketBodyHtml([unclassified], {})).toBe(buildBasketBodyHtml([unclassified]))
-    expect(buildBasketBodyHtml([item], { 'classification:5/1': { intro: '', closing: '' } }))
+    expect(buildBasketSubject([item], { 'classification:5/1': { subject: null } })).toBe('General Book')
+    expect(buildBasketBodyHtml([item], { 'classification:5/1': { intro: null, closing: '' } }))
       .toBe(buildBasketBodyHtml([item]))
   })
 
@@ -44,18 +45,19 @@ describe('draft template rendering', () => {
       'General Book': { subject: 'batch {count}', intro: '{names}' },
       'classification:5/1': { subject: 'not the batch', intro: 'not the batch' },
     }
-    const batch = [item, { ...item, bookId: 2, nameAr: 'علي', classificationCode: '6/1' }]
+    const batch = [item, { ...item, bookId: 2, ref: 'REF-2', nameAr: '', nameEn: 'Ali', classificationCode: '6/1' }]
     expect(buildBasketSubject(batch, overrides)).toBe('batch 2')
-    expect(buildBasketBodyHtml(batch, overrides)).toContain('أحمد، علي')
+    expect(buildBasketBodyHtml(batch, overrides)).toContain('أحمد، Ali')
+    expect(buildBasketSubject(batch, { 'General Book': { subject: '{ref} {detail}' } })).toBe('REF-1 كتاب')
   })
 
   it('escapes plain text and substituted values, converts line breaks, and preserves unknown tokens', () => {
     const overrides = { 'General Book': {
-      intro: '<img src=x> {bank}\r\n{name} {ref} {date} {count} {unknown}',
+      intro: '<img src=x> {names}\r\n{ref} {date} {count} {detail} {unknown} {name} {employee_id} {start} {end}',
       closing: 'Regards & thanks\nSecond line',
     } }
     const html = buildBasketBodyHtml([item], overrides)
-    expect(html).toContain('&lt;img src=x&gt; Bank &amp; Co<br>أحمد REF-1 11/06/2026 1 {unknown}')
+    expect(html).toContain('&lt;img src=x&gt; أحمد<br>REF-1 11/06/2026 1 كتاب {unknown} {name} {employee_id} {start} {end}')
     expect(html).toContain('Regards &amp; thanks<br>Second line')
     expect(html).not.toContain('<img')
     expect(html).toContain('البيان')
@@ -67,14 +69,21 @@ describe('draft template rendering', () => {
       'General Book': { subject: 'generic' },
       'classification:5/1': { subject: 'classified' },
       'General Book:transfer': { subject: 'transfer {date}', intro: 'transfer body', closing: 'transfer closing' },
-      'leave:Sick': { subject: 'sick {name}', intro: 'sick body' },
+      'leave:Sick': { subject: 'sick {names}', intro: '{start_date} — {end_date}' },
     }
     expect(buildBasketSubject([transfer], overrides)).toBe('transfer 11/06/2026')
     expect(buildBasketBodyHtml([transfer], overrides)).toContain('transfer body')
     expect(buildBasketBodyHtml([transfer], overrides)).not.toContain('<table')
     const leave = { ...item, formKind: 'Leave Application Form', leaveType: 'Sick' }
     expect(buildBasketSubject([leave], overrides)).toBe('sick أحمد')
-    expect(buildBasketBodyHtml([leave], overrides)).toContain('sick body')
+    expect(buildBasketBodyHtml([leave], overrides)).toContain('01/06/2026 — 02/06/2026')
+  })
+
+  it('joins unique trimmed salary-transfer banks and escapes substituted values', () => {
+    const salary = { ...item, formKind: 'Salary Transfer Request' }
+    const batch = [salary, { ...salary, bankName: ' Bank & Co ' }, { ...salary, bankName: 'Other Bank' }]
+    expect(buildBasketBodyHtml(batch, { 'Salary Transfer Request': { intro: '{bank}' } }))
+      .toContain('Bank &amp; Co، Other Bank')
   })
 
   it('passes overrides through compose prefill while retaining attachments and basket identity', () => {
@@ -94,7 +103,7 @@ describe('draft template rendering', () => {
       expect(defaults.subject).not.toBe('')
       expect(defaults.intro).not.toMatch(/<[^>]*>/)
       expect(defaults.closing).not.toMatch(/<[^>]*>/)
-      expect(renderDraftSample(key, { [key]: { subject: 'custom {name}', intro: 'custom intro', closing: 'custom closing' } }))
+      expect(renderDraftSample(key, { [key]: { subject: 'custom {names}', intro: 'custom intro', closing: 'custom closing' } }))
         .toMatchObject({ subject: 'custom أحمد علي', bodyHtml: expect.stringContaining('custom intro') })
     }
   })

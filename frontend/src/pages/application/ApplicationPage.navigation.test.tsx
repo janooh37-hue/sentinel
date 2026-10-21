@@ -65,8 +65,8 @@ vi.mock('@/components/books/SavedRecordActions', () => ({ SavedRecordActions: ()
 vi.mock('./notifyToggle', () => ({ shouldShowNotifyToggle: () => false }))
 vi.mock('./ApprovedViolationUpload', () => ({ ApprovedViolationUpload: () => <div data-testid="approved-upload" /> }))
 vi.mock('@/components/templates/ServiceNotificationTab', () => ({
-  ServiceNotificationTab: ({ service, groups }: { service: string; groups?: string[] }) =>
-    <div data-testid="notification-templates" data-service={service} data-groups={groups?.join(',')} />,
+  ServiceNotificationTab: ({ service }: { service: string }) =>
+    <div data-testid="notification-templates" data-service={service} />,
 }))
 vi.mock('@/components/templates/ServiceDraftTab', () => ({
   ServiceDraftTab: ({ service }: { service: string }) => <div data-testid="draft-templates" data-service={service} />,
@@ -168,7 +168,6 @@ describe('ApplicationPage service URLs', () => {
     renderServices('/services/violation?tab=notification')
 
     expect(await screen.findByTestId('notification-templates')).toHaveAttribute('data-service', 'Violation Form')
-    expect(screen.getByTestId('notification-templates')).toHaveAttribute('data-groups', 'violations')
     expect(screen.queryByRole('button', { name: 'Email draft' })).not.toBeInTheDocument()
   })
 
