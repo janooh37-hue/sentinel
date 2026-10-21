@@ -2,7 +2,9 @@
 
 import hashlib
 import io
+import threading
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -10,13 +12,16 @@ from unittest.mock import Mock
 import docx
 import pytest
 from PIL import Image
-from sqlalchemy import select
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
 from app.core import docx_engine, form_policy, leave_lifecycle
+from app.db import session as session_mod
 from app.db.models import (
     REF_SEQUENCE_ID,
     AuditLog,
+    Base,
     Book,
     BookCategory,
     BookEditSession,
@@ -28,6 +33,7 @@ from app.db.models import (
     OutboundMessage,
     User,
 )
+from app.db.session import attach_sqlite_pragmas
 from app.services import (
     absence_service,
     artifact_service,
@@ -36,6 +42,7 @@ from app.services import (
     included_papers_service,
     leave_service,
     notify_dispatch,
+    perm_service,
     sms_templates,
     word_book_service,
 )
@@ -43,6 +50,32 @@ from app.services import (
 
 @pytest.fixture()
 def gate_env(db_session, tmp_path, monkeypatch):
+    return _make_gate_env(db_session, tmp_path, monkeypatch)
+
+
+@pytest.fixture()
+def wal_gate_env(tmp_path, monkeypatch):
+    """``gate_env`` on a file-backed WAL database, for races between sessions."""
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'gate.db'}",
+        future=True,
+        connect_args={"check_same_thread": False},
+    )
+    attach_sqlite_pragmas(engine, wal=True)
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
+    monkeypatch.setattr(session_mod, "engine", engine)
+    monkeypatch.setattr(session_mod, "SessionLocal", factory)
+    db = factory()
+    perm_service.seed_role_defaults(db)
+    try:
+        yield _make_gate_env(db, tmp_path, monkeypatch)
+    finally:
+        db.close()
+        engine.dispose()
+
+
+def _make_gate_env(db_session, tmp_path, monkeypatch):
     settings = Settings(data_dir=tmp_path / "data", templates_dir=document_service._TEMPLATES_DIR)
     for module in (document_service, artifact_service, book_service):
         monkeypatch.setattr(module, "get_settings", lambda: settings)
@@ -336,6 +369,58 @@ def test_a_reissue_takes_over_a_rejected_leave(gate_env, template):
     env.db.refresh(leave)
     assert leave.status == "Approved"
     assert env.db.query(Leave).count() == 1
+
+
+@pytest.mark.parametrize("template", ["Leave Permit Form", "Administrative Leave Form"])
+def test_overriding_a_rejected_owner_waits_for_a_takeover_in_flight(
+    wal_gate_env, monkeypatch, template
+):
+    """The approval mirror reads ownership under the write lock, so overriding a
+    rejected owner while a re-issue takes its leave over cannot settle that leave."""
+    env = wal_gate_env
+    rejected, leave = generate(env, template)
+    submit(env, rejected)
+    decide(env, rejected, "rejected")
+    planned, release, owner_read = threading.Event(), threading.Event(), threading.Event()
+    plan, owner = document_service.plan_gated_leave, book_service.leave_owner
+
+    def paused_plan(*args, **kwargs):
+        result = plan(*args, **kwargs)
+        planned.set()
+        assert release.wait(10)
+        return result
+
+    def observed_owner(*args, **kwargs):
+        if threading.current_thread().name.startswith("override"):
+            owner_read.set()
+        return owner(*args, **kwargs)
+
+    monkeypatch.setattr(document_service, "plan_gated_leave", paused_plan)
+    monkeypatch.setattr(book_service, "leave_owner", observed_owner)
+
+    def override():
+        with Session(env.db.bind, autoflush=False, expire_on_commit=False) as db:
+            actor = db.get_one(User, env.signer.id)
+            book_service.override_state(db, rejected.id, target_state="approved", actor=actor)
+
+    with (
+        ThreadPoolExecutor(1) as takeover_pool,
+        ThreadPoolExecutor(1, thread_name_prefix="override") as override_pool,
+    ):
+        takeover = takeover_pool.submit(generate, env, template)
+        assert planned.wait(10)
+        overriding = override_pool.submit(override)
+        # Unlocked, the override reads ownership at once; locked, it waits for the takeover.
+        owner_read.wait(1)
+        release.set()
+        reissue, reissued_leave = takeover.result(15)
+        overriding.result(15)
+    assert reissued_leave.id == leave.id
+    env.db.expire_all()
+    assert env.db.get_one(Book, rejected.id).approval_state == "approved"
+    assert book_service.leave_owner(env.db, leave.id) is env.db.get_one(Book, reissue.id)
+    assert env.db.get_one(Leave, leave.id).status == "Pending"
+    assert env.send.call_count == 0
 
 
 @pytest.mark.parametrize("template", ["Leave Permit Form", "Administrative Leave Form"])

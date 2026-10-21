@@ -51,6 +51,7 @@ from app.db.models import (
     OutboundMessage,
     User,
 )
+from app.db.repos._locking import begin_immediate_if_idle
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.schemas.book import (
     ApprovalLogItem,
@@ -1304,6 +1305,9 @@ def _commit_approval_state(db: Session, book: Book, *, user_id: int | None) -> N
         and version.template_id in form_policy.SIGN_GATED_LEAVE_FORMS
         and is_enrolled(book)
     ):
+        # Read ownership under the write lock held until the commit below: a
+        # generation taking this leave over holds it from its plan to its commit.
+        begin_immediate_if_idle(db)
         document = db.get(Document, version.document_id) if version.document_id else None
         leave = db.get(Leave, document.leave_id) if document and document.leave_id else None
         if (
