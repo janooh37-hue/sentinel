@@ -10,6 +10,7 @@ import type * as AuthContextModule from '@/lib/authContext'
 import { NavBellPopover } from '@/components/shell/NavBellPopover'
 import { api } from '@/lib/api'
 import i18n from '@/lib/i18n'
+import { messageTemplatesApi } from '@/lib/messageTemplates'
 import { ApplicationPage } from './ApplicationPage'
 import { inmateRegisterHref } from './statistics/registerModel'
 import { workflowMonth } from './statistics/workflowFixtures'
@@ -63,6 +64,18 @@ vi.mock('@/hooks/useEmailBasket', () => ({ useEmailBasket: () => ({ baskets: [] 
 vi.mock('@/components/books/SavedRecordActions', () => ({ SavedRecordActions: () => null }))
 vi.mock('./notifyToggle', () => ({ shouldShowNotifyToggle: () => false }))
 vi.mock('./ApprovedViolationUpload', () => ({ ApprovedViolationUpload: () => <div data-testid="approved-upload" /> }))
+vi.mock('@/components/templates/ServiceNotificationTab', () => ({
+  ServiceNotificationTab: ({ service, groups }: { service: string; groups?: string[] }) =>
+    <div data-testid="notification-templates" data-service={service} data-groups={groups?.join(',')} />,
+}))
+vi.mock('@/components/templates/ServiceDraftTab', () => ({
+  ServiceDraftTab: ({ service }: { service: string }) => <div data-testid="draft-templates" data-service={service} />,
+}))
+vi.mock('@/lib/draftTemplates', () => ({
+  useDraftVariants: () => [{ key: 'Demo', services: ['Demo'] }],
+  draftKeysForService: (variants: { key: string; services: string[] }[], service: string) =>
+    variants.filter((variant) => variant.services.includes(service)).map((variant) => variant.key),
+}))
 
 function LocationProbe(): React.JSX.Element {
   const location = useLocation()
@@ -93,6 +106,7 @@ function renderServices(entry: string): void {
 beforeEach(() => {
   vi.clearAllMocks()
   void i18n.changeLanguage('en')
+  vi.spyOn(messageTemplatesApi, 'list').mockResolvedValue([])
   vi.mocked(api.listTemplates).mockResolvedValue({ items: ['Inmate Conduct Violations', 'Demo'].map((id) => ({
     id, name_en: id, name_ar: id, category: 'admin', notifies_employee: false,
   })) } as never)
@@ -129,6 +143,33 @@ describe('ApplicationPage service URLs', () => {
     renderServices('/services/demo')
 
     expect(await screen.findByTestId('template-form')).toBeVisible()
+  })
+
+  it('shows notification and email editors from the message service catalog', async () => {
+    vi.mocked(messageTemplatesApi.list).mockResolvedValue([{
+      event: 'demo', label: { en: 'Demo', ar: 'نموذج' }, group: 'forms', services: ['Demo'],
+      timing: 'on_save', default: { en: 'Hello', ar: 'مرحباً' }, override: null, variables: [],
+    }])
+    const user = userEvent.setup()
+    renderServices('/services/demo?tab=notification')
+
+    expect(await screen.findByTestId('notification-templates')).toHaveAttribute('data-service', 'Demo')
+    expect(screen.getByRole('button', { name: 'Notification' })).toHaveAttribute('aria-pressed', 'true')
+    await user.click(screen.getByRole('button', { name: 'Email draft' }))
+    expect(screen.getByTestId('draft-templates')).toHaveAttribute('data-service', 'Demo')
+    expect(screen.getByTestId('location')).toHaveTextContent('/services/demo?tab=email-draft')
+  })
+
+  it('uses employee-notification metadata for the Violation Form fallback', async () => {
+    vi.mocked(api.listTemplates).mockResolvedValue({ items: [{
+      id: 'Violation Form', name_en: 'Violation Form', name_ar: 'المخالفة',
+      category: 'admin', notifies_employee: true,
+    }] } as never)
+    renderServices('/services/violation?tab=notification')
+
+    expect(await screen.findByTestId('notification-templates')).toHaveAttribute('data-service', 'Violation Form')
+    expect(screen.getByTestId('notification-templates')).toHaveAttribute('data-groups', 'violations')
+    expect(screen.queryByRole('button', { name: 'Email draft' })).not.toBeInTheDocument()
   })
 
   it('returns to the filtered catalog on Back after picking a service', async () => {

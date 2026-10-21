@@ -5,6 +5,12 @@ import i18n from 'i18next'
 import ar from '@/locales/ar.json'
 import { GeneratedSaveActions } from './GeneratedSaveActions'
 
+vi.mock('@/components/notify/NotifyMessagePreview', () => ({
+  NotifyMessagePreview: ({ notifyEmployee }: { notifyEmployee: boolean }) => (
+    <div data-testid="notify-message-preview" data-notify={notifyEmployee} />
+  ),
+}))
+
 beforeEach(async () => {
   await i18n.addResourceBundle('ar', 'translation', ar, true, true)
   await i18n.changeLanguage('ar')
@@ -24,6 +30,12 @@ describe('GeneratedSaveActions', () => {
     saveDisabled: false,
     saving: false,
     hint: 'أكمل المرفقات المطلوبة أولًا',
+    previewBody: {
+      template_id: 'Leave Permit Form',
+      employee_id: 'G1',
+      fields: { duration_hours: '3' },
+      revise_of_book_id: null,
+    },
     onNotifyChange: vi.fn(),
     onSave: vi.fn(),
   }
@@ -37,9 +49,11 @@ describe('GeneratedSaveActions', () => {
   it('renders the notification row only when requested', () => {
     const { rerender } = render(<GeneratedSaveActions {...baseProps} showNotify />)
     expect(screen.getByRole('switch', { name: 'إشعار الموظف' })).toBeVisible()
+    expect(screen.getByTestId('notify-message-preview')).toBeVisible()
 
     rerender(<GeneratedSaveActions {...baseProps} showNotify={false} />)
     expect(screen.queryByRole('switch', { name: 'إشعار الموظف' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('notify-message-preview')).not.toBeInTheDocument()
   })
 
   it('names WhatsApp before the SMS fallback when notification is on', () => {
@@ -78,6 +92,7 @@ describe('GeneratedSaveActions', () => {
     render(<GeneratedSaveActions {...baseProps} notifyEmployee={false} />)
 
     expect(screen.getByText('سيتم الحفظ دون إشعار الموظف.')).toBeVisible()
+    expect(screen.getByTestId('notify-message-preview')).toHaveAttribute('data-notify', 'false')
   })
 
   it('invokes onSave once from the save button', () => {

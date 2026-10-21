@@ -33,6 +33,13 @@ vi.mock('./NationalServiceDialog', () => ({
     open ? <div role="dialog" aria-label="National Service"><button onClick={onClose}>Close service</button></div> : null,
 }))
 vi.mock('./report/LeavesReport', () => ({ LeavesReport: () => null }))
+vi.mock('@/components/templates/ServiceNotificationTab', () => ({
+  ServiceNotificationTab: ({ service, groups }: { service: string; groups: string[] }) =>
+    <div data-testid="notification-templates" data-service={service} data-groups={groups.join(',')} />,
+}))
+vi.mock('@/components/templates/ServiceDraftTab', () => ({
+  ServiceDraftTab: ({ service }: { service: string }) => <div data-testid="draft-templates" data-service={service} />,
+}))
 
 function LocationProbe(): React.JSX.Element {
   const location = useLocation()
@@ -70,5 +77,20 @@ describe('Leaves URL state', () => {
   it('keeps the requested tab when loaded from a URL', () => {
     renderLeaves('/leaves?tab=balance')
     expect(screen.getByRole('tab', { name: /balance/i })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('opens the Notification editor and preserves existing filters in the URL', () => {
+    renderLeaves('/leaves?tab=balance&q=care')
+    fireEvent.click(screen.getByRole('tab', { name: 'Notification' }))
+    expect(screen.getByRole('tab', { name: 'Notification' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('notification-templates')).toHaveAttribute('data-service', 'leaves')
+    expect(screen.getByTestId('notification-templates')).toHaveAttribute('data-groups', 'leaves,reminders')
+    expect(screen.getByTestId('location')).toHaveTextContent('/leaves?tab=notification&q=care')
+  })
+
+  it('opens the Email draft editor from a shared URL', () => {
+    renderLeaves('/leaves?tab=email-draft')
+    expect(screen.getByRole('tab', { name: 'Email draft' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('draft-templates')).toHaveAttribute('data-service', 'leaves')
   })
 })

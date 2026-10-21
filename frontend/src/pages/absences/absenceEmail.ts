@@ -3,12 +3,17 @@ import {
   buildClosing,
   dmyPad,
   esc,
+  draftPlainText,
+  draftTextHtml,
   HEADER_RED,
   p,
   TD_STYLE,
+  substituteDraftText,
   thStyle,
 } from '@/lib/basketEmail'
 import { computeEndDate } from '@/lib/leaveDateMath'
+import type { DraftOverrides } from '@/lib/draftTemplates'
+import type { DraftTemplateFields } from '@/lib/messageTemplates'
 
 export type AbsenceCase = 'absent' | 'returned'
 export type AbsenceEmailRow = AbsenceRegisterRowRead & { case: AbsenceCase }
@@ -97,24 +102,60 @@ function returnedParagraph(rows: AbsenceEmailRow[]): string {
   return 'يطيب لنا ان نهديكم اطيب التحيات , ونفيدكم علما بأن المذكورين من أفراد القوة الملحقة بمرتبنا أدناه عادوا من <b><u>تغيبهم وباشروا عملهم في اليوم التالي للفترة المبينة بجانب أسمائهم</u></b> .'
 }
 
+const ABSENCE_CLOSING = '<b>' + buildClosing([
+  'يرجى التفضل بالإطلاع وأمركم ،،،،،',
+  'وأقبلوا فائق الإحترام والتقدير',
+]) + '</b>'
+
+function absenceDraftValues(rows: AbsenceEmailRow[]): Record<string, string> {
+  return {
+    name: letterName(rows[0]),
+    names: rows.map(letterName).join('، '),
+    count: String(rows.length),
+    employee_id: rows[0].employee_id,
+    start: dmyPad(rows[0].start_date),
+    end: dmyPad(rows[0].end_date),
+    date: dmyPad(returnDateIso(rows[0].end_date)),
+    days: String(rows[0].days),
+  }
+}
+
+export function defaultAbsenceDraftText(rows: AbsenceEmailRow[]): Required<DraftTemplateFields> {
+  return {
+    subject: ABSENCE_EMAIL_SUBJECT,
+    intro: rows.length ? draftPlainText(rows[0].case === 'returned'
+      ? returnedParagraph(rows) : rows.length > 1 ? ABSENT_PLURAL : ABSENT_SINGULAR) : '',
+    closing: draftPlainText(ABSENCE_CLOSING),
+  }
+}
+
 export function buildAbsenceEmail(
   rows: AbsenceEmailRow[],
-  opts: { violationAttached: boolean },
+  opts: { violationAttached: boolean; overrides?: DraftOverrides },
 ): { subject: string; bodyHtml: string } {
   if (rows.length === 0) return { subject: ABSENCE_EMAIL_SUBJECT, bodyHtml: '' }
 
   const absent = rows.filter((row) => row.case === 'absent')
   const returned = rows.filter((row) => row.case === 'returned')
   const sections = [p('السلام عليكم ورحمة الله وبركاته')]
+  const firstOverride = opts.overrides?.[`absence:${rows[0].case}`]
+  const subject = firstOverride?.subject
+    ? substituteDraftText(firstOverride.subject, absenceDraftValues(rows)) : ABSENCE_EMAIL_SUBJECT
 
   if (absent.length > 0) {
+    const intro = opts.overrides?.['absence:absent']?.intro
     sections.push(
-      p(absent.length > 1 ? ABSENT_PLURAL : ABSENT_SINGULAR),
+      p(intro ? draftTextHtml(substituteDraftText(intro, absenceDraftValues(absent)))
+        : absent.length > 1 ? ABSENT_PLURAL : ABSENT_SINGULAR),
       buildAbsenceTableHtml(absent),
     )
   }
   if (returned.length > 0) {
-    sections.push(p(returnedParagraph(returned)), buildAbsenceTableHtml(returned))
+    const intro = opts.overrides?.['absence:returned']?.intro
+    sections.push(
+      p(intro ? draftTextHtml(substituteDraftText(intro, absenceDraftValues(returned))) : returnedParagraph(returned)),
+      buildAbsenceTableHtml(returned),
+    )
   }
   if (opts.violationAttached) {
     const line = rows.length === 1
@@ -122,12 +163,9 @@ export function buildAbsenceEmail(
       : 'مرفق مخالفات موقعة من قبلهم'
     sections.push(p(`<b style="color:#C00000">${line}</b>`))
   }
-  sections.push(
-    '<b>' + buildClosing([
-      'يرجى التفضل بالإطلاع وأمركم ،،،،،',
-      'وأقبلوا فائق الإحترام والتقدير',
-    ]) + '</b>',
-  )
+  sections.push(firstOverride?.closing
+    ? buildClosing([draftTextHtml(substituteDraftText(firstOverride.closing, absenceDraftValues(rows)))])
+    : ABSENCE_CLOSING)
 
-  return { subject: ABSENCE_EMAIL_SUBJECT, bodyHtml: sections.join('') }
+  return { subject, bodyHtml: sections.join('') }
 }

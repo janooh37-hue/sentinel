@@ -2,8 +2,10 @@ import { FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
+import { NotifyMessagePreview } from '@/components/notify/NotifyMessagePreview'
 import { Button } from '@/components/ui/button'
 import type { SigningPath } from '@/lib/api'
+import type { NotifyPreviewRequest } from '@/lib/messageTemplates'
 
 export interface GeneratedSaveActionsProps {
   signingPath: SigningPath | undefined
@@ -13,6 +15,7 @@ export interface GeneratedSaveActionsProps {
   saveDisabled: boolean
   saving: boolean
   hint: string
+  previewBody: NotifyPreviewRequest | null
   onNotifyChange: (checked: boolean) => void
   onSave: () => void
 }
@@ -25,6 +28,7 @@ export function GeneratedSaveActions({
   saveDisabled,
   saving,
   hint,
+  previewBody,
   onNotifyChange,
   onSave,
 }: GeneratedSaveActionsProps): React.JSX.Element {
@@ -43,20 +47,29 @@ export function GeneratedSaveActions({
       dir="auto"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-base font-semibold text-foreground">
             {t('application.actions.readyToSave')}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
           {showNotify && (
-            <NotifyEmployeeToggle
-              className="mt-3"
-              checked={notifyEmployee}
-              disabled={notifyDisabled || saving}
-              onChange={onNotifyChange}
-              label={t('application.notify.label')}
-              hint={notificationHint}
-            />
+            <>
+              <NotifyEmployeeToggle
+                className="mt-3"
+                checked={notifyEmployee}
+                disabled={notifyDisabled || saving}
+                onChange={onNotifyChange}
+                label={t('application.notify.label')}
+                hint={notificationHint}
+              />
+              {previewBody && (
+                <NotifyMessagePreview
+                  key={`${previewBody.template_id}:${previewBody.employee_id}`}
+                  body={previewBody}
+                  notifyEmployee={notifyEmployee}
+                />
+              )}
+            </>
           )}
         </div>
         <Button

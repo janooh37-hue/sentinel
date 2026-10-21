@@ -12,6 +12,8 @@ import type { JobStatusResponse } from '@/lib/api'
 import type * as ApiModule from '@/lib/api'
 import { api, ApiError } from '@/lib/api'
 import { ApplicationPage } from './ApplicationPage'
+import { messageTemplatesApi } from '@/lib/messageTemplates'
+import type * as MessageTemplatesModule from '@/lib/messageTemplates'
 
 const jobStatusState = vi.hoisted(() => ({
   handlers: new Map<string, (job: JobStatusResponse) => void>(),
@@ -32,6 +34,22 @@ vi.mock('@/lib/api', async (importOriginal) => ({
     getBookVersionFields: vi.fn(),
   },
 }))
+vi.mock('@/lib/messageTemplates', async (importOriginal) => {
+  const actual = await importOriginal<typeof MessageTemplatesModule>()
+  return {
+    ...actual,
+    messageTemplatesApi: {
+      ...actual.messageTemplatesApi,
+      preview: vi.fn().mockResolvedValue({
+        event: 'leave_permit',
+        language: 'en',
+        timing: 'on_approval',
+        text: { en: 'Employee message before approval', ar: 'رسالة الموظف قبل الاعتماد' },
+        segments: { en: 1, ar: 1 },
+      }),
+    },
+  }
+})
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ capabilities: new Set(), isLoading: false, has: () => true }),
 }))
@@ -194,6 +212,14 @@ describe('ApplicationPage generated handoff reset', () => {
     await waitFor(() => expect(mockedApi.generateDocument).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(jobStatusState.handlers.has('job-1')).toBe(true))
     await act(async () => jobStatusState.handlers.get('job-1')?.(completedPreviewJob('job-1')))
+
+    expect(await screen.findByText('Employee message before approval')).toBeVisible()
+    expect(messageTemplatesApi.preview).toHaveBeenCalledWith({
+      template_id: 'Demo',
+      employee_id: 'G1',
+      fields: mockedApi.generateDocument.mock.calls[0][0].fields,
+      revise_of_book_id: null,
+    })
 
     await user.click(await screen.findByRole('button', { name: /^Save to Records$/ }))
     await waitFor(() => expect(mockedApi.generateDocument).toHaveBeenCalledTimes(2))
