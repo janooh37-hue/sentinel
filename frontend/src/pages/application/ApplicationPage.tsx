@@ -1566,7 +1566,7 @@ function StandardApplicationPage(): React.JSX.Element {
                 <div className="flex min-h-[400px] flex-col">
                   {previewJobStatus === 'done' && !lastSaved && (
                     <GeneratedSaveActions
-                      templateId={selectedTemplate}
+                      signingPath={schemaQuery.data?.signing_path}
                       showNotify={showNotifyEmployee}
                       notifyEmployee={notifyEmployee}
                       notifyDisabled={generateMutation.isPending}

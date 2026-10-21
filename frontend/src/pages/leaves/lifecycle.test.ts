@@ -98,7 +98,7 @@ describe('actionsFor amend', () => {
 
 describe('sign-gated record leaves', () => {
   it('displays Pending honestly without offering Leaves-page approval actions', () => {
-    for (const kind of ['Leave Permit', 'Administrative Leave']) {
+    for (const kind of ['Leave Permit', 'Administrative Leave', 'Sick Leave']) {
       expect(displayState(kind, 'Pending', OVERDUE, TODAY)).toBe('Requested')
       expect(actionsFor(kind, 'Pending', OVERDUE, TODAY)).toEqual([])
       expect(needsAction(kind, 'Pending', OVERDUE, TODAY)).toBe(false)

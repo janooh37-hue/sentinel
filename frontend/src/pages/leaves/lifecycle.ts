@@ -68,7 +68,8 @@ export function displayState(
   const group = lifecycleGroup(leaveType)
   switch (group) {
     case 'sick':
-      return 'Recorded'
+      // Pending only while its generated Leave Application awaits the signature.
+      return s === 'Pending' ? 'Requested' : 'Recorded'
     case 'record':
       if (s === 'Pending') return 'Requested'
       return classifyLeaveType(leaveType) === 'Administrative Leave' ? 'PreApproved' : 'Recorded'

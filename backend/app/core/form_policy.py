@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from app.core import leave_lifecycle
+
 SigningPath = Literal["auto", "in_app", "scan", "chain"]
 
 SIGNING_PATHS: dict[str, SigningPath] = {
@@ -41,9 +43,26 @@ SIGNING_PATHS: dict[str, SigningPath] = {
     "Passport Release List": "scan",
 }
 
-# Generated leave records whose Leave row stays Pending (and employee
-# notifications held) until the manager signs through the approval chain.
-SIGN_GATED_LEAVE_FORMS = frozenset({"Leave Permit Form", "Administrative Leave Form"})
+# Generated leave forms whose Leave row can stay Pending (and its employee
+# message held) until the manager signs through the approval chain. Whether a
+# given record is gated depends on its leave type: ``is_sign_gated_leave``.
+SIGN_GATED_LEAVE_FORMS = frozenset(
+    {"Leave Permit Form", "Administrative Leave Form", "Leave Application Form"}
+)
+
+
+def is_sign_gated_leave(template_id: str | None, leave_type: str | None) -> bool:
+    """Whether a generated leave of ``leave_type`` follows its record's signing chain.
+
+    Annual Leave needs manager and HQ approvals the app does not link, so an
+    Annual Leave Application keeps its Leaves-page lifecycle.
+    """
+    if template_id not in SIGN_GATED_LEAVE_FORMS:
+        return False
+    return template_id != "Leave Application Form" or not leave_lifecycle.is_annual(
+        leave_type or "Annual Leave"
+    )
+
 
 _DEFAULT_PATH: SigningPath = "auto"
 

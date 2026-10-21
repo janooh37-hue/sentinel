@@ -37,6 +37,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import attach_sqlite_pragmas
+from app.schemas.leave import LeaveUpdate
 from app.services import (
     absence_service,
     artifact_service,
@@ -924,3 +925,172 @@ def test_permit_without_doc_manager_carries_the_signer_name(gate_env):
     signed = _document_xml(_data_path(env, version.signed_pdf_path))
     assert env.manager.name_en in signed
     assert "w:drawing" in signed
+
+
+def _log_sends(env):
+    """Record each send as an OutboundMessage, so re-grant de-dup can see it."""
+
+    def logged_send(db, event_type, record_id, *, sent_by):
+        db.add(
+            OutboundMessage(
+                employee_id=env.employee.id,
+                event_type=event_type,
+                event_ref=f"{event_type}:{record_id}",
+                language="en",
+                phone="+971500000000",
+                status="sent",
+            )
+        )
+        db.commit()
+
+    env.send.side_effect = logged_send
+
+
+def _sign(env, book):
+    submit(env, book)
+    book_service.sign_book(env.db, book.id, user_id=env.signer.id, version_id=book.versions[-1].id)
+
+
+def _clearance(env, **kwargs):
+    result = document_service.generate_document(
+        env.db,
+        employee_id=env.employee.id,
+        template_id="Employee Clearance Form",
+        fields={"date": "20/10/2026"},
+        manager_id=env.manager.id,
+        current_user=env.signer,
+        converter=lambda _: None,
+        **kwargs,
+    )
+    return env.db.get_one(Book, result.book_id)
+
+
+def _application(env, leave_type, **kwargs):
+    return generate(
+        env,
+        "Leave Application Form",
+        fields={"leave_type": leave_type, "total_days": "2"},
+        **kwargs,
+    )
+
+
+@pytest.mark.parametrize("notify", [True, False])
+def test_chain_form_message_waits_for_approval(gate_env, notify):
+    env = gate_env
+    _log_sends(env)
+    book = _clearance(env, notify_employee=notify)
+    # What the generate route sends at save.
+    notify_dispatch.auto_send_for_book(env.db, book.id)
+    env.send.assert_not_called()
+    submit(env, book)
+    decide(env, book, "returned")
+    env.send.assert_not_called()
+    _sign(env, book)
+    assert book.approval_state == "approved"
+    assert [c.args[1:3] for c in env.send.call_args_list] == (
+        [("employee_clearance", book.id)] if notify else []
+    )
+    for state in ("rejected", "approved"):
+        book_service.override_state(
+            env.db, book.id, target_state=state, actor=env.signer, reason="Repair"
+        )
+    assert env.send.call_count == int(notify)
+
+
+@pytest.mark.parametrize(
+    ("leave_type", "event"),
+    [("Compassionate Leave", "leave_approved"), ("Sick Leave", "sick_leave_registered")],
+)
+def test_non_annual_leave_application_is_settled_by_signing(gate_env, leave_type, event):
+    env = gate_env
+    book, leave = _application(env, leave_type)
+    assert leave.status == "Pending"
+    notify_dispatch.auto_send_for_book(env.db, book.id)
+    env.send.assert_not_called()
+    submit(env, book)
+    decide(env, book, "rejected")
+    assert leave.status == "Rejected"
+    env.send.assert_not_called()
+    _sign(env, book)
+    env.db.refresh(leave)
+    assert leave.status == "Approved"
+    assert [c.args[1:3] for c in env.send.call_args_list] == [(event, leave.id)]
+    with pytest.raises(document_service.ValidationFailedError) as excinfo:
+        _application(env, leave_type)
+    assert _issued_on(excinfo) == book.ref_number
+    env.db.rollback()
+
+
+def test_annual_leave_application_approval_sends_request_received_only(gate_env):
+    env = gate_env
+    _log_sends(env)
+    book, leave = _application(env, "Annual Leave")
+    notify_dispatch.auto_send_for_book(env.db, book.id)
+    env.send.assert_not_called()
+    _sign(env, book)
+    env.db.refresh(leave)
+    assert book.approval_state == "approved"
+    assert leave.status == "Pending"
+    for state in ("rejected", "approved"):
+        book_service.override_state(
+            env.db, book.id, target_state=state, actor=env.signer, reason="Repair"
+        )
+    env.db.refresh(leave)
+    assert leave.status == "Pending"
+    assert [c.args[1:3] for c in env.send.call_args_list] == [("leave_requested", leave.id)]
+    leave_service.update_leave(env.db, leave.id, LeaveUpdate(status="Approved"))
+    assert env.send.call_args.args[1:3] == ("leave_approved", leave.id)
+    assert env.send.call_count == 2
+
+
+@pytest.mark.parametrize("form", ["clearance", "application"])
+def test_legacy_chain_record_keeps_mains_behaviour(gate_env, monkeypatch, form):
+    env = gate_env
+    if form == "clearance":
+        book, leave = _clearance(env), None
+    else:
+        book, leave = _application(env, "Compassionate Leave")
+        leave.status = "Approved"
+    for version in book.versions:
+        version.fields = {k: v for k, v in version.fields.items() if k != "_signing"}
+    env.db.commit()
+    reevaluate = Mock()
+    monkeypatch.setattr(leave_service, "_enqueue_leave_reevaluation", reevaluate)
+    submit(env, book)
+    decide(env, book, "rejected")
+    book_service.override_state(env.db, book.id, target_state="approved", actor=env.signer)
+    assert book.approval_state == "approved"
+    if leave is not None:
+        env.db.refresh(leave)
+        assert leave.status == "Approved"
+    assert reevaluate.call_count == 0
+    env.send.assert_not_called()
+
+
+def test_leaves_page_cannot_decide_a_sign_gated_application(gate_env):
+    env = gate_env
+    book, leave = _application(env, "Compassionate Leave")
+    for status in ("Approved", "Rejected", "Cancelled"):
+        with pytest.raises(document_service.ValidationFailedError) as excinfo:
+            leave_service.update_leave(env.db, leave.id, LeaveUpdate(status=status))
+        assert excinfo.value.code == "LEAVE_SIGN_GATED"
+        assert excinfo.value.details["ref_number"] == book.ref_number
+    env.db.refresh(leave)
+    assert leave.status == "Pending"
+    env.send.assert_not_called()
+    _sign(env, book)
+    assert [c.args[1] for c in env.send.call_args_list] == ["leave_approved"]
+
+
+def test_a_revised_leave_type_moves_with_the_leave(gate_env):
+    env = gate_env
+    book, leave = _application(env, "Sick Leave")
+    submit(env, book)
+    decide(env, book, "returned")
+    _revised, revised_leave = _application(env, "Compassionate Leave", revise_of_book_id=book.id)
+    assert revised_leave.id == leave.id
+    assert revised_leave.leave_type == "Compassionate Leave"
+    _sign(env, book)
+    env.db.refresh(leave)
+    assert leave.status == "Approved"
+    assert [c.args[1] for c in env.send.call_args_list] == ["leave_approved"]

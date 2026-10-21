@@ -272,6 +272,26 @@ def get_leave(db: Session, leave_id: int, *, include_deleted: bool = False) -> L
     return row
 
 
+def _refuse_sign_gated(db: Session, row: Leave) -> None:
+    """A sign-gated leave's verdict is its record's (book_service._commit_approval_state)."""
+    from app.core import form_policy
+    from app.services import book_service
+
+    owner = book_service.leave_owner(db, row.id)
+    if (
+        owner is not None
+        and owner.versions
+        and book_service.is_enrolled(owner)
+        and form_policy.is_sign_gated_leave(owner.versions[-1].template_id, row.leave_type)
+    ):
+        raise ValidationFailedError(
+            "LEAVE_SIGN_GATED",
+            f"This leave is decided by the manager's signature on record {owner.ref_number}",
+            ref_number=owner.ref_number,
+            book_id=owner.id,
+        )
+
+
 def update_leave(
     db: Session, leave_id: int, payload: LeaveUpdate, *, actor: str | None = None
 ) -> Leave:
@@ -280,6 +300,7 @@ def update_leave(
     before = _workforce_leave_snapshot(row)
     status_changed = False
     if payload.status is not None:
+        _refuse_sign_gated(db, row)
         old_status = row.status
         new_status: LeaveStatus = payload.status
         allowed = leave_lifecycle.allowed_transitions(row.leave_type, old_status)
@@ -572,6 +593,8 @@ def file_return(
         embed_signature={"employee": True},
         current_user=current_user,
         return_for_leave_id=leave_id,
+        # The return dialog never notified the employee; its approval doesn't either.
+        notify_employee=False,
     )
 
     # generate_document already linked the doc + committed. Now complete the leave.

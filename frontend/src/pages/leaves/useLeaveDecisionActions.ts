@@ -11,7 +11,7 @@ import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/r
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, apiErrorMessage } from '@/lib/api'
+import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import type { LeaveStatus } from '@/lib/api'
 
 interface Params {
@@ -61,7 +61,13 @@ export function useLeaveDecisionActions({
       else toast.success(t('common.savedToast'))
       onMutated()
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err) => {
+      if (err instanceof ApiError && err.code === 'LEAVE_SIGN_GATED') {
+        toast.error(t('leaves.signGated', { ref: String(err.details.ref_number ?? '') }))
+        return
+      }
+      toast.error(apiErrorMessage(err))
+    },
   })
 
   const deleteMutation = useMutation({

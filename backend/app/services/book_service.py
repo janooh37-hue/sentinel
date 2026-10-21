@@ -1289,29 +1289,41 @@ def set_leave_status(db: Session, leave: Leave, status: str, *, user_id: int | N
 def _commit_approval_state(db: Session, book: Book, *, user_id: int | None) -> None:
     """Commit a chain decision and its linked leave together; notify only afterwards.
 
-    Record-kind leaves cannot be approved through Leaves PATCH. Only these two
-    generated forms mirror the record's verdict, including administrative repairs,
-    and only when the record is enrolled and owns the leave (``leave_owner``).
-    A voided or deleted record cancels its leave. Approval is the only send.
+    Record-kind leaves cannot be approved through Leaves PATCH. A sign-gated
+    leave (``form_policy.is_sign_gated_leave``) mirrors the record's verdict,
+    including administrative repairs, only when the record is enrolled and owns
+    the leave (``leave_owner``). A voided or deleted record cancels its leave.
+
+    An enrolled chain form's employee message is held from save to the first
+    approval, and sent then if the operator kept the "notify employee" switch
+    on. Rejection and return send nothing.
     """
     from app.core import form_policy
     from app.services import leave_service, notify_dispatch
 
     version = _current_version(book)
+    template_id = version.template_id if version is not None else None
+    enrolled = version is not None and is_enrolled(book)
     leave = None
+    gated = False
     status_changed = False
-    if (
-        version is not None
-        and version.template_id in form_policy.SIGN_GATED_LEAVE_FORMS
-        and is_enrolled(book)
-    ):
+    if enrolled and template_id in form_policy.SIGN_GATED_LEAVE_FORMS:
         # Read ownership under the write lock held until the commit below: a
         # generation taking this leave over holds it from its plan to its commit.
         begin_immediate_if_idle(db)
-        document = db.get(Document, version.document_id) if version.document_id else None
-        leave = db.get(Leave, document.leave_id) if document and document.leave_id else None
+        # Newest linked leave: a Word revision that lost its link (a take-over)
+        # still names the type; ``leave_owner`` requires the current version's link.
+        for previous in reversed(book.versions):
+            document = db.get(Document, previous.document_id) if previous.document_id else None
+            if document is not None and document.leave_id is not None:
+                leave = db.get(Leave, document.leave_id)
+                break
+        gated = form_policy.is_sign_gated_leave(
+            template_id, leave.leave_type if leave is not None else None
+        )
         if (
-            leave is not None
+            gated
+            and leave is not None
             and leave.deleted_at is None
             and leave_owner(db, leave.id, include=book) is book
         ):
@@ -1324,12 +1336,20 @@ def _commit_approval_state(db: Session, book: Book, *, user_id: int | None) -> N
             status_changed = set_leave_status(db, leave, status, user_id=user_id)
     db.commit()
     db.refresh(book)
-    if leave is None or leave.deleted_at is not None or not status_changed:
+    if status_changed and leave is not None:
+        leave_service._cache_invalidate_employee(leave.employee_id)
+    if (
+        not enrolled
+        or book.approval_state != "approved"
+        or book.voided_at is not None
+        or book.deleted_at is not None
+        # A sign-gated leave notifies only when this approval settled it.
+        or (gated and not status_changed)
+    ):
         return
-    leave_service._cache_invalidate_employee(leave.employee_id)
-    # Notify only on a real approval, and only if the operator kept the
-    # generation-time "notify employee" switch on. A Word revision has no
-    # snapshot, so the newest generated version's choice holds.
+    # Only if the operator kept the generation-time "notify employee" switch
+    # on. A Word revision has no snapshot, so the newest generated version's
+    # choice holds.
     signing = next(
         (
             snapshot
@@ -1338,16 +1358,17 @@ def _commit_approval_state(db: Session, book: Book, *, user_id: int | None) -> N
         ),
         None,
     )
-    if book.approval_state != "approved" or (
-        isinstance(signing, dict) and signing.get("notify_employee") is False
-    ):
+    if isinstance(signing, dict) and signing.get("notify_employee") is False:
+        return
+    target = notify_dispatch.book_event(db, book)
+    if target is None:
+        return
+    event, record_id = target
+    # An Annual Leave Application's approval tells the employee the request was
+    # received; the Leaves page notifies its own later verdicts.
+    if template_id == "Leave Application Form" and not gated and event != nf.EVENT_LEAVE_REQUESTED:
         return
     # Revoking and re-granting approval does not re-issue the same message.
-    event, record_id = (
-        (nf.EVENT_LEAVE_PERMIT, book.id)
-        if version is not None and version.template_id == "Leave Permit Form"
-        else (nf.EVENT_ADMIN_LEAVE, leave.id)
-    )
     sent = notify_dispatch.last_status(db, event, record_id)
     if sent is not None and sent.status != "failed":
         return
@@ -1355,7 +1376,7 @@ def _commit_approval_state(db: Session, book: Book, *, user_id: int | None) -> N
         notify_dispatch.auto_send_for_book(db, book.id, sent_by=user_id)
     except Exception:
         db.rollback()
-        log.exception("auto notification failed for signed leave book %s", book.id)
+        log.exception("auto notification failed for approved book %s", book.id)
 
 
 def _current_pending_step(book: Book) -> BookApprovalStep | None:

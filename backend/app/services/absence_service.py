@@ -35,8 +35,11 @@ from app.db.models import Absence, Employee, Leave
 SUPERSEDING_LEAVE_TYPES: Final[frozenset[str]] = frozenset(
     {"Sick Leave", "Annual Leave", "Leave Permit", "Administrative Leave"}
 )
-#: Sign-gated record types: they explain an absence only once approved.
-_APPROVAL_GATED_TYPES: Final[frozenset[str]] = frozenset({"Leave Permit", "Administrative Leave"})
+#: Sign-gated types: they explain an absence only once approved. A Sick Leave
+#: is Pending only while its generated Leave Application awaits the signature.
+_APPROVAL_GATED_TYPES: Final[frozenset[str]] = frozenset(
+    {"Leave Permit", "Administrative Leave", "Sick Leave"}
+)
 
 
 def supersedes_absence(leave_type: str) -> bool:

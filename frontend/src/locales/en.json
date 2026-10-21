@@ -1677,6 +1677,7 @@
     "title": "Leave History",
     "subtitle": "Records and accrual balances for all employees",
     "empty": "No leaves match these filters.",
+    "signGated": "Record {{ref}} decides this leave. It is approved when the manager signs that record.",
     "tabs": {
       "records": "Records",
       "balance": "Balance"

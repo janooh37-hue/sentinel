@@ -36,7 +36,7 @@ from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
-from app.core import form_policy, leave_lifecycle
+from app.core import form_policy
 from app.core import signature as signature_core
 from app.core.book_text import build_search_text
 from app.core.book_text import html_to_text as book_html_to_text
@@ -940,7 +940,9 @@ def plan_gated_leave(
     its own row (moved to new dates on a revision), takes the matching row over,
     or inserts a new one. ``None`` for every other form.
     """
-    if template_id not in form_policy.SIGN_GATED_LEAVE_FORMS or employee_id is None:
+    if employee_id is None or not form_policy.is_sign_gated_leave(
+        template_id, fields.get("leave_type")
+    ):
         return None
     from app.services import book_service
 
@@ -998,7 +1000,9 @@ def _make_leave_row(
             days = int(fields.get("total_days", 1) or 1)
         except (ValueError, TypeError):
             days = 1
-        status = leave_lifecycle.birth_status(leave_type)
+        # Every Leave Application starts as a request: Annual waits for the
+        # Leaves page, any other type for the manager's signature.
+        status = "Pending"
 
     elif template_id == "Passport Release Form":
         leave_type = "Passport Release"
@@ -1930,7 +1934,7 @@ def generate_document(
         # Revise reuses the existing book's ref — no allocation. A sign-gated
         # revision still takes the write lock so its leave plan below is decided
         # under the same serialisation as a fresh generation's.
-        if template_id in form_policy.SIGN_GATED_LEAVE_FORMS:
+        if form_policy.is_sign_gated_leave(template_id, fields.get("leave_type")):
             begin_immediate_if_idle(db)
         raw_ref = revise_book.ref_number
     elif commit and _classification is not None:
@@ -2520,8 +2524,9 @@ def generate_document(
             )
             actor_id = current_user.id if current_user is not None else None
             if existing_leave is not None and gated_leave.move_dates:
-                # A revision keeps its leave identity on corrected dates and its
-                # verdict until it is resubmitted.
+                # A revision keeps its leave identity on corrected dates (and, for a
+                # Leave Application, type) and its verdict until it is resubmitted.
+                existing_leave.leave_type = leave_row.leave_type
                 existing_leave.start_date = leave_row.start_date
                 existing_leave.end_date = leave_row.end_date
                 existing_leave.days = leave_row.days
@@ -2558,10 +2563,9 @@ def generate_document(
         # ``db.add``, and a re-generated certificate is exactly when an operator
         # expects the correction to land.
         # Sign-gated leaves supersede only once approved (book_service._commit_approval_state).
-        if (
-            absence_service.supersedes_absence(leave_row.leave_type)
-            and template_id not in form_policy.SIGN_GATED_LEAVE_FORMS
-        ):
+        if absence_service.supersedes_absence(
+            leave_row.leave_type
+        ) and not form_policy.is_sign_gated_leave(template_id, leave_row.leave_type):
             # ``commit=False``: this is part of the document's unit of work, so a
             # failure in step 13 or later takes the supersede back with the rest.
             superseded_absences = absence_service.delete_absences_covered_by(
