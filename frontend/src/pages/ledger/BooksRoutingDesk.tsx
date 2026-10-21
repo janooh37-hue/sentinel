@@ -246,7 +246,6 @@ export function BooksRoutingDesk(): React.JSX.Element {
                 ref={searchRef}
                 id="routing-search"
                 type="search"
-                dir="auto"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 onKeyDown={(event) => {
