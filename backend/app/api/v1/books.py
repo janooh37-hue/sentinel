@@ -62,6 +62,9 @@ from app.schemas.book import (
     BookDeriveRequest,
     BookEditSessionRead,
     BookFacetsResponse,
+    BookFolderCreate,
+    BookFolderRead,
+    BookFolderUpdate,
     BookInboxRead,
     BookLinkCreate,
     BookListResponse,
@@ -103,6 +106,7 @@ from app.schemas.book import (
 )
 from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
 from app.services import (
+    book_folder_service,
     book_link_service,
     book_send_service,
     book_service,
@@ -481,6 +485,67 @@ def create_word_session(
     )
 
 
+# Static folder routes must precede every /{book_id} route.
+@router.get("/folders", response_model=list[BookFolderRead])
+def list_book_folders(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.view"))],
+    book_id: int | None = None,
+) -> list[BookFolderRead]:
+    return book_folder_service.list_folders(db, user, book_id=book_id)
+
+
+@router.post("/folders", response_model=BookFolderRead, status_code=201)
+def create_book_folder(
+    body: BookFolderCreate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.view"))],
+) -> BookFolderRead:
+    return book_folder_service.create_folder(db, user, name=body.name, team=body.team)
+
+
+@router.patch("/folders/{folder_id}", response_model=BookFolderRead)
+def rename_book_folder(
+    folder_id: int,
+    body: BookFolderUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.view"))],
+) -> BookFolderRead:
+    return book_folder_service.rename_folder(db, user, folder_id, name=body.name)
+
+
+@router.delete("/folders/{folder_id}", status_code=204)
+def delete_book_folder(
+    folder_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.view"))],
+) -> Response:
+    book_folder_service.delete_folder(db, user, folder_id)
+    return Response(status_code=204)
+
+
+@router.put("/{book_id}/folders/{folder_id}", status_code=204)
+def add_book_to_folder(
+    book_id: int,
+    folder_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.view"))],
+) -> Response:
+    book_folder_service.file_book(db, user, book_id, folder_id)
+    return Response(status_code=204)
+
+
+@router.delete("/{book_id}/folders/{folder_id}", status_code=204)
+def remove_book_from_folder(
+    book_id: int,
+    folder_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.view"))],
+) -> Response:
+    book_folder_service.file_book(db, user, book_id, folder_id, remove=True)
+    return Response(status_code=204)
+
+
 @router.post(
     "/{book_id}/derive", response_model=WordSessionRead, status_code=status.HTTP_201_CREATED
 )
@@ -744,7 +809,8 @@ def list_books(
     include_deleted: bool = False,
     created_by_me: bool = False,
     inbox: book_service.InboxFilter | None = None,
-    sort: book_service.BookSort = "newest",
+    folder_id: int | None = None,
+    sort: str = Query("-date", pattern=r"^-?(date|ref|subject|purpose|confidentiality|status)$"),
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
     offset: int = Query(0, ge=0),
 ) -> BookListResponse:
@@ -762,6 +828,7 @@ def list_books(
         include_deleted=include_deleted,
         created_by_me=created_by_me,
         inbox=inbox,
+        folder_id=folder_id,
         sort=sort,
         limit=limit,
         offset=offset,
@@ -787,7 +854,7 @@ def list_books(
         _fill_draft_fields(item, row, db, by_book=by_book)
         items.append(item)
     _attach_creator_names(db, rows, items)
-    if inbox is not None:
+    if inbox is not None or folder_id is not None:
         _attach_desk_fields(db, user, rows, items)
     return BookListResponse(
         items=items,
@@ -837,14 +904,21 @@ def _attach_desk_fields(
     }
     names = book_service.resolve_names_by_ids(db, set(signed_by.values()))
     names_ar = book_service.resolve_names_ar_by_ids(db, set(signed_by.values()))
+    creator_ids = {r.created_by_user_id for r in rows if r.created_by_user_id is not None}
+    titles = book_service.resolve_titles_by_ids(db, creator_ids | set(signed_by.values()))
     for row, item in zip(rows, items, strict=True):
         item.recipients = recipients.get(row.id, [])
+        item.created_by_title, item.created_by_title_ar = titles.get(
+            row.created_by_user_id, (None, None)
+        )
         manager = managers.get(row.doc_manager_id) if row.doc_manager_id is not None else None
         if manager is not None and (manager.name_en or manager.name_ar):
             item.signer_name, item.signer_name_ar = manager.name_en, manager.name_ar
+            item.signer_title = item.signer_title_ar = manager.title
         elif row.id in signed_by:
             item.signer_name = names.get(signed_by[row.id])
             item.signer_name_ar = names_ar.get(signed_by[row.id])
+            item.signer_title, item.signer_title_ar = titles.get(signed_by[row.id], (None, None))
 
 
 def _enrich_path_fields(

@@ -2648,6 +2648,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Book Folders */
+        get: operations["list_book_folders_api_v1_books_folders_get"];
+        put?: never;
+        /** Create Book Folder */
+        post: operations["create_book_folder_api_v1_books_folders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/folders/{folder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Book Folder */
+        delete: operations["delete_book_folder_api_v1_books_folders__folder_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Book Folder */
+        patch: operations["rename_book_folder_api_v1_books_folders__folder_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/folders/{folder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Add Book To Folder */
+        put: operations["add_book_to_folder_api_v1_books__book_id__folders__folder_id__put"];
+        post?: never;
+        /** Remove Book From Folder */
+        delete: operations["remove_book_from_folder_api_v1_books__book_id__folders__folder_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/derive": {
         parameters: {
             query?: never;
@@ -8430,6 +8484,36 @@ export interface components {
             /** Services */
             services: components["schemas"]["ServiceFacetRead"][];
         };
+        /** BookFolderCreate */
+        BookFolderCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Team
+             * @default false
+             */
+            team: boolean;
+        };
+        /** BookFolderRead */
+        BookFolderRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Team */
+            team: boolean;
+            /** Count */
+            count: number;
+            /** Can Manage */
+            can_manage: boolean;
+            /** Has Book */
+            has_book?: boolean | null;
+        };
+        /** BookFolderUpdate */
+        BookFolderUpdate: {
+            /** Name */
+            name: string;
+        };
         /**
          * BookInboxRead
          * @description The caller's own received send of a record (BookRead.my_inbox).
@@ -8450,6 +8534,10 @@ export interface components {
             sent_by_name?: string | null;
             /** Sent By Name Ar */
             sent_by_name_ar?: string | null;
+            /** Sent By Title */
+            sent_by_title?: string | null;
+            /** Sent By Title Ar */
+            sent_by_title_ar?: string | null;
             /**
              * Sent At
              * Format: date-time
@@ -8577,6 +8665,10 @@ export interface components {
             created_by_name?: string | null;
             /** Created By Name Ar */
             created_by_name_ar?: string | null;
+            /** Created By Title */
+            created_by_title?: string | null;
+            /** Created By Title Ar */
+            created_by_title_ar?: string | null;
             /** Created By G */
             created_by_g?: string | null;
             /** Submitted At */
@@ -8636,6 +8728,10 @@ export interface components {
             signer_name?: string | null;
             /** Signer Name Ar */
             signer_name_ar?: string | null;
+            /** Signer Title */
+            signer_title?: string | null;
+            /** Signer Title Ar */
+            signer_title_ar?: string | null;
             /**
              * Current Template Id
              * @description Selected revision's template_id — current unless an older revision was requested.
@@ -8657,6 +8753,10 @@ export interface components {
             user_name?: string | null;
             /** User Name Ar */
             user_name_ar?: string | null;
+            /** User Title */
+            user_title?: string | null;
+            /** User Title Ar */
+            user_title_ar?: string | null;
             /** Sent By User Id */
             sent_by_user_id: number;
             /** Sent By Name */
@@ -22400,6 +22500,206 @@ export interface operations {
             };
         };
     };
+    list_book_folders_api_v1_books_folders_get: {
+        parameters: {
+            query?: {
+                book_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookFolderRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_book_folder_api_v1_books_folders_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookFolderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookFolderRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_book_folder_api_v1_books_folders__folder_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_book_folder_api_v1_books_folders__folder_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookFolderUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookFolderRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_book_to_folder_api_v1_books__book_id__folders__folder_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                folder_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_book_from_folder_api_v1_books__book_id__folders__folder_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                folder_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     derive_book_api_v1_books__book_id__derive_post: {
         parameters: {
             query?: never;
@@ -22789,7 +23089,8 @@ export interface operations {
                 include_deleted?: boolean;
                 created_by_me?: boolean;
                 inbox?: ("received" | "done" | "sent" | "archived" | "any") | null;
-                sort?: "newest" | "oldest" | "secret" | "urgent";
+                folder_id?: number | null;
+                sort?: string;
                 limit?: number;
                 offset?: number;
             };

@@ -816,6 +816,8 @@ export type BookRead = components['schemas']['BookRead'] & {
   doc_manager_has_signature?: boolean
   imported_doc?: ImportedDocRead | null
 }
+export type BookFolderRead = components['schemas']['BookFolderRead']
+export type BookSortKey = `${'' | '-'}${'date' | 'ref' | 'subject' | 'purpose' | 'confidentiality' | 'status'}`
 export type IncludedPaperProposal = components['schemas']['IncludedPaperProposal']
 export type IncludedPaperRead = components['schemas']['IncludedPaperRead']
 export type IncludedPaperReplacementRead = components['schemas']['IncludedPaperReplacementRead']
@@ -2111,8 +2113,21 @@ export const api = {
     offset?: number
     created_by_me?: boolean
     inbox?: 'received' | 'done' | 'sent' | 'archived' | 'any'
-    sort?: 'newest' | 'oldest' | 'secret' | 'urgent'
+    folder_id?: number
+    sort?: BookSortKey
   } = {}) => request<BookListResponse>('GET', `/books${qs({ ...params })}`),
+  listBookFolders: (bookId?: number) =>
+    request<BookFolderRead[]>('GET', `/books/folders${qs({ book_id: bookId })}`),
+  createBookFolder: (body: { name: string; team?: boolean }) =>
+    request<BookFolderRead>('POST', '/books/folders', body),
+  renameBookFolder: (id: number, name: string) =>
+    request<BookFolderRead>('PATCH', `/books/folders/${id}`, { name }),
+  deleteBookFolder: (id: number) =>
+    request<void>('DELETE', `/books/folders/${id}`),
+  addBookToFolder: (bookId: number, folderId: number) =>
+    request<void>('PUT', `/books/${bookId}/folders/${folderId}`),
+  removeBookFromFolder: (bookId: number, folderId: number) =>
+    request<void>('DELETE', `/books/${bookId}/folders/${folderId}`),
   getBook: (id: number, versionId?: number, options: { markRead?: boolean } = {}) =>
     request<BookRead>('GET', `/books/${id}${qs({ version_id: versionId, mark_read: options.markRead })}`),
   /** Resolve a book by its ref_number (e.g. "GS-0005") — backs the ledger

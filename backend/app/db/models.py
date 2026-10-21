@@ -547,6 +547,47 @@ class BookLink(Base):
     )
 
 
+class BookFolder(Base):
+    """A personal or team filing folder; a null owner denotes a team folder."""
+
+    __tablename__ = "book_folders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    owner_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (Index("ix_book_folders_owner_user_id", "owner_user_id"),)
+
+
+class BookFolderItem(Base):
+    """Folder membership independent of a book's workflow state."""
+
+    __tablename__ = "book_folder_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    folder_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("book_folders.id", ondelete="CASCADE"), nullable=False
+    )
+    book_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=False
+    )
+    added_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("folder_id", "book_id", name="uq_book_folder_items_folder_book"),
+        Index("ix_book_folder_items_book_id", "book_id"),
+    )
+
+
 class BookAnnotation(Base):
     """A markup placed on a book version's PDF during review.
 

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, computed_field
 
 from app.core.form_kind import resolve_service, word_draft_service
 from app.schemas._base import ORMBase
@@ -38,6 +38,24 @@ class BookCategoryRead(ORMBase):
     name_ar: str | None
     prefix: str
     requires_approval: bool
+
+
+class BookFolderCreate(BaseModel):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+    team: bool = False
+
+
+class BookFolderUpdate(BaseModel):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+
+
+class BookFolderRead(BaseModel):
+    id: int
+    name: str
+    team: bool
+    count: int
+    can_manage: bool
+    has_book: bool | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -380,6 +398,8 @@ class BookInboxRead(ORMBase):
     sent_by_user_id: int
     sent_by_name: str | None = None
     sent_by_name_ar: str | None = None
+    sent_by_title: str | None = None
+    sent_by_title_ar: str | None = None
     sent_at: datetime
     read_at: datetime | None = None
     done_at: datetime | None = None
@@ -391,6 +411,8 @@ class BookRecipientRead(ORMBase):
     user_id: int
     user_name: str | None = None
     user_name_ar: str | None = None
+    user_title: str | None = None
+    user_title_ar: str | None = None
     sent_by_user_id: int
     sent_by_name: str | None = None
     sent_by_name_ar: str | None = None
@@ -546,6 +568,8 @@ class BookRead(ORMBase):
     created_by_user_id: int | None = None
     created_by_name: str | None = None
     created_by_name_ar: str | None = None
+    created_by_title: str | None = None
+    created_by_title_ar: str | None = None
     created_by_g: str | None = None
     # Captured submission instant for the selected revision, when trustworthy.
     submitted_at: datetime | None = None
@@ -612,12 +636,14 @@ class BookRead(ORMBase):
     sms: list[NotifyMessageRead] = Field(default_factory=list)
     # Set only when the row matched via FTS body search (not on ilike-only hits).
     search_snippet: str | None = None
-    # Ledger desk list rows only (inbox scopes): active recipients the caller
+    # Ledger desk list rows only (inbox scopes or folders): active recipients the caller
     # may see (same rule as GET /books/{id}/recipients) and whose signature the
     # paper carries (the signer once signed, else the doc's named manager).
     recipients: list[BookRecipientRead] | None = None
     signer_name: str | None = None
     signer_name_ar: str | None = None
+    signer_title: str | None = None
+    signer_title_ar: str | None = None
 
 
 class BookListResponse(BaseModel):

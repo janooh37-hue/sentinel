@@ -321,12 +321,15 @@ def _recipient_reads(db: Session, user: User, rows: list[BookRecipient]) -> list
     names_ar = book_service.resolve_names_ar_by_ids(
         db, {r.user_id for r in rows} | {r.sent_by_user_id for r in rows}
     )
+    titles = book_service.resolve_titles_by_ids(db, {r.user_id for r in rows})
     return [
         BookRecipientRead(
             id=r.id,
             user_id=r.user_id,
             user_name=names.get(r.user_id),
             user_name_ar=names_ar.get(r.user_id),
+            user_title=titles.get(r.user_id, (None, None))[0],
+            user_title_ar=titles.get(r.user_id, (None, None))[1],
             sent_by_user_id=r.sent_by_user_id,
             sent_by_name=names.get(r.sent_by_user_id),
             sent_by_name_ar=names_ar.get(r.sent_by_user_id),
@@ -614,6 +617,7 @@ def my_inbox(db: Session, user_id: int, book_ids: list[int]) -> dict[int, BookIn
     ).all()
     names = book_service.resolve_names_by_ids(db, {r.sent_by_user_id for r in rows})
     names_ar = book_service.resolve_names_ar_by_ids(db, {r.sent_by_user_id for r in rows})
+    titles = book_service.resolve_titles_by_ids(db, {r.sent_by_user_id for r in rows})
     return {
         r.book_id: BookInboxRead(
             id=r.id,
@@ -622,6 +626,8 @@ def my_inbox(db: Session, user_id: int, book_ids: list[int]) -> dict[int, BookIn
             sent_by_user_id=r.sent_by_user_id,
             sent_by_name=names.get(r.sent_by_user_id),
             sent_by_name_ar=names_ar.get(r.sent_by_user_id),
+            sent_by_title=titles.get(r.sent_by_user_id, (None, None))[0],
+            sent_by_title_ar=titles.get(r.sent_by_user_id, (None, None))[1],
             sent_at=r.created_at,
             read_at=r.read_at,
             done_at=r.done_at,

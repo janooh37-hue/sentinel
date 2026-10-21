@@ -42,6 +42,7 @@ from app.db.models import (
     BookApprovalStep,
     BookCategory,
     BookEditSession,
+    BookFolderItem,
     BookRecipient,
     BookRevisionAccess,
     BookVersion,
@@ -909,7 +910,6 @@ def _created_by_clause(user: User | None) -> ColumnElement[bool]:
 
 
 InboxFilter = Literal["received", "done", "sent", "archived", "any"]
-BookSort = Literal["newest", "oldest", "secret", "urgent"]
 
 # Purpose words a desk search can name (Arabic + English labels).
 _PURPOSE_WORDS: Final[dict[str, tuple[str, ...]]] = {
@@ -1085,7 +1085,8 @@ def list_books(
     include_deleted: bool = False,
     created_by_me: bool = False,
     inbox: InboxFilter | None = None,
-    sort: BookSort = "newest",
+    folder_id: int | None = None,
+    sort: str = "-date",
 ) -> tuple[list[Book], int, dict[int, str]]:
     """Paginated list with optional filters.
 
@@ -1114,6 +1115,20 @@ def list_books(
     if not include_deleted:
         stmt = stmt.where(Book.deleted_at.is_(None))
         count_stmt = count_stmt.where(Book.deleted_at.is_(None))
+
+    if folder_id is not None:
+        from app.services import book_folder_service
+
+        if user is None:
+            raise NotFoundError("FOLDER_NOT_FOUND", "Folder not found")
+        book_folder_service.get_folder(db, user, folder_id)
+        filed = exists(
+            select(BookFolderItem.id).where(
+                BookFolderItem.folder_id == folder_id, BookFolderItem.book_id == Book.id
+            )
+        )
+        stmt = stmt.where(filed)
+        count_stmt = count_stmt.where(filed)
 
     if created_by_me:
         mine = _created_by_clause(user)
@@ -1204,14 +1219,56 @@ def list_books(
             .scalar_subquery()
         )
         when = func.coalesce(last_send, Book.created_at)
-    order: list[Any] = (
-        [when.asc(), Book.id.asc()] if sort == "oldest" else [when.desc(), Book.id.desc()]
-    )
-    if sort == "secret":
-        rank = case(_CONFIDENTIALITY_RANK, value=Book.confidentiality, else_=0)
-        order.insert(0, rank.desc())
-    elif sort == "urgent":
-        order.insert(0, case((Book.priority == "High", 1), else_=0).desc())
+    key = sort.removeprefix("-")
+    sort_column: Any = when
+    if key == "ref":
+        sort_column = Book.ref_number
+    elif key == "subject":
+        sort_column = Book.subject
+    elif key == "confidentiality":
+        sort_column = case(_CONFIDENTIALITY_RANK, value=Book.confidentiality, else_=0)
+    elif key == "purpose" and user is not None:
+        sort_column = (
+            _my_send_rows(user, inbox)
+            .with_only_columns(
+                case(
+                    {"action": 0, "reply": 1, "info": 2, "circulate": 3},
+                    value=BookRecipient.purpose,
+                    else_=4,
+                )
+            )
+            .order_by(BookRecipient.created_at.desc(), BookRecipient.id.desc())
+            .limit(1)
+            .correlate_except(BookRecipient)
+            .scalar_subquery()
+        )
+        sort_column = func.coalesce(sort_column, 4)
+    elif key == "status" and user is not None:
+        status = (
+            select(
+                case(
+                    (BookRecipient.archived_at.is_not(None), 3),
+                    (BookRecipient.done_at.is_not(None), 2),
+                    (BookRecipient.read_at.is_not(None), 1),
+                    else_=0,
+                )
+            )
+            .where(
+                BookRecipient.book_id == Book.id,
+                BookRecipient.user_id == user.id,
+                BookRecipient.revoked_at.is_(None),
+            )
+            .order_by(BookRecipient.created_at.desc(), BookRecipient.id.desc())
+            .limit(1)
+            .correlate_except(BookRecipient)
+            .scalar_subquery()
+        )
+        sort_column = func.coalesce(status, 4)
+    order: list[Any] = [
+        sort_column.desc() if sort.startswith("-") else sort_column.asc(),
+        when.desc(),
+        Book.id.desc(),
+    ]
     stmt = (
         stmt.options(
             selectinload(Book.category),
@@ -3044,6 +3101,22 @@ def resolve_names_ar_by_ids(db: Session, user_ids: set[int]) -> dict[int, str | 
             .where(User.id.in_(user_ids))
         ).all()
     )
+
+
+def resolve_titles_by_ids(
+    db: Session, user_ids: set[int]
+) -> dict[int, tuple[str | None, str | None]]:
+    """Linked employee designations in one batch; missing titles stay null."""
+    if not user_ids:
+        return {}
+    return {
+        user_id: (title, title_ar)
+        for user_id, title, title_ar in db.execute(
+            select(User.id, Employee.position, Employee.position_ar)
+            .outerjoin(Employee, User.employee_id == Employee.id)
+            .where(User.id.in_(user_ids))
+        )
+    }
 
 
 def submitter_name(db: Session, book: Book) -> str | None:
