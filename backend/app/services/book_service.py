@@ -1286,7 +1286,9 @@ def set_leave_status(db: Session, leave: Leave, status: str, *, user_id: int | N
     return True
 
 
-def _commit_approval_state(db: Session, book: Book, *, user_id: int | None) -> None:
+def _commit_approval_state(
+    db: Session, book: Book, *, user_id: int | None, notify: bool = True
+) -> None:
     """Commit a chain decision and its linked leave together; notify only afterwards.
 
     Record-kind leaves cannot be approved through Leaves PATCH. A sign-gated
@@ -1339,7 +1341,8 @@ def _commit_approval_state(db: Session, book: Book, *, user_id: int | None) -> N
     if status_changed and leave is not None:
         leave_service._cache_invalidate_employee(leave.employee_id)
     if (
-        not enrolled
+        not notify
+        or not enrolled
         or book.approval_state != "approved"
         or book.voided_at is not None
         or book.deleted_at is not None
@@ -3445,7 +3448,10 @@ def add_attachment(
                 book.id,
                 exc_info=True,
             )
-    _commit_approval_state(db, book, user_id=user.id if user is not None else None)
+    # A plain append is not an approval transition, so it never notifies.
+    _commit_approval_state(
+        db, book, user_id=user.id if user is not None else None, notify=flip_version is not None
+    )
     return book
 
 

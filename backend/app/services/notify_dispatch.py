@@ -361,7 +361,7 @@ def book_event(db: Session, book: Book) -> tuple[str, int] | None:
                 if route == "duty_resumption":
                     return nf.EVENT_DUTY_RESUMPTION, doc.leave_id
                 leave = db.get(Leave, doc.leave_id)
-                if leave is None or leave.employee_id is None:
+                if leave is None or leave.employee_id is None or leave.deleted_at is not None:
                     return None
                 event = _leave_status_event(leave)
                 return (event, leave.id) if event is not None else None

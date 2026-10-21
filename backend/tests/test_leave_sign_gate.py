@@ -1094,3 +1094,23 @@ def test_a_revised_leave_type_moves_with_the_leave(gate_env):
     env.db.refresh(leave)
     assert leave.status == "Approved"
     assert [c.args[1] for c in env.send.call_args_list] == ["leave_approved"]
+
+
+def test_plain_attachment_does_not_send_a_held_approval_message(gate_env, monkeypatch):
+    env = gate_env
+    book = _clearance(env)
+    monkeypatch.setattr(notify_dispatch, "_autosend_enabled", lambda _: False)
+    _sign(env, book)
+    monkeypatch.setattr(notify_dispatch, "_autosend_enabled", lambda _: True)
+    book_service.add_attachment(env.db, book.id, "note.pdf", b"%PDF-1.4 x", user=env.signer)
+    assert len(book.attachment_paths) == 1
+    env.send.assert_not_called()
+
+
+def test_deleted_annual_leave_gets_no_message_on_signing(gate_env):
+    env = gate_env
+    book, leave = _application(env, "Annual Leave")
+    leave_service.soft_delete_leave(env.db, leave.id)
+    _sign(env, book)
+    assert book.approval_state == "approved"
+    env.send.assert_not_called()

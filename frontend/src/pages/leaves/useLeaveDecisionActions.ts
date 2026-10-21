@@ -8,11 +8,20 @@
  */
 
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import type { LeaveStatus } from '@/lib/api'
+
+/** A leave decision error for a toast; a sign-gated leave names its deciding record. */
+export function leaveErrorMessage(t: TFunction, err: unknown): string {
+  if (err instanceof ApiError && err.code === 'LEAVE_SIGN_GATED') {
+    return t('leaves.signGated', { ref: String(err.details.ref_number ?? '') })
+  }
+  return apiErrorMessage(err)
+}
 
 interface Params {
   leaveId: number
@@ -61,13 +70,7 @@ export function useLeaveDecisionActions({
       else toast.success(t('common.savedToast'))
       onMutated()
     },
-    onError: (err) => {
-      if (err instanceof ApiError && err.code === 'LEAVE_SIGN_GATED') {
-        toast.error(t('leaves.signGated', { ref: String(err.details.ref_number ?? '') }))
-        return
-      }
-      toast.error(apiErrorMessage(err))
-    },
+    onError: (err) => toast.error(leaveErrorMessage(t, err)),
   })
 
   const deleteMutation = useMutation({
