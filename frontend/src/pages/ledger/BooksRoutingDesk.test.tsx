@@ -225,7 +225,8 @@ describe('Books routing desk', () => {
       created_at: '2026-10-12T09:00:00Z', can_recall: true, ...extra,
     })
     vi.mocked(api.listBooks).mockResolvedValue({
-      items: [{ ...BOOK, my_inbox: null, priority: 'High', signer_name: 'Juma Saadi', recipients: [
+      // I also received this book (my_inbox set): the Outgoing tab still shows my send.
+      items: [{ ...BOOK, priority: 'High', signer_name: 'Juma Saadi', recipients: [
         recipient(2, 'Khalid', { read_at: '2026-10-12T10:00:00Z', done_at: '2026-10-12T11:00:00Z' }),
         recipient(3, 'Salim', { read_at: '2026-10-12T10:00:00Z' }),
         recipient(4, 'Aisha'),

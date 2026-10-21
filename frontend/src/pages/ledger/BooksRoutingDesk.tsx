@@ -301,7 +301,7 @@ export function BooksRoutingDesk(): React.JSX.Element {
             <ul className="divide-y divide-hairline" aria-label={searching ? t('ledger.booksDesk.searchLabel') : scopeLabel(scope)}>
               {rows.map((book) => (
                 <li key={book.id}>
-                  <BookRow book={book} showScope={searching} current={book.id === lastOpenedId} onOpen={() => bookPage.open(String(book.id))} />
+                  <BookRow book={book} asSent={!searching && scope === 'outgoing'} showScope={searching} current={book.id === lastOpenedId} onOpen={() => bookPage.open(String(book.id))} />
                 </li>
               ))}
             </ul>
@@ -347,8 +347,10 @@ export function BooksRoutingDesk(): React.JSX.Element {
  * where it came from, who it went to and whose signature it carries. The end
  * column is when, plus my state (received) or the recipients' progress (sent).
  */
-function BookRow({ book, showScope, current, onOpen }: {
+function BookRow({ book, asSent, showScope, current, onOpen }: {
   book: BookRead
+  /** Outgoing tab: show my send even when I also received this book. */
+  asSent: boolean
   showScope: boolean
   current: boolean
   onOpen: () => void
@@ -356,7 +358,7 @@ function BookRow({ book, showScope, current, onOpen }: {
   const { t, i18n } = useTranslation()
   const me = useAuth().user?.id
   const name = (en: string | null | undefined, ar: string | null | undefined): string => pickEmployeeName({ name_en: en ?? '', name_ar: ar }, i18n.language)
-  const inbox = book.my_inbox
+  const inbox = asSent ? null : book.my_inbox
   const place = scopeOf(book)
   const recipients = book.recipients ?? []
   // Received: my own row. Sent: the rows I sent (other forwards are not my send).
