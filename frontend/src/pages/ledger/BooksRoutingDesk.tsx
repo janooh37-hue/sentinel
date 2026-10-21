@@ -274,7 +274,7 @@ export function BooksRoutingDesk(): React.JSX.Element {
                 <span className="pointer-events-none absolute inset-y-0 end-2 my-auto hidden h-fit text-xs text-muted-foreground sm:inline-flex" aria-hidden><Kbd>Ctrl K</Kbd></span>
               )}
             </div>
-            <Select value={sort} onValueChange={(value) => { setOffset(0); setSort(value) }}>
+            <Select dir={i18n.dir()} value={sort} onValueChange={(value) => { setOffset(0); setSort(value) }}>
               <SelectTrigger className="w-auto shrink-0 gap-2" aria-label={t('ledger.booksDesk.sortLabel')}>
                 <ArrowDownUp className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} aria-hidden />
                 <SelectValue />
@@ -412,7 +412,7 @@ function BookRow({ book, showScope, current, onOpen }: {
           {toNames.length > 0 && (
             <Meta label={t('ledger.booksDesk.to')} title={toNames.join(listSep)}>
               {toNames.slice(0, 2).join(listSep)}
-              {toNames.length > 2 && <span className="ms-1 text-muted-foreground">{t('ledger.booksDesk.moreNames', { count: toNames.length - 2 })}</span>}
+              {toNames.length > 2 && <bdi dir="ltr" className="ms-1 text-muted-foreground">{t('ledger.booksDesk.moreNames', { count: toNames.length - 2 })}</bdi>}
             </Meta>
           )}
           {signer && <Meta label={t('ledger.booksDesk.signer')}>{signer}</Meta>}

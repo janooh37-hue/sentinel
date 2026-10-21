@@ -2159,8 +2159,8 @@
       "archived": "Archived",
       "archivedState": "Archived",
       "toast": {
-        "done": "Marked as done and moved to Done",
-        "undoDone": "Done undone and moved back to Incoming",
+        "done": "Marked as done",
+        "undoDone": "Done undone",
         "archive": "Moved to Archived",
         "unarchive": "Restored from Archived"
       },
