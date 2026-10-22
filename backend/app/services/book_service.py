@@ -34,6 +34,7 @@ from app.core.form_kind import (
     subject_prefixes,
     word_draft_service,
 )
+from app.core.fts_query import and_prefix_query, has_nul
 from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import (
     AuditLog,
@@ -143,26 +144,22 @@ def derive_subject(book: Book) -> str | None:
 def _fts_query_books(db: Session, q: str) -> dict[int, str]:
     """Run an FTS5 query on books_fts; return {book_id: snippet}.
 
-    Normalises the query with normalize_ar, splits into tokens, and appends
-    ``*`` to the last token for prefix-match typing (e.g. ``تصريح أمن*``).
+    Normalises the query with normalize_ar, then matches every whitespace-separated
+    token as an FTS5 *literal* (so ``E-40817`` or ``a OR b`` are data, not syntax),
+    appending ``*`` to the last token only for prefix-match typing
+    (e.g. ``تصريح أمن*``). Text containing a NUL matches nothing: the NUL check runs
+    on the raw input, before normalisation can rewrite it.
 
-    Falls back to {} on any error (missing FTS table, syntax, etc.) so the
-    caller's ilike path still works.
+    Falls back to {} on any error (missing FTS table, etc.) so the caller's ilike
+    path still works.
     """
     from app.core.book_text import normalize_ar
 
-    norm = normalize_ar(q.strip())
-    if not norm:
+    if has_nul(q):
         return {}
-
-    tokens = norm.split()
-    if not tokens:
+    match_str = and_prefix_query(normalize_ar(q.strip()))
+    if match_str is None:
         return {}
-    # Append prefix wildcard to last token only; escape embedded quotes.
-    escaped = [t.replace('"', '""') for t in tokens]
-    match_str = (
-        " ".join([*escaped[:-1], escaped[-1] + "*"]) if len(escaped) > 1 else escaped[0] + "*"
-    )
 
     try:
         rows = db.execute(

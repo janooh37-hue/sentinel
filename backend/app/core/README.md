@@ -309,6 +309,23 @@ showed.
 
 ---
 
+### `fts_query`
+
+```python
+fts_query.and_prefix_query(text: str) -> str | None  # tokens AND-ed, last one a prefix
+fts_query.phrase_query(text: str) -> str | None      # whole text as one phrase
+fts_query.has_nul(text: str) -> bool
+```
+
+Builds SQLite FTS5 `MATCH` expressions from user text as quoted *literals*, so
+`E-40817`, `2026/1043`, `a OR b` or `col:x` are data, never FTS5 syntax. Used by
+Records search (`book_service._fts_query_books`, AND + last-token prefix) and ledger
+search (`search_service.search`, one phrase). `None` means "no full-text match":
+blank text, or text containing a NUL, which cannot be quoted. Callers must check
+`has_nul` on the raw input before any normalisation.
+
+---
+
 ## Templates
 
 Tokenized templates live in `backend/templates/`. Pristine v3 originals
