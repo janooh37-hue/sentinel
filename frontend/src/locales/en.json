@@ -2876,6 +2876,7 @@
         "personalAudience": "Only you can see this folder.",
         "everyoneAudience": "Everyone can see this folder. Each person sees only the books they are allowed to open.",
         "restrictedAudience": "Shared with: {{audience}}.",
+        "departmentAudience": "{{name}} department",
         "bookVisibility": "Each person sees only the books they are allowed to open.",
         "createdBy": "Created by {{name}}",
         "share": "Share",

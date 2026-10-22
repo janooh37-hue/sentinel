@@ -3131,6 +3131,7 @@
         "personalAudience": "لا يظهر هذا المجلد إلا لك.",
         "everyoneAudience": "يظهر هذا المجلد للجميع. لا يرى كل شخص إلا الكتب المسموح له بفتحها.",
         "restrictedAudience": "تمت المشاركة مع: {{audience}}.",
+        "departmentAudience": "قسم {{name}}",
         "bookVisibility": "لا يرى كل شخص إلا الكتب المسموح له بفتحها.",
         "createdBy": "أنشأه {{name}}",
         "share": "مشاركة",

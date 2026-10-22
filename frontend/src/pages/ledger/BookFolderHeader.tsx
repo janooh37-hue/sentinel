@@ -15,14 +15,17 @@ export function BookFolderHeader({ folder }: { folder: BookFolderRead }): React.
   const [sharing, setSharing] = useState(false)
   const isAr = i18n.language.startsWith('ar')
   const creator = pickEmployeeName({ name_en: folder.created_by_name ?? '', name_ar: folder.created_by_name_ar }, i18n.language)
-  const audience = [
-    ...folder.shared_users.map((user) => (isAr ? user.title_ar || user.title : user.title || user.title_ar)
-      || pickEmployeeName({ name_en: user.name, name_ar: user.name_ar }, i18n.language)),
-    ...folder.shared_departments,
-  ]
+  // Names, not titles: several people can share one designation, and a bare title reads like a whole group.
+  const people = folder.shared_users.map((user) => {
+    const name = pickEmployeeName({ name_en: user.name, name_ar: user.name_ar }, i18n.language)
+    const title = isAr ? user.title_ar || user.title : user.title || user.title_ar
+    return { short: name, full: title ? `${bidi(name)} (${bidi(title)})` : bidi(name) }
+  })
+  const departments = folder.shared_departments.map((department) => t(`${KEY}.departmentAudience`, { name: bidi(department) }))
+  const audience = [...people.map((person) => bidi(person.short)), ...departments]
   const separator = isAr ? '، ' : ', '
-  const audienceSentence = (items: string[]): string => t(`${KEY}.restrictedAudience`, { audience: items.map(bidi).join(separator) })
-  const fullAudience = audienceSentence(audience)
+  const audienceSentence = (items: string[]): string => t(`${KEY}.restrictedAudience`, { audience: items.join(separator) })
+  const fullAudience = audienceSentence([...people.map((person) => person.full), ...departments])
   const visibleAudience = audienceSentence(audience.slice(0, 3))
 
   return (
