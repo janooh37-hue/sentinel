@@ -120,15 +120,17 @@ export function ScanBackDock(): React.JSX.Element | null {
         // `end-4` is the logical utility (inset-inline-end) — it flips in RTL.
         // Never `right-4`. Precedent: IdentityDocCard.tsx:97.
         'fixed z-30 flex flex-col items-end gap-2 end-4',
-        // The toast viewport (AppToaster, position="bottom-right") sits at the same
-        // corner in LTR and paints over anything under it (z-index 999999999 —
-        // we clear it spatially, not by fighting z-index). Its default 24px
-        // bottom offset + a collapsed toast's 40px pill is well inside the ~88px (5.5rem)
-        // band; 5.5rem also exceeds the 3.5rem BottomTabBar clearance
-        // App.tsx's <main> already reserves on mobile, so one value covers
-        // both viewports. A stack of several toasts, or an expanded description, can still reach higher —
-        // accepted residual, not solved here.
-        'bottom-[calc(5.5rem+var(--safe-bottom))] md:bottom-[5.5rem]',
+        // The toast viewport (AppToaster, position="bottom-right", 12px offset) sits at
+        // the same corner in LTR and paints over anything under it (z-index
+        // 999999999 — we clear it spatially, not by fighting z-index). A single
+        // Sileo toast opens its body for an Undo, a description or a message longer
+        // than the pill: ~136px tall, ~176px when it carries an action and a body
+        // (a collapsed pill is ~40px). The band is 12rem (192px), so the dock sits
+        // above any one toast at 1280px and at 390px, in LTR and RTL alike. 12rem
+        // also exceeds the 3.5rem BottomTabBar clearance App.tsx's <main> reserves
+        // on mobile, so one value covers both viewports. A stack of several toasts,
+        // or a multi-line message, can still reach higher — accepted residual.
+        'bottom-[calc(12rem+var(--safe-bottom))] md:bottom-[12rem]',
         'rtl:items-start',
       )}
     >

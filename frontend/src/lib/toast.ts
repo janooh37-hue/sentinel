@@ -118,7 +118,7 @@ function buildOptions(kind: ToastKind, id: string, message: string, opts: ToastO
             try {
               action.onClick()
             } finally {
-              sileo.dismiss(id)
+              dismiss(id)
             }
           },
         }
@@ -126,15 +126,72 @@ function buildOptions(kind: ToastKind, id: string, message: string, opts: ToastO
   }
 }
 
+/**
+ * Sileo's `dismiss(id)` schedules "remove every item with this id" 600 ms later,
+ * and a toast raised with the same id in that window is deleted by that stale
+ * timer. A caller-chosen id therefore maps to a generation-suffixed Sileo id: it
+ * is reused while that toast is live (update in place) and replaced by a fresh
+ * generation once it is closing or gone. Id-less toasts are unique already.
+ */
+interface Generation {
+  internal: string
+  /** True once the host has seen the toast live in the DOM. */
+  seen: boolean
+}
+
+const generations = new Map<string, Generation>()
+let generationCounter = 0
+
+function internalIdFor(callerId: string): string {
+  const existing = generations.get(callerId)
+  if (existing) return existing.internal
+  generationCounter += 1
+  const internal = `${callerId}#${generationCounter}`
+  generations.set(callerId, { internal, seen: false })
+  return internal
+}
+
+/** Forgets the generation a caller id or Sileo id belongs to, so the next raise starts a fresh one. */
+function release(id: string): string {
+  const direct = generations.get(id)
+  if (direct) {
+    generations.delete(id)
+    return direct.internal
+  }
+  for (const [callerId, generation] of generations) {
+    if (generation.internal === id) generations.delete(callerId)
+  }
+  return id
+}
+
+/**
+ * Called by the host with the toasts Sileo currently renders. A generation that
+ * is closing, or that vanished after being seen (an auto-close, which only Sileo
+ * itself performs), is dropped so a later raise of the same id is a new toast.
+ */
+export function reconcileToastGenerations(rendered: ReadonlyArray<{ id: string; exiting: boolean }>): void {
+  for (const [callerId, generation] of generations) {
+    const match = rendered.find((item) => item.id === generation.internal)
+    if (match && !match.exiting) generation.seen = true
+    else if (match || generation.seen) generations.delete(callerId)
+  }
+}
+
 function show(kind: ToastKind, message: string, opts: ToastOptions = {}): string {
-  const id = opts.id !== undefined ? String(opts.id) : nextId()
+  const callerId = opts.id !== undefined ? String(opts.id) : nextId()
+  const internal = opts.id !== undefined ? internalIdFor(callerId) : callerId
   announce(stateOf(kind, opts.action !== undefined), message, opts.description)
-  return sileo.show(buildOptions(kind, id, message, opts))
+  sileo.show(buildOptions(kind, internal, message, opts))
+  return callerId
 }
 
 function dismiss(id?: string | number): void {
-  if (id === undefined) sileo.clear()
-  else sileo.dismiss(String(id))
+  if (id === undefined) {
+    generations.clear()
+    sileo.clear()
+  } else {
+    sileo.dismiss(release(String(id)))
+  }
 }
 
 function promise<T>(source: Promise<T> | (() => Promise<T>), messages: ToastPromiseMessages<T>): Promise<T> {

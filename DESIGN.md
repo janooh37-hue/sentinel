@@ -1521,8 +1521,7 @@ against the pill (warning on the light pill is `#9a4507`, a shade darker than
 `--warning`). A theme change flips live toasts.
 
 **RTL.** The viewport stays physically `bottom-right` in both languages (as the
-previous host did; `ScanBackDock` sits at the inline end, so it is clear of it in
-Arabic). Text, the badge and the action follow `<html dir>`; the body uses
+previous host did). `ScanBackDock` sits at the inline end, so it is on the far side in wide Arabic, but on a narrow screen the two share the corner in both languages; the dock's 12rem bottom band (see Known limits) keeps it clear of one expanded toast either way. Text, the badge and the action follow `<html dir>`; the body uses
 `text-align: start`. Titles are not title-cased.
 
 **Motion.** Sileo's CSS honours `prefers-reduced-motion`; its pill is animated
@@ -1543,9 +1542,10 @@ viewer). The lock overlay hides the viewport and the announcers
 
 **Known limits (Sileo 0.1.6).** Only the newest toast shows its body without
 hover, so in a stack older toasts read as their state title until hovered (the
-announcers still carry their full text). An expanded body can rise above the
-`ScanBackDock` band on the right in English. `Infinity`-duration toasts with a
-description open on hover/focus only.
+announcers still carry their full text). `ScanBackDock` reserves a 12rem bottom
+band, enough for one expanded toast, including one with an action and a body; a stack of several
+toasts or a long multi-line message can still reach it. `Infinity`-duration
+toasts with a description open on hover/focus only.
 
 ## 4. Dashboard page
 

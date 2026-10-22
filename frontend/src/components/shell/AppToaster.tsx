@@ -7,7 +7,7 @@ import {
   type Announcement,
   type AnnouncementPriority,
 } from '@/lib/toastAnnouncements'
-import { toast } from '@/lib/toast'
+import { reconcileToastGenerations, toast } from '@/lib/toast'
 
 import './AppToaster.css'
 
@@ -169,6 +169,12 @@ export function AppToaster(): React.JSX.Element {
     const observer = new MutationObserver(() => {
       tidyAccessibility(root)
       releaseStaleHover(root, engaged)
+      reconcileToastGenerations(
+        Array.from(root.querySelectorAll<HTMLElement>('[data-sileo-toast]'), (el) => ({
+          id: toastIdOf(el) ?? '',
+          exiting: el.dataset.exiting === 'true',
+        })),
+      )
     })
     observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-exiting'] })
     tidyAccessibility(root)

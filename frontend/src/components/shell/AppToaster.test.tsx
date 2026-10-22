@@ -217,6 +217,91 @@ describe('AppToaster + toast adapter', () => {
     expect(toastEls()).toHaveLength(0)
   })
 
+  describe('re-raising a fixed id while the previous toast is closing', () => {
+    // Sileo removes every item with a dismissed id 600 ms later; a toast raised
+    // with that id inside the window used to be deleted by the stale timer.
+    const ID = 'timesheet-cell-locked'
+    const closers: Array<[string, () => void]> = [
+      [
+        'click',
+        () => {
+          fireEvent.click(toastEls()[0])
+        },
+      ],
+      [
+        'Escape',
+        () => {
+          const el = toastEls()[0]
+          el.focus()
+          fireEvent.keyDown(el, { key: 'Escape' })
+        },
+      ],
+      [
+        'default timeout',
+        () => {
+          vi.advanceTimersByTime(TOAST_DEFAULT_DURATION_MS + 50)
+        },
+      ],
+      ['toast.dismiss(id)', () => toast.dismiss(ID)],
+    ]
+
+    it.each(closers)('keeps the second toast after the first closes by %s', async (_name, close) => {
+      vi.useFakeTimers()
+      await act(async () => {
+        toast.warning('First', { id: ID })
+      })
+      await act(async () => {
+        close()
+      })
+      await act(async () => {
+        vi.advanceTimersByTime(300)
+      })
+      await act(async () => {
+        toast.warning('Second', { id: ID })
+      })
+      await act(async () => {
+        vi.advanceTimersByTime(1000)
+      })
+      expect(toastEls().map(titleOf)).toEqual(['Second'])
+    })
+
+    it('still updates in place while the toast is live, and never duplicates it', async () => {
+      vi.useFakeTimers()
+      await act(async () => {
+        toast.warning('First', { id: ID })
+      })
+      await act(async () => {
+        vi.advanceTimersByTime(1000)
+        toast.warning('Updated', { id: ID })
+      })
+      expect(toastEls().map(titleOf)).toEqual(['Updated'])
+    })
+
+    it('dismisses by the id the caller was given, and dismiss-all clears fixed ids too', async () => {
+      vi.useFakeTimers()
+      let returned = ''
+      await act(async () => {
+        returned = toast.info('Fixed', { id: ID })
+      })
+      expect(returned).toBe(ID)
+      await act(async () => {
+        toast.dismiss(returned)
+        vi.advanceTimersByTime(700)
+      })
+      expect(toastEls()).toHaveLength(0)
+
+      await act(async () => {
+        toast.info('Again', { id: ID })
+      })
+      await act(async () => {
+        toast.dismiss()
+        toast.info('After clear', { id: ID })
+        vi.advanceTimersByTime(700)
+      })
+      expect(toastEls().map(titleOf)).toEqual(['After clear'])
+    })
+  })
+
   it('click on the toast dismisses it, except a loading one', async () => {
     act(() => {
       toast.loading('Working')
@@ -244,7 +329,8 @@ describe('AppToaster + toast adapter', () => {
     act(() => {
       toast.success('Done', { id: 'record-delete-3' })
     })
-    expect(toastEls()[0].querySelector('filter')?.id).toBe('sileo-gooey-record-delete-3')
+    // Caller id plus the adapter's generation suffix.
+    expect(toastEls()[0].querySelector('filter')?.id).toMatch(/^sileo-gooey-record-delete-3#\d+$/)
   })
 
   it('walks a promise from loading to success and to error under one id', async () => {
