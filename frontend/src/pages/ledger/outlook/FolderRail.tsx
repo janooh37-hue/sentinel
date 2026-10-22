@@ -1,5 +1,5 @@
 /**
- * FolderRail — the left folder rail of the Ledger Outlook shell (Phase 4, Task 6).
+ * FolderRail — the folder rail of the Ledger Outlook shell (Phase 4, Task 6).
  *
  * Matches the prototype's `.rail` (docs/prototypes/ledger-outlook-redesign.html):
  *   [collapse toggle] → [＋ New email] → [account header] → personal folders
@@ -14,9 +14,8 @@
  * Collapse: the rail folds to a 60px icon-only strip (Outlook-style). Labels and
  * the email line hide; emoji centre and carry `title`/`aria-label` tooltips so
  * they stay identifiable. State persists in localStorage so it survives
- * navigation. Pinned LTR by the shell (`[data-ledger-chrome] dir=ltr`), so the
- * rail never mirrors in Arabic — width + logical utilities keep it on the start
- * (left) edge.
+ * navigation. The rail follows the app direction: left in English, right in
+ * Arabic, matching the Books rail.
  *
  * The emoji are wayfinding aids per CLAUDE.md principle #1 — keep them. Rail
  * colours use the `--rail*` semantic tokens (Task 2), never hardcoded hex.
@@ -118,6 +117,7 @@ export function FolderRail({ header, activeView, onSelectView, onNewEmail, allMa
           className={cn(
             'h-3.5 w-3.5 flex-none transition-transform duration-200 motion-reduce:transition-none',
             collapsed && 'rotate-180',
+            'rtl:-scale-x-100',
           )}
           aria-hidden
         />

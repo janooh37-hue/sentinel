@@ -12,7 +12,7 @@
  * filter bar (D1), the per-session thread-collapse toggle (D2), multi-select
  * (D4), and the flag UI on rows (D3b). Rows are `MessageListRow`.
  *
- * Ledger CHROME — `[data-ledger-chrome] dir="ltr"`, never mirrors in Arabic.
+ * Ledger chrome follows the app direction; use logical utilities only.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -367,7 +367,7 @@ function ThreadGroup({
         <ChevronRight
           className={cn(
             'h-4 w-4 shrink-0 text-faint transition-transform motion-reduce:transition-none',
-            open && 'rotate-90',
+            open ? 'rotate-90' : 'rtl:-scale-x-100',
           )}
           strokeWidth={1.8}
           aria-hidden

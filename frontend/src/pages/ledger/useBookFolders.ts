@@ -8,6 +8,9 @@ const ERROR_KEYS: Record<string, string | undefined> = {
   FORBIDDEN: 'ledger.booksDesk.folders.errorForbidden',
 }
 
+/** dataTransfer type for a Books desk row dragged onto a rail folder. */
+export const BOOK_DRAG_TYPE = 'application/x-gssg-book'
+
 /** Folder failures in the reader's language; raw API text is English-only. */
 export function toastFolderError(t: TFunction, error: unknown, titleKey: string): void {
   const key = error instanceof ApiError ? ERROR_KEYS[error.code] : undefined

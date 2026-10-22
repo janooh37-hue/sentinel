@@ -10,8 +10,8 @@
  * (smart folders are filters, not containers — spec §E). Esc / ✕ clears the
  * selection (Esc is wired by the parent list).
  *
- * Ledger CHROME — lives inside `[data-ledger-chrome] dir="ltr"`, must NOT mirror
- * in Arabic. Logical utilities only; emoji are wayfinding aids.
+ * Ledger chrome follows the app direction; logical utilities only. Emoji are
+ * wayfinding aids.
  */
 
 import { useState } from 'react'

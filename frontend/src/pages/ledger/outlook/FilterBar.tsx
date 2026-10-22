@@ -9,8 +9,7 @@
  * open folder (`applyQuickFilters`). "This employee" is only enabled when a
  * person is in context (an employee G-number resolved from the open mail).
  *
- * This is ledger CHROME — it lives inside `[data-ledger-chrome] dir="ltr"` and
- * must NOT mirror in Arabic. Use logical utilities; only leaf text re-flows.
+ * Ledger chrome follows the app direction; use logical utilities only.
  * Emoji are wayfinding aids (CLAUDE.md principle #1).
  */
 

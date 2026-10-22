@@ -1,5 +1,5 @@
-import { useId, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import type { DragEvent, ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Folder, FolderArchive, FolderCheck, FolderInput, FolderOutput, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -15,7 +15,7 @@ import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
 import { useInboxSummary } from '@/pages/books/useInboxCount'
 import { FolderButton } from './outlook/FolderRail'
-import { toastFolderError, useBookFolders } from './useBookFolders'
+import { BOOK_DRAG_TYPE, toastFolderError, useBookFolders } from './useBookFolders'
 
 export type Scope = 'incoming' | 'done' | 'outgoing' | 'archived'
 const SCOPES: readonly Scope[] = ['incoming', 'done', 'outgoing', 'archived']
@@ -104,6 +104,9 @@ export function BooksRail({ scope, folderId, switcher, onSelectScope, onSelectFo
   const summary = useInboxSummary()
   const [editor, setEditor] = useState<FolderEdit | null>(null)
   const [deleting, setDeleting] = useState<BookFolderRead | null>(null)
+  // A desk row is being dragged: every folder shows it accepts the drop.
+  const [dragging, setDragging] = useState(false)
+  const [dropTarget, setDropTarget] = useState<number | null>(null)
   const canCreateTeam = user?.role === 'admin' || user?.role === 'manager'
 
   function invalidateFolders(): void {
@@ -138,6 +141,45 @@ export function BooksRail({ scope, folderId, switcher, onSelectScope, onSelectFo
     },
     onError: (error) => toastFolderError(t, error, `${KEY}.deleteError`),
   })
+  const fileMutation = useMutation({
+    mutationFn: ({ bookId, folder }: { bookId: number; folder: BookFolderRead }) => api.addBookToFolder(bookId, folder.id),
+    onSuccess: (_result, { folder }) => {
+      invalidateFolders()
+      toast.success(t(`${KEY}.filedInto`, { name: folder.name }))
+    },
+    onError: (error) => toastFolderError(t, error, `${KEY}.fileError`),
+  })
+  useEffect(() => {
+    const start = (event: globalThis.DragEvent): void => { if (event.dataTransfer?.types.includes(BOOK_DRAG_TYPE)) setDragging(true) }
+    const end = (): void => { setDragging(false); setDropTarget(null) }
+    document.addEventListener('dragstart', start)
+    document.addEventListener('dragend', end)
+    document.addEventListener('drop', end)
+    return () => {
+      document.removeEventListener('dragstart', start)
+      document.removeEventListener('dragend', end)
+      document.removeEventListener('drop', end)
+    }
+  }, [])
+  function dropHandlers(folder: BookFolderRead) {
+    return {
+      onDragOver: (event: DragEvent<HTMLDivElement>) => {
+        // Only book rows are droppable; files or text dragged over the rail are ignored.
+        if (!event.dataTransfer.types.includes(BOOK_DRAG_TYPE)) return
+        event.preventDefault()
+        event.dataTransfer.dropEffect = 'copy'
+        setDropTarget(folder.id)
+      },
+      onDragLeave: (event: DragEvent<HTMLDivElement>) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget((id) => id === folder.id ? null : id)
+      },
+      onDrop: (event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault()
+        const bookId = Number(event.dataTransfer.getData(BOOK_DRAG_TYPE))
+        if (bookId) fileMutation.mutate({ bookId, folder })
+      },
+    }
+  }
   const pending = saveMutation.isPending || deleteMutation.isPending
 
   function renderEditor(): ReactNode {
@@ -198,7 +240,11 @@ export function BooksRail({ scope, folderId, switcher, onSelectScope, onSelectFo
             {sectionFolders.map((folder) => (
               <div key={folder.id} data-folder-id={folder.id}>
                 {editor?.id === folder.id ? renderEditor() : (
-                  <div className="flex min-w-0 items-center gap-0.5">
+                  <div {...dropHandlers(folder)} className={cn(
+                    'flex min-w-0 items-center gap-0.5 rounded-md transition-colors',
+                    dragging && 'outline-1 -outline-offset-1 outline-dashed outline-rail-line',
+                    dropTarget === folder.id && 'bg-rail-2 outline-solid outline-rail-faint',
+                  )}>
                     <div className="min-w-0 flex-1">
                       <FolderButton icon={<Folder className="h-4 w-4" strokeWidth={1.8} aria-hidden />} label={folder.name} active={folderId === folder.id} count={folder.count} onClick={() => onSelectFolder(folder.id)} />
                     </div>

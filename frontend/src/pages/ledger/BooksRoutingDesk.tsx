@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { DragEvent, ReactNode } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Archive, ArrowDownUp, ArrowLeft, BookText, Check, CheckCheck, ChevronDown, ChevronUp, Eye, FileText, Flag,
@@ -40,7 +40,7 @@ import { defaultPaperKey, paperCountOf, paperKey, papersOf } from '@/pages/books
 import type { PaperKey } from '@/pages/books/recordPapers'
 import { BooksRail, ScopeIcon } from './BooksRail'
 import type { Scope } from './BooksRail'
-import { toastFolderError, useBookFolders } from './useBookFolders'
+import { BOOK_DRAG_TYPE, toastFolderError, useBookFolders } from './useBookFolders'
 
 const RecordPaperViewer = lazy(() => import('@/pages/books/RecordPaperViewer'))
 
@@ -335,7 +335,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
               <ul className="divide-y divide-hairline" aria-label={searching ? t('ledger.booksDesk.searchLabel') : placeLabel}>
                 {rows.map((book) => (
                   <li key={book.id}>
-                    <BookRow book={book} asSent={asSent} showScope={searching} current={book.id === lastOpenedId} onOpen={() => bookPage.open(String(book.id))} />
+                    <BookRow book={book} asSent={asSent} showScope={searching} current={book.id === lastOpenedId} draggable={!isMobile} onOpen={() => bookPage.open(String(book.id))} />
                   </li>
                 ))}
               </ul>
@@ -382,12 +382,14 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
  * table row under the column header; below lg it stacks: purpose, then
  * subject + note, then a labelled meta line, with date and status at the end.
  */
-function BookRow({ book, asSent, showScope, current, onOpen }: {
+function BookRow({ book, asSent, showScope, current, draggable, onOpen }: {
   book: BookRead
   /** Outgoing tab: show my send even when I also received this book. */
   asSent: boolean
   showScope: boolean
   current: boolean
+  /** Desktop: drag the row onto a rail folder to file it. */
+  draggable: boolean
   onOpen: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -418,6 +420,8 @@ function BookRow({ book, asSent, showScope, current, onOpen }: {
       type="button"
       data-book-id={book.id}
       aria-current={current ? 'true' : undefined}
+      draggable={draggable}
+      onDragStart={draggable ? (event) => startBookDrag(event, book.id, book.ref_number, book.subject || t('ledger.booksDesk.untitled'), i18n.dir()) : undefined}
       onClick={onOpen}
       className={cn(
         'grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-4 py-3 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:px-6',
@@ -483,6 +487,28 @@ function BookRow({ book, asSent, showScope, current, onOpen }: {
       </span>
     </button>
   )
+}
+
+/** Carry the book id and show a compact chip under the pointer, not the whole wide row. */
+function startBookDrag(event: DragEvent<HTMLElement>, id: number, ref: string, subject: string, dir: 'ltr' | 'rtl'): void {
+  event.dataTransfer.setData(BOOK_DRAG_TYPE, String(id))
+  event.dataTransfer.effectAllowed = 'copy'
+  const chip = document.createElement('div')
+  chip.dir = dir
+  chip.className = 'fixed -top-96 start-0 flex max-w-72 items-center gap-2 rounded-md border border-border bg-surface-raised px-3 py-2 text-sm text-foreground shadow-lg'
+  const refLabel = document.createElement('bdi')
+  refLabel.dir = 'ltr'
+  refLabel.className = 'shrink-0 font-mono text-xs text-muted-foreground'
+  refLabel.textContent = ref
+  const subjectLabel = document.createElement('span')
+  subjectLabel.dir = 'auto'
+  subjectLabel.className = 'min-w-0 truncate'
+  subjectLabel.textContent = subject
+  chip.append(refLabel, subjectLabel)
+  document.body.append(chip)
+  // Hold the chip by its start edge, so in Arabic the pointer sits on its right.
+  event.dataTransfer.setDragImage(chip, dir === 'rtl' ? chip.offsetWidth - 14 : 14, 14)
+  requestAnimationFrame(() => chip.remove())
 }
 
 function BookFolderMenu({ bookId, disabled }: { bookId: number; disabled: boolean }): React.JSX.Element {

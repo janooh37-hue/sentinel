@@ -125,6 +125,29 @@ describe('Books routing desk', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books', 'routing'] })
     expect(api.markBookInboxDone).not.toHaveBeenCalled()
   })
+  it('files a book dragged from the list onto a rail folder, leaving its inbox state alone', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [BOOK], total: 1, limit: 50, offset: 0 })
+    vi.mocked(api.listBookFolders).mockResolvedValue([{ id: 3, name: 'Personnel', team: false, count: 0, can_manage: true }])
+    vi.spyOn(api, 'addBookToFolder').mockResolvedValue(undefined)
+    const qc = mount()
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    const data = new Map<string, string>()
+    const dataTransfer = {
+      setData: (type: string, value: string) => data.set(type, value),
+      getData: (type: string) => data.get(type) ?? '',
+      get types() { return [...data.keys()] },
+      setDragImage: vi.fn(),
+      effectAllowed: 'all',
+      dropEffect: 'none',
+    }
+    fireEvent.dragStart(await screen.findByRole('button', { name: /GS-7/ }), { dataTransfer })
+    const folder = (await screen.findByRole('button', { name: /^Personnel/ })).closest('[data-folder-id] > div')!
+    fireEvent.dragOver(folder, { dataTransfer })
+    fireEvent.drop(folder, { dataTransfer })
+    await waitFor(() => expect(api.addBookToFolder).toHaveBeenCalledWith(7, 3))
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books', 'folders'] }))
+    expect(api.markBookInboxDone).not.toHaveBeenCalled()
+  })
   it('switches scope without mixing recipient inbox with record direction', async () => {
     mount()
     await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith(expect.objectContaining({ inbox: 'received' })))
@@ -300,7 +323,7 @@ describe('Books routing desk', () => {
     })
     mount('/ledger?tab=books&scope=outgoing')
     const row = await screen.findByRole('button', { name: /GS-7/ })
-    expect(row).toHaveTextContent('Khalid+2')
+    expect(row).toHaveTextContent('Khalid +2')
     expect(row).not.toHaveTextContent('Forwarded')
     expect(row).toHaveTextContent('Count by Thursday')
     expect(row).toHaveTextContent('Juma Saadi')

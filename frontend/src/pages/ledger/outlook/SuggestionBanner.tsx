@@ -7,8 +7,7 @@
  * dismiss endpoint (that cluster won't reappear, per-user).
  *
  * Shown only when there's at least one suggestion AND the user is on a normal
- * folder view (not already inside a smart folder). Ledger CHROME — lives inside
- * `[data-ledger-chrome] dir="ltr"`, never mirrors in Arabic.
+ * folder view (not already inside a smart folder).
  */
 
 import { useTranslation } from 'react-i18next'

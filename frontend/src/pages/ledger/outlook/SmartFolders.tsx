@@ -10,8 +10,8 @@
  * Smart folders are per-user saved subject filters (no membership). Selecting a
  * folder sets the shell's `{kind:'smart'}` view.
  *
- * Ledger CHROME — lives inside `[data-ledger-chrome] dir="ltr"`, never mirrors
- * in Arabic. Logical utilities only; emoji are wayfinding aids (✨/📂).
+ * Ledger chrome follows the app direction; logical utilities only. Emoji are
+ * wayfinding aids (✨/📂).
  */
 
 import { useState } from 'react'

@@ -17,9 +17,8 @@
  *
  * Prototype reference: `.rp-top` / `.rp-actions` / `.rp-from` / `.recips` /
  * `.attach` / `.rp-body` / `.thread` (docs/prototypes/ledger-outlook-redesign.html
- * lines 217–293, `renderMessage` 1101–1158). The whole pane lives inside
- * `[data-ledger-chrome] dir="ltr"` — it does NOT mirror; only the body renders
- * in its own source direction (handled by EmailBody, Task 3).
+ * lines 217–293, `renderMessage` 1101–1158). The pane follows the app
+ * direction; only the body renders in its own source direction (EmailBody).
  *
  * Reply / Reply All / Forward are surfaced as callbacks (the shell opens the
  * Outlook handoff dialog with them). Smart-link clicks bubble via
@@ -156,7 +155,7 @@ export function ReadingPane({
               </span>
             )}
           </div>
-          <div className="flex flex-none flex-col items-end gap-2 rtl:items-start">
+          <div className="flex flex-none flex-col items-end gap-2">
             <div className="flex items-center gap-1.5">
               <Button
                 variant="primary"
@@ -240,7 +239,7 @@ export function ReadingPane({
   )
 }
 
-/** The `.read` flex container the slot expects — the pane never mirrors. */
+/** The `.read` flex container the slot expects. */
 function PaneShell({
   children,
   ariaLabel,

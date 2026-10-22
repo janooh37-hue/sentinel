@@ -16,16 +16,10 @@
  *   - personal folder → api.listLedger(mailboxToLedgerParams(view))  → ['ledger', params]
  * The resolved items + isLoading + tab + selectedId + view feed into MessageList.
  *
- * ── RTL EXCEPTION (Ledger-only) ──────────────────────────────────────────────
- * The chrome must NOT mirror in Arabic — folder rail stays LEFT, message list
- * MIDDLE, reading-pane area RIGHT, identical to LTR. We enforce this by pinning
- * the structural grid container to `dir="ltr"` (the `data-ledger-chrome`
- * wrapper below) so child order never flips, while each pane's TEXT re-flows to
- * Arabic (`dir="auto"` on the leaf nodes inside the panes). This is the one page
- * in the app that deliberately breaks app-wide RTL mirroring — Outlook
- * orientation is direction-independent. Do NOT "fix" this. See the prototype's
- * CSS note (docs/prototypes/ledger-outlook-redesign.html lines 474–538) and
- * CLAUDE.md's RTL note.
+ * DIRECTION: the shell follows the app direction like the Books desk. English
+ * reads rail · list · reading pane · context panel from the left; Arabic mirrors
+ * it, so the rail sits on the right in both Ledger tabs. Email bodies still
+ * render in their own source direction (EmailBody).
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
@@ -545,8 +539,6 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   if (requestedEntryQuery.isError) {
     return (
       <div
-        data-ledger-chrome
-        dir="ltr"
         className="flex flex-1 flex-col items-center justify-center gap-4 bg-background p-6"
       >
         {switcher && <div className="w-full max-w-[236px]">{switcher}</div>}
@@ -574,8 +566,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
     // restores the list. (Phase 4 hid the slot on mobile; Phase 5 fills it.) ──
     if (selectedId != null) {
       return (
-        // RTL-no-mirror still applies — pin the chrome `dir="ltr"`.
-        <div data-ledger-chrome dir="ltr" className="relative flex flex-1 flex-col overflow-hidden bg-background">
+        <div className="relative flex flex-1 flex-col overflow-hidden bg-background">
           {switcher && (
             <div className="flex-none border-b border-border bg-surface px-3 py-2">
               <div className="max-w-[236px]">{switcher}</div>
@@ -609,8 +600,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
                   <SheetTitle className="sr-only">
                     {t('ledger.outlook.peopleIn', { count: peopleCount })}
                   </SheetTitle>
-                  {/* Pin LTR so the panel stays Outlook-oriented; leaf text re-flows. */}
-                  <div dir="ltr" className="flex h-full min-h-0">
+                  <div className="flex h-full min-h-0">
                     <ContextPanel
                       selectedId={selectedId}
                       selectedKind={selectedKind}
@@ -631,10 +621,9 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
     }
 
     return (
-      // RTL-no-mirror still applies on mobile — pin the chrome `dir="ltr"`.
       // `relative` so a `new`-mode compose overlay (absolute inset-0) anchors
       // here even with no row selected.
-      <div data-ledger-chrome dir="ltr" className="relative flex flex-1 flex-col overflow-hidden bg-background">
+      <div className="relative flex flex-1 flex-col overflow-hidden bg-background">
         <div className="flex flex-none items-center gap-2 border-b border-border bg-surface px-3 py-2">
           {switcher && <div className="min-w-0 max-w-[236px] flex-1">{switcher}</div>}
           <Sheet open={folderDrawerOpen} onOpenChange={setFolderDrawerOpen}>
@@ -648,8 +637,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
             </SheetTrigger>
             <SheetContent className="w-[236px] p-0">
               <SheetTitle className="sr-only">{t('ledger.outlook.foldersTrigger')}</SheetTitle>
-              {/* The rail re-flows its own colours; pin LTR so it stays Outlook-oriented. */}
-              <div dir="ltr" className="flex h-full min-h-0">
+              <div className="flex h-full min-h-0">
                 <FolderRail activeView={activeView} onSelectView={handleSelectView} onNewEmail={handleNewEmail} allMail={allMail} onToggleAllMail={setAllMail} onReviewSuggestions={() => setReviewOpen(true)} suggestionCount={suggestions.length} />
               </div>
             </SheetContent>
@@ -663,15 +651,8 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   }
 
   return (
-    // RTL-no-mirror: structural chrome is pinned `dir="ltr"` so rail/list/pane
-    // never flip in Arabic. Leaf text inside each pane re-flows via `dir="auto"`.
-    // Ledger-only exception — see the file header + CLAUDE.md. Do not remove.
-    <div
-      data-ledger-chrome
-      dir="ltr"
-      className="relative grid flex-1 grid-cols-[auto_312px_1fr_auto] overflow-hidden bg-background"
-    >
-      {/* Folder rail (desktop middle column is the list, right is the slot). */}
+    <div className="relative grid flex-1 grid-cols-[auto_312px_1fr_auto] overflow-hidden bg-background">
+      {/* Folder rail at the inline start; the list, reading pane, and context panel follow. */}
       <div className="flex min-h-0">
         <FolderRail header={switcher} activeView={activeView} onSelectView={handleSelectView} onNewEmail={handleNewEmail} allMail={allMail} onToggleAllMail={setAllMail} onReviewSuggestions={() => setReviewOpen(true)} suggestionCount={suggestions.length} />
       </div>
@@ -682,10 +663,8 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
       {/* Reading-pane slot — empty state or reading pane. */}
       <div className="flex min-h-0">{readingPaneSlot}</div>
 
-      {/* Context panel — 4th column. The `auto` track lets the panel own its
-          own width (312px expanded / 42px collapsed). It is the 4th child of
-          the pinned `dir="ltr"` container, so it stays right-most in Arabic too
-          — only its leaf text re-flows (RTL-no-mirror preserved). */}
+      {/* Context panel: the `auto` track lets the panel own its width
+          (312px expanded / 42px collapsed) at the inline end. */}
       <ContextPanel
         selectedId={selectedId}
         selectedKind={selectedKind}
