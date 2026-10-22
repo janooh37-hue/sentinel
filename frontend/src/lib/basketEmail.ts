@@ -2,9 +2,9 @@
  * Build the basket compose prefill — subject + an official-letter body that
  * mirrors the emails the office actually sends (see real samples in the ledger).
  *
- * The wording, table layout and header colour are FIXED per kind to match those
- * letters byte-for-look — they are standardised correspondence, not UI chrome,
- * so they are NOT routed through i18n and do NOT follow the app language:
+ * Defaults, table layout and header colour match the standard letters. Shared
+ * plain-text overrides can replace subject, introduction and closing; tables
+ * remain structural. Letter content is not routed through UI i18n:
  *   • Sick   → blue header (#4472C4), LTR, English columns
  *              (S.N · ID · Name · From · To · Leave Days · Location)
  *   • Annual + other leave kinds → red header (#C00000), RTL, Arabic columns
@@ -18,6 +18,59 @@
 import type { ComposeReference } from '@/components/ledger/ReferencePicker'
 
 import { basketKey, filenameForItem, type BasketKey, type EmailBasketItem } from './emailBasket'
+import type { DraftOverrides } from './draftTemplates'
+import type { DraftTemplateFields } from './messageTemplates'
+
+/** Only keys in the renderer's value map are substituted; unknown tokens stay literal. */
+export function substituteDraftText(text: string, values: Record<string, string>): string {
+  return text.replace(/\{(\w+)\}/g, (match, token: string) =>
+    Object.hasOwn(values, token) ? values[token] : match)
+}
+
+export function draftTextHtml(text: string): string {
+  return esc(text).replace(/\r\n?|\n/g, '<br>')
+}
+
+/** Convert rendered default blocks to editable plain text without losing line breaks. */
+export function draftPlainText(html: string): string {
+  return html.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"').replace(/&gt;/g, '>').replace(/&lt;/g, '<')
+    .replace(/&amp;/g, '&').trim()
+}
+
+interface DraftParts { intro: string; table: string; closing: string }
+
+function basketDraftValues(items: EmailBasketItem[]): Record<string, string> {
+  const first = items[0]
+  return {
+    ref: first.ref,
+    date: dmyPad(first.bookDate ?? ''),
+    names: items.map(nameArOf).join('، '),
+    count: String(items.length),
+    detail: first.detail,
+    bank: [...new Set(items.map((item) => (item.bankName ?? '').trim()).filter(Boolean))].join('، '),
+    start_date: dmyPad(first.startDate ?? ''),
+    end_date: dmyPad(first.endDate ?? ''),
+  }
+}
+
+function basketOverride(items: EmailBasketItem[], overrides?: DraftOverrides): DraftTemplateFields {
+  if (!overrides || !items.length) return {}
+  const first = items[0]
+  const key = first.formKind === 'Security Permit' ? 'General Book' : basketKey(first)
+  if (key !== 'General Book') return overrides[key] ?? {}
+  if (items.every(isTransfer)) return overrides['General Book:transfer'] ?? {}
+  const code = first.classificationCode
+  const specific = code && items.every((item) => item.classificationCode === code)
+    ? overrides[`classification:${code}`] : undefined
+  const generic = overrides['General Book']
+  return {
+    subject: specific?.subject || (generic?.subject ?? ''),
+    intro: specific?.intro || (generic?.intro ?? ''),
+    closing: specific?.closing || (generic?.closing ?? ''),
+  }
+}
 
 // ── escaping & formatting ────────────────────────────────────────────────────
 
@@ -135,18 +188,18 @@ function isTransfer(item: EmailBasketItem): boolean {
   return item.formKind === 'General Book' && item.detail === TRANSFER_SUBJECT
 }
 
-function transferEmailBody(item: EmailBasketItem): string {
+function transferEmailParts(item: EmailBasketItem): DraftParts {
   const date = dmyPad(item.bookDate ?? '')
   const ref = esc(item.ref)
   const intro =
     'يطيب لنا أن نتقدم إليكم بخالص التحية و التقدير , يرجى العلم أنه ولغايات تنظيمية في العمل ' +
     `تم نقل المذكورين بالجدول المبين مضمون الكتاب الرقم ${ref} تاريخ ${date} م ` +
     'إلى الجهات المبينة بجانب أسمائهم إعتباراً من تاريخه .'
-  return (
-    p('السلام عليكم ورحمة الله وبركاته :') +
-    p(intro) +
-    buildClosing(['للتفضل بالعلم ولإجراءاتكم لطفاً.', 'هذا وتفضلوا بقبول فائق الإحترام والتقدير.'])
-  )
+  return {
+    intro: p('السلام عليكم ورحمة الله وبركاته :') + p(intro),
+    table: '',
+    closing: buildClosing(['للتفضل بالعلم ولإجراءاتكم لطفاً.', 'هذا وتفضلوا بقبول فائق الإحترام والتقدير.']),
+  }
 }
 
 const SALARY_TRANSFER = 'Salary Transfer Request'
@@ -181,7 +234,7 @@ function salaryTransferTable(items: EmailBasketItem[]): string {
 // ── Resignation (Resignation Letter / Resignation Declaration) ────────────────
 const RESIGNATION_FORMS = ['Resignation Letter', 'Resignation Declaration']
 
-function resignationBody(items: EmailBasketItem[], plural: boolean): string {
+function resignationBody(items: EmailBasketItem[], plural: boolean): Omit<DraftParts, 'closing'> {
   const who = plural ? 'المذكورين أدناه' : 'المذكور أدناه'
   const intro =
     p('السلام عليكم ورحمة الله وبركاته') +
@@ -196,15 +249,15 @@ function resignationBody(items: EmailBasketItem[], plural: boolean): string {
     i.joinDate ? dmy(i.joinDate) : '',
     i.lastWorkDay ? dmy(i.lastWorkDay) : '',
   ])
-  return (
-    intro +
-    tableHtml(
+  return {
+    intro,
+    table: tableHtml(
       'rtl',
       HEADER_RED,
       ['#', 'ID', 'الاسم', 'الجنسية', 'رقم الهاتف', 'المهام', 'تاريخ الالتحاق', 'أخر يوم عمل'],
       rows,
-    )
-  )
+    ),
+  }
 }
 
 // ── Passport Release Form ─────────────────────────────────────────────────────
@@ -214,7 +267,7 @@ const PASSPORT_CLOSING = buildClosing([
   'وأقبلوا تحياتي ،،،',
 ])
 
-function passportBody(items: EmailBasketItem[], plural: boolean): string {
+function passportBody(items: EmailBasketItem[], plural: boolean): Omit<DraftParts, 'closing'> {
   const who = plural ? 'المذكورين في الجدول أدناه' : 'المذكور في الجدول أدناه'
   const intro = RED_GREETING + p(`تقدم إلينا ${who} بطلب جواز السفر حسب ما هو مبين .`)
   const rows = items.map((i, idx) => [
@@ -225,16 +278,16 @@ function passportBody(items: EmailBasketItem[], plural: boolean): string {
     i.nationality ?? '',
     '', // ملاحظة — note, filled in the editor if needed
   ])
-  return (
-    intro +
-    tableHtml('rtl', HEADER_RED, ['م', 'الرقم', 'المسمى الوظيفي', 'الأسم', 'الجنسية', 'ملاحظة'], rows)
-  )
+  return {
+    intro,
+    table: tableHtml('rtl', HEADER_RED, ['م', 'الرقم', 'المسمى الوظيفي', 'الأسم', 'الجنسية', 'ملاحظة'], rows),
+  }
 }
 
 // ── Duty Resumption Form = return-from-leave letter ───────────────────────────
 const DUTY_RESUMPTION_FORM = 'Duty Resumption Form'
 
-function returnBody(items: EmailBasketItem[], plural: boolean): string {
+function returnBody(items: EmailBasketItem[], plural: boolean): Omit<DraftParts, 'closing'> {
   const who = plural ? 'المذكورين بالجدول أدناه' : 'المذكور بالجدول أدناه'
   const intro = RED_GREETING + p(`نفيدكم علماً بعودة ${who} من الإجازة حسب ما هو موضح .`)
   const rows = items.map((i, idx) => [
@@ -244,22 +297,22 @@ function returnBody(items: EmailBasketItem[], plural: boolean): string {
     nameArOf(i),
     i.resumptionDate ? dmy(i.resumptionDate) : '',
   ])
-  return (
-    intro +
-    tableHtml('rtl', HEADER_RED, ['#', 'الرقم الوظيفي', 'المسمى الوظيفي', 'الاسم', 'تاريخ استئناف الواجب'], rows)
-  )
+  return {
+    intro,
+    table: tableHtml('rtl', HEADER_RED, ['#', 'الرقم الوظيفي', 'المسمى الوظيفي', 'الاسم', 'تاريخ استئناف الواجب'], rows),
+  }
 }
 
 // ── Salary Deduction Form ─────────────────────────────────────────────────────
 const SALARY_DEDUCTION_FORM = 'Salary Deduction Form'
 
-function deductionBody(items: EmailBasketItem[], plural: boolean): string {
+function deductionBody(items: EmailBasketItem[], plural: boolean): Omit<DraftParts, 'closing'> {
   const who = plural ? 'المذكورين أدناه' : 'المذكور أدناه'
   const intro =
     p('السلام عليكم ورحمة الله وبركاته ,,,') +
     p(`يطيب لنا أن نهديكم أطيب التحيات ، ونود إعلامكم بأن ${who} من أفراد القوة لدينا تم الخصم من رواتبهم ، ويرجى توضيح سبب الخصم .`)
   const rows = items.map((i, idx) => [String(idx + 1), i.employeeId, nameArOf(i), positionArOf(i)])
-  return intro + tableHtml('rtl', HEADER_RED, ['#', 'ID', 'الاسم', 'المهام'], rows)
+  return { intro, table: tableHtml('rtl', HEADER_RED, ['#', 'ID', 'الاسم', 'المهام'], rows) }
 }
 
 function sickIntro(plural: boolean): string {
@@ -290,7 +343,7 @@ function genericIntroLine(plural: boolean): string {
 
 // ── public builders ───────────────────────────────────────────────────────────
 
-export function buildBasketSubject(items: EmailBasketItem[]): string {
+function defaultBasketSubject(items: EmailBasketItem[]): string {
   if (items.length === 0) return ''
   if (isTransfer(items[0])) return `تنقلات يوم ${dmyPad(items[0].bookDate ?? '')}`
   const lt = items[0].leaveType
@@ -306,17 +359,16 @@ export function buildBasketSubject(items: EmailBasketItem[]): string {
   return fk || 'مستندات'
 }
 
-/** Intro paragraph(s) + the styled table + the standard closing, ready to seed
- *  the compose editor. */
-export function buildBasketBodyHtml(items: EmailBasketItem[]): string {
-  if (items.length === 0) return ''
+/** Default structural parts are shared by compose and the template editor. */
+function basketEmailParts(items: EmailBasketItem[]): DraftParts {
+  if (items.length === 0) return { intro: '', table: '', closing: '' }
   const plural = items.length > 1
   const leaveType = items[0].leaveType
   const formKind = items[0].formKind
 
-  if (isTransfer(items[0])) return transferEmailBody(items[0])
+  if (isTransfer(items[0])) return transferEmailParts(items[0])
 
-  let body: string
+  let body: Omit<DraftParts, 'closing'>
   let closing = STANDARD_CLOSING
 
   if (leaveType === 'Sick') {
@@ -329,11 +381,12 @@ export function buildBasketBodyHtml(items: EmailBasketItem[]): string {
       daysBetween(i.startDate, i.endDate),
       FIXED_LOCATION, // single site for now
     ])
-    body =
-      sickIntro(plural) +
-      tableHtml('ltr', HEADER_BLUE, ['S.N', 'ID', 'Name', 'From', 'To', 'Leave Days', 'Location'], rows)
+    body = {
+      intro: sickIntro(plural),
+      table: tableHtml('ltr', HEADER_BLUE, ['S.N', 'ID', 'Name', 'From', 'To', 'Leave Days', 'Location'], rows),
+    }
   } else if (formKind === SALARY_TRANSFER) {
-    body = salaryTransferIntro(items, plural) + salaryTransferTable(items)
+    body = { intro: salaryTransferIntro(items, plural), table: salaryTransferTable(items) }
   } else if (formKind === PASSPORT_FORM) {
     body = passportBody(items, plural)
     closing = PASSPORT_CLOSING
@@ -352,10 +405,10 @@ export function buildBasketBodyHtml(items: EmailBasketItem[]): string {
       i.startDate ? dmy(i.startDate) : '',
       i.endDate ? dmy(i.endDate) : '',
     ])
-    body =
-      RED_GREETING +
-      p(leaveIntroLine(leaveType, plural)) +
-      tableHtml('rtl', HEADER_RED, ['م', 'الرقم الوظيفي', 'المسمى الوظيفي', 'الاسم', 'تاريخ الإجازة', 'ولغاية'], rows)
+    body = {
+      intro: RED_GREETING + p(leaveIntroLine(leaveType, plural)),
+      table: tableHtml('rtl', HEADER_RED, ['م', 'الرقم الوظيفي', 'المسمى الوظيفي', 'الاسم', 'تاريخ الإجازة', 'ولغاية'], rows),
+    }
   } else {
     // Non-leave forms — red default style, detail (subject) column.
     const rows = items.map((i, idx) => [
@@ -365,18 +418,41 @@ export function buildBasketBodyHtml(items: EmailBasketItem[]): string {
       nameArOf(i),
       i.detail,
     ])
-    body =
-      RED_GREETING +
-      p(genericIntroLine(plural)) +
-      tableHtml('rtl', HEADER_RED, ['م', 'الرقم الوظيفي', 'المسمى الوظيفي', 'الاسم', 'البيان'], rows)
+    body = {
+      intro: RED_GREETING + p(genericIntroLine(plural)),
+      table: tableHtml('rtl', HEADER_RED, ['م', 'الرقم الوظيفي', 'المسمى الوظيفي', 'الاسم', 'البيان'], rows),
+    }
   }
 
-  return body + closing
+  return { ...body, closing }
+}
+
+export function defaultBasketDraftText(items: EmailBasketItem[]) {
+  const parts = basketEmailParts(items)
+  return { subject: defaultBasketSubject(items), intro: draftPlainText(parts.intro), closing: draftPlainText(parts.closing) }
+}
+
+export function buildBasketSubject(items: EmailBasketItem[], overrides?: DraftOverrides): string {
+  const subject = basketOverride(items, overrides).subject ?? ''
+  return subject ? substituteDraftText(subject, basketDraftValues(items)) : defaultBasketSubject(items)
+}
+
+export function buildBasketBodyHtml(items: EmailBasketItem[], overrides?: DraftOverrides): string {
+  const parts = basketEmailParts(items)
+  const override = basketOverride(items, overrides)
+  if (!override.intro && !override.closing) return parts.intro + parts.table + parts.closing
+  const values = basketDraftValues(items)
+  const intro = override.intro ? p(draftTextHtml(substituteDraftText(override.intro, values))) : parts.intro
+  const closing = override.closing
+    ? buildClosing([draftTextHtml(substituteDraftText(override.closing, values))])
+    : parts.closing
+  return intro + parts.table + closing
 }
 
 export function buildBasketPrefill(
   items: EmailBasketItem[],
   to: string[],
+  overrides?: DraftOverrides,
 ): {
   to: string[]
   subject: string
@@ -395,8 +471,8 @@ export function buildBasketPrefill(
   }))
   return {
     to,
-    subject: buildBasketSubject(items),
-    bodyHtml: buildBasketBodyHtml(items),
+    subject: buildBasketSubject(items, overrides),
+    bodyHtml: buildBasketBodyHtml(items, overrides),
     references,
     attachRefPdf: true,
     basketKey: items.length > 0 ? basketKey(items[0]) : '',

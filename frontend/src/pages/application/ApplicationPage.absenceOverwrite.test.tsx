@@ -18,6 +18,7 @@ import en from '@/locales/en.json'
 import type { JobStatusResponse } from '@/lib/api'
 import { api } from '@/lib/api'
 import { ApplicationPage } from './ApplicationPage'
+import type * as MessageTemplatesModule from '@/lib/messageTemplates'
 
 const jobStatusState = vi.hoisted(() => ({
   handlers: new Map<string, (job: JobStatusResponse) => void>(),
@@ -39,6 +40,18 @@ vi.mock('@/lib/api', () => ({
   },
   apiErrorMessage: (error: unknown) => String(error),
 }))
+vi.mock('@/lib/messageTemplates', async (importOriginal) => {
+  const actual = await importOriginal<typeof MessageTemplatesModule>()
+  return {
+    ...actual,
+    messageTemplatesApi: {
+      ...actual.messageTemplatesApi,
+      preview: vi.fn().mockResolvedValue({
+        event: null, language: 'en', timing: 'on_save', text: null, segments: null,
+      }),
+    },
+  }
+})
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ capabilities: new Set(), isLoading: false, has: () => true }),
 }))

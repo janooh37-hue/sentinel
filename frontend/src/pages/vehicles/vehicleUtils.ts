@@ -18,6 +18,7 @@ import { ApiError, apiErrorMessage } from '@/lib/api'
 import type { VehicleFileRead } from '@/lib/api'
 import { fileKindFromName } from '@/lib/fileTypes'
 import { toBase64Url } from '@/lib/pdf'
+import { normalizeDigits } from '@/lib/utils'
 
 /** The Badge tones this module may use — derived from the design system so a
  *  new token in `badge-variants.ts` is immediately available here. */
@@ -288,15 +289,6 @@ function parseIso(iso: string): Date | null {
 }
 
 // ── Plates ──────────────────────────────────────────────────────────────────
-
-/** Arabic-Indic (٠١٢) and Extended-Arabic (۰۱۲) digits → ASCII, so a plate or
- *  a traffic code typed on an Arabic keypad validates. */
-export function normalizeDigits(input: string): string {
-  return input.replace(/[\u0660-\u0669\u06f0-\u06f9]/g, (char) => {
-    const code = char.charCodeAt(0)
-    return String(code - (code >= 0x06f0 ? 0x06f0 : 0x0660))
-  })
-}
 
 /** The plate as the paperwork writes it: `14 \ 58216`, or the bare number when
  *  the vehicle carries no category code. */

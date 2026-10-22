@@ -100,6 +100,7 @@ export function deriveRecordItem({
     nameEn,
     nameAr,
     formKind,
+    classificationCode: book.classification_code,
     leaveType,
     detail,
     startDate,

@@ -1142,7 +1142,7 @@ async function unwrap<T>(res: Response): Promise<T> {
   return parsed as T
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   // `same-origin` carries the httpOnly `gssg_session` cookie through the Vite
   // proxy (dev) and the pywebview origin (packaged) so auth survives requests.
   const init: RequestInit = { method, cache: 'no-store', credentials: 'same-origin' }

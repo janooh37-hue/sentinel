@@ -68,6 +68,7 @@ import { isIncludedPapersOwner } from './includedPapersState'
 import { describeListFrom, useRecordNavContext } from './useRecordNavContext'
 import { buildRecordBasketItem } from './recordsBasket'
 import { buildBasketPrefill } from '@/lib/basketEmail'
+import { useDraftTemplates } from '@/lib/messageTemplates'
 import { currentBookDocId } from '@/lib/bookDocument'
 import { getRecentRecipientsForForm } from '@/lib/recentRecipients'
 import { basketKey } from '@/lib/emailBasket'
@@ -320,6 +321,7 @@ function BookRecordPageBody(): React.JSX.Element {
   const approvalContext = useMemo(() => parseApprovalContext(searchParams), [searchParams])
 
   const qc = useQueryClient()
+  const draftOverrides = useDraftTemplates().data?.overrides
   const { user } = useAuth()
   const isInmateReporter = user?.role === 'inmate_reporter'
   const effectiveVersionId = isInmateReporter ? undefined : versionIdParam
@@ -708,7 +710,7 @@ function BookRecordPageBody(): React.JSX.Element {
       // dropped: this is not a basket send, and carrying it would let a
       // successful handoff clear a same-kind basket the operator is still
       // filling. Clear only the persisted-basket identity, not the prefill.
-      const prefill = buildBasketPrefill([item], getRecentRecipientsForForm(key))
+      const prefill = buildBasketPrefill([item], getRecentRecipientsForForm(key), draftOverrides)
       prefill.basketKey = undefined
       navigate('/ledger', { state: { composePrefill: prefill } })
     } catch (err) {
@@ -716,7 +718,7 @@ function BookRecordPageBody(): React.JSX.Element {
     } finally {
       setEmailingRecord(false)
     }
-  }, [book, recordHasPapers, emailingRecord, navigate, t])
+  }, [book, recordHasPapers, emailingRecord, navigate, t, draftOverrides])
 
   const busy = decideMutation.isPending || signMutation.isPending
   const canRevise = Boolean(

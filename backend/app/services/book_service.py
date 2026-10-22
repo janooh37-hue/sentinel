@@ -1339,38 +1339,19 @@ def _commit_approval_state(
         leave_service._cache_invalidate_employee(leave.employee_id)
     if (
         not notify
-        or not enrolled
         or book.approval_state != "approved"
         or book.voided_at is not None
         or book.deleted_at is not None
-        # A sign-gated leave notifies only when this approval settled it.
-        or (gated and not status_changed)
     ):
         return
-    # Only if the operator kept the generation-time "notify employee" switch
-    # on. A Word revision has no snapshot, so the newest generated version's
-    # choice holds.
-    signing = next(
-        (
-            snapshot
-            for v in reversed(book.versions)
-            if isinstance(snapshot := (v.fields or {}).get("_signing"), dict)
-        ),
-        None,
-    )
-    if isinstance(signing, dict) and signing.get("notify_employee") is False:
-        return
-    target = notify_dispatch.book_event(db, book)
-    if target is None:
-        return
-    event, record_id = target
-    # An Annual Leave Application's approval tells the employee the request was
-    # received; the Leaves page notifies its own later verdicts.
-    if template_id == "Leave Application Form" and not gated and event != nf.EVENT_LEAVE_REQUESTED:
-        return
-    # Revoking and re-granting approval does not re-issue the same message.
-    sent = notify_dispatch.last_status(db, event, record_id)
-    if sent is not None and sent.status != "failed":
+    if not notify_dispatch.approval_notification_eligible(
+        db,
+        book,
+        template_id=template_id,
+        target=notify_dispatch.book_event(db, book),
+        gated=gated,
+        status_changed=status_changed,
+    ):
         return
     try:
         notify_dispatch.auto_send_for_book(db, book.id, sent_by=user_id)

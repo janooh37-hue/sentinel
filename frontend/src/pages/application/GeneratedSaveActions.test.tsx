@@ -1,13 +1,36 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render as renderComponent, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from 'i18next'
 
 import ar from '@/locales/ar.json'
+import { messageTemplatesApi } from '@/lib/messageTemplates'
+import type * as MessageTemplatesModule from '@/lib/messageTemplates'
 import { GeneratedSaveActions } from './GeneratedSaveActions'
+
+vi.mock('@/lib/messageTemplates', async (importOriginal) => {
+  const actual = await importOriginal<typeof MessageTemplatesModule>()
+  Object.assign(actual.messageTemplatesApi, { preview: vi.fn() })
+  return actual
+})
+
+function render(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return renderComponent(ui, {
+    wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  })
+}
 
 beforeEach(async () => {
   await i18n.addResourceBundle('ar', 'translation', ar, true, true)
   await i18n.changeLanguage('ar')
+  vi.mocked(messageTemplatesApi.preview).mockResolvedValue({
+    event: 'leave_permit',
+    language: 'ar',
+    timing: 'on_approval',
+    text: { ar: 'تفاصيل رسالة التصريح', en: 'Permit message details' },
+    segments: { ar: 1, en: 1 },
+  })
 })
 
 afterEach(() => {
@@ -24,6 +47,12 @@ describe('GeneratedSaveActions', () => {
     saveDisabled: false,
     saving: false,
     hint: 'أكمل المرفقات المطلوبة أولًا',
+    previewBody: {
+      template_id: 'Leave Permit Form',
+      employee_id: 'G1',
+      fields: { duration_hours: '3' },
+      revise_of_book_id: null,
+    },
     onNotifyChange: vi.fn(),
     onSave: vi.fn(),
   }
@@ -34,12 +63,15 @@ describe('GeneratedSaveActions', () => {
     expect(screen.getByText('جاهز للحفظ في السجلات')).toBeVisible()
   })
 
-  it('renders the notification row only when requested', () => {
+  it('keeps the revision message preview visible when the notify switch is hidden', async () => {
     const { rerender } = render(<GeneratedSaveActions {...baseProps} showNotify />)
     expect(screen.getByRole('switch', { name: 'إشعار الموظف' })).toBeVisible()
+    expect(await screen.findByText('تفاصيل رسالة التصريح')).toBeVisible()
 
-    rerender(<GeneratedSaveActions {...baseProps} showNotify={false} />)
+    const revisionBody = { ...baseProps.previewBody, revise_of_book_id: 42 }
+    rerender(<GeneratedSaveActions {...baseProps} showNotify={false} previewBody={revisionBody} />)
     expect(screen.queryByRole('switch', { name: 'إشعار الموظف' })).not.toBeInTheDocument()
+    expect(await screen.findByText('تفاصيل رسالة التصريح')).toBeVisible()
   })
 
   it('names WhatsApp before the SMS fallback when notification is on', () => {

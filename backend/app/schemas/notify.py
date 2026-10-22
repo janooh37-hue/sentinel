@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas._base import ORMBase
 
@@ -45,3 +46,56 @@ class NotifyMessageRead(NotifyStatusItem):
     delivery_checked_at: datetime | None
     phone: str
     body: str | None = None
+
+
+class MessageText(BaseModel):
+    ar: str
+    en: str
+
+
+class MessageTextWrite(MessageText):
+    ar: str = Field(max_length=1000)
+    en: str = Field(max_length=1000)
+
+
+class MessageSegments(BaseModel):
+    ar: int
+    en: int
+
+
+class MessageVariable(BaseModel):
+    name: str
+    label_en: str
+    label_ar: str
+    sample: str
+
+
+class MessageTemplateRead(BaseModel):
+    event: str
+    label: MessageText
+    group: Literal["leaves", "forms", "violations", "reminders"]
+    services: list[str]
+    timing: Literal["on_approval", "on_save", "on_status_change", "scheduled", "manual"]
+    default: MessageText
+    override: MessageText | None
+    variables: list[MessageVariable]
+
+
+class MessageRenderRead(BaseModel):
+    text: MessageText
+    segments: MessageSegments
+
+
+class NotifyPreviewRequest(BaseModel):
+    template_id: str
+    employee_id: str | None = None
+    fields: dict[str, Any] = Field(default_factory=dict)
+    revise_of_book_id: int | None = None
+
+
+class NotifyPreviewRead(BaseModel):
+    event: str | None
+    language: Literal["ar", "en"]
+    timing: Literal["on_approval", "on_save", "on_status_change", "scheduled", "manual"]
+    text: MessageText | None
+    segments: MessageSegments | None

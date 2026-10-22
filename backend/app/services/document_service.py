@@ -381,6 +381,21 @@ _MANAGER_SIGN_DATE_FORMS: frozenset[str] = frozenset(
 )
 
 
+def inherited_notify_employee(book: Book) -> bool:
+    """Revision saves and previews inherit the newest generated snapshot's choice.
+
+    Missing flags default on; records without any snapshot never notified revisions.
+    """
+    return next(
+        (
+            snapshot.get("notify_employee") is not False
+            for version in reversed(book.versions)
+            if isinstance(snapshot := (version.fields or {}).get(_SIGNING_KEY), dict)
+        ),
+        False,
+    )
+
+
 def _submitter_signs_employee_cell(
     template_id: str,
     submitter_id: int | None,
@@ -979,6 +994,16 @@ def plan_gated_leave(
             book_id=owner.id,
         )
     return GatedLeavePlan(leave_id=held.id, take_over=True, cancel_leave_id=own.id if own else None)
+
+
+def join_violation_types(fields: dict[str, Any]) -> dict[str, Any]:
+    """Warning Form sends ``violation_type`` as a list of strings; join it once
+    with the Arabic comma so the DOCX token, the Violation record and the
+    employee message all read the same text."""
+    vio_type = fields.get("violation_type")
+    if isinstance(vio_type, list):
+        return {**fields, "violation_type": "، ".join(str(v) for v in vio_type)}
+    return fields
 
 
 def _make_leave_row(
@@ -1682,11 +1707,7 @@ def generate_document(
     _raw_employee_embed_requested = embed_signature.get("employee") is True
     pdf_converter = converter or convert_docx_to_pdf
 
-    # Warning Form sends ``violation_type`` as a list of strings; join it once
-    # with the Arabic comma so the DOCX token and the Violation record match.
-    vio_type = fields.get("violation_type")
-    if isinstance(vio_type, list):
-        fields = {**fields, "violation_type": "، ".join(str(v) for v in vio_type)}
+    fields = join_violation_types(fields)
     if commit and template_id == "General Book" and not fields.get("date"):
         fields = {**fields, "date": datetime.now().strftime("%d-%m-%Y")}
 
@@ -1969,14 +1990,7 @@ def generate_document(
         if revise_book is not None:
             # The revise screen hides the notify switch, so the request flag carries
             # no choice: keep the newest snapshot's (none: revisions never notified).
-            notify_employee = next(
-                (
-                    snapshot.get("notify_employee") is not False
-                    for v in reversed(revise_book.versions)
-                    if isinstance(snapshot := (v.fields or {}).get(_SIGNING_KEY), dict)
-                ),
-                False,
-            )
+            notify_employee = inherited_notify_employee(revise_book)
         fields[_SIGNING_KEY] = {
             "issued": datetime.now().strftime("%d/%m/%Y"),
             "employee": bool(embed_signature.get("employee")),

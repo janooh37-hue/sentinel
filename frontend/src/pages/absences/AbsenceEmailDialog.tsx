@@ -14,6 +14,7 @@ import {
 import type { AbsenceRegisterRowRead } from '@/lib/api'
 import { dmyPad } from '@/lib/basketEmail'
 import { todayIso } from '@/lib/leaveDateMath'
+import type { DraftOverrides } from '@/lib/draftTemplates'
 import { getRecentRecipientsForForm } from '@/lib/recentRecipients'
 import {
   ABSENCE_BASKET_KEY,
@@ -27,6 +28,7 @@ interface Props {
   open: boolean
   rows: AbsenceRegisterRowRead[]
   onOpenChange: (open: boolean) => void
+  draftOverrides?: DraftOverrides
 }
 
 function rowKey(row: AbsenceRegisterRowRead): string {
@@ -37,7 +39,7 @@ function caseSelectId(row: AbsenceRegisterRowRead): string {
   return `absence-email-case-${encodeURIComponent(rowKey(row))}`
 }
 
-export function AbsenceEmailDialog({ open, rows, onOpenChange }: Props): React.JSX.Element {
+export function AbsenceEmailDialog({ open, rows, onOpenChange, draftOverrides }: Props): React.JSX.Element {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [cases, setCases] = useState<Record<string, AbsenceCase>>({})
@@ -67,8 +69,8 @@ export function AbsenceEmailDialog({ open, rows, onOpenChange }: Props): React.J
     [cases, rows, today],
   )
   const { subject, bodyHtml } = useMemo(
-    () => buildAbsenceEmail(emailRows, { violationAttached }),
-    [emailRows, violationAttached],
+    () => buildAbsenceEmail(emailRows, { violationAttached, overrides: draftOverrides }),
+    [emailRows, violationAttached, draftOverrides],
   )
 
   const openInEmail = (): void => {
