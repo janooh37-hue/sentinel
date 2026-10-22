@@ -251,6 +251,35 @@ including self and assigned organization, department, duty-unit, or duty-post
 populations; request filters may only narrow it.
 _Avoid_: Capability, role, filter
 
+**Department**:
+An administrator-managed organizational unit with Arabic and English names and
+an optional parent department. Users belong through Department membership and
+employees through their own department; it is not the duty unit.
+_Avoid_: Duty unit, company (السرية), team
+
+**Department membership**:
+A user's place in a Department as head, deputy, or member. A user normally has
+one membership, and exactly one membership is primary.
+_Avoid_: Role (that is the account preset), scope
+
+**Department scope**:
+The rows a user may see in scoped areas: their member departments, plus every
+sub-department of a department they head or deputize, plus their own work.
+Capabilities and Levels still apply inside it, and request filters may only
+narrow it.
+_Avoid_: Workforce scope, filter, capability
+
+**Organization-wide view**:
+The `departments.all` capability, held by admins and granted per user, that
+places a user's Department scope over every department.
+_Avoid_: Admin, manager role
+
+**Department send**:
+A direct send addressed to a Department. It reaches the department's head and
+deputies, who hand it down to everyone, chosen members, or a sub-department;
+each hand-down is an ordinary direct send linked to it.
+_Avoid_: Broadcast, circular, announcement
+
 ### Correspondence and intake
 
 **Mailbox**:
