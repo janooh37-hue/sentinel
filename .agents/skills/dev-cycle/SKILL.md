@@ -27,7 +27,7 @@ description: "Fix bugs and add features on the laptop dev channel (branch dev, r
    - Required `AGENTS.md` reviews.
 6. **Publish:** `dev-channel.ps1 publish` (frontend build, migrate, restart, health check). `restart` alone for backend-only changes.
 7. **Report:** changes, commits, checks, failures, what to test on the dev URL.
-8. **Promote (gate):** after the user approves, follow **Promotion** below. Production goes live only via `scripts\mng.ps1 update` on GSSGAPP.
+8. **Promote (gate):** after the user approves, follow **Promotion** below. Production goes live only via `scripts\mng.ps1 update` on GSSGIT.
 
 ## Promotion
 

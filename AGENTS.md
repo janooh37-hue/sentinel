@@ -4,7 +4,7 @@ Local/LAN HR and document console: FastAPI/Python 3.12 backend, React/Vite/TypeS
 
 ## Production safety
 
-- On the production server (`GSSGAPP`), the main checkout is live production. Do not switch branches there; use a Git worktree for feature work.
+- On the production server (`GSSGIT`), the main checkout is live production. Do not switch branches there; use a Git worktree for feature work.
 - On every host, cut feature worktrees from a freshly fetched `origin/main` (`git fetch origin && git worktree add -b feat/x .worktrees/x origin/main`). Local `main` lags, and a stale base reuses migration and ADR numbers already taken on `origin/main`.
 - The laptop `GSSGLT` is the dev channel: a production-backup snapshot restored to a dev data directory. Its `.env` sets `GSSG_DISABLE_SCHEDULER=1` and has no SMS, WhatsApp, or BioTime settings. Never copy `.email_key` or `.vapid_key` to it. Share it only via tailnet-only `tailscale serve`, never Funnel. See issue #160 and `docs/adr/0004-dev-channel-on-laptop-with-production-snapshot.md`.
 - Never deploy changes that are not committed and pushed to `origin/main`; a later `mng update` would overwrite them.
