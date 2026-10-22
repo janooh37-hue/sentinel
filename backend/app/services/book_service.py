@@ -3072,7 +3072,8 @@ def folder_filing_details(
         item.book_id: (
             names.get(item.added_by_user_id),
             names_ar.get(item.added_by_user_id),
-            item.created_at,
+            # Stored naive UTC and assigned after validation, so tag it as ORMBase would.
+            item.created_at.replace(tzinfo=UTC),
         )
         for item in filed
     }

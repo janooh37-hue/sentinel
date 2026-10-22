@@ -499,7 +499,7 @@ class BookLinkCreate(BaseModel):
     target_book_id: int
 
 
-class BookThreadItem(BaseModel):
+class BookThreadItem(ORMBase):
     book_id: int
     ref_number: str
     subject: str | None
@@ -512,6 +512,9 @@ class BookThreadItem(BaseModel):
     can_unlink: bool
     addressee_user_id: int | None = None
     current_document_id: int | None = None
+
+    # Book.created_at is local wall-clock (see BookRead).
+    LOCAL_WALLCLOCK_FIELDS: ClassVar[frozenset[str]] = frozenset({"created_at"})
 
 
 class BookConfidentialityUpdate(BaseModel):
