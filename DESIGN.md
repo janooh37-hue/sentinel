@@ -1506,7 +1506,7 @@ and `toast.dismiss(id?)` from `@/lib/toast`; options `id`, `description`,
 
 | Concern | Rule |
 | ------- | ---- |
-| Identity | Every call gets a unique id, so notices stack. Same `id` updates the visible toast in place (loading → success/error, `timesheet-cell-locked`). Sileo's own default shares one id and would replace every notice. |
+| Identity | Every call gets a unique id, so notices stack, and every id a call returns can be passed back as `id` to update that toast in place (`const id = toast.loading(…)` then `toast.success(…, { id })`; `timesheet-cell-locked`). A fixed id raised again after its toast closed is a fresh toast. Sileo's own default shares one id and would replace every notice. |
 | Duration | 4 s default (Sonner's, unchanged by the Sileo migration; Sileo's own is 6 s). An explicit `duration` overrides it. `Infinity` stays until dismissed; `loading` always does. A deferred-delete Undo passes its own commit window as `duration`. The body stays open until the toast closes. |
 | Pill vs body | The collapsed pill holds one line (≤ 36 characters). A longer message moves into the body under a localized state title (`common.toastState.*`); a short message with a `description` keeps the message as the title. The body opens by itself on the newest toast and on hover or keyboard focus. |
 | Neutral | `toast(msg)` is `info`, or `action` when it carries an action. |
@@ -1542,10 +1542,12 @@ viewer). The lock overlay hides the viewport and the announcers
 
 **Known limits (Sileo 0.1.6).** Only the newest toast shows its body without
 hover, so in a stack older toasts read as their state title until hovered (the
-announcers still carry their full text). `ScanBackDock` reserves a 12rem bottom
-band, enough for one expanded toast, including one with an action and a body; a stack of several
-toasts or a long multi-line message can still reach it. `Infinity`-duration
-toasts with a description open on hover/focus only.
+announcers still carry their full text). `ScanBackDock` reserves a bottom band of
+`min(12rem, 50dvh)`, enough for one expanded toast, including one with an action
+and a body, and caps its open panel to the room above it (the rows scroll), so the
+header and "View all" stay on screen on short laptops and at larger font scales. A
+stack of several toasts or a long multi-line message can still reach the dock.
+`Infinity`-duration toasts with a description open on hover/focus only.
 
 ## 4. Dashboard page
 

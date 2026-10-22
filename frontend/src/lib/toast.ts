@@ -60,7 +60,9 @@ type SileoOptionsWithId = SileoOptions & { id: string }
 let sequence = 0
 
 function nextId(): string {
-  sequence += 1
+  // Skip any id a caller already holds, so a generated id never aliases one.
+  do sequence += 1
+  while (generations.has(`toast-${sequence}`))
   return `toast-${sequence}`
 }
 
@@ -179,7 +181,7 @@ export function reconcileToastGenerations(rendered: ReadonlyArray<{ id: string; 
 
 function show(kind: ToastKind, message: string, opts: ToastOptions = {}): string {
   const callerId = opts.id !== undefined ? String(opts.id) : nextId()
-  const internal = opts.id !== undefined ? internalIdFor(callerId) : callerId
+  const internal = internalIdFor(callerId)
   announce(stateOf(kind, opts.action !== undefined), message, opts.description)
   sileo.show(buildOptions(kind, internal, message, opts))
   return callerId
@@ -195,7 +197,7 @@ function dismiss(id?: string | number): void {
 }
 
 function promise<T>(source: Promise<T> | (() => Promise<T>), messages: ToastPromiseMessages<T>): Promise<T> {
-  const id = nextId()
+  const id = internalIdFor(nextId())
   const resolveOf = <A>(message: string | ((arg: A) => string), arg: A): string =>
     typeof message === 'function' ? message(arg) : message
   announce('loading', messages.loading, undefined)

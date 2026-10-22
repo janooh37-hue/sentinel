@@ -302,6 +302,86 @@ describe('AppToaster + toast adapter', () => {
     })
   })
 
+  describe('an id returned by a toast call', () => {
+    it('turns the loading toast it came from into the success, in place', async () => {
+      vi.useFakeTimers()
+      let id = ''
+      await act(async () => {
+        id = toast.loading('Uploading')
+      })
+      expect(toastEls().map(titleOf)).toEqual(['Uploading'])
+      await act(async () => {
+        toast.success('Uploaded', { id })
+        vi.advanceTimersByTime(1000)
+      })
+      expect(toastEls().map(titleOf)).toEqual(['Uploaded'])
+      expect(toastEls()[0].dataset.state).toBe('success')
+    })
+
+    it('turns the loading toast into an error, and lets the new toast time out', async () => {
+      vi.useFakeTimers()
+      let id = ''
+      await act(async () => {
+        id = toast.loading('Uploading')
+      })
+      await act(async () => {
+        toast.error('Upload failed', { id })
+        vi.advanceTimersByTime(1000)
+      })
+      expect(toastEls().map(titleOf)).toEqual(['Upload failed'])
+      await act(async () => {
+        vi.advanceTimersByTime(TOAST_DEFAULT_DURATION_MS + 1000)
+      })
+      expect(toastEls()).toHaveLength(0)
+    })
+
+    it('updates an ordinary toast in place and dismisses by that id', async () => {
+      vi.useFakeTimers()
+      let id = ''
+      await act(async () => {
+        id = toast('Deleted', { duration: 20_000 })
+        toast.info('Other')
+      })
+      await act(async () => {
+        toast.info('Deleted again', { id, duration: 20_000 })
+        vi.advanceTimersByTime(1000)
+      })
+      expect(toastEls().map(titleOf)).toEqual(['Deleted again', 'Other'])
+      await act(async () => {
+        toast.dismiss(id)
+        vi.advanceTimersByTime(700)
+      })
+      expect(toastEls().map(titleOf)).toEqual(['Other'])
+    })
+
+    it('is raised again as a fresh toast after it closed', async () => {
+      vi.useFakeTimers()
+      let id = ''
+      await act(async () => {
+        id = toast.success('One')
+      })
+      await act(async () => {
+        vi.advanceTimersByTime(TOAST_DEFAULT_DURATION_MS + 50)
+      })
+      await act(async () => {
+        vi.advanceTimersByTime(300)
+        toast.success('Two', { id })
+      })
+      await act(async () => {
+        vi.advanceTimersByTime(1000)
+      })
+      expect(toastEls().map(titleOf)).toEqual(['Two'])
+    })
+
+    it('never hands out an id a caller already holds', async () => {
+      await act(async () => {
+        toast.info('Held', { id: 'toast-1', duration: Infinity })
+        toast.info('Anonymous', { duration: Infinity })
+      })
+      expect(toastEls().map(titleOf)).toEqual(['Held', 'Anonymous'])
+    })
+  })
+
   it('click on the toast dismisses it, except a loading one', async () => {
     act(() => {
       toast.loading('Working')

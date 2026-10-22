@@ -130,7 +130,12 @@ export function ScanBackDock(): React.JSX.Element | null {
         // also exceeds the 3.5rem BottomTabBar clearance App.tsx's <main> reserves
         // on mobile, so one value covers both viewports. A stack of several toasts,
         // or a multi-line message, can still reach higher — accepted residual.
-        'bottom-[calc(12rem+var(--safe-bottom))] md:bottom-[12rem]',
+        // The band is rem-based and the app scales rem (up to 24px), so it is
+        // clamped to half the viewport, and the open panel below is capped to the
+        // room left above it: on a short laptop the header and "View all" must
+        // stay on screen, with the rows scrolling instead.
+        '[--dock-band:min(12rem,50dvh)]',
+        'bottom-[calc(var(--dock-band)+var(--safe-bottom))] md:bottom-[var(--dock-band)]',
         'rtl:items-start',
       )}
     >
@@ -138,8 +143,8 @@ export function ScanBackDock(): React.JSX.Element | null {
         /* 26rem, not 20rem: each row now carries a page-1 thumbnail, and the
            dock has to be wide enough for the thumb to still be a preview
            (~7rem here) and leave the drop target room beside it. */
-        <div className="w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
-          <div className="flex items-center gap-2 border-b border-hairline px-3 py-2">
+        <div className="flex w-[min(26rem,calc(100vw-2rem))] max-h-[max(6rem,calc(100dvh-var(--dock-band)-var(--safe-bottom)-4.5rem))] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
+          <div className="flex shrink-0 items-center gap-2 border-b border-hairline px-3 py-2">
             <Printer className="h-3.5 w-3.5 text-warning" strokeWidth={2} aria-hidden />
             <span className="flex-1 text-[0.76em] font-semibold">{t('scanBack.dock.header')}</span>
             <button
@@ -150,13 +155,16 @@ export function ScanBackDock(): React.JSX.Element | null {
               {t('scanBack.viewAll', { count })}
             </button>
           </div>
-          <ScanBackUploadZone onFile={upload} busy={autoBusy} compact />
-          {/* The barcode target adds ~7rem above the rows; 15rem keeps the
-              expanded dock inside its previous ~22rem mobile height budget. */}
-          <div className="max-h-[15rem] overflow-auto">
-            {books.slice(0, MAX_ROWS).map((b) => (
-              <DockRow key={b.id} book={b} onFile={file} busy={busy} />
-            ))}
+          {/* Everything under the header scrolls when the capped panel is short. */}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <ScanBackUploadZone onFile={upload} busy={autoBusy} compact />
+            {/* The barcode target adds ~7rem above the rows; 15rem keeps the
+                expanded dock inside its previous ~22rem mobile height budget. */}
+            <div className="max-h-[15rem] overflow-auto">
+              {books.slice(0, MAX_ROWS).map((b) => (
+                <DockRow key={b.id} book={b} onFile={file} busy={busy} />
+              ))}
+            </div>
           </div>
         </div>
       )}
