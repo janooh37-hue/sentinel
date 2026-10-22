@@ -1844,7 +1844,8 @@ def get_version_fields(
     elif current.id != version_id:
         raise AppError("FORBIDDEN", "You do not have access to this revision.", http_status=403)
     version = next(item for item in row.versions if item.id == version_id)
-    return {"fields": version.fields or {}}
+    # ``_signing`` is the generation-time signing snapshot, not an editable field.
+    return {"fields": {k: v for k, v in (version.fields or {}).items() if k != "_signing"}}
 
 
 @router.get(
@@ -2056,7 +2057,7 @@ def delete_book(
     user: Annotated[User, Depends(require_capability("books.delete"))],
 ) -> Response:
     _require_full_book(db, user, book_id, write=True)
-    book_service.delete_book(db, book_id)
+    book_service.delete_book(db, book_id, user_id=user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

@@ -105,7 +105,7 @@ def _manager_user(db: Session) -> tuple[User, Manager]:
     return user, mgr
 
 
-def _generate(db: Session, mgr: Manager, *, signed: bool) -> Book:
+def _generate(db: Session, mgr: Manager, *, approve: bool) -> Book:
     result = document_service.generate_document(
         db,
         employee_id=None,
@@ -117,12 +117,24 @@ def _generate(db: Session, mgr: Manager, *, signed: bool) -> Book:
         },
         manager_id=mgr.id,
         submitter_id=None,
-        embed_signature={"manager": signed},
+        embed_signature={"manager": True},
         commit=True,
         current_user=None,
     )
     book = db.get(Book, result.book_id)
     assert book is not None
+    assert book.approval_state == "none"
+    if approve:
+        assert mgr.user_id is not None
+        book_service.submit_for_approval(
+            db,
+            book.id,
+            priority="Normal",
+            approver_user_id=None,
+            reviewer_user_ids=[],
+            submitted_by_user_id=mgr.user_id,
+        )
+        book_service.sign_book(db, book.id, user_id=mgr.user_id, version_id=book.versions[-1].id)
     return book
 
 
@@ -130,10 +142,10 @@ def _configure(db: Session) -> None:
     inmate_violation_whatsapp.set_group(db, GROUP, actor="test")
 
 
-def test_auto_approval_sends_signed_pdf_once_to_configured_group(env: Any) -> None:
+def test_chain_approval_sends_signed_pdf_once_to_configured_group(env: Any) -> None:
     _configure(env.db)
     _, mgr = _manager_user(env.db)
-    book = _generate(env.db, mgr, signed=True)
+    book = _generate(env.db, mgr, approve=True)
     assert book.approval_state == "approved"
     assert env.queued == [book.versions[-1].id]
 
@@ -162,7 +174,7 @@ def test_caption_caps_inmate_names_and_skips_bad_date() -> None:
 
 def test_no_group_configured_sends_nothing(env: Any) -> None:
     _, mgr = _manager_user(env.db)
-    book = _generate(env.db, mgr, signed=True)
+    book = _generate(env.db, mgr, approve=True)
     assert book.approval_state == "approved"
     assert env.queued == []
     inmate_violation_whatsapp.deliver(book.versions[-1].id)
@@ -172,7 +184,7 @@ def test_no_group_configured_sends_nothing(env: Any) -> None:
 def test_rolled_back_approval_sends_nothing(env: Any) -> None:
     _configure(env.db)
     _, mgr = _manager_user(env.db)
-    book = _generate(env.db, mgr, signed=False)
+    book = _generate(env.db, mgr, approve=False)
     version = book.versions[-1]
     version.status = "approved"
     inmate_violation_whatsapp.queue_send(env.db, version)
@@ -189,7 +201,7 @@ def test_send_failure_keeps_approval(env: Any, monkeypatch: pytest.MonkeyPatch) 
         raise RuntimeError("gateway down")
 
     monkeypatch.setattr(openwa_client, "send_file", boom)
-    book = _generate(env.db, mgr, signed=True)
+    book = _generate(env.db, mgr, approve=True)
     _run_queued(env)  # must not raise
 
     env.db.expire_all()
@@ -204,7 +216,7 @@ def test_manager_signing_sends_once(env: Any) -> None:
     operator = User(email="op@x.ae", password_hash="x", role=OPERATOR_ROLE, status="active")
     env.db.add(operator)
     env.db.commit()
-    book = _generate(env.db, mgr, signed=False)
+    book = _generate(env.db, mgr, approve=False)
     assert book.approval_state == "none" and env.queued == []
 
     book_service.submit_for_approval(
@@ -226,7 +238,7 @@ def test_manager_signing_sends_once(env: Any) -> None:
 def test_scan_back_signed_copy_sends_once(env: Any) -> None:
     _configure(env.db)
     _, mgr = _manager_user(env.db)
-    book = _generate(env.db, mgr, signed=False)
+    book = _generate(env.db, mgr, approve=False)
     scan = _write_pdf(get_settings().data_dir / "scan.docx").read_bytes()
 
     book_service.add_attachment(env.db, book.id, "scan.pdf", scan, as_signed=True)

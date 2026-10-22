@@ -351,7 +351,6 @@ export interface LeaveReturnBody {
   resumption_date: string // ISO yyyy-mm-dd
   delay_reason?: string
   manager_id?: number | null
-  embed_manager_signature?: boolean
 }
 
 // ─── Signature placement editor (approval-signature-placement plan §8) ────────
@@ -1171,7 +1170,7 @@ async function unwrap<T>(res: Response): Promise<T> {
   return parsed as T
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   // `same-origin` carries the httpOnly `gssg_session` cookie through the Vite
   // proxy (dev) and the pywebview origin (packaged) so auth survives requests.
   const init: RequestInit = { method, cache: 'no-store', credentials: 'same-origin' }
@@ -1532,7 +1531,7 @@ export const api = {
     limit?: number
     offset?: number
   } = {}) => request<PermitListResponse>('GET', `/permits${qs({ ...params })}`),
-  permitsSummary: () => request<PermitSummary>('GET', '/permits/summary'),
+  permitsSummary: (zone?: PermitZone) => request<PermitSummary>('GET', `/permits/summary${qs({ zone })}`),
   /** Full permit records (people + vehicles) for the detailed print — one request. */
   listPermitsDetailed: (
     params: { state?: string; zone?: PermitZone; company?: string; q?: string; ids?: string } = {},

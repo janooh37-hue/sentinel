@@ -1692,6 +1692,7 @@
     "title": "Leave History",
     "subtitle": "Records and accrual balances for all employees",
     "empty": "No leaves match these filters.",
+    "signGated": "Record {{ref}} decides this leave. It is approved when the manager signs that record.",
     "tabs": {
       "records": "Records",
       "balance": "Balance"
@@ -1972,9 +1973,7 @@
       "resumptionDate": "Return (resumption) date",
       "delayReason": "Reason for delay (if any)",
       "fileButton": "File & complete",
-      "filed": "Return form filed — leave completed",
-      "managerSignatureHelp": "Turning this off still prints the manager's name and title — it only skips embedding their signature image.",
-      "managerSignatureRequired": "Select a manager with a saved signature, or turn off \"Include manager signature\"."
+      "filed": "Return form filed — leave completed"
     },
     "amend": {
       "action": "Edit leave",
@@ -3892,6 +3891,7 @@
     "notify": {
       "label": "Notify employee",
       "hintOn": "The employee will get a message when this form is saved.",
+      "hintOnAtApproval": "The employee will get a message once the manager approves this form.",
       "hintOff": "Saved without notifying the employee."
     },
     "selectedRecipients": "Selected recipients",
@@ -4108,6 +4108,8 @@
     },
     "noTemplateSelected": "Select a form to begin",
     "noEmployeeSelected": "Pick an employee first",
+    "leaveAlreadyIssued": "Record {{ref}} already covers this leave. Open that record instead of issuing a new one.",
+    "leaveAlreadyIssuedNoRef": "Another record already covers this leave. Open that record instead of issuing a new one.",
     "toast": {
       "generated": "Document generated",
       "previewed": "Preview rendered",
@@ -4247,7 +4249,8 @@
         "leaves": "From Leaves",
         "records": "From Records",
         "ledger": "From Ledger",
-        "workforce": "From Workforce"
+        "workforce": "From Workforce",
+        "permits": "From Permits"
       },
       "topFull": "Top zone is full (max {{count}})",
       "topOnlyBigCards": "Only big cards can go in the Top zone",
@@ -4364,7 +4367,8 @@
       "recent_ledger": "Recent Ledger",
       "pending_departures": "Pending Departures",
       "workforce_pulse": "Workforce Pulse",
-      "violation_months": "Monthly report workflow"
+      "violation_months": "Monthly report workflow",
+      "permits": "Permits"
     },
     "quickActionLabels": {
       "general_book": "General Book",
@@ -4428,6 +4432,9 @@
         "sent": "Sent",
         "byPurpose": "Received by purpose",
         "open": "Open records sent to me"
+      },
+      "permits": {
+        "latest": "Latest"
       },
       "violations": {
         "header": "Open Violations",
@@ -6303,6 +6310,124 @@
       "engine": "AI engine",
       "notePlaceholder": "Optional: describe what you noticed (e.g. “PDF export slow since yesterday”)",
       "result": "AI diagnosis ({{engine}}, {{seconds}} s)"
+    }
+  },
+  "msgTemplates": {
+    "editor": {
+      "modified": "Modified",
+      "dirty": "Unsaved changes",
+      "save": "Save template",
+      "saving": "Saving…",
+      "saved": "Template saved",
+      "reset": "Reset to default",
+      "resetConfirm": "Replace this template with its default text? Unsaved changes will be discarded.",
+      "confirmReset": "Confirm reset",
+      "cancel": "Cancel",
+      "preview": "Preview with sample data",
+      "previewLoading": "Updating preview…",
+      "loading": "Loading draft template…",
+      "retry": "Try again",
+      "counts": "{{chars}} characters · {{segments}} SMS segments",
+      "variablesHint": "Select a field, then insert a variable at the cursor.",
+      "defaultNote": "Default text is used when this field is empty.",
+      "languages": { "ar": "Arabic message", "en": "English message" },
+      "fields": { "subject": "Subject", "intro": "Introduction", "closing": "Closing" },
+      "timing": {
+        "on_approval": "Sent after manager approval",
+        "on_save": "Sent when saved",
+        "on_status_change": "Sent when the status changes",
+        "scheduled": "Sent automatically on schedule",
+        "manual": "Sent manually"
+      },
+      "errors": {
+        "UNKNOWN_PLACEHOLDER": "Unknown placeholder. Use only the listed variables.",
+        "EMPTY_TEMPLATE": "Both Arabic and English messages must contain text.",
+        "UNKNOWN_TOKEN": "Unknown token. Use only the listed variables.",
+        "HTML_NOT_ALLOWED": "HTML is not allowed. Enter plain text only.",
+        "UNKNOWN_KEY": "This email draft template is not available.",
+        "tooLong": "Template text must be {{limit}} characters or fewer.",
+        "unknownIn": "{{language}}: {{names}}.",
+        "unknownNames": "Not recognised: {{names}}."
+      }
+    },
+    "preview": {
+      "title": "Employee message preview",
+      "language": "Preview language",
+      "ar": "Arabic",
+      "en": "English",
+      "loading": "Loading employee message preview",
+      "error": "Message preview is unavailable. You can still save.",
+      "empty": "No message is sent to the employee for this form.",
+      "notSending": "Will not be sent",
+      "segments_one": "{{count}} SMS segment",
+      "segments_other": "{{count}} SMS segments",
+      "timing": {
+        "on_approval": "Sent after manager approval",
+        "on_save": "Sent when saved",
+        "on_status_change": "Sent when the status changes",
+        "scheduled": "Sent on schedule",
+        "manual": "Sent manually"
+      }
+    },
+    "draftTokens": {
+      "ref": "Reference",
+      "date": "Record date",
+      "names": "Employee names",
+      "count": "Employee count",
+      "detail": "Details",
+      "bank": "Bank names",
+      "start_date": "Start date",
+      "end_date": "End date",
+      "return_date": "Return date"
+    },
+    "drafts": {
+      "general": "General Book",
+      "salaryTransfer": "Salary transfer",
+      "passport": "Passport release",
+      "resignation": "Resignation letter",
+      "resignationDeclaration": "Resignation declaration",
+      "resumption": "Duty resumption",
+      "deduction": "Salary deduction",
+      "transfer": "Employee transfers",
+      "absent": "Absence — still absent",
+      "returned": "Absence — returned to duty",
+      "leave": {
+        "Sick": "Sick leave",
+        "Annual": "Annual leave",
+        "Compassionate": "Compassionate leave",
+        "Duty": "Duty leave",
+        "Emergency": "Emergency leave",
+        "Hajj": "Hajj leave",
+        "Others": "Other leave"
+      }
+    },
+    "tabs": {
+      "notification": "Notification",
+      "emailDraft": "Email draft",
+      "notificationEmpty": "This service has no employee message templates.",
+      "draftsEmpty": "This service has no email draft templates.",
+      "loading": "Loading templates…",
+      "error": "Templates could not be loaded.",
+      "retry": "Try again"
+    },
+    "settings": {
+      "title": "Message templates",
+      "description": "View employee messages and email drafts. Expand a template to review its wording.",
+      "employeeMessages": "Employee messages",
+      "emailDrafts": "Email drafts",
+      "loading": "Loading message templates",
+      "loadError": "Could not load employee message templates.",
+      "retry": "Try again",
+      "noMessages": "No employee message templates are available.",
+      "noDrafts": "No email draft templates are available.",
+      "groups": {
+        "leaves": "Leaves",
+        "forms": "Forms",
+        "violations": "Violations",
+        "reminders": "Reminders",
+        "classifications": "General Book classifications",
+        "absences": "Absences"
+      }
     }
   }
 }

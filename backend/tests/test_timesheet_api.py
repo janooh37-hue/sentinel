@@ -1009,7 +1009,7 @@ def _sick_certificate(document_service, db, day=9):
     )
 
 
-def test_generating_a_sick_leave_clears_the_absence(client, db_session, generation_env):
+def test_a_sick_leave_clears_the_absence_once_approved(client, db_session, generation_env):
     """Drives the real creation path — a hand-inserted Leave would not exercise the hook."""
 
     _guard(db_session)
@@ -1019,48 +1019,76 @@ def test_generating_a_sick_leave_clears_the_absence(client, db_session, generati
     assert db_session.query(Absence).count() == 1
     result = _sick_certificate(generation_env, db_session)
     assert result.leave_id is not None
+    assert result.superseded_absences == []
+    assert db_session.query(Absence).count() == 1
+    _approve(db_session, result.book_id)
     assert db_session.query(Absence).count() == 0
     assert client.get("/api/v1/timesheet/2026/7").json()["rows"][0]["codes"][8] == "SL "
 
 
-def test_regenerating_the_same_certificate_supersedes_it_again(client, db_session, generation_env):
-    """The dedup branch reuses the row and never calls ``db.add`` — it must still fire."""
+def test_a_reissued_certificate_supersedes_once_approved(client, db_session, generation_env):
+    """A re-issue takes the rejected record's leave over; its approval clears the absence."""
 
     _guard(db_session)
     first = _sick_certificate(generation_env, db_session)
+    admin = User(email="rejecter@test.ae", password_hash="x", role="admin", status="active")
+    db_session.add(admin)
+    db_session.commit()
+    from app.services import book_service
+
+    book_service.override_state(
+        db_session, first.book_id, target_state="rejected", actor=admin, reason="Redo"
+    )
     client.put(
         "/api/v1/timesheet/2026/7/cell", json={"employee_id": "G1001", "day": 9, "code": "AB"}
     )
     assert db_session.query(Absence).count() == 1
 
     again = _sick_certificate(generation_env, db_session)
-    assert again.leave_id == first.leave_id  # proves the dedup path ran
+    assert again.leave_id == first.leave_id  # proves the take-over path ran
+    assert db_session.query(Absence).count() == 1
+    _approve(db_session, again.book_id)
     assert db_session.query(Absence).count() == 0
 
 
-def test_generating_a_leave_permit_clears_the_absence(client, db_session, generation_env):
+def _approve(db: Session, book_id: int | None) -> None:
+    from app.services import book_service
+
+    admin = User(email="approver@test.ae", password_hash="x", role="admin", status="active")
+    db.add(admin)
+    db.commit()
+    assert book_id is not None
+    book_service.override_state(db, book_id, target_state="approved", actor=admin)
+
+
+def test_a_leave_permit_clears_the_absence_once_approved(client, db_session, generation_env):
     _guard(db_session)
     client.put(
         "/api/v1/timesheet/2026/7/cell", json={"employee_id": "G1001", "day": 9, "code": "AB"}
     )
-    generation_env.generate_document(
+    result = generation_env.generate_document(
         db_session,
         employee_id="G1001",
         template_id="Leave Permit Form",
         fields={"date": "2026-07-09"},
         commit=True,
     )
+    assert result.superseded_absences == []
+    assert db_session.query(Absence).count() == 1
+    _approve(db_session, result.book_id)
     assert db_session.query(Absence).count() == 0
 
 
-def test_generating_an_administrative_leave_clears_the_absence(client, db_session, generation_env):
+def test_an_administrative_leave_clears_the_absence_once_approved(
+    client, db_session, generation_env
+):
     _guard(db_session)
     for day in (9, 10):
         client.put(
             "/api/v1/timesheet/2026/7/cell",
             json={"employee_id": "G1001", "day": day, "code": "AB"},
         )
-    generation_env.generate_document(
+    result = generation_env.generate_document(
         db_session,
         employee_id="G1001",
         template_id="Administrative Leave Form",
@@ -1071,6 +1099,8 @@ def test_generating_an_administrative_leave_clears_the_absence(client, db_sessio
         },
         commit=True,
     )
+    assert db_session.query(Absence).count() == 2
+    _approve(db_session, result.book_id)
     assert db_session.query(Absence).count() == 0
 
 
@@ -1138,7 +1168,7 @@ def test_a_failure_after_step_12_leaves_the_absences_intact(
 
 def test_the_supersede_reports_the_dates_it_removed(client, db_session, generation_env):
     """The generation result carries the overwritten days so the operator who
-    uploaded the certificate sees 'absence from X to Y is overwritten'."""
+    issued the Annual Leave sees 'absence from X to Y is overwritten'."""
 
     _guard(db_session)
     for day in (9, 10):
@@ -1151,7 +1181,7 @@ def test_the_supersede_reports_the_dates_it_removed(client, db_session, generati
         employee_id="G1001",
         template_id="Leave Application Form",
         fields={
-            "leave_type": "Sick Leave",
+            "leave_type": "Annual Leave",
             "start_date": "2026-07-09",
             "end_date": "2026-07-10",
             "total_days": 2,

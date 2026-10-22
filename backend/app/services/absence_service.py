@@ -27,13 +27,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError, ValidationFailedError
-from app.core.leave_lifecycle import english_part
+from app.core.leave_lifecycle import canonical_status, english_part
 from app.core.timesheet_codes import UNKNOWN_LEAVE, in_roster, is_void
 from app.db.models import Absence, Employee, Leave
 
 #: English leave types whose record explains an absence and therefore removes it.
 SUPERSEDING_LEAVE_TYPES: Final[frozenset[str]] = frozenset(
     {"Sick Leave", "Annual Leave", "Leave Permit", "Administrative Leave"}
+)
+#: Sign-gated types: they explain an absence only once approved. A Sick Leave
+#: is Pending only while its generated Leave Application awaits the signature.
+_APPROVAL_GATED_TYPES: Final[frozenset[str]] = frozenset(
+    {"Leave Permit", "Administrative Leave", "Sick Leave"}
 )
 
 
@@ -94,6 +99,10 @@ def _days_on_leave(db: Session, employee_id: str, start: date, end: date) -> set
     covered: set[date] = set()
     for leave_type, status, leave_start, leave_end in rows:
         if is_void(status) or not supersedes_absence(leave_type):
+            continue
+        if english_part(leave_type) in _APPROVAL_GATED_TYPES and canonical_status(status) != (
+            "Approved"
+        ):
             continue
         day = max(leave_start, start)
         while day <= min(leave_end, end):

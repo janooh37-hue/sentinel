@@ -83,8 +83,8 @@ export interface TemplateFormProps {
 
 /**
  * Pair a signature field with its sibling hand_sign_checkbox so they render as
- * a single card. Convention: `employee_sig_path` ↔ `hand_sign_employee`,
- * `manager_sig_path` ↔ `hand_sign_manager`. Returns the hand-sign field id
+ * a single card. Convention: `employee_sig_path` ↔ `hand_sign_employee`.
+ * Returns the hand-sign field id
  * (and labels) when a paired control exists in this schema, else null.
  */
 function findPairedHandSign(
@@ -191,9 +191,8 @@ function renderField(
       // type string remains "hand_sign_checkbox" for backwards-compat with
       // the existing _fields.json. The checkbox now binds to
       // `embed_signature.<entity>` and means "embed my saved signature".
-      // defaultOn is per-field (field.default === 'true' in _fields.json,
-      // e.g. Inmate Conduct Violations' hand_sign_manager) — every sibling
-      // form's hand_sign_manager has no `default` and stays unchecked.
+      // defaultOn is per-field (field.default === 'true' in _fields.json);
+      // fields without a `default` stay unchecked.
       return (
         <EmbedSignatureCheckbox
           key={field.id}

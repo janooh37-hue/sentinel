@@ -23,6 +23,7 @@ import { EmailSection } from './EmailSection'
 import { ManagersSection } from './ManagersSection'
 import { DesignationCatalog } from './DesignationCatalog'
 import { SigningSignatureSection } from './SigningSignatureSection'
+import { MessageTemplatesSection } from './MessageTemplatesSection'
 import { MigrationWizard, MIGRATION_SKIPPED_KEY } from '@/pages/system/MigrationWizard'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -751,6 +752,7 @@ type SettingsPanelId =
   | 'managers'
   | 'email'
   | 'sms'
+  | 'messageTemplates'
   | 'access'
   | 'crashReporting'
   | 'system'
@@ -836,6 +838,11 @@ export function SettingsPage(): React.JSX.Element {
       title: t('settings.smsAutosend.label'),
       description: t('settings.smsAutosend.hint'),
     },
+    messageTemplates: {
+      id: 'messageTemplates',
+      title: t('msgTemplates.settings.title'),
+      description: t('msgTemplates.settings.description'),
+    },
     access: {
       id: 'access',
       title: t('access.settingsCard.title'),
@@ -885,6 +892,7 @@ export function SettingsPage(): React.JSX.Element {
       panels: [
         ...(has('email.manage') ? [panels.email] : []),
         ...(has('settings.edit') ? [panels.sms] : []),
+        panels.messageTemplates,
       ],
     },
     {
@@ -956,6 +964,8 @@ export function SettingsPage(): React.JSX.Element {
         return settings ? (
           <SmsAutosendSection settings={settings} onUpdate={handleUpdate} />
         ) : settingsSkeleton
+      case 'messageTemplates':
+        return <MessageTemplatesSection />
       case 'access':
         return <AccessRequestsSection />
       case 'crashReporting':

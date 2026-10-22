@@ -5,17 +5,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import i18n from 'i18next'
 import { z } from 'zod'
+import { toast } from 'sonner'
 
 import en from '@/locales/en.json'
 import type * as ApiModule from '@/lib/api'
 import type { JobStatusResponse } from '@/lib/api'
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import { ApplicationPage } from './ApplicationPage'
+import { messageTemplatesApi } from '@/lib/messageTemplates'
+import type * as MessageTemplatesModule from '@/lib/messageTemplates'
 
 const jobStatusState = vi.hoisted(() => ({
   handlers: new Map<string, (job: JobStatusResponse) => void>(),
 }))
 
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn(), info: vi.fn() },
+}))
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof ApiModule>()
   return {
@@ -30,6 +36,22 @@ vi.mock('@/lib/api', async (importOriginal) => {
       getBookVersionFields: vi.fn(),
     },
     apiErrorMessage: (error: unknown) => String(error),
+  }
+})
+vi.mock('@/lib/messageTemplates', async (importOriginal) => {
+  const actual = await importOriginal<typeof MessageTemplatesModule>()
+  return {
+    ...actual,
+    messageTemplatesApi: {
+      ...actual.messageTemplatesApi,
+      preview: vi.fn().mockResolvedValue({
+        event: 'leave_permit',
+        language: 'en',
+        timing: 'on_approval',
+        text: { en: 'Employee message before approval', ar: 'رسالة الموظف قبل الاعتماد' },
+        segments: { en: 1, ar: 1 },
+      }),
+    },
   }
 })
 vi.mock('@/lib/useCapabilities', () => ({
@@ -70,9 +92,6 @@ vi.mock('@/components/books/SavedRecordActions', () => ({
     <div data-testid="saved-actions">saved:{bookId}</div>
   ),
 }))
-vi.mock('./notifyToggle', () => ({
-  shouldShowNotifyToggle: () => true,
-}))
 
 const mockedApi = vi.mocked(api)
 
@@ -94,11 +113,11 @@ function completedSavedJob(jobId: string): JobStatusResponse {
   } as JobStatusResponse
 }
 
-function renderPage() {
+function renderPage(route = '/services/demo?employee_id=G1') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/services/demo?employee_id=G1']}>
+      <MemoryRouter initialEntries={[route]}>
         <Routes>
           <Route path="/services/:slug?" element={<ApplicationPage />} />
         </Routes>
@@ -128,6 +147,13 @@ beforeEach(async () => {
     name_ar: null,
   } as never)
   mockedApi.getSettings.mockResolvedValue({ sms_autosend_enabled: true } as never)
+  vi.mocked(messageTemplatesApi.preview).mockResolvedValue({
+    event: 'leave_permit',
+    language: 'en',
+    timing: 'on_approval',
+    text: { en: 'Employee message before approval', ar: 'رسالة الموظف قبل الاعتماد' },
+    segments: { en: 1, ar: 1 },
+  })
   mockedApi.getTemplateFields.mockResolvedValue({
     meta: {},
     needs_manager: false,
@@ -145,6 +171,107 @@ afterEach(() => {
 })
 
 describe('ApplicationPage generated handoff reset', () => {
+  it('does not request or render a revision message preview when autosend is disabled', async () => {
+    mockedApi.getSettings.mockResolvedValue({ sms_autosend_enabled: false } as never)
+    mockedApi.getBook.mockResolvedValue({ versions: [{ id: 9 }] } as never)
+    mockedApi.getBookVersionFields.mockResolvedValue({ fields: { notes: 'Revised details' } } as never)
+    const user = userEvent.setup()
+    renderPage('/services/demo?employee_id=G1&revise=42')
+    await waitFor(() => expect(mockedApi.getBookVersionFields).toHaveBeenCalledWith(42, 9))
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /^Preview$/ })
+      .some((button) => !button.hasAttribute('disabled'))).toBe(true))
+    const previewButton = screen.getAllByRole('button', { name: /^Preview$/ })
+      .filter((button) => !button.hasAttribute('disabled')).pop()!
+    await user.click(previewButton)
+    await waitFor(() => expect(jobStatusState.handlers.has('job-1')).toBe(true))
+    await act(async () => jobStatusState.handlers.get('job-1')?.(completedPreviewJob('job-1')))
+
+    expect(screen.getByRole('button', { name: /^Save to Records$/ })).toBeEnabled()
+    expect(messageTemplatesApi.preview).not.toHaveBeenCalled()
+    expect(screen.queryByText('Employee message before approval')).not.toBeInTheDocument()
+    expect(screen.queryByText(i18n.t('msgTemplates.preview.title'))).not.toBeInTheDocument()
+    expect(screen.queryByRole('switch', { name: i18n.t('application.notify.label') })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    { width: 1440, hasMessage: true },
+    { width: 1440, hasMessage: false },
+    { width: 390, hasMessage: true },
+    { width: 390, hasMessage: false },
+  ])('previews a revision without a notify switch at $width px (message: $hasMessage)', async ({
+    width,
+    hasMessage,
+  }) => {
+    const originalWidth = window.innerWidth
+    window.innerWidth = width
+    window.dispatchEvent(new Event('resize'))
+    mockedApi.getBook.mockResolvedValue({ versions: [{ id: 9 }] } as never)
+    mockedApi.getBookVersionFields.mockResolvedValue({ fields: { notes: 'Revised details' } } as never)
+    vi.mocked(messageTemplatesApi.preview).mockResolvedValue({
+      event: 'leave_permit',
+      language: 'en',
+      timing: 'on_approval',
+      text: hasMessage ? { en: 'Revision approval message', ar: 'رسالة اعتماد التعديل' } : null,
+      segments: hasMessage ? { en: 1, ar: 1 } : null,
+    })
+    const user = userEvent.setup()
+    try {
+      renderPage('/services/demo?employee_id=G1&revise=42')
+      await waitFor(() => expect(mockedApi.getBookVersionFields).toHaveBeenCalledWith(42, 9))
+      await waitFor(() => expect(screen.getAllByRole('button', { name: /^Preview$/ })
+        .some((button) => !button.hasAttribute('disabled'))).toBe(true))
+      const previewButton = screen.getAllByRole('button', { name: /^Preview$/ })
+        .filter((button) => !button.hasAttribute('disabled')).pop()!
+      await user.click(previewButton)
+      await waitFor(() => expect(jobStatusState.handlers.has('job-1')).toBe(true))
+      await act(async () => jobStatusState.handlers.get('job-1')?.(completedPreviewJob('job-1')))
+
+      await waitFor(() => expect(messageTemplatesApi.preview).toHaveBeenCalledWith({
+        template_id: 'Demo',
+        employee_id: 'G1',
+        fields: { notes: 'Revised details' },
+        revise_of_book_id: 42,
+      }))
+      expect(await screen.findByText(
+        hasMessage ? 'Revision approval message' : i18n.t('msgTemplates.preview.empty'),
+      )).toBeVisible()
+      expect(screen.queryByRole('switch', { name: i18n.t('application.notify.label') })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^Save to Records$/ })).toBeEnabled()
+    } finally {
+      window.innerWidth = originalWidth
+      window.dispatchEvent(new Event('resize'))
+    }
+  })
+
+  it('shows the localized existing-record message when the leave is already issued', async () => {
+    mockedApi.generateDocument.mockRejectedValueOnce(
+      new ApiError(422, 'LEAVE_ALREADY_ISSUED', 'This leave is already issued on record HR-1', {
+        ref_number: 'HR-1',
+        book_id: 1,
+      }),
+    )
+    const user = userEvent.setup()
+    renderPage()
+
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByRole('button', { name: /^Preview$/ })
+          .some((button) => !button.hasAttribute('disabled')),
+      ).toBe(true),
+    )
+    const previewButton = screen
+      .getAllByRole('button', { name: /^Preview$/ })
+      .filter((button) => !button.hasAttribute('disabled'))
+      .pop()
+    await user.click(previewButton!)
+
+    const message = en.application.leaveAlreadyIssued.replace('{{ref}}', 'HR-1')
+    expect(await screen.findByRole('alert')).toHaveTextContent(message)
+    expect(toast.error).toHaveBeenCalledWith(message)
+    expect(screen.queryByText(/This leave is already issued on record HR-1/)).not.toBeInTheDocument()
+  })
+
   it('clears prior saved actions when a new preview job is accepted and completes', async () => {
     const user = userEvent.setup()
     renderPage()
@@ -165,6 +292,14 @@ describe('ApplicationPage generated handoff reset', () => {
     await waitFor(() => expect(mockedApi.generateDocument).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(jobStatusState.handlers.has('job-1')).toBe(true))
     await act(async () => jobStatusState.handlers.get('job-1')?.(completedPreviewJob('job-1')))
+
+    expect(await screen.findByText('Employee message before approval')).toBeVisible()
+    expect(messageTemplatesApi.preview).toHaveBeenCalledWith({
+      template_id: 'Demo',
+      employee_id: 'G1',
+      fields: mockedApi.generateDocument.mock.calls[0][0].fields,
+      revise_of_book_id: null,
+    })
 
     await user.click(await screen.findByRole('button', { name: /^Save to Records$/ }))
     await waitFor(() => expect(mockedApi.generateDocument).toHaveBeenCalledTimes(2))

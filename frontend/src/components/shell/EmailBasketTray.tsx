@@ -22,6 +22,7 @@ import { api } from '@/lib/api'
 import { useEmailBasket } from '@/hooks/useEmailBasket'
 import { basketLabel, type BasketKey, type EmailBasketItem } from '@/lib/emailBasket'
 import { buildBasketPrefill } from '@/lib/basketEmail'
+import { useDraftTemplates } from '@/lib/messageTemplates'
 import { buildRecordBasketItem } from '@/pages/books/recordsBasket'
 import { getRecentRecipientsForForm } from '@/lib/recentRecipients'
 
@@ -31,6 +32,7 @@ export function EmailBasketTray(): React.JSX.Element | null {
   const t = tRaw as (k: string, o?: object) => string
   const navigate = useNavigate()
   const { baskets, remove, clear, totalCount } = useEmailBasket()
+  const draftOverrides = useDraftTemplates().data?.overrides
 
   if (totalCount === 0) return null
 
@@ -40,8 +42,8 @@ export function EmailBasketTray(): React.JSX.Element | null {
     // items added before the enrichment fix — or before the employee record was
     // complete — would otherwise send blank. Rebuild from current data via
     // getBook + buildRecordBasketItem; fall back to the stored item if the
-    // lookup fails (deleted book / offline). Subject + body are fixed
-    // official-letter templates owned by buildBasketPrefill.
+    // lookup fails (deleted book / offline). Letter wording uses the current
+    // shared overrides, with the office defaults when none are available.
     const refreshed = await Promise.all(
       items.map(async (it) => {
         try {
@@ -52,7 +54,7 @@ export function EmailBasketTray(): React.JSX.Element | null {
         }
       }),
     )
-    const prefill = buildBasketPrefill(refreshed, getRecentRecipientsForForm(key))
+    const prefill = buildBasketPrefill(refreshed, getRecentRecipientsForForm(key), draftOverrides)
     // Keep the basket's stored key so the correct (possibly mis-keyed, stale)
     // basket is the one cleared on a successful send.
     prefill.basketKey = key

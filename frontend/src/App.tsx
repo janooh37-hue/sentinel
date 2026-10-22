@@ -116,13 +116,15 @@ const SendToGroupPage = lazy(loadSendToGroupPage)
 const ScanBackPage = lazy(loadScanBackPage)
 const SignaturePlacementPage = lazy(loadSignaturePlacementPage)
 
+export const DEFAULT_QUERY_STALE_TIME = 60_000
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
       refetchOnWindowFocus: true,   // return-to-app => silently fresh (if stale)
       refetchOnReconnect: true,     // after a gap, refetch only what is stale
-      staleTime: 60_000,            // SSE + mutations keep data fresh; gates focus/remount refetches
+      staleTime: DEFAULT_QUERY_STALE_TIME, // SSE + mutations keep data fresh; gates focus/remount refetches
       gcTime: 5 * 60_000,
     },
   },

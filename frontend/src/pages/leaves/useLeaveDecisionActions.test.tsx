@@ -2,11 +2,12 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
+import { toast } from 'sonner'
 
 import { useLeaveDecisionActions } from './useLeaveDecisionActions'
 import * as apiMod from '@/lib/api'
+import i18n from '@/lib/i18n'
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 function wrapperFor(qc: QueryClient) {
@@ -72,5 +73,28 @@ describe('useLeaveDecisionActions', () => {
       notes: undefined,
       notify_employee: true,
     })
+  })
+
+  it('explains a sign-gated leave approval using the localized record reference', async () => {
+    await i18n.changeLanguage('en')
+    const qc = new QueryClient()
+    const rawMessage = 'This leave is controlled by the record signature.'
+    vi.spyOn(apiMod.api, 'updateLeave').mockRejectedValueOnce(
+      new apiMod.ApiError(422, 'LEAVE_SIGN_GATED', rawMessage, {
+        ref_number: 'HR-42',
+        book_id: 42,
+      }),
+    )
+    const { result } = renderHook(
+      () => useLeaveDecisionActions({ leaveId: 7, employeeId: 'G100', onMutated: vi.fn() }),
+      { wrapper: wrapperFor(qc) },
+    )
+
+    result.current.updateMutation.mutate({ status: 'Approved', n: '' })
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+      'Record HR-42 decides this leave. It is approved when the manager signs that record.',
+    ))
+    expect(toast.error).not.toHaveBeenCalledWith(rawMessage)
   })
 })

@@ -133,6 +133,38 @@ def _set(db: Session, key: str, value: object) -> None:
     _upsert_setting(db, key, value)
 
 
+def set_audited_setting(
+    db: Session,
+    key: str,
+    value: object | None,
+    *,
+    actor: str,
+    action: str,
+    entity_type: str,
+    entity_id: str,
+) -> None:
+    """Upsert (or delete, when ``value`` is None) one setting and write an AuditLog
+    row with before/after, then commit. No row is written when nothing changes."""
+    row = db.execute(select(AppSetting).where(AppSetting.key == key)).scalar_one_or_none()
+    before = json.loads(row.value) if row is not None else None
+    if before == value:
+        return
+    if value is None:
+        db.delete(row)
+    else:
+        _upsert_setting(db, key, value)
+    db.add(
+        AuditLog(
+            actor=actor,
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            payload=json.dumps({"before": before, "after": value}, ensure_ascii=False),
+        )
+    )
+    db.commit()
+
+
 def _set_workforce_configuration_value(db: Session, key: str, value: object) -> None:
     """Write one key after the complete typed configuration has been validated."""
     if key not in _WORKFORCE_CONFIGURATION_KEYS:

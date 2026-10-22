@@ -21,9 +21,9 @@ export type LeaveAction = 'approve' | 'reject' | 'cancel' | 'delay' | 'extend' |
 
 export const ENDING_SOON_DAYS = 3
 
-/** Kinds with no workflow at all — born Approved, register entries only.
- * Mirrors backend _RECORD_TYPES; Passport Release / Duty Resumption bucket to
- * Others for FILTER chips but must not get request actions/counting. */
+/** Kinds without Leaves-page actions. Generated Leave Permit / Administrative
+ * Leave rows follow their record's signing chain; other entries start Approved.
+ * Passport Release / Duty Resumption bucket to Others for FILTER chips only. */
 const RECORD_TYPES: ReadonlySet<string> = new Set([
   'administrative leave', 'leave permit', 'passport release', 'duty resumption',
 ])
@@ -68,8 +68,10 @@ export function displayState(
   const group = lifecycleGroup(leaveType)
   switch (group) {
     case 'sick':
-      return 'Recorded'
+      // Pending only while its generated Leave Application awaits the signature.
+      return s === 'Pending' ? 'Requested' : 'Recorded'
     case 'record':
+      if (s === 'Pending') return 'Requested'
       return classifyLeaveType(leaveType) === 'Administrative Leave' ? 'PreApproved' : 'Recorded'
     case 'ns':
       if (s === 'Completed') return 'Completed'

@@ -34,11 +34,14 @@ import type { AbsenceRegisterRowRead } from '@/lib/api'
 import { copyTable } from '@/lib/copyTable'
 import { computeEndDate, todayIso } from '@/lib/leaveDateMath'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useDraftTemplates } from '@/lib/messageTemplates'
 import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
 import { Button } from '@/components/ui/button'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ServiceDraftTab } from '@/components/templates/ServiceDraftTab'
 import {
   ABSENCE_TABLE_HEADERS,
   absenceTableCells,
@@ -58,6 +61,7 @@ export function AbsencesPage(): React.JSX.Element {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const qc = useQueryClient()
+  const draftOverrides = useDraftTemplates().data?.overrides
   const { has, isLoading: capabilitiesLoading } = useCapabilities()
   const canEdit = has('leaves.edit')
 
@@ -67,6 +71,7 @@ export function AbsencesPage(): React.JSX.Element {
   const [start, setStart] = useSearchParam('from', { fallback: todayIso() })
   const [end, setEnd] = useSearchParam('to', { fallback: todayIso() })
   const [search, setSearch] = useSearchParam('q')
+  const [tab, setTab] = useSearchParam('tab', { fallback: 'records' })
   const overlay = useUrlOverlay('action', ['open'])
   const [note, setNote] = useState('')
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
@@ -238,6 +243,19 @@ export function AbsencesPage(): React.JSX.Element {
               </div>
             </div>
           </header>
+          <Tabs value={tab === 'email-draft' ? 'email-draft' : 'records'} onValueChange={setTab}>
+            <TabsList className="mb-5 flex w-full justify-start overflow-x-auto">
+              <TabsTrigger value="records" className="shrink-0 whitespace-nowrap">
+                {t('leaves.tabs.records')}
+              </TabsTrigger>
+              <TabsTrigger value="email-draft" className="shrink-0 whitespace-nowrap">
+                {t('msgTemplates.tabs.emailDraft')}
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="email-draft" className="min-w-0">
+              <ServiceDraftTab service="absences" />
+            </TabsContent>
+            <TabsContent value="records">
 
           <div className="mx-auto w-full max-w-2xl">
             <div className="rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
@@ -529,6 +547,8 @@ export function AbsencesPage(): React.JSX.Element {
               </div>
             )}
           </section>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
 
@@ -543,6 +563,7 @@ export function AbsencesPage(): React.JSX.Element {
       <AbsenceEmailDialog
         open={emailOpen}
         rows={selectedRows}
+        draftOverrides={draftOverrides}
         onOpenChange={(open) => {
           if (!open) overlay.close()
         }}

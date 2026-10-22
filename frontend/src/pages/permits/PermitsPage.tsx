@@ -11,7 +11,6 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { TFunction } from 'i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Car, Plus, Printer, ShieldCheck, Paperclip, Users, X } from 'lucide-react'
@@ -44,7 +43,7 @@ import { PermitQuickView } from './PermitQuickView'
 import { ItemPermitsTab } from './ItemPermitsTab'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
-import { fmtDate, fmtLongDate, statusTone } from './permitUtils'
+import { fmtDate, fmtLongDate, permitWindow, statusTone } from './permitUtils'
 import { usePrefetchLetter, type PrefetchHandlers } from './usePrefetchLetter'
 
 const STATE_OPTIONS = ['', 'valid', 'active', 'expiring', 'expired', 'revoked'] as const
@@ -64,29 +63,6 @@ const tabCls =
   'data-[state=inactive]:hover:bg-surface/60 ' +
   'data-[state=active]:bg-surface data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-sm ' +
   '[[data-theme=dark]_&]:data-[state=active]:bg-surface-tinted [[data-theme=dark]_&]:data-[state=active]:text-foreground [[data-theme=dark]_&]:data-[state=active]:shadow-none'
-
-/** Validity text + remaining-days text, shared by the table cell, the mobile card and the quick view. */
-function permitWindow(
-  t: TFunction,
-  language: string,
-  row: PermitListItem,
-): { validity: string; remaining: string | null } {
-  const remaining =
-    row.derived_status === 'revoked' || row.days_remaining === null
-      ? null
-      : row.days_remaining < 0
-        ? t('permits.expired')
-        : row.days_remaining === 0
-          ? t('permits.endsToday')
-          : t('permits.daysLeft', { count: row.days_remaining })
-  return {
-    validity: t('permits.validityFrom', {
-      period: t(`permits.validityPeriod.${row.validity.unit}`, { count: row.validity.value }),
-      date: fmtLongDate(row.start_date, language),
-    }),
-    remaining,
-  }
-}
 
 export function PermitsPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()

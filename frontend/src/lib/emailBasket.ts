@@ -24,6 +24,7 @@ export interface EmailBasketItem {
   resumptionDate?: string // duty resumption: تاريخ استئناف الواجب column (return-from-leave)
   lastWorkDay?: string // resignation: أخر يوم عمل column
   bookDate?: string // ISO issue date (book.created_at) — transfer cover-email date
+  classificationCode?: string | null // General Book draft variant, with generic fallback
 }
 
 export type BasketKey = string

@@ -14,13 +14,14 @@
  * State machine:
  *   - selectedTemplate → triggers field schema fetch
  *   - selectedEmployee → required before submission
- *   - activeTab: 'fields' | 'preview'
+ *   - activeTab: fields | preview | notification | email-draft (URL-backed)
  *   - activeJobId → mounts <JobStatus>, switches to preview tab on generate
  *
  * URL (the source of truth for which service is open):
  *   - /services            → gallery; ?q= is the search box
  *   - /services/<slug>     → that service's form (push, so Back returns to the gallery)
  *   - ?employee_id=<G-id>  pre-selects an employee
+ *   - ?tab=notification|email-draft → service template editor
  *   - ?revise=<bookId>     revise mode (regenerates a new version of that book)
  *   - ?mode=stats&stats_month=YYYY-MM → inmate violations monthly register
  *   - ?mode=upload → Inmate Conduct Violations opens on "import a signed paper violation"
@@ -67,6 +68,10 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ServiceArtwork, type ServiceArtworkId } from '@/components/ui/service-artwork'
 import { TemplateForm } from '@/components/application/TemplateForm'
 import { AttachmentsBlock } from '@/components/application/AttachmentsBlock'
+import { ServiceNotificationTab } from '@/components/templates/ServiceNotificationTab'
+import { ServiceDraftTab } from '@/components/templates/ServiceDraftTab'
+import { useMessageTemplates } from '@/lib/messageTemplates'
+import { draftKeysForService, useDraftVariants } from '@/lib/draftTemplates'
 import {
   attachmentsWithSeed,
   emptyAttachmentsState,
@@ -111,8 +116,6 @@ import {
   seedReportDateTime,
   todayIso,
 } from './resignationDate'
-
-type TabValue = 'fields' | 'preview'
 
 type InmateEntryMode = 'create' | 'upload' | 'stats'
 
@@ -235,7 +238,7 @@ function StandardApplicationPage(): React.JSX.Element {
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(
     employeeIdFromUrl,
   )
-  const [activeTab, setActiveTab] = useState<TabValue>('fields')
+  const [requestedTab, setActiveTab] = useSearchParam('tab', { fallback: 'fields' })
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
   // Latest polled job status — drives Save book enablement on the Preview tab.
   // The Preview tab's Save button only lights up when status === 'done', so the
@@ -336,6 +339,20 @@ function StandardApplicationPage(): React.JSX.Element {
   })
   const schema = schemaQuery.data ? adaptSchema(schemaQuery.data) : null
   const selectedMeta = templates.find((tpl) => tpl.id === selectedTemplate) ?? null
+  const messageTemplates = useMessageTemplates()
+  const draftVariants = useDraftVariants()
+  const hasNotificationTab = selectedTemplate !== null && (
+    messageTemplates.data?.some((template) => template.services.includes(selectedTemplate)) ||
+    selectedMeta?.notifies_employee === true
+  )
+  const hasDraftTab = selectedTemplate !== null &&
+    draftKeysForService(draftVariants, selectedTemplate).length > 0
+  const activeTab =
+    (requestedTab === 'notification' && hasNotificationTab) ||
+    (requestedTab === 'email-draft' && hasDraftTab) ||
+    (requestedTab === 'preview' && activeJobId)
+      ? requestedTab
+      : 'fields'
   const paperPair =
     PAPER_LANGUAGES.find((p) => p.en === selectedTemplate || p.ar === selectedTemplate) ?? null
   // The tab needs both papers allowed; a revision stays on its book's paper.
@@ -346,11 +363,13 @@ function StandardApplicationPage(): React.JSX.Element {
     templates.some((tpl) => tpl.id === paperPair.ar)
       ? paperPair
       : null
-  const showNotifyEmployee = shouldShowNotifyToggle({
+  const notifyContext = {
     notifiesEmployee: selectedMeta?.notifies_employee ?? false,
     autosendEnabled: settingsQuery.data?.sms_autosend_enabled ?? false,
     isRevision: reviseBookId !== null,
-  })
+  }
+  const showNotifyEmployee = shouldShowNotifyToggle(notifyContext)
+  const showNotifyPreview = shouldShowNotifyToggle({ ...notifyContext, isRevision: false })
 
   // Attachments (spec 2026-06-11 §6) — named slots come from the template
   // policy on the detail response; the block itself renders on EVERY form
@@ -391,7 +410,8 @@ function StandardApplicationPage(): React.JSX.Element {
     defaultValues: {},
   })
 
-  const leaveType = form.watch('leave_type') as string | undefined
+  const currentFormValues = form.watch()
+  const leaveType = currentFormValues.leave_type as string | undefined
   const visibleSlots = useMemo(
     () => visibleAttachmentSlots(attachmentSlots, leaveType),
     [attachmentSlots, leaveType],
@@ -457,6 +477,12 @@ function StandardApplicationPage(): React.JSX.Element {
       setSubmitError(null)
     },
     onError: (err) => {
+      if (err instanceof ApiError && err.code === 'LEAVE_ALREADY_ISSUED') {
+        const message = t('application.leaveAlreadyIssued', { ref: String(err.details.ref_number ?? '') })
+        setSubmitError(message)
+        toast.error(message)
+        return
+      }
       setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))
       toast.error(apiErrorMessage(err))
     },
@@ -505,8 +531,8 @@ function StandardApplicationPage(): React.JSX.Element {
     // remain "hand_sign_<entity>" for backwards-compat with _fields.json, but
     // Round 2 — Fix E inverted the semantics: a checked box now means
     // "embed the saved signature image". The payload key is the bare entity
-    // ("employee" / "manager"). A field with `default: "true"` (e.g. Inmate
-    // Conduct Violations' hand_sign_manager) is treated as checked unless the
+    // ("employee" / "manager"). A field with `default: "true"` is treated as
+    // checked unless the
     // operator explicitly unticks it — same `value !== false` rule as the
     // Report form's `sign` field below, generalized via the per-field default
     // instead of a hardcoded field id.
@@ -566,6 +592,10 @@ function StandardApplicationPage(): React.JSX.Element {
       classification_code: isGeneralBookForm ? classificationCode ?? undefined : undefined,
     }
   }
+
+  const notifyPayload = showNotifyPreview
+    ? buildPayload(currentFormValues, false)
+    : null
 
   const submitWithCommit = (commit: boolean) => {
     // General Book Word mode: the create needs only classification + subject —
@@ -721,7 +751,6 @@ function StandardApplicationPage(): React.JSX.Element {
     form.reset({})
     attachmentsDirtyRef.current = false
     setAttachmentsState(emptyAttachmentsState())
-    setActiveTab('fields')
     setActiveJobId(null)
     setPreviewJobStatus(null)
     setLastSaved(null)
@@ -901,7 +930,6 @@ function StandardApplicationPage(): React.JSX.Element {
     pendingNotificationRef.current = undefined
     // Per-book notify switch is not remembered — each newly-picked form starts On.
     setNotifyEmployee(true)
-    setActiveTab('fields')
     setSubmitError(null)
     setClassificationCode(null)
     setConfidentiality('general')
@@ -1372,8 +1400,8 @@ function StandardApplicationPage(): React.JSX.Element {
               hidden={isInmateService && inmateEntryMode !== 'create'}
               className="rounded-2xl bg-surface px-4 py-6 sm:px-7"
             >
-              {/* Tab strip — Fields / Preview */}
-              <div className="mb-5 flex items-center gap-1 border-b border-hairline pb-4">
+              {/* Service tabs share the form's horizontally scrollable strip. */}
+              <div className="mb-5 flex items-center gap-1 overflow-x-auto border-b border-hairline pb-4">
                 <TabButton
                   active={activeTab === 'fields'}
                   onClick={() => setActiveTab('fields')}
@@ -1387,6 +1415,22 @@ function StandardApplicationPage(): React.JSX.Element {
                 >
                   {previewTabLabel}
                 </TabButton>
+                {hasNotificationTab && (
+                  <TabButton
+                    active={activeTab === 'notification'}
+                    onClick={() => setActiveTab('notification')}
+                  >
+                    {t('msgTemplates.tabs.notification')}
+                  </TabButton>
+                )}
+                {hasDraftTab && (
+                  <TabButton
+                    active={activeTab === 'email-draft'}
+                    onClick={() => setActiveTab('email-draft')}
+                  >
+                    {t('msgTemplates.tabs.emailDraft')}
+                  </TabButton>
+                )}
 
                 {/* Preview-only actions on the right of the tab strip */}
                 {activeTab === 'preview' && activeJobId && (
@@ -1404,6 +1448,12 @@ function StandardApplicationPage(): React.JSX.Element {
               </div>
 
               {/* Tab content */}
+              {activeTab === 'notification' && selectedTemplate && (
+                <ServiceNotificationTab service={selectedTemplate} />
+              )}
+              {activeTab === 'email-draft' && selectedTemplate && (
+                <ServiceDraftTab service={selectedTemplate} />
+              )}
               {activeTab === 'fields' && (
                 <div
                   className={
@@ -1573,8 +1623,15 @@ function StandardApplicationPage(): React.JSX.Element {
                 <div className="flex min-h-[400px] flex-col">
                   {previewJobStatus === 'done' && !lastSaved && (
                     <GeneratedSaveActions
+                      signingPath={schemaQuery.data?.signing_path}
                       showNotify={showNotifyEmployee}
                       notifyEmployee={notifyEmployee}
+                      previewBody={notifyPayload ? {
+                        template_id: notifyPayload.template_id,
+                        employee_id: notifyPayload.employee_id ?? null,
+                        fields: notifyPayload.fields,
+                        revise_of_book_id: reviseBookId,
+                      } : null}
                       notifyDisabled={generateMutation.isPending}
                       saveDisabled={
                         (!isAdminCategory && !selectedEmployee) ||
@@ -1629,6 +1686,9 @@ function StandardApplicationPage(): React.JSX.Element {
                             nameEn: employeeQuery.data.name_en ?? '',
                             nameAr: employeeQuery.data.name_ar ?? null,
                             formKind: selectedTemplate,
+                            classificationCode: isGeneralBookForm
+                              ? classificationCode
+                              : typeof v.classification_code === 'string' ? v.classification_code : null,
                             leaveType:
                               selectedTemplate === 'Leave Application Form'
                                 ? leaveType
@@ -1858,10 +1918,11 @@ function TabButton({
   return (
     <button
       type="button"
+      aria-pressed={active}
       disabled={disabled}
       onClick={onClick}
       className={[
-        'relative inline-flex items-center rounded-full px-3.5 py-1.5 text-[0.78em] font-medium transition-colors',
+        'relative inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 py-1.5 text-[0.78em] font-medium transition-colors md:min-h-0',
         active
           ? 'bg-primary-soft text-primary'
           : 'text-muted-foreground hover:bg-surface-tinted hover:text-foreground',

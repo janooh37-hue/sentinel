@@ -4474,6 +4474,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/email/draft-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Draft Templates */
+        get: operations["get_draft_templates_api_v1_email_draft_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/email/draft-templates/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Draft Template */
+        put: operations["put_draft_template_api_v1_email_draft_templates__key__put"];
+        post?: never;
+        /** Delete Draft Template */
+        delete: operations["delete_draft_template_api_v1_email_draft_templates__key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/email/account": {
         parameters: {
             query?: never;
@@ -4975,6 +5010,75 @@ export interface paths {
         put?: never;
         /** Refresh Delivery */
         post: operations["refresh_delivery_api_v1_notify__msg_id__refresh_delivery_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notify/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Templates */
+        get: operations["templates_api_v1_notify_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notify/templates/{event}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Template */
+        put: operations["update_template_api_v1_notify_templates__event__put"];
+        post?: never;
+        /** Reset Template */
+        delete: operations["reset_template_api_v1_notify_templates__event__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notify/templates/{event}/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Render Template */
+        post: operations["render_template_api_v1_notify_templates__event__render_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notify/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview */
+        post: operations["preview_api_v1_notify_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9942,7 +10046,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "sent_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures" | "workforce_pulse" | "violation_months" | "inbox";
+            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "sent_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures" | "workforce_pulse" | "violation_months" | "inbox" | "permits";
             /**
              * Visible
              * @default true
@@ -10393,6 +10497,35 @@ export interface components {
             sync_interval_minutes: number;
             /** Linked Employee Id */
             linked_employee_id?: string | null;
+        };
+        /** EmailDraftTemplateParts */
+        EmailDraftTemplateParts: {
+            /** Subject */
+            subject?: string | null;
+            /** Intro */
+            intro?: string | null;
+            /** Closing */
+            closing?: string | null;
+        };
+        /** EmailDraftTemplatePartsWrite */
+        EmailDraftTemplatePartsWrite: {
+            /** Subject */
+            subject?: string | null;
+            /** Intro */
+            intro?: string | null;
+            /** Closing */
+            closing?: string | null;
+        };
+        /** EmailDraftTemplatesRead */
+        EmailDraftTemplatesRead: {
+            /** Overrides */
+            overrides?: {
+                [key: string]: components["schemas"]["EmailDraftTemplateParts"];
+            };
+            /** Tokens */
+            tokens: {
+                [key: string]: string[];
+            };
         };
         /** EmailHandoffResult */
         EmailHandoffResult: {
@@ -12042,11 +12175,6 @@ export interface components {
             delay_reason?: string | null;
             /** Manager Id */
             manager_id?: number | null;
-            /**
-             * Embed Manager Signature
-             * @default true
-             */
-            embed_manager_signature: boolean;
         };
         /**
          * LeaveUpdate
@@ -12548,6 +12676,65 @@ export interface components {
             /** Updated */
             updated: number;
         };
+        /** MessageRenderRead */
+        MessageRenderRead: {
+            text: components["schemas"]["MessageText"];
+            segments: components["schemas"]["MessageSegments"];
+        };
+        /** MessageSegments */
+        MessageSegments: {
+            /** Ar */
+            ar: number;
+            /** En */
+            en: number;
+        };
+        /** MessageTemplateRead */
+        MessageTemplateRead: {
+            /** Event */
+            event: string;
+            label: components["schemas"]["MessageText"];
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "leaves" | "forms" | "violations" | "reminders";
+            /** Services */
+            services: string[];
+            /**
+             * Timing
+             * @enum {string}
+             */
+            timing: "on_approval" | "on_save" | "on_status_change" | "scheduled" | "manual";
+            default: components["schemas"]["MessageText"];
+            override: components["schemas"]["MessageText"] | null;
+            /** Variables */
+            variables: components["schemas"]["MessageVariable"][];
+        };
+        /** MessageText */
+        MessageText: {
+            /** Ar */
+            ar: string;
+            /** En */
+            en: string;
+        };
+        /** MessageTextWrite */
+        MessageTextWrite: {
+            /** Ar */
+            ar: string;
+            /** En */
+            en: string;
+        };
+        /** MessageVariable */
+        MessageVariable: {
+            /** Name */
+            name: string;
+            /** Label En */
+            label_en: string;
+            /** Label Ar */
+            label_ar: string;
+            /** Sample */
+            sample: string;
+        };
         /** MigrateRequest */
         MigrateRequest: {
             /** V3 Data Dir */
@@ -12760,6 +12947,36 @@ export interface components {
             phone: string;
             /** Body */
             body?: string | null;
+        };
+        /** NotifyPreviewRead */
+        NotifyPreviewRead: {
+            /** Event */
+            event: string | null;
+            /**
+             * Language
+             * @enum {string}
+             */
+            language: "ar" | "en";
+            /**
+             * Timing
+             * @enum {string}
+             */
+            timing: "on_approval" | "on_save" | "on_status_change" | "scheduled" | "manual";
+            text: components["schemas"]["MessageText"] | null;
+            segments: components["schemas"]["MessageSegments"] | null;
+        };
+        /** NotifyPreviewRequest */
+        NotifyPreviewRequest: {
+            /** Template Id */
+            template_id: string;
+            /** Employee Id */
+            employee_id?: string | null;
+            /** Fields */
+            fields?: {
+                [key: string]: unknown;
+            };
+            /** Revise Of Book Id */
+            revise_of_book_id?: number | null;
         };
         /** NotifySendRequest */
         NotifySendRequest: {
@@ -26854,6 +27071,107 @@ export interface operations {
             };
         };
     };
+    get_draft_templates_api_v1_email_draft_templates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailDraftTemplatesRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_draft_template_api_v1_email_draft_templates__key__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailDraftTemplatePartsWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailDraftTemplatesRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_draft_template_api_v1_email_draft_templates__key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailDraftTemplatesRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_account_api_v1_email_account_get: {
         parameters: {
             query?: never;
@@ -27782,6 +28100,179 @@ export interface operations {
             };
         };
     };
+    templates_api_v1_notify_templates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTemplateRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_template_api_v1_notify_templates__event__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageTextWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTemplateRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_template_api_v1_notify_templates__event__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTemplateRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    render_template_api_v1_notify_templates__event__render_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageTextWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageRenderRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_api_v1_notify_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotifyPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyPreviewRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     vapid_public_key_api_v1_push_vapid_public_key_get: {
         parameters: {
             query?: never;
@@ -28060,7 +28551,9 @@ export interface operations {
     };
     permit_summary_api_v1_permits_summary_get: {
         parameters: {
-            query?: never;
+            query?: {
+                zone?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: {

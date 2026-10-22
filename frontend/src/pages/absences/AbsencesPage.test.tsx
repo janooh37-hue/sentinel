@@ -72,6 +72,10 @@ vi.mock('@/pages/leaves/LeaveEmployeePicker', () => ({
   ),
 }))
 
+vi.mock('@/components/templates/ServiceDraftTab', () => ({
+  ServiceDraftTab: ({ service }: { service: string }) => <div data-testid="draft-templates" data-service={service} />,
+}))
+
 import { AbsencesPage } from './AbsencesPage'
 
 const ROW = (id: number, date: string, note: string | null = null) => ({
@@ -179,6 +183,16 @@ afterEach(() => {
 })
 
 describe('AbsencesPage', () => {
+  it('opens the email draft tab from its URL without template-edit permission', async () => {
+    hasCapability.mockImplementation((cap) => cap === 'leaves.view')
+    renderPage(['/absences?tab=email-draft&q=John'])
+    expect(screen.getByRole('tab', { name: 'Email draft' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('draft-templates')).toHaveAttribute('data-service', 'absences')
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Records' }))
+    expect(screen.getByRole('searchbox', { name: 'Search by ID or name' })).toHaveValue('John')
+    expect(screen.getByTestId('location')).toHaveTextContent('/absences?q=John')
+  })
+
   it('keeps the form hidden until an employee is picked', () => {
     renderPage()
     expect(screen.queryByLabelText('First day')).not.toBeInTheDocument()

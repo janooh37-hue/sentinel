@@ -8,7 +8,8 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { api, type OdometerMonthRead, type OdometerRowRead, type OdometerUpsert } from '@/lib/api'
-import { EMPTY_VALUE, formatAed, formatNumber, invalidateVehicleQueries, localized, normalizeDigits, vehicleErrorMessage } from '../vehicleUtils'
+import { normalizeDigits } from '@/lib/utils'
+import { EMPTY_VALUE, formatAed, formatNumber, invalidateVehicleQueries, localized, vehicleErrorMessage } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'
 
 export function OdometerLog({ data, canEdit, isMobile }: {

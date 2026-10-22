@@ -108,8 +108,9 @@ def list_permits(
 def permit_summary(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("permits.view"))],
+    zone: str | None = None,
 ) -> PermitSummary:
-    return PermitSummary(**permit_service.summary(db))
+    return PermitSummary(**permit_service.summary(db, zone=zone))
 
 
 @router.get("/detailed", response_model=list[PermitRead])

@@ -3,12 +3,16 @@ import {
   buildClosing,
   dmyPad,
   esc,
+  draftPlainText,
+  draftTextHtml,
   HEADER_RED,
   p,
   TD_STYLE,
+  substituteDraftText,
   thStyle,
 } from '@/lib/basketEmail'
 import { computeEndDate } from '@/lib/leaveDateMath'
+import type { DraftOverrides } from '@/lib/draftTemplates'
 
 export type AbsenceCase = 'absent' | 'returned'
 export type AbsenceEmailRow = AbsenceRegisterRowRead & { case: AbsenceCase }
@@ -97,24 +101,67 @@ function returnedParagraph(rows: AbsenceEmailRow[]): string {
   return 'يطيب لنا ان نهديكم اطيب التحيات , ونفيدكم علما بأن المذكورين من أفراد القوة الملحقة بمرتبنا أدناه عادوا من <b><u>تغيبهم وباشروا عملهم في اليوم التالي للفترة المبينة بجانب أسمائهم</u></b> .'
 }
 
+const ABSENCE_CLOSING = '<b>' + buildClosing([
+  'يرجى التفضل بالإطلاع وأمركم ،،،،،',
+  'وأقبلوا فائق الإحترام والتقدير',
+]) + '</b>'
+
+function absenceDraftValues(rows: AbsenceEmailRow[]): Record<string, string> {
+  return {
+    names: rows.map(letterName).join('، '),
+    count: String(rows.length),
+    start_date: dmyPad(rows[0].start_date),
+    end_date: dmyPad(rows[0].end_date),
+    return_date: dmyPad(returnDateIso(rows[0].end_date)),
+  }
+}
+
+const ABSENCE_GREETING = 'السلام عليكم ورحمة الله وبركاته'
+
+function defaultAbsenceIntro(rows: AbsenceEmailRow[], includeGreeting = true): string {
+  const paragraph = rows[0].case === 'returned'
+    ? returnedParagraph(rows) : rows.length > 1 ? ABSENT_PLURAL : ABSENT_SINGULAR
+  return (includeGreeting ? p(ABSENCE_GREETING) : '') + p(paragraph)
+}
+
+export function defaultAbsenceDraftText(rows: AbsenceEmailRow[]) {
+  return {
+    subject: ABSENCE_EMAIL_SUBJECT,
+    intro: rows.length ? draftPlainText(defaultAbsenceIntro(rows)) : '',
+    closing: draftPlainText(ABSENCE_CLOSING),
+  }
+}
+
 export function buildAbsenceEmail(
   rows: AbsenceEmailRow[],
-  opts: { violationAttached: boolean },
+  opts: { violationAttached: boolean; overrides?: DraftOverrides },
 ): { subject: string; bodyHtml: string } {
   if (rows.length === 0) return { subject: ABSENCE_EMAIL_SUBJECT, bodyHtml: '' }
 
   const absent = rows.filter((row) => row.case === 'absent')
   const returned = rows.filter((row) => row.case === 'returned')
-  const sections = [p('السلام عليكم ورحمة الله وبركاته')]
+  const sections: string[] = []
+  let greetingEmitted = false
+  const firstOverride = opts.overrides?.[`absence:${rows[0].case}`]
+  const subject = firstOverride?.subject
+    ? substituteDraftText(firstOverride.subject, absenceDraftValues(rows)) : ABSENCE_EMAIL_SUBJECT
 
-  if (absent.length > 0) {
-    sections.push(
-      p(absent.length > 1 ? ABSENT_PLURAL : ABSENT_SINGULAR),
-      buildAbsenceTableHtml(absent),
-    )
-  }
-  if (returned.length > 0) {
-    sections.push(p(returnedParagraph(returned)), buildAbsenceTableHtml(returned))
+  for (const group of [absent, returned]) {
+    if (!group.length) continue
+    let intro = opts.overrides?.[`absence:${group[0].case}`]?.intro ?? ''
+    const hasOverride = Boolean(intro)
+    const normalizedIntro = intro.replace(/\r\n/g, '\n').trimStart()
+    if (normalizedIntro.startsWith(ABSENCE_GREETING)) {
+      if (greetingEmitted) intro = normalizedIntro.slice(ABSENCE_GREETING.length).trimStart()
+      greetingEmitted = true
+    }
+    if (hasOverride) {
+      if (intro) sections.push(p(draftTextHtml(substituteDraftText(intro, absenceDraftValues(group)))))
+    } else {
+      sections.push(defaultAbsenceIntro(group, !greetingEmitted))
+      greetingEmitted = true
+    }
+    sections.push(buildAbsenceTableHtml(group))
   }
   if (opts.violationAttached) {
     const line = rows.length === 1
@@ -122,12 +169,9 @@ export function buildAbsenceEmail(
       : 'مرفق مخالفات موقعة من قبلهم'
     sections.push(p(`<b style="color:#C00000">${line}</b>`))
   }
-  sections.push(
-    '<b>' + buildClosing([
-      'يرجى التفضل بالإطلاع وأمركم ،،،،،',
-      'وأقبلوا فائق الإحترام والتقدير',
-    ]) + '</b>',
-  )
+  sections.push(firstOverride?.closing
+    ? buildClosing([draftTextHtml(substituteDraftText(firstOverride.closing, absenceDraftValues(rows)))])
+    : ABSENCE_CLOSING)
 
-  return { subject: ABSENCE_EMAIL_SUBJECT, bodyHtml: sections.join('') }
+  return { subject, bodyHtml: sections.join('') }
 }

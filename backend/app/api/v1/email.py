@@ -1,11 +1,11 @@
 """Email integration endpoints — configure IMAP account + trigger sync.
 
-  GET    /email/account          → current config (no password)
-  PUT    /email/account          → upsert (password optional on PATCH-like updates)
-  DELETE /email/account          → drop the row + forget credentials
-  POST   /email/test             → live IMAP login test against saved creds
-  POST   /email/sync             → fetch new mail + create LedgerEntries
-  GET    /email/sync/status      → live sync state for the Ledger strip
+GET    /email/account          → current config (no password)
+PUT    /email/account          → upsert (password optional on PATCH-like updates)
+DELETE /email/account          → drop the row + forget credentials
+POST   /email/test             → live IMAP login test against saved creds
+POST   /email/sync             → fetch new mail + create LedgerEntries
+GET    /email/sync/status      → live sync state for the Ledger strip
 """
 
 from __future__ import annotations
@@ -36,11 +36,53 @@ from app.schemas.email import (
     EmailSyncStatus,
     HandoffAttachment,
 )
-from app.services import email_service, scheduler_service
+from app.schemas.email_draft_template import EmailDraftTemplatePartsWrite, EmailDraftTemplatesRead
+from app.services import email_draft_template_service, email_service, scheduler_service
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/email", tags=["email"])
+
+
+@router.get(
+    "/draft-templates", response_model=EmailDraftTemplatesRead, response_model_exclude_none=True
+)
+def get_draft_templates(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> EmailDraftTemplatesRead:
+    return email_draft_template_service.get_templates(db)
+
+
+@router.put(
+    "/draft-templates/{key:path}",
+    response_model=EmailDraftTemplatesRead,
+    response_model_exclude_none=True,
+)
+def put_draft_template(
+    key: str,
+    payload: EmailDraftTemplatePartsWrite,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_capability("messages.templates"))],
+) -> EmailDraftTemplatesRead:
+    return email_draft_template_service.set_template(
+        db, key, payload, actor=current_user.employee_id or current_user.email
+    )
+
+
+@router.delete(
+    "/draft-templates/{key:path}",
+    response_model=EmailDraftTemplatesRead,
+    response_model_exclude_none=True,
+)
+def delete_draft_template(
+    key: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_capability("messages.templates"))],
+) -> EmailDraftTemplatesRead:
+    return email_draft_template_service.set_template(
+        db, key, None, actor=current_user.employee_id or current_user.email
+    )
 
 
 def _to_read(account: object) -> EmailAccountRead:
@@ -171,9 +213,7 @@ async def create_handoff(
         for upload in files:
             data = await upload.read()
             if data:
-                attachments.append(
-                    (upload.filename or "attachment", upload.content_type, data)
-                )
+                attachments.append((upload.filename or "attachment", upload.content_type, data))
     try:
         entry = email_service.draft_outgoing(
             db,
@@ -197,4 +237,3 @@ async def create_handoff(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     result_mode = "draft" if mode == "draft" else "mailto"
     return EmailHandoffResult(ledger_entry_id=entry.id, mode=result_mode)
-

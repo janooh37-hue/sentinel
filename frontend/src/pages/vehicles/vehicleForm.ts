@@ -12,12 +12,12 @@
 import { z } from 'zod'
 
 import type { VehicleCreate, VehicleRead, VehicleSiteRead, VehicleUpdate } from '@/lib/api'
+import { normalizeDigits } from '@/lib/utils'
 
 import {
   VEHICLE_CLASSES,
   VEHICLE_CLASS_ALIASES,
   licenseWindowEnd,
-  normalizeDigits,
   parsePlate,
   plateLabel,
   todayIso,

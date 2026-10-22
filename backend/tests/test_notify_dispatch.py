@@ -602,9 +602,8 @@ def test_send_leave_status_admin_leave_swaps_to_admin_leave(db_session, monkeypa
 
 
 def test_auto_send_for_book_leave_permit_renders_hours_and_local_time(db_session, monkeypatch):
-    """Generating a Leave Permit Form sends the permit body: issue time is the
-    book's created_at verbatim (document_service already stamps it in local
-    wall-clock), plus duration_hours."""
+    """An approved Leave Permit sends its body with the book's local creation
+    time (document_service already stamps local wall-clock) and duration_hours."""
     from app.db.models import Book, BookCategory, BookVersion
     from app.services import notify_dispatch as nd
     from app.services import openwa_client
@@ -620,7 +619,9 @@ def test_auto_send_for_book_leave_permit_renders_hours_and_local_time(db_session
     if db_session.get(BookCategory, "HR") is None:
         db_session.add(BookCategory(id="HR", prefix="HR"))
     db_session.flush()
-    book = Book(category_id="HR", ref_number="HR-7001", employee_id="GLP")
+    book = Book(
+        category_id="HR", ref_number="HR-7001", employee_id="GLP", approval_state="approved"
+    )
     db_session.add(book)
     db_session.flush()
     db_session.add(
@@ -684,9 +685,40 @@ def test_load_book_event_keeps_evening_created_at_on_the_same_day(db_session):
     assert "Valid from 9:00 PM on Thursday, 16/07/2026, for 2 hour(s)." in text
 
 
+def test_load_book_event_starts_a_signed_permit_at_signing(db_session):
+    """A sign-gated permit is notified when signed, so its start time is the
+    signing instant (stored naive UTC), not the earlier generation time."""
+    from app.db.models import Book, BookCategory, BookVersion
+    from app.services import notify_dispatch as nd
+
+    db_session.add(Employee(id="GLPS", name_en="Signed Permit", msg_language="en"))
+    if db_session.get(BookCategory, "HR") is None:
+        db_session.add(BookCategory(id="HR", prefix="HR"))
+    db_session.flush()
+    book = Book(category_id="HR", ref_number="HR-7003", employee_id="GLPS")
+    db_session.add(book)
+    db_session.flush()
+    signed_at = datetime(2026, 7, 16, 9, 30)
+    db_session.add(
+        BookVersion(
+            book_id=book.id,
+            version_no=1,
+            template_id="Leave Permit Form",
+            signed_at=signed_at,
+            fields={"_signing": {"issued": "15/07/2026"}},
+        )
+    )
+    book.created_at = datetime(2026, 7, 15, 8, 0)
+    db_session.commit()
+
+    rec = nd._load_book_event(db_session, book.id)
+    assert rec is not None
+    assert rec.created_at == signed_at.replace(tzinfo=UTC).astimezone().replace(tzinfo=None)
+
+
 def test_auto_send_for_book_admin_leave_routes_via_leave_row(db_session, monkeypatch):
-    """Generating an Administrative Leave Form routes by the Leave row it created
-    (doc.leave_id) and sends the admin_leave body."""
+    """An approved Administrative Leave routes by its linked Leave row
+    rather than trying to load a Leave using the book id."""
     from app.db.models import Book, BookCategory, BookVersion, Document
     from app.services import notify_dispatch as nd
     from app.services import openwa_client
@@ -722,7 +754,9 @@ def test_auto_send_for_book_admin_leave_routes_via_leave_row(db_session, monkeyp
     )
     db_session.add(doc)
     db_session.flush()
-    book = Book(category_id="HR", ref_number="HR-7002", employee_id="GAL2")
+    book = Book(
+        category_id="HR", ref_number="HR-7002", employee_id="GAL2", approval_state="approved"
+    )
     db_session.add(book)
     db_session.flush()
     db_session.add(

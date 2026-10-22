@@ -515,6 +515,14 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "نشر إعلانات نصية أو مستندات إلى مجموعات واتساب.",
     ),
     Capability(
+        "messages.templates",
+        "messages",
+        "Manage message templates",
+        "إدارة قوالب الرسائل",
+        "Edit or reset employee message and email draft wording.",
+        "تعديل صياغة رسائل الموظفين ومسودات البريد أو إعادتها إلى الافتراضي.",
+    ),
+    Capability(
         "workforce.self.view",
         "workforce",
         "View own workforce record",

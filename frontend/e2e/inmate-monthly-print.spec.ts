@@ -156,7 +156,7 @@ const INMATE_TEMPLATE_META = {
   name_ar: 'المخالفات المسلكية',
   form_number: '300-005',
   category: 'admin' as const,
-  signing_path: 'auto' as const,
+  signing_path: 'chain' as const,
   has_code: true,
   feature_minted: false,
   notifies_employee: false,
@@ -301,7 +301,7 @@ class SyntheticApi {
     if (method === 'GET' && path === '/templates/Inmate Conduct Violations/fields') {
       await this.fulfillJson(route, {
         meta: INMATE_TEMPLATE_META,
-        signing_path: 'auto',
+        signing_path: 'chain',
         attachment_slots: [],
         fields: [
           { key: 'report_date', type: 'date', label_en: 'Date', label_ar: 'التاريخ', required: true },
@@ -349,14 +349,6 @@ class SyntheticApi {
             label_en: 'Signing manager',
             label_ar: 'المُوقِّع',
             required: false,
-          },
-          {
-            key: 'hand_sign_manager',
-            type: 'hand_sign_checkbox',
-            label_en: "Embed manager's saved signature",
-            label_ar: 'تضمين توقيع المدير المحفوظ',
-            required: false,
-            default: 'true',
           },
         ],
       })

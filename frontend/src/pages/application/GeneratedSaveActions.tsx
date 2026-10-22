@@ -3,16 +3,20 @@ import { useTranslation } from 'react-i18next'
 
 import { ConfidentialitySelect } from '@/components/books/ConfidentialitySelect'
 import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
+import { NotifyMessagePreview } from '@/components/notify/NotifyMessagePreview'
 import { Button } from '@/components/ui/button'
-import type { Confidentiality } from '@/lib/api'
+import type { Confidentiality, SigningPath } from '@/lib/api'
+import type { NotifyPreviewRequest } from '@/lib/messageTemplates'
 
 export interface GeneratedSaveActionsProps {
+  signingPath: SigningPath | undefined
   showNotify: boolean
   notifyEmployee: boolean
   notifyDisabled: boolean
   saveDisabled: boolean
   saving: boolean
   hint: string
+  previewBody: NotifyPreviewRequest | null
   onNotifyChange: (checked: boolean) => void
   onSave: () => void
   /** Record level picker; omitted (e.g. revise mode) when the level is fixed. */
@@ -21,20 +25,26 @@ export interface GeneratedSaveActionsProps {
 }
 
 export function GeneratedSaveActions({
+  signingPath,
   showNotify,
   notifyEmployee,
   notifyDisabled,
   saveDisabled,
   saving,
   hint,
+  previewBody,
   onNotifyChange,
   onSave,
   confidentiality,
   onConfidentialityChange,
 }: GeneratedSaveActionsProps): React.JSX.Element {
   const { t } = useTranslation()
+  const hintOn =
+    signingPath === 'chain'
+      ? 'application.notify.hintOnAtApproval'
+      : 'application.notify.hintOn'
   const notificationHint = notifyEmployee
-    ? `${t('application.notify.hintOn')} ${t('application.actions.notificationChannel')}`
+    ? `${t(hintOn)} ${t('application.actions.notificationChannel')}`
     : t('application.notify.hintOff')
 
   return (
@@ -43,7 +53,7 @@ export function GeneratedSaveActions({
       dir="auto"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-base font-semibold text-foreground">
             {t('application.actions.readyToSave')}
           </p>
@@ -56,6 +66,13 @@ export function GeneratedSaveActions({
               onChange={onNotifyChange}
               label={t('application.notify.label')}
               hint={notificationHint}
+            />
+          )}
+          {previewBody && (
+            <NotifyMessagePreview
+              key={`${previewBody.template_id}:${previewBody.employee_id}`}
+              body={previewBody}
+              notifyEmployee={notifyEmployee}
             />
           )}
           {confidentiality && onConfidentialityChange && (

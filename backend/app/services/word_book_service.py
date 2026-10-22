@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
 from app.config import get_settings
-from app.core import manager_override
+from app.core import form_policy, manager_override
 from app.core.book_template_retokenize import read_general_book_fields
 from app.core.book_text import build_search_text, docx_to_text
 from app.core.classifications import (
@@ -36,6 +36,7 @@ from app.core.docx_engine import aztec_corner_for
 from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, Manager, User
 from app.db.repos import classified_refs_repo
+from app.db.repos._locking import begin_immediate_if_idle
 from app.schemas.book import BookConfidentiality, TemplateSessionRead, WordSessionDetailRead
 from app.services import artifact_service, book_template_service, manager_service
 from app.services._pdf_executor import convert_docx_to_pdf
@@ -792,6 +793,25 @@ def finish_word_session(
     # ------------------------------------------------------------------
     # 3. Create Document row
     # ------------------------------------------------------------------
+    # A sign-gated leave form keeps its leave through a Word revision, so signing
+    # still settles it (book_service._commit_approval_state), unless another
+    # record has since taken that leave over.
+    prior_document = (
+        db.get(Document, prior.document_id)
+        if prior is not None
+        and prior.document_id
+        and template_id in form_policy.SIGN_GATED_LEAVE_FORMS
+        else None
+    )
+    carried_leave_id = prior_document.leave_id if prior_document is not None else None
+    if carried_leave_id is not None:
+        from app.services import book_service
+
+        # Read ownership under the write lock, as generation's plan does, so a
+        # takeover in flight cannot be overtaken by this revision.
+        begin_immediate_if_idle(db)
+        if book_service.leave_owner(db, carried_leave_id) not in (None, book):
+            carried_leave_id = None
     doc = Document(
         template_id=template_id,
         ref_number=book.ref_number,
@@ -800,6 +820,7 @@ def finish_word_session(
         submission_id=str(uuid.uuid4()),
         role="primary",
         created_at=now,
+        leave_id=carried_leave_id,
     )
     db.add(doc)
     db.flush()  # get doc.id

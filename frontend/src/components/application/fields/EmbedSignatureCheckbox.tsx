@@ -6,8 +6,8 @@
  * Round 2 — Fix E: renamed from HandSignCheckbox with inverted semantics.
  * Previously: checked = "I'll sign by hand" (no embed). Now: checked = "embed
  * my saved signature". Default unchecked → no embed → operator signs by hand
- * — UNLESS the field declares `default: "true"` in _fields.json (e.g. Inmate
- * Conduct Violations' hand_sign_manager), threaded in as `defaultOn`. Mirrors
+ * — UNLESS the field declares `default: "true"` in _fields.json, threaded in
+ * as `defaultOn`. Mirrors
  * CheckboxField's `defaultOn` prop/contract exactly (see there for the
  * `value !== false` rationale) rather than inventing a parallel mechanism.
  */

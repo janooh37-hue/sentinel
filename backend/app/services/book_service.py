@@ -34,6 +34,7 @@ from app.core.form_kind import (
     subject_prefixes,
     word_draft_service,
 )
+from app.core.fts_query import and_prefix_query, has_nul
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import (
     AuditLog,
@@ -48,10 +49,12 @@ from app.db.models import (
     BookVersion,
     Document,
     Employee,
+    Leave,
     Manager,
     OutboundMessage,
     User,
 )
+from app.db.repos._locking import begin_immediate_if_idle
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.schemas.book import (
     ApprovalLogItem,
@@ -145,26 +148,22 @@ def derive_subject(book: Book) -> str | None:
 def _fts_query_books(db: Session, q: str) -> dict[int, str]:
     """Run an FTS5 query on books_fts; return {book_id: snippet}.
 
-    Normalises the query with normalize_ar, splits into tokens, and appends
-    ``*`` to the last token for prefix-match typing (e.g. ``تصريح أمن*``).
+    Normalises the query with normalize_ar, then matches every whitespace-separated
+    token as an FTS5 *literal* (so ``E-40817`` or ``a OR b`` are data, not syntax),
+    appending ``*`` to the last token only for prefix-match typing
+    (e.g. ``تصريح أمن*``). Text containing a NUL matches nothing: the NUL check runs
+    on the raw input, before normalisation can rewrite it.
 
-    Falls back to {} on any error (missing FTS table, syntax, etc.) so the
-    caller's ilike path still works.
+    Falls back to {} on any error (missing FTS table, etc.) so the caller's ilike
+    path still works.
     """
     from app.core.book_text import normalize_ar
 
-    norm = normalize_ar(q.strip())
-    if not norm:
+    if has_nul(q):
         return {}
-
-    tokens = norm.split()
-    if not tokens:
+    match_str = and_prefix_query(normalize_ar(q.strip()))
+    if match_str is None:
         return {}
-    # Append prefix wildcard to last token only; escape embedded quotes.
-    escaped = [t.replace('"', '""') for t in tokens]
-    match_str = (
-        " ".join([*escaped[:-1], escaped[-1] + "*"]) if len(escaped) > 1 else escaped[0] + "*"
-    )
 
     try:
         rows = db.execute(
@@ -1457,7 +1456,7 @@ def has_active_edit_session(db: Session, book_id: int) -> bool:
     )
 
 
-def delete_book(db: Session, book_id: int) -> None:
+def delete_book(db: Session, book_id: int, *, user_id: int | None = None) -> None:
     """Soft-delete: set deleted_at.  Ref number is NOT released.
 
     Raises ``BOOK_NOT_DELETABLE`` (409) when the record is voided, pending or
@@ -1477,7 +1476,7 @@ def delete_book(db: Session, book_id: int) -> None:
             },
         )
     row.deleted_at = datetime.now(UTC).replace(tzinfo=None)
-    db.commit()
+    _commit_approval_state(db, row, user_id=user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -1547,6 +1546,154 @@ def _recompute_approval_state(book: Book) -> None:
     if version is not None and not is_report(book):
         version.status = state
     book.approval_state = state
+
+
+def is_enrolled(book: Book) -> bool:
+    """Whether ``book`` was generated under the sign-gated leave lifecycle.
+
+    Enrolled records carry the generation-time ``_signing`` snapshot on some
+    version (a Word revision inherits it from the versions before it). Records
+    issued before the gate keep their already-issued leave untouched.
+    """
+    return any(isinstance((v.fields or {}).get("_signing"), dict) for v in book.versions)
+
+
+def leave_owner(db: Session, leave_id: int, *, include: Book | None = None) -> Book | None:
+    """The live record that decides a sign-gated leave, or ``None``.
+
+    The owner is the live (not deleted, not voided) record whose CURRENT version
+    links the leave. A re-issue that takes a leave over links a newer document,
+    so the newest link wins. ``include`` also counts that record when it was
+    just deleted or voided (it then cancels the leave it owned).
+    """
+    later = aliased(BookVersion)
+    live = and_(Book.deleted_at.is_(None), Book.voided_at.is_(None))
+    return db.scalars(
+        select(Book)
+        .join(BookVersion, BookVersion.book_id == Book.id)
+        .join(Document, Document.id == BookVersion.document_id)
+        .where(
+            Document.leave_id == leave_id,
+            ~exists().where(
+                later.book_id == BookVersion.book_id, later.version_no > BookVersion.version_no
+            ),
+            or_(live, Book.id == include.id) if include is not None else live,
+        )
+        .order_by(Document.id.desc())
+        .limit(1)
+    ).first()
+
+
+def set_leave_status(db: Session, leave: Leave, status: str, *, user_id: int | None) -> bool:
+    """Move a sign-gated leave to ``status`` with audit and re-evaluation; no commit.
+
+    Returns whether the status changed. The caller commits and then invalidates
+    the employee's leave cache.
+    """
+    from app.services import absence_service, leave_service
+
+    if leave.status == status:
+        return False
+    before = leave_service._workforce_leave_snapshot(leave)
+    actor = db.get(User, user_id) if user_id is not None else None
+    leave_service._audit(
+        db,
+        "leave.status_changed",
+        leave.id,
+        actor.employee_id if actor else None,
+        {"from": leave.status, "to": status},
+    )
+    leave.status = status
+    leave.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    leave_service._enqueue_leave_reevaluation(
+        db,
+        before=before,
+        after=leave,
+        reason_code=leave_service._leave_transition_reason(status),
+    )
+    # Generation leaves absences alone; only an approved leave explains them.
+    if status == "Approved" and absence_service.supersedes_absence(leave.leave_type):
+        absence_service.delete_absences_covered_by(
+            db, leave.employee_id, leave.start_date, leave.end_date, commit=False
+        )
+    return True
+
+
+def _commit_approval_state(
+    db: Session, book: Book, *, user_id: int | None, notify: bool = True
+) -> None:
+    """Commit a chain decision and its linked leave together; notify only afterwards.
+
+    Record-kind leaves cannot be approved through Leaves PATCH. A sign-gated
+    leave (``form_policy.is_sign_gated_leave``) mirrors the record's verdict,
+    including administrative repairs, only when the record is enrolled and owns
+    the leave (``leave_owner``). A voided or deleted record cancels its leave.
+
+    An enrolled chain form's employee message is held from save to the first
+    approval, and sent then if the operator kept the "notify employee" switch
+    on. Rejection and return send nothing.
+    """
+    from app.core import form_policy
+    from app.services import leave_service, notify_dispatch
+
+    version = _current_version(book)
+    template_id = version.template_id if version is not None else None
+    enrolled = version is not None and is_enrolled(book)
+    leave = None
+    gated = False
+    status_changed = False
+    if enrolled and template_id in form_policy.SIGN_GATED_LEAVE_FORMS:
+        # Read ownership under the write lock held until the commit below: a
+        # generation taking this leave over holds it from its plan to its commit.
+        begin_immediate_if_idle(db)
+        # Newest linked leave: a Word revision that lost its link (a take-over)
+        # still names the type; ``leave_owner`` requires the current version's link.
+        for previous in reversed(book.versions):
+            document = db.get(Document, previous.document_id) if previous.document_id else None
+            if document is not None and document.leave_id is not None:
+                leave = db.get(Leave, document.leave_id)
+                break
+        gated = form_policy.is_sign_gated_leave(
+            template_id, leave.leave_type if leave is not None else None
+        )
+        if (
+            gated
+            and leave is not None
+            and leave.deleted_at is None
+            and leave_owner(db, leave.id, include=book) is book
+        ):
+            if book.voided_at is not None or book.deleted_at is not None:
+                status = "Cancelled"
+            else:
+                status = {"approved": "Approved", "rejected": "Rejected"}.get(
+                    book.approval_state, "Pending"
+                )
+            status_changed = set_leave_status(db, leave, status, user_id=user_id)
+    db.commit()
+    db.refresh(book)
+    if status_changed and leave is not None:
+        leave_service._cache_invalidate_employee(leave.employee_id)
+    if (
+        not notify
+        or book.approval_state != "approved"
+        or book.voided_at is not None
+        or book.deleted_at is not None
+    ):
+        return
+    if not notify_dispatch.approval_notification_eligible(
+        db,
+        book,
+        template_id=template_id,
+        target=notify_dispatch.book_event(db, book),
+        gated=gated,
+        status_changed=status_changed,
+    ):
+        return
+    try:
+        notify_dispatch.auto_send_for_book(db, book.id, sent_by=user_id)
+    except Exception:
+        db.rollback()
+        log.exception("auto notification failed for approved book %s", book.id)
 
 
 def _current_pending_step(book: Book) -> BookApprovalStep | None:
@@ -1803,8 +1950,7 @@ def submit_for_approval(
         submitted_at=datetime.now(UTC),
     )
     _recompute_approval_state(book)
-    db.commit()
-    db.refresh(book)
+    _commit_approval_state(db, book, user_id=submitted_by_user_id)
     return book
 
 
@@ -1897,8 +2043,7 @@ def decide_step(
     assert version is not None
     retain_revision_access(db, version, current)
     _recompute_approval_state(book)
-    db.commit()
-    db.refresh(book)
+    _commit_approval_state(db, book, user_id=user_id)
     return book
 
 
@@ -2028,8 +2173,8 @@ def override_state(
       - delete artifacts. Flipping away from ``approved`` leaves a filed signed
         PDF in place (it just stops being served, since serving keys on
         ``status == "approved"``); ``unfile_signed_copy`` is how you remove it.
-      - notify, or re-file in the Correspondence Log. This is a repair tool,
-        not a signing path.
+      - re-file in the Correspondence Log. This is a repair tool, not a signing
+        path. Linked sign-gated leaves still follow the repaired verdict and notify.
 
     Writes a ``book_state_override`` AuditLog row with the before/after pair
     and the reason.
@@ -2079,8 +2224,7 @@ def override_state(
             ),
         )
     )
-    db.commit()
-    db.refresh(book)
+    _commit_approval_state(db, book, user_id=actor.id)
     return book
 
 
@@ -2143,6 +2287,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
         version=version,
         signer_signature_path=str(abs_sig),
         signer_names=signer_names,
+        signer_user_id=user_id,
     )
     _require_current_revision(db, book, version_id)
     db.refresh(book, attribute_names=["approval_state", "voided_at", "deleted_at"])
@@ -2221,8 +2366,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     except Exception:
         log.warning("correspondence auto-log failed on sign for book %s", book.id, exc_info=True)
     inmate_violation_whatsapp.queue_send(db, version)
-    db.commit()
-    db.refresh(book)
+    _commit_approval_state(db, book, user_id=user_id)
     return book
 
 
@@ -3720,8 +3864,10 @@ def add_attachment(
                 book.id,
                 exc_info=True,
             )
-    db.commit()
-    db.refresh(book)
+    # A plain append is not an approval transition, so it never notifies.
+    _commit_approval_state(
+        db, book, user_id=user.id if user is not None else None, notify=flip_version is not None
+    )
     return book
 
 
@@ -3922,11 +4068,10 @@ def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -
             payload=json.dumps({"ref_number": book.ref_number, "reverted_to": book.approval_state}),
         )
     )
-    db.commit()
+    _commit_approval_state(db, book, user_id=user.id if user is not None else None)
     for path in old_paths:
         with contextlib.suppress(OSError):
             path.unlink()
-    db.refresh(book)
     return book
 
 
