@@ -3054,6 +3054,30 @@ def approval_summary(db: Session, user: User) -> ApprovalSummaryResponse:
     )
 
 
+def folder_filing_details(
+    db: Session, folder_id: int, book_ids: list[int]
+) -> dict[int, tuple[str | None, str | None, datetime]]:
+    """Filing provenance for the visible page only, with batched name resolution."""
+    if not book_ids:
+        return {}
+    filed = db.scalars(
+        select(BookFolderItem).where(
+            BookFolderItem.folder_id == folder_id, BookFolderItem.book_id.in_(book_ids)
+        )
+    ).all()
+    user_ids = {item.added_by_user_id for item in filed}
+    names = resolve_names_by_ids(db, user_ids)
+    names_ar = resolve_names_ar_by_ids(db, user_ids)
+    return {
+        item.book_id: (
+            names.get(item.added_by_user_id),
+            names_ar.get(item.added_by_user_id),
+            item.created_at,
+        )
+        for item in filed
+    }
+
+
 def user_display_name(db: Session, user: User) -> str:
     """Public form of the display-name resolution for an already-fetched user."""
     return _resolve_user_name(db, user)

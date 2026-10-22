@@ -64,6 +64,8 @@ from app.schemas.book import (
     BookFacetsResponse,
     BookFolderCreate,
     BookFolderRead,
+    BookFolderShareOptions,
+    BookFolderSharesUpdate,
     BookFolderUpdate,
     BookInboxRead,
     BookLinkCreate,
@@ -504,6 +506,24 @@ def create_book_folder(
     return book_folder_service.create_folder(db, user, name=body.name, team=body.team)
 
 
+@router.get("/folders/share-options", response_model=BookFolderShareOptions)
+def book_folder_share_options(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.view"))],
+) -> BookFolderShareOptions:
+    return book_folder_service.share_options(db, user)
+
+
+@router.put("/folders/{folder_id}/shares", response_model=BookFolderRead)
+def update_book_folder_shares(
+    folder_id: int,
+    body: BookFolderSharesUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.view"))],
+) -> BookFolderRead:
+    return book_folder_service.update_shares(db, user, folder_id, body)
+
+
 @router.patch("/folders/{folder_id}", response_model=BookFolderRead)
 def rename_book_folder(
     folder_id: int,
@@ -846,11 +866,18 @@ def list_books(
         )
         by_book = {s.book_id: s for s in sessions if s.book_id is not None}
     inbox_by_book = book_send_service.my_inbox(db, user.id, [row.id for row in rows])
+    filing_details = (
+        book_service.folder_filing_details(db, folder_id, [row.id for row in rows])
+        if folder_id is not None
+        else {}
+    )
     items: list[BookRead] = []
     for row in rows:
         item = _build_book_response(db, row, user, detail=False)
         item.my_inbox = inbox_by_book.get(row.id)
         item.search_snippet = fts_snippets.get(row.id) or None
+        if row.id in filing_details:
+            item.filed_by_name, item.filed_by_name_ar, item.filed_at = filing_details[row.id]
         _fill_draft_fields(item, row, db, by_book=by_book)
         items.append(item)
     _attach_creator_names(db, rows, items)

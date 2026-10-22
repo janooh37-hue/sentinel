@@ -49,6 +49,31 @@ class BookFolderUpdate(BaseModel):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
 
 
+class BookFolderShareUser(BaseModel):
+    id: int
+    name: str
+    name_ar: str | None
+    title: str | None
+    title_ar: str | None
+
+
+class BookFolderShareOption(BookFolderShareUser):
+    department: str | None
+
+
+class BookFolderShareOptions(BaseModel):
+    users: list[BookFolderShareOption]
+    departments: list[str]
+
+
+class BookFolderSharesUpdate(BaseModel):
+    everyone: bool
+    user_ids: list[int] = Field(default_factory=list)
+    departments: list[
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)]
+    ] = Field(default_factory=list)
+
+
 class BookFolderRead(BaseModel):
     id: int
     name: str
@@ -56,6 +81,11 @@ class BookFolderRead(BaseModel):
     count: int
     can_manage: bool
     has_book: bool | None = None
+    created_by_name: str | None
+    created_by_name_ar: str | None
+    everyone: bool
+    shared_users: list[BookFolderShareUser]
+    shared_departments: list[str]
 
 
 # ---------------------------------------------------------------------------
@@ -644,6 +674,9 @@ class BookRead(ORMBase):
     signer_name_ar: str | None = None
     signer_title: str | None = None
     signer_title_ar: str | None = None
+    filed_by_name: str | None = None
+    filed_by_name_ar: str | None = None
+    filed_at: datetime | None = None
 
 
 class BookListResponse(BaseModel):

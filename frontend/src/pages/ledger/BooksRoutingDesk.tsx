@@ -29,6 +29,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/s
 import { api, apiErrorMessage } from '@/lib/api'
 import type { BookInboxRead, BookListResponse, BookRead, BookRecipientRead, BookSortKey, SendPurpose } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
+import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { formatDmy } from '@/lib/formatDmy'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
@@ -38,6 +39,7 @@ import { cn } from '@/lib/utils'
 import { inboxSummaryKey } from '@/pages/books/useInboxCount'
 import { defaultPaperKey, paperCountOf, paperKey, papersOf } from '@/pages/books/recordPapers'
 import type { PaperKey } from '@/pages/books/recordPapers'
+import { BookFolderHeader } from './BookFolderHeader'
 import { BooksRail, ScopeIcon } from './BooksRail'
 import type { Scope } from './BooksRail'
 import { BOOK_DRAG_TYPE, toastFolderError, useBookFolders } from './useBookFolders'
@@ -240,6 +242,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
   const reader = !isMobile && view === 'reader' && open
   const searching = listScope === 'any'
   const asSent = !searching && !folderId && scope === 'outgoing'
+  const activeFolder = !searching && folderId ? folders.data?.find((folder) => folder.id === folderId) : undefined
   const placeLabel = folderId ? folders.data?.find((folder) => folder.id === folderId)?.name ?? t('ledger.booksDesk.folders.folder') : scopeLabel(scope)
   const rail = <BooksRail scope={searching || folderId ? null : scope} folderId={searching ? null : folderId} switcher={!isMobile ? switcher : undefined} onSelectScope={selectPlace} onSelectFolder={selectPlace} />
 
@@ -308,6 +311,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
             </Select>
           </div>
         </div>
+        {activeFolder && <BookFolderHeader key={activeFolder.id} folder={activeFolder} />}
         <div className="min-h-0 flex-1 overflow-y-auto" aria-busy={list.isFetching}>
           {searching && list.data && (
             <p role="status" className="border-b border-hairline px-4 py-2 text-xs text-muted-foreground lg:px-6">{t('ledger.booksDesk.results', { count: list.data.total })}</p>
@@ -335,7 +339,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
               <ul className="divide-y divide-hairline" aria-label={searching ? t('ledger.booksDesk.searchLabel') : placeLabel}>
                 {rows.map((book) => (
                   <li key={book.id}>
-                    <BookRow book={book} asSent={asSent} showScope={searching} current={book.id === lastOpenedId} draggable={!isMobile} onOpen={() => bookPage.open(String(book.id))} />
+                    <BookRow book={book} asSent={asSent} showScope={searching} inFolder={listScope === 'folder'} current={book.id === lastOpenedId} draggable={!isMobile} onOpen={() => bookPage.open(String(book.id))} />
                   </li>
                 ))}
               </ul>
@@ -382,11 +386,12 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
  * table row under the column header; below lg it stacks: purpose, then
  * subject + note, then a labelled meta line, with date and status at the end.
  */
-function BookRow({ book, asSent, showScope, current, draggable, onOpen }: {
+function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen }: {
   book: BookRead
   /** Outgoing tab: show my send even when I also received this book. */
   asSent: boolean
   showScope: boolean
+  inFolder: boolean
   current: boolean
   /** Desktop: drag the row onto a rail folder to file it. */
   draggable: boolean
@@ -447,6 +452,12 @@ function BookRow({ book, asSent, showScope, current, draggable, onOpen }: {
           {category && <bdi className="min-w-0 truncate">{category}</bdi>}
           <ConfidentialityMark level={book.confidentiality} />
         </span>
+        {inFolder && (book.filed_by_name || book.filed_by_name_ar || book.filed_at) && (
+          <span className="mt-1 block text-xs text-muted-foreground">
+            {t('ledger.booksDesk.folders.filedBy', { name: bidi(name(book.filed_by_name, book.filed_by_name_ar) || t('ledger.booksDesk.folders.unknownPerson')) })}
+            {book.filed_at && <> · <BookDate value={book.filed_at} /></>}
+          </span>
+        )}
         {note && (
           <span className="mt-1 flex min-w-0 items-start gap-1.5 text-muted-foreground">
             <MessageSquareText className="mt-0.5 h-3.5 w-3.5 shrink-0 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden />

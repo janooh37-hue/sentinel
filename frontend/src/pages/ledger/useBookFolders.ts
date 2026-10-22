@@ -6,6 +6,9 @@ import { api, ApiError } from '@/lib/api'
 const ERROR_KEYS: Record<string, string | undefined> = {
   FOLDER_NOT_FOUND: 'ledger.booksDesk.folders.errorNotFound',
   FORBIDDEN: 'ledger.booksDesk.folders.errorForbidden',
+  FOLDER_NOT_TEAM: 'ledger.booksDesk.folders.errorNotTeam',
+  FOLDER_SHARES_EMPTY: 'ledger.booksDesk.folders.errorSharesEmpty',
+  FOLDER_SHARE_USER_INVALID: 'ledger.booksDesk.folders.errorShareUserInvalid',
 }
 
 /** dataTransfer type for a Books desk row dragged onto a rail folder. */

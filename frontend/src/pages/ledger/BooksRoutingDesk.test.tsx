@@ -5,12 +5,13 @@ import i18n from 'i18next'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import ar from '@/locales/ar.json'
-import type { BookRead } from '@/lib/api'
+import type { BookFolderRead, BookRead } from '@/lib/api'
 import type * as ApiModule from '@/lib/api'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'employee' } }) }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => false }) }))
-vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
+vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: vi.fn(() => false) }))
 vi.mock('@/pages/books/RecordPaperViewer', () => ({
   default: ({ papers }: { papers: { url: string }[] }) => <div role="document" data-url={papers[0]?.url} />,
 }))
@@ -34,6 +35,12 @@ const BOOK: BookRead = {
   my_inbox: { id: 9, purpose: 'action', sent_by_user_id: 2, sent_by_name: 'Khalid', sent_at: '2026-10-12T09:00:00Z', read_at: null },
 }
 
+const FOLDER: BookFolderRead = {
+  id: 3, name: 'Personnel', team: false, count: 2, can_manage: true,
+  created_by_name: 'Khalid', created_by_name_ar: 'خالد',
+  everyone: false, shared_users: [], shared_departments: [],
+}
+
 function RouterControls(): React.JSX.Element {
   const location = useLocation()
   const navigate = useNavigate()
@@ -46,6 +53,7 @@ function mount(url = '/ledger?tab=books'): QueryClient {
   return qc
 }
 beforeEach(() => {
+  vi.mocked(useIsMobile).mockReturnValue(false)
   vi.spyOn(api, 'listBooks').mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 })
   vi.spyOn(api, 'listBookFolders').mockResolvedValue([])
   vi.spyOn(api, 'getInboxSummary').mockResolvedValue({ unread: 0, received: 0, sent: 0, archived: 0, by_purpose: { info: 0, action: 0, reply: 0, circulate: 0 } })
@@ -76,13 +84,84 @@ describe('Books routing desk', () => {
   })
 
   it('selects a folder without retaining the scope filter', async () => {
-    vi.mocked(api.listBookFolders).mockResolvedValue([{ id: 3, name: 'Personnel', team: false, count: 2, can_manage: true }])
+    vi.mocked(api.listBookFolders).mockResolvedValue([FOLDER])
     mount('/ledger?tab=books&scope=done')
     await userEvent.click(await screen.findByRole('button', { name: /^Personnel/ }))
     await waitFor(() => expect(api.listBooks).toHaveBeenLastCalledWith(expect.objectContaining({ folder_id: 3, sort: '-date' })))
     expect(screen.getByLabelText('URL')).toHaveTextContent('folder=3')
     expect(screen.getByLabelText('URL')).not.toHaveTextContent('scope=')
     expect(vi.mocked(api.listBooks).mock.lastCall?.[0]).not.toHaveProperty('inbox')
+  })
+
+  it.each([false, true])('shows the restricted folder audience above its books (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.mocked(api.listBookFolders).mockResolvedValue([{
+      ...FOLDER, team: true, shared_departments: ['Operations'],
+      shared_users: [{ id: 2, name: 'Aisha', name_ar: 'عائشة', title: 'HR officer', title_ar: 'مسؤولة الموارد البشرية' }],
+    }])
+    mount('/ledger?tab=books&folder=3')
+    const header = (await screen.findByRole('heading', { name: 'Personnel' })).closest('header')!
+    expect(header).toHaveTextContent('Team')
+    expect(header).toHaveTextContent('Books: 2')
+    expect(header).toHaveTextContent(/Shared with:.*HR officer.*Operations/)
+    expect(header).toHaveTextContent('Each person sees only the books they are allowed to open.')
+    expect(header).toHaveTextContent(/Created by.*Khalid/)
+    expect(within(header).getByRole('button', { name: 'Share' })).toBeInTheDocument()
+  })
+
+  it('saves chosen people and departments and refreshes folders and books', async () => {
+    vi.mocked(api.listBookFolders).mockResolvedValue([{ ...FOLDER, team: true, everyone: true }])
+    vi.spyOn(api, 'getBookFolderShareOptions').mockResolvedValue({
+      departments: ['Operations'],
+      users: [{ id: 2, name: 'Aisha', name_ar: 'عائشة', title: 'HR officer', title_ar: null, department: 'Operations' }],
+    })
+    vi.spyOn(api, 'updateBookFolderShares').mockResolvedValue({ ...FOLDER, team: true })
+    const qc = mount('/ledger?tab=books&folder=3')
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    await userEvent.click(await screen.findByRole('button', { name: 'Share' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Share team folder' })
+    expect(dialog).toHaveAttribute('dir', 'ltr')
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'Only chosen people and departments' }))
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeDisabled()
+    await userEvent.click(await within(dialog).findByRole('checkbox', { name: 'Operations' }))
+    await userEvent.type(within(dialog).getByRole('searchbox', { name: 'Search people' }), 'Aisha')
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Aisha HR officer' }))
+    expect(within(dialog).getByText('People selected: 1')).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.updateBookFolderShares).toHaveBeenCalledWith(3, { everyone: false, user_ids: [2], departments: ['Operations'] }))
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books', 'folders'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books', 'routing'] })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('prefills restricted sharing and clears it when everyone is selected', async () => {
+    vi.mocked(api.listBookFolders).mockResolvedValue([{
+      ...FOLDER, team: true, shared_departments: ['Operations'],
+      shared_users: [{ id: 2, name: 'Aisha', name_ar: null, title: null, title_ar: null }],
+    }])
+    vi.spyOn(api, 'getBookFolderShareOptions').mockResolvedValue({
+      departments: ['Operations'],
+      users: [{ id: 2, name: 'Aisha', name_ar: null, title: null, title_ar: null, department: 'Operations' }],
+    })
+    vi.spyOn(api, 'updateBookFolderShares').mockResolvedValue({ ...FOLDER, team: true, everyone: true })
+    mount('/ledger?tab=books&folder=3')
+    await userEvent.click(await screen.findByRole('button', { name: 'Share' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByRole('checkbox', { name: 'Operations' })).toBeChecked()
+    expect(within(dialog).getByRole('checkbox', { name: 'Aisha' })).toBeChecked()
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'Everyone' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.updateBookFolderShares).toHaveBeenCalledWith(3, { everyone: true, user_ids: [], departments: [] }))
+  })
+
+  it('shows who filed a folder book and when, beneath its subject', async () => {
+    vi.mocked(api.listBookFolders).mockResolvedValue([FOLDER])
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, filed_by_name: 'Aisha', filed_by_name_ar: 'عائشة', filed_at: '2026-10-15T08:30:00Z' }], total: 1, limit: 50, offset: 0 })
+    mount('/ledger?tab=books&folder=3')
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(row).toHaveTextContent('Filed by \u2068Aisha\u2069 · 15/10/2026')
+    const subject = within(row).getByText('Staff instruction').parentElement!.parentElement!
+    expect(subject).toHaveTextContent('Filed by \u2068Aisha\u2069')
   })
 
   it('shows the sender designation with the name below it', async () => {
@@ -95,7 +174,7 @@ describe('Books routing desk', () => {
   })
 
   it('creates a personal folder inline with Enter', async () => {
-    vi.spyOn(api, 'createBookFolder').mockResolvedValue({ id: 4, name: 'Planning', team: false, count: 0, can_manage: true })
+    vi.spyOn(api, 'createBookFolder').mockResolvedValue({ ...FOLDER, id: 4, name: 'Planning', count: 0 })
     mount()
     await userEvent.click(screen.getByRole('button', { name: 'New personal folder' }))
     const input = screen.getByRole('textbox', { name: 'Folder name' })
@@ -106,7 +185,7 @@ describe('Books routing desk', () => {
   it('files and unfiles an opened book without changing its inbox state', async () => {
     let filed = false
     vi.mocked(api.listBooks).mockResolvedValue({ items: [BOOK], total: 1, limit: 50, offset: 0 })
-    vi.mocked(api.listBookFolders).mockImplementation(async (bookId) => [{ id: 3, name: 'Personnel', team: false, count: filed ? 1 : 0, can_manage: true, has_book: bookId ? filed : null }])
+    vi.mocked(api.listBookFolders).mockImplementation(async (bookId) => [{ ...FOLDER, count: filed ? 1 : 0, has_book: bookId ? filed : null }])
     vi.spyOn(api, 'getBook').mockResolvedValue(BOOK)
     vi.spyOn(api, 'addBookToFolder').mockImplementation(async () => { filed = true })
     vi.spyOn(api, 'removeBookFromFolder').mockImplementation(async () => { filed = false })
@@ -127,7 +206,7 @@ describe('Books routing desk', () => {
   })
   it('files a book dragged from the list onto a rail folder, leaving its inbox state alone', async () => {
     vi.mocked(api.listBooks).mockResolvedValue({ items: [BOOK], total: 1, limit: 50, offset: 0 })
-    vi.mocked(api.listBookFolders).mockResolvedValue([{ id: 3, name: 'Personnel', team: false, count: 0, can_manage: true }])
+    vi.mocked(api.listBookFolders).mockResolvedValue([{ ...FOLDER, count: 0 }])
     vi.spyOn(api, 'addBookToFolder').mockResolvedValue(undefined)
     const qc = mount()
     const invalidate = vi.spyOn(qc, 'invalidateQueries')
@@ -349,6 +428,30 @@ describe('Books routing desk (Arabic)', () => {
     const keys = Array.from(root.querySelectorAll('kbd'), (node) => node.textContent ?? '')
     return keys.reduce((text, key) => text.replace(key, ''), [root.textContent, ...attributes].join(' ')).replace(/GS-\d+/g, '')
   }
+
+  it('uses Arabic folder details, filing metadata and a right-to-left share dialog', async () => {
+    vi.mocked(api.listBookFolders).mockResolvedValue([{
+      ...FOLDER, name: 'شؤون الموظفين', team: true, shared_departments: ['العمليات'],
+      shared_users: [{ id: 2, name: 'Aisha', name_ar: 'عائشة', title: 'HR officer', title_ar: 'مسؤولة الموارد البشرية' }],
+    }])
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{
+      ...BOOK, subject: 'تعليمات الموظفين', filed_by_name: 'Aisha', filed_by_name_ar: 'عائشة', filed_at: '2026-10-15T08:30:00Z',
+      my_inbox: { ...BOOK.my_inbox!, sent_by_name_ar: 'خالد' },
+    }], total: 1, limit: 50, offset: 0 })
+    vi.spyOn(api, 'getBookFolderShareOptions').mockResolvedValue({
+      departments: ['العمليات'],
+      users: [{ id: 2, name: 'Aisha', name_ar: 'عائشة', title: 'HR officer', title_ar: 'مسؤولة الموارد البشرية', department: 'العمليات' }],
+    })
+    mount('/ledger?tab=books&folder=3')
+    const header = (await screen.findByRole('heading', { name: 'شؤون الموظفين' })).closest('header')!
+    expect(header).toHaveTextContent(/تمت المشاركة مع:.*مسؤولة الموارد البشرية.*العمليات/)
+    expect(await screen.findByRole('button', { name: /GS-7/ })).toHaveTextContent('أضافه \u2068عائشة\u2069 · 15/10/2026')
+    await userEvent.click(screen.getByRole('button', { name: 'مشاركة' }))
+    const dialog = await screen.findByRole('dialog', { name: 'مشاركة مجلد الفريق' })
+    expect(dialog).toHaveAttribute('dir', 'rtl')
+    expect(await within(dialog).findByRole('checkbox', { name: 'عائشة مسؤولة الموارد البشرية' })).toBeChecked()
+    expect(rendered(dialog)).not.toMatch(/[A-Za-z]/)
+  })
 
   it('renders the list and the open book without any English', async () => {
     const arabic = { ...BOOK, subject: 'تعليمات الموظفين', confidentiality: 'secret' as const, versions: [{ id: 1, version_no: 1, document_id: 73, status: 'none', trigger: 'create', has_fields: false, created_at: BOOK.created_at, manager_sig_embedded: false }] }

@@ -817,6 +817,10 @@ export type BookRead = components['schemas']['BookRead'] & {
   imported_doc?: ImportedDocRead | null
 }
 export type BookFolderRead = components['schemas']['BookFolderRead']
+export type BookFolderShareUser = components['schemas']['BookFolderShareUser']
+export type BookFolderShareOption = components['schemas']['BookFolderShareOption']
+export type BookFolderShareOptions = components['schemas']['BookFolderShareOptions']
+export type BookFolderSharesUpdate = components['schemas']['BookFolderSharesUpdate']
 export type BookSortKey = `${'' | '-'}${'date' | 'ref' | 'subject' | 'purpose' | 'confidentiality' | 'status'}`
 export type IncludedPaperProposal = components['schemas']['IncludedPaperProposal']
 export type IncludedPaperRead = components['schemas']['IncludedPaperRead']
@@ -2118,6 +2122,10 @@ export const api = {
   } = {}) => request<BookListResponse>('GET', `/books${qs({ ...params })}`),
   listBookFolders: (bookId?: number) =>
     request<BookFolderRead[]>('GET', `/books/folders${qs({ book_id: bookId })}`),
+  getBookFolderShareOptions: () =>
+    request<BookFolderShareOptions>('GET', '/books/folders/share-options'),
+  updateBookFolderShares: (folderId: number, body: BookFolderSharesUpdate) =>
+    request<BookFolderRead>('PUT', `/books/folders/${folderId}/shares`, body),
   createBookFolder: (body: { name: string; team?: boolean }) =>
     request<BookFolderRead>('POST', '/books/folders', body),
   renameBookFolder: (id: number, name: string) =>

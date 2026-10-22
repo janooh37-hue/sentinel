@@ -1,18 +1,63 @@
 """Personal and shared desk folders; filing never changes a book's workflow."""
 
-from sqlalchemy import case, delete, func, or_, select
+from sqlalchemy import and_, case, delete, exists, func, or_, select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.errors import AppError, NotFoundError
-from app.db.models import Book, BookFolder, BookFolderItem, User
-from app.schemas.book import BookFolderRead
+from app.core.roles import INMATE_REPORTER_ROLE
+from app.db.models import Book, BookFolder, BookFolderItem, BookFolderShare, Employee, User
+from app.schemas.book import (
+    BookFolderRead,
+    BookFolderShareOption,
+    BookFolderShareOptions,
+    BookFolderSharesUpdate,
+    BookFolderShareUser,
+)
 from app.services import book_send_service, book_service
 
 
+def visibility_clause(user: User) -> ColumnElement[bool]:
+    """One folder access rule shared by lists and every folder operation."""
+    team_visible: ColumnElement[bool] = ~exists(
+        select(BookFolderShare.id)
+        .where(BookFolderShare.folder_id == BookFolder.id)
+        .correlate(BookFolder)
+    )
+    if book_send_service._is_manager_or_admin(user):
+        team_visible = BookFolder.owner_user_id.is_(None)
+    else:
+        department = (
+            select(func.lower(func.trim(Employee.department)))
+            .where(Employee.id == user.employee_id)
+            .scalar_subquery()
+        )
+        team_visible = or_(
+            team_visible,
+            exists(
+                select(BookFolderShare.id)
+                .where(
+                    BookFolderShare.folder_id == BookFolder.id,
+                    or_(
+                        BookFolderShare.user_id == user.id,
+                        func.lower(func.trim(BookFolderShare.department)) == department,
+                    ),
+                )
+                .correlate(BookFolder)
+            ),
+        )
+    return or_(
+        BookFolder.owner_user_id == user.id,
+        and_(BookFolder.owner_user_id.is_(None), team_visible),
+    )
+
+
 def get_folder(db: Session, user: User, folder_id: int, *, manage: bool = False) -> BookFolder:
-    folder = db.get(BookFolder, folder_id)
-    if folder is None or folder.owner_user_id not in (None, user.id):
+    folder = db.scalar(
+        select(BookFolder).where(BookFolder.id == folder_id, visibility_clause(user))
+    )
+    if folder is None:
         raise NotFoundError("FOLDER_NOT_FOUND", "Folder not found")
     if manage and folder.owner_user_id is None and not book_send_service._is_manager_or_admin(user):
         raise AppError(
@@ -24,9 +69,7 @@ def get_folder(db: Session, user: User, folder_id: int, *, manage: bool = False)
 def list_folders(
     db: Session, user: User, *, book_id: int | None = None, folder_id: int | None = None
 ) -> list[BookFolderRead]:
-    stmt = select(BookFolder).where(
-        or_(BookFolder.owner_user_id == user.id, BookFolder.owner_user_id.is_(None))
-    )
+    stmt = select(BookFolder).where(visibility_clause(user))
     if folder_id is not None:
         stmt = stmt.where(BookFolder.id == folder_id)
     folders = db.scalars(
@@ -50,6 +93,19 @@ def list_folders(
     if visibility is not None:
         counts_stmt = counts_stmt.where(visibility)
     counts = {folder: (count, has_book) for folder, count, has_book in db.execute(counts_stmt)}
+    shares: dict[int, list[BookFolderShare]] = {}
+    for share in db.scalars(
+        select(BookFolderShare)
+        .where(BookFolderShare.folder_id.in_([f.id for f in folders]))
+        .order_by(BookFolderShare.id)
+    ):
+        shares.setdefault(share.folder_id, []).append(share)
+    user_ids = {f.created_by_user_id for f in folders} | {
+        share.user_id for rows in shares.values() for share in rows if share.user_id is not None
+    }
+    names = book_service.resolve_names_by_ids(db, user_ids)
+    names_ar = book_service.resolve_names_ar_by_ids(db, user_ids)
+    titles = book_service.resolve_titles_by_ids(db, user_ids)
     return [
         BookFolderRead(
             id=f.id,
@@ -58,6 +114,27 @@ def list_folders(
             count=counts.get(f.id, (0, 0))[0],
             can_manage=f.owner_user_id == user.id or book_send_service._is_manager_or_admin(user),
             has_book=bool(counts.get(f.id, (0, 0))[1]) if book_id is not None else None,
+            created_by_name=names.get(f.created_by_user_id),
+            created_by_name_ar=names_ar.get(f.created_by_user_id),
+            everyone=f.owner_user_id is None and not shares.get(f.id),
+            shared_users=[
+                BookFolderShareUser(
+                    id=s.user_id,
+                    name=names[s.user_id],
+                    name_ar=names_ar.get(s.user_id),
+                    title=titles.get(s.user_id, (None, None))[0],
+                    title_ar=titles.get(s.user_id, (None, None))[1],
+                )
+                for s in shares.get(f.id, [])
+                if s.user_id is not None and s.user_id in names
+            ]
+            if f.owner_user_id is None
+            else [],
+            shared_departments=[
+                s.department for s in shares.get(f.id, []) if s.department is not None
+            ]
+            if f.owner_user_id is None
+            else [],
         )
         for f in folders
     ]
@@ -86,6 +163,7 @@ def rename_folder(db: Session, user: User, folder_id: int, *, name: str) -> Book
 def delete_folder(db: Session, user: User, folder_id: int) -> None:
     folder = get_folder(db, user, folder_id, manage=True)
     db.execute(delete(BookFolderItem).where(BookFolderItem.folder_id == folder.id))
+    db.execute(delete(BookFolderShare).where(BookFolderShare.folder_id == folder.id))
     db.delete(folder)
     db.commit()
 
@@ -109,3 +187,84 @@ def file_book(
             .on_conflict_do_nothing(index_elements=["folder_id", "book_id"])
         )
     db.commit()
+
+
+def _require_team_manager(user: User) -> None:
+    if not book_send_service._is_manager_or_admin(user):
+        raise AppError(
+            "FORBIDDEN", "Only managers and admins may manage team folders.", http_status=403
+        )
+
+
+def share_options(db: Session, user: User) -> BookFolderShareOptions:
+    _require_team_manager(user)
+    users = [
+        BookFolderShareOption(
+            id=account.id,
+            name=employee.name_en
+            if employee is not None
+            else (account.display_name or account.email),
+            name_ar=employee.name_ar if employee is not None else None,
+            title=employee.position if employee is not None else None,
+            title_ar=employee.position_ar if employee is not None else None,
+            department=(employee.department or "").strip() or None
+            if employee is not None
+            else None,
+        )
+        for account, employee in db.execute(
+            select(User, Employee)
+            .outerjoin(Employee, User.employee_id == Employee.id)
+            .where(User.status == "active", User.role != INMATE_REPORTER_ROLE)
+        )
+    ]
+    users.sort(key=lambda option: (option.name.casefold(), option.id))
+    return BookFolderShareOptions(
+        users=users,
+        departments=sorted(
+            {option.department for option in users if option.department}, key=str.casefold
+        ),
+    )
+
+
+def update_shares(
+    db: Session, user: User, folder_id: int, body: BookFolderSharesUpdate
+) -> BookFolderRead:
+    folder = get_folder(db, user, folder_id)
+    _require_team_manager(user)
+    if folder.owner_user_id is not None:
+        raise AppError("FOLDER_NOT_TEAM", "Personal folders cannot be shared.", http_status=422)
+    user_ids = set(body.user_ids) if not body.everyone else set()
+    departments = (
+        {department.casefold(): department for department in body.departments}
+        if not body.everyone
+        else {}
+    )
+    if not body.everyone and not user_ids and not departments:
+        raise AppError(
+            "FOLDER_SHARES_EMPTY", "Choose at least one user or department.", http_status=422
+        )
+    valid_ids = (
+        set(
+            db.scalars(
+                select(User.id).where(
+                    User.id.in_(user_ids),
+                    User.status == "active",
+                    User.role != INMATE_REPORTER_ROLE,
+                )
+            )
+        )
+        if user_ids
+        else set()
+    )
+    if user_ids != valid_ids:
+        raise AppError(
+            "FOLDER_SHARE_USER_INVALID", "Shared users must be active users.", http_status=422
+        )
+    db.execute(delete(BookFolderShare).where(BookFolderShare.folder_id == folder.id))
+    db.add_all(BookFolderShare(folder_id=folder.id, user_id=uid) for uid in sorted(user_ids))
+    db.add_all(
+        BookFolderShare(folder_id=folder.id, department=department)
+        for department in sorted(departments.values(), key=str.casefold)
+    )
+    db.commit()
+    return list_folders(db, user, folder_id=folder.id)[0]

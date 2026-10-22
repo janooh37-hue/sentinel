@@ -109,6 +109,11 @@ def test_personal_folder_is_hidden_from_every_other_user(
         "count": 0,
         "can_manage": True,
         "has_book": None,
+        "created_by_name": api.users["A"].display_name or api.users["A"].email,
+        "created_by_name_ar": None,
+        "everyone": False,
+        "shared_users": [],
+        "shared_departments": [],
     }
     api.as_user(other)
     own = _create_folder(api, "My private folder")

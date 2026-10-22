@@ -2666,6 +2666,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/folders/share-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Book Folder Share Options */
+        get: operations["book_folder_share_options_api_v1_books_folders_share_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/folders/{folder_id}/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Book Folder Shares */
+        put: operations["update_book_folder_shares_api_v1_books_folders__folder_id__shares_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/folders/{folder_id}": {
         parameters: {
             query?: never;
@@ -8508,6 +8542,60 @@ export interface components {
             can_manage: boolean;
             /** Has Book */
             has_book?: boolean | null;
+            /** Created By Name */
+            created_by_name: string | null;
+            /** Created By Name Ar */
+            created_by_name_ar: string | null;
+            /** Everyone */
+            everyone: boolean;
+            /** Shared Users */
+            shared_users: components["schemas"]["BookFolderShareUser"][];
+            /** Shared Departments */
+            shared_departments: string[];
+        };
+        /** BookFolderShareOption */
+        BookFolderShareOption: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Title */
+            title: string | null;
+            /** Title Ar */
+            title_ar: string | null;
+            /** Department */
+            department: string | null;
+        };
+        /** BookFolderShareOptions */
+        BookFolderShareOptions: {
+            /** Users */
+            users: components["schemas"]["BookFolderShareOption"][];
+            /** Departments */
+            departments: string[];
+        };
+        /** BookFolderShareUser */
+        BookFolderShareUser: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Title */
+            title: string | null;
+            /** Title Ar */
+            title_ar: string | null;
+        };
+        /** BookFolderSharesUpdate */
+        BookFolderSharesUpdate: {
+            /** Everyone */
+            everyone: boolean;
+            /** User Ids */
+            user_ids?: number[];
+            /** Departments */
+            departments?: string[];
         };
         /** BookFolderUpdate */
         BookFolderUpdate: {
@@ -8732,6 +8820,12 @@ export interface components {
             signer_title?: string | null;
             /** Signer Title Ar */
             signer_title_ar?: string | null;
+            /** Filed By Name */
+            filed_by_name?: string | null;
+            /** Filed By Name Ar */
+            filed_by_name_ar?: string | null;
+            /** Filed At */
+            filed_at?: string | null;
             /**
              * Current Template Id
              * @description Selected revision's template_id — current unless an older revision was requested.
@@ -22550,6 +22644,74 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookFolderRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    book_folder_share_options_api_v1_books_folders_share_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookFolderShareOptions"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_book_folder_shares_api_v1_books_folders__folder_id__shares_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookFolderSharesUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -565,6 +565,34 @@ class BookFolder(Base):
     __table_args__ = (Index("ix_book_folders_owner_user_id", "owner_user_id"),)
 
 
+class BookFolderShare(Base):
+    """A selected user or department allowed to see a restricted team folder."""
+
+    __tablename__ = "book_folder_shares"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    folder_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("book_folders.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    department: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "(user_id IS NOT NULL AND department IS NULL) OR "
+            "(user_id IS NULL AND department IS NOT NULL)",
+            name="ck_book_folder_shares_target",
+        ),
+        UniqueConstraint("folder_id", "user_id", name="uq_book_folder_shares_user"),
+        UniqueConstraint("folder_id", "department", name="uq_book_folder_shares_department"),
+    )
+
+
 class BookFolderItem(Base):
     """Folder membership independent of a book's workflow state."""
 
