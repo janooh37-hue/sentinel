@@ -1677,6 +1677,7 @@
     "title": "Leave History",
     "subtitle": "Records and accrual balances for all employees",
     "empty": "No leaves match these filters.",
+    "signGated": "Record {{ref}} decides this leave. It is approved when the manager signs that record.",
     "tabs": {
       "records": "Records",
       "balance": "Balance"
@@ -1957,9 +1958,7 @@
       "resumptionDate": "Return (resumption) date",
       "delayReason": "Reason for delay (if any)",
       "fileButton": "File & complete",
-      "filed": "Return form filed — leave completed",
-      "managerSignatureHelp": "Turning this off still prints the manager's name and title — it only skips embedding their signature image.",
-      "managerSignatureRequired": "Select a manager with a saved signature, or turn off \"Include manager signature\"."
+      "filed": "Return form filed — leave completed"
     },
     "amend": {
       "action": "Edit leave",
@@ -3608,6 +3607,7 @@
     "notify": {
       "label": "Notify employee",
       "hintOn": "The employee will get a message when this form is saved.",
+      "hintOnAtApproval": "The employee will get a message once the manager approves this form.",
       "hintOff": "Saved without notifying the employee."
     },
     "selectedRecipients": "Selected recipients",
@@ -3824,6 +3824,8 @@
     },
     "noTemplateSelected": "Select a form to begin",
     "noEmployeeSelected": "Pick an employee first",
+    "leaveAlreadyIssued": "Record {{ref}} already covers this leave. Open that record instead of issuing a new one.",
+    "leaveAlreadyIssuedNoRef": "Another record already covers this leave. Open that record instead of issuing a new one.",
     "toast": {
       "generated": "Document generated",
       "previewed": "Preview rendered",

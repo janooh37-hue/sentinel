@@ -357,6 +357,13 @@ def _run_generation(
         # now-closed request session; re-fetch so a role/link change made
         # while this job sat queued is respected, not a stale detached read.
         actor = db.get(User, current_user.id) if current_user is not None else None
+        # inmate_reporter's private saves never notify regardless of the request
+        # flag (server-enforced, not just a UI default).
+        notify_employee = (
+            False
+            if actor is not None and actor.role == INMATE_REPORTER_ROLE
+            else request.notify_employee
+        )
         result = document_service.generate_document(
             db,
             employee_id=request.employee_id,
@@ -371,20 +378,15 @@ def _run_generation(
             revise_of_book_id=request.revise_of_book_id,
             attachments=request.attachments,
             classification_code=request.classification_code,
+            notify_employee=notify_employee,
         )
         # Best-effort automatic employee SMS for generated service forms.
         # Must never break generation — the document is already committed.
-        # inmate_reporter's private saves never autosend regardless of the
-        # request flag (server-enforced, not just a UI default).
         if _should_autosend(
             commit=request.commit,
             revise_of_book_id=request.revise_of_book_id,
             book_id=result.book_id,
-            notify_employee=(
-                False
-                if actor is not None and actor.role == INMATE_REPORTER_ROLE
-                else request.notify_employee
-            ),
+            notify_employee=notify_employee,
         ):
             try:
                 notify_dispatch.auto_send_for_book(db, result.book_id, sent_by=None)  # type: ignore[arg-type]
@@ -453,11 +455,21 @@ def generate_document(
             payload.classification_code if effective_service == "General Book" else None
         ),
     )
+    revise_book: Book | None = None
     if payload.revise_of_book_id is not None:
         revise_book = db.get(Book, payload.revise_of_book_id)
         if revise_book is not None and revise_book.deleted_at is not None:
             revise_book = None
         book_service.require_revise_access(db, user, revise_book)
+    # Refuse a duplicate of a live record's leave now, with its reference number,
+    # rather than as a failed job (the job re-checks it).
+    document_service.plan_gated_leave(
+        db,
+        template_id=payload.template_id,
+        employee_id=payload.employee_id,
+        fields=payload.fields,
+        revise_book=revise_book,
+    )
 
     for source in payload.attachments or ():
         if source.source == "staged" or source.book_id is None:

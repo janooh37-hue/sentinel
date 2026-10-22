@@ -11256,11 +11256,6 @@ export interface components {
             delay_reason?: string | null;
             /** Manager Id */
             manager_id?: number | null;
-            /**
-             * Embed Manager Signature
-             * @default true
-             */
-            embed_manager_signature: boolean;
         };
         /**
          * LeaveUpdate

@@ -16,6 +16,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
@@ -169,6 +170,8 @@ def _process_one(db: Session, item: ScanInbox, *, reader: DocumentReader) -> Non
             item.state = "auto_filed"
             item.resolution = "auto_filed"
             item.resolved_at = _utcnow()
+        except OperationalError:  # lock timeout: abort, retry on the next drain
+            raise
         except Exception as exc:  # auto-file failed → fall back to confirm
             log.warning("scan-inbox auto-file failed for %d: %s", item.id, exc)
             item.state = "awaiting_confirmation"
@@ -257,6 +260,8 @@ def auto_file_email_reply(db: Session, *, ledger_entry_id: int, book_id: int) ->
             item.state = "auto_filed"
             item.resolution = "auto_filed"
             item.resolved_at = _utcnow()
+        except OperationalError:  # lock timeout: abort, retry on the next filing
+            raise
         except Exception as exc:  # file failed → operator decides
             log.warning("scan-inbox reply auto-file failed for %d: %s", item.id, exc)
             item.state = "awaiting_confirmation"

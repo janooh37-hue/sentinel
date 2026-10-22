@@ -452,6 +452,12 @@ function StandardApplicationPage(): React.JSX.Element {
       setSubmitError(null)
     },
     onError: (err) => {
+      if (err instanceof ApiError && err.code === 'LEAVE_ALREADY_ISSUED') {
+        const message = t('application.leaveAlreadyIssued', { ref: String(err.details.ref_number ?? '') })
+        setSubmitError(message)
+        toast.error(message)
+        return
+      }
       setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))
       toast.error(apiErrorMessage(err))
     },
@@ -500,8 +506,8 @@ function StandardApplicationPage(): React.JSX.Element {
     // remain "hand_sign_<entity>" for backwards-compat with _fields.json, but
     // Round 2 — Fix E inverted the semantics: a checked box now means
     // "embed the saved signature image". The payload key is the bare entity
-    // ("employee" / "manager"). A field with `default: "true"` (e.g. Inmate
-    // Conduct Violations' hand_sign_manager) is treated as checked unless the
+    // ("employee" / "manager"). A field with `default: "true"` is treated as
+    // checked unless the
     // operator explicitly unticks it — same `value !== false` rule as the
     // Report form's `sign` field below, generalized via the per-field default
     // instead of a hardcoded field id.
@@ -1560,6 +1566,7 @@ function StandardApplicationPage(): React.JSX.Element {
                 <div className="flex min-h-[400px] flex-col">
                   {previewJobStatus === 'done' && !lastSaved && (
                     <GeneratedSaveActions
+                      signingPath={schemaQuery.data?.signing_path}
                       showNotify={showNotifyEmployee}
                       notifyEmployee={notifyEmployee}
                       notifyDisabled={generateMutation.isPending}

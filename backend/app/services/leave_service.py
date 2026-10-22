@@ -272,6 +272,26 @@ def get_leave(db: Session, leave_id: int, *, include_deleted: bool = False) -> L
     return row
 
 
+def _refuse_sign_gated(db: Session, row: Leave) -> None:
+    """A sign-gated leave's verdict is its record's (book_service._commit_approval_state)."""
+    from app.core import form_policy
+    from app.services import book_service
+
+    owner = book_service.leave_owner(db, row.id)
+    if (
+        owner is not None
+        and owner.versions
+        and book_service.is_enrolled(owner)
+        and form_policy.is_sign_gated_leave(owner.versions[-1].template_id, row.leave_type)
+    ):
+        raise ValidationFailedError(
+            "LEAVE_SIGN_GATED",
+            f"This leave is decided by the manager's signature on record {owner.ref_number}",
+            ref_number=owner.ref_number,
+            book_id=owner.id,
+        )
+
+
 def update_leave(
     db: Session, leave_id: int, payload: LeaveUpdate, *, actor: str | None = None
 ) -> Leave:
@@ -280,6 +300,7 @@ def update_leave(
     before = _workforce_leave_snapshot(row)
     status_changed = False
     if payload.status is not None:
+        _refuse_sign_gated(db, row)
         old_status = row.status
         new_status: LeaveStatus = payload.status
         allowed = leave_lifecycle.allowed_transitions(row.leave_type, old_status)
@@ -523,22 +544,15 @@ def file_return(
     resumption_date: date,
     delay_reason: str | None = None,
     manager_id: int | None = None,
-    embed_manager_signature: bool = True,
     actor: str | None = None,
     current_user: User | None = None,
 ) -> Leave:
     """File the Duty Resumption (return) form for a returnable leave.
 
-    Generates the Duty Resumption document, embedding the employee's saved
-    vault signature when present, and the manager's saved signature when
-    ``embed_manager_signature`` is true (default) AND the resolved manager
-    has one on file — ``document_service.generate_document`` raises
-    ``MANAGER_SIGNATURE_REQUIRED`` before allocating a reference or
-    committing anything when a REQUESTED manager signature is unavailable,
-    so filing never silently lands as an unsigned "signed" copy. Turning
-    the checkbox off only skips that embed; it never blanks the printed
-    manager name/title. Attaches the result to THIS leave (no standalone
-    register row), records the return date, and sets status -> Completed.
+    Generates the Duty Resumption document with the employee's saved vault
+    signature when present; the manager signs through the book approval chain.
+    Attaches the result to THIS leave (no standalone register row), records
+    the return date, and sets status -> Completed.
     NS requires a certificate already on file.
     """
     from app.services import document_service  # local import: avoid cycle
@@ -576,9 +590,11 @@ def file_return(
         template_id="Duty Resumption Form",
         fields=fields,
         manager_id=manager_id,
-        embed_signature={"employee": True, "manager": embed_manager_signature},
+        embed_signature={"employee": True},
         current_user=current_user,
         return_for_leave_id=leave_id,
+        # The return dialog never notified the employee; its approval doesn't either.
+        notify_employee=False,
     )
 
     # generate_document already linked the doc + committed. Now complete the leave.

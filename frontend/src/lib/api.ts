@@ -348,7 +348,6 @@ export interface LeaveReturnBody {
   resumption_date: string // ISO yyyy-mm-dd
   delay_reason?: string
   manager_id?: number | null
-  embed_manager_signature?: boolean
 }
 
 // ─── Signature placement editor (approval-signature-placement plan §8) ────────

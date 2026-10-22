@@ -95,3 +95,14 @@ describe('actionsFor amend', () => {
     expect(actionsFor('Sick Leave', 'Approved', '2026-08-25', '2026-07-15')).not.toContain('amend')
   })
 })
+
+describe('sign-gated record leaves', () => {
+  it('displays Pending honestly without offering Leaves-page approval actions', () => {
+    for (const kind of ['Leave Permit', 'Administrative Leave', 'Sick Leave']) {
+      expect(displayState(kind, 'Pending', OVERDUE, TODAY)).toBe('Requested')
+      expect(actionsFor(kind, 'Pending', OVERDUE, TODAY)).toEqual([])
+      expect(needsAction(kind, 'Pending', OVERDUE, TODAY)).toBe(false)
+      expect(displayState(kind, 'Rejected', OVERDUE, TODAY)).toBe('Rejected')
+    }
+  })
+})

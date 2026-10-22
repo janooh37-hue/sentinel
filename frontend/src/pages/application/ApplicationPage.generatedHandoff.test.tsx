@@ -5,17 +5,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import i18n from 'i18next'
 import { z } from 'zod'
+import { toast } from 'sonner'
 
 import en from '@/locales/en.json'
 import type { JobStatusResponse } from '@/lib/api'
-import { api } from '@/lib/api'
+import type * as ApiModule from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import { ApplicationPage } from './ApplicationPage'
 
 const jobStatusState = vi.hoisted(() => ({
   handlers: new Map<string, (job: JobStatusResponse) => void>(),
 }))
 
-vi.mock('@/lib/api', () => ({
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn(), info: vi.fn() },
+}))
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: {
     listTemplates: vi.fn(),
     getEmployeeLookup: vi.fn(),
@@ -25,7 +31,6 @@ vi.mock('@/lib/api', () => ({
     getBook: vi.fn(),
     getBookVersionFields: vi.fn(),
   },
-  apiErrorMessage: (error: unknown) => String(error),
 }))
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ capabilities: new Set(), isLoading: false, has: () => true }),
@@ -140,6 +145,35 @@ afterEach(() => {
 })
 
 describe('ApplicationPage generated handoff reset', () => {
+  it('shows the localized existing-record message when the leave is already issued', async () => {
+    mockedApi.generateDocument.mockRejectedValueOnce(
+      new ApiError(422, 'LEAVE_ALREADY_ISSUED', 'This leave is already issued on record HR-1', {
+        ref_number: 'HR-1',
+        book_id: 1,
+      }),
+    )
+    const user = userEvent.setup()
+    renderPage()
+
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByRole('button', { name: /^Preview$/ })
+          .some((button) => !button.hasAttribute('disabled')),
+      ).toBe(true),
+    )
+    const previewButton = screen
+      .getAllByRole('button', { name: /^Preview$/ })
+      .filter((button) => !button.hasAttribute('disabled'))
+      .pop()
+    await user.click(previewButton!)
+
+    const message = en.application.leaveAlreadyIssued.replace('{{ref}}', 'HR-1')
+    expect(await screen.findByRole('alert')).toHaveTextContent(message)
+    expect(toast.error).toHaveBeenCalledWith(message)
+    expect(screen.queryByText(/This leave is already issued on record HR-1/)).not.toBeInTheDocument()
+  })
+
   it('clears prior saved actions when a new preview job is accepted and completes', async () => {
     const user = userEvent.setup()
     renderPage()

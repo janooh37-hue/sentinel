@@ -129,7 +129,11 @@ export function JobStatus({ jobId, onDone }: JobStatusProps): React.JSX.Element 
             <p className="mt-1 font-mono text-xs text-muted-foreground">{job.error_code}</p>
           )}
           {job?.error_message ? (
-            <p className="mt-1 text-xs text-destructive">{job.error_message}</p>
+            <p className="mt-1 text-xs text-destructive">
+              {job?.error_code === 'LEAVE_ALREADY_ISSUED'
+                ? t('application.leaveAlreadyIssuedNoRef')
+                : job.error_message}
+            </p>
           ) : (
             pollError && <p className="mt-1 text-xs text-destructive">{pollError}</p>
           )}

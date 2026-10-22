@@ -18,11 +18,11 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.core import leave_lifecycle
+from app.core import form_policy, leave_lifecycle
 from app.core.phone import normalize_phone
 from app.db.models import Book, Document, Employee, Leave, OutboundMessage, Violation
+from app.services import book_service, openwa_client, sms_client, sms_templates
 from app.services import notify_format as nf
-from app.services import openwa_client, sms_client, sms_templates
 
 log = logging.getLogger(__name__)
 
@@ -80,11 +80,20 @@ def _load_book_event(db: Session, book_id: int) -> BookEvent | None:
     # book rows sit +4h from their Document.created_at (naive UTC), 26 at +0
     # (the book_service.create_book path, which raises none of these events).
     # Converting again here pushed every permit 4h into the future.
+    # A sign-gated permit is notified when signed, so it starts at signing.
+    # signed_at is naive UTC; convert to the same local wall-clock. A record
+    # issued before the gate keeps its issue time even if it was signed later.
+    issued = (
+        version.signed_at.replace(tzinfo=UTC).astimezone().replace(tzinfo=None)
+        if version.signed_at is not None and book_service.is_enrolled(book)
+        else book.created_at
+    )
     return BookEvent(
         employee=employee,
-        fields=version.fields or {},
+        # A Word revision stores no fields; its message keeps the generated form's.
+        fields=next((v.fields for v in reversed(book.versions) if v.fields), {}),
         today=date.today(),
-        created_at=book.created_at,
+        created_at=issued,
     )
 
 
@@ -275,6 +284,26 @@ def send_direct(
     return _route(db, base=base, cfg=cfg)
 
 
+def _leave_status_event(leave: Leave) -> str | None:
+    """The event matching a leave's current canonical status, or ``None``."""
+    event = _LEAVE_STATUS_EVENTS.get(leave_lifecycle.canonical_status(leave.status))
+    # Sick leave is recorded, not requested — the dedicated wording replaces
+    # the generic approval message (spec 2026-07-15, decision 3).
+    if (
+        event == nf.EVENT_LEAVE_APPROVED
+        and leave_lifecycle.classify_group(leave.leave_type) == "sick"
+    ):
+        return nf.EVENT_SICK_LEAVE_REGISTERED
+    # Administrative Leave uses its dedicated issued wording after approval,
+    # including generated records settled by the manager's signing chain.
+    if (
+        event == nf.EVENT_LEAVE_APPROVED
+        and nf.type_label(leave.leave_type, "en") == "Administrative Leave"
+    ):
+        return nf.EVENT_ADMIN_LEAVE
+    return event
+
+
 def _send_leave_status(
     db: Session, leave_id: int, *, sent_by: int | None
 ) -> OutboundMessage | None:
@@ -282,24 +311,9 @@ def _send_leave_status(
     leave = db.get(Leave, leave_id)
     if leave is None or leave.employee_id is None:
         return None
-    event = _LEAVE_STATUS_EVENTS.get(leave_lifecycle.canonical_status(leave.status))
+    event = _leave_status_event(leave)
     if event is None:
         return None
-    # Sick leave is recorded, not requested — the dedicated wording replaces
-    # the generic approval message (spec 2026-07-15, decision 3).
-    if (
-        event == nf.EVENT_LEAVE_APPROVED
-        and leave_lifecycle.classify_group(leave.leave_type) == "sick"
-    ):
-        event = nf.EVENT_SICK_LEAVE_REGISTERED
-    # Administrative Leave is born Approved (issued) — its dedicated wording
-    # replaces the generic approval message (spec 2026-07-16). elif: a leave is
-    # at most one type, so this is mutually exclusive with the sick swap above.
-    elif (
-        event == nf.EVENT_LEAVE_APPROVED
-        and nf.type_label(leave.leave_type, "en") == "Administrative Leave"
-    ):
-        event = nf.EVENT_ADMIN_LEAVE
     return send_for_event(db, event, leave_id, sent_by=sent_by)
 
 
@@ -323,39 +337,61 @@ def auto_send_leave_status(
     return _send_leave_status(db, leave_id, sent_by=sent_by)
 
 
+def book_event(db: Session, book: Book) -> tuple[str, int] | None:
+    """The (event, record id) a book's automatic notification sends now, or ``None``.
+
+    Leave/violation forms carry their record on the generated Document (a book id
+    is the wrong key for their loaders): route those by the newest version whose
+    document links one (a Word revision may not), and for leave pick the event
+    from its status (a freshly generated leave is a *request*).
+    """
+    if not book.versions or book.employee_id is None:
+        return None
+    tpl = book.versions[-1].template_id or ""
+    route = nf.SPECIAL_TEMPLATE_ROUTES.get(tpl)
+    if route is not None:
+        for version in reversed(book.versions):
+            doc = db.get(Document, version.document_id) if version.document_id else None
+            if doc is None:
+                continue
+            if route == "violation":
+                if doc.violation_id is not None:
+                    return nf.EVENT_VIOLATION, doc.violation_id
+            elif doc.leave_id is not None:
+                leave = db.get(Leave, doc.leave_id)
+                if leave is None or leave.employee_id is None or leave.deleted_at is not None:
+                    return None
+                if route == "duty_resumption":
+                    return nf.EVENT_DUTY_RESUMPTION, leave.id
+                event = _leave_status_event(leave)
+                return (event, leave.id) if event is not None else None
+    event = nf.TEMPLATE_EVENTS.get(tpl)
+    return (event, book.id) if event is not None else None
+
+
 def auto_send_for_book(
     db: Session, book_id: int, *, sent_by: int | None = None
 ) -> OutboundMessage | None:
-    """Best-effort automatic notification for a freshly-generated service form.
+    """Best-effort automatic notification for a generated or approved service form.
 
-    No-ops (returns None) unless a channel is enabled, auto-send is enabled, the
-    book's latest version maps to an event, and the book has an employee.
-
-    Leave/violation forms carry their record on the generated Document (a book id
-    is the wrong key for their loaders): route those by the document's leave_id /
-    violation_id, and for leave pick the event from its status (a freshly
-    generated leave is a *request*).
+    No-ops unless a channel and auto-send are enabled, the book maps to an event
+    (``book_event``), and the book has an employee. An approval-chain form must
+    first reach approved: generating or returning one sends nothing.
     """
     if not _autosend_enabled(db):
         return None
     book = db.get(Book, book_id)
-    if book is None or not book.versions or book.employee_id is None:
+    if book is None or not book.versions:
         return None
-    version = book.versions[-1]
-    tpl = version.template_id or ""
-    doc = db.get(Document, version.document_id) if version.document_id else None
-    route = nf.SPECIAL_TEMPLATE_ROUTES.get(tpl)
-    if doc is not None:
-        if route == "leave_status" and doc.leave_id is not None:
-            return _send_leave_status(db, doc.leave_id, sent_by=sent_by)
-        if route == "duty_resumption" and doc.leave_id is not None:
-            return send_for_event(db, nf.EVENT_DUTY_RESUMPTION, doc.leave_id, sent_by=sent_by)
-        if route == "violation" and doc.violation_id is not None:
-            return send_for_event(db, nf.EVENT_VIOLATION, doc.violation_id, sent_by=sent_by)
-    event = nf.TEMPLATE_EVENTS.get(tpl)
-    if event is None:
+    if (
+        form_policy.signing_path_of(book.versions[-1].template_id) == "chain"
+        and book.approval_state != "approved"
+    ):
         return None
-    return send_for_event(db, event, book_id, sent_by=sent_by)
+    target = book_event(db, book)
+    if target is None:
+        return None
+    return send_for_event(db, target[0], target[1], sent_by=sent_by)
 
 
 def auto_send_leave_amended(

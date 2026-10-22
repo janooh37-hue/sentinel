@@ -102,12 +102,6 @@ const FIELDS: TemplateField[] = [
     label_ar: 'المُوقِّع',
     type: 'manager_picker',
   },
-  {
-    id: 'hand_sign_manager',
-    label_en: "Embed manager's saved signature",
-    label_ar: 'تضمين توقيع المدير المحفوظ',
-    type: 'hand_sign_checkbox',
-  },
 ]
 
 // TemplateForm's `schema` prop is a full TemplateDetailResponse — meta,
@@ -119,7 +113,7 @@ const SCHEMA: TemplateDetailResponse = {
     name_ar: 'المخالفات المسلكية',
     form_number: '300-005',
     category: 'admin',
-    signing_path: 'auto',
+    signing_path: 'chain',
     has_code: true,
     notifies_employee: false,
     feature_minted: false,
@@ -182,10 +176,8 @@ describe('Inmate Conduct Violations form', () => {
     // Manager picker (manager_id) — real ManagerPickerField hitting the
     // mocked api.listManagers().
     expect(screen.getByText('Signing manager')).toBeInTheDocument()
-    // hand_sign_checkbox with no paired `manager_sig_path` signature field in
-    // this schema renders standalone via EmbedSignatureCheckbox (not
-    // suppressed — that only happens when a paired signature field exists).
-    expect(screen.getByText("Embed manager's saved signature")).toBeInTheDocument()
+    expect(screen.queryByText("Embed manager's saved signature")).not.toBeInTheDocument()
+    expect(screen.getAllByRole('checkbox')).toHaveLength(3)
   })
 
   it('labels the supervisor action in Arabic under lng=ar', async () => {

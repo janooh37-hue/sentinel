@@ -36,7 +36,7 @@ from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
-from app.core import form_policy, leave_lifecycle
+from app.core import form_policy
 from app.core import signature as signature_core
 from app.core.book_text import build_search_text
 from app.core.book_text import html_to_text as book_html_to_text
@@ -71,6 +71,7 @@ from app.db.models import (
     User,
     Violation,
 )
+from app.db.repos._locking import begin_immediate_if_idle
 from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.schemas.employee import EMPLOYEE_STATUS_RESIGNED, WORKING_STATUSES
@@ -152,8 +153,8 @@ _INMATE_ACTION_LABELS: tuple[tuple[str, str], ...] = (
 
 # ---------------------------------------------------------------------------
 # inmate_reporter draft/submit field validation (spec: role §5) — the only
-# fields this role may write; everything else (manager_id, hand_sign_manager,
-# signature paths, ...) is rejected before it reaches here.
+# fields this role may write; everything else (manager_id, signature paths,
+# ...) is rejected before it reaches here.
 # ---------------------------------------------------------------------------
 
 _INMATE_REPORT_FIELD_KEYS: Final[frozenset[str]] = frozenset(
@@ -362,6 +363,22 @@ _SUBMITTER_SIGN_FORMS: frozenset[str] = frozenset(
 # carries only manager + submitter pickers (no signature field), so the
 # submitter's signature is the only one available for the employee slot.
 _SUBMITTER_AUTO_SIGN_FORMS: frozenset[str] = frozenset({"Employee Clearance Form"})
+
+# Reserved ``BookVersion.fields`` key holding a chain form's generation-time
+# signing snapshot (issue date, employee/submitter embed, notify choice).
+_SIGNING_KEY = "_signing"
+
+# Chain forms whose ``{{ today }}`` is the manager's signing date, not the
+# issue date (the issue date rides ``date``/``request_date``).
+_MANAGER_SIGN_DATE_FORMS: frozenset[str] = frozenset(
+    {
+        "HR Request Form",
+        "Passport Release Form",
+        "Duty Resumption Form",
+        "Leave Application Form",
+        "Administrative Leave Form",
+    }
+)
 
 
 def _submitter_signs_employee_cell(
@@ -894,6 +911,76 @@ def _find_duplicate_leave(db: Session, leave_row: Leave) -> Leave | None:
     )
 
 
+@dataclass(frozen=True)
+class GatedLeavePlan:
+    """Which leave row a sign-gated generation links, decided before any side effect."""
+
+    #: Row to link; ``None`` inserts a fresh Pending row.
+    leave_id: int | None = None
+    #: The revised record's own row follows its corrected dates.
+    move_dates: bool = False
+    #: The row was another (rejected, deleted, voided or legacy) record's: set Pending.
+    take_over: bool = False
+    #: The revised record's own row, left behind by a take-over: set Cancelled.
+    cancel_leave_id: int | None = None
+
+
+def plan_gated_leave(
+    db: Session,
+    *,
+    template_id: str,
+    employee_id: str | None,
+    fields: dict[str, Any],
+    revise_book: Book | None,
+) -> GatedLeavePlan | None:
+    """Settle exclusive ownership of a sign-gated leave (unique natural key).
+
+    Raises ``LEAVE_ALREADY_ISSUED`` when another live, non-rejected, enrolled
+    record owns the leave these fields describe. Otherwise the generation links
+    its own row (moved to new dates on a revision), takes the matching row over,
+    or inserts a new one. ``None`` for every other form.
+    """
+    if employee_id is None or not form_policy.is_sign_gated_leave(
+        template_id, fields.get("leave_type")
+    ):
+        return None
+    from app.services import book_service
+
+    own: Leave | None = None
+    if revise_book is not None:
+        # Newest version linked to a live leave; a Word revision may predate the
+        # leave_id carry-over. Only an unowned or self-owned row is still this record's.
+        for previous in reversed(revise_book.versions):
+            previous_document = (
+                db.get(Document, previous.document_id) if previous.document_id else None
+            )
+            if previous_document is not None and previous_document.leave_id is not None:
+                previous_leave = db.get(Leave, previous_document.leave_id)
+                if previous_leave is not None and previous_leave.deleted_at is None:
+                    owner = book_service.leave_owner(db, previous_leave.id)
+                    if owner is None or owner is revise_book:
+                        own = previous_leave
+                break
+    key = _make_leave_row(employee_id, template_id, fields, Path(), datetime.now())
+    held = _find_duplicate_leave(db, key)
+    if held is None or held is own:
+        return GatedLeavePlan(leave_id=own.id if own else None, move_dates=own is not None)
+    owner = book_service.leave_owner(db, held.id)
+    if (
+        owner is not None
+        and owner is not revise_book
+        and owner.approval_state != "rejected"
+        and book_service.is_enrolled(owner)
+    ):
+        raise ValidationFailedError(
+            "LEAVE_ALREADY_ISSUED",
+            f"This leave is already issued on record {owner.ref_number}",
+            ref_number=owner.ref_number,
+            book_id=owner.id,
+        )
+    return GatedLeavePlan(leave_id=held.id, take_over=True, cancel_leave_id=own.id if own else None)
+
+
 def _make_leave_row(
     employee_id: str,
     template_id: str,
@@ -913,7 +1000,9 @@ def _make_leave_row(
             days = int(fields.get("total_days", 1) or 1)
         except (ValueError, TypeError):
             days = 1
-        status = leave_lifecycle.birth_status(leave_type)
+        # Every Leave Application starts as a request: Annual waits for the
+        # Leaves page, any other type for the manager's signature.
+        status = "Pending"
 
     elif template_id == "Passport Release Form":
         leave_type = "Passport Release"
@@ -934,7 +1023,7 @@ def _make_leave_row(
         start = fields.get("date", today)
         end = start
         days = 0
-        status = "Approved"
+        status = "Pending"
 
     elif template_id == "Administrative Leave Form":
         leave_type = "Administrative Leave"
@@ -944,7 +1033,7 @@ def _make_leave_row(
             days = int(fields.get("duration", 1) or 1)
         except (ValueError, TypeError):
             days = 1
-        status = "Approved"
+        status = "Pending"
 
     else:
         leave_type = template_id
@@ -1120,6 +1209,15 @@ def _build_template_data(
     # HugeRTE HTML — flatten to plain text so the Jinja {{ token }} render
     # doesn't emit literal <p>/<span> markup into the DOCX.
     data.update(_flatten_rich_fields(template_id, fields))
+    # A chain form renders its frozen issue date, on generation and on signing.
+    signing = data.pop(_SIGNING_KEY, None)
+    issued = signing.get("issued") if isinstance(signing, dict) else None
+    if isinstance(issued, str):
+        for key in ("today", "date", "request_date", "issue_date"):
+            if key not in fields and not (
+                key == "today" and template_id in _MANAGER_SIGN_DATE_FORMS
+            ):
+                data[key] = issued
 
     # The exit forms use an independent interviewer selection. The UI sends
     # picker IDs as strings; resolve to a Submitter without affecting the
@@ -1309,6 +1407,7 @@ def _build_template_data(
                 Leave.start_date >= month_start,
                 Leave.start_date < month_end,
                 Leave.deleted_at.is_(None),
+                ~Leave.status.in_(["Rejected", "Cancelled"]),
             )
             .count()
         )
@@ -1527,6 +1626,7 @@ def generate_document(
     return_for_leave_id: int | None = None,
     classification_code: str | None = None,
     converter: artifact_service.PdfConverter | None = None,
+    notify_employee: bool = True,
 ) -> GenerationResult:
     """Orchestrate the v4 doc generation pipeline.
 
@@ -1616,22 +1716,9 @@ def generate_document(
                 field=field_meta["key"],
             )
 
-    # Forms with an explicit manager-signature checkbox honor the operator's
-    # choice; all other forms keep their server-enforced signing policy.
+    # Enforce the server signing policy; chain forms stay unsigned until approval.
     signing_path = form_policy.signing_path_of(template_id)
-    hand_sign_manager_field = next(
-        (f for f in form_meta.get("fields", []) if f.get("key") == "hand_sign_manager"),
-        None,
-    )
-    if hand_sign_manager_field is None:
-        embed_signature["manager"] = signing_path == "auto"
-    elif "manager" not in embed_signature and hand_sign_manager_field.get("default") == "true":
-        # Per-field default (_fields.json), e.g. Inmate Conduct Violations —
-        # only seeded when the caller genuinely omitted the key (a script, a
-        # test, or any non-UI caller must not silently land unsigned and
-        # unrouted just because it didn't think to send embed_signature).
-        # An explicit {"manager": False} from the caller is left untouched.
-        embed_signature["manager"] = True
+    embed_signature["manager"] = signing_path == "auto"
 
     # ------------------------------------------------------------------
     # 1a-inmate_reporter. Fixed-scope role: exact template, unattached,
@@ -1704,23 +1791,6 @@ def generate_document(
         fields["reporter_id"] = current_user.employee_id
         fields["submitter_g"] = current_user.employee_id
 
-    # Duty Resumption checkbox contract (approval-signature-placement plan
-    # §4): a REQUESTED manager signature that cannot be embedded must stop
-    # filing before any reference is allocated or record committed — never
-    # silently fall through to an unsigned "signed" copy. Scoped to this one
-    # form; every other form keeps its existing signing policy (unticking
-    # the checkbox bypasses only this requirement, not manager-ID validity).
-    if template_id == "Duty Resumption Form" and embed_signature.get("manager"):
-        if manager_id is not None and db.get(Manager, manager_id) is None:
-            raise NotFoundError(
-                "MANAGER_NOT_FOUND", f"Manager {manager_id} does not exist", id=manager_id
-            )
-        _gate_manager = resolve_manager(db, explicit_manager_id=manager_id)
-        if _gate_manager is None or manager_service.signature_str(db, _gate_manager) is None:
-            raise ValidationFailedError(
-                "MANAGER_SIGNATURE_REQUIRED",
-                "Select a manager with a saved signature or turn off Include manager signature.",
-            )
     is_personnel = form_meta.get("category", "personnel") == "personnel"
 
     employee: Employee | None = None
@@ -1861,7 +1931,11 @@ def generate_document(
         if code is not None:
             _classification = get_classification(code)
     if commit and revise_book is not None:
-        # Revise reuses the existing book's ref — no allocation.
+        # Revise reuses the existing book's ref — no allocation. A sign-gated
+        # revision still takes the write lock so its leave plan below is decided
+        # under the same serialisation as a fresh generation's.
+        if form_policy.is_sign_gated_leave(template_id, fields.get("leave_type")):
+            begin_immediate_if_idle(db)
         raw_ref = revise_book.ref_number
     elif commit and _classification is not None:
         # Shared classified serial — atomic with the Book/Document insert via
@@ -1875,6 +1949,40 @@ def generate_document(
         raw_ref = allocate_ref_with_retry(db, cat_code)
     else:
         raw_ref = "DRAFT"
+
+    # Under the write lock (held through the terminal commit): a duplicate of a
+    # live record's leave is refused before anything is written but the ref,
+    # which the caller's rollback returns.
+    gated_leave = plan_gated_leave(
+        db,
+        template_id=template_id,
+        employee_id=employee_id,
+        fields=fields,
+        revise_book=revise_book,
+    )
+
+    # Chain forms are re-rendered when the manager signs, possibly days later:
+    # freeze the issue date and the employee/submitter signature and notify
+    # choices so the signed copy reproduces this paper (render_signed_artifact).
+    fields = {k: v for k, v in fields.items() if k != _SIGNING_KEY}
+    if commit and signing_path == "chain" and template_id != "Inmate Conduct Violations":
+        if revise_book is not None:
+            # The revise screen hides the notify switch, so the request flag carries
+            # no choice: keep the newest snapshot's (none: revisions never notified).
+            notify_employee = next(
+                (
+                    snapshot.get("notify_employee") is not False
+                    for v in reversed(revise_book.versions)
+                    if isinstance(snapshot := (v.fields or {}).get(_SIGNING_KEY), dict)
+                ),
+                False,
+            )
+        fields[_SIGNING_KEY] = {
+            "issued": datetime.now().strftime("%d/%m/%Y"),
+            "employee": bool(embed_signature.get("employee")),
+            "submitter_id": submitter_id,
+            "notify_employee": notify_employee,
+        }
 
     # ------------------------------------------------------------------
     # 4-7. Assemble the docxtpl data dict (employee fields, manager override,
@@ -2393,6 +2501,8 @@ def generate_document(
     leave_id: int | None = None
     #: Days whose absence rows a generated superseding leave overwrote.
     superseded_absences: list[date] = []
+    #: A take-over changed an existing leave's status (leave cache to invalidate).
+    gated_leave_changed = False
     if return_for_leave_id is not None:
         # Return-form filing: attach to the existing leave; no new register row.
         doc_row.leave_id = return_for_leave_id
@@ -2403,7 +2513,32 @@ def generate_document(
         # loop must not spam exact-duplicate Leave rows (the documented
         # 2026-03-26 incident inserted 300 identical sick rows). Reuse any
         # non-deleted row with the same natural key instead of inserting again.
-        existing_leave = _find_duplicate_leave(db, leave_row)
+        # A sign-gated form follows its ownership plan (plan_gated_leave).
+        if gated_leave is None:
+            existing_leave = _find_duplicate_leave(db, leave_row)
+        else:
+            from app.services import book_service
+
+            existing_leave = (
+                db.get(Leave, gated_leave.leave_id) if gated_leave.leave_id is not None else None
+            )
+            actor_id = current_user.id if current_user is not None else None
+            if existing_leave is not None and gated_leave.move_dates:
+                # A revision keeps its leave identity on corrected dates (and, for a
+                # Leave Application, type) and its verdict until it is resubmitted.
+                existing_leave.leave_type = leave_row.leave_type
+                existing_leave.start_date = leave_row.start_date
+                existing_leave.end_date = leave_row.end_date
+                existing_leave.days = leave_row.days
+                existing_leave.doc_path = leave_row.doc_path
+            if commit and existing_leave is not None and gated_leave.take_over:
+                gated_leave_changed = book_service.set_leave_status(
+                    db, existing_leave, "Pending", user_id=actor_id
+                )
+            if gated_leave.cancel_leave_id is not None:
+                left_behind = db.get_one(Leave, gated_leave.cancel_leave_id)
+                if book_service.set_leave_status(db, left_behind, "Cancelled", user_id=actor_id):
+                    gated_leave_changed = True
         if existing_leave is not None:
             log.info(
                 "leave-row dedup: reusing leave %d for employee %s (%s %s→%s)",
@@ -2427,7 +2562,10 @@ def generate_document(
         # purpose — the dedup branch above reuses an existing row and never calls
         # ``db.add``, and a re-generated certificate is exactly when an operator
         # expects the correction to land.
-        if absence_service.supersedes_absence(leave_row.leave_type):
+        # Sign-gated leaves supersede only once approved (book_service._commit_approval_state).
+        if absence_service.supersedes_absence(
+            leave_row.leave_type
+        ) and not form_policy.is_sign_gated_leave(template_id, leave_row.leave_type):
             # ``commit=False``: this is part of the document's unit of work, so a
             # failure in step 13 or later takes the supersede back with the rest.
             superseded_absences = absence_service.delete_absences_covered_by(
@@ -2550,6 +2688,10 @@ def generate_document(
         )
     db.commit()
     db.refresh(doc_row)
+    if gated_leave_changed and employee_id is not None:
+        from app.services import leave_service
+
+        leave_service._cache_invalidate_employee(employee_id)
 
     # B1: unlink superseded in-place-edit files NOW — transaction is durable.
     # If commit raised above, we never reach this point, so old files are safe.
@@ -2736,6 +2878,7 @@ def render_signed_artifact(
     version: BookVersion,
     signer_signature_path: str,
     signer_names: Sequence[str] = (),
+    signer_user_id: int | None = None,
     output_dir: Path | None = None,
     converter: artifact_service.PdfConverter | None = None,
 ) -> artifact_service.ArtifactResult:
@@ -2784,22 +2927,50 @@ def render_signed_artifact(
         )
     employee = db.get(Employee, book.employee_id) if book.employee_id else None
     fields = dict(version.fields or {})
-
-    data = _build_template_data(
-        db,
-        template_id=template_id,
-        employee=employee,
-        employee_id=book.employee_id,
-        fields=fields,
-        # The manager chosen at generation is recorded on book.doc_manager_id,
-        # NOT in version.fields — re-render with it so the signed copy keeps the
-        # same verifier name/title (else the {{ manager_name }} cell renders
-        # blank; SC-0425 regression).
-        manager_id=book.doc_manager_id,
-        submitter_id=None,
-        embed_signature=None,
-        current_user=None,
+    signing = fields.get(_SIGNING_KEY)
+    signing = signing if isinstance(signing, dict) else {}
+    # Replay the generation's employee/submitter signature choice.
+    embed_signature = {"employee": signing.get("employee") is True}
+    raw_submitter_id = signing.get("submitter_id")
+    submitter_id = (
+        raw_submitter_id
+        if isinstance(raw_submitter_id, int) and db.get(Submitter, raw_submitter_id) is not None
+        else None
     )
+
+    def _data(manager_id: int | None) -> dict[str, Any]:
+        return _build_template_data(
+            db,
+            template_id=template_id,
+            employee=employee,
+            employee_id=book.employee_id,
+            fields=fields,
+            # The manager chosen at generation is recorded on book.doc_manager_id,
+            # NOT in version.fields — re-render with it so the signed copy keeps the
+            # same verifier name/title (else the {{ manager_name }} cell renders
+            # blank; SC-0425 regression).
+            manager_id=manager_id,
+            submitter_id=submitter_id,
+            embed_signature=embed_signature,
+            current_user=None,
+        )
+
+    data = _data(book.doc_manager_id)
+    if not str(data.get("manager_name") or "").strip() and signer_user_id is not None:
+        # No manager on the paper: name the signer so the signature has an anchor.
+        signer_manager_id = db.scalar(select(Manager.id).where(Manager.user_id == signer_user_id))
+        if signer_manager_id is not None:
+            data = _data(signer_manager_id)
+    if _submitter_signs_employee_cell(template_id, submitter_id, embed_signature):
+        assert submitter_id is not None  # _submitter_signs_employee_cell requires it
+        data["employee_sig_path"] = _submitter_sign_path(db, submitter_id)
+    if template_id in _MANAGER_SIGN_DATE_FORMS:
+        signed_on = (
+            version.signed_at.replace(tzinfo=UTC).astimezone()
+            if version.signed_at is not None
+            else datetime.now()
+        )
+        data["today"] = signed_on.strftime("%d/%m/%Y")
     # Inject the approver's signature into the manager signature slot.
     data["sig1_path"] = signer_signature_path
 

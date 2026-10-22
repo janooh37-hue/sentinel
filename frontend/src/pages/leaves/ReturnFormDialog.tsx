@@ -1,11 +1,9 @@
 /**
  * ReturnFormDialog — file the Duty Resumption (return) form for a returnable
  * leave. Pre-fills leave start/end (read-only) + leave type; resumption date
- * defaults to today and is editable; optional delay reason. Manager +
- * "include manager signature" mirror the Services Duty Resumption template
- * (`ManagerPickerField` / `EmbedSignatureCheckbox`, checked by default) so
- * both filing surfaces share the same manager-signature contract. On success
- * the leave is Completed.
+ * defaults to today and is editable; optional delay reason. Manager selection
+ * mirrors the Services Duty Resumption template; manager signatures are
+ * collected through the signing chain. On success the leave is Completed.
  */
 
 import { useEffect } from 'react'
@@ -14,7 +12,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, ApiError, type LeaveListItem, type LeaveRead, apiErrorMessage } from '@/lib/api'
+import { api, type LeaveListItem, type LeaveRead, apiErrorMessage } from '@/lib/api'
 import {
   DialogRoot,
   DialogContent,
@@ -24,7 +22,6 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { ManagerPickerField } from '@/components/application/fields/ManagerPickerField'
-import { EmbedSignatureCheckbox } from '@/components/application/fields/EmbedSignatureCheckbox'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -44,7 +41,6 @@ interface ReturnFormValues {
   resumption_date: string
   delay_reason: string
   manager_id: number | null
-  hand_sign_manager: boolean
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -59,7 +55,6 @@ function defaultValues(): ReturnFormValues {
     resumption_date: todayIso(),
     delay_reason: '',
     manager_id: null,
-    hand_sign_manager: true,
   }
 }
 
@@ -91,7 +86,6 @@ export function ReturnFormDialog({
         resumption_date: values.resumption_date,
         delay_reason: values.delay_reason.trim() || undefined,
         manager_id: values.manager_id,
-        embed_manager_signature: values.hand_sign_manager,
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['leaves-list'] })
@@ -104,11 +98,6 @@ export function ReturnFormDialog({
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
-
-  const managerSignatureRequired =
-    mutation.isError &&
-    mutation.error instanceof ApiError &&
-    mutation.error.code === 'MANAGER_SIGNATURE_REQUIRED'
 
   const resumptionInvalid = !!resumption && resumption < leave.start_date.slice(0, 10)
 
@@ -170,27 +159,13 @@ export function ReturnFormDialog({
               />
             </div>
 
-            {/* Manager + signature */}
+            {/* Manager */}
             <div className="flex flex-col gap-2 rounded-md border border-border p-3">
               <ManagerPickerField
                 name="manager_id"
                 label_en="Line Manager"
                 label_ar="المدير المباشر"
               />
-              <EmbedSignatureCheckbox
-                name="hand_sign_manager"
-                label_en="Include manager signature"
-                label_ar="تضمين توقيع المدير"
-                defaultOn
-              />
-              <p className="text-xs text-muted-foreground">
-                {t('leaves.return.managerSignatureHelp')}
-              </p>
-              {managerSignatureRequired && (
-                <span role="alert" className="text-xs text-destructive">
-                  {t('leaves.return.managerSignatureRequired')}
-                </span>
-              )}
             </div>
 
             {/* Footer */}

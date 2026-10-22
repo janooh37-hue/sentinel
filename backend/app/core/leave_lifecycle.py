@@ -9,7 +9,9 @@ gives each kind its own lifecycle:
 - request:          Annual & the rare kinds. Born Pending; Pending → Approved/
                     Rejected/Cancelled; Approved → Cancelled. Rejected/Cancelled terminal.
 - record:           Administrative Leave, Leave Permit, Passport Release, Duty
-                    Resumption. Born Approved, no actions — register entries only.
+                    Resumption. Born Approved outside form generation, no Leaves
+                    actions. Generated Leave Permit / Administrative Leave rows
+                    instead start Pending and follow the record's signing chain.
 - national_service: Born Pending ("Scheduled"); dates editable while Pending
                     (delay/extend); PATCH may only Cancel; Completed is set
                     exclusively by the certificate upload endpoint.

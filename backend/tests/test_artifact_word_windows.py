@@ -254,15 +254,26 @@ def test_phase6_windows_word_artifact_smoke() -> None:
             current_user=user,
             converter=_real_dispatch_ex_converter,
         )
-        leave_docx = leave.docx_path
-        leave_pdf = leave.pdf_path
+        leave_book = db.get_one(Book, leave.book_id)
+        leave_version = max(leave_book.versions, key=lambda item: item.version_no)
+        assert leave_version.manager_sig_embedded is False
+        assert leave_book.approval_state == "none"
+        leave_artifact = document_service.render_signed_artifact(
+            db,
+            version=leave_version,
+            signer_signature_path=str(signature),
+            signer_names=("Phase Six Manager", "مدير المرحلة السادسة"),
+            converter=_real_dispatch_ex_converter,
+        )
+        leave_docx = leave_artifact.docx_path
+        leave_pdf = leave_artifact.conversion.pdf_path
         assert leave_pdf is not None
         leave_manifest = _manifest(leave_docx)
         leave_text = docx_to_text(leave_docx)
         assert "موظف المرحلة السادسة" in leave_text
         assert "مدير المرحلة السادسة" in leave_text
         assert any(leave.ref_number in header for header in leave_manifest["headers"])
-        assert int(leave_manifest["drawing_count"]) >= 2  # Aztec plus synthetic signature
+        assert int(leave_manifest["drawing_count"]) >= 2  # Aztec plus sign-time signature
         assert any(str(value).strip() for value in leave_manifest["footers"])
         assert leave.ref_number in _pdf_text(leave_pdf)
 
@@ -504,8 +515,18 @@ def test_signature_placement_word_smoke(monkeypatch: pytest.MonkeyPatch) -> None
             current_user=user,
             converter=_real_dispatch_ex_converter,
         )
-        docx_path = result.docx_path
-        pdf_path = result.pdf_path
+        book = db.get_one(Book, result.book_id)
+        version = max(book.versions, key=lambda item: item.version_no)
+        assert version.manager_sig_embedded is False
+        artifact = document_service.render_signed_artifact(
+            db,
+            version=version,
+            signer_signature_path=str(signature),
+            signer_names=("Sig Placement Manager", "مدير اختبار الموضع"),
+            converter=_real_dispatch_ex_converter,
+        )
+        docx_path = artifact.docx_path
+        pdf_path = artifact.conversion.pdf_path
         assert pdf_path is not None
 
         from app.core.signature_layout import inspect_signature_drawings
@@ -686,7 +707,9 @@ def test_initial_approval_signature_word_smoke(
         with fitz.open(actual_pdf) as ap, fitz.open(reference_pdf) as rp:
             assert ap.page_count == rp.page_count  # no new page pushed by insertion
 
-        actual_drawings = [d for d in inspect_signature_drawings(actual_docx) if d.role == "manager"]
+        actual_drawings = [
+            d for d in inspect_signature_drawings(actual_docx) if d.role == "manager"
+        ]
         assert len(actual_drawings) == 1  # one marked manager signature, one slot
         reference_drawings = [
             d for d in inspect_signature_drawings(reference_src) if d.role == "manager"
@@ -753,9 +776,7 @@ def test_pdf_executor_reaps_wedged_worker_on_timeout(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(_pdf_executor.sys, "platform", "win32")
 
     killed: list[list[str]] = []
-    monkeypatch.setattr(
-        _pdf_executor.subprocess, "run", lambda cmd, **kwargs: killed.append(cmd)
-    )
+    monkeypatch.setattr(_pdf_executor.subprocess, "run", lambda cmd, **kwargs: killed.append(cmd))
 
     class _FakeExecutor:
         def __init__(self, pid: int) -> None:

@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { CalendarDays, ChevronRight, X } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { api, apiErrorMessage } from '@/lib/api'
+import { api } from '@/lib/api'
 import type { LeaveListItem, LeaveStatus } from '@/lib/api'
 import { splitBilingual } from '@/lib/bilingualValue'
 import { cn } from '@/lib/utils'
@@ -29,6 +29,7 @@ import { Input } from '@/components/ui/input'
 import { actionsFor, needsAction } from '../lifecycle'
 import { StatusBadge } from '../StatusBadge'
 import { leaveEmployeeName } from '../leaveEmployeeName'
+import { leaveErrorMessage } from '../useLeaveDecisionActions'
 import { EmployeeProfileStrip } from './EmployeeProfileStrip'
 import { PeriodRun } from './PeriodRun'
 import { RecordExpansion } from './RecordExpansion'
@@ -142,7 +143,7 @@ export function RegisterTable({
       void qc.invalidateQueries({ queryKey: ['leave-balance', row.employee_id] })
       toast.success(status === 'Approved' ? t('leaves.toast.approved') : t('leaves.toast.rejected'))
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err) => toast.error(leaveErrorMessage(t, err)),
   })
 
   function cycleSort(key: SortSpec['key']): void {

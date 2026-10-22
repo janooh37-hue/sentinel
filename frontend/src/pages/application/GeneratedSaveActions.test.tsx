@@ -17,6 +17,7 @@ afterEach(() => {
 
 describe('GeneratedSaveActions', () => {
   const baseProps = {
+    signingPath: 'auto' as const,
     showNotify: true,
     notifyEmployee: true,
     notifyDisabled: false,
@@ -45,6 +46,32 @@ describe('GeneratedSaveActions', () => {
     render(<GeneratedSaveActions {...baseProps} />)
 
     expect(screen.getByText(/واتساب، ثم الرسائل النصية كخيار بديل/)).toBeVisible()
+  })
+
+  it.each([
+    {
+      language: 'ar',
+      onSaveHint: /سيصل الموظف إشعار عند حفظ هذا النموذج/,
+      atApprovalHint: /سيصل الموظف إشعار بعد اعتماد المدير لهذا النموذج/,
+    },
+    {
+      language: 'en',
+      onSaveHint: /The employee will get a message when this form is saved/,
+      atApprovalHint: /The employee will get a message once the manager approves this form/,
+    },
+  ])('tells the operator a chain form notifies on manager approval ($language)', async ({
+    language,
+    onSaveHint,
+    atApprovalHint,
+  }) => {
+    await i18n.changeLanguage(language)
+    const { rerender } = render(<GeneratedSaveActions {...baseProps} signingPath="chain" />)
+    expect(screen.getByText(atApprovalHint)).toBeVisible()
+    expect(screen.queryByText(onSaveHint)).not.toBeInTheDocument()
+
+    rerender(<GeneratedSaveActions {...baseProps} signingPath="auto" />)
+    expect(screen.getByText(onSaveHint)).toBeVisible()
+    expect(screen.queryByText(atApprovalHint)).not.toBeInTheDocument()
   })
 
   it('uses the saved-without-notifying hint when notification is off', () => {
