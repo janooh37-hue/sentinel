@@ -3963,7 +3963,8 @@
         "leaves": "From Leaves",
         "records": "From Records",
         "ledger": "From Ledger",
-        "workforce": "From Workforce"
+        "workforce": "From Workforce",
+        "permits": "From Permits"
       },
       "topFull": "Top zone is full (max {{count}})",
       "topOnlyBigCards": "Only big cards can go in the Top zone",
@@ -4079,7 +4080,8 @@
       "recent_ledger": "Recent Ledger",
       "pending_departures": "Pending Departures",
       "workforce_pulse": "Workforce Pulse",
-      "violation_months": "Monthly report workflow"
+      "violation_months": "Monthly report workflow",
+      "permits": "Permits"
     },
     "quickActionLabels": {
       "general_book": "General Book",
@@ -4137,6 +4139,9 @@
       "onLeave": "on leave"
     },
     "widgets": {
+      "permits": {
+        "latest": "Latest"
+      },
       "violations": {
         "header": "Open Violations",
         "action": "Review",

@@ -57,6 +57,7 @@ import { BooksAwaitingWidget } from '@/pages/dashboard/widgets/BooksAwaitingWidg
 import { ExpiringSoonWidget } from '@/pages/dashboard/widgets/ExpiringSoonWidget'
 import { PendingDeparturesWidget } from '@/pages/dashboard/widgets/PendingDeparturesWidget'
 import { ViolationMonthsWidget } from '@/pages/dashboard/widgets/ViolationMonthsWidget'
+import { PermitsWidget } from '@/pages/dashboard/widgets/PermitsWidget'
 import { WaitingApprovalsCard } from '@/pages/dashboard/widgets/WaitingApprovalsCard'
 import { SentApprovalsWidget } from '@/pages/dashboard/widgets/SentApprovalsWidget'
 import { WorkforceCoverageSheet } from '@/pages/dashboard/widgets/WorkforceCoverageSheet'
@@ -420,6 +421,8 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         return <PendingDeparturesWidget />
       case 'violation_months':
         return <ViolationMonthsWidget />
+      case 'permits':
+        return <PermitsWidget />
       case 'workforce_pulse':
         return <WorkforcePulseWidget onOpenCoverage={() => setCoverageOpen(true)} />
       case 'on_leave_today':

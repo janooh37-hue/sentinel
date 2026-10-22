@@ -466,6 +466,22 @@ def test_summary_headcount_by_derived_zone_union(db_session):
     assert summary["people_red"] == 3
 
 
+def test_summary_scoped_to_zone_counts_only_that_zones_permits(db_session):
+    red = {"al_wathba_1": [], "al_wathba_2": ["red"], "work_residence": False}
+    _mk(db_session, access_areas=red)
+    _mk(
+        db_session,
+        access_areas=red,
+        start_date=TODAY - timedelta(days=60),
+        end_date=TODAY - timedelta(days=1),
+    )
+    _mk(db_session)  # green only
+
+    red_summary = svc.summary(db_session, zone="red")
+    assert (red_summary["active"], red_summary["expired"]) == (1, 1)
+    assert svc.summary(db_session)["active"] == 2
+
+
 def test_record_visit_hook(db_session):
     row = _mk(db_session)
     visit = svc.record_visit(

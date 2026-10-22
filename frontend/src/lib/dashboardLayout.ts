@@ -37,8 +37,8 @@ export const DEFAULT_CANVAS_WIDTH: CanvasWidth = 'compact'
  * from where the widget's own action navigates — see DashboardPage's
  * `renderWidget` and the widget components' links; keep in step with them.
  */
-export type WidgetSource = 'employees' | 'leaves' | 'records' | 'ledger' | 'workforce'
-export const WIDGET_SOURCES = ['employees', 'leaves', 'records', 'ledger', 'workforce'] as const
+export type WidgetSource = 'employees' | 'leaves' | 'records' | 'ledger' | 'workforce' | 'permits'
+export const WIDGET_SOURCES = ['employees', 'leaves', 'records', 'ledger', 'workforce', 'permits'] as const
 
 /** All 15 canonical widget ids (order = catalog order in the editor). */
 export const WIDGET_IDS = [
@@ -58,6 +58,7 @@ export const WIDGET_IDS = [
   'pending_departures',
   'workforce_pulse',
   'violation_months',
+  'permits',
 ] as const
 
 export type WidgetId = (typeof WIDGET_IDS)[number]
@@ -86,6 +87,7 @@ export const WIDGET_SIZE: Record<WidgetId, WidgetSize> = {
   pending_departures: 'panel',
   workforce_pulse: 'panel',
   violation_months: 'panel',
+  permits: 'panel',
 }
 
 /**
@@ -100,6 +102,7 @@ export const WIDGET_SIZE: Record<WidgetId, WidgetSize> = {
  *   • ledger   — ledger, recent_ledger open a ledger entry; email sync is the
  *                inbound-mail feed behind the ledger inbox
  *   • workforce — workforce_pulse opens the Workforce Pulse drill-down
+ *   • permits  — permits opens the permits register
  */
 export const WIDGET_SOURCE: Record<WidgetId, WidgetSource> = {
   pending: 'records',
@@ -118,6 +121,7 @@ export const WIDGET_SOURCE: Record<WidgetId, WidgetSource> = {
   pending_departures: 'employees',
   workforce_pulse: 'workforce',
   violation_months: 'records',
+  permits: 'permits',
 }
 
 export const LOWER_ZONES = ['under_workspace', 'under_quick_actions'] as const
