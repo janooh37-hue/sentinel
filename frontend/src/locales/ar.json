@@ -4273,7 +4273,8 @@
         "leaves": "من الإجازات",
         "records": "من المستندات",
         "ledger": "من المراسلات",
-        "workforce": "من القوى العاملة"
+        "workforce": "من القوى العاملة",
+        "permits": "من التصاريح"
       },
       "topFull": "منطقة الأعلى ممتلئة (الحد الأقصى {{count}})",
       "topOnlyBigCards": "البطاقات الكبيرة فقط يمكن وضعها في الأعلى",
@@ -4397,7 +4398,8 @@
       "recent_ledger": "أحدث المراسلات",
       "pending_departures": "المغادرات المجدولة",
       "workforce_pulse": "نبض القوى العاملة",
-      "violation_months": "اعتماد التقارير الشهرية"
+      "violation_months": "اعتماد التقارير الشهرية",
+      "permits": "التصاريح"
     },
     "quickActionLabels": {
       "general_book": "السجل العام",
