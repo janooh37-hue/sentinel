@@ -38,7 +38,7 @@ vi.mock('@/components/ui/rich-editor', () => ({
 }))
 const { isMobile } = vi.hoisted(() => ({ isMobile: { value: false } }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => isMobile.value }))
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }))
 vi.mock('./useSyncStatus', () => ({ useSyncStatus: () => ({ status: null }) }))

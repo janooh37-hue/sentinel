@@ -39,7 +39,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, type BookRead } from '@/lib/api'
 import {

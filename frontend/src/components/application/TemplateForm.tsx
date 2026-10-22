@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { UseFormReturn } from 'react-hook-form'
 import { FormProvider } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api } from '@/lib/api'
 import { useLeaveDateMath } from '@/lib/useLeaveDateMath'

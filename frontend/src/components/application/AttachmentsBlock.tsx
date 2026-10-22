@@ -21,7 +21,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Archive, Check, FileText, Loader2, Paperclip, Plus, Upload, X } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, ApiError } from '@/lib/api'
 import type { AttachmentSlotRead } from '@/lib/api'

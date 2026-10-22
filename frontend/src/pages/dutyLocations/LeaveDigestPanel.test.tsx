@@ -18,7 +18,7 @@ vi.mock('react-i18next', () => ({
     return k
   }, i18n: { language: 'ar' } }),
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/api', () => ({
   api: {
     previewLeaveDigest: vi.fn(),

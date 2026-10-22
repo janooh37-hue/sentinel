@@ -37,7 +37,7 @@ vi.mock('@/lib/useCapabilities', () => ({
     has: (cap: string) => cap === 'books.submit',
   }),
 }))
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }))
 

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ExternalLink, Loader2, Send } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { TemplateForm } from '@/components/application/TemplateForm'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'

@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Car, Plus, Printer, ShieldCheck, Paperclip, Users, X } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, type PermitListItem, type PermitRead, type PermitZone } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'

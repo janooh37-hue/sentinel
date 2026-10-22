@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Crosshair, Expand, GripVertical, Minimize2, Pencil, Search, Shrink, ZoomIn, ZoomOut } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, api, type OrgNodeRead } from '@/lib/api'

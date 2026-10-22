@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import i18n from 'i18next'
 import { z } from 'zod'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import en from '@/locales/en.json'
 import type * as ApiModule from '@/lib/api'
@@ -19,7 +19,7 @@ const jobStatusState = vi.hoisted(() => ({
   handlers: new Map<string, (job: JobStatusResponse) => void>(),
 }))
 
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
 vi.mock('@/lib/api', async (importOriginal) => {

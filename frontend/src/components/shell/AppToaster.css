@@ -1,0 +1,96 @@
+/* Sileo host styling. Sileo injects its own base CSS; everything here adapts it
+   to the app's themes, RTL, stacking and print rules. The viewport's
+   data-theme is the APP theme (light | dark): Sileo draws a dark pill on a
+   light page and a light pill on a dark page, so each state tone below is the
+   inverse theme's token, picked for >=4.5:1 against its pill. */
+
+/* Above dialogs (z-50) and the document viewer (z-90); the lock overlay hides
+   the viewport instead (LockOverlay.css). */
+[data-sileo-viewport][data-position] {
+  z-index: 999999999;
+}
+
+[data-sileo-viewport][data-theme='light'] {
+  --sileo-state-success: #34d399;
+  --sileo-state-loading: #a3aab8;
+  --sileo-state-error: #ff7a86;
+  --sileo-state-warning: #fbbf24;
+  --sileo-state-info: #60a5fa;
+  --sileo-state-action: #8da6e8;
+}
+
+[data-sileo-viewport][data-theme='dark'] {
+  --sileo-state-success: #047857;
+  --sileo-state-loading: #5a6068;
+  --sileo-state-error: #c8102e;
+  --sileo-state-warning: #9a4507;
+  --sileo-state-info: #1d4ed8;
+  --sileo-state-action: #0d2845;
+}
+
+/* Rules below carry the viewport selector so they beat Sileo's equal-weight
+   rules whatever order the two stylesheets load in (dev and build differ). */
+
+/* Sileo capitalizes every word of a title; ours are sentences. */
+[data-sileo-viewport] [data-sileo-title] {
+  text-transform: none;
+}
+
+/* Sileo hard-codes `text-align: left`. Messages can carry a second line ("\n"). */
+[data-sileo-viewport] [data-sileo-description] {
+  text-align: start;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  content-visibility: visible;
+}
+
+/* Sileo hides a collapsed body with `content-visibility: hidden`, which skips
+   its layout, so the height it measures for the open pill is stale and a long
+   message (two Arabic lines, three English) is clipped. `visibility: hidden`
+   keeps layout live and still removes the body, and its Undo link, from the
+   accessibility tree and the tab order until the toast opens. */
+[data-sileo-viewport] [data-sileo-content]:not([data-visible='true']) {
+  content-visibility: visible;
+  visibility: hidden;
+}
+
+[data-sileo-viewport][data-theme='light'] [data-sileo-toast] [data-sileo-description] {
+  color: rgb(255 255 255 / 0.82);
+}
+
+[data-sileo-viewport][data-theme='dark'] [data-sileo-toast] [data-sileo-description] {
+  color: rgb(28 31 36 / 0.86);
+}
+
+/* The toast sits on the page (ring in the app's primary); its action sits on the
+   pill (ring in the action's own tone). */
+[data-sileo-toast]:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+[data-sileo-button]:focus-visible {
+  outline: 2px solid var(--_c, currentColor);
+  outline-offset: 2px;
+}
+
+/* Sileo's own reduced-motion rule is `[data-sileo-viewport] *` (specificity
+   0,1,0), which every `[data-sileo-toast][data-ready]` transition outranks, so it
+   changes nothing. Re-state it so it wins. The loading spinner is exempt: it is
+   the only cue that work is in progress. The pill's JS springs are switched off
+   in AppToaster.tsx. */
+@media (prefers-reduced-motion: reduce) {
+  [data-sileo-viewport] :is([data-sileo-toast], [data-sileo-toast] *):not([data-sileo-icon='spin']) {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+}
+
+@media print {
+  [data-sileo-viewport],
+  [data-toast-announcer] {
+    display: none !important;
+  }
+}

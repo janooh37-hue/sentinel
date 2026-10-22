@@ -13,7 +13,7 @@ import i18n from '@/lib/i18n'
 import type * as VehicleDialogShellModule from './VehicleDialogShell'
 import { EvgFetchDialog } from './EvgFetchDialog'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 const shellBusyMock = vi.hoisted(() => vi.fn())
 

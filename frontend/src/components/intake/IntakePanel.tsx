@@ -19,7 +19,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Loader2, ScanLine, UserCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { ApiError, api, type ExternalOut, type IntakeResponse, type ReturnedFormOut, type StagedAttachmentRead } from '@/lib/api'
 import { SICK_ONLY_SLOT_KEY } from '@/components/application/attachmentsState'

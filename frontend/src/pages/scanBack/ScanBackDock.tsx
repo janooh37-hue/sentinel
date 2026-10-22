@@ -3,8 +3,8 @@
  * the six oldest stranded records, each a drop target.
  *
  * Positioned with `inset-inline-end` so it flips in Arabic, and lifted clear
- * of both BottomTabBar (mobile, `fixed inset-x-0 bottom-0 z-40`) and sonner's
- * app-wide bottom-right Toaster (same corner in LTR, z-index far above ours)
+ * of both BottomTabBar (mobile, `fixed inset-x-0 bottom-0 z-40`) and the toast
+ * host's app-wide bottom-right viewport (same corner in LTR, z-index far above ours)
  * — see the `bottom-[...]` comment below for the clearance arithmetic.
  */
 import { useRef, useState } from 'react'
@@ -120,13 +120,13 @@ export function ScanBackDock(): React.JSX.Element | null {
         // `end-4` is the logical utility (inset-inline-end) — it flips in RTL.
         // Never `right-4`. Precedent: IdentityDocCard.tsx:97.
         'fixed z-30 flex flex-col items-end gap-2 end-4',
-        // sonner's Toaster (App.tsx, position="bottom-right") sits at the same
+        // The toast viewport (AppToaster, position="bottom-right") sits at the same
         // corner in LTR and paints over anything under it (z-index 999999999 —
         // we clear it spatially, not by fighting z-index). Its default 24px
-        // bottom offset + a single toast's ~64px height is a ~88px (5.5rem)
+        // bottom offset + a collapsed toast's 40px pill is well inside the ~88px (5.5rem)
         // band; 5.5rem also exceeds the 3.5rem BottomTabBar clearance
         // App.tsx's <main> already reserves on mobile, so one value covers
-        // both viewports. A stack of several toasts can still reach higher —
+        // both viewports. A stack of several toasts, or an expanded description, can still reach higher —
         // accepted residual, not solved here.
         'bottom-[calc(5.5rem+var(--safe-bottom))] md:bottom-[5.5rem]',
         'rtl:items-start',

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { useTranslation } from 'react-i18next'
 import { Loader2, Copy as CopyIcon, ArrowRight } from 'lucide-react'
 

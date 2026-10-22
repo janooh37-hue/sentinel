@@ -45,7 +45,7 @@ import { SuggestionBanner } from './SuggestionBanner'
 import { ReviewSuggestionsSheet } from './ReviewSuggestionsSheet'
 import { CreateSmartFolderDialog } from './CreateSmartFolderDialog'
 import type { SmartFolder, SmartFolderSuggestion } from '@/lib/api'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { useDeferredDelete, type PendingDelete } from '@/lib/useDeferredDelete'
 import {
   DEFAULT_MAILBOX_VIEW,
@@ -93,8 +93,8 @@ interface ComposeState {
 
 /**
  * Deferred-delete window. The Undo toast MUST stay visible for exactly this long:
- * the destructive commit fires at `delayMs`, so a shorter toast (sonner defaults
- * to 4s) would hide Undo while the delete is still cancelable. One constant feeds
+ * the destructive commit fires at `delayMs`, so a shorter toast (the default
+ * may change) would hide Undo while the delete is still cancelable. One constant feeds
  * both the hook's `delayMs` and the toast `duration` so they can't drift.
  */
 const UNDO_DELAY_MS = 6000

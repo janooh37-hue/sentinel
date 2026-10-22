@@ -13,7 +13,7 @@ import { WordSessionPage } from './WordSessionPage'
 void i18n.use(initReactI18next).init({ lng: 'ar', resources: { ar: { translation: ar } }, interpolation: { escapeValue: false } })
 const capabilities = vi.hoisted(() => ({ templates: true }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => cap !== 'books.templates' || capabilities.templates }) }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/pages/application/DocPdfCanvas', () => ({ default: ({ pdfUrl }: { pdfUrl: string }) => <div data-testid="paper" data-url={pdfUrl} /> }))
 vi.mock('@/components/books/SavedRecordActions', () => ({ SavedRecordActions: ({ bookId }: { bookId: number }) => <div>saved:{bookId}</div> }))
 

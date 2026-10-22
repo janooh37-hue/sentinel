@@ -7,7 +7,7 @@
 import { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 

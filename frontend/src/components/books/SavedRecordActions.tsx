@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ExternalLink, Forward, Printer, Send } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { SubmitForApprovalDialog } from './SubmitForApprovalDialog'
 import { ConfidentialityChip } from './ConfidentialityChip'

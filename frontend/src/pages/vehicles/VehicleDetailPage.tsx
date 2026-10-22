@@ -43,7 +43,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { FileTypeIcon } from '@/components/ledger/FileTypeIcon'
 import { RefreshButton } from '@/components/refresh/RefreshButton'

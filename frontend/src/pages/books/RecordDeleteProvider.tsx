@@ -27,7 +27,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, type ReactNode
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import { bidi } from '@/lib/bidi'

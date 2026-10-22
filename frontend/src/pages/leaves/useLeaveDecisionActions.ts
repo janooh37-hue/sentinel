@@ -10,7 +10,7 @@
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import type { LeaveStatus } from '@/lib/api'

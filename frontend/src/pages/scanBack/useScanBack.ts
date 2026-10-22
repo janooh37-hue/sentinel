@@ -10,7 +10,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, ApiError, type BookRead } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'

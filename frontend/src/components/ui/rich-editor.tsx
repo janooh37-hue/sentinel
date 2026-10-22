@@ -21,7 +21,7 @@ import { Controller, useFormContext } from 'react-hook-form'
 import { Editor as HugeRTEEditor } from '@hugerte/hugerte-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import type { EditorTemplateListItem, EditorTemplateRead } from '@/lib/api'

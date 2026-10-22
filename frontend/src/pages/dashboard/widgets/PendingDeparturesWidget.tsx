@@ -13,7 +13,7 @@
 import { useNavigate, Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { CalendarClock, UserMinus } from 'lucide-react'
 
 import { api, apiErrorMessage, ApiError } from '@/lib/api'

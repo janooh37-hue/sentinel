@@ -43,7 +43,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, ExternalLink, FileText, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { RequireCapability } from '@/components/shell/RequireCapability'

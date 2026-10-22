@@ -8,7 +8,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
 import { Input } from '@/components/ui/input'

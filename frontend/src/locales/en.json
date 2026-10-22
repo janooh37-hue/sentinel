@@ -282,7 +282,15 @@
     "loadError": "Couldn't load this. Check your connection and try again.",
     "copyFailed": "Could not copy to clipboard. Try again.",
     "retry": "Retry",
-    "done": "Done"
+    "done": "Done",
+    "toastState": {
+      "success": "Done",
+      "error": "Error",
+      "warning": "Warning",
+      "info": "Notice",
+      "action": "Notice",
+      "loading": "Working…"
+    }
   },
   "a11y": {
     "skipToContent": "Skip to main content"

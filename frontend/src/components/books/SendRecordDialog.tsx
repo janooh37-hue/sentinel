@@ -10,7 +10,7 @@ import { useId, useState } from 'react'
 import * as RadixDialog from '@radix-ui/react-dialog'
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { Search, X } from 'lucide-react'
 
 import {

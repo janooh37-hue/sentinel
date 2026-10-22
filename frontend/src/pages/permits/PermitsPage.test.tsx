@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
 
@@ -339,7 +339,7 @@ describe('PermitsPage', () => {
 
   it('after issuing a permit, lands on its preview with the filters cleared, before the list has it', async () => {
     const user = userEvent.setup()
-    const success = vi.spyOn(toast, 'success').mockImplementation(() => 1)
+    const success = vi.spyOn(toast, 'success').mockImplementation(() => 'toast-1')
     try {
       // The list mock never includes PMT-0009: the preview must come from the record the form returned.
       renderPage(['/permits?state=active&q=acme'])

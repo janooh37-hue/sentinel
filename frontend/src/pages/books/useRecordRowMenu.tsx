@@ -7,7 +7,7 @@ import { Copy, Download, ExternalLink, Lock, Printer, Send, SquareArrowOutUpRigh
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api } from '@/lib/api'
 import type { BookRead } from '@/lib/api'

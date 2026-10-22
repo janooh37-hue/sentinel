@@ -16,7 +16,7 @@ import { Fragment, useEffect, useId, useMemo, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { CalendarDays, ChevronRight, X } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api } from '@/lib/api'
 import type { LeaveListItem, LeaveStatus } from '@/lib/api'

@@ -9,7 +9,7 @@ import * as apiMod from '@/lib/api'
 import { registerPdfCachePurger } from '@/lib/pdfCachePurge'
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 function wrapperFor(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) =>

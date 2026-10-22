@@ -15,7 +15,7 @@ import { useId, useState } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage, type DutyTransferResult, type EmployeeLookupItem } from '@/lib/api'
 import { unitOptions, postsForUnit } from '@/lib/dutyUnits'

@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trash2, UserPlus, FileText, Upload, Car, ScanLine, Printer, Send } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage, ApiError, type PermitRead, type PermitValidityPeriod } from '@/lib/api'
 import { PermitDocumentVersions } from './PermitDocumentVersions'

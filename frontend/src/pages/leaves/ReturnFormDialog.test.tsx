@@ -6,13 +6,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useFormContext } from 'react-hook-form'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/lib/api'
 import { ReturnFormDialog } from './ReturnFormDialog'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/components/application/fields/ManagerPickerField', () => ({
   ManagerPickerField: ({ name, label_en }: { name: string; label_en: string }) => {
     const { register } = useFormContext()

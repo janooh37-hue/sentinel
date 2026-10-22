@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, type PermitRead } from '@/lib/api'
 import { PermitFormDialog } from './PermitFormDialog'
@@ -12,7 +12,7 @@ vi.mock('@/lib/useCapabilities', () => ({
 }))
 
 // Silence toast in tests
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@/lib/api')>()

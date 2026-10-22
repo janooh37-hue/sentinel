@@ -13,7 +13,7 @@
  * The api mock therefore names every method this page can now reach:
  * `listDesignations` (the catalog the affordance depends on) and
  * `setTimesheetRoster` (the one atomic write), beside the two the shell already
- * used. `sonner` carries `warning` as well, because a locked cell refuses
+ * used. The toast mock carries `warning` as well, because a locked cell refuses
  * through the grid's own one-per-gesture toast rather than by going dead.
  *
  * jsdom has neither `DataTransfer` nor the Web Animations API, so the pointer
@@ -26,10 +26,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
 vi.mock('@/lib/api', () => ({

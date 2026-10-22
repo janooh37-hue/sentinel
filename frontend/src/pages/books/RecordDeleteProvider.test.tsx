@@ -19,7 +19,7 @@ vi.mock('@/lib/api', async (orig) => {
   const actual = await orig<typeof import('@/lib/api')>()
   return { ...actual, api: { ...actual.api, deleteBook } }
 })
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: Object.assign(toastFn, {
     success: toastSuccess,
     error: toastError,

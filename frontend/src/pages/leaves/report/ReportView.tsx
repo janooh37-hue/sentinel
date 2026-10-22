@@ -17,7 +17,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { FileDown, Loader2, PenLine, Printer } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage, type LeaveListItem } from '@/lib/api'
 import { isQuickActionAllowed } from '@/lib/dashboardLayout'

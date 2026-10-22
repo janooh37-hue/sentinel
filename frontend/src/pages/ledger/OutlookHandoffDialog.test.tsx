@@ -43,7 +43,7 @@ vi.mock('@/lib/useIdentity', () => ({
 vi.mock('@/components/ui/rich-editor', () => ({
   RichEditor: ({ name }: { name: string }) => <div data-testid={`rich-editor-${name}`} />,
 }))
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }))
 

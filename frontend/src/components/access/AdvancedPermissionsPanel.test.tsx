@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const toastSuccess = vi.hoisted(() => vi.fn())
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: { success: toastSuccess, error: vi.fn() },
 }))
 

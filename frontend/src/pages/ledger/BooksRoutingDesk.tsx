@@ -6,7 +6,7 @@ import {
   Folder, FolderPlus, Maximize2, MessageSquareText, Minimize2, Search, Send, X,
 } from 'lucide-react'
 import { CheckboxItem, ItemIndicator } from '@radix-ui/react-dropdown-menu'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 

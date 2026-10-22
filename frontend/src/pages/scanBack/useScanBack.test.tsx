@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { ageDays, ageGroup, useFileSignedCopy, useScanBack, useScanBackUpload } from './useScanBack'
 import * as apiMod from '@/lib/api'
@@ -17,7 +17,7 @@ vi.mock('@/lib/useCapabilities', () => ({
   }),
 }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }))
 
 function wrapperFor(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) =>

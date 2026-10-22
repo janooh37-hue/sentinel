@@ -1,13 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { describe, expect, it, vi } from 'vitest'
 
 import { RegisterTable } from './RegisterTable'
 import * as apiMod from '@/lib/api'
 import i18n from '@/lib/i18n'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 const PENDING_COMPASSIONATE = {
   id: 7,

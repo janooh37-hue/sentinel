@@ -19,7 +19,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { useTranslation } from 'react-i18next'
 import { format, parseISO, type Locale } from 'date-fns'
 import { ar as arLocale } from 'date-fns/locale'

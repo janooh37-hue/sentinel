@@ -11,7 +11,7 @@ import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import { MemoryRouter } from 'react-router-dom'
 
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { WordReopenButton, WordSessionActions } from './BookWordActions'
 import { BookStatusChips } from './BookStatusChips'
 import * as apiMod from '@/lib/api'
@@ -46,7 +46,7 @@ void i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false },
 })
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 const navigate = vi.fn()
 vi.mock('react-router-dom', async () => ({
   ...await vi.importActual('react-router-dom'),

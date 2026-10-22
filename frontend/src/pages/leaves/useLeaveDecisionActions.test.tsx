@@ -2,13 +2,13 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { useLeaveDecisionActions } from './useLeaveDecisionActions'
 import * as apiMod from '@/lib/api'
 import i18n from '@/lib/i18n'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 function wrapperFor(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) =>

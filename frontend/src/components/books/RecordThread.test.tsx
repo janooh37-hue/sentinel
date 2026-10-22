@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import type * as RouterModule from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, ApiError, type BookRead, type BookThreadItem } from '@/lib/api'
 import en from '@/locales/en.json'
@@ -28,7 +28,7 @@ vi.mock('react-router-dom', async (original) => ({
 }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: auth.authenticated ? { role: auth.role } : null }) }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => !auth.denied.has(cap) }) }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }))
 
 const BOOK: BookRead = {
   id: 7, ref_number: '1/1/196', category_id: 'GS',

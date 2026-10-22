@@ -26,7 +26,7 @@ const jobStatusState = vi.hoisted(() => ({
 }))
 const toastWarning = vi.hoisted(() => vi.fn())
 
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: { success: vi.fn(), warning: toastWarning, error: vi.fn(), info: vi.fn() },
 }))
 vi.mock('@/lib/api', async (importOriginal) => {

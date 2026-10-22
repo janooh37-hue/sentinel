@@ -9,7 +9,7 @@ import { vi, test, expect } from 'vitest'
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/api', () => ({
   api: { updateEmployee: vi.fn() },
   apiErrorMessage: (e: unknown) => String(e),

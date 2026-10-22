@@ -8,7 +8,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createElement, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { WordHandoffDialog } from './WordHandoffDialog'
 import * as apiMod from '@/lib/api'
@@ -59,7 +59,7 @@ vi.mock('react-i18next', () => ({
   }),
 }))
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 // Mock the heavy pdf.js canvas — a sentinel div carrying the pdfUrl.
 vi.mock('@/pages/application/DocPdfCanvas', () => ({

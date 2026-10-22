@@ -15,7 +15,7 @@ vi.mock('react-i18next', () => ({
     i18n: { language: translationState.language },
   }),
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
     capabilities: new Set(

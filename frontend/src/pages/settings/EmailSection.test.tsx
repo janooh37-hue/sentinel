@@ -30,7 +30,7 @@ vi.mock('@/lib/useIdentity', () => ({
   useIdentity: () => ({ identity: { email: 'me@gssg.ae', linked: true }, isAdmin: true }),
 }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ setUser: vi.fn() }) }))
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }))
 vi.mock('./SignatureSection', () => ({ SignatureSection: () => null }))

@@ -29,7 +29,7 @@ import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-route
 import { useQuery } from '@tanstack/react-query'
 import { BookOpen, ChevronRight, Stamp, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api } from '@/lib/api'
 import type { BookRead } from '@/lib/api'

@@ -11,7 +11,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { ChevronDown, ChevronUp, ExternalLink, TriangleAlert } from 'lucide-react'
 
 import { api, ApiError } from '@/lib/api'

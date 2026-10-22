@@ -3,7 +3,7 @@ import { Check, FilePenLine, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { api, apiErrorMessage } from '@/lib/api'

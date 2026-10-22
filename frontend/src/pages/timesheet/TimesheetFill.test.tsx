@@ -9,7 +9,7 @@
  * operator hears about it once.
  *
  * Its own file, not a thirteenth case in `TimesheetPage.test.tsx`: that file
- * holds the twelve Task 7 settled and its sonner stub carries no `warning`,
+ * holds the twelve Task 7 settled and its toast stub carries no `warning`,
  * which the grid's own client-side refusal needs. Splitting keeps both mock
  * surfaces honest instead of widening one to cover two jobs.
  */
@@ -17,10 +17,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
 vi.mock('@/lib/api', () => ({

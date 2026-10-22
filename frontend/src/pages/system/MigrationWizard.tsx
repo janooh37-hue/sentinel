@@ -15,7 +15,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, type MigrationResult, type MigrationStatus } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'

@@ -19,7 +19,7 @@ import { useState } from 'react'
 import * as RadixDialog from '@radix-ui/react-dialog'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { ShieldAlert, X } from 'lucide-react'
 
 import { api, apiErrorMessage, type BookOverridableState, type BookRead } from '@/lib/api'

@@ -22,9 +22,9 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
 
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import type { TimesheetDesignationRead, TimesheetRow } from '@/lib/api'
 import i18n from '@/lib/i18n'
 
