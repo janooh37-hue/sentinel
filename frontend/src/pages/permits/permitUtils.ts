@@ -3,7 +3,9 @@
  * i18n key mapping, and a couple of small formatters. Kept framework-free so
  * both the table and the detail dialog stay consistent.
  */
-import { api, type PermitDerivedStatus, type PermitZone } from '@/lib/api'
+import type { TFunction } from 'i18next'
+
+import { api, type PermitDerivedStatus, type PermitListItem, type PermitZone } from '@/lib/api'
 
 export type Tone = 'neutral' | 'active' | 'warning' | 'danger' | 'info' | 'outline'
 
@@ -63,6 +65,29 @@ export function fmtLongDate(iso: string, language: string): string {
     year: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(`${iso.slice(0, 10)}T00:00:00Z`))
+}
+
+/** Validity text + remaining-days text: register row, mobile card, quick view and dashboard widget. */
+export function permitWindow(
+  t: TFunction,
+  language: string,
+  row: PermitListItem,
+): { validity: string; remaining: string | null } {
+  const remaining =
+    row.derived_status === 'revoked' || row.days_remaining === null
+      ? null
+      : row.days_remaining < 0
+        ? t('permits.expired')
+        : row.days_remaining === 0
+          ? t('permits.endsToday')
+          : t('permits.daysLeft', { count: row.days_remaining })
+  return {
+    validity: t('permits.validityFrom', {
+      period: t(`permits.validityPeriod.${row.validity.unit}`, { count: row.validity.value }),
+      date: fmtLongDate(row.start_date, language),
+    }),
+    remaining,
+  }
 }
 
 /** The permit letter's book. One key, so the quick view, the full dialog's

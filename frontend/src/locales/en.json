@@ -4139,6 +4139,9 @@
       "onLeave": "on leave"
     },
     "widgets": {
+      "permits": {
+        "latest": "Latest"
+      },
       "violations": {
         "header": "Open Violations",
         "action": "Review",

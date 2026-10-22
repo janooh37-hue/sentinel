@@ -1504,7 +1504,7 @@ export const api = {
     limit?: number
     offset?: number
   } = {}) => request<PermitListResponse>('GET', `/permits${qs({ ...params })}`),
-  permitsSummary: () => request<PermitSummary>('GET', '/permits/summary'),
+  permitsSummary: (zone?: PermitZone) => request<PermitSummary>('GET', `/permits/summary${qs({ zone })}`),
   /** Full permit records (people + vehicles) for the detailed print — one request. */
   listPermitsDetailed: (
     params: { state?: string; zone?: PermitZone; company?: string; q?: string; ids?: string } = {},

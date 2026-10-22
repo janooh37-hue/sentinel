@@ -4461,6 +4461,9 @@
       "onLeave": "في إجازة"
     },
     "widgets": {
+      "permits": {
+        "latest": "الأحدث"
+      },
       "violations": {
         "header": "المخالفات المفتوحة",
         "action": "مراجعة",

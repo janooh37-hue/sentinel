@@ -26344,7 +26344,9 @@ export interface operations {
     };
     permit_summary_api_v1_permits_summary_get: {
         parameters: {
-            query?: never;
+            query?: {
+                zone?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: {

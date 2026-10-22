@@ -865,9 +865,9 @@ def record_visit(
 # ─── summary + export ──────────────────────────────────────────────────────────
 
 
-def summary(db: Session) -> dict[str, int]:
+def summary(db: Session, *, zone: str | None = None) -> dict[str, int]:
     today = date.today()
-    rows, _ = list_permits(db, limit=100_000, offset=0)
+    rows, _ = list_permits(db, zone=zone, limit=100_000, offset=0)
     active = expiring = expired = revoked = 0
     people_active = people_green = people_red = people_work = 0
     for row in rows:
