@@ -243,6 +243,23 @@ def set_vehicle_notify_days(db: Session, days: int) -> int:
     return clamped
 
 
+def get_vehicle_maintenance_contractor_id(db: Session) -> int | None:
+    raw = _get(db, "settings.vehicles_maintenance_contractor_id", None)
+    return raw if isinstance(raw, int) and not isinstance(raw, bool) else None
+
+
+def set_vehicle_maintenance_contractor_id(db: Session, recipient_id: int | None) -> None:
+    from app.api.errors import ValidationFailedError
+    from app.services import recipient_service
+
+    if recipient_id is not None and recipient_service.resolve_name(db, recipient_id) is None:
+        raise ValidationFailedError(
+            "RECIPIENT_NOT_FOUND", "Choose an existing maintenance contractor recipient."
+        )
+    _set(db, "settings.vehicles_maintenance_contractor_id", recipient_id)
+    db.commit()
+
+
 def update_settings(db: Session, payload: AppSettingsUpdate) -> AppSettingsRead:
     """Upsert only the non-None fields in *payload*, then return the full state."""
     from app.core.signature_render import clamp_boldness, clamp_size

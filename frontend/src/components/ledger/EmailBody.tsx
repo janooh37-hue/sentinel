@@ -70,9 +70,8 @@ export function BodyContent({
     : ''
 
   // Phase 5 — render the body in its OWN source direction "as sent", not the
-  // chrome's. The wrapper lives inside `[data-ledger-chrome] dir="ltr"`, so set
-  // dir explicitly (never inherited): honour the source's own `dir`, else infer
-  // from the first strong character.
+  // chrome's, so set dir explicitly (never inherited): honour the source's own
+  // `dir`, else infer from the first strong character.
   const srcDir = inferSourceDir(html)
 
   useLayoutEffect(() => {

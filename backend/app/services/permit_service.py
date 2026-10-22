@@ -130,17 +130,42 @@ def _vehicle_read(v: PermitVehicle) -> PermitVehicleRead:
     )
 
 
-def to_read(row: Permit, *, today: date | None = None, db: Session | None = None) -> PermitRead:
-    """Build the detail schema (people + vehicles) + computed fields off a row."""
+def readable_book(db: Session, book_id: int | None, user: User | None) -> Book | None:
+    """The permit's letter Record, or ``None`` when absent or ``user`` cannot open it.
+
+    ``user=None`` (internal callers) skips the access check.
+    """
+    book = db.get(Book, book_id) if book_id is not None else None
+    if book is None or user is None:
+        return book
+    from app.services import book_service
+
+    # The list-surface rule (not resolve_book_read_access), so General letters
+    # keep showing to permit users exactly as before.
+    clause = book_service.user_visibility_clause(db, user)
+    if clause is None or db.scalar(select(Book.id).where(Book.id == book.id, clause)):
+        return book
+    return None
+
+
+def to_read(
+    row: Permit,
+    *,
+    today: date | None = None,
+    db: Session | None = None,
+    user: User | None = None,
+) -> PermitRead:
+    """Build the detail schema (people + vehicles) + computed fields off a row.
+
+    With ``user``, a letter Record they cannot open is reported as absent
+    (no id/ref/state)."""
     today = today or date.today()
     people = _active_people(row)
     vehicles = _active_vehicles(row)
-    book_ref: str | None = None
-    approval_state: str | None = None
-    if db is not None and row.book_id is not None:
-        b = db.get(Book, row.book_id)
-        book_ref = b.ref_number if b is not None else None
-        approval_state = b.approval_state if b is not None else None
+    b = readable_book(db, row.book_id, user) if db is not None else None
+    book_ref = b.ref_number if b is not None else None
+    approval_state = b.approval_state if b is not None else None
+    book_id = row.book_id if db is None or user is None or b is not None else None
     return PermitRead.model_validate(
         {
             **row.__dict__,
@@ -155,7 +180,7 @@ def to_read(row: Permit, *, today: date | None = None, db: Session | None = None
             "vehicle_count": len(vehicles),
             "document_name": _basename(row.document_path),
             "manager_id": row.manager_id,
-            "book_id": row.book_id,
+            "book_id": book_id,
             "book_ref": book_ref,
             "approval_state": approval_state,
             "people": [_person_read(p) for p in people],

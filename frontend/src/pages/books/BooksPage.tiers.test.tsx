@@ -38,6 +38,9 @@ const rows = vi.hoisted(() => [3, 2, 1].map((id) => ({
 vi.mock('@/lib/api', () => ({
   api: {
     getBookFacets: vi.fn().mockResolvedValue({ total: 3, services: [] }),
+    getInboxSummary: vi.fn().mockResolvedValue({
+      unread: 0, received: 0, sent: 0, archived: 0, by_purpose: { info: 0, action: 0, reply: 0, circulate: 0 },
+    }),
     listBooks: vi.fn().mockResolvedValue({ items: rows }),
     listBookCategories: vi.fn().mockResolvedValue([]),
     listTemplates: vi.fn().mockResolvedValue({ items: [] }),
@@ -51,9 +54,9 @@ vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
 vi.mock('./StatusSpine', () => ({ StatusSpine: () => null }))
 vi.mock('./FormRail', () => ({
   FormRail: () => null,
-  MineChip: ({ onToggle }: { onToggle: () => void }) => (
-    <button type="button" onClick={onToggle}>
-      mine-chip
+  MineChip: ({ onToggle, label, testId }: { onToggle: () => void; label?: string; testId?: string }) => (
+    <button type="button" onClick={onToggle} data-testid={testId}>
+      {label ?? 'mine-chip'}
     </button>
   ),
 }))
@@ -197,7 +200,7 @@ describe('Records page list keys inside the drawer', () => {
     renderPage()
     await waitFor(() => expect(document.querySelectorAll('[data-book-id]')).toHaveLength(3))
     await userEvent.click(document.querySelector('[data-book-id="3"] button') as HTMLElement)
-    expect(screen.getByRole('dialog', { name: 'GS-0003' })).toBeInTheDocument()
+    expect(await screen.findByRole('dialog', { name: 'GS-0003' })).toBeInTheDocument()
 
     await userEvent.keyboard('j')
     await waitFor(() => expect(openParam()).toBe('2'))

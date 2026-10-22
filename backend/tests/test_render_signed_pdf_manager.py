@@ -15,7 +15,7 @@ import zipfile
 from PIL import Image
 
 from app.config import Settings
-from app.db.models import Book, BookCategory, BookVersion, Manager
+from app.db.models import Book, BookCategory, BookVersion, Employee, Manager, User
 from app.services import document_service
 from app.services.document_service import _TEMPLATES_DIR
 
@@ -77,3 +77,46 @@ def test_signed_copy_keeps_doc_manager_name(db_session, tmp_path, monkeypatch):
     text = _docx_text(docx)
     assert "SAEED RASHED" in text, "signed copy dropped the manager name"
     assert artifact.docx_path == docx
+
+
+def test_signed_general_book_keeps_submitter_g_on_every_footer(db_session, tmp_path, monkeypatch):
+    """The signed re-render has no current_user; the footer still prints the
+    book submitter's G-number on page 1 and pages 2+."""
+    settings = Settings(data_dir=tmp_path, templates_dir=_TEMPLATES_DIR)
+    monkeypatch.setattr(document_service, "get_settings", lambda: settings)
+    sig = tmp_path / "signer.png"
+    Image.new("RGBA", (400, 168), (0, 0, 0, 255)).save(sig)
+
+    if db_session.get(BookCategory, "GS") is None:
+        db_session.add(BookCategory(id="GS", prefix="GS"))
+    db_session.add(Employee(id="G4321", name_en="Submitter", name_ar="مقدم"))
+    submitter = User(email="gb-submitter@x.ae", password_hash="x", employee_id="G4321")
+    db_session.add(submitter)
+    db_session.flush()
+    book = Book(
+        category_id="GS",
+        ref_number="1/5/GSSG/77",
+        subject="كتاب",
+        classification_code="5/1",
+        approval_state="approved",
+        submitted_by_user_id=submitter.id,
+    )
+    db_session.add(book)
+    db_session.flush()
+    version = BookVersion(
+        book_id=book.id,
+        version_no=1,
+        template_id="General Book",
+        fields={"subject": "كتاب", "body_html": "<p>نص</p>", "date": "13-10-2026"},
+        status="approved",
+    )
+    db_session.add(version)
+    db_session.flush()
+
+    artifact = document_service.render_signed_artifact(
+        db_session, version=version, signer_signature_path=str(sig), output_dir=tmp_path / "out"
+    )
+
+    with zipfile.ZipFile(artifact.docx_path) as z:
+        for part in ("word/footer1.xml", "word/footer2.xml"):
+            assert z.read(part).decode().count("G4321") == 1, part

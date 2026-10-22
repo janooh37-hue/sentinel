@@ -65,6 +65,7 @@ Other pages will be appended under §4 as they're documented.
    4.10 Monthly inmate report workspace
 5. Animation appendix
 6. Not yet documented
+7. Ledger Books workspace
 ```
 
 ---
@@ -535,18 +536,15 @@ focus-visible:ring-offset-1 focus-visible:ring-offset-background
 | Variant       | Default                                                      | Hover                          | Active                          | Disabled              |
 | ------------- | ------------------------------------------------------------ | ------------------------------ | ------------------------------- | --------------------- |
 | `default`     | `bg-primary text-primary-foreground`                         | `bg-primary/90`                | `bg-primary/95`                 | `pointer-events-none opacity-50` |
-| `secondary`   | `border border-border bg-surface text-foreground`            | `bg-accent`                    | (no specific active)            | same                  |
-| `outline`     | `border border-border bg-transparent text-foreground`        | `bg-accent`                    | (no specific active)            | same                  |
-| `ghost`       | `text-muted-foreground`                                      | `bg-accent hover:text-foreground` | (no specific active)         | same                  |
+| `secondary`   | `border border-border bg-surface text-foreground`            | `bg-surface-tinted`            | (no specific active)            | same                  |
+| `outline`     | `border border-border bg-transparent text-foreground`        | `bg-surface-tinted`            | (no specific active)            | same                  |
+| `ghost`       | `text-muted-foreground`                                      | `bg-surface-tinted hover:text-foreground` | (no specific active) | same                  |
 | `destructive` | `bg-destructive text-destructive-foreground` (*see note*)    | `bg-destructive/90`            | (no specific active)            | same                  |
 | `link`        | `text-primary underline-offset-4`                            | `underline`                    | (no underline change)           | same                  |
 
-> **Wart:** `secondary`, `outline`, and `ghost` all hover to `bg-accent` —
-> which is GSSG red. The intent here predates the Phase-17 color rebind;
-> these variants should hover to `bg-surface-tinted`, not `bg-accent`. The
-> Dashboard sidesteps this bug by not using these variants (EmptyState's
-> secondary button only appears in empty states, where the red flash is
-> rare).
+> Neutral variants (`secondary`, `outline`, `ghost`) hover to
+> `bg-surface-tinted`. They hovered to GSSG red (`bg-accent`) until the Books
+> workspace pass fixed it.
 >
 > **`destructive` variant** references `bg-destructive` and
 > `text-destructive-foreground`, which are **not defined** in the project's
@@ -1257,7 +1255,7 @@ border-b border-hairline px-4 py-3
 **Footer:**
 
 - Optional `"+ N more unread"` line when `total_unread > items.length`.
-- `<Link to="/ledger">` styled like the inline-button-link pattern, with
+- `<Link to="/ledger?tab=email">` styled like the inline-button-link pattern, with
   an `ArrowRight` icon. The arrow rotates 180° in RTL.
 
 **Open/close:**
@@ -2465,9 +2463,8 @@ documented.
   green / amber / red / blue backgrounds become harsh against `#131826`.
   Migrate to semantic soft-tones (`bg-success-soft text-success` etc.) —
   the WidgetCard delta pills already do this.
-- shadcn Button `secondary` / `outline` / `ghost` variants hover to
-  `bg-accent` (GSSG red) which is almost certainly a bug. Should hover
-  to `bg-surface-tinted`.
+- (Fixed) shadcn Button `secondary` / `outline` / `ghost` variants now hover to
+  `bg-surface-tinted` instead of `bg-accent` (GSSG red).
 - shadcn Button `destructive` variant references `bg-destructive` and
   `text-destructive-foreground` which **don't exist in @theme inline** —
   the variant is effectively unstyled. Either delete the variant or wire
@@ -2500,3 +2497,76 @@ will trip over them.
   intentional (per source comment) until a dedicated backend summary
   endpoint lands. Worth flagging in the variant matrix as "placeholder"
   rather than "live data".
+
+## 7. Ledger Books workspace
+
+**Sources:** `pages/ledger/LedgerPage.tsx`, `pages/ledger/BooksRoutingDesk.tsx`,
+`components/books/PurposeMark.tsx`.
+
+- Books is the first Ledger tab and the landing tab. Email opens for
+  `?tab=email`, `?mail=` or `?action=`; the resolved tab is pinned in the URL
+  with replace. Email hand-offs (`composePrefill`, `ledgerView` state) navigate
+  to `/ledger?tab=email` so the pin never rewrites their entry. Users without
+  `books.view` (and inmate reporters) land on Email.
+- Incoming / Done / Outgoing / Archived are personal routing scopes. Done means
+  the caller marked their received book done; Archived takes precedence over
+  Incoming and Done. Incoming shows the unread count as plain mono text.
+- **List.** One full-width list, no placeholder pane. Scope tabs and the search
+  field share one bar. From `lg` up, a sticky `aria-hidden` header and every row
+  share one grid template (`RECEIVED_GRID`):
+  `9.5rem` purpose, `10.5rem` reference, `1fr` subject, `minmax(7rem,12rem)`
+  sender, `6.5rem` confidentiality, `6rem` status, `6rem` sent date (end
+  aligned). Outgoing (`OUTGOING_GRID`) drops purpose and status and shows the
+  creator and created date. Below `lg` the same row stacks in three lines:
+  purpose, reference and date; subject; sender, confidentiality and status.
+  Rows are `<button>`s: `px-4 py-3 lg:px-6`, `hover:bg-surface-tinted`, inset
+  focus ring. Unread subjects are `font-semibold`. A paper count (`FileText` +
+  mono number + sr-only plural) follows the subject only when there is more
+  than one paper.
+- **Status** is text plus shape, never colour alone: New = `h-2 w-2` primary dot +
+  `font-semibold`; Read = muted text; Done = `CheckCheck` + `text-success`;
+  Archived = `Archive` icon.
+- **Purpose mark** (`PurposeMark`): bare lucide glyph (`h-4 w-4`, stroke 1.8) +
+  label, no background, no border, no radius. It sits in a fixed column so it
+  never competes with the confidentiality chip, which keeps its existing pill
+  (`ConfidentialityChip`, uppercase, tinted background; General renders nothing).
+  The glyph shape and label carry the meaning; the tone only helps scanning.
+  No new tokens.
+
+  | Purpose     | Glyph                | Glyph tone              | Label weight    | RTL                |
+  | ----------- | -------------------- | ----------------------- | --------------- | ------------------ |
+  | `info`      | `Eye`                | `text-muted-foreground` | `font-medium`   | unchanged          |
+  | `action`    | `ClipboardCheck`     | `text-primary`          | `font-semibold` | unchanged          |
+  | `reply`     | `MessageSquareReply` | `text-warning`          | `font-medium`   | `rtl:-scale-x-100` |
+  | `circulate` | `Megaphone`          | `text-success`          | `font-medium`   | `rtl:-scale-x-100` |
+
+  Glyphs avoid `Flag` (Email follow-up) and the chip icons (`Lock`, `UserRound`,
+  `Send`).
+- **Book view.** Clicking a row pushes `?book=` (`useUrlOverlay('book', ['view'])`)
+  and replaces the list and the Ledger tabs with a full-page view; the list stays
+  mounted but hidden. Toolbar Back and browser Back both pop to the list, which
+  keeps scope, search and scroll and returns focus to the opened row
+  (`aria-current`, `bg-primary-soft`), or to the scope tab when that row left
+  the scope.
+  1. One toolbar, `bg-surface-raised border-b px-3 py-2 lg:px-4`, `flex-wrap`:
+     Back to books (ghost), hairline divider, inbox actions (Mark as done is the
+     only `default` button), Send / Forward, reply actions; then at the inline
+     end Expand / Collapse (desktop) and Open in Records (ghost link,
+     `BookText`). On mobile the toolbar is sticky and wraps.
+  2. Title band `px-4 py-4 lg:px-6`: purpose mark, mono reference, confidentiality
+     chip, then the subject as `h2 text-xl font-semibold` (`max-w-[75ch]`,
+     wrapped in `<bdi>` so it aligns to the page start).
+  3. Body: the reused `RecordPaperViewer` (`mode="pane"`, `compact`,
+     `initialFit="width"`, capped at actual size) beside a Details aside
+     (`w-80 xl:w-96`, `border-s`, own scroll) holding the sender note, a
+     two-column `dl` (From, Sent, Opened, Done, Papers; outgoing books show
+     Created by, Created, Papers), recipients and thread. Mobile stacks the aside below a `65dvh`
+     (min `24rem`) document area and scrolls as a page.
+- Expand toggles `view=reader` with replace (not a history step) and hides the
+  Details aside so the document takes the full width.
+- List queries keep a 30-second fresh cache. Opening patches read state in that
+  cache rather than refetching the list, without clearing pending mutation
+  invalidation. Queue actions remove the completed row locally and open the next
+  book in place (replace), or return to the list when the scope is empty.
+- Dates are `DD/MM/YYYY` with Western digits (`formatDmy`, `dir="ltr"` mono) in
+  both languages, per §1.7.

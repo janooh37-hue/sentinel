@@ -19,7 +19,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, CalendarClock, ClipboardCheck, Flag, Inbox, Paperclip, Printer, ScanLine, ShieldCheck, Stamp } from 'lucide-react'
+import { ArrowRight, CalendarClock, ClipboardCheck, FileInput, Flag, Inbox, Paperclip, Printer, ScanLine, ShieldCheck, Stamp } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
@@ -33,6 +33,7 @@ import { useAwaitingReturnCount } from '@/pages/leaves/useAwaitingReturnCount'
 import { useFlagCount } from '@/pages/ledger/outlook/useFlagCount'
 import { useScanBack } from '@/pages/scanBack/useScanBack'
 import { useScanInboxCount } from '@/pages/scanInbox/useScanInboxCount'
+import { useInboxCount } from '@/pages/books/useInboxCount'
 import {
   formatRegisterMonth,
   inmateRegisterHref,
@@ -133,6 +134,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
   const scanInbox = useScanInboxCount(canScanDocuments)
   const followUps = useFlagCount(canViewLedger)
   const { count: scanBackCount } = useScanBack('mine', canViewBooks && canEditBooks)
+  const inboxUnread = useInboxCount(canViewBooks)
 
   // #31 — assignment-aware approvals summary. Never gated behind
   // books.approve: a review-only user's late feedback is just as actionable
@@ -197,7 +199,8 @@ function DefaultNavBellPopover(): React.JSX.Element {
     awaitingApproval === 0 &&
     followUps === 0 &&
     scanBackCount === 0 &&
-    awaitingViolationMonths === 0
+    awaitingViolationMonths === 0 &&
+    inboxUnread === 0
 
   return (
     <div ref={rootRef} className="relative">
@@ -211,7 +214,8 @@ function DefaultNavBellPopover(): React.JSX.Element {
           awaitingApproval +
           followUps +
           scanBackCount +
-          awaitingViolationMonths
+          awaitingViolationMonths +
+          inboxUnread
         }
         onClick={() => setOpen((v) => !v)}
       />
@@ -306,6 +310,33 @@ function DefaultNavBellPopover(): React.JSX.Element {
             </button>
           )}
 
+          {/* Records sent to me (direct send), unread */}
+          {inboxUnread > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                navigate('/ledger?tab=books&scope=incoming')
+              }}
+              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            >
+              <Avatar className="h-8 w-8 bg-primary-soft text-primary">
+                <AvatarFallback className="bg-transparent">
+                  <FileInput className="h-4 w-4" strokeWidth={1.8} />
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-[0.9em] font-semibold text-foreground">
+                  {t('books.inbox.sentToMe')}
+                </span>
+                <span className="text-[0.78em] text-muted-foreground">
+                  {t('books.inbox.unread', { count: inboxUnread })}
+                </span>
+              </div>
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
+            </button>
+          )}
+
           {/* Awaiting MY approval — #31, assignment-aware (sent access or any
               received kind), never merely books.approve */}
           {approvalsAvailable && awaitingApproval > 0 && (
@@ -368,7 +399,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
               type="button"
               onClick={() => {
                 setOpen(false)
-                navigate('/ledger', { state: { ledgerView: 'followups' } })
+                navigate('/ledger?tab=email', { state: { ledgerView: 'followups' } })
               }}
               className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
@@ -572,7 +603,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
             )}
             {canViewLedger ? (
               <Link
-                to="/ledger"
+                to="/ledger?tab=email"
                 onClick={() => setOpen(false)}
                 className="flex items-center justify-between px-4 py-2.5 text-sm text-primary transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none"
               >

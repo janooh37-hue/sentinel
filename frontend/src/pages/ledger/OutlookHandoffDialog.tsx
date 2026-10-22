@@ -1014,7 +1014,7 @@ export function OutlookHandoffDialog({
                 {handoffMutation.isPending ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Send className="h-3.5 w-3.5" />
+                  <Send className="h-3.5 w-3.5 rtl:-scale-x-100" />
                 )}
                 {t('ledger.outlook.handoff.submit')}
               </Button>

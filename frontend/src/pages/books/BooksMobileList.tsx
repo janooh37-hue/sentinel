@@ -22,6 +22,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { bidi } from '@/lib/bidi'
+import { pickEmployeeName } from '@/lib/employeeName'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SkeletonRow } from '@/components/ui/skeleton'
 import { PullToRefresh } from '@/components/refresh/PullToRefresh'
@@ -30,6 +31,8 @@ import { addToBasket } from '@/lib/emailBasket'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { reportReviewOf, sealDescriptor, signedSourceOf, type ReportReview } from './bookStateLabel'
+import { InboxUnreadDot } from './InboxUnreadDot'
+import { ConfidentialityChip } from '@/components/books/ConfidentialityChip'
 import { newRecordHref } from './newRecordHref'
 import { deleteBlockReason } from './recordDelete'
 import { useRecordDelete } from './RecordDeleteProvider'
@@ -225,9 +228,9 @@ export function BooksMobileList({
                     row={row}
                     isAr={isAr}
                     canSubmit={
-                      isInmateReporter
+                      row.can_write && (isInmateReporter
                         ? inmateReporterActionFor(row, userId) === 'edit-submit'
-                        : canSubmit
+                        : canSubmit)
                     }
                     highlighted={row.id === highlightedId || row.id === flashId}
                     selectMode={selectMode}
@@ -412,7 +415,7 @@ function BookMobileCard({
   onTogglePick,
   onSubmit,
 }: BookMobileCardProps): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const catLabel = isAr
     ? (row.category.name_ar ?? row.category.name_en)
     : (row.category.name_en ?? row.category.name_ar)
@@ -439,7 +442,8 @@ function BookMobileCard({
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         {/* ref + approval action */}
         <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-[0.85em] font-semibold text-primary">
+          <span className="inline-flex items-center font-mono text-[0.85em] font-semibold text-primary">
+            <InboxUnreadDot book={row} />
             {selectMode ? (
               <bdi dir="ltr">{row.ref_number}</bdi>
             ) : (
@@ -497,14 +501,15 @@ function BookMobileCard({
             {catLabel}
           </span>
           {row.direction && <DirectionPill direction={row.direction} t={t} />}
+          <ConfidentialityChip level={row.confidentiality} />
         </div>
 
         {/* creator · date · papers */}
         <p className="text-[0.72em] text-muted-foreground">
           <span>
             {t('books.record.createdBy')}{' '}
-            {row.created_by_name ? (
-              <bdi>{row.created_by_name}</bdi>
+            {row.created_by_name || row.created_by_name_ar ? (
+              <bdi>{pickEmployeeName({ name_en: row.created_by_name ?? '', name_ar: row.created_by_name_ar }, i18n.language)}</bdi>
             ) : (
               t('books.record.creatorUnknown')
             )}

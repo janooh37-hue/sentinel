@@ -23,10 +23,9 @@
  * reading-pane empty state (Phase 4). A people-less mail that still carries a
  * linked record shows the idle state PLUS the linked-records card.
  *
- * The panel owns its collapse chrome (persisted to localStorage). It is the 4th
- * child of the shell's pinned `dir="ltr"` container, so it never mirrors in
- * Arabic — only its leaf text re-flows (`dir="auto"`). Desktop only; mobile is
- * Task 4 (a Sheet, not a column).
+ * The panel owns its collapse chrome (persisted to localStorage). It is the
+ * shell's inline-end column, so it sits on the left in Arabic. Desktop only;
+ * mobile is Task 4 (a Sheet, not a column).
  *
  * Prototype reference: `.cx`/`.card`/`.sib`/`.rec`/`.vault`/`.cx-idle`
  * (docs/prototypes/ledger-outlook-redesign.html CSS 295–371, renderContext
@@ -173,7 +172,7 @@ export function ContextPanel({
           onClick={() => setCollapsed(false)}
           className="grid h-6 w-6 place-items-center rounded-md border border-border bg-surface text-muted-foreground transition-colors hover:bg-surface-tinted"
         >
-          <ChevronsRight className="h-3.5 w-3.5 rotate-180" aria-hidden />
+          <ChevronsRight className="h-3.5 w-3.5 rotate-180 rtl:-scale-x-100" aria-hidden />
         </button>
         <span
           className="mt-1 text-[0.62rem] font-semibold uppercase tracking-wider text-muted-foreground"
@@ -198,7 +197,7 @@ export function ContextPanel({
         onClick={() => setCollapsed(true)}
         className="grid h-6 w-6 place-items-center rounded-md border border-border bg-surface text-muted-foreground transition-colors hover:bg-surface-tinted"
       >
-        <ChevronsRight className="h-3.5 w-3.5" aria-hidden />
+        <ChevronsRight className="h-3.5 w-3.5 rtl:-scale-x-100" aria-hidden />
       </button>
     </div>
   )

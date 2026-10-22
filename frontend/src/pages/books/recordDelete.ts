@@ -5,7 +5,7 @@
  * A record is deletable iff it is not voided, its `approval_state` is one of
  * none / returned / rejected, and it has no active Word edit session (deleting
  * under a live WebDAV session would orphan the session). On top of that the
- * caller needs `books.delete` and a full-access, non-inmate-reporter view.
+ * caller needs `books.delete` and writable full access, without the inmate role.
  *
  * UI contract: `noCapability` / `restricted` hide the delete control;
  * `inFlight` / `wordSession` show it disabled with the reason (`deleteReasonKey`).
@@ -17,7 +17,7 @@ export type DeleteBlockReason = 'noCapability' | 'restricted' | 'inFlight' | 'wo
 /** The fields the guard reads; satisfied by `BookRead`. */
 export type DeletableBook = Pick<
   BookRead,
-  'approval_state' | 'access_scope' | 'voided_at' | 'edit_session'
+  'approval_state' | 'access_scope' | 'can_write' | 'voided_at' | 'edit_session'
 >
 
 const DELETABLE_STATES: Readonly<Record<string, true>> = {
@@ -35,7 +35,7 @@ export function deleteBlockReason(
   { has, isInmateReporter }: { has: (cap: string) => boolean; isInmateReporter: boolean },
 ): DeleteBlockReason | null {
   if (!has('books.delete')) return 'noCapability'
-  if (isInmateReporter || book.access_scope !== 'full') return 'restricted'
+  if (isInmateReporter || book.access_scope !== 'full' || !book.can_write) return 'restricted'
   if (book.voided_at || !DELETABLE_STATES[book.approval_state]) return 'inFlight'
   if (book.edit_session?.state === 'active') return 'wordSession'
   return null

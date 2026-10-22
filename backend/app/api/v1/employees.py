@@ -278,10 +278,10 @@ def update_employee(
 def get_employee_detail(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("employees.view"))],
+    user: Annotated[User, Depends(require_capability("employees.view"))],
 ) -> detail_schemas.EmployeeDetailRead:
     """Aggregate everything tied to an employee — for the Employee Detail page."""
-    detail = employee_detail_service.get_employee_detail(db, employee_id)
+    detail = employee_detail_service.get_employee_detail(db, employee_id, user=user)
     if detail is None:
         raise HTTPException(status_code=404, detail="Employee not found")
     return detail

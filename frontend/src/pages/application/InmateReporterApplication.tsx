@@ -207,6 +207,8 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
     attachments: null,
     classification_code: null,
     notify_employee: false,
+    // Reporter records stay General so the operators handling them can open them.
+    confidentiality: 'general',
   }), [editingBookId])
 
   const generateMutation = useMutation({
@@ -517,6 +519,7 @@ export function WordReportForm({ user, onBack }: { user: SessionUser; onBack: ()
       date,
       signer_employee_id: user.employee_id,
       sign: true,
+      confidentiality: 'general',
     }),
     onSuccess: (value) => {
       setError(null)

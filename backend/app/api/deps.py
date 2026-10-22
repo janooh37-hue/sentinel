@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
 from app.config import Settings, get_settings
-from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
+from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE, MANAGER_ROLE
 from app.db.models import User
 from app.db.session import get_db
 from app.services import auth_service, perm_service
@@ -105,6 +105,12 @@ def require_admin(user: Annotated[User, Depends(get_current_user)]) -> User:
     return user
 
 
+def require_admin_or_manager(user: Annotated[User, Depends(get_current_user)]) -> User:
+    if user.role not in (ADMIN_ROLE, MANAGER_ROLE):
+        raise AppError("FORBIDDEN", "Admin or manager access required.", http_status=403)
+    return user
+
+
 def require_capability(capability: str) -> Callable[..., User]:
     """Build a dependency that 401s if anon, 403s if the user lacks ``capability``.
 
@@ -133,6 +139,7 @@ __all__ = [
     "get_current_user",
     "get_optional_user",
     "require_admin",
+    "require_admin_or_manager",
     "require_capability",
     "settings_dep",
 ]

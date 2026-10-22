@@ -27,7 +27,11 @@ def test_static_catalog_has_complete_bilingual_request_policy_metadata():
     assert {cap.id for cap in CAPABILITIES if cap.sensitive} == set(
         permissions.SENSITIVE_CAPABILITY_IDS
     )
-    assert all(cap.requestable for cap in CAPABILITIES if not cap.sensitive)
+    # books.secret is the one non-sensitive cap that can't be self-requested:
+    # clearance is granted by an admin or manager, never asked for.
+    assert {cap.id for cap in CAPABILITIES if not cap.sensitive and not cap.requestable} == {
+        "books.secret"
+    }
 
 
 def test_static_role_default_counts_are_preserved():

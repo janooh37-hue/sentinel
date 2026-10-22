@@ -64,8 +64,8 @@ export interface PdfPagesProps {
   sizing: PdfSizing
   className?: string
   pageClassName?: string
-  /** Page boxes were laid out (or re-laid out) — overlay hosts re-measure. */
-  onLayout?: () => void
+  /** Page boxes were laid out (or re-laid out); receives the first page's width at scale 1. */
+  onLayout?: (naturalWidth: number) => void
   /** The page nearest the top of the viewport changed. */
   onCurrentPage?: (page: number, total: number) => void
   /**
@@ -220,7 +220,7 @@ export function PdfPages({
   }, [sizes])
 
   useLayoutEffect(() => {
-    if (sizes.length > 0) onLayoutRef.current?.()
+    if (sizes.length > 0) onLayoutRef.current?.(sizes[0].width)
   }, [sizes, rasterWidth])
 
   // 4 — paint: the near pages first; with `eager` every other page after them.

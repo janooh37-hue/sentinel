@@ -134,7 +134,11 @@ def _entry_out(entry: register.RegisterEntry) -> RegisterEntryOut:
     )
 
 
-def _month_out(month: register.MonthRegister, *, today: date | None = None) -> MonthOut:
+def _month_out(
+    month: register.MonthRegister, *, db: Session, actor: User, today: date | None = None
+) -> MonthOut:
+    fingerprint = month.projection_fingerprint
+    month = register.redact_month(db, actor, month)
     counts = month.counts
     return MonthOut(
         year=month.year,
@@ -148,7 +152,7 @@ def _month_out(month: register.MonthRegister, *, today: date | None = None) -> M
         reopened_by_name=month.reopened_by_name,
         force_reason=month.force_reason,
         force_closed=month.force_reason is not None,
-        projection_fingerprint=month.projection_fingerprint,
+        projection_fingerprint=fingerprint,
         wing_summary=month.wing_summary,
         workflow=month.workflow,
         first_closable_date=register.first_closable_date(month.year, month.month),
@@ -242,7 +246,7 @@ def get_month(
     _user: Annotated[User, Depends(register_reader)],
     db: Annotated[Session, Depends(get_db)],
 ) -> MonthOut:
-    return _month_out(register.build_month(db, year, month, actor=_user))
+    return _month_out(register.build_month(db, year, month, actor=_user), db=db, actor=_user)
 
 
 @router.get("/statistics/{year}/{month}/export")
@@ -269,7 +273,7 @@ def export_month(
             http_status=422,
         )
     payload, filename = register.export_workbook(
-        db, year, month, language=language, populations=scope
+        db, year, month, language=language, populations=scope, actor=_user
     )
     return Response(
         content=payload,
@@ -294,7 +298,9 @@ def prepare_month(
     user: Annotated[User, Depends(register_reader)],
     db: Annotated[Session, Depends(get_db)],
 ) -> MonthOut:
-    return _month_out(register.prepare_month(db, year, month, actor=user, **body.model_dump()))
+    return _month_out(
+        register.prepare_month(db, year, month, actor=user, **body.model_dump()), db=db, actor=user
+    )
 
 
 @router.post("/statistics/{year}/{month}/review", response_model=MonthOut)
@@ -305,7 +311,9 @@ def review_month(
     user: Annotated[User, Depends(register_reader)],
     db: Annotated[Session, Depends(get_db)],
 ) -> MonthOut:
-    return _month_out(register.review_month(db, year, month, actor=user, **body.model_dump()))
+    return _month_out(
+        register.review_month(db, year, month, actor=user, **body.model_dump()), db=db, actor=user
+    )
 
 
 @router.post("/statistics/{year}/{month}/return", response_model=MonthOut)
@@ -316,7 +324,9 @@ def return_month(
     user: Annotated[User, Depends(register_reader)],
     db: Annotated[Session, Depends(get_db)],
 ) -> MonthOut:
-    return _month_out(register.return_month(db, year, month, actor=user, **body.model_dump()))
+    return _month_out(
+        register.return_month(db, year, month, actor=user, **body.model_dump()), db=db, actor=user
+    )
 
 
 @router.post("/statistics/{year}/{month}/approve", response_model=MonthOut)
@@ -327,7 +337,9 @@ def approve_month(
     user: Annotated[User, Depends(register_reader)],
     db: Annotated[Session, Depends(get_db)],
 ) -> MonthOut:
-    return _month_out(register.approve_month(db, year, month, actor=user, **body.model_dump()))
+    return _month_out(
+        register.approve_month(db, year, month, actor=user, **body.model_dump()), db=db, actor=user
+    )
 
 
 @router.get("/statistics/{year}/{month}/candidates", response_model=list[WorkflowCandidateOut])
@@ -349,7 +361,9 @@ def reopen_month(
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[Session, Depends(get_db)],
 ) -> MonthOut:
-    return _month_out(register.reopen_month(db, year, month, actor=admin, **body.model_dump()))
+    return _month_out(
+        register.reopen_month(db, year, month, actor=admin, **body.model_dump()), db=db, actor=admin
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -384,7 +398,7 @@ def create_manual_row(
         reporter_id=body.reporter_id,
         details_text=body.details_text,
     )
-    return _month_out(register.build_month(db, year, month, actor=user))
+    return _month_out(register.build_month(db, year, month, actor=user), db=db, actor=user)
 
 
 @router.patch("/statistics/manual-rows/{row_id}", response_model=MonthOut)
@@ -400,7 +414,7 @@ def update_manual_row(
         actor=user,
         changes=body.model_dump(exclude_unset=True),
     )
-    return _month_out(register.build_month(db, row.year, row.month, actor=user))
+    return _month_out(register.build_month(db, row.year, row.month, actor=user), db=db, actor=user)
 
 
 @router.delete("/statistics/manual-rows/{row_id}", response_model=MonthOut)
@@ -411,7 +425,7 @@ def delete_manual_row(
 ) -> MonthOut:
     year, month = register.manual_row_month(db, row_id)
     register.delete_manual_row(db, row_id, actor=user)
-    return _month_out(register.build_month(db, year, month, actor=user))
+    return _month_out(register.build_month(db, year, month, actor=user), db=db, actor=user)
 
 
 @router.post("/statistics/completions/{book_id}", response_model=MonthOut)
@@ -433,4 +447,4 @@ def complete_import(
         inmates=[item.model_dump() for item in body.inmates],
     )
     year, month = register.record_month(db, book)
-    return _month_out(register.build_month(db, year, month, actor=user))
+    return _month_out(register.build_month(db, year, month, actor=user), db=db, actor=user)

@@ -8,7 +8,7 @@ import { BottomTabBar } from '@/components/shell/BottomTabBar'
 import { LockOverlay } from '@/components/shell/LockOverlay'
 import { MobileTopBar } from '@/components/shell/MobileTopBar'
 import { NavDrawer } from '@/components/shell/NavDrawer'
-import { RequireCapability } from '@/components/shell/RequireCapability'
+import { RequireAnyCapability, RequireCapability } from '@/components/shell/RequireCapability'
 import { TopNav } from '@/components/shell/TopNav'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { ShortcutsHelpDialog } from '@/components/ui/shortcuts-help'
@@ -106,6 +106,7 @@ const EmployeeDetailPage = lazy(loadEmployeeDetailPage)
 const TimesheetPage = lazy(loadTimesheetPage)
 const AccessRequestsPage = lazy(loadAccessRequestsPage)
 const PermissionsPage = lazy(loadPermissionsPage)
+const SecretClearancePage = lazy(() => import('@/pages/access/SecretClearancePage').then((m) => ({ default: m.SecretClearancePage })))
 const DebugConsolePage = lazy(loadDebugConsolePage)
 const ExpiryPage = lazy(loadExpiryPage)
 const IntakePage = lazy(loadIntakePage)
@@ -487,9 +488,9 @@ function Shell(): React.JSX.Element {
               <Route
                 path="/ledger"
                 element={
-                  <RequireCapability cap="ledger.view">
+                  <RequireAnyCapability caps={['ledger.view', 'books.view']}>
                     <LedgerRoute />
-                  </RequireCapability>
+                  </RequireAnyCapability>
                 }
               />
               <Route
@@ -564,6 +565,16 @@ function Shell(): React.JSX.Element {
                   <RequireCapability cap="users.manage">
                     <PermissionsPage />
                   </RequireCapability>
+                }
+              />
+              {/* Role-gated (admin or manager), not capability-gated: the API
+                  allows exactly these roles to grant/remove Secret clearance. */}
+              <Route
+                path="/secret-clearance"
+                element={
+                  user?.role === 'admin' || user?.role === 'manager'
+                    ? <SecretClearancePage />
+                    : <NotFoundPage />
                 }
               />
               <Route path="*" element={<NotFoundPage />} />

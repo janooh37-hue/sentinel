@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 
 import { api, apiErrorMessage, ApiError, type PermitRead, type PermitValidityPeriod } from '@/lib/api'
 import { PermitDocumentVersions } from './PermitDocumentVersions'
+import { PermitSendButton } from './PermitSendButton'
 import { RowDocButton } from './RowDocButton'
 import {
   DialogRoot,
@@ -965,7 +966,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
         </div>
 
         {/* Footer actions */}
-        {permit && (canDelete || canEdit || canRevoke) && (
+        {permit && (canDelete || canEdit || canRevoke || permit.book_id != null) && (
           <div className="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3">
             {canDelete && (
               <Button
@@ -988,6 +989,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
                 {t('permits.actions.printPermit')}
               </Button>
             )}
+            {permit.book_id != null && <PermitSendButton bookId={permit.book_id} />}
             {!isRevoked && (
               <>
                 {canSend && (

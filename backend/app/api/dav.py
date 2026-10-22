@@ -26,8 +26,10 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from app.api.errors import AppError
+from app.db.models import Book, User
 from app.db.session import get_db
-from app.services import word_session_repo
+from app.services import book_service, word_session_repo
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -89,14 +91,23 @@ async def dav_handler(
     if method == "OPTIONS":
         return respond(Response(status_code=200, headers=_OPTIONS_HEADERS))
 
+    sess = word_session_repo.get_active_session_by_token(db, token)
+    if sess is None:
+        return respond(Response(status_code=404))
+    if sess.book_id is not None:
+        owner = db.get(User, sess.user_id)
+        book = db.get(Book, sess.book_id)
+        if owner is None or book is None or book.deleted_at is not None:
+            return respond(Response(status_code=404), sess.id)
+        try:
+            book_service.require_full_book_access(db, owner, book, write=True)
+        except AppError:
+            return respond(Response(status_code=404), sess.id)
+
     # ------------------------------------------------------------------
     # Collection path  (/dav/{token}/ — filename is empty)
     # ------------------------------------------------------------------
     if filename == "":
-        sess = word_session_repo.get_active_session_by_token(db, token)
-        if sess is None:
-            return respond(Response(status_code=404))
-
         if method == "PROPFIND":
             xml = (
                 '<?xml version="1.0" encoding="utf-8"?>'
@@ -119,9 +130,6 @@ async def dav_handler(
     # ------------------------------------------------------------------
     # File path  (/dav/{token}/{filename})
     # ------------------------------------------------------------------
-    sess = word_session_repo.get_active_session_by_token(db, token)
-    if sess is None:
-        return respond(Response(status_code=404))
 
     path = sess.working_path
 

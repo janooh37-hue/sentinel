@@ -262,6 +262,16 @@ export function paperResetSignature(book: Pick<BookLike, 'id' | 'approval_state'
   return `${book.id}:${book.approval_state}:${papers.map(paperKey).join()}`
 }
 
+/** Saves a paper through a transient anchor (the same `download` the viewer uses). */
+export function downloadPaper(paper: Paper): void {
+  const a = document.createElement('a')
+  a.href = paper.downloadUrl
+  a.download = paper.filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
 /**
  * Count papers without building URL strings — for per-row chips in long lists.
  * Mirrors `papersOf`, including its `inmateReporter` rules, so every surface

@@ -74,6 +74,7 @@ from app.db.models import (
 from app.db.repos._locking import begin_immediate_if_idle
 from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
+from app.schemas.book import BookConfidentiality
 from app.schemas.employee import EMPLOYEE_STATUS_RESIGNED, WORKING_STATUSES
 from app.schemas.linked_document import LinkedDocumentRead
 from app.services import (
@@ -1650,7 +1651,9 @@ def generate_document(
     attachments: Sequence[GenerateAttachmentSpec] | None = None,
     return_for_leave_id: int | None = None,
     classification_code: str | None = None,
+    confidentiality: BookConfidentiality = "general",
     converter: artifact_service.PdfConverter | None = None,
+    defer_commit: bool = False,
     notify_employee: bool = True,
 ) -> GenerationResult:
     """Orchestrate the v4 doc generation pipeline.
@@ -1669,11 +1672,18 @@ def generate_document(
         sentinel ``ref_number="DRAFT"`` and is the absence of a Book row that
         identifies it as un-committed.
 
+    ``defer_commit`` leaves persistence in the caller's transaction, allowing a
+    generated book to be linked to its source record atomically. This mode is
+    limited to new books without attachments; those workflows own file cleanup.
+
     ``current_user`` is the presentation and stamping identity. When set, their
     ``employee_id`` (G-number) is injected as ``data["submitter_g"]`` for the
     template footer; it falls back to ``""`` if absent or unlinked. Interactive
     callers separately pass ``record_access_user`` to enforce revision and source
     record authorization. Trusted system workflows leave that identity unset.
+
+    ``confidentiality`` sets the header level mark on primary and companion
+    DOCX files. Revisions retain the existing book's level instead.
 
     Round 2 — Fix E: ``embed_signature`` replaces the old ``hand_sign`` kwarg
     with inverted semantics. ``embed_signature[entity]=True`` opts INTO
@@ -1702,6 +1712,8 @@ def generate_document(
     (``Document.leave_id = return_for_leave_id``). leave_service.file_return
     then completes that leave.
     """
+    if defer_commit and (revise_of_book_id is not None or attachments):
+        raise ValueError("Deferred generation requires a new book without attachments.")
     embed_signature = dict(embed_signature or {})
     _raw_manager_embed_requested = embed_signature.get("manager") is True
     _raw_employee_embed_requested = embed_signature.get("employee") is True
@@ -2071,6 +2083,7 @@ def generate_document(
         data=primary_data,
         destination=destination,
         stamps=artifact_service.StampPlan(
+            level=revise_book.confidentiality if revise_book is not None else confidentiality,
             reference=raw_ref if commit else None,
             header_reference=commit
             and _classification is None
@@ -2248,6 +2261,7 @@ def generate_document(
                 ref_number=raw_ref,
                 classification_code=_classification.code if _classification else None,
                 subject=_subject,
+                confidentiality=confidentiality,
                 direction="outgoing",
                 stamp_style=STAMP_STYLE_HEADER,
                 employee_id=employee_id,
@@ -2628,6 +2642,9 @@ def generate_document(
                 data=data,
                 destination=out_dir / comp_filename,
                 stamps=artifact_service.StampPlan(
+                    level=(
+                        revise_book.confidentiality if revise_book is not None else confidentiality
+                    ),
                     reference=raw_ref if commit else None,
                     header_reference=commit and _classification is None,
                     aztec_corner=(aztec_corner_for(companion_template_id) if commit else None),
@@ -2700,7 +2717,10 @@ def generate_document(
             fields,
             actor_user_id=current_user.id if current_user is not None else None,
         )
-    db.commit()
+    if defer_commit:
+        db.flush()
+    else:
+        db.commit()
     db.refresh(doc_row)
     if gated_leave_changed and employee_id is not None:
         from app.services import leave_service
@@ -2835,6 +2855,7 @@ def _sign_authored_docx(
             source_path=source,
             destination=destination,
             stamps=artifact_service.StampPlan(
+                level=book.confidentiality,
                 signature=artifact_service.SignatureStamp(
                     image_path=Path(signer_signature_path),
                     anchor_names=tuple(names),
@@ -2845,7 +2866,7 @@ def _sign_authored_docx(
                     ),
                     keep_manager_block_together=keep_together,
                     manager_title=manager_title,
-                )
+                ),
             ),
             converter=converter or convert_docx_to_pdf,
         )
@@ -2987,6 +3008,12 @@ def render_signed_artifact(
         data["today"] = signed_on.strftime("%d/%m/%Y")
     # Inject the approver's signature into the manager signature slot.
     data["sig1_path"] = signer_signature_path
+    if template_id in CLASSIFIED_BOOK_FORMS:
+        # No current_user here: the footer keeps the submitter's G-number, as
+        # printed on the unsigned paper.
+        from app.services import book_service
+
+        data["submitter_g"] = book_service.submitter_g_number(db, book) or ""
 
     # Resolve the classified papers' recipient_id → recipient_name on the
     # REQUEST session (mirrors the generate path) so the adapter never opens a
@@ -3018,6 +3045,7 @@ def render_signed_artifact(
         data=data,
         destination=out_dir / docx_name.replace(".docx", "_signed.docx"),
         stamps=artifact_service.StampPlan(
+            level=book.confidentiality,
             reference=book.ref_number,
             header_reference=template_id not in CLASSIFIED_BOOK_FORMS
             and template_id not in VEHICLE_LETTER_FORMS,

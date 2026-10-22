@@ -74,7 +74,7 @@ export function WordSessionActions({
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
-  if (book.voided_at || book.edit_session?.state !== 'active') return null
+  if (!book.can_write || book.voided_at || book.edit_session?.state !== 'active') return null
 
   const busy = finishMutation.isPending || discardMutation.isPending
 
@@ -162,7 +162,7 @@ export function WordReopenButton({
   })
   const hasActiveSession = book.edit_session?.state === 'active'
   const isFinished = ((book.versions?.length ?? 0) > 0 || book.is_word_book) && !hasActiveSession
-  const eligible = isFinished && !book.voided_at
+  const eligible = book.can_write && isFinished && !book.voided_at
   const label = t('books.word.editNewVersion')
   const title = isMobile ? t('books.word.needsPc') : label
   const disabled = isMobile === true || reopenMutation.isPending
@@ -186,7 +186,7 @@ export function WordReopenButton({
   // Reopen flips `book.edit_session` active via the `invalidate()` refetch,
   // often before the user sees the dialog (always when a lock defers it):
   // keep the retained session mounted instead of reading that as "nothing to show".
-  if (book.voided_at || (!isFinished && reopenSession == null)) return null
+  if (!book.can_write || book.voided_at || (!isFinished && reopenSession == null)) return null
 
   return (
     <>

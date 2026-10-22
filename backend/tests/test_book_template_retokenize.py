@@ -65,9 +65,7 @@ def test_rendered_general_book_retokenizes_header_block_and_neutralizes_jinja(tm
     )
     doc = Document(str(finished))
     office_line = next(
-        p
-        for p in _header_copies_of(doc)["Fallback"]
-        if "مكتب ادارة الوثبة" in p.text
+        p for p in _header_copies_of(doc)["Fallback"] if "مكتب ادارة الوثبة" in p.text
     )
     office_line.add_run(" {{ 7*7 }}")
     doc.save(str(finished))
@@ -226,12 +224,49 @@ def test_date_token_run_not_forced_ltr(tmp_path):
     assert token_run.font.rtl is None
 
 
-def test_footer_g_token_is_not_inserted(tmp_path):
+def _footer_texts(docx_path: Path) -> list[str]:
+    from docx.oxml.ns import qn
+
+    section = Document(str(docx_path)).sections[0]
+    return [
+        "".join(t.text or "" for t in footer.part.element.iter(qn("w:t")))
+        for footer in (section.footer, section.first_page_footer)
+    ]
+
+
+def test_saved_general_book_footer_prints_new_authors_g_on_every_page(tmp_path):
+    from app.core.docx_engine import DocxEngine
+    from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
+
+    finished = tmp_path / "finished.docx"
+    DocxEngine(TEMPLATES_DIR).fill(
+        "General Book",
+        {
+            "ref": "1/5/141",
+            "date": "21-09-2026",
+            "body": GENERAL_BOOK_BODY_SENTINEL,
+            "body_html": "<p>نص الكتاب</p>",
+            "submitter_g": "G3082",
+        },
+        finished,
+    )
+    assert all("G3082" in text for text in _footer_texts(finished))
+
+    retokenize_general_book(finished)
+    retokenize_general_book(finished)  # idempotent: no second G-number cell
+    validate_book_template(finished)
+    rendered = tmp_path / "rendered.docx"
+    render(finished, {"submitter_g": "G-7777"}, rendered, sandboxed=True)
+
+    for text in _footer_texts(rendered):
+        assert text.count("G-7777") == 1
+        assert "G3082" not in text
+
+
+def test_hand_made_template_footer_gets_g_token(tmp_path):
     p = _finished_book(tmp_path)
     retokenize_general_book(p)
-    doc = Document(str(p))
-    footer_text = "\n".join(para.text for s in doc.sections for para in s.footer.paragraphs)
-    assert "{{ submitter_g }}" not in footer_text
+    assert "{{ submitter_g }}" in _footer_texts(p)[0]
 
 
 def test_validate_accepts_good_template(tmp_path):
@@ -244,8 +279,6 @@ def test_validate_rejects_unretokenized_doc(tmp_path):
     p = _finished_book(tmp_path)
     with pytest.raises(ValueError):
         validate_book_template(p)  # no tokens → dummy values never render
-
-
 
 
 def test_ref_font_matches_date_font_on_existing_ref_line(tmp_path):
@@ -266,9 +299,7 @@ def test_ref_font_matches_date_font_on_existing_ref_line(tmp_path):
     doc.save(str(p))
     retokenize_general_book(p)
     doc2 = Document(str(p))
-    ref_para = next(
-        pp for pp in _header_copies_of(doc2)["Fallback"] if "{{ ref }}" in pp.text
-    )
+    ref_para = next(pp for pp in _header_copies_of(doc2)["Fallback"] if "{{ ref }}" in pp.text)
     ref_run = next(r for r in ref_para.runs if "{{ ref }}" in r.text)
     assert ref_run.font.size == Pt(12)
 

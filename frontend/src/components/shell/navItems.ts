@@ -18,13 +18,14 @@ export interface NavItem {
   Icon: LucideIcon
   /** Optional capability gate. When set, only users with this capability see the item. */
   cap?: string
+  anyCaps?: readonly string[]
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/', key: 'nav.dashboard', Icon: LayoutDashboard },
   { to: '/employees', key: 'nav.employees', Icon: Users, cap: 'employees.view' },
   { to: '/vehicles', key: 'nav.vehicles', Icon: Car, cap: 'vehicles.view' },
-  { to: '/ledger', key: 'nav.ledger', Icon: Mail, cap: 'ledger.view' },
+  { to: '/ledger', key: 'nav.ledger', Icon: Mail, anyCaps: ['ledger.view', 'books.view'] },
   { to: '/leaves', key: 'nav.leaves', Icon: CalendarDays, cap: 'leaves.view' },
   { to: '/services', key: 'nav.services', Icon: FileText, cap: 'documents.generate' },
   { to: '/books', key: 'nav.records', Icon: BookText, cap: 'books.view' },

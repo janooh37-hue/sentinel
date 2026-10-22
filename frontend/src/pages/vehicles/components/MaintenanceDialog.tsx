@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
-import type { VehicleListItem, VehicleMaintenanceRead } from '@/lib/api'
+import type { VehicleListItem, VehicleMaintenanceRead, VehicleMaintenanceRequestRead } from '@/lib/api'
 
 import {
   DOCUMENT_ACCEPT,
@@ -80,6 +80,7 @@ interface Props {
   onOpenChange: (open: boolean) => void
   /** Fixed vehicle (vehicle file), or `null` to let the operator choose. */
   vehicle?: MaintenanceDialogVehicle | null
+  request?: VehicleMaintenanceRequestRead | null
   onSaved?: (record: VehicleMaintenanceRead) => void
 }
 
@@ -87,6 +88,7 @@ export function MaintenanceDialog({
   open,
   onOpenChange,
   vehicle = null,
+  request = null,
   onSaved,
 }: Props): React.JSX.Element {
   const { t } = useTranslation()
@@ -113,6 +115,7 @@ export function MaintenanceDialog({
       {options ? (
         <MaintenanceForm
           locked={vehicle}
+          request={request}
           options={options}
           onSaved={onSaved}
           onOpenChange={onOpenChange}
@@ -130,12 +133,14 @@ export function MaintenanceDialog({
 
 function MaintenanceForm({
   locked,
+  request,
   options,
   onSaved,
   onOpenChange,
   onBusyChange,
 }: {
   locked: MaintenanceDialogVehicle | null
+  request: VehicleMaintenanceRequestRead | null
   options: readonly VehicleListItem[]
   onSaved?: (record: VehicleMaintenanceRead) => void
   onOpenChange: (open: boolean) => void
@@ -160,8 +165,8 @@ function MaintenanceForm({
     defaultValues: {
       vehicle_id: String(locked?.id ?? options[0]?.id ?? ''),
       date: todayIso(),
-      type: 'service',
-      odometer_km: '',
+      type: request?.type ?? 'service',
+      odometer_km: request?.odometer_km == null ? '' : String(request.odometer_km),
       cost: '0',
       vendor_ar: '',
       vendor_en: '',
@@ -187,6 +192,7 @@ function MaintenanceForm({
         vendor_en: values.vendor_en || null,
         next_due: values.next_due || null,
         receipt_file_id: receiptFileId,
+        ...(request ? { request_id: request.id } : {}),
       })
     },
     onSuccess: (record) => {

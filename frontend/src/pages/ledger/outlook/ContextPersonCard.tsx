@@ -103,7 +103,7 @@ export function ContextPersonCard({ employeeId, onNavigate, onEmail }: Props): R
   const headerRole = emp ? pickPosition(emp, lang) : null
 
   return (
-    <div className="border-b border-border bg-surface" dir="ltr">
+    <div className="border-b border-border bg-surface">
       {/* Clickable header — the whole row toggles the card. */}
       <button
         type="button"
@@ -143,7 +143,7 @@ export function ContextPersonCard({ employeeId, onNavigate, onEmail }: Props): R
           </span>
         </span>
         <ChevronRight
-          className={`h-4 w-4 flex-none text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`}
+          className={`h-4 w-4 flex-none text-muted-foreground transition-transform ${open ? 'rotate-90' : 'rtl:-scale-x-100'}`}
           aria-hidden
         />
       </button>
@@ -181,7 +181,7 @@ function PersonDetail({
   onNavigate,
   onEmail,
 }: PersonDetailProps): React.JSX.Element {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
 
   if (isLoading) {
     return (
@@ -215,15 +215,8 @@ function PersonDetail({
         </Badge>
       </div>
 
-      {/* 2×2 facts grid — backed fields only; null → "—". The panel chrome is
-          pinned LTR (Outlook-no-mirror), so without an explicit dir the labels
-          stay LTR-aligned (left) while `dir="auto"` values flip to the RTL edge
-          (right) in Arabic — the value no longer sits under its label. Anchoring
-          the grid to the language direction aligns label + value to the same
-          start edge (and flows the 2 columns RTL, which is correct for Arabic).
-          Per CLAUDE.md this is in-spec: only the chrome STRUCTURE stays LTR;
-          Arabic TEXT inside panes is right-aligned. */}
-      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5" dir={i18n.dir()}>
+      {/* 2×2 facts grid — backed fields only; null → "—". */}
+      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5">
         <Fact testid="cx-fact-joined" label={t('ledger.outlook.facts.joined')} value={joined} />
         <Fact testid="cx-fact-mobile" label={t('ledger.outlook.facts.mobile')} value={orDash(emp.contact)} mono />
         <Fact testid="cx-fact-nationality" label={t('ledger.outlook.facts.nationality')} value={orDash(emp.nationality)} />
@@ -279,10 +272,8 @@ function PersonDetail({
                 <span aria-hidden>{activityEmoji(a.kind)}</span>
                 {a.summary}
               </span>
-              {/* dir="ltr" + stripped bidi marks. The context panel chrome is
-                  pinned LTR (the Outlook-no-mirror rule), but the Arabic medium
-                  date is numeric (DD/MM/YYYY) and carries embedded RLM marks
-                  that scramble it to "212026/05/" inside an LTR context.
+              {/* dir="ltr" + stripped bidi marks: the Arabic medium date is
+                  numeric (DD/MM/YYYY) and its embedded RLM marks scramble it.
                   Isolating the span as LTR renders 21/05/2026 cleanly in both
                   languages (English medium uses a month name and is unaffected). */}
               <span className="flex-none text-[0.68rem] text-muted-foreground/70" dir="ltr">

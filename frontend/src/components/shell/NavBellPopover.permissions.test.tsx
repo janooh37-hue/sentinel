@@ -135,6 +135,8 @@ it('requires books.edit for scan-back and documents.scan for scan-inbox', async 
 
   expect(scanBack).toHaveBeenCalledWith('mine', false)
   expect(scanInboxCount).toHaveBeenCalledWith(false)
+  expect(api.getLedgerUnreadRecent).not.toHaveBeenCalled()
+  expect(flagCount).toHaveBeenCalledWith(false)
   await userEvent.click(screen.getByRole('button', { name: /notification/i }))
   expect(screen.queryByText('Signed copy not filed')).not.toBeInTheDocument()
   expect(screen.queryByText('Scan inbox')).not.toBeInTheDocument()

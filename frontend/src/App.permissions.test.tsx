@@ -106,6 +106,7 @@ const routes = [
   ['/scan-back', ['books.view', 'books.edit'], 'scanback-page'],
   ['/leaves', ['leaves.view'], 'leaves-page'],
   ['/ledger', ['ledger.view'], 'ledger-page'],
+  ['/ledger', ['books.view'], 'ledger-page'],
   ['/settings', ['settings.view'], 'settings-page'],
   ['/expiry', ['expiry.view'], 'expiry-page'],
   ['/permissions', ['users.manage'], 'permissions-page'],

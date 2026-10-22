@@ -27,7 +27,8 @@ it, and the other forms keep the Aztec until their papers are redesigned.
   and `zxing-cpp` must be installed in the runtime venv or nothing decodes.
 - The paper date must be persisted at first commit; a re-render at signing may
   not move it, or the barcode would disagree with the paper.
-- The redesigned paper carries no submitter G-number, so `_adapt_general_book`
-  blanks `submitter_g` outright (not just skipping the page-1 → pages-2+ footer
-  sync) and `retokenize_general_book` drops the token from saved templates. The
-  other forms still print it.
+- The paper prints the submitter G-number like the Report: a `{{ submitter_g }}`
+  cell at the end of the contact strip in both the first-page and the default
+  footer, so no page-1 → pages-2+ footer sync is needed. `retokenize_general_book`
+  keeps or inserts that cell in saved templates, and startup adds it to library
+  templates saved while the paper printed none (2026-10-13 amendment).

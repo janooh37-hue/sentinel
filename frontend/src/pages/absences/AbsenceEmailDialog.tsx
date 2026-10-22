@@ -74,7 +74,7 @@ export function AbsenceEmailDialog({ open, rows, onOpenChange, draftOverrides }:
   )
 
   const openInEmail = (): void => {
-    navigate('/ledger', {
+    navigate('/ledger?tab=email', {
       state: {
         composePrefill: {
           subject,

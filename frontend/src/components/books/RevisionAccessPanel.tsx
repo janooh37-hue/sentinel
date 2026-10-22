@@ -19,6 +19,7 @@ import { ShieldCheck, X } from 'lucide-react'
 
 import { api, apiErrorMessage, type BookRevisionAccessRead } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { pickEmployeeName } from '@/lib/employeeName'
 
 interface Props {
   bookId: number
@@ -44,7 +45,7 @@ const STATE_LABEL_KEYS: Record<string, string> = {
 }
 
 export function RevisionAccessPanel({ bookId, onClose }: Props): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const [revokeTarget, setRevokeTarget] = useState<BookRevisionAccessRead | null>(null)
   const [reason, setReason] = useState('')
@@ -145,7 +146,7 @@ export function RevisionAccessPanel({ bookId, onClose }: Props): React.JSX.Eleme
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 text-[0.82em] font-medium text-foreground">
-                            <bdi>{grant.user_name ?? `#${grant.user_id}`}</bdi>
+                            <bdi>{pickEmployeeName({ name_en: grant.user_name ?? '', name_ar: grant.user_name_ar }, i18n.language) || `#${grant.user_id}`}</bdi>
                             <span className="rounded-full bg-surface-tinted px-1.5 py-0.5 text-[0.7em] font-semibold text-muted-foreground">
                               {grant.kind === 'approver'
                                 ? t('books.approvals.subTabSign')
@@ -186,7 +187,7 @@ export function RevisionAccessPanel({ bookId, onClose }: Props): React.JSX.Eleme
             {revokeTarget && (
               <div className="rounded-lg border border-accent/40 bg-accent/5 p-3.5">
                 <p className="mb-2 text-[0.82em] font-medium text-foreground">
-                  {t('books.approval.revokeAccess')} — <bdi>{revokeTarget.user_name ?? `#${revokeTarget.user_id}`}</bdi>
+                  {t('books.approval.revokeAccess')} — <bdi>{pickEmployeeName({ name_en: revokeTarget.user_name ?? '', name_ar: revokeTarget.user_name_ar }, i18n.language) || `#${revokeTarget.user_id}`}</bdi>
                 </p>
                 <label
                   htmlFor="revoke-access-reason"

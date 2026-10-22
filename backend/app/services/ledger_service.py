@@ -29,8 +29,9 @@ from sqlalchemy.orm import Session
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS
-from app.db.models import Book, Employee, LedgerEntry, LedgerFlag
+from app.db.models import Book, Employee, LedgerEntry, LedgerFlag, User
 from app.schemas.ledger import LedgerEntryCreate, LedgerEntryUpdate
+from app.services import book_service
 
 log = logging.getLogger(__name__)
 
@@ -44,9 +45,9 @@ _UNSAFE_CHARS = re.compile(
     # Path separators / control chars PLUS unicode bidi-control, zero-width
     # and BOM codepoints that pass ``isalnum`` but enable display-name
     # spoofing (e.g. U+202E RIGHT-TO-LEFT OVERRIDE in a filename).
-    "[\\/:*?\"<>|\x00-\x1f"
-    "\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]"
+    '[\\/:*?"<>|\x00-\x1f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]'
 )
+
 
 # Subject normaliser — delegates to the canonical ``core.subject`` helper (the
 # backend twin of ``frontend/src/lib/normaliseSubject.ts``) so thread lookup and
@@ -75,9 +76,7 @@ def _safe_filename(raw: str) -> str:
     candidate = Path(candidate).name
     cleaned = _UNSAFE_CHARS.sub("_", candidate).strip(". ")
     if not cleaned:
-        raise ValidationFailedError(
-            "LEDGER_BAD_FILENAME", "Filename is empty or invalid", raw=raw
-        )
+        raise ValidationFailedError("LEDGER_BAD_FILENAME", "Filename is empty or invalid", raw=raw)
     return cleaned
 
 
@@ -139,9 +138,7 @@ def derive_inline_map(
     return result
 
 
-def non_inline_attachments(
-    attachment_paths: list[str], inline_map: dict[str, str]
-) -> list[str]:
+def non_inline_attachments(attachment_paths: list[str], inline_map: dict[str, str]) -> list[str]:
     """Attachment paths that are NOT referenced as inline images."""
     inline = set(inline_map.values())
     return [p for p in attachment_paths if p not in inline]
@@ -178,9 +175,34 @@ def _tags_contain(tag: str, *, negate: bool = False) -> Any:
     keyword = "NOT EXISTS" if negate else "EXISTS"
     param = "ledger_no_tag" if negate else "ledger_tag"
     return text(
-        f"{keyword} (SELECT 1 FROM json_each(ledger_entries.tags)"
-        f" WHERE json_each.value = :{param})"
+        f"{keyword} (SELECT 1 FROM json_each(ledger_entries.tags) WHERE json_each.value = :{param})"
     ).bindparams(**{param: tag})
+
+
+def related_book_visible(db: Session, user: User | None) -> ColumnElement[bool] | None:
+    """SQL: the entry links no Record, or one ``user`` can open.
+
+    ``None`` means nothing is hidden (admin, no user, or no restriction), so
+    rows about General records stay exactly as before.
+    """
+    clause = book_service.user_visibility_clause(db, user) if user is not None else None
+    if clause is None:
+        return None
+    return or_(
+        LedgerEntry.related_book_id.is_(None),
+        LedgerEntry.related_book_id.in_(select(Book.id).where(clause)),
+    )
+
+
+def _caller_book_clause(db: Session, owner_user_id: int | None) -> ColumnElement[bool] | None:
+    """``related_book_visible`` for the caller behind a resolved mail scope.
+
+    Every user-facing path passes the caller's id as ``owner_user_id``; ``None``
+    is the admin ``scope=all`` view or an internal caller, which hides nothing.
+    """
+    if owner_user_id is None:
+        return None
+    return related_book_visible(db, db.get(User, owner_user_id))
 
 
 def list_entries(
@@ -315,6 +337,11 @@ def list_entries(
         stmt = stmt.where(LedgerEntry.related_book_id == related_book_id)
         count_stmt = count_stmt.where(LedgerEntry.related_book_id == related_book_id)
 
+    book_clause = _caller_book_clause(db, owner_user_id)
+    if book_clause is not None:
+        stmt = stmt.where(book_clause)
+        count_stmt = count_stmt.where(book_clause)
+
     if has_attachment is not None:
         # JSON column is stored as TEXT in SQLite; an empty list serialises
         # to "[]" with no spaces. Anything else means at least one element.
@@ -382,13 +409,17 @@ def list_entries(
         # Per-user: the CALLER (flag_user_id) has a ledger_flags row. With no
         # caller scope there's no meaningful "flagged" set, so match nothing.
         flag_exists = (
-            select(LedgerFlag.id)
-            .where(
-                LedgerFlag.entry_id == LedgerEntry.id,
-                LedgerFlag.user_id == flag_user_id,
+            (
+                select(LedgerFlag.id)
+                .where(
+                    LedgerFlag.entry_id == LedgerEntry.id,
+                    LedgerFlag.user_id == flag_user_id,
+                )
+                .exists()
             )
-            .exists()
-        ) if flag_user_id is not None else literal(False)
+            if flag_user_id is not None
+            else literal(False)
+        )
         stmt = stmt.where(flag_exists)
         count_stmt = count_stmt.where(flag_exists)
 
@@ -409,9 +440,7 @@ def list_entries(
             LedgerEntry.created_at.desc(),
         )
     else:
-        stmt = stmt.order_by(
-            LedgerEntry.entry_date.desc(), LedgerEntry.created_at.desc()
-        )
+        stmt = stmt.order_by(LedgerEntry.entry_date.desc(), LedgerEntry.created_at.desc())
 
     stmt = stmt.limit(limit).offset(offset)
 
@@ -459,20 +488,32 @@ def get_entry(
             f"Ledger entry {entry_id} has been deleted",
             id=entry_id,
         )
-    if (
-        owner_user_id is not None
-        and row.channel == "email"
-        and DRAFT_TAG in (row.tags or [])
-        and row.owner_user_id != owner_user_id
+    if owner_user_id is not None and (
+        (
+            row.channel == "email"
+            and DRAFT_TAG in (row.tags or [])
+            and row.owner_user_id != owner_user_id
+        )
+        or not _related_book_visible_to(db, row, owner_user_id)
     ):
         # Shared mailbox: synced/sent email opens for any signed-in user; only a
-        # cross-owner DRAFT is a 404 (don't leak existence), not a 403.
+        # cross-owner DRAFT is a 404 (don't leak existence), not a 403. A row
+        # about a Record the caller cannot open is a 404 for the same reason.
         raise NotFoundError(
             "LEDGER_ENTRY_NOT_FOUND",
             f"Ledger entry {entry_id} does not exist",
             id=entry_id,
         )
     return row
+
+
+def _related_book_visible_to(db: Session, row: LedgerEntry, owner_user_id: int) -> bool:
+    if row.related_book_id is None:
+        return True
+    clause = _caller_book_clause(db, owner_user_id)
+    return clause is None or (
+        db.scalar(select(LedgerEntry.id).where(LedgerEntry.id == row.id, clause)) is not None
+    )
 
 
 def list_thread(
@@ -559,18 +600,14 @@ def create_entry(
     _validate_fks(db, data)
 
     # Only email rows are owner-scoped (non-email = shared correspondence log).
-    row_owner = (
-        owner_user_id if (data.get("channel") or "").strip() == "email" else None
-    )
+    row_owner = owner_user_id if (data.get("channel") or "").strip() == "email" else None
 
     # Default created_by to the linked employee when caller didn't supply one.
     created_by = data.get("created_by")
     if not created_by:
         from app.db.models import EmailAccount
 
-        account = db.execute(
-            select(EmailAccount).where(EmailAccount.id == 1)
-        ).scalar_one_or_none()
+        account = db.execute(select(EmailAccount).where(EmailAccount.id == 1)).scalar_one_or_none()
         if account is not None and account.linked_employee_id:
             created_by = account.linked_employee_id
 
@@ -595,8 +632,10 @@ def create_entry(
     return row
 
 
-def update_entry(db: Session, entry_id: int, payload: LedgerEntryUpdate) -> LedgerEntry:
-    row = get_entry(db, entry_id)
+def update_entry(
+    db: Session, entry_id: int, payload: LedgerEntryUpdate, *, owner_user_id: int | None = None
+) -> LedgerEntry:
+    row = get_entry(db, entry_id, owner_user_id=owner_user_id)
     data: dict[str, Any] = payload.model_dump(exclude_unset=True)
     _validate_fks(db, data)
 
@@ -608,8 +647,8 @@ def update_entry(db: Session, entry_id: int, payload: LedgerEntryUpdate) -> Ledg
     return row
 
 
-def soft_delete_entry(db: Session, entry_id: int) -> None:
-    row = get_entry(db, entry_id)
+def soft_delete_entry(db: Session, entry_id: int, *, owner_user_id: int | None = None) -> None:
+    row = get_entry(db, entry_id, owner_user_id=owner_user_id)
     row.deleted_at = _utcnow()
     db.commit()
 
@@ -678,9 +717,7 @@ def unread_emails(
     return list(db.execute(stmt).scalars())
 
 
-def mark_entry_read(
-    db: Session, entry_id: int, owner_user_id: int | None = None
-) -> LedgerEntry:
+def mark_entry_read(db: Session, entry_id: int, owner_user_id: int | None = None) -> LedgerEntry:
     """Idempotently set ``read_at`` to now if currently NULL.
 
     Calling twice is safe — second call is a no-op. Hard-deleted entries
@@ -694,9 +731,7 @@ def mark_entry_read(
     return row
 
 
-def mark_entry_unread(
-    db: Session, entry_id: int, owner_user_id: int | None = None
-) -> LedgerEntry:
+def mark_entry_unread(db: Session, entry_id: int, owner_user_id: int | None = None) -> LedgerEntry:
     """Clear ``read_at`` (mark unread) if currently set. Idempotent — a second
     call is a no-op. Soft/hard-deleted entries raise NotFoundError (matches
     ``mark_entry_read``). Powers the bulk "Mark unread" action."""
@@ -727,17 +762,13 @@ def mark_all_emails_read(db: Session, owner_user_id: int | None = None) -> int:
     ids = list(db.execute(id_stmt).scalars())
     if not ids:
         return 0
-    for row in db.execute(
-        select(LedgerEntry).where(LedgerEntry.id.in_(ids))
-    ).scalars():
+    for row in db.execute(select(LedgerEntry).where(LedgerEntry.id.in_(ids))).scalars():
         row.read_at = now
     db.commit()
     return len(ids)
 
 
-def toggle_star(
-    db: Session, entry_id: int, owner_user_id: int | None = None
-) -> LedgerEntry:
+def toggle_star(db: Session, entry_id: int, owner_user_id: int | None = None) -> LedgerEntry:
     """Flip the ★ tag on ``entry_id``: add when absent, remove when present."""
     row = get_entry(db, entry_id, owner_user_id=owner_user_id)
     tags = list(row.tags or [])
@@ -766,9 +797,7 @@ def _get_flag(db: Session, *, entry_id: int, user_id: int) -> LedgerFlag | None:
     ).scalar_one_or_none()
 
 
-def _upsert_flag(
-    db: Session, *, entry_id: int, user_id: int, due: date | None
-) -> LedgerEntry:
+def _upsert_flag(db: Session, *, entry_id: int, user_id: int, due: date | None) -> LedgerEntry:
     """Apply the flag upsert without choosing the caller's transaction boundary."""
     row = get_entry(db, entry_id)
     flag = _get_flag(db, entry_id=entry_id, user_id=user_id)
@@ -788,10 +817,9 @@ def _upsert_flag(
     return row
 
 
-def set_flag(
-    db: Session, *, entry_id: int, user_id: int, due: date | None
-) -> LedgerEntry:
+def set_flag(db: Session, *, entry_id: int, user_id: int, due: date | None) -> LedgerEntry:
     """Upsert the caller's flag and commit the standalone API operation."""
+    get_entry(db, entry_id, owner_user_id=user_id)
     row = _upsert_flag(db, entry_id=entry_id, user_id=user_id, due=due)
     db.commit()
     return row
@@ -799,7 +827,7 @@ def set_flag(
 
 def clear_flag(db: Session, *, entry_id: int, user_id: int) -> LedgerEntry:
     """Delete the caller's flag row for ``entry_id`` (no-op if absent)."""
-    row = get_entry(db, entry_id)
+    row = get_entry(db, entry_id, owner_user_id=user_id)
     flag = _get_flag(db, entry_id=entry_id, user_id=user_id)
     if flag is not None:
         db.delete(flag)
@@ -835,13 +863,14 @@ def add_attachment(
     *,
     data: bytes,
     original_filename: str,
+    owner_user_id: int | None = None,
 ) -> LedgerEntry:
     """Save ``data`` under ``data/ledger_attachments/<entry_id>/`` and update the row.
 
     Security: same rules as vault_service — filename sanitised, size capped,
     extension whitelisted, resolved path checked for containment.
     """
-    row = get_entry(db, entry_id)
+    row = get_entry(db, entry_id, owner_user_id=owner_user_id)
 
     if len(data) == 0:
         raise ValidationFailedError("LEDGER_EMPTY_FILE", "Uploaded file is empty")
@@ -925,8 +954,6 @@ def list_counterparties(
 
     rows = db.execute(stmt).all()
     return [r.counterparty for r in rows]
-
-
 
 
 __all__ = [

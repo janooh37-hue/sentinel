@@ -39,10 +39,6 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
   const { has } = useCapabilities()
   const { user } = useAuth()
   const isInmateReporter = user?.role === 'inmate_reporter'
-  const canEdit = has('books.edit')
-  // Submit-for-approval is its own authority (atomic `books.submit`), separate
-  // from edit/discard: the draft preview's primary action keys off this alone.
-  const canSubmitBook = has('books.submit')
   const navigate = useNavigate()
   const { scheduleDelete } = useRecordDelete()
   const [confirming, setConfirming] = useState<{ bookId: number | null; value: boolean }>({ bookId, value: false })
@@ -53,6 +49,9 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
     queryFn: () => api.getBook(bookId!),
     enabled: bookId !== null,
   })
+  const canEdit = has('books.edit') && !!book?.can_write
+  // Submit is independent of edit, but still requires this record's write access.
+  const canSubmitBook = has('books.submit') && !!book?.can_write
 
   // Discard goes through the shared deferred-delete service (6 s Undo toast).
   const discard = (): void => {
@@ -65,8 +64,8 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
   const current = versions.length > 0 ? versions[versions.length - 1] : undefined
   const reporterAction = book ? inmateReporterActionFor(book, user?.id) : 'read-only'
   const canDiscard = book ? deleteBlockReason(book, { has, isInmateReporter }) === null : false
-  const canContinue = isInmateReporter ? reporterAction === 'edit-submit' : canEdit
-  const canSubmitCurrent = isInmateReporter ? reporterAction === 'edit-submit' : canSubmitBook
+  const canContinue = !!book?.can_write && (isInmateReporter ? reporterAction === 'edit-submit' : canEdit)
+  const canSubmitCurrent = !!book?.can_write && (isInmateReporter ? reporterAction === 'edit-submit' : canSubmitBook)
   const pdfUrl = current?.document_id
     ? paperUrl({ documentId: current.document_id })
     : null

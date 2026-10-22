@@ -20,6 +20,10 @@ vi.mock('@/lib/api', () => ({
     }),
     listAwaitingScanBooks: vi.fn().mockResolvedValue([]),
     getLedgerUnreadRecent: vi.fn().mockResolvedValue({ items: [], total_unread: 0 }),
+    getInboxSummary: vi.fn().mockResolvedValue({
+      unread: 0, received: 0, sent: 0, archived: 0,
+      by_purpose: { info: 0, action: 0, reply: 0, circulate: 0 },
+    }),
   },
 }))
 
@@ -70,7 +74,7 @@ describe('useWaitingSignals permission matrix', () => {
   })
 
   it('requires ledger.view for the unread-ledger query', async () => {
-    const deniedCapabilities: string[] = []
+    const deniedCapabilities = ['books.view']
     const deniedClient = renderSignals(deniedCapabilities)
     await waitForCapabilities(deniedClient, deniedCapabilities)
     expect(api.getLedgerUnreadRecent).not.toHaveBeenCalled()
@@ -80,5 +84,18 @@ describe('useWaitingSignals permission matrix', () => {
     const allowedClient = renderSignals(allowedCapabilities)
     await waitForCapabilities(allowedClient, allowedCapabilities)
     expect(api.getLedgerUnreadRecent).toHaveBeenCalledOnce()
+  })
+
+  it('does not expose cached email counts to a books-only user', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(['my-capabilities'], ['books.view'])
+    client.setQueryData(['ledger', 'unread-recent'], { items: [], total_unread: 12 })
+    const wrapper = ({ children }: PropsWithChildren): React.JSX.Element => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+    const { result } = renderHook(() => useWaitingSignals(true), { wrapper })
+    await waitFor(() => expect(client.isFetching()).toBe(0))
+    expect(result.current.ledgerUnread).toBeUndefined()
+    expect(api.getLedgerUnreadRecent).not.toHaveBeenCalled()
   })
 })

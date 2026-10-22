@@ -27,8 +27,8 @@
  *     resize is out of scope. A user-resized width/height is stashed while
  *     minimized/maximized and re-applied on restore.
  *
- * Docking uses physical `right-4` deliberately — the ledger chrome is LTR-pinned
- * (does not mirror in Arabic), so the panel sits bottom-right in both languages.
+ * Docking uses logical `end-4`, so the panel sits bottom-right in English and
+ * bottom-left in Arabic, mirroring the shell.
  *
  * Mobile (fullScreen): the prior full-screen `absolute inset-0` passthrough.
  */
@@ -63,7 +63,7 @@ const POSITION: Record<ComposeWindowState, string> = {
   maximized:
     'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[86vh] w-[min(1200px,92vw)] rounded-xl border border-border shadow-2xl',
   minimized:
-    'bottom-0 right-4 h-auto w-[min(320px,80vw)] rounded-t-lg border border-b-0 border-border shadow-2xl',
+    'bottom-0 end-4 h-auto w-[min(320px,80vw)] rounded-t-lg border border-b-0 border-border shadow-2xl',
 }
 
 /** Fallback width used to place the window under the pointer when a maximized drag restores it. */
@@ -200,7 +200,7 @@ export function ComposeWindow({ fullScreen, children }: ComposeWindowProps): Rea
         'animate-in fade-in-0 zoom-in-95 duration-200 motion-reduce:animate-none',
         POSITION[state],
         state === 'normal' && 'resize',
-        state === 'normal' && !dragged && 'bottom-4 right-4',
+        state === 'normal' && !dragged && 'bottom-4 end-4',
       )}
       style={dragged ? { left: customPos.x, top: customPos.y } : undefined}
     >

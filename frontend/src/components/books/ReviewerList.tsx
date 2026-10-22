@@ -8,6 +8,7 @@
 import type { BookApprovalStepRead } from '@/lib/api'
 import { reviewerDescriptor } from '@/pages/books/bookStateLabel'
 import { cn } from '@/lib/utils'
+import { pickEmployeeName } from '@/lib/employeeName'
 import { useTranslation } from 'react-i18next'
 
 export function ReviewerList({
@@ -19,7 +20,7 @@ export function ReviewerList({
   versionNo?: number
   currentVersionNo?: number
 }): React.JSX.Element | null {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   if (reviewers.length === 0) return null
 
   return (
@@ -46,7 +47,7 @@ export function ReviewerList({
                   className="text-[0.82em] font-semibold text-foreground"
                   dir="auto"
                 >
-                  {r.assignee_name ?? '—'}
+                  {pickEmployeeName({ name_en: r.assignee_name ?? '', name_ar: r.assignee_name_ar }, i18n.language) || '—'}
                 </span>
                 <span
                   className={cn(

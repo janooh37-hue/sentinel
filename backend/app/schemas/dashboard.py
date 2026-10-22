@@ -43,6 +43,7 @@ DASHBOARD_WIDGET_IDS = (
     "pending_departures",
     "workforce_pulse",
     "violation_months",
+    "inbox",
     "permits",
 )
 DASHBOARD_QUICK_ACTION_IDS = (
@@ -83,6 +84,7 @@ DashboardWidgetId = Literal[
     "pending_departures",
     "workforce_pulse",
     "violation_months",
+    "inbox",
     "permits",
 ]
 DashboardQuickActionId = Literal[

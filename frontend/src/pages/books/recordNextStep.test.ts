@@ -65,6 +65,7 @@ function bookOf(state: string, over: Record<string, unknown> = {}): BookRead {
     ref_number: 'HR-1',
     approval_state: state,
     access_scope: 'full',
+    can_write: true,
     voided_at: null,
     edit_session: null,
     submitted_at: '2026-10-03T12:00:00',
@@ -84,6 +85,26 @@ function bookOf(state: string, over: Record<string, unknown> = {}): BookRead {
     ...rest,
   } as unknown as BookRead
 }
+
+describe('recordNextStep — screen-language names', () => {
+  it('uses Arabic assignee, manager fallback and editor names, while English keeps English', () => {
+    const assignee = bookOf('pending', { steps: [stepOf({ assignee_name: 'Khalid', assignee_name_ar: 'خالد' })] })
+    const ar = ctxOf({ locale: 'ar-AE' })
+    expect(recordNextStep(assignee, ar).status.vars.name).toBe('خالد')
+    expect(recordNextStep(assignee, ctxOf()).status.vars.name).toBe('Khalid')
+    const manager = bookOf('pending', {
+      steps: [stepOf({ assignee_name: null })],
+      doc_manager_name: 'Manager',
+      doc_manager_name_ar: 'المدير',
+    })
+    expect(recordNextStep(manager, ar).status.vars.name).toBe('المدير')
+    const editor = bookOf('none', {
+      edit_session: { state: 'active', user_id: 3, user_name: 'Mariam', user_name_ar: 'مريم' },
+    })
+    expect(recordNextStep(editor, ar).status.vars.name).toBe('مريم')
+    expect(recordNextStep(bookOf('pending', { steps: [stepOf({})] }), ar).status.vars.name).toBe('Khalid')
+  })
+})
 
 describe('recordNextStep — Report review', () => {
   const report = (state: string, over: Record<string, unknown> = {}): BookRead =>
@@ -461,5 +482,32 @@ describe('relativeAgo', () => {
     expect(relativeAgo('2026-10-03T12:00:00', NOW, 'en')).toBe('2 days ago')
     expect(relativeAgo('2026-10-05T09:00:00Z', NOW, 'en')).toBe('3 hours ago')
     expect(relativeAgo(null, NOW, 'en')).toBe('')
+  })
+})
+
+describe('recordNextStep — read-only recipients', () => {
+  it.each(['none', 'pending', 'awaiting_scan', 'approved', 'returned', 'rejected'])(
+    'keeps read tools but hides write actions in %s despite all capabilities',
+    (state) => {
+      const r = recordNextStep(bookOf(state, { can_write: false, signedPdfUrl: '/signed' }), ctxOf())
+      const actions = [r.primary, ...r.secondary, ...r.overflow]
+      expect(actions).not.toEqual(expect.arrayContaining([
+        'sendForApproval', 'continueEditing', 'revise', 'scanSigned',
+      ]))
+      for (const action of actions) {
+        expect(['print', 'email', 'downloadSigned', undefined]).toContain(action)
+      }
+      expect(r.overflow).toContain('print')
+    },
+  )
+
+  it('does not offer Finish or Discard for another user’s active Word session', () => {
+    const r = recordNextStep(bookOf('none', {
+      can_write: false,
+      edit_session: { state: 'active', user_id: 3, user_name: 'Mariam' },
+    }), ctxOf())
+    expect(r.primary).toBeUndefined()
+    expect(r.secondary).toEqual([])
+    expect(r.overflow).toEqual(['print'])
   })
 })

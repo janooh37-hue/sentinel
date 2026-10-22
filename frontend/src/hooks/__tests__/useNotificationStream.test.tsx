@@ -17,6 +17,7 @@ const ZERO: NotificationCounts = {
   emails: 0,
   monthly_reviews: 0,
   monthly_approvals: 0,
+  inbox: 0,
 }
 
 // The tsconfig lib predates Promise.withResolvers.

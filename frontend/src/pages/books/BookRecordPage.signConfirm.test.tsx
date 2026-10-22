@@ -30,6 +30,7 @@ vi.mock('@/lib/api', async (orig) => {
       ...real.api,
       listAwaitingBooks: vi.fn().mockResolvedValue([]),
       getBook: vi.fn(),
+      getBookThread: vi.fn().mockResolvedValue([]),
       signBook: vi.fn(),
       submitBook: vi.fn(),
       listApprovers: vi.fn().mockResolvedValue([]),
@@ -38,6 +39,7 @@ vi.mock('@/lib/api', async (orig) => {
       getEmployee: vi.fn().mockResolvedValue({ name_en: 'SAEED ALYAHYAEE', name_ar: 'سعيد' }),
       listBookAnnotations: vi.fn().mockResolvedValue([]),
       listBookClassifications: vi.fn().mockResolvedValue([]),
+      listBookRecipients: vi.fn().mockResolvedValue([]),
       markBookSeen: vi.fn().mockResolvedValue(undefined),
       listApprovalLog: vi.fn().mockResolvedValue({ items: [], total: 0 }),
     },
@@ -110,6 +112,7 @@ function pendingFixture(overrides: Record<string, unknown> = {}): unknown {
     submitted_by_g: null,
     created_at: '2026-08-01T09:00:00Z',
     access_scope: 'full',
+    can_write: true,
     approval_steps: [
       { id: 1, step_order: 1, stage_label: 'Manager', assignee_user_id: 7, state: 'pending', note: null, decided_at: null, kind: 'approver' },
     ],

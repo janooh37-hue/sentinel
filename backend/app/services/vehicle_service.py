@@ -22,6 +22,7 @@ from app.config import get_settings
 from app.core.vehicle_certificates import Profile
 from app.db.models import (
     AuditLog,
+    Book,
     Employee,
     Vehicle,
     VehicleAccident,
@@ -29,6 +30,7 @@ from app.db.models import (
     VehicleFine,
     VehicleLicenseRenewal,
     VehicleMaintenance,
+    VehicleMaintenanceRequest,
     VehicleOdometerReading,
     VehiclePhotoAsset,
     VehicleSite,
@@ -53,6 +55,7 @@ from app.schemas.vehicle import (
     VehicleListItem,
     VehicleMaintenanceCreate,
     VehicleMaintenanceRead,
+    VehicleMaintenanceRequestRead,
     VehicleRead,
     VehicleSiteCreate,
     VehicleSiteRead,
@@ -60,7 +63,7 @@ from app.schemas.vehicle import (
     VehiclesSummary,
     VehicleUpdate,
 )
-from app.services import settings_service, vehicle_photo_service
+from app.services import recipient_service, settings_service, vehicle_photo_service
 from app.services.workforce_etag import require_if_match, row_etag
 from app.services.workforce_schedule_service import acquire_schedule_write_lock
 
@@ -307,6 +310,7 @@ def to_read(
             "notes_en": row.notes_en,
             "photo_asset_id": row.photo_asset_id,
             "license_file_id": row.license_file_id,
+            "current_odometer_km": current_odometer_km(row),
         }
     )
     return result.model_copy(
@@ -1452,6 +1456,33 @@ def delete_accident(
     )
 
 
+def current_odometer_km(vehicle: Vehicle) -> int | None:
+    latest = max(vehicle.odometer_readings, key=lambda item: item.month, default=None)
+    if latest is not None:
+        return latest.closing_km if latest.closing_km is not None else latest.opening_km
+    maintenance = max(vehicle.maintenance, key=lambda item: (item.date, item.id), default=None)
+    return maintenance.odometer_km if maintenance is not None else None
+
+
+def maintenance_request_read(
+    db: Session, row: VehicleMaintenanceRequest
+) -> VehicleMaintenanceRequestRead:
+    result = VehicleMaintenanceRequestRead.model_validate(row)
+    book = db.get(Book, row.book_id) if row.book_id is not None else None
+    result.ref_number = book.ref_number if book is not None else None
+    return result
+
+
+def list_maintenance_requests(db: Session, vehicle_id: int) -> list[VehicleMaintenanceRequestRead]:
+    get_vehicle(db, vehicle_id)
+    rows = db.scalars(
+        select(VehicleMaintenanceRequest)
+        .where(VehicleMaintenanceRequest.vehicle_id == vehicle_id)
+        .order_by(VehicleMaintenanceRequest.created_at.desc(), VehicleMaintenanceRequest.id.desc())
+    )
+    return [maintenance_request_read(db, row) for row in rows]
+
+
 def create_maintenance(
     db: Session,
     payload: VehicleMaintenanceCreate,
@@ -1461,6 +1492,26 @@ def create_maintenance(
     vehicle = require_active_vehicle(db, payload.vehicle_id)
     if payload.receipt_file_id is not None:
         _owned_file(db, vehicle.id, payload.receipt_file_id, kind="receipt")
+    request = None
+    if payload.request_id is not None:
+        # Claim the open request with the maintenance insert in one transaction.
+        # The conditional update also rejects a concurrent second completion.
+        claimed = db.execute(
+            update(VehicleMaintenanceRequest)
+            .where(
+                VehicleMaintenanceRequest.id == payload.request_id,
+                VehicleMaintenanceRequest.vehicle_id == vehicle.id,
+                VehicleMaintenanceRequest.status == "open",
+            )
+            .values(status="done", completed_at=_utcnow())
+        )
+        if cast(CursorResult[Any], claimed).rowcount != 1:
+            db.rollback()
+            raise ValidationFailedError(
+                "MAINTENANCE_REQUEST_NOT_OPEN",
+                "The maintenance request must be open and belong to this vehicle.",
+            )
+        request = db.get(VehicleMaintenanceRequest, payload.request_id)
     row = VehicleMaintenance(
         vehicle_id=vehicle.id,
         date=payload.date,
@@ -1473,6 +1524,9 @@ def create_maintenance(
         receipt_file_id=payload.receipt_file_id,
     )
     db.add(row)
+    if request is not None:
+        db.flush()
+        request.maintenance_id = row.id
     db.commit()
     db.refresh(row)
     _audit(db, "maintenance.logged", vehicle.id, actor, {"maintenance_id": row.id})
@@ -1798,6 +1852,10 @@ def summary(db: Session) -> VehiclesSummary:
             select(func.count(VehicleSite.id)).where(VehicleSite.active.is_(True))
         ).scalar_one()
     )
+    contractor_id = settings_service.get_vehicle_maintenance_contractor_id(db)
+    contractor_name = (
+        recipient_service.resolve_name(db, contractor_id) if contractor_id is not None else None
+    )
     return VehiclesSummary(
         vehicles=len(vehicles),
         fines_count=int(fines_count),
@@ -1819,6 +1877,8 @@ def summary(db: Session) -> VehiclesSummary:
         ),
         active_sites=active_sites,
         notify_days=notify_days,
+        maintenance_contractor_id=contractor_id if contractor_name else None,
+        maintenance_contractor_name=contractor_name,
     )
 
 

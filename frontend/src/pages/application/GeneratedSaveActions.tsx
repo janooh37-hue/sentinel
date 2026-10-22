@@ -1,10 +1,11 @@
 import { FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { ConfidentialitySelect } from '@/components/books/ConfidentialitySelect'
 import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
 import { NotifyMessagePreview } from '@/components/notify/NotifyMessagePreview'
 import { Button } from '@/components/ui/button'
-import type { SigningPath } from '@/lib/api'
+import type { Confidentiality, SigningPath } from '@/lib/api'
 import type { NotifyPreviewRequest } from '@/lib/messageTemplates'
 
 export interface GeneratedSaveActionsProps {
@@ -18,6 +19,9 @@ export interface GeneratedSaveActionsProps {
   previewBody: NotifyPreviewRequest | null
   onNotifyChange: (checked: boolean) => void
   onSave: () => void
+  /** Record level picker; omitted (e.g. revise mode) when the level is fixed. */
+  confidentiality?: Confidentiality
+  onConfidentialityChange?: (level: Confidentiality) => void
 }
 
 export function GeneratedSaveActions({
@@ -31,6 +35,8 @@ export function GeneratedSaveActions({
   previewBody,
   onNotifyChange,
   onSave,
+  confidentiality,
+  onConfidentialityChange,
 }: GeneratedSaveActionsProps): React.JSX.Element {
   const { t } = useTranslation()
   const hintOn =
@@ -68,6 +74,11 @@ export function GeneratedSaveActions({
               body={previewBody}
               notifyEmployee={notifyEmployee}
             />
+          )}
+          {confidentiality && onConfidentialityChange && (
+            <div className="mt-3">
+              <ConfidentialitySelect value={confidentiality} onChange={onConfidentialityChange} />
+            </div>
           )}
         </div>
         <Button

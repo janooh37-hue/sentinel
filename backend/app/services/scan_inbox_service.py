@@ -125,9 +125,12 @@ def _process_one(db: Session, item: ScanInbox, *, reader: DocumentReader) -> Non
         return
 
     employees = list(db.execute(select(Employee)).scalars())
+    # An owned item lands in that user's triage list, so it may only propose
+    # Records the owner can open; owner-less items keep the system view.
+    owner = db.get(User, item.owner_user_id) if item.owner_user_id is not None else None
     try:
         classification = scan_triage_service.classify(
-            raw, db=db, employees=employees, reader=reader
+            raw, db=db, employees=employees, reader=reader, user=owner
         )
     except ocr.InvalidImageError as exc:
         item.state = "error"
@@ -286,6 +289,12 @@ def _apply_file(
     """
     raw = abs_file_path(item).read_bytes()
     if item.proposed_route == "book_attach" and item.proposed_book_id is not None:
+        if user is not None:
+            # Operator filing: the target must be a Record they can open
+            # (hidden Records 404 exactly like a missing one).
+            book_service.resolve_book_read_access(
+                db, user, book_service.get_book(db, item.proposed_book_id)
+            )
         book = book_service.add_attachment(db, item.proposed_book_id, item.filename, raw, user=user)
         if book.attachment_paths:
             # Plain-append success path: a new path was added, so we can undo it.

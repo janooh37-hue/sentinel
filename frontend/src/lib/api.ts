@@ -316,6 +316,9 @@ export type VehicleAccidentCreate = components['schemas']['VehicleAccidentCreate
 export type VehicleAccidentRead = components['schemas']['VehicleAccidentRead']
 export type VehicleMaintenanceCreate = components['schemas']['VehicleMaintenanceCreate']
 export type VehicleMaintenanceRead = components['schemas']['VehicleMaintenanceRead']
+export type VehicleMaintenanceRequestCreate = components['schemas']['VehicleMaintenanceRequestCreate']
+export type VehicleMaintenanceRequestRead = components['schemas']['VehicleMaintenanceRequestRead']
+export type VehicleMaintenanceRequestResult = components['schemas']['VehicleMaintenanceRequestResult']
 export type OdometerMonthRead = components['schemas']['OdometerMonthRead']
 export type OdometerRowRead = components['schemas']['OdometerRowRead']
 export type OdometerUpsert = components['schemas']['OdometerUpsert']
@@ -459,6 +462,9 @@ export interface RegisterResult {
   is_first: boolean
   user: SessionUser | null
 }
+
+/** One row of the Secret clearance page (`locked` = admin, always cleared). */
+export type SecretClearanceRead = components['schemas']['SecretClearanceRead']
 
 export interface AdminUserRead {
   id: number
@@ -809,6 +815,12 @@ export type BookRead = components['schemas']['BookRead'] & {
   doc_manager_has_signature?: boolean
   imported_doc?: ImportedDocRead | null
 }
+export type BookFolderRead = components['schemas']['BookFolderRead']
+export type BookFolderShareUser = components['schemas']['BookFolderShareUser']
+export type BookFolderShareOption = components['schemas']['BookFolderShareOption']
+export type BookFolderShareOptions = components['schemas']['BookFolderShareOptions']
+export type BookFolderSharesUpdate = components['schemas']['BookFolderSharesUpdate']
+export type BookSortKey = `${'' | '-'}${'date' | 'ref' | 'subject' | 'purpose' | 'confidentiality' | 'status'}`
 export type IncludedPaperProposal = components['schemas']['IncludedPaperProposal']
 export type IncludedPaperRead = components['schemas']['IncludedPaperRead']
 export type IncludedPaperReplacementRead = components['schemas']['IncludedPaperReplacementRead']
@@ -829,6 +841,21 @@ export type ApprovalStatusParam = 'pending' | 'returned' | 'approved' | 'rejecte
 export type ApprovalSortParam = 'oldest' | 'newest'
 export type RetainedDecisionRead = components['schemas']['RetainedDecisionRead']
 export type BookRevisionAccessRead = components['schemas']['BookRevisionAccessRead']
+// Record levels + direct send (record classification, Phase 1).
+export type Confidentiality = components['schemas']['BookConfidentialityUpdate']['confidentiality']
+export const CONFIDENTIALITY_LEVELS = ['general', 'personal', 'secret', 'directed'] as const satisfies readonly Confidentiality[]
+export type BookSendRequest = components['schemas']['BookSendRequest']
+export type SendPurpose = BookSendRequest['purpose']
+export const SEND_PURPOSES = ['info', 'action', 'reply', 'circulate'] as const satisfies readonly SendPurpose[]
+export type BookSendResult = components['schemas']['BookSendResponse']
+export type BookRecipientRead = components['schemas']['BookRecipientRead']
+export type BookInboxRead = components['schemas']['BookInboxRead']
+export type RecipientCandidateRead = components['schemas']['RecipientCandidateRead']
+export type BookDeriveRequest = components['schemas']['BookDeriveRequest']
+export type BookThreadItem = components['schemas']['BookThreadItem']
+export type BookLinkCreate = components['schemas']['BookLinkCreate']
+export type BookReferenceSendResult = components['schemas']['BookReferenceSendResult']
+export type BookReferenceSkipped = components['schemas']['BookReferenceSkipped']
 
 // Annotation overlay (Slice 3). Hand-typed mirror of schemas.book.BookAnnotationRead
 // until gen:api folds it into the generated schema.
@@ -841,6 +868,7 @@ export interface BookAnnotationRead {
   comment: string | null
   author_user_id: number | null
   author_name: string | null
+  author_name_ar?: string | null
   created_at: string
 }
 
@@ -1590,6 +1618,10 @@ export const api = {
   vehiclesSummary: () => request<VehiclesSummary>('GET', '/vehicles/summary'),
   setVehicleNotifyDays: (days: number) =>
     request<VehiclesSummary>('PUT', '/vehicles/notify-days', { days }),
+  setVehicleMaintenanceContractor: (maintenanceContractorId: number | null) =>
+    request<VehiclesSummary>('PUT', '/vehicles/maintenance-contractor', {
+      maintenance_contractor_id: maintenanceContractorId,
+    }),
   listVehicleSites: () => request<VehicleSiteRead[]>('GET', '/vehicles/sites'),
   createVehicleSite: (body: VehicleSiteCreate) =>
     request<VehicleSiteRead>('POST', '/vehicles/sites', body),
@@ -1767,6 +1799,10 @@ export const api = {
     request<OdometerRowRead>('PUT', `/vehicles/${vehicleId}/odometer/${month}`, body),
   generateOdometerForm: (body: OdometerFormRequest) =>
     request<LetterResult>('POST', '/vehicles/odometer/form', body),
+  listVehicleMaintenanceRequests: (vehicleId: number) =>
+    request<VehicleMaintenanceRequestRead[]>('GET', `/vehicles/${vehicleId}/maintenance-requests`),
+  createVehicleMaintenanceRequest: (vehicleId: number, body: VehicleMaintenanceRequestCreate) =>
+    request<VehicleMaintenanceRequestResult>('POST', `/vehicles/${vehicleId}/maintenance-requests`, body),
   listVehicleMaintenance: (month?: string) =>
     request<VehicleMaintenanceRead[]>('GET', `/vehicles/maintenance${qs({ month })}`),
   createVehicleMaintenance: (body: VehicleMaintenanceCreate) =>
@@ -2079,9 +2115,28 @@ export const api = {
     limit?: number
     offset?: number
     created_by_me?: boolean
+    inbox?: 'received' | 'done' | 'sent' | 'archived' | 'any'
+    folder_id?: number
+    sort?: BookSortKey
   } = {}) => request<BookListResponse>('GET', `/books${qs({ ...params })}`),
-  getBook: (id: number, versionId?: number) =>
-    request<BookRead>('GET', `/books/${id}${qs({ version_id: versionId })}`),
+  listBookFolders: (bookId?: number) =>
+    request<BookFolderRead[]>('GET', `/books/folders${qs({ book_id: bookId })}`),
+  getBookFolderShareOptions: () =>
+    request<BookFolderShareOptions>('GET', '/books/folders/share-options'),
+  updateBookFolderShares: (folderId: number, body: BookFolderSharesUpdate) =>
+    request<BookFolderRead>('PUT', `/books/folders/${folderId}/shares`, body),
+  createBookFolder: (body: { name: string; team?: boolean }) =>
+    request<BookFolderRead>('POST', '/books/folders', body),
+  renameBookFolder: (id: number, name: string) =>
+    request<BookFolderRead>('PATCH', `/books/folders/${id}`, { name }),
+  deleteBookFolder: (id: number) =>
+    request<void>('DELETE', `/books/folders/${id}`),
+  addBookToFolder: (bookId: number, folderId: number) =>
+    request<void>('PUT', `/books/${bookId}/folders/${folderId}`),
+  removeBookFromFolder: (bookId: number, folderId: number) =>
+    request<void>('DELETE', `/books/${bookId}/folders/${folderId}`),
+  getBook: (id: number, versionId?: number, options: { markRead?: boolean } = {}) =>
+    request<BookRead>('GET', `/books/${id}${qs({ version_id: versionId, mark_read: options.markRead })}`),
   /** Resolve a book by its ref_number (e.g. "GS-0005") — backs the ledger
    * book-chip deep-link. 404s when no live book carries the ref. */
   getBookByRef: (ref: string) =>
@@ -2091,6 +2146,14 @@ export const api = {
   getBookVersionFields: (bookId: number, versionId: number): Promise<{ fields: Record<string, unknown> }> =>
     request<{ fields: Record<string, unknown> }>('GET', `/books/${bookId}/versions/${versionId}/fields`),
   createBook: (body: BookCreate) => request<BookRead>('POST', '/books', body),
+  deriveBook: (id: number, body: BookDeriveRequest) =>
+    request<WordSessionRead>('POST', `/books/${id}/derive`, body),
+  getBookThread: (id: number) =>
+    request<BookThreadItem[]>('GET', `/books/${id}/thread`),
+  linkBook: (id: number, body: BookLinkCreate) =>
+    request<BookThreadItem>('POST', `/books/${id}/links`, body),
+  unlinkBook: (id: number, targetId: number) =>
+    request<void>('DELETE', `/books/${id}/links/${targetId}`),
 
   // --- word-session endpoints (feature/word-books) ---
   /** GET /books/classifications — full government classification list. */
@@ -2155,7 +2218,7 @@ export const api = {
   /** GET /books/facets — per-service counts + per-service approval-state
    *  counts, over every record (not a page window). Backs the Records rail
    *  and the status spine. */
-  getBookFacets: (params: { created_by_me?: boolean } = {}) =>
+  getBookFacets: (params: { created_by_me?: boolean; inbox?: 'received' | 'done' | 'sent' | 'archived' } = {}) =>
     request<BookFacetsResponse>('GET', `/books/facets${qs({ ...params })}`),
 
   // --- books approval worklist (#31, revision-scoped) ---
@@ -2276,6 +2339,35 @@ export const api = {
       'DELETE',
       `/books/${bookId}/versions/${versionId}/annotations/${annotationId}`,
     ),
+  /** PUT /books/{id}/confidentiality — relabel the record's level (creator,
+   *  manager, or admin). Secret needs `books.secret` (SECRET_CLEARANCE_REQUIRED). */
+  setBookConfidentiality: (id: number, confidentiality: Confidentiality) =>
+    request<BookRead>('PUT', `/books/${id}/confidentiality`, { confidentiality }),
+  /** POST /books/{id}/send — send or forward the record. Repeat or self
+   *  recipients come back in `skipped`. Errors: PERSONAL_REQUIRES_DIRECTED (409),
+   *  RECIPIENT_NOT_CLEARED / RECIPIENT_INVALID (422). */
+  sendBook: (id: number, body: BookSendRequest) =>
+    request<BookSendResult>('POST', `/books/${id}/send`, body),
+  /** GET /books/{id}/recipients — the send rows the caller may see. */
+  listBookRecipients: (id: number) =>
+    request<BookRecipientRead[]>('GET', `/books/${id}/recipients`),
+  /** DELETE /books/{id}/recipients/{recipientId} — recall a send (sender, manager, admin). */
+  recallBookRecipient: (id: number, recipientId: number) =>
+    request<void>('DELETE', `/books/${id}/recipients/${recipientId}`),
+  markBookInboxDone: (id: number) =>
+    request<BookInboxRead>('POST', `/books/${id}/inbox/done`),
+  undoBookInboxDone: (id: number) =>
+    request<BookInboxRead>('DELETE', `/books/${id}/inbox/done`),
+  archiveBookInbox: (id: number) =>
+    request<BookInboxRead>('POST', `/books/${id}/inbox/archive`),
+  unarchiveBookInbox: (id: number) =>
+    request<BookInboxRead>('DELETE', `/books/${id}/inbox/archive`),
+  /** GET /books/recipient-candidates — active users to send to; Secret → cleared only. */
+  listRecipientCandidates: (confidentiality?: Confidentiality) =>
+    request<RecipientCandidateRead[]>('GET', `/books/recipient-candidates${qs({ confidentiality })}`),
+  /** GET /books/inbox/summary — my received sends (unread, by purpose) and my sent count (B2). */
+  getInboxSummary: () =>
+    request<components['schemas']['InboxSummaryRead']>('GET', '/books/inbox/summary'),
 
   // --- intake (Phase C — Universal Intake Drop-zone) ---
   /** POST /api/v1/intake — classify a scanned file. Returns a discriminated
@@ -2693,6 +2785,10 @@ export const api = {
     request<AdminUserRead>('POST', `/auth/users/${userId}/default-manager`, { enabled }),
   listAuthAudit: (limit = 50) =>
     request<AuditEntryRead[]>('GET', `/auth/audit?limit=${limit}`),
+  // Secret clearance (`books.secret`) — admin or manager.
+  listSecretClearance: () => request<SecretClearanceRead[]>('GET', '/auth/secret-clearance'),
+  setSecretClearance: (userId: number, enabled: boolean) =>
+    request<void>('PUT', `/auth/users/${userId}/secret-clearance`, { enabled }),
 
   // --- permissions (granular capability matrix, 2026-05-26) ---
   /** The signed-in user's own effective capabilities — drives the UI gates. */

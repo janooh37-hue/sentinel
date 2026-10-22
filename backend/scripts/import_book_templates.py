@@ -42,7 +42,7 @@ def main() -> int:
         tmp = dest.with_suffix(".tmp")
         try:
             shutil.copy2(src, tmp)
-            retokenize_general_book(tmp, submitter_g=None)
+            retokenize_general_book(tmp)
             validate_book_template(tmp)
             tmp.rename(dest)
             ok += 1

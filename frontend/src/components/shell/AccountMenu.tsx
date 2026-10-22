@@ -22,6 +22,7 @@ import {
   LinkIcon,
   ShieldCheck,
   UserRound,
+  KeyRound,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -350,6 +351,20 @@ export function AccountMenu({
                     {pendingCount}
                   </span>
                 )}
+              </button>
+            )}
+            {(user?.role === 'admin' || user?.role === 'manager') && (
+              <button
+                type="button"
+                data-testid="account-secret-clearance"
+                onClick={() => {
+                  setOpen(false)
+                  navigate('/secret-clearance')
+                }}
+                className="flex min-h-11 w-full items-center gap-2.5 px-4 py-2.5 text-start text-[0.9em] text-foreground transition-colors hover:bg-surface-tinted"
+              >
+                <KeyRound className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} aria-hidden />
+                <span className="flex-1">{t('access.secretClearance.title')}</span>
               </button>
             )}
             <button

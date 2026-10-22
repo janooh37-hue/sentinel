@@ -60,6 +60,7 @@ import { ViolationMonthsWidget } from '@/pages/dashboard/widgets/ViolationMonths
 import { PermitsWidget } from '@/pages/dashboard/widgets/PermitsWidget'
 import { WaitingApprovalsCard } from '@/pages/dashboard/widgets/WaitingApprovalsCard'
 import { SentApprovalsWidget } from '@/pages/dashboard/widgets/SentApprovalsWidget'
+import { InboxWidget } from '@/pages/dashboard/widgets/InboxWidget'
 import { WorkforceCoverageSheet } from '@/pages/dashboard/widgets/WorkforceCoverageSheet'
 import { WorkforcePulseWidget } from '@/pages/dashboard/widgets/WorkforcePulseWidget'
 import {
@@ -356,6 +357,8 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         )
       case 'sent_approvals':
         return <SentApprovalsWidget />
+      case 'inbox':
+        return <InboxWidget />
       case 'violations': {
         const openViolations = summary?.totals.open_violations_count ?? 0
         return (

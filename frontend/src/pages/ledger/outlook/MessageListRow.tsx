@@ -182,7 +182,7 @@ export function MessageListRow({
         )}
       </span>
 
-      <span className="flex flex-col items-end gap-1 rtl:items-start">
+      <span className="flex flex-col items-end gap-1">
         <span
           className={cn(
             'whitespace-nowrap text-[0.72em]',

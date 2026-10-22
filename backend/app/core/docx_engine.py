@@ -109,12 +109,12 @@ def aztec_corner_for(template_id: str) -> str | None:
 
 
 def syncs_general_book_footer(template_id: str) -> bool:
-    """Whether page 1's footer (letterhead + submitter G-number) should be copied
-    onto pages 2+.
+    """Whether page 1's footer (``footer3``: letterhead + submitter G-number)
+    should be copied onto pages 2+ (``footer2``).
 
     The classified book forms and the Inmate Conduct Violations report carry it.
-    General Book is excluded: its redesigned paper drops the footer's G-number
-    entirely (see ``_adapt_general_book``)."""
+    General Book is excluded: its paper already prints the letterhead and the
+    G-number in both its first-page and default footers (different part names)."""
     if template_id == "Inmate Conduct Violations":
         return True
     return template_id in CLASSIFIED_BOOK_FORMS and template_id not in {
@@ -353,6 +353,7 @@ def _adapt_general_book(data: dict[str, Any]) -> dict[str, Any]:
     ref = str(out.get("ref") or "").strip()
     out["barcode"] = qr.barcode_payload(ref, parsed_date.date()) if ref else ""
     out.setdefault("subject", "")
+    out.setdefault("reference_line", "")
     out.setdefault("body", "")
     # Preserve raw body HTML (when the service layer threaded it through) for
     # the post-process that rebuilds real Word tables from <table> elements.
@@ -379,8 +380,8 @@ def _adapt_general_book(data: dict[str, Any]) -> dict[str, Any]:
     # never has to render a blank signature line.
     if not (out.get("manager_name") or "").strip():
         out["manager_name"] = DEFAULT_MANAGER_NAME
-    # General Book no longer prints the submitter's G-number in its footer.
-    out["submitter_g"] = ""
+    # Submitter G-number for the footer on every page (``{{ submitter_g }}``).
+    out["submitter_g"] = str(data.get("submitter_g") or "")
     # recipient_id → recipient_name is resolved upstream on the REQUEST session
     # (document_service, before engine.fill) — see that module's canonical path.
     # We must NOT open a second SessionLocal() here: the generation path holds a
@@ -392,10 +393,9 @@ def _adapt_general_book(data: dict[str, Any]) -> dict[str, Any]:
 
 def _adapt_report(data: dict[str, Any]) -> dict[str, Any]:
     """General Book adapter, except the Report prints DD/MM/YYYY (like its reference
-    letter) and its footer prints the submitter's G-number."""
+    letter)."""
     out = _adapt_general_book(data)
     out["date"] = out["date"].replace("-", "/")
-    out["submitter_g"] = str(data.get("submitter_g") or "")
     return out
 
 
@@ -1071,6 +1071,28 @@ def _pp_general_book(doc: Any, ctx: dict[str, Any]) -> None:
     _format_letterhead_barcode(doc, ctx)
     _format_general_book_ref_line(doc)
 
+    reference_line = ctx.get("reference_line") or ""
+    if reference_line:
+        from copy import deepcopy
+
+        # Preserve the template's Arabic font; numbers/date need their own LTR
+        # runs, just like the reference value in the letterhead.
+        for paragraph in doc.paragraphs:
+            if paragraph.text != reference_line:
+                continue
+            source = next((run for run in paragraph.runs if run.text), None)
+            source_rpr = deepcopy(source._element.rPr) if source is not None else None
+            for run in list(paragraph.runs):
+                run._element.getparent().remove(run._element)
+            for text in re.split(r"(\d+(?:[/-]\d+)+)", reference_line):
+                if not text:
+                    continue
+                run = paragraph.add_run(text)
+                if source_rpr is not None:
+                    run._element.insert(0, deepcopy(source_rpr))
+                run.font.rtl = not text[0].isdigit()
+            break
+
     anchor = _find_general_book_body_anchor(doc)
     if anchor is None:
         log.warning("General Book: no body anchor paragraph found — body not rendered")
@@ -1312,7 +1334,7 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
         "post_process": _pp_passport_release_list,
     },
     # Report: no-classification, no-ref General Book paper; reuses the General
-    # Book body + footer pipeline but keeps the submitter G-number in its footer.
+    # Book body + footer pipeline, submitter G-number included.
     "Report": {"adapter": _adapt_report, "post_process": _pp_general_book},
     "Inmate Conduct Violations": {"adapter": _adapt_common, "post_process": None},
     "Vehicle Fines": {"adapter": _adapt_common, "post_process": None},

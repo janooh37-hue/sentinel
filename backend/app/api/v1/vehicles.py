@@ -27,6 +27,7 @@ from app.schemas.vehicle import (
     FinesLetterRequest,
     LetterResult,
     LicenseRenewCreate,
+    MaintenanceContractorUpdate,
     NotifyDaysUpdate,
     OdometerFormRequest,
     OdometerMonthRead,
@@ -51,6 +52,9 @@ from app.schemas.vehicle import (
     VehicleListItem,
     VehicleMaintenanceCreate,
     VehicleMaintenanceRead,
+    VehicleMaintenanceRequestCreate,
+    VehicleMaintenanceRequestRead,
+    VehicleMaintenanceRequestResult,
     VehiclePhotoRead,
     VehicleProfileScan,
     VehicleRead,
@@ -116,6 +120,16 @@ def update_notify_days(
     _user: Annotated[User, Depends(require_capability("vehicles.edit"))],
 ) -> VehiclesSummary:
     settings_service.set_vehicle_notify_days(db, payload.days)
+    return vehicle_service.summary(db)
+
+
+@router.put("/maintenance-contractor", response_model=VehiclesSummary)
+def update_maintenance_contractor(
+    payload: MaintenanceContractorUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> VehiclesSummary:
+    settings_service.set_vehicle_maintenance_contractor_id(db, payload.maintenance_contractor_id)
     return vehicle_service.summary(db)
 
 
@@ -827,6 +841,31 @@ def delete_vehicle_accident(
 ) -> Response:
     vehicle_service.delete_accident(db, vehicle_id, accident_id, actor=user.email)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/{vehicle_id}/maintenance-requests", response_model=list[VehicleMaintenanceRequestRead]
+)
+def list_vehicle_maintenance_requests(
+    vehicle_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("vehicles.view"))],
+) -> list[VehicleMaintenanceRequestRead]:
+    return vehicle_service.list_maintenance_requests(db, vehicle_id)
+
+
+@router.post(
+    "/{vehicle_id}/maintenance-requests",
+    response_model=VehicleMaintenanceRequestResult,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_vehicle_maintenance_request(
+    vehicle_id: int,
+    payload: VehicleMaintenanceRequestCreate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> VehicleMaintenanceRequestResult:
+    return vehicle_letter_service.create_maintenance_request(db, vehicle_id, payload, user=user)
 
 
 @router.put("/{vehicle_id}/odometer/{month}", response_model=OdometerRowRead)

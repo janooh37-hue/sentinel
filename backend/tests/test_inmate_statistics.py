@@ -70,6 +70,7 @@ def api_db(monkeypatch, tmp_path) -> Session:
         yield db
     finally:
         db.close()
+        eng.dispose()
 
 
 @pytest.fixture()

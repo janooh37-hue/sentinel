@@ -23,7 +23,10 @@ import {
   Download,
   ExternalLink,
   FileStack,
+  Inbox,
+  Link2,
   Loader2,
+  Lock,
   Mail,
   PanelRightClose,
   PanelRightOpen,
@@ -63,6 +66,7 @@ import { ariaKeyShortcut } from '@/components/ui/keyshortcut'
 import { IconAction } from '@/components/ui/icon-action'
 import { useAuth } from '@/lib/authContext'
 import { bidi } from '@/lib/bidi'
+import { pickEmployeeName } from '@/lib/employeeName'
 import { currentBookDocId } from '@/lib/bookDocument'
 import { copyToClipboard } from '@/lib/clipboard'
 import { serviceHref } from '@/lib/quickActions'
@@ -74,6 +78,12 @@ import { cn } from '@/lib/utils'
 import { inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
 import { isApproverAssignee, myPendingReviewerStep } from '@/components/books/reviewers'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
+import { ChangeConfidentialityDialog } from '@/components/books/ChangeConfidentialityDialog'
+import { RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
+import { SendRecordDialog } from '@/components/books/SendRecordDialog'
+import { useReplyActions } from '@/components/books/useReplyActions'
+import { useInboxActions } from '@/components/books/useInboxActions'
+import { LinkRecordDialog } from '@/components/books/LinkRecordDialog'
 import { DocumentState } from '@/components/books/DocumentState'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { WordReopenButton, WordSessionActions } from '@/components/books/BookWordActions'
@@ -93,6 +103,7 @@ import {
 } from './recordNextStep'
 import {
   defaultPaperKey,
+  downloadPaper,
   paperKey,
   paperResetSignature,
   papersOf,
@@ -158,8 +169,8 @@ export function RecordPane({
   const serviceLabel = useServiceLabel()
   const { has } = useCapabilities()
   const { scheduleDelete } = useRecordDelete()
-  const canEdit = has('books.edit')
-  const canScanCap = has('documents.scan')
+  const canEdit = has('books.edit') && !!book?.can_write
+  const canScanCap = has('documents.scan') && !!book?.can_write
   const canScan = canScanCap && canEdit
   // State (not a ref): the workflow buttons built during render click it.
   const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null)
@@ -170,6 +181,11 @@ export function RecordPane({
   const [deleteTarget, setDeleteTarget] = useState<Paper | null>(null)
   const [replaceTarget, setReplaceTarget] = useState<Paper | null>(null)
   const [deleteRecordOpen, setDeleteRecordOpen] = useState(false)
+  const [sendOpen, setSendOpen] = useState(false)
+  const [levelOpen, setLevelOpen] = useState(false)
+  const [linkOpen, setLinkOpen] = useState(false)
+  const reply = useReplyActions(book)
+  const inboxActions = useInboxActions(book)
   const [wordTrigger, setWordTrigger] = useState<WordReopenTrigger | null>(null)
   // Relative times ("2 days ago") are computed once per mounted pane; they need no ticking.
   const [now] = useState(() => Date.now())
@@ -227,6 +243,8 @@ export function RecordPane({
     setFullOpen(false)
     setIncludedPapersOpen(false)
     setDeleteRecordOpen(false)
+    setSendOpen(false)
+    setLevelOpen(false)
   }
 
   useEffect(() => {
@@ -276,6 +294,13 @@ export function RecordPane({
   const who = subjectEmployeePart(book.subject, { classified: !!book.classification_code })
   const review = reportReviewOf(book)
   const seal = sealDescriptor(state, { signingPath: book.signing_path, signedSource: signedSourceOf(book), review })
+  // Sender and purpose: the More menu's heading, joined for the rail's tooltip.
+  const inbox = book.my_inbox
+  const inboxFrom = inbox
+    ? t('books.send.sentToYou', { name: bidi(pickEmployeeName({ name_en: inbox.sent_by_name ?? '', name_ar: inbox.sent_by_name_ar }, i18n.language)) })
+    : ''
+  const inboxPurpose = inbox ? t(`books.send.purposes.${inbox.purpose}`) : ''
+  const inboxLabel = `${inboxFrom} · ${inboxPurpose}`
 
   if (mode === 'inline' && size === 'collapsed') {
     return (
@@ -285,7 +310,7 @@ export function RecordPane({
             type="button"
             aria-label={t('books.pane.normal')}
             onClick={() => onSizeChange('normal')}
-            className="flex h-full w-full flex-col items-center gap-3 py-3 text-primary transition-colors hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring motion-reduce:transition-none"
+            className="flex w-full shrink-0 flex-col items-center gap-3 py-3 text-primary transition-colors hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring motion-reduce:transition-none"
           >
             <PanelRightOpen className="h-4 w-4 rtl:-scale-x-100" aria-hidden />
             <span
@@ -298,6 +323,54 @@ export function RecordPane({
             <span className="sr-only">{t(seal.labelKey)}</span>
           </button>
         </Hint>
+        {/* A recipient's tools stay one click away while the preview is closed. */}
+        {inbox && (
+          <div
+            role="group"
+            aria-label={inboxLabel}
+            data-testid="pane-rail-inbox"
+            className="mx-2 flex shrink-0 flex-col items-center gap-1 border-t border-hairline py-2"
+          >
+            <Hint label={inboxLabel} side="start">
+              <span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-info-soft text-info">
+                <Inbox className="h-3.5 w-3.5" aria-hidden />
+              </span>
+            </Hint>
+            {inboxActions.map((item) => (
+              <IconAction
+                key={item.key}
+                aria-label={item.label}
+                hint={item.label}
+                hintSide="start"
+                disabled={item.pending}
+                aria-busy={item.pending || undefined}
+                onClick={item.onSelect}
+                className="border-transparent bg-transparent pointer-coarse:h-11 pointer-coarse:w-11"
+              >
+                {item.icon}
+              </IconAction>
+            ))}
+            {reply.actions.map((item) => (
+              <IconAction
+                key={item.key}
+                aria-label={item.label}
+                hint={item.label}
+                hintSide="start"
+                onClick={item.onSelect}
+                className="border-transparent bg-transparent pointer-coarse:h-11 pointer-coarse:w-11"
+              >
+                {item.icon}
+              </IconAction>
+            ))}
+          </div>
+        )}
+        {/* The rest of the strip still expands on click (the button above is the accessible control). */}
+        <div
+          aria-hidden
+          onClick={() => onSizeChange('normal')}
+          className="min-h-0 flex-1 cursor-pointer transition-colors hover:bg-surface-raised motion-reduce:transition-none"
+        />
+        {reply.dialog}
       </aside>
     )
   }
@@ -312,7 +385,7 @@ export function RecordPane({
       ? versions.find((v) => v.id === book.selected_version_id)
       : undefined) ?? liveVersion
   const isLiveCurrent = currentVersion != null && currentVersion.version_no === liveVersion?.version_no
-  const canMutateCurrent = book.access_scope !== 'assigned_revision' && isLiveCurrent
+  const canMutateCurrent = book.can_write && book.access_scope !== 'assigned_revision' && isLiveCurrent
   const reporterAction = inmateReporterActionFor(book, user?.id)
   const isInmateReport =
     isInmateReporter && book.ref_number.startsWith('REPORT-') && reporterAction !== 'read-only'
@@ -326,7 +399,7 @@ export function RecordPane({
   const ns: NextStep = recordNextStep(statusDetail.data?.id === book.id ? { ...book, ...statusDetail.data } : book, {
     has,
     canEdit,
-    canGenerate: has('documents.generate'),
+    canGenerate: has('documents.generate') && book.can_write,
     canMutateCurrent,
     isInmateReporter,
     inmateAction: reporterAction,
@@ -398,8 +471,10 @@ export function RecordPane({
   const showDelete = deleteId !== undefined
   const deleteReason = deleteId ? reasonOf(deleteId) : undefined
   const deleteLabel = state === 'none' ? t('books.record.deleteDraft') : t('books.record.delete')
-  const hasMoreItems =
+  const hasOtherMoreItems =
+    reply.actions.length > 0 || (canEdit && book.access_scope === 'full') || book.can_send || book.can_change_confidentiality ||
     wordTrigger !== null || showScanSignedInMenu || showAddToPdf || showEmail || showDelete
+  const hasMoreItems = inboxActions.length > 0 || hasOtherMoreItems
 
   const includedDocumentId = includedDetail.data ? currentBookDocId(includedDetail.data) : undefined
 
@@ -561,8 +636,8 @@ export function RecordPane({
           )}
           <p className="mt-0.5 text-[0.7em] text-muted-foreground">
             {t('books.record.createdBy')}{' '}
-            {book.created_by_name ? (
-              <bdi>{book.created_by_name}</bdi>
+            {book.created_by_name || book.created_by_name_ar ? (
+              <bdi>{pickEmployeeName({ name_en: book.created_by_name ?? '', name_ar: book.created_by_name_ar }, i18n.language)}</bdi>
             ) : (
               <span className="italic">{t('books.record.creatorUnknown')}</span>
             )}
@@ -586,8 +661,8 @@ export function RecordPane({
             )}
           </p>
         </div>
-        {/* Chips row: classification / draft / editing / voided */}
-        {(book.classification_code || book.is_draft || book.edit_session?.state === 'active' || book.voided_at) && (
+        {/* Chips row: confidentiality / classification / draft / editing / voided */}
+        {(book.confidentiality !== 'general' || book.classification_code || book.is_draft || book.edit_session?.state === 'active' || book.voided_at) && (
           <div className="flex flex-wrap gap-1.5 px-3.5 pt-2">
             <BookStatusChips book={book} />
           </div>
@@ -597,6 +672,7 @@ export function RecordPane({
             <WordSessionBanner book={book} compact live={false} />
           </div>
         )}
+        <RecordRecipientsPanel bookId={book.id} className="mt-2 border-t border-hairline" />
         <div className="flex min-h-[20rem] flex-col pt-2">
           <Suspense fallback={<DocumentState kind="loading" />}>
             <RecordPaperViewer
@@ -659,6 +735,43 @@ export function RecordPane({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" side="top">
+                {inbox && (
+                  <>
+                    <div role="presentation" className="max-w-64 px-2.5 pb-1.5 pt-1.5 text-[0.75em] leading-snug">
+                      <p className="font-semibold">{inboxFrom}</p>
+                      <p className="text-muted-foreground">{inboxPurpose}</p>
+                      {inbox.note && (
+                        <p className="mt-1 line-clamp-3 whitespace-pre-line" dir="auto">{inbox.note}</p>
+                      )}
+                    </div>
+                    {inboxActions.map((item) => (
+                      <DropdownMenuItem key={item.key} pending={item.pending} onSelect={item.onSelect}>
+                        {item.icon}{item.label}
+                      </DropdownMenuItem>
+                    ))}
+                    {hasOtherMoreItems && <DropdownMenuSeparator />}
+                  </>
+                )}
+                {book.can_send && (
+                  <DropdownMenuItem onSelect={() => setSendOpen(true)}>
+                    <Send className="h-3.5 w-3.5" aria-hidden />
+                    {t('books.send.menu')}
+                  </DropdownMenuItem>
+                )}
+                {reply.actions.map((item) => (
+                  <DropdownMenuItem key={item.key} onSelect={item.onSelect}>{item.icon}{item.label}</DropdownMenuItem>
+                ))}
+                {canEdit && book.access_scope === 'full' && (
+                  <DropdownMenuItem onSelect={() => { if (canEdit && book.access_scope === 'full') setLinkOpen(true) }}>
+                    <Link2 className="h-3.5 w-3.5" aria-hidden />{t('books.thread.linkRecord')}
+                  </DropdownMenuItem>
+                )}
+                {book.can_change_confidentiality && (
+                  <DropdownMenuItem onSelect={() => setLevelOpen(true)}>
+                    <Lock className="h-3.5 w-3.5" aria-hidden />
+                    {t('books.confidentiality.menu')}
+                  </DropdownMenuItem>
+                )}
                 {wordTrigger && (
                   <DropdownMenuItem disabled={wordTrigger.disabled} onSelect={wordTrigger.onClick}>
                     {wordTrigger.icon}
@@ -704,6 +817,11 @@ export function RecordPane({
           </span>
         )}
       </div>
+
+      <SendRecordDialog book={book} open={sendOpen} onOpenChange={setSendOpen} />
+      {reply.dialog}
+      <LinkRecordDialog book={book} open={linkOpen && canEdit && book.access_scope === 'full'} onOpenChange={setLinkOpen} />
+      <ChangeConfidentialityDialog book={book} open={levelOpen} onOpenChange={setLevelOpen} />
 
       {/* Owns the "Edit in Word" mutation + inmate-reporter handoff dialog; the trigger renders in More. */}
       {hasWordReopen && (
@@ -882,16 +1000,6 @@ export function RecordPane({
         : null}
     </aside>
   )
-}
-
-/** Saves a paper through a transient anchor (the same `download` the viewer uses). */
-function downloadPaper(paper: Paper): void {
-  const a = document.createElement('a')
-  a.href = paper.downloadUrl
-  a.download = paper.filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
 }
 
 function paneBtnClass({

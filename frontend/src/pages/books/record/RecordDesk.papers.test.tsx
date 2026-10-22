@@ -26,6 +26,7 @@ function makeBook(overrides: Record<string, unknown> = {}): BookRead {
     ref_number: 'GS-0001',
     approval_state: 'approved',
     access_scope: 'full',
+    can_write: true,
     attachment_paths: ['vault/scan-a.pdf'],
     imported_doc: null,
     edit_session: null,

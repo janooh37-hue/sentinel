@@ -8,8 +8,8 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 
 import en from '@/locales/en.json'
-import type { JobStatusResponse } from '@/lib/api'
 import type * as ApiModule from '@/lib/api'
+import type { JobStatusResponse } from '@/lib/api'
 import { api, ApiError } from '@/lib/api'
 import { ApplicationPage } from './ApplicationPage'
 import { messageTemplatesApi } from '@/lib/messageTemplates'
@@ -22,18 +22,22 @@ const jobStatusState = vi.hoisted(() => ({
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
-vi.mock('@/lib/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof ApiModule>()),
-  api: {
-    listTemplates: vi.fn(),
-    getEmployeeLookup: vi.fn(),
-    getSettings: vi.fn(),
-    getTemplateFields: vi.fn(),
-    generateDocument: vi.fn(),
-    getBook: vi.fn(),
-    getBookVersionFields: vi.fn(),
-  },
-}))
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof ApiModule>()
+  return {
+    ...actual,
+    api: {
+      listTemplates: vi.fn(),
+      getEmployeeLookup: vi.fn(),
+      getSettings: vi.fn(),
+      getTemplateFields: vi.fn(),
+      generateDocument: vi.fn(),
+      getBook: vi.fn(),
+      getBookVersionFields: vi.fn(),
+    },
+    apiErrorMessage: (error: unknown) => String(error),
+  }
+})
 vi.mock('@/lib/messageTemplates', async (importOriginal) => {
   const actual = await importOriginal<typeof MessageTemplatesModule>()
   return {

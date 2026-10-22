@@ -1,5 +1,5 @@
 /**
- * FolderRail — the left folder rail of the Ledger Outlook shell (Phase 4, Task 6).
+ * FolderRail — the folder rail of the Ledger Outlook shell (Phase 4, Task 6).
  *
  * Matches the prototype's `.rail` (docs/prototypes/ledger-outlook-redesign.html):
  *   [collapse toggle] → [＋ New email] → [account header] → personal folders
@@ -14,15 +14,14 @@
  * Collapse: the rail folds to a 60px icon-only strip (Outlook-style). Labels and
  * the email line hide; emoji centre and carry `title`/`aria-label` tooltips so
  * they stay identifiable. State persists in localStorage so it survives
- * navigation. Pinned LTR by the shell (`[data-ledger-chrome] dir=ltr`), so the
- * rail never mirrors in Arabic — width + logical utilities keep it on the start
- * (left) edge.
+ * navigation. The rail follows the app direction: left in English, right in
+ * Arabic, matching the Books rail.
  *
  * The emoji are wayfinding aids per CLAUDE.md principle #1 — keep them. Rail
  * colours use the `--rail*` semantic tokens (Task 2), never hardcoded hex.
  */
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft } from 'lucide-react'
@@ -37,6 +36,7 @@ import { SmartFolders } from './SmartFolders'
 const RAIL_COLLAPSED_KEY = 'ledger.railCollapsed'
 
 interface FolderRailProps {
+  header?: ReactNode
   activeView: MailboxView
   onSelectView: (view: MailboxView) => void
   /** Called when the ＋ New email button is clicked (Phase 6). */
@@ -51,7 +51,7 @@ interface FolderRailProps {
   suggestionCount?: number
 }
 
-export function FolderRail({ activeView, onSelectView, onNewEmail, allMail, onToggleAllMail, onReviewSuggestions, suggestionCount = 0 }: FolderRailProps): React.JSX.Element {
+export function FolderRail({ header, activeView, onSelectView, onNewEmail, allMail, onToggleAllMail, onReviewSuggestions, suggestionCount = 0 }: FolderRailProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const { identity, isAdmin } = useIdentity()
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -100,6 +100,7 @@ export function FolderRail({ activeView, onSelectView, onNewEmail, allMail, onTo
         collapsed ? 'w-[60px]' : 'w-[236px]',
       )}
     >
+      {!collapsed && header && <div className="mb-2">{header}</div>}
       {/* Collapse / expand the folder pane (Outlook-style; state persists). */}
       <button
         type="button"
@@ -116,6 +117,7 @@ export function FolderRail({ activeView, onSelectView, onNewEmail, allMail, onTo
           className={cn(
             'h-3.5 w-3.5 flex-none transition-transform duration-200 motion-reduce:transition-none',
             collapsed && 'rotate-180',
+            'rtl:-scale-x-100',
           )}
           aria-hidden
         />
@@ -168,7 +170,7 @@ export function FolderRail({ activeView, onSelectView, onNewEmail, allMail, onTo
       {PERSONAL_FOLDERS.map((folder) => (
         <FolderButton
           key={folder.key}
-          emoji={folder.emoji}
+          icon={folder.emoji}
           label={t(`ledger.outlook.folders.${folder.i18nKey}`)}
           collapsed={collapsed}
           active={activeView.kind === 'folder' && activeView.folder === folder.key}
@@ -212,7 +214,7 @@ export function FolderRail({ activeView, onSelectView, onNewEmail, allMail, onTo
 
       {/* 🚩 Follow-ups — the current user's flagged entries (Phase 2, D3b). */}
       <FolderButton
-        emoji="🚩"
+        icon="🚩"
         label={t('ledger.followups.title')}
         collapsed={collapsed}
         active={activeView.kind === 'followups'}
@@ -236,29 +238,31 @@ export function FolderRail({ activeView, onSelectView, onNewEmail, allMail, onTo
 }
 
 interface FolderButtonProps {
-  emoji: string
+  icon: ReactNode
   label: string
   active: boolean
   badge?: number
+  count?: number
   collapsed?: boolean
   onClick: () => void
 }
 
-function FolderButton({ emoji, label, active, badge, collapsed, onClick }: FolderButtonProps): React.JSX.Element {
+export function FolderButton({ icon, label, active, badge, count, collapsed, onClick }: FolderButtonProps): React.JSX.Element {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={collapsed ? label : undefined}
+      aria-current={active ? 'page' : undefined}
+      aria-label={collapsed ? label : count != null || badge != null ? `${label} ${count ?? badge}` : undefined}
       title={collapsed ? label : undefined}
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-start text-[0.82em] transition-colors',
+        'flex min-w-0 w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-start text-[0.82em] transition-colors',
         collapsed && 'justify-center px-0',
         active ? 'bg-rail-3 font-semibold text-white' : 'text-rail-text hover:bg-rail-2',
       )}
     >
-      <span className="relative w-[18px] flex-none text-center text-[1em]" aria-hidden>
-        {emoji}
+      <span className="relative grid w-[18px] flex-none place-items-center text-[1em]" aria-hidden>
+        {icon}
         {collapsed && badge != null && (
           <span className="absolute -end-1 -top-1 h-2 w-2 rounded-full bg-info ring-2 ring-rail" />
         )}
@@ -266,6 +270,11 @@ function FolderButton({ emoji, label, active, badge, collapsed, onClick }: Folde
       {!collapsed && (
         <span className="flex-1 truncate" dir="auto">
           {label}
+        </span>
+      )}
+      {!collapsed && count != null && (
+        <span className="flex-none font-mono text-[0.78em] tabular-nums text-rail-faint">
+          {count}
         </span>
       )}
       {!collapsed && badge != null && (

@@ -1,9 +1,9 @@
-import { Hourglass, Inbox, ScanLine, Settings } from 'lucide-react'
+import { FileInput, Hourglass, Inbox, ScanLine, Settings } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 import { NAV_ITEMS } from './navItems'
 
-export type WaitingSignalId = 'approvals' | 'scanback' | 'ledgerUnread'
+export type WaitingSignalId = 'approvals' | 'scanback' | 'ledgerUnread' | 'inbox'
 
 export interface DockEntry {
   id: string
@@ -13,18 +13,20 @@ export interface DockEntry {
   to: string
   cap?: string
   caps?: readonly string[]
+  anyCaps?: readonly string[]
   signal?: WaitingSignalId
 }
 
 export const SECTION_ENTRIES: readonly DockEntry[] = [
   ...NAV_ITEMS.map(
-    ({ to, key, Icon, cap }): DockEntry => ({
+    ({ to, key, Icon, cap, anyCaps }): DockEntry => ({
       id: `sec:${to}`,
       kind: 'section',
       labelKey: key,
       Icon,
       to,
       cap,
+      anyCaps,
     }),
   ),
   {
@@ -63,9 +65,18 @@ export const SIGNAL_ENTRIES: readonly DockEntry[] = [
     kind: 'signal',
     labelKey: 'nav.signals.ledgerUnread',
     Icon: Inbox,
-    to: '/ledger',
+    to: '/ledger?tab=email',
     cap: 'ledger.view',
     signal: 'ledgerUnread',
+  },
+  {
+    id: 'sig:inbox',
+    kind: 'signal',
+    labelKey: 'books.inbox.sentToMe',
+    Icon: FileInput,
+    to: '/ledger?tab=books&scope=incoming',
+    cap: 'books.view',
+    signal: 'inbox',
   },
 ]
 
@@ -92,10 +103,11 @@ export function entryById(id: string): DockEntry | undefined {
 }
 
 export function isNavEntryAllowed(
-  entry: Pick<DockEntry, 'cap' | 'caps'>,
+  entry: Pick<DockEntry, 'cap' | 'caps' | 'anyCaps'>,
   has: (capability: string) => boolean,
 ): boolean {
-  return (!entry.cap || has(entry.cap)) && (!entry.caps || entry.caps.every(has))
+  return (!entry.cap || has(entry.cap)) && (!entry.caps || entry.caps.every(has)) &&
+    (!entry.anyCaps || entry.anyCaps.some(has))
 }
 
 /** The `sig:approvals` entry has no static capability gate (see above) — it

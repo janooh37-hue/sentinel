@@ -7,12 +7,15 @@ import { toast } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/lib/api'
-import type { VehicleFileRead, VehiclePhotoRead, VehicleRead, VehicleSiteRead } from '@/lib/api'
+import type { VehicleFileRead, VehicleMaintenanceRead, VehicleMaintenanceRequestRead, VehiclePhotoRead, VehicleRead, VehicleSiteRead, VehiclesSummary } from '@/lib/api'
 import i18n from '@/lib/i18n'
 
 import { VehicleDetailPage } from './VehicleDetailPage'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+
+const mobileViewport = vi.hoisted(() => ({ value: false }))
+vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => mobileViewport.value }))
 
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
@@ -33,6 +36,9 @@ vi.mock('@/lib/api', async (importOriginal) => {
     api: {
       ...mod.api,
       getVehicle: vi.fn(),
+      vehiclesSummary: vi.fn(),
+      listVehicleMaintenanceRequests: vi.fn(),
+      createVehicleMaintenance: vi.fn(),
       listVehicleSites: vi.fn(),
       uploadVehicleFile: vi.fn(),
       updateVehicle: vi.fn(),
@@ -92,6 +98,7 @@ function baseVehicle(overrides: Partial<VehicleRead> = {}): VehicleRead {
     class_en: 'Light bus',
     vin: null,
     site_id: 1,
+    current_odometer_km: 12500,
     license_start: '2026-01-01',
     license_expiry: '2027-01-01',
     expiry_status: 'valid',
@@ -145,7 +152,7 @@ const PHOTO_ASSET: VehiclePhotoRead = {
 }
 
 function renderPage(
-  tab?: 'renewals' | 'photos' | 'certificates',
+  tab?: 'renewals' | 'photos' | 'certificates' | 'maintenance',
   initialEntry?: string,
   onLocation?: (search: string) => void,
 ) {
@@ -183,6 +190,7 @@ function LocationProbe({ onLocation }: { onLocation?: (search: string) => void }
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  mobileViewport.value = false
   await i18n.changeLanguage('en')
   i18n.addResource('en', 'translation', 'vehicles.setAsMainPhoto', 'Set as main photo')
   i18n.addResource('en', 'translation', 'vehicles.replaceLicenceFile', 'Replace licence file')
@@ -200,6 +208,13 @@ beforeEach(async () => {
   )
   vi.mocked(api.getVehicle).mockResolvedValue(baseVehicle())
   vi.mocked(api.listVehicleSites).mockResolvedValue(SITES)
+  vi.mocked(api.vehiclesSummary).mockResolvedValue({
+    vehicles: 1, fines_count: 0, fines_amount_fils: 0, black_points: 0,
+    license_attention: 0, insurance_attention: 0, open_accidents: 0,
+    maintenance_due: 0, active_sites: 1, notify_days: 30,
+    maintenance_contractor_id: 3, maintenance_contractor_name: 'Fleet garage',
+  })
+  vi.mocked(api.listVehicleMaintenanceRequests).mockResolvedValue([])
   vi.mocked(api.listVehiclePhotos).mockResolvedValue([PHOTO_ASSET])
   vi.mocked(api.promoteVehiclePhoto).mockResolvedValue(PHOTO_ASSET)
 })
@@ -422,6 +437,58 @@ describe('VehicleDetailPage', () => {
       expect(api.deleteVehicleFile).not.toHaveBeenCalledWith(101, 502)
     })
   })
+  it.each([false, true])('Mark done submits request_id and the edited completion fields (mobile=%s)', async (mobile) => {
+    mobileViewport.value = mobile
+    const user = userEvent.setup()
+    const request: VehicleMaintenanceRequestRead = {
+      id: 42, vehicle_id: 101, employee_id: null, type: 'repair',
+      description: 'Replace brake pads', odometer_km: 12550, book_id: 501,
+      ref_number: '11/1/GSSG/501', status: 'open', maintenance_id: null,
+      created_by_user_id: 1, created_at: '2026-10-15T09:00:00Z', completed_at: null,
+    }
+    vi.mocked(api.listVehicleMaintenanceRequests).mockResolvedValue([request])
+    const record: VehicleMaintenanceRead = {
+      id: 77, vehicle_id: 101, date: '2026-10-15', type: 'repair', odometer_km: 12600,
+      cost: 400, vendor_ar: null, vendor_en: null, next_due: null, receipt_file_id: null,
+      created_at: '2026-10-15T10:00:00Z', vehicle_plate_label: '14 \\ 58216',
+      vehicle_type_ar: '', vehicle_type_en: '',
+    }
+    vi.mocked(api.createVehicleMaintenance).mockResolvedValue(record)
+    renderPage('maintenance')
+
+    expect(await screen.findByRole('link', { name: '11/1/GSSG/501' })).toHaveAttribute('href', '/books/501')
+    await user.click(screen.getByRole('button', { name: 'Mark done' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add maintenance' })
+    expect(within(dialog).getByRole('combobox', { name: /Maintenance type/ })).toHaveTextContent('Repair')
+    const odometer = within(dialog).getByLabelText('Odometer (km)')
+    expect(odometer).toHaveValue(12550)
+    await user.clear(odometer)
+    await user.type(odometer, '12600')
+    await user.clear(within(dialog).getByLabelText(/^Cost/))
+    await user.type(within(dialog).getByLabelText(/^Cost/), '400')
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(api.createVehicleMaintenance).toHaveBeenCalledWith(expect.objectContaining({
+      vehicle_id: 101, request_id: 42, type: 'repair', odometer_km: 12600, cost: 400,
+    })))
+    expect(api.createVehicleMaintenance).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([false, true])('disables requests and links to settings without a contractor (mobile=%s)', async (mobile) => {
+    mobileViewport.value = mobile
+    vi.mocked(api.vehiclesSummary).mockResolvedValue({
+      ...await api.vehiclesSummary(),
+      maintenance_contractor_id: null, maintenance_contractor_name: null,
+    } satisfies VehiclesSummary)
+    renderPage('maintenance')
+
+    const action = await screen.findByRole('button', { name: 'Request maintenance' })
+    expect(action).toBeDisabled()
+    expect(await screen.findByText('Set a maintenance contractor in vehicle settings before requesting maintenance.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Vehicle settings' })).toHaveAttribute('href', '/vehicles')
+    expect(api.createVehicleMaintenance).not.toHaveBeenCalled()
+  })
+
   it('opens a renew overlay from the URL and closes it without leaving the vehicle', async () => {
     const user = userEvent.setup()
     let current = ''

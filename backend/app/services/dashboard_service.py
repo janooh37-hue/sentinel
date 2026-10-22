@@ -47,7 +47,7 @@ from app.schemas.dashboard import (
     DashboardUpcomingLeaveItem,
 )
 from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_LOANED, WORKING_STATUSES
-from app.services import book_service, email_service
+from app.services import book_service, email_service, ledger_service
 from app.services.ledger_service import DRAFT_TAG
 
 # How many "recent" rows to surface per stream.
@@ -129,7 +129,7 @@ def get_summary(
         on_leave_today=_on_leave_today(db, today=today),
         upcoming_leave_ends=_upcoming_leave_ends(db, today=today),
         recent_documents=_recent_documents(db, user=user),
-        recent_ledger=_recent_ledger(db),
+        recent_ledger=_recent_ledger(db, user=user),
         email_sync=_email_sync(db, today=today, owner_user_id=owner_user_id),
     )
 
@@ -353,7 +353,7 @@ def _recent_documents(
     ]
 
 
-def _recent_ledger(db: Session) -> list[DashboardRecentLedger]:
+def _recent_ledger(db: Session, *, user: User | None = None) -> list[DashboardRecentLedger]:
     related_emp = Employee.__table__.alias("related_emp")
 
     stmt = (
@@ -377,6 +377,9 @@ def _recent_ledger(db: Session) -> list[DashboardRecentLedger]:
         .order_by(LedgerEntry.created_at.desc(), LedgerEntry.id.desc())
         .limit(RECENT_LIMIT)
     )
+    visible = ledger_service.related_book_visible(db, user)
+    if visible is not None:
+        stmt = stmt.where(visible)
 
     rows: list[Any] = list(db.execute(stmt).all())
     return [

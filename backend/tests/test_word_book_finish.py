@@ -11,8 +11,18 @@ from pathlib import Path
 
 import fitz
 import pytest
+from docx import Document as DocxFile
 
 from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, User
+
+
+@pytest.fixture(autouse=True)
+def _isolated_artifact_settings(monkeypatch, tmp_path):
+    from app.services import artifact_service, word_book_service
+
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+    monkeypatch.setattr(artifact_service, "get_settings", lambda: word_book_service.get_settings())
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -74,7 +84,7 @@ def _make_book_with_session(
     working_dir.mkdir(parents=True, exist_ok=True)
     working_path = working_dir / f"{ref.replace('/', '-')}.docx"
     if write_file:
-        working_path.write_bytes(b"PK fake docx bytes")
+        DocxFile().save(working_path)
 
     token = secrets.token_urlsafe(32)
     session = BookEditSession(
@@ -375,7 +385,7 @@ def test_finish_second_session_gives_version_2_revision(db_session, tmp_path, mo
     working_dir2 = tmp_path / "data" / "editing" / f"book-{book.id}-v2"
     working_dir2.mkdir(parents=True, exist_ok=True)
     working_path2 = working_dir2 / "revision.docx"
-    working_path2.write_bytes(b"PK fake docx v2")
+    DocxFile().save(working_path2)
     session2 = BookEditSession(
         book_id=book.id,
         user_id=user.id,
@@ -447,6 +457,51 @@ def test_finish_accepts_public_pdf_converter(db_session, tmp_path, monkeypatch):
 
     document = db_session.get(Document, result.versions[-1].document_id)
     assert document is not None
+    assert document.pdf_path is not None
+
+
+@pytest.mark.parametrize(
+    "level, expected",
+    [("secret", ["سري"]), ("personal", ["شخصي"]), ("general", []), ("directed", [])],
+)
+def test_finish_restores_current_level_before_pdf_conversion(db_session, tmp_path, level, expected):
+    from datetime import UTC, datetime
+
+    from app.core.level_mark import apply_level_mark
+    from app.services import word_book_service
+
+    user = _user(db_session)
+    book, session = _make_book_with_session(db_session, user, tmp_path)
+    source = Path(session.working_path)
+    paper = DocxFile(source)
+    paper.sections[0].footer.paragraphs[0].text = "G-1001"
+    paper.save(source)
+    assert apply_level_mark(source, "secret")
+    footer = DocxFile(source).sections[0].footer.part.element.xml
+    book.confidentiality = level
+    session.last_put_at = datetime.now(UTC).replace(tzinfo=None)
+    db_session.commit()
+    converted = []
+
+    def convert(path):
+        paper = DocxFile(path)
+        controls = paper.sections[0].header.part.element.xpath(
+            './/w:sdt[w:sdtPr/w:tag/@w:val="gssg-level-mark"]'
+        )
+        assert [
+            "".join(node.text or "" for node in mark.xpath(".//w:t", namespaces=mark.nsmap))
+            for mark in controls
+        ] == expected
+        assert paper.sections[0].footer.part.element.xml == footer
+        converted.append(path)
+        return _pdf(path.with_suffix(".pdf"))
+
+    result = word_book_service.finish_word_session(
+        db_session, user=user, book_id=book.id, converter=convert
+    )
+
+    document = db_session.get(Document, result.versions[-1].document_id)
+    assert converted == [Path(document.docx_path)]
     assert document.pdf_path is not None
 
 
@@ -623,7 +678,7 @@ def test_finish_classified_book_slashed_ref_no_nested_dirs(db_session, tmp_path,
     working_dir = tmp_path / "data" / "editing" / f"book-{book.id}"
     working_dir.mkdir(parents=True, exist_ok=True)
     working_path = working_dir / f"{slashed_ref.replace('/', '-')}.docx"
-    working_path.write_bytes(b"PK fake classified docx")
+    DocxFile().save(working_path)
 
     session = BookEditSession(
         book_id=book.id,

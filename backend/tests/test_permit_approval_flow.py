@@ -373,7 +373,10 @@ def test_pending_word_version_survives_structured_regeneration(gen_env, tmp_path
     assert initial_document is not None
     initial_path = Path(initial_document.docx_path)
     initial_path.parent.mkdir(parents=True, exist_ok=True)
-    initial_path.write_bytes(b"PK generated permit docx")
+    # A real package: finishing the session re-applies the printed level mark.
+    from docx import Document as DocxDocument
+
+    DocxDocument().save(str(initial_path))
 
     word_book_service.reopen_word_session(
         db, user=db.query(User).filter_by(email="op@x.ae").one(), book_id=book.id

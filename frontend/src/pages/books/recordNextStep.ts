@@ -20,6 +20,7 @@ import {
 } from '@/components/books/book-detail-drawer-utils'
 import { approverStep } from '@/components/books/reviewers'
 import { parseUtcMs } from '@/lib/time'
+import { pickEmployeeName } from '@/lib/employeeName'
 
 import { deleteBlockReason, deleteReasonKey } from './recordDelete'
 import { reportReviewOf } from './bookStateLabel'
@@ -90,11 +91,11 @@ export type ReviseBlockReason = 'noTemplate' | 'noPermission' | 'notCurrent' | '
 export interface NextStepContext {
   /** The user's capability check (`useCapabilities().has`). */
   has: (cap: string) => boolean
-  /** `has('books.edit')`. */
+  /** `has('books.edit') && book.can_write`. */
   canEdit: boolean
-  /** `has('documents.generate')` — Revise regenerates via POST /documents/generate. */
+  /** `has('documents.generate') && book.can_write` — needed for Revise. */
   canGenerate: boolean
-  /** Full access AND the live revision (BRP `canMutateCurrent`). */
+  /** Writable full access AND the live revision (BRP `canMutateCurrent`). */
   canMutateCurrent: boolean
   isInmateReporter: boolean
   /** `inmateReporterActionFor(book, user.id)`; `'read-only'` for everyone else. */
@@ -231,6 +232,7 @@ export function recordNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   const out =
     !ctx.isInmateReporter &&
     ctx.canMutateCurrent &&
+    book.can_write &&
     ctx.has('books.override_state') &&
     !built.overflow.includes('changeState')
       ? { ...built, overflow: [...built.overflow, 'changeState' as const] }
@@ -256,13 +258,14 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   const isInmateReport =
     inmate && book.ref_number.startsWith('REPORT-') && ctx.inmateAction !== 'read-only'
   const canApprove = ctx.has('books.approve')
-  const canSubmitBook = ctx.has('books.submit')
-  const canScan = ctx.has('documents.scan')
+  const canSubmitBook = ctx.has('books.submit') && book.can_write
+  const canScan = ctx.has('documents.scan') && book.can_write
   const review = reportReviewOf(book)
 
   // Gates mirrored from BookRecordPage so the model and the page agree.
-  const canWord = ctx.canMutateCurrent && (!inmate || isInmateReport)
+  const canWord = book.can_write && ctx.canMutateCurrent && (!inmate || isInmateReport)
   const canSend =
+    book.can_write &&
     ctx.canMutateCurrent &&
     (isInmateReport
       ? state === 'none' && !wordActive
@@ -274,6 +277,7 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   // truth is its docx (the form would open empty) and an inmate's own report
   // is edited in place, so neither is ever offered Continue editing.
   const canContinue =
+    book.can_write &&
     !book.is_word_book &&
     !isInmateReport &&
     ctx.canMutateCurrent &&
@@ -287,7 +291,7 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   const canFileSigned =
     !inmate && ctx.canMutateCurrent && canFileSignedCopy(state, { canEdit: ctx.canEdit, canScan })
   const hasSignedCopy = state === 'approved' && Boolean(current?.signed_pdf_url)
-  const canManageSignedPaper = hasSignedCopy && ctx.canEdit && ctx.canMutateCurrent && !inmate
+  const canManageSignedPaper = book.can_write && hasSignedCopy && ctx.canEdit && ctx.canMutateCurrent && !inmate
   const canEmail = !inmate
 
   const emailDisabled: Partial<Record<ActionId, ReasonKey>> =
@@ -299,8 +303,10 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   const deleteDisabled = (id: ActionId): Partial<Record<ActionId, ReasonKey>> =>
     deleteDisabledKey ? { [id]: deleteDisabledKey } : {}
 
+  const language = ctx.locale.split('-')[0]
   const name = (s: BookApprovalStepRead | undefined): string =>
-    s?.assignee_name ?? book.doc_manager_name ?? ''
+    pickEmployeeName({ name_en: s?.assignee_name ?? '', name_ar: s?.assignee_name_ar }, language) ||
+    pickEmployeeName({ name_en: book.doc_manager_name ?? '', name_ar: book.doc_manager_name_ar }, language)
 
   // A voided record (discarded draft) is read-only; its ref stays in the register.
   if (book.voided_at) {
@@ -312,7 +318,7 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   // returned / rejected / approved record (backend leaves approval_state alone).
   if (wordActive && (canWord || state === 'none')) {
     return step(
-      { key: 'wordActive', vars: { name: book.edit_session?.user_name ?? '' } },
+      { key: 'wordActive', vars: { name: pickEmployeeName({ name_en: book.edit_session?.user_name ?? '', name_ar: book.edit_session?.user_name_ar }, language) } },
       canWord
         ? { primary: 'finishEditing', secondary: ['discardDraft'], overflow: ['print'] }
         : { overflow: ['print'] },
@@ -349,7 +355,7 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
           overflow: pick([
             ['print', true],
             ['email', canEmail],
-            ['addToPdf', ctx.canManageIncludedPapers],
+            ['addToPdf', book.can_write && ctx.canManageIncludedPapers],
             ['scanSigned', canFileSigned],
             ['deleteDraft', deleteVisible],
           ]),
@@ -422,10 +428,10 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
           overflow: pick([
             ['email', canEmail],
             ['print', true],
-            ['adjustSignature', !inmate && ctx.canMutateCurrent && current?.document_id != null],
+            ['adjustSignature', !inmate && book.can_write && ctx.canMutateCurrent && current?.document_id != null],
             ['replaceSigned', canManageSignedPaper],
             ['removeSigned', canManageSignedPaper],
-            ['changeState', !inmate && ctx.canMutateCurrent && ctx.has('books.override_state')],
+            ['changeState', !inmate && book.can_write && ctx.canMutateCurrent && ctx.has('books.override_state')],
           ]),
           disabled: emailDisabled,
         },
@@ -440,13 +446,13 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
         { key: state, vars: { name: name(decider) } },
         {
           quote: decider?.note?.trim() ? decider.note : undefined,
-          primary: inmate || ctx.canEdit ? 'revise' : undefined,
+          primary: book.can_write && (inmate || ctx.canEdit) ? 'revise' : undefined,
           overflow: pick([
             ['print', true],
             ['deleteRecord', deleteVisible],
           ]),
           disabled: {
-            ...(reviseKey && (inmate || ctx.canEdit) ? { revise: reviseKey } : {}),
+            ...(book.can_write && reviseKey && (inmate || ctx.canEdit) ? { revise: reviseKey } : {}),
             ...deleteDisabled('deleteRecord'),
           },
         },

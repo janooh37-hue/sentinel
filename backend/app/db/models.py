@@ -269,6 +269,11 @@ class Book(Base):
     # Original creator (users.id): immutable; set once at creation. No FK, same
     # SQLite batch-ALTER reason as submitted_by_user_id.
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Record level (migration 0102): general | personal | secret | directed.
+    # Gates who can open the record; see book_service.user_visibility_clause.
+    confidentiality: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="general", server_default="general"
+    )
     # The Manager directory row actually printed on the doc (reviewer/manager-
     # routed approvals, 2026-06-23). Submit-for-approval follows its `user_id`
     # link to auto-route. FK omitted (SQLite batch ALTER) — integrity app-side.
@@ -306,6 +311,10 @@ class Book(Base):
         Index("ix_books_employee_id", "employee_id"),
         Index("ix_books_created_at", "created_at"),
         Index("ix_books_created_by_user_id", "created_by_user_id"),
+        CheckConstraint(
+            "confidentiality IN ('general', 'personal', 'secret', 'directed')",
+            name="ck_books_confidentiality",
+        ),
     )
 
 
@@ -470,6 +479,140 @@ class BookRevisionAccess(Base):
             "state IN ('approved', 'rejected', 'returned', 'reviewed', 'changes_requested')",
             name="ck_book_revision_access_state",
         ),
+    )
+
+
+class BookRecipient(Base):
+    """A direct send of a record to one user (migration 0102).
+
+    An active row (``revoked_at IS NULL``) lets the recipient open the record
+    whatever its level or record type. A recall sets ``revoked_at``; the row
+    stays as history. At most one active row per (book, user).
+    """
+
+    __tablename__ = "book_recipients"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    sent_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    # info | action | reply | circulate (للاطلاع / للتنفيذ / للإفادة / للتعميم)
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    __table_args__ = (
+        Index("ix_book_recipients_user_revoked", "user_id", "revoked_at"),
+        Index("ix_book_recipients_book", "book_id"),
+        Index(
+            "uq_book_recipients_active",
+            "book_id",
+            "user_id",
+            unique=True,
+            sqlite_where=text("revoked_at IS NULL"),
+        ),
+        CheckConstraint(
+            "purpose IN ('info', 'action', 'reply', 'circulate')",
+            name="ck_book_recipients_purpose",
+        ),
+    )
+
+
+class BookLink(Base):
+    """An outgoing reply, derivation or live reference to another record."""
+
+    __tablename__ = "book_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    target_book_id: Mapped[int] = mapped_column(
+        ForeignKey("books.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    attached: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        CheckConstraint("kind IN ('reply', 'based_on', 'reference')", name="ck_book_links_kind"),
+        UniqueConstraint("book_id", "target_book_id", name="uq_book_links_pair"),
+        Index("ix_book_links_target", "target_book_id"),
+    )
+
+
+class BookFolder(Base):
+    """A personal or team filing folder; a null owner denotes a team folder."""
+
+    __tablename__ = "book_folders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    owner_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (Index("ix_book_folders_owner_user_id", "owner_user_id"),)
+
+
+class BookFolderShare(Base):
+    """A selected user or department allowed to see a restricted team folder."""
+
+    __tablename__ = "book_folder_shares"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    folder_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("book_folders.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    department: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "(user_id IS NOT NULL AND department IS NULL) OR "
+            "(user_id IS NULL AND department IS NOT NULL)",
+            name="ck_book_folder_shares_target",
+        ),
+        UniqueConstraint("folder_id", "user_id", name="uq_book_folder_shares_user"),
+        UniqueConstraint("folder_id", "department", name="uq_book_folder_shares_department"),
+    )
+
+
+class BookFolderItem(Base):
+    """Folder membership independent of a book's workflow state."""
+
+    __tablename__ = "book_folder_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    folder_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("book_folders.id", ondelete="CASCADE"), nullable=False
+    )
+    book_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=False
+    )
+    added_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("folder_id", "book_id", name="uq_book_folder_items_folder_book"),
+        Index("ix_book_folder_items_book_id", "book_id"),
     )
 
 
@@ -722,6 +865,9 @@ class Vehicle(Base):
     maintenance: Mapped[list[VehicleMaintenance]] = relationship(
         back_populates="vehicle", cascade="all, delete-orphan"
     )
+    maintenance_requests: Mapped[list[VehicleMaintenanceRequest]] = relationship(
+        back_populates="vehicle", cascade="all, delete-orphan"
+    )
     odometer_readings: Mapped[list[VehicleOdometerReading]] = relationship(
         back_populates="vehicle", cascade="all, delete-orphan"
     )
@@ -882,6 +1028,41 @@ class VehicleMaintenance(Base):
     vehicle: Mapped[Vehicle] = relationship(back_populates="maintenance")
 
     __table_args__ = (Index("ix_vehicle_maintenance_vehicle", "vehicle_id"),)
+
+
+class VehicleMaintenanceRequest(Base):
+    __tablename__ = "vehicle_maintenance_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    vehicle_id: Mapped[int] = mapped_column(
+        ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False
+    )
+    employee_id: Mapped[str | None] = mapped_column(ForeignKey("employees.id"), nullable=True)
+    type: Mapped[str] = mapped_column(String(16), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    odometer_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Cross-workflow links are service-owned, like VehicleAccident.letter_book_id.
+    book_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="open", server_default="open"
+    )
+    maintenance_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    vehicle: Mapped[Vehicle] = relationship(back_populates="maintenance_requests")
+
+    __table_args__ = (
+        CheckConstraint(
+            "type IN ('service', 'repair', 'tires', 'other')",
+            name="ck_vehicle_maintenance_requests_type",
+        ),
+        CheckConstraint(
+            "status IN ('open', 'done')", name="ck_vehicle_maintenance_requests_status"
+        ),
+        Index("ix_vehicle_maintenance_requests_vehicle_status", "vehicle_id", "status"),
+    )
 
 
 class VehicleOdometerReading(Base):

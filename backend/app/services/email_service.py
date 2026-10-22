@@ -42,7 +42,7 @@ from app.api.errors import NotFoundError
 from app.config import get_settings
 from app.core import crypto
 from app.core.subject import normalise_subject
-from app.db.models import Book, EmailAccount, LedgerEntry
+from app.db.models import Book, EmailAccount, LedgerEntry, User
 from app.schemas.email import (
     EmailAccountUpsert,
     EmailSyncResult,
@@ -814,18 +814,28 @@ def _find_pending_match(
     return None
 
 
-def _resolve_book(db: Session, entry: LedgerEntry) -> Book | None:
+def _resolve_book(db: Session, entry: LedgerEntry, owner: User | None = None) -> Book | None:
+    """The Record a sent mail is about — only one ``owner`` can open, so a ref in
+    a subject never links (or auto-logs) a Record hidden from the sender."""
+    book: Book | None = None
     if entry.related_book_id is not None:
         try:
-            return book_service.get_book(db, entry.related_book_id)
+            book = book_service.get_book(db, entry.related_book_id)
         except NotFoundError:
             return None
-
-    for match in _BOOK_REF_RE.finditer(entry.subject.upper()):
-        try:
-            return book_service.get_book_by_ref(db, match.group(0).upper())
-        except NotFoundError:
-            continue
+    else:
+        for match in _BOOK_REF_RE.finditer(entry.subject.upper()):
+            try:
+                book = book_service.get_book_by_ref(db, match.group(0).upper())
+                break
+            except NotFoundError:
+                continue
+    if book is None or owner is None:
+        return book
+    # The list-surface rule, so General records link exactly as before.
+    clause = book_service.user_visibility_clause(db, owner)
+    if clause is None or db.scalar(select(Book.id).where(Book.id == book.id, clause)):
+        return book
     return None
 
 
@@ -860,7 +870,7 @@ def reconcile_sent_entry(
             entry.related_employee_id = pending.related_employee_id
         pending.deleted_at = datetime.now(UTC).replace(tzinfo=None)
 
-    book = _resolve_book(db, entry)
+    book = _resolve_book(db, entry, db.get(User, owner_user_id))
     if book is not None:
         if book.send_state == "unsent":
             book.send_state = "sent"

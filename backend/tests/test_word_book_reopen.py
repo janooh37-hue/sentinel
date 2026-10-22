@@ -11,6 +11,7 @@ from pathlib import Path
 
 import fitz
 import pytest
+from docx import Document as DocxFile
 
 from app.db.models import (
     Book,
@@ -22,6 +23,15 @@ from app.db.models import (
     Employee,
     User,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolated_artifact_settings(monkeypatch, tmp_path):
+    from app.services import artifact_service, word_book_service
+
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+    monkeypatch.setattr(artifact_service, "get_settings", lambda: word_book_service.get_settings())
+
 
 # ---------------------------------------------------------------------------
 # Helpers (mirrors test_word_book_finish.py)
@@ -81,7 +91,7 @@ def _make_finished_book(
     out_dir.mkdir(parents=True, exist_ok=True)
     docx_path = out_dir / f"{ref.replace('/', '-')}_v1.docx"
     if docx_exists:
-        docx_path.write_bytes(b"PK fake finished docx v1")
+        DocxFile().save(docx_path)
 
     doc = Document(
         template_id="General Book",
@@ -176,6 +186,43 @@ def test_reopen_creates_active_session_and_working_file(db_session, tmp_path, mo
     assert Path(doc.docx_path).exists()
     assert Path(doc.docx_path).read_bytes() == prior_docx
     assert db_session.query(BookVersion).filter_by(book_id=book.id).one() == version
+
+
+@pytest.mark.parametrize(
+    "level, expected",
+    [("secret", ["سري"]), ("personal", ["شخصي"]), ("general", []), ("directed", [])],
+)
+def test_reopen_restores_current_level_without_changing_finished_source(
+    db_session, tmp_path, level, expected
+):
+    from app.core.level_mark import apply_level_mark
+    from app.services import word_book_service
+
+    user = _user(db_session)
+    book, document, _version = _make_finished_book(db_session, user, tmp_path)
+    source = Path(document.docx_path)
+    paper = DocxFile(source)
+    paper.sections[0].footer.paragraphs[0].text = "G-1001"
+    paper.save(source)
+    assert apply_level_mark(source, "secret")
+    original = source.read_bytes()
+    footer = DocxFile(source).sections[0].footer.part.element.xml
+    book.confidentiality = level
+    db_session.commit()
+
+    info = word_book_service.reopen_word_session(db_session, user=user, book_id=book.id)
+
+    session = db_session.query(BookEditSession).filter_by(token=info.token).one()
+    reopened = DocxFile(session.working_path)
+    controls = reopened.sections[0].header.part.element.xpath(
+        './/w:sdt[w:sdtPr/w:tag/@w:val="gssg-level-mark"]'
+    )
+    assert [
+        "".join(node.text or "" for node in mark.xpath(".//w:t", namespaces=mark.nsmap))
+        for mark in controls
+    ] == expected
+    assert reopened.sections[0].footer.part.element.xml == footer
+    assert source.read_bytes() == original
 
 
 def test_reopen_commit_failure_removes_uncommitted_working_copy(db_session, tmp_path, monkeypatch):

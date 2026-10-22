@@ -1,7 +1,8 @@
 """Turn a finished General Book docx into a library boilerplate template.
 
 The per-book fields are (re)injected as tokens -- ``{{ ref }}``, ``{{ date }}``,
-``{{ barcode }}``, ``{{ recipient_name }}``, ``{{ subject }}``, and ``{{ cc }}``
+``{{ barcode }}``, ``{{ recipient_name }}``, ``{{ subject }}``, ``{{ cc }}``, and
+the footer's ``{{ submitter_g }}``
 -- so a template is a reusable shell, not a snapshot frozen to the addressee and
 subject of the book it was saved from. ALL pre-existing Jinja delimiters in the document
 are neutralized (a zero-width space inside each delimiter) so operator-typed
@@ -19,7 +20,8 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
-from docx.oxml.ns import qn
+from docx.oxml import parse_xml
+from docx.oxml.ns import nsdecls, qn
 from docx.text.paragraph import Paragraph
 
 from app.core.book_table import normalize_data_table
@@ -46,7 +48,100 @@ _DUMMY = {
     "recipient_name": "DUMMY_RECIPIENT",
     "subject": "DUMMY_SUBJECT",
     "cc": "DUMMY_CC",
+    "submitter_g": "G-9999",
 }
+
+SUBMITTER_TOKEN = "{{ submitter_g }}"
+#: Footer G-number: its own cell at the end of the contact-strip table, right-
+#: aligned on the margin, Helvetica 8pt in the strip's grey (on the Report the
+#: row's top edge + 4pt puts it on the thin rule's centre line; the General
+#: Book's rule sits higher, so there it lands just under the rule's end). The
+#: row keeps its height, so nothing else in the footer moves. The fixed width
+#: is also how an existing G-number cell is recognised.
+SUBMITTER_CELL_TWIPS = 900
+_SUBMITTER_RUN = (
+    '<w:r><w:rPr><w:rFonts w:ascii="Helvetica" w:hAnsi="Helvetica"/>'
+    '<w:color w:val="A09F9F"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>'
+    f"<w:t>{SUBMITTER_TOKEN}</w:t></w:r>"
+)
+SUBMITTER_CELL = (
+    f'<w:tc {nsdecls("w")}><w:tcPr><w:tcW w:w="{SUBMITTER_CELL_TWIPS}" w:type="dxa"/>'
+    '<w:vAlign w:val="top"/></w:tcPr><w:p><w:pPr><w:pStyle w:val="Footer"/><w:bidi w:val="0"/>'
+    '<w:spacing w:before="80" w:after="0"/><w:jc w:val="right"/></w:pPr>'
+    f"{_SUBMITTER_RUN}</w:p></w:tc>"
+)
+#: Footers without a contact strip (hand-made imports) get a plain paragraph.
+#: ``bidi=0`` keeps ``jc=right`` on the physical right in Arabic-styled files.
+_SUBMITTER_PARA = (
+    f'<w:p {nsdecls("w")}><w:pPr><w:bidi w:val="0"/><w:jc w:val="right"/></w:pPr>'
+    f"{_SUBMITTER_RUN}</w:p>"
+)
+
+
+def _text(el: Any) -> str:
+    return "".join(t.text or "" for t in el.iter(qn("w:t")))
+
+
+def _twips(el: Any, path: str) -> int:
+    found = el.find(path)
+    return int(found.get(qn("w:w"))) if found is not None else 0
+
+
+def add_footer_submitter_g(footer: Any, width: int) -> bool:
+    """Make the ``w:ftr`` element *footer* print ``{{ submitter_g }}``; return
+    whether it changed.
+
+    The token goes in its own cell at the end of the footer's last table (the
+    contact strip). The table grows to *width* (the text width, twips) minus its
+    indent; the last existing column gives up whatever the new cell needs
+    beyond that. A G-number cell already there is reset to the token, so a
+    rendered or neutralized G-number becomes the token again. A footer with no
+    table gets a right-aligned token paragraph instead.
+    """
+    tables = footer.findall(qn("w:tbl"))
+    if not tables:
+        if SUBMITTER_TOKEN in _text(footer):
+            return False
+        footer.append(parse_xml(_SUBMITTER_PARA))
+        return True
+    tbl = tables[-1]
+    rows = tbl.findall(qn("w:tr"))
+    last_cells = [tr.findall(qn("w:tc"))[-1] for tr in rows]
+    if all(
+        _twips(tc, f"{qn('w:tcPr')}/{qn('w:tcW')}") == SUBMITTER_CELL_TWIPS for tc in last_cells
+    ):
+        stale = [tc for tc in last_cells if _text(tc) != SUBMITTER_TOKEN]
+        for tc in stale:
+            tc.getparent().replace(tc, parse_xml(SUBMITTER_CELL))
+        return bool(stale)
+    tbl_w = tbl.find(f"{qn('w:tblPr')}/{qn('w:tblW')}")
+    width -= _twips(tbl, f"{qn('w:tblPr')}/{qn('w:tblInd')}")
+    shrink = max(0, int(tbl_w.get(qn("w:w"))) + SUBMITTER_CELL_TWIPS - width)
+    grid = tbl.find(qn("w:tblGrid"))
+    last_col = grid.findall(qn("w:gridCol"))[-1]
+    last_col.set(qn("w:w"), str(int(last_col.get(qn("w:w"))) - shrink))
+    grid.append(parse_xml(f'<w:gridCol {nsdecls("w")} w:w="{SUBMITTER_CELL_TWIPS}"/>'))
+    for tr, tc in zip(rows, last_cells, strict=True):
+        last_w = tc.find(f"{qn('w:tcPr')}/{qn('w:tcW')}")
+        last_w.set(qn("w:w"), str(int(last_w.get(qn("w:w"))) - shrink))
+        tr.append(parse_xml(SUBMITTER_CELL))
+    tbl_w.set(qn("w:w"), str(int(tbl_w.get(qn("w:w"))) + SUBMITTER_CELL_TWIPS - shrink))
+    return True
+
+
+def ensure_footer_submitter_g(doc: Any) -> bool:
+    """Put the submitter G-number on every page's footer (default and first
+    page) of a General Book *doc*; return whether anything changed."""
+    changed = False
+    for section in doc.sections:
+        width = section.page_width.twips - section.left_margin.twips - section.right_margin.twips
+        footers = [section.footer]
+        if section.different_first_page_header_footer:
+            footers.append(section.first_page_footer)
+        for footer in footers:
+            if not footer.is_linked_to_previous:
+                changed |= add_footer_submitter_g(footer._element, width)
+    return changed
 
 
 def read_general_book_fields(docx_path: Path) -> tuple[str | None, str | None, list[str]]:
@@ -184,7 +279,7 @@ def _strip_header_artifacts(doc: Any) -> None:
                     _clear_runs(para)
 
 
-def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) -> None:
+def retokenize_general_book(docx_path: Path) -> None:
     doc = Document(str(docx_path))
 
     # 1. Neutralize FIRST — everything currently in the doc is untrusted.
@@ -254,6 +349,9 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
         _guard_para(cc_para, "{%p if cc %}", after=False)
         _retokenize_labeled_line(cc_para, "نسخة إلى: ", "{{ cc }}")
         _guard_para(cc_para, "{%p endif %}", after=True)
+
+    # 4. Every page's footer prints the author's G-number.
+    ensure_footer_submitter_g(doc)
 
     # 5. Legacy English header stamp out.
     _strip_header_artifacts(doc)

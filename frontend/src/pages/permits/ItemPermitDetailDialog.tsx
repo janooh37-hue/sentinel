@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { PermitDocumentVersions } from './PermitDocumentVersions'
+import { PermitSendButton } from './PermitSendButton'
 import { approvalTone, fmtDate, zoneTone, type PermitApprovalState } from './permitUtils'
 
 interface Props {
@@ -180,7 +181,7 @@ export function ItemPermitDetailDialog({
           )}
         </div>
 
-        {permit && (canDelete || canEdit) && (
+        {permit && (canDelete || canEdit || permit.book_id != null) && (
           <div className="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3">
             {canDelete && (
               <Button
@@ -192,6 +193,7 @@ export function ItemPermitDetailDialog({
                 {t('permits.actions.delete')}
               </Button>
             )}
+            {permit.book_id != null && <PermitSendButton bookId={permit.book_id} />}
             {canSend && (
               <Button
                 type="button"

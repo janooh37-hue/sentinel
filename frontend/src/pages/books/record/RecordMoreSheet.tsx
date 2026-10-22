@@ -12,12 +12,15 @@ import * as Dialog from '@radix-ui/react-dialog'
 import {
   Check,
   FileStack,
+  Link2,
   Loader2,
+  Lock,
   type LucideIcon,
   Mail,
   MessageSquare,
   Printer,
   RefreshCw,
+  Send,
   ShieldAlert,
   ShieldCheck,
   Trash2,
@@ -33,6 +36,8 @@ import { deleteBlockReason, deleteReasonKey } from '../recordDelete'
 import type { NextStep } from '../recordNextStep'
 import { useRecordPrint } from '../useRecordPrintMode'
 import type { RecordPieceProps } from './recordActions'
+import { useReplyActions } from '@/components/books/useReplyActions'
+import { useInboxActions } from '@/components/books/useInboxActions'
 
 interface SheetRow {
   id: string
@@ -140,9 +145,11 @@ export function RecordMoreSheet({
 }: RecordMoreSheetProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const print = useRecordPrint()
+  const reply = useReplyActions(book, actions.openOverlay)
+  const inboxActions = useInboxActions(book)
   if (!book) return null
 
-  const { isInmateReporter, canMark, canMutateCurrent, canOverrideState, canManageRevisionAccess, canManageIncludedPapers, canManageSignedPaper } = caps
+  const { isInmateReporter, canEdit, canMark, canMutateCurrent, canOverrideState, canManageRevisionAccess, canManageIncludedPapers, canManageSignedPaper } = caps
   const { bookId, state, current, recordHasPapers, emailingRecord, wordReopenTrigger, adjustSigTrigger, armed } = view
   const { openOverlay, emailViaOutlook, setUnfileOpen, pickSignedFile, pickReplacementFile, setArmedFor } = actions
   const close = (): void => onOpenChange(false)
@@ -177,6 +184,38 @@ export function RecordMoreSheet({
       label: t('books.includedPapers.addToPdf'),
       hint: t('books.record.hint.pdf'),
       onSelect: () => openOverlay('papers'),
+    })
+  }
+  if (book.can_send) {
+    documentRows.push({
+      id: 'send',
+      icon: iconOf(Send),
+      label: t('books.send.menu'),
+      hint: t('books.send.hint'),
+      testId: 'record-more-send',
+      onSelect: () => openOverlay('send'),
+    })
+  }
+  documentRows.push(...inboxActions.map((item) => ({
+    id: item.key, icon: item.icon, label: item.label, onSelect: item.onSelect, pending: item.pending,
+  })))
+  documentRows.push(...reply.actions.map((item) => ({
+    id: item.key, icon: item.icon, label: item.label, onSelect: item.onSelect,
+  })))
+  if (canEdit && book.access_scope === 'full') {
+    documentRows.push({
+      id: 'link', icon: iconOf(Link2), label: t('books.thread.linkRecord'),
+      onSelect: () => { if (canEdit && book.access_scope === 'full') openOverlay('link') },
+    })
+  }
+  if (book.can_change_confidentiality) {
+    documentRows.push({
+      id: 'level',
+      icon: iconOf(Lock),
+      label: t('books.confidentiality.menu'),
+      hint: t(`books.confidentiality.levels.${book.confidentiality}`),
+      testId: 'record-more-level',
+      onSelect: () => openOverlay('level'),
     })
   }
   if (hasSignedCopy && current?.signed_pdf_url) {

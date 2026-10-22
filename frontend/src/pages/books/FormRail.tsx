@@ -7,9 +7,8 @@
  * Two tiers (the page picks one from its container width, never both):
  *   full   the 15rem rail: artwork · label · state dots · count
  *   icons  the `w-14` rail: artwork + count badge, label in a `Hint`
- * The "Created by me" toggle sits at the top of either tier; the page hides it
- * (passes no `mine`) for inmate reporters, and renders `MineChip` itself in the
- * drawer tier where there is no rail.
+ * The "Created by me" toggle sits at the top of either tier. The page hides it
+ * for inmate reporters and renders `MineChip` itself in the drawer tier.
  */
 import { UserRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -54,7 +53,7 @@ const FOCUS =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset'
 
 /**
- * "Created by me": `aria-pressed`, `UserRound`, label + count badge.
+ * "Created by me": `aria-pressed`, icon, label + count badge.
  * `row` = full-rail row, `icon` = icon-rail cell (label in a Hint),
  * `chip` = pill for the drawer tier's toolbar, next to Drafts.
  */
@@ -63,7 +62,9 @@ export function MineChip({
   count,
   onToggle,
   variant,
-}: MineToggleState & { variant: 'row' | 'icon' | 'chip' }): React.JSX.Element {
+}: MineToggleState & {
+    variant: 'row' | 'icon' | 'chip'
+  }): React.JSX.Element {
   const { t } = useTranslation()
   const label = t('books.list.createdByMe')
   const badge = count !== null && (

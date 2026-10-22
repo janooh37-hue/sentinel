@@ -12,9 +12,12 @@ import { useTranslation } from 'react-i18next'
 import {
   Download,
   FileStack,
+  Link2,
+  Lock,
   Mail,
   Printer,
   RefreshCw,
+  Send,
   ShieldAlert,
   ShieldCheck,
   Trash2,
@@ -33,6 +36,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { RecordPieceProps } from './recordActions'
 import { useRecordPrint } from '../useRecordPrintMode'
+import { useReplyActions } from '@/components/books/useReplyActions'
+import { useInboxActions } from '@/components/books/useInboxActions'
 
 function GroupLabel({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -61,6 +66,7 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
   const print = useRecordPrint()
   const {
     has,
+    canEdit,
     canMutateCurrent,
     isInmateReporter,
     canOverrideState,
@@ -70,6 +76,8 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
   } = caps
   const { state, current, recordHasPapers, emailingRecord, scanBusy, wordReopenTrigger, adjustSigTrigger, nextStep } = view
   const { openOverlay, emailViaOutlook, setUnfileOpen, replaceSignedRef, fileSignedRef, requestDelete } = actions
+  const reply = useReplyActions(book, openOverlay)
+  const inboxActions = useInboxActions(book)
   if (!book) return null
 
   const overflow = nextStep?.overflow ?? []
@@ -128,6 +136,34 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
           <DropdownMenuItem onSelect={() => openOverlay('papers')}>
             <FileStack className="h-3.5 w-3.5" aria-hidden="true" />
             {t('books.includedPapers.addToPdf')}
+          </DropdownMenuItem>
+        )}
+        {book.can_send && (
+          <DropdownMenuItem data-testid="record-send-trigger" onSelect={() => openOverlay('send')}>
+            <Send className="h-3.5 w-3.5" aria-hidden="true" />
+            {t('books.send.menu')}
+          </DropdownMenuItem>
+        )}
+        {inboxActions.map((item) => (
+          <DropdownMenuItem key={item.key} pending={item.pending} onSelect={item.onSelect}>
+            {item.icon}{item.label}
+          </DropdownMenuItem>
+        ))}
+        {reply.actions.map((item) => (
+          <DropdownMenuItem key={item.key} onSelect={item.onSelect}>
+            {item.icon}{item.label}
+          </DropdownMenuItem>
+        ))}
+        {canEdit && book.access_scope === 'full' && (
+          <DropdownMenuItem onSelect={() => { if (canEdit && book.access_scope === 'full') openOverlay('link') }}>
+            <Link2 className="h-3.5 w-3.5" aria-hidden />
+            {t('books.thread.linkRecord')}
+          </DropdownMenuItem>
+        )}
+        {book.can_change_confidentiality && (
+          <DropdownMenuItem data-testid="record-level-trigger" onSelect={() => openOverlay('level')}>
+            <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+            {t('books.confidentiality.menu')}
           </DropdownMenuItem>
         )}
         {state === 'approved' && current?.signed_pdf_url && (

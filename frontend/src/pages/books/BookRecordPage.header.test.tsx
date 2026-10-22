@@ -5,6 +5,7 @@
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -24,6 +25,7 @@ vi.mock('@/lib/api', async (orig) => {
     api: {
       ...real.api,
       getBook: vi.fn(),
+      getBookThread: vi.fn().mockResolvedValue([]),
       getBookVersionFields: vi.fn().mockResolvedValue({ fields: {} }),
       getEmployee: vi.fn().mockResolvedValue({ name_en: 'SAEED', name_ar: 'سعيد' }),
       listBookAnnotations: vi.fn().mockResolvedValue([]),
@@ -64,6 +66,7 @@ function fixture(overrides: Record<string, unknown> = {}): unknown {
     subject: 'Leave request — SAEED',
     approval_state: 'returned',
     access_scope: 'full',
+    can_write: true,
     signing_path: null,
     is_word_book: false,
     is_draft: false,
@@ -108,11 +111,11 @@ function fixture(overrides: Record<string, unknown> = {}): unknown {
   }
 }
 
-function renderRecord(): void {
+function renderRecord(entry = '/books/48'): void {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/books/48']}>
+      <MemoryRouter initialEntries={[entry]}>
         <RecordDeleteProvider>
           <Routes>
             <Route path="/books/:id" element={<BookRecordPage />} />
@@ -131,6 +134,20 @@ describe('BookRecordPage — header', () => {
     viewport.mobile = false
     mockHas.mockImplementation(() => false)
     vi.mocked(api.getBook).mockReset()
+  })
+
+  it.each([false, true])('hides Link from the record tools and denies its URL overlay without books.edit (mobile=%s)', async (mobile) => {
+    viewport.mobile = mobile
+    mockHas.mockImplementation((cap) => cap === 'books.create' || cap === 'books.view' || cap === 'books.service.General Book')
+    vi.mocked(api.getBook).mockResolvedValue(fixture() as never)
+    renderRecord('/books/48?action=link')
+    await screen.findByTestId('record-meta')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: mobile ? 'More' : 'Tools' }))
+    const menu = await screen.findByRole(mobile ? 'dialog' : 'menu')
+    expect(within(menu).queryByText('Link a record')).toBeNull()
+    expect(within(menu).getByText('Reply')).toBeVisible()
+    expect(within(menu).getByText('Create from')).toBeVisible()
   })
 
   it('shows who created a non-Word record, with G number and date', async () => {

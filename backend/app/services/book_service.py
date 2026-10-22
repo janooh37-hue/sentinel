@@ -19,7 +19,7 @@ from pathlib import Path, PurePath
 from typing import Any, Final, Literal, NamedTuple
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Integer, and_, exists, false, func, not_, or_, select, text
+from sqlalchemy import Integer, and_, case, exists, false, func, not_, or_, select, text, true
 from sqlalchemy.orm import Session, aliased, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -35,7 +35,7 @@ from app.core.form_kind import (
     word_draft_service,
 )
 from app.core.fts_query import and_prefix_query, has_nul
-from app.core.roles import INMATE_REPORTER_ROLE
+from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import (
     AuditLog,
     Book,
@@ -43,6 +43,8 @@ from app.db.models import (
     BookApprovalStep,
     BookCategory,
     BookEditSession,
+    BookFolderItem,
+    BookRecipient,
     BookRevisionAccess,
     BookVersion,
     Document,
@@ -356,8 +358,87 @@ def _classified_under_clause(category_ids: set[str]) -> ColumnElement[bool]:
     )
 
 
+def active_recipient_clause(user_id: int) -> ColumnElement[bool]:
+    """SQL: ``user_id`` holds an active direct send of the correlated ``Book``."""
+    return exists(
+        select(BookRecipient.id)
+        .where(
+            BookRecipient.book_id == Book.id,
+            BookRecipient.user_id == user_id,
+            BookRecipient.revoked_at.is_(None),
+        )
+        # Never correlate the recipients table: callers may join it outside.
+        .correlate_except(BookRecipient)
+    )
+
+
+def is_active_recipient(db: Session, user_id: int, book_id: int) -> bool:
+    return (
+        db.scalar(
+            select(BookRecipient.id)
+            .where(
+                BookRecipient.book_id == book_id,
+                BookRecipient.user_id == user_id,
+                BookRecipient.revoked_at.is_(None),
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
+def _confidentiality_clause(
+    db: Session, user: User, type_ok: ColumnElement[bool]
+) -> ColumnElement[bool]:
+    """SQL: which records a non-admin may open, given ``type_ok`` (the existing
+    record-type rules). Python mirror: ``_confidentiality_allows``."""
+    level = Book.confidentiality
+    creator = Book.created_by_user_id == user.id
+    if user.role == INMATE_REPORTER_ROLE:
+        return and_(
+            type_ok,
+            or_(level == "general", and_(level.in_(("personal", "directed")), creator)),
+        )
+    recipient = active_recipient_clause(user.id)
+    branches = [
+        and_(level == "general", or_(type_ok, recipient)),
+        and_(level == "personal", creator),
+        and_(level == "directed", or_(creator, recipient)),
+    ]
+    if perm_service.has_capability(db, user, "books.secret"):
+        branches.append(and_(level == "secret", or_(type_ok, recipient)))
+    return or_(*branches)
+
+
+def _confidentiality_allows(
+    db: Session, user: User, book: Book, *, existing: bool, write: bool = False
+) -> bool:
+    """Python mirror of ``_confidentiality_clause``. ``existing`` is the
+    pre-confidentiality verdict (books.view + record type [+ reporter matrix])."""
+    if user.role == ADMIN_ROLE:
+        return existing
+    level = book.confidentiality
+    creator = book.created_by_user_id is not None and book.created_by_user_id == user.id
+    if user.role == INMATE_REPORTER_ROLE:
+        return existing and (level == "general" or (level in ("personal", "directed") and creator))
+    if level == "personal":
+        return creator
+    if level == "directed":
+        return creator or (not write and is_active_recipient(db, user.id, book.id))
+    if level == "secret" and not perm_service.has_capability(db, user, "books.secret"):
+        return False
+    return existing or (not write and is_active_recipient(db, user.id, book.id))
+
+
+def _hidden_by_confidentiality(user: User, book: Book, *, existing: bool) -> bool:
+    """A denied open that must look like a missing record (404, not 403)."""
+    return existing or (book.confidentiality != "general" and user.role != ADMIN_ROLE)
+
+
 def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | None:
-    """SQL clause hiding every service/category explicitly denied to ``user``."""
+    """SQL clause for the records ``user`` may open: denied services/categories,
+    the inmate-reporter matrix, and the record level (``_confidentiality_clause``).
+    ``None`` only for an admin with nothing denied."""
     denied_services, denied_categories = perm_service.denied_record_types(db, user)
     clauses: list[ColumnElement[bool]] = []
     if denied_categories:
@@ -369,11 +450,15 @@ def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | Non
         )
     if user.role == INMATE_REPORTER_ROLE:
         clauses.append(_inmate_reporter_visibility_clause(user))
-    return and_(*clauses) if clauses else None
+    type_ok = and_(*clauses) if clauses else None
+    if user.role == ADMIN_ROLE:
+        return type_ok
+    return _confidentiality_clause(db, user, type_ok if type_ok is not None else true())
 
 
 def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | None:
-    """Hide Documents whose service or owning submission category is denied."""
+    """Hide Documents whose service or owning submission category is denied, or
+    whose owning record's level hides it (a direct send re-opens it)."""
     denied_services, denied_categories = perm_service.denied_record_types(db, user)
     clauses: list[ColumnElement[bool]] = []
     if denied_services:
@@ -439,7 +524,38 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
             .correlate(Document)
         )
         clauses.append(linked_current_visible)
-    return and_(*clauses) if clauses else None
+    type_ok = and_(*clauses) if clauses else None
+    if user.role == ADMIN_ROLE:
+        return type_ok
+    level_ok = _confidentiality_clause(db, user, true())
+    owner_document = aliased(Document)
+
+    def owning_book_matches(condition: ColumnElement[bool]) -> ColumnElement[bool]:
+        return exists(
+            select(BookVersion.id)
+            .select_from(BookVersion)
+            .join(Book, Book.id == BookVersion.book_id)
+            .join(owner_document, owner_document.id == BookVersion.document_id)
+            .where(
+                condition,
+                or_(
+                    owner_document.id == Document.id,
+                    and_(
+                        Document.role == "companion",
+                        owner_document.role == "primary",
+                        owner_document.submission_id == Document.submission_id,
+                    ),
+                ),
+            )
+            .correlate(Document)
+        )
+
+    not_hidden = not_(owning_book_matches(not_(level_ok)))
+    visible = not_hidden if type_ok is None else and_(type_ok, not_hidden)
+    if user.role == INMATE_REPORTER_ROLE:
+        return visible
+    received = owning_book_matches(and_(active_recipient_clause(user.id), level_ok))
+    return or_(visible, received)
 
 
 def require_record_type_access(
@@ -528,7 +644,9 @@ def resolve_book_read_access(
         # Fixed-scope reporter: never full books.view semantics — current
         # version only, gated by the state/ownership matrix, never a
         # historical revision even when the current report is shared.
-        if not _inmate_reporter_book_visible(book, user.id):
+        if not _inmate_reporter_book_visible(book, user.id) or not _confidentiality_allows(
+            db, user, book, existing=True
+        ):
             raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
         current_id = versions[-1].id if versions else None
         if version_id is not None and version_id != current_id:
@@ -540,18 +658,19 @@ def resolve_book_read_access(
         allowed_ids = frozenset({current_id}) if current_id is not None else frozenset()
         return BookReadAccess(True, allowed_ids, current_id)
     has_view = perm_service.has_capability(db, user, "books.view")
-    full = has_view
+    existing = has_view
     record_type_error: AppError | None = None
-    if full:
+    if existing:
         try:
             assert_record_type_visible(db, user, book)
         except AppError as exc:
             if exc.code != "RECORD_TYPE_FORBIDDEN":
                 raise
-            full = False
+            existing = False
             record_type_error = exc
-    if full:
+    if _confidentiality_allows(db, user, book, existing=existing):
         return BookReadAccess(True, ids, version_id or (versions[-1].id if versions else None))
+    level_hidden = _hidden_by_confidentiality(user, book, existing=existing)
     allowed = set(
         db.scalars(
             select(BookRevisionAccess.version_id)
@@ -589,6 +708,8 @@ def resolve_book_read_access(
             )
             is not None
         )
+        if level_hidden and never_assigned:
+            raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
         if record_type_error is not None and never_assigned:
             raise record_type_error
         raise AppError(
@@ -602,20 +723,50 @@ def resolve_book_read_access(
     return BookReadAccess(False, frozenset(allowed), selected)
 
 
-def require_full_book_access(db: Session, user: User, row: Book) -> None:
-    """Require normal books.view + type visibility. Never satisfied by an assignment."""
-    if not perm_service.has_capability(db, user, "books.view"):
+def require_full_book_access(db: Session, user: User, row: Book, *, write: bool = False) -> None:
+    """Require record access under its level; a direct send grants reads only.
+
+    Never satisfied by an assignment.
+    """
+    has_view = perm_service.has_capability(db, user, "books.view")
+    record_type_error: AppError | None = None
+    if has_view:
+        try:
+            assert_record_type_visible(db, user, row)
+        except AppError as exc:
+            if exc.code != "RECORD_TYPE_FORBIDDEN":
+                raise
+            record_type_error = exc
+    reporter_hidden = user.role == INMATE_REPORTER_ROLE and not _inmate_reporter_book_visible(
+        row, user.id
+    )
+    existing = has_view and record_type_error is None and not reporter_hidden
+    if _confidentiality_allows(db, user, row, existing=existing, write=write):
+        return
+    if _hidden_by_confidentiality(user, row, existing=existing):
+        raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
+    if not has_view:
         raise AppError(
             "FORBIDDEN",
             "Missing capability: books.view",
             http_status=403,
             details={"capability": "books.view"},
         )
-    assert_record_type_visible(db, user, row)
-    if user.role == INMATE_REPORTER_ROLE and not _inmate_reporter_book_visible(row, user.id):
+    if record_type_error is not None:
+        raise record_type_error
+    raise AppError(
+        "FORBIDDEN",
+        "You do not have access to this revision.",
+        http_status=403,
+    )
+
+
+def require_confidentiality_clearance(db: Session, user: User, level: str) -> None:
+    """Only Secret-cleared users may create a Secret record or relabel to Secret."""
+    if level == "secret" and not perm_service.has_capability(db, user, "books.secret"):
         raise AppError(
-            "FORBIDDEN",
-            "You do not have access to this revision.",
+            "SECRET_CLEARANCE_REQUIRED",
+            "Secret clearance is required for Secret records.",
             http_status=403,
         )
 
@@ -740,7 +891,7 @@ def require_revise_access(db: Session, user: User, book: Book | None) -> BookVer
             details={"capability": "books.edit"},
         )
     if book is not None:
-        require_full_book_access(db, user, book)
+        require_full_book_access(db, user, book, write=True)
     return None
 
 
@@ -757,8 +908,82 @@ def _created_by_clause(user: User | None) -> ColumnElement[bool]:
     return false() if user is None else Book.created_by_user_id == user.id
 
 
+InboxFilter = Literal["received", "done", "sent", "archived", "any"]
+
+# Purpose words a desk search can name (Arabic + English labels).
+_PURPOSE_WORDS: Final[dict[str, tuple[str, ...]]] = {
+    "info": ("للاطلاع", "for information", "info"),
+    "action": ("للتنفيذ", "for action", "action"),
+    "reply": ("للإفادة", "for reply", "reply"),
+    "circulate": ("للتعميم", "for circulation", "circulate"),
+}
+_CONFIDENTIALITY_RANK: Final[dict[str, int]] = {"secret": 3, "personal": 2, "directed": 1}
+
+
+def _purposes_named(q: str) -> list[str]:
+    from app.core.book_text import normalize_ar
+
+    needle = normalize_ar(q.strip()).lower()
+    return [
+        purpose
+        for purpose, words in _PURPOSE_WORDS.items()
+        if any(needle in normalize_ar(word) for word in words)
+    ]
+
+
+def _my_send_rows(user: User, inbox: InboxFilter | None) -> Any:
+    """Correlated select over the caller's active sends of ``Book`` for ``inbox``."""
+    mine = {
+        "sent": BookRecipient.sent_by_user_id == user.id,
+        "any": or_(BookRecipient.user_id == user.id, BookRecipient.sent_by_user_id == user.id),
+    }.get(inbox or "any", BookRecipient.user_id == user.id)
+    return select(BookRecipient.id).where(
+        BookRecipient.book_id == Book.id, BookRecipient.revoked_at.is_(None), mine
+    )
+
+
+def inbox_clause(user: User | None, inbox: InboxFilter) -> ColumnElement[bool]:
+    """Caller-owned incoming states; archive takes precedence over done."""
+    if user is None:
+        return false()
+    if inbox in ("received", "done", "archived"):
+        unarchived_stmt = (
+            select(BookRecipient.id)
+            .where(
+                BookRecipient.book_id == Book.id,
+                BookRecipient.user_id == user.id,
+                BookRecipient.revoked_at.is_(None),
+                BookRecipient.archived_at.is_(None),
+            )
+            .correlate_except(BookRecipient)
+        )
+        if inbox in ("received", "done"):
+            done_clause = (
+                BookRecipient.done_at.is_not(None)
+                if inbox == "done"
+                else BookRecipient.done_at.is_(None)
+            )
+            return exists(unarchived_stmt.where(done_clause))
+        return active_recipient_clause(user.id) & ~exists(unarchived_stmt)
+    if inbox == "any":
+        return active_recipient_clause(user.id) | inbox_clause(user, "sent")
+    return exists(
+        select(BookRecipient.id)
+        .where(
+            BookRecipient.book_id == Book.id,
+            BookRecipient.sent_by_user_id == user.id,
+            BookRecipient.revoked_at.is_(None),
+        )
+        .correlate_except(BookRecipient)
+    )
+
+
 def service_facets(
-    db: Session, user: User | None = None, *, created_by_me: bool = False
+    db: Session,
+    user: User | None = None,
+    *,
+    created_by_me: bool = False,
+    inbox: InboxFilter | None = None,
 ) -> tuple[ServiceCount, list[ServiceCount]]:
     """`(all_records, per_service)` over EVERY non-deleted book.
 
@@ -809,6 +1034,8 @@ def service_facets(
             stmt = stmt.where(visibility)
     if created_by_me:
         stmt = stmt.where(_created_by_clause(user))
+    if inbox is not None:
+        stmt = stmt.where(inbox_clause(user, inbox))
 
     all_states: Counter[str] = Counter()
     per_service: dict[str, Counter[str]] = {}
@@ -856,6 +1083,9 @@ def list_books(
     offset: int = 0,
     include_deleted: bool = False,
     created_by_me: bool = False,
+    inbox: InboxFilter | None = None,
+    folder_id: int | None = None,
+    sort: str = "-date",
 ) -> tuple[list[Book], int, dict[int, str]]:
     """Paginated list with optional filters.
 
@@ -885,10 +1115,29 @@ def list_books(
         stmt = stmt.where(Book.deleted_at.is_(None))
         count_stmt = count_stmt.where(Book.deleted_at.is_(None))
 
+    if folder_id is not None:
+        from app.services import book_folder_service
+
+        if user is None:
+            raise NotFoundError("FOLDER_NOT_FOUND", "Folder not found")
+        book_folder_service.get_folder(db, user, folder_id)
+        filed = exists(
+            select(BookFolderItem.id).where(
+                BookFolderItem.folder_id == folder_id, BookFolderItem.book_id == Book.id
+            )
+        )
+        stmt = stmt.where(filed)
+        count_stmt = count_stmt.where(filed)
+
     if created_by_me:
         mine = _created_by_clause(user)
         stmt = stmt.where(mine)
         count_stmt = count_stmt.where(mine)
+
+    if inbox is not None:
+        inbox_filter = inbox_clause(user, inbox)
+        stmt = stmt.where(inbox_filter)
+        count_stmt = count_stmt.where(inbox_filter)
 
     if category_id is not None:
         category_clause = or_(
@@ -912,12 +1161,37 @@ def list_books(
 
     if q:
         needle = f"%{q.strip()}%"
-        ilike_clause = or_(
+        branches: list[ColumnElement[bool]] = [
             Book.subject.ilike(needle),
             Book.ref_number.ilike(needle),
-        )
-        # Union: ilike OR FTS body match (ternary; fts_ids empty = ilike only).
-        clause = or_(ilike_clause, Book.id.in_(fts_ids)) if fts_ids else ilike_clause
+        ]
+        # Union: ilike OR FTS body match (fts_ids empty = ilike only).
+        if fts_ids:
+            branches.append(Book.id.in_(fts_ids))
+        if user is not None:
+            # The caller's own sends: routing note, purpose, and the person on
+            # the other end (sender of a received book, recipient of a sent one).
+            people = (
+                select(User.id)
+                .outerjoin(Employee, User.employee_id == Employee.id)
+                .where(
+                    or_(
+                        User.display_name.ilike(needle),
+                        Employee.name_en.ilike(needle),
+                        Employee.name_ar.ilike(needle),
+                    )
+                )
+            )
+            sends = _my_send_rows(user, "any").correlate_except(BookRecipient)
+            send_match = [
+                BookRecipient.note.ilike(needle),
+                BookRecipient.sent_by_user_id.in_(people),
+                BookRecipient.user_id.in_(people),
+            ]
+            if purposes := _purposes_named(q):
+                send_match.append(BookRecipient.purpose.in_(purposes))
+            branches += [exists(sends.where(or_(*send_match))), Book.created_by_user_id.in_(people)]
+        clause = or_(*branches)
         stmt = stmt.where(clause)
         count_stmt = count_stmt.where(clause)
 
@@ -933,12 +1207,73 @@ def list_books(
         stmt = stmt.where(Book.created_at < upper)
         count_stmt = count_stmt.where(Book.created_at < upper)
 
+    # Inbox scopes order by when the book reached (or left) the caller, which is
+    # the date the desk shows; other lists keep the record's creation time.
+    when: Any = Book.created_at
+    if inbox is not None and user is not None:
+        last_send = (
+            _my_send_rows(user, inbox)
+            .with_only_columns(func.max(BookRecipient.created_at))
+            .correlate_except(BookRecipient)
+            .scalar_subquery()
+        )
+        when = func.coalesce(last_send, Book.created_at)
+    key = sort.removeprefix("-")
+    sort_column: Any = when
+    if key == "ref":
+        sort_column = Book.ref_number
+    elif key == "subject":
+        sort_column = Book.subject
+    elif key == "confidentiality":
+        sort_column = case(_CONFIDENTIALITY_RANK, value=Book.confidentiality, else_=0)
+    elif key == "purpose" and user is not None:
+        sort_column = (
+            _my_send_rows(user, inbox)
+            .with_only_columns(
+                case(
+                    {"action": 0, "reply": 1, "info": 2, "circulate": 3},
+                    value=BookRecipient.purpose,
+                    else_=4,
+                )
+            )
+            .order_by(BookRecipient.created_at.desc(), BookRecipient.id.desc())
+            .limit(1)
+            .correlate_except(BookRecipient)
+            .scalar_subquery()
+        )
+        sort_column = func.coalesce(sort_column, 4)
+    elif key == "status" and user is not None:
+        status = (
+            select(
+                case(
+                    (BookRecipient.archived_at.is_not(None), 3),
+                    (BookRecipient.done_at.is_not(None), 2),
+                    (BookRecipient.read_at.is_not(None), 1),
+                    else_=0,
+                )
+            )
+            .where(
+                BookRecipient.book_id == Book.id,
+                BookRecipient.user_id == user.id,
+                BookRecipient.revoked_at.is_(None),
+            )
+            .order_by(BookRecipient.created_at.desc(), BookRecipient.id.desc())
+            .limit(1)
+            .correlate_except(BookRecipient)
+            .scalar_subquery()
+        )
+        sort_column = func.coalesce(status, 4)
+    order: list[Any] = [
+        sort_column.desc() if sort.startswith("-") else sort_column.asc(),
+        when.desc(),
+        Book.id.desc(),
+    ]
     stmt = (
         stmt.options(
             selectinload(Book.category),
             selectinload(Book.versions).selectinload(BookVersion.approval_steps),
         )
-        .order_by(Book.created_at.desc(), Book.id.desc())
+        .order_by(*order)
         .limit(limit)
         .offset(offset)
     )
@@ -1065,6 +1400,7 @@ def create_book(db: Session, payload: BookCreate, *, created_by_user_id: int | N
         stamp_style=payload.stamp_style,
         created_at=datetime.now(UTC).replace(tzinfo=None),
         created_by_user_id=created_by_user_id,
+        confidentiality=payload.confidentiality,
         deleted_at=None,
     )
     db.add(row)
@@ -1389,6 +1725,9 @@ def _approval_context(
     names = resolve_names_by_ids(
         db, {uid for uid in (submitted_by_user_id, manager_user_id) if uid is not None}
     )
+    names_ar = resolve_names_ar_by_ids(
+        db, {uid for uid in (submitted_by_user_id, manager_user_id) if uid is not None}
+    )
     fields = version.fields or {}
     subject = fields.get("subject")
     subject = subject.strip() if isinstance(subject, str) and subject.strip() else book.subject
@@ -1409,8 +1748,10 @@ def _approval_context(
         "employee_name_snapshot": book.employee_name_snapshot,
         "submitted_by_user_id": submitted_by_user_id,
         "submitted_by_name": names.get(submitted_by_user_id) if submitted_by_user_id else None,
+        "submitted_by_name_ar": names_ar.get(submitted_by_user_id),
         "doc_manager_user_id": manager_user_id,
         "doc_manager_name": names.get(manager_user_id) if manager_user_id else None,
+        "doc_manager_name_ar": names_ar.get(manager_user_id),
         "submitted_at": instant.isoformat() if instant else None,
     }
 
@@ -2567,8 +2908,9 @@ def _build_worklist_item(
     db: Session,
     row: _WorklistRow,
     *,
-    names_by_id: dict[int, str],
+    names_by_id: tuple[dict[int, str], dict[int, str | None]],
 ) -> ApprovalLogItem:
+    names_by_id, names_ar_by_id = names_by_id
     book, version, full = row.book, row.version, row.access_scope == "full"
     approver_steps = [
         s for s in version.approval_steps if _received_step_kind(book, s.kind) == "approver"
@@ -2613,11 +2955,28 @@ def _build_worklist_item(
         priority=priority,
         submitted_by_user_id=book.submitted_by_user_id if full else None,
         submitted_by_name=submitted_by_name,
+        submitted_by_name_ar=context.get(
+            "submitted_by_name_ar",
+            names_ar_by_id.get(
+                context.get("submitted_by_user_id") or (book.submitted_by_user_id if full else None)
+            ),
+        ),
         doc_manager_user_id=doc_manager_user_id,
         doc_manager_name=doc_manager_name,
+        doc_manager_name_ar=context.get(
+            "doc_manager_name_ar", names_ar_by_id.get(doc_manager_user_id)
+        ),
         approver_name=names_by_id.get(signer_step.assignee_user_id) if signer_step else None,
+        approver_name_ar=(
+            names_ar_by_id.get(signer_step.assignee_user_id) if signer_step else None
+        ),
         reviewer_names=[
             names_by_id.get(s.assignee_user_id, "")
+            for s in version.approval_steps
+            if _received_step_kind(book, s.kind) == "reviewer"
+        ],
+        reviewer_names_ar=[
+            names_ar_by_id.get(s.assignee_user_id)
             for s in version.approval_steps
             if _received_step_kind(book, s.kind) == "reviewer"
         ],
@@ -2635,7 +2994,9 @@ def _build_worklist_item(
     )
 
 
-def _worklist_names(db: Session, rows: list[_WorklistRow]) -> dict[int, str]:
+def _worklist_names(
+    db: Session, rows: list[_WorklistRow]
+) -> tuple[dict[int, str], dict[int, str | None]]:
     user_ids: set[int] = set()
     for row in rows:
         if row.access_scope == "full" and row.book.submitted_by_user_id is not None:
@@ -2644,10 +3005,24 @@ def _worklist_names(db: Session, rows: list[_WorklistRow]) -> dict[int, str]:
         context = (
             row.version.approval_context if isinstance(row.version.approval_context, dict) else {}
         )
-        raw = context.get("submitted_by_user_id")
-        if isinstance(raw, int) and not isinstance(raw, bool):
-            user_ids.add(raw)
-    return resolve_names_by_ids(db, user_ids)
+        for key in ("submitted_by_user_id", "doc_manager_user_id"):
+            raw = context.get(key)
+            if isinstance(raw, int) and not isinstance(raw, bool):
+                user_ids.add(raw)
+    manager_ids = {
+        row.book.doc_manager_id
+        for row in rows
+        if row.access_scope == "full" and row.book.doc_manager_id is not None
+    }
+    if manager_ids:
+        user_ids.update(
+            db.scalars(
+                select(Manager.user_id).where(
+                    Manager.id.in_(manager_ids), Manager.user_id.is_not(None)
+                )
+            )
+        )
+    return resolve_names_by_ids(db, user_ids), resolve_names_ar_by_ids(db, user_ids)
 
 
 def _sent_worklist_rows(
@@ -2823,6 +3198,31 @@ def approval_summary(db: Session, user: User) -> ApprovalSummaryResponse:
     )
 
 
+def folder_filing_details(
+    db: Session, folder_id: int, book_ids: list[int]
+) -> dict[int, tuple[str | None, str | None, datetime]]:
+    """Filing provenance for the visible page only, with batched name resolution."""
+    if not book_ids:
+        return {}
+    filed = db.scalars(
+        select(BookFolderItem).where(
+            BookFolderItem.folder_id == folder_id, BookFolderItem.book_id.in_(book_ids)
+        )
+    ).all()
+    user_ids = {item.added_by_user_id for item in filed}
+    names = resolve_names_by_ids(db, user_ids)
+    names_ar = resolve_names_ar_by_ids(db, user_ids)
+    return {
+        item.book_id: (
+            names.get(item.added_by_user_id),
+            names_ar.get(item.added_by_user_id),
+            # Stored naive UTC and assigned after validation, so tag it as ORMBase would.
+            item.created_at.replace(tzinfo=UTC),
+        )
+        for item in filed
+    }
+
+
 def user_display_name(db: Session, user: User) -> str:
     """Public form of the display-name resolution for an already-fetched user."""
     return _resolve_user_name(db, user)
@@ -2857,6 +3257,35 @@ def resolve_names_by_ids(db: Session, user_ids: set[int]) -> dict[int, str]:
         emp = emps.get(u.employee_id) if u.employee_id else None
         out[u.id] = emp.name_en if emp is not None else (u.display_name or u.email)
     return out
+
+
+def resolve_names_ar_by_ids(db: Session, user_ids: set[int]) -> dict[int, str | None]:
+    """Linked employee Arabic names in one batch; missing names stay null."""
+    if not user_ids:
+        return {}
+    return dict(
+        db.execute(
+            select(User.id, Employee.name_ar)
+            .outerjoin(Employee, User.employee_id == Employee.id)
+            .where(User.id.in_(user_ids))
+        ).all()
+    )
+
+
+def resolve_titles_by_ids(
+    db: Session, user_ids: set[int]
+) -> dict[int, tuple[str | None, str | None]]:
+    """Linked employee designations in one batch; missing titles stay null."""
+    if not user_ids:
+        return {}
+    return {
+        user_id: (title, title_ar)
+        for user_id, title, title_ar in db.execute(
+            select(User.id, Employee.position, Employee.position_ar)
+            .outerjoin(Employee, User.employee_id == Employee.id)
+            .where(User.id.in_(user_ids))
+        )
+    }
 
 
 def submitter_name(db: Session, book: Book) -> str | None:
@@ -2895,6 +3324,8 @@ def list_approver_candidates(db: Session) -> list[ApproverOptionRead]:
     users = (
         db.execute(select(User).where(User.status == "active").order_by(User.id)).scalars().all()
     )
+    names = resolve_names_by_ids(db, {user.id for user in users})
+    names_ar = resolve_names_ar_by_ids(db, {user.id for user in users})
 
     out: list[ApproverOptionRead] = []
     for user in users:
@@ -2908,7 +3339,8 @@ def list_approver_candidates(db: Session) -> list[ApproverOptionRead]:
         out.append(
             ApproverOptionRead(
                 id=user.id,
-                name=_resolve_user_name(db, user),
+                name=names[user.id],
+                name_ar=names_ar.get(user.id),
                 is_default=user.is_default_manager,
             )
         )
@@ -3042,8 +3474,11 @@ def list_reviewer_candidates(db: Session) -> list[ApproverOptionRead]:
     users = (
         db.execute(select(User).where(User.status == "active").order_by(User.id)).scalars().all()
     )
+    names = resolve_names_by_ids(db, {user.id for user in users})
+    names_ar = resolve_names_ar_by_ids(db, {user.id for user in users})
     return [
-        ApproverOptionRead(id=u.id, name=_resolve_user_name(db, u), is_default=False) for u in users
+        ApproverOptionRead(id=u.id, name=names[u.id], name_ar=names_ar.get(u.id), is_default=False)
+        for u in users
     ]
 
 
@@ -3067,6 +3502,9 @@ def build_step_read(db: Session, step: BookApprovalStep) -> BookApprovalStepRead
     """Serialize a step with the assignee's resolved display name."""
     item = BookApprovalStepRead.model_validate(step)
     item.assignee_name = resolve_user_name_by_id(db, step.assignee_user_id)
+    item.assignee_name_ar = resolve_names_ar_by_ids(db, {step.assignee_user_id}).get(
+        step.assignee_user_id
+    )
     return item
 
 

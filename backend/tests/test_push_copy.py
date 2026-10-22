@@ -1,9 +1,15 @@
-"""Push-notification copy — title is always the app name (EN+AR), bodies are
-specific and professional. Pure unit tests over the copy builders / helpers."""
+"""Push copy and record privacy — titles stay the app name in both languages;
+direct-send counts and actionable items include only visible unread active sends."""
 
+from datetime import datetime
+
+import pytest
+
+from app.db.models import Book, BookCategory, BookRecipient
 from app.services import notification_service as ns
 from app.services import scheduler_service as ss
 from app.services.notification_service import ActionableItem
+from tests.conftest import make_user
 
 APP = "GSSG Manager"
 
@@ -50,6 +56,7 @@ def test_titles_are_app_name_in_both_languages():
         ("approval", [_item("approval", label="HR-1", subject="Leave", requester="Sam")]),
         ("review", [_item("review", label="HR-2")]),
         ("scan", [_item("scan")]),
+        ("inbox", [_item("inbox", subject="Memo", requester="Sam")]),
     ]
     for kind, items in cases:
         messages, _url = ss._build_push(kind, items, "/section")
@@ -127,6 +134,124 @@ def test_approval_multiple_counts_queue():
     assert messages["en"][1] == "3 documents awaiting your signature"
     assert messages["ar"][1] == "3 مستندات بانتظار توقيعك"
     assert url == "/books?status=pending"
+
+
+# --- direct sends -----------------------------------------------------------
+
+
+def test_inbox_confidential_single_is_neutral_even_with_details_present():
+    it = _item(
+        "inbox",
+        url="/books/5",
+        label="HR-0409",
+        subject="Private memo",
+        requester="Ali",
+        confidential=True,
+    )
+    messages, url = ss._build_push("inbox", [it], "/ledger?tab=books&scope=incoming")
+    assert messages == {
+        "en": (APP, "New record sent to you"),
+        "ar": (APP, "لديك معاملة جديدة"),
+    }
+    assert url == "/books/5"
+
+
+def test_inbox_general_single_includes_record_and_sender():
+    book = Book(id=5, ref_number="HR-0409", subject="Annual leave", confidentiality="general")
+    item = ns.inbox_item(book, BookRecipient(id=12), "Ali")
+    assert (item.kind, item.ref, item.label) == ("inbox", "send:12", "HR-0409")
+    assert not item.confidential
+    messages, url = ss._build_push("inbox", [item], "/ledger?tab=books&scope=incoming")
+    assert messages["en"][1] == "New record sent to you · HR-0409 — Annual leave\nFrom Ali"
+    assert messages["ar"][1] == "لديك معاملة جديدة · HR-0409 — Annual leave\nمن Ali"
+    assert url == "/books/5"
+
+
+@pytest.mark.parametrize("level", ["personal", "secret", "directed"])
+def test_inbox_item_redacts_non_general_record(level):
+    book = Book(id=5, ref_number="HR-0409", subject="Private memo", confidentiality=level)
+    item = ns.inbox_item(book, BookRecipient(id=12), "Ali")
+    assert item.subject is None
+    assert item.requester is None
+    assert item.confidential
+    assert (item.ref, item.url, item.label) == ("send:12", "/books/5", "HR-0409")
+
+
+def test_inbox_multiple_summarizes_without_any_record_details():
+    section = ss._KIND_META["inbox"]
+    assert section == "/ledger?tab=books&scope=incoming"
+    items = [
+        _item("inbox", subject="General memo", requester="Ali"),
+        _item("inbox", ref="send:2", subject="Private memo", confidential=True),
+    ]
+    messages, url = ss._build_push("inbox", items, section)
+    assert messages["en"][1] == "2 new records sent to you"
+    assert messages["ar"][1] == "لديك معاملات جديدة · \u20662\u2069"
+    assert url == section
+
+
+@pytest.mark.parametrize("level", ["general", "personal", "secret", "directed"])
+def test_record_actionable_items_redact_non_general_subjects(api_db, monkeypatch, level):
+    user = make_user(api_db, role="manager")
+    book = Book(id=5, ref_number="HR-0409", subject="Private memo", confidentiality=level)
+    monkeypatch.setattr(ns.book_service, "list_awaiting", lambda *a, **kw: [book])
+    monkeypatch.setattr(ns.book_service, "list_awaiting_scan", lambda *a, **kw: [book])
+    items = [
+        item for item in ns.actionable_items(api_db, user) if item.kind in {"approval", "scanback"}
+    ]
+    assert {item.kind for item in items} == {"approval", "scanback"}
+    for item in items:
+        assert item.label == book.ref_number
+        assert item.subject == (book.subject if level == "general" else None)
+        messages, _ = ss._build_push(item.kind, [item], "/section")
+        for lang in ("en", "ar"):
+            assert (book.subject in messages[lang][1]) == (level == "general")
+
+
+def test_inbox_counts_and_items_only_include_visible_unread_active_sends(api_db, monkeypatch):
+    user = make_user(api_db, email="recipient@test.ae")
+    sender = make_user(api_db, email="sender@test.ae")
+    api_db.add(BookCategory(id="HR", name_en="HR", prefix="HR"))
+    rows = []
+    for n, level in enumerate(
+        ["general", "directed", "general", "general", "secret", "general"], 1
+    ):
+        book = Book(
+            category_id="HR",
+            ref_number=f"HR-{n}",
+            subject=f"Subject {n}",
+            confidentiality=level,
+            created_by_user_id=sender.id,
+            deleted_at=datetime(2026, 1, 1) if n == 6 else None,
+        )
+        api_db.add(book)
+        api_db.flush()
+        row = BookRecipient(
+            book_id=book.id,
+            user_id=user.id,
+            sent_by_user_id=sender.id,
+            purpose="info",
+            read_at=datetime(2026, 1, 1) if n == 3 else None,
+            revoked_at=datetime(2026, 1, 1) if n == 4 else None,
+        )
+        api_db.add(row)
+        rows.append(row)
+    api_db.commit()
+    assert ns.relevant_counts(api_db, user, precomputed_leaves=0).inbox == 2
+    assert ns.relevant_counts(api_db, sender, precomputed_leaves=0).inbox == 0
+    batches = []
+    resolve = ns.book_service.resolve_names_by_ids
+
+    def resolve_names(db, ids):
+        batches.append(ids)
+        return resolve(db, ids)
+
+    monkeypatch.setattr(ns.book_service, "resolve_names_by_ids", resolve_names)
+    items = [item for item in ns.actionable_items(api_db, user) if item.kind == "inbox"]
+    assert batches == [{sender.id}]
+    assert {item.ref for item in items} == {f"send:{row.id}" for row in rows[:2]}
+    assert next(item for item in items if not item.confidential).requester == sender.email
+    assert next(item for item in items if item.confidential).subject is None
 
 
 # --- scan -------------------------------------------------------------------

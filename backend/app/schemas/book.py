@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, computed_field
 
 from app.core.form_kind import resolve_service, word_draft_service
 from app.schemas._base import ORMBase
@@ -22,6 +22,10 @@ BookStampStyle = Literal[
     "Watermark Style",
 ]
 
+# Record level (Book.confidentiality) and direct-send purpose.
+BookConfidentiality = Literal["general", "personal", "secret", "directed"]
+SendPurpose = Literal["info", "action", "reply", "circulate"]
+
 
 # ---------------------------------------------------------------------------
 # Category schemas
@@ -34,6 +38,54 @@ class BookCategoryRead(ORMBase):
     name_ar: str | None
     prefix: str
     requires_approval: bool
+
+
+class BookFolderCreate(BaseModel):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+    team: bool = False
+
+
+class BookFolderUpdate(BaseModel):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+
+
+class BookFolderShareUser(BaseModel):
+    id: int
+    name: str
+    name_ar: str | None
+    title: str | None
+    title_ar: str | None
+
+
+class BookFolderShareOption(BookFolderShareUser):
+    department: str | None
+
+
+class BookFolderShareOptions(BaseModel):
+    users: list[BookFolderShareOption]
+    departments: list[str]
+
+
+class BookFolderSharesUpdate(BaseModel):
+    everyone: bool
+    user_ids: list[int] = Field(default_factory=list)
+    departments: list[
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)]
+    ] = Field(default_factory=list)
+
+
+class BookFolderRead(BaseModel):
+    id: int
+    name: str
+    team: bool
+    count: int
+    can_manage: bool
+    has_book: bool | None = None
+    created_by_name: str | None
+    created_by_name_ar: str | None
+    everyone: bool
+    shared_users: list[BookFolderShareUser]
+    shared_departments: list[str]
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +104,7 @@ class BookCreate(BaseModel):
     direction: BookDirection = "incoming"
     stamp_style: BookStampStyle = "Header Text (Ref: XX-0000)"
     doc_id: int | None = None  # optional link to a Document row
+    confidentiality: BookConfidentiality = "general"
 
 
 class BookUpdate(BaseModel):
@@ -123,6 +176,7 @@ class BookApprovalStepRead(ORMBase):
     kind: str = "approver"
     seen_at: datetime | None = None
     assignee_name: str | None = None
+    assignee_name_ar: str | None = None
 
 
 class RetainedDecisionRead(ORMBase):
@@ -132,6 +186,7 @@ class RetainedDecisionRead(ORMBase):
     decided_at: datetime
     assignee_user_id: int
     assignee_name: str | None = None
+    assignee_name_ar: str | None = None
 
 
 class BookRevisionAccessRead(ORMBase):
@@ -140,6 +195,7 @@ class BookRevisionAccessRead(ORMBase):
     version_no: int
     user_id: int
     user_name: str | None = None
+    user_name_ar: str | None = None
     kind: str
     state: str
     note: str | None
@@ -164,6 +220,7 @@ class BookVersionRead(ORMBase):
     # Real assignment submission time; never inferred from revision creation.
     submitted_at: datetime | None = None
     created_by_name: str | None = None
+    created_by_name_ar: str | None = None
     docx_url: str | None = None
     pdf_url: str | None = None
     manager_sig_embedded: bool = False
@@ -197,6 +254,7 @@ class BookAnnotationRead(ORMBase):
     comment: str | None
     author_user_id: int | None = None
     author_name: str | None = None
+    author_name_ar: str | None = None
     created_at: datetime
 
 
@@ -224,6 +282,7 @@ class BookEditSessionRead(ORMBase):
 
     user_id: int
     user_name: str | None = None
+    user_name_ar: str | None = None
     state: str
     last_put_at: datetime | None = None
     created_at: datetime
@@ -253,6 +312,7 @@ class WordBookCreate(BaseModel):
     manager_id: int | None = None
     template_name: str | None = None
     table_rows: list[dict[str, str]] | None = None
+    confidentiality: BookConfidentiality = "general"
     # Report path only: present ⇒ create a Report (no classification/ref). `sign`
     # embeds the signer's signature at Finish; `date` is the report's document date.
     signer_employee_id: str | None = None
@@ -341,6 +401,7 @@ class IncludedPaperReplacementRead(BaseModel):
 class IncludedPapersHistoryRead(ORMBase):
     actor_user_id: int | None = None
     actor_name: str
+    actor_name_ar: str | None = None
     revision_before: int
     revision_after: int
     added: list[str] = Field(default_factory=list)
@@ -356,6 +417,134 @@ class IncludedPapersPreviewRead(BaseModel):
     total_page_count: int
     papers: list[IncludedPaperRead]
     pdf_base64: str
+
+
+class BookInboxRead(ORMBase):
+    """The caller's own received send of a record (BookRead.my_inbox)."""
+
+    id: int
+    purpose: SendPurpose
+    note: str | None = None
+    sent_by_user_id: int
+    sent_by_name: str | None = None
+    sent_by_name_ar: str | None = None
+    sent_by_title: str | None = None
+    sent_by_title_ar: str | None = None
+    sent_at: datetime
+    read_at: datetime | None = None
+    done_at: datetime | None = None
+    archived_at: datetime | None = None
+
+
+class BookRecipientRead(ORMBase):
+    id: int
+    user_id: int
+    user_name: str | None = None
+    user_name_ar: str | None = None
+    user_title: str | None = None
+    user_title_ar: str | None = None
+    sent_by_user_id: int
+    sent_by_name: str | None = None
+    sent_by_name_ar: str | None = None
+    purpose: SendPurpose
+    note: str | None = None
+    created_at: datetime
+    read_at: datetime | None = None
+    done_at: datetime | None = None
+    archived_at: datetime | None = None
+    revoked_at: datetime | None = None
+    can_recall: bool = False
+
+
+class BookSendRequest(BaseModel):
+    user_ids: list[int] = Field(min_length=1, max_length=50)
+    purpose: SendPurpose
+    note: str | None = Field(default=None, max_length=500)
+    # Personal records only: switch the level to directed in the same send.
+    make_directed: bool = False
+    include_references: bool = True
+
+
+class BookSendSkipped(BaseModel):
+    user_id: int
+    reason: Literal["already_recipient", "self"]
+
+
+class BookReferenceSkipped(BaseModel):
+    user_id: int
+    reason: Literal["not_cleared", "personal", "already_recipient", "self"]
+
+
+class BookReferenceSendResult(BaseModel):
+    book_id: int
+    ref_number: str
+    sent_user_ids: list[int]
+    skipped: list[BookReferenceSkipped]
+
+
+class BookSendResponse(BaseModel):
+    sent: list[BookRecipientRead]
+    skipped: list[BookSendSkipped]
+    references: list[BookReferenceSendResult] = Field(default_factory=list)
+
+
+class BookDeriveRequest(BaseModel):
+    kind: Literal["reply", "based_on"]
+    confidentiality: BookConfidentiality | None = None
+    attach_reference: bool = True
+    classification_code: str | None = None
+
+
+class BookLinkCreate(BaseModel):
+    target_book_id: int
+
+
+class BookThreadItem(ORMBase):
+    book_id: int
+    ref_number: str
+    subject: str | None
+    confidentiality: BookConfidentiality
+    created_at: datetime
+    approval_state: str
+    direction: Literal["outgoing", "incoming"]
+    kind: Literal["reply", "based_on", "reference"]
+    attached: bool
+    can_unlink: bool
+    addressee_user_id: int | None = None
+    current_document_id: int | None = None
+
+    # Book.created_at is local wall-clock (see BookRead).
+    LOCAL_WALLCLOCK_FIELDS: ClassVar[frozenset[str]] = frozenset({"created_at"})
+
+
+class BookConfidentialityUpdate(BaseModel):
+    confidentiality: BookConfidentiality
+
+
+class RecipientCandidateRead(BaseModel):
+    id: int
+    name: str
+    name_ar: str | None = None
+    g_number: str | None = None
+    role: str
+    has_secret_clearance: bool
+
+
+class InboxPurposeCounts(BaseModel):
+    info: int = 0
+    action: int = 0
+    reply: int = 0
+    circulate: int = 0
+
+
+class InboxSummaryRead(BaseModel):
+    """Received counts exclude done/archived sends; archived counts whole records."""
+
+    unread: int
+    received: int
+    sent: int
+    archived: int = 0
+    by_purpose: InboxPurposeCounts
 
 
 class BookRead(ORMBase):
@@ -381,6 +570,15 @@ class BookRead(ORMBase):
     priority: str | None
     approval_state: str
     access_scope: Literal["full", "assigned_revision"] = "full"
+    confidentiality: BookConfidentiality = "general"
+    # Full record write access; clients must also check the action's capability.
+    can_write: bool = False
+    # Caller may direct-send / forward this record (full access).
+    can_send: bool = False
+    # Caller may relabel the level (creator, manager, or admin with full access).
+    can_change_confidentiality: bool = False
+    # The caller's newest active received send of this record, if any.
+    my_inbox: BookInboxRead | None = None
     selected_version_id: int | None = None
     can_sign: bool = False
     can_review: bool = False
@@ -396,17 +594,22 @@ class BookRead(ORMBase):
     signing_path: str | None = None
     submitted_by_user_id: int | None = None
     submitted_by_name: str | None = None
+    submitted_by_name_ar: str | None = None
     submitted_by_g: str | None = None
     # Immutable original creator (books.created_by_user_id); distinct from the
     # submitter, who is only set on submit and reset on revision.
     created_by_user_id: int | None = None
     created_by_name: str | None = None
+    created_by_name_ar: str | None = None
+    created_by_title: str | None = None
+    created_by_title_ar: str | None = None
     created_by_g: str | None = None
     # Captured submission instant for the selected revision, when trustworthy.
     submitted_at: datetime | None = None
     # The doc's named manager resolved to a login account (auto-route target).
     doc_manager_user_id: int | None = None
     doc_manager_name: str | None = None
+    doc_manager_name_ar: str | None = None
     # Whether that linked account has a signature on file — drives the submit
     # dialog's "manager has no signature, add one" warning (lenient submit).
     doc_manager_has_signature: bool = False
@@ -466,6 +669,17 @@ class BookRead(ORMBase):
     sms: list[NotifyMessageRead] = Field(default_factory=list)
     # Set only when the row matched via FTS body search (not on ilike-only hits).
     search_snippet: str | None = None
+    # Ledger desk list rows only (inbox scopes or folders): active recipients the caller
+    # may see (same rule as GET /books/{id}/recipients) and whose signature the
+    # paper carries (the signer once signed, else the doc's named manager).
+    recipients: list[BookRecipientRead] | None = None
+    signer_name: str | None = None
+    signer_name_ar: str | None = None
+    signer_title: str | None = None
+    signer_title_ar: str | None = None
+    filed_by_name: str | None = None
+    filed_by_name_ar: str | None = None
+    filed_at: datetime | None = None
 
 
 class BookListResponse(BaseModel):
@@ -501,6 +715,7 @@ class ApproverOptionRead(BaseModel):
 
     id: int
     name: str
+    name_ar: str | None = None
     # True for the admin-set default manager — the picker preselects them.
     is_default: bool = False
 
@@ -537,11 +752,15 @@ class ApprovalLogItem(ORMBase):
     priority: str | None = "Normal"
     submitted_by_user_id: int | None = None
     submitted_by_name: str | None = None
+    submitted_by_name_ar: str | None = None
     doc_manager_user_id: int | None = None
     doc_manager_name: str | None = None
+    doc_manager_name_ar: str | None = None
     # The assigned signer's display name (never a doc manager/scan filer by default).
     approver_name: str | None = None
+    approver_name_ar: str | None = None
     reviewer_names: list[str] = Field(default_factory=list)
+    reviewer_names_ar: list[str | None] = Field(default_factory=list)
     # The selected revision's real submission instant, or null — never record
     # creation time.
     submitted_at: datetime | None = None

@@ -28,6 +28,7 @@ import { AppLockContext } from '@/lib/appLockContext'
 import { bidi } from '@/lib/bidi'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
+import { pickEmployeeName } from '@/lib/employeeName'
 import type { BookRead, WordSessionRead } from '@/lib/api'
 
 // Same pdf.js canvas the generate-preview tab uses — the finished book renders
@@ -329,8 +330,8 @@ export function WordHandoffDialog({ session, open, onClose, onFinished }: Props)
                 {createdDate && (
                   <bdi dir="ltr">{createdDate}</bdi>
                 )}
-                {bookQuery.data?.submitted_by_name && (
-                  <> · {t('books.word.preparedBy')}: <bdi dir="ltr">{bookQuery.data.submitted_by_name}</bdi></>
+                {(bookQuery.data?.submitted_by_name || bookQuery.data?.submitted_by_name_ar) && (
+                  <> · {t('books.word.preparedBy')}: <bdi dir="auto">{pickEmployeeName({ name_en: bookQuery.data.submitted_by_name ?? '', name_ar: bookQuery.data.submitted_by_name_ar }, i18n.language)}</bdi></>
                 )}
               </p>
             )}

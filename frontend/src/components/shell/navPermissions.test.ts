@@ -12,7 +12,7 @@ const expectedPrimaryCaps: Record<string, string | undefined> = {
   '/': undefined,
   '/employees': 'employees.view',
   '/vehicles': 'vehicles.view',
-  '/ledger': 'ledger.view',
+  '/ledger': undefined,
   '/leaves': 'leaves.view',
   '/services': 'documents.generate',
   '/books': 'books.view',
@@ -25,6 +25,17 @@ describe('permission-aware navigation', () => {
       expectedPrimaryCaps,
     )
     expect(NAV_ITEMS.map((item) => item.to)).toEqual(Object.keys(expectedPrimaryCaps))
+  })
+
+  it.each([
+    { caps: [], allowed: false },
+    { caps: ['ledger.view'], allowed: true },
+    { caps: ['books.view'], allowed: true },
+  ])('allows Ledger with either capability: $caps', ({ caps, allowed }) => {
+    const entry = NAV_ITEMS.find((item) => item.to === '/ledger')!
+    expect(isNavEntryAllowed(entry, (cap) => caps.includes(cap))).toBe(allowed)
+    const dockEntry = SECTION_ENTRIES.find((item) => item.to === '/ledger')!
+    expect(isNavEntryAllowed(dockEntry, (cap) => caps.includes(cap))).toBe(allowed)
   })
 
   it('gates settings and waiting signals with every destination capability', () => {

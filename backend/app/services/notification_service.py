@@ -17,9 +17,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core import leave_lifecycle
-from app.db.models import Leave, User
+from app.db.models import Book, BookRecipient, Leave, User
 from app.schemas.notifications import NotificationCounts
 from app.services import (
+    book_send_service,
     book_service,
     inmate_statistics_service,
     ledger_service,
@@ -32,7 +33,7 @@ from app.services import (
 class ActionableItem:
     """One owned, actionable item for Web Push — carries its own deep link."""
 
-    kind: str  # Book, monthly report, scan, email or scan-back action.
+    kind: str  # Book, direct send, monthly report, scan, email or scan-back action.
     ref: str  # opaque, stable per-kind key, e.g. 'book:42'
     url: str  # frontend deep-link path the notification click navigates to
     label: str  # short human label (ref number / id) for the body text
@@ -40,6 +41,28 @@ class ActionableItem:
     requester: str | None = None  # who submitted it / email sender
     preview: str | None = None  # short plain-text content preview (emails)
     attachments: int = 0  # attachment count, for the email body's "size" line
+    confidential: bool = False
+    requester_ar: str | None = None
+
+
+def inbox_item(
+    book: Book,
+    row: BookRecipient,
+    sender_name: str | None,
+    sender_name_ar: str | None = None,
+) -> ActionableItem:
+    """Direct-send push item, with record details only for general records."""
+    confidential = book.confidentiality != "general"
+    return ActionableItem(
+        kind="inbox",
+        ref=f"send:{row.id}",
+        url=f"/books/{book.id}",
+        label=book.ref_number,
+        subject=None if confidential else book.subject,
+        requester=None if confidential else sender_name,
+        requester_ar=None if confidential else sender_name_ar,
+        confidential=confidential,
+    )
 
 
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -118,19 +141,27 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
     items: list[ActionableItem] = []
 
     # Approval chain — books whose current pending step is assigned to this user.
-    for book in book_service.list_awaiting(db, user_id=user.id):
+    awaiting = book_service.list_awaiting(db, user_id=user.id)
+    received = book_send_service.unread_received(db, user)
+    user_ids = {book.submitted_by_user_id for book in awaiting if book.submitted_by_user_id}
+    user_ids.update(row.sent_by_user_id for row, _ in received)
+    sender_names = book_service.resolve_names_by_ids(db, user_ids)
+    sender_names_ar = book_service.resolve_names_ar_by_ids(db, user_ids)
+    for book in awaiting:
         role = book_service.your_step_kind(book, user.id)
         # A Report's manager only reviews it — never "Signature needed".
         kind = "review" if role == "reviewer" or book_service.is_report(book) else "approval"
-        label = book.ref_number or book.subject or f"#{book.id}"
+        subject = book.subject if book.confidentiality == "general" else None
+        label = book.ref_number or subject or f"#{book.id}"
         items.append(
             ActionableItem(
                 kind,
                 f"book:{book.id}",
                 f"/books/{book.id}",
                 label,
-                subject=book.subject,
-                requester=book_service.submitter_name(db, book),
+                subject=subject,
+                requester=sender_names.get(book.submitted_by_user_id),
+                requester_ar=sender_names_ar.get(book.submitted_by_user_id),
             )
         )
 
@@ -168,9 +199,19 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
                     f"book:{book.id}",
                     f"/books/{book.id}",
                     book.ref_number or f"#{book.id}",
-                    subject=book.subject,
+                    subject=book.subject if book.confidentiality == "general" else None,
                 )
             )
+
+    items.extend(
+        inbox_item(
+            book,
+            row,
+            sender_names.get(row.sent_by_user_id),
+            sender_names_ar.get(row.sent_by_user_id),
+        )
+        for row, book in received
+    )
 
     items.extend(_monthly_items(db, user))
     return items
@@ -220,6 +261,7 @@ def relevant_counts(
                  the same tick (avoids repeating the org-wide paging per user).
     - scans:     scan-inbox items owned by this user (awaiting_confirmation + unrouted).
     - emails:    unread incoming email in this user's mailbox.
+    - inbox:     unread active direct sends on records this user can open.
 
     This is the Phase 5 contract: Phase 5 Web Push calls the same function.
     Keep it pure (no side effects, no request objects).
@@ -244,6 +286,7 @@ def relevant_counts(
         leaves=leaves,
         scans=scans,
         emails=emails,
+        inbox=len(book_send_service.unread_received(db, user)),
         monthly_reviews=sum(item.kind == "monthly_review" for item in monthly),
         monthly_approvals=sum(item.kind == "monthly_approval" for item in monthly),
     )

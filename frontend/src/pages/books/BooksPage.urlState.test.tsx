@@ -52,6 +52,28 @@ beforeEach(() => {
 })
 
 describe('Books URL state', () => {
+  it.each([
+    ['received', 'incoming'],
+    ['sent', 'outgoing'],
+    ['archived', 'archived'],
+  ])('replaces legacy inbox=%s with the Ledger Books scope before fetching records', async (inbox, scope) => {
+    setup(`/books?inbox=${inbox}`)
+    await waitFor(() => expect(screen.getByTestId('url')).toHaveTextContent(`/ledger?tab=books&scope=${scope}`))
+    expect(api.listBooks).not.toHaveBeenCalled()
+    expect(api.getBookFacets).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByText('back'))
+    expect(screen.getByTestId('url')).toHaveTextContent(/^\/elsewhere$/)
+  })
+
+  it('drops an unknown inbox value while preserving Records filters and replacing history', async () => {
+    setup('/books?inbox=unknown&mine=1')
+    await waitFor(() => expect(screen.getByTestId('url')).toHaveTextContent(/^\/books\?mine=1$/))
+    await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({ limit: 500, created_by_me: true }))
+    expect(api.listBooks).not.toHaveBeenCalledWith(expect.objectContaining({ inbox: expect.anything() }))
+    await userEvent.click(screen.getByText('back'))
+    expect(screen.getByTestId('url')).toHaveTextContent(/^\/elsewhere$/)
+  })
+
   it('restores filter, search, selection from URL and replaces filter changes', async () => {
     setup()
     await waitFor(() => expect(screen.getByTestId('record-pane')).toHaveTextContent('42'))

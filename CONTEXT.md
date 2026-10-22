@@ -85,6 +85,25 @@ revocation. It does not authorize later Revisions or confer editing/signing
 authority.
 _Avoid_: Record ownership, permanent access to the whole Record
 
+**Level**:
+A Record's confidentiality: General (عام), Personal (شخصي, creator only),
+Secret (سري, users with Secret clearance) or Directed (موجه, creator plus
+Direct send recipients). Separate from the التبويب classification code.
+_Avoid_: Classification (that is the filing tab)
+
+**Direct send**:
+Delivering a Record to named users with a purpose (للاطلاع, للتنفيذ, للإفادة,
+للتعميم) and an optional note. It is a read grant for that one Record that can
+be recalled; it never grants editing, signing or relabelling. A recipient
+sending it on is a forward. Marking done also marks it read; undo keeps the
+read time. Archiving hides it from the received inbox and counts, not access;
+the Archived filter supports unarchive.
+_Avoid_: Send state (external email delivery)
+
+**Secret clearance**:
+The `books.secret` capability that admins and managers grant per user; it
+opens every Secret Record.
+
 ### Attendance and leave
 
 **Attendance case**:
@@ -306,6 +325,8 @@ the domain language above.
 | Generated artifact | `Document` |
 | Revision | `BookVersion` |
 | Send state | `Book.send_state` |
+| Level | `Book.confidentiality` |
+| Direct send | `BookRecipient` |
 | Threaded reply confirmation | `ScanInbox.source = "email_reply_match"` |
 | Attendance case | `AttendanceCase` |
 | Automatic verdict | `AttendanceEvaluation` |

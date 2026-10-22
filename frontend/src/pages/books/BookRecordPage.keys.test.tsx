@@ -33,6 +33,7 @@ vi.mock('@/lib/api', async (orig) => {
     api: {
       ...real.api,
       getBook: vi.fn(),
+      getBookThread: vi.fn().mockResolvedValue([]),
       signBook: vi.fn(),
       createBookAnnotation: vi.fn(),
       listBookAnnotations: vi.fn(),
@@ -101,6 +102,7 @@ function fixture(overrides: Record<string, unknown> = {}): unknown {
     subject: 'Leave request',
     approval_state: 'pending',
     access_scope: 'full',
+    can_write: true,
     signing_path: null,
     is_word_book: false,
     is_draft: false,

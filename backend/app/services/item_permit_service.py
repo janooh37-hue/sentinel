@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.core.permit_letter import build_item_permit_letter_html
-from app.db.models import AuditLog, Book, Employee, ItemPermit
+from app.db.models import AuditLog, Employee, ItemPermit, User
 from app.schemas.item_permit import ItemPermitCreate, ItemPermitRead, ItemPermitUpdate
 from app.services import permit_service
 
@@ -104,12 +104,14 @@ def get_item_permit(db: Session, permit_id: int) -> ItemPermit:
     return row
 
 
-def to_read(row: ItemPermit, *, db: Session) -> ItemPermitRead:
+def to_read(row: ItemPermit, *, db: Session, user: User | None = None) -> ItemPermitRead:
+    """With ``user``, a letter Record they cannot open is reported as absent."""
     emp = row.employee
-    book = db.get(Book, row.book_id) if row.book_id is not None else None
+    book = permit_service.readable_book(db, row.book_id, user)
     return ItemPermitRead.model_validate(
         {
             **row.__dict__,
+            "book_id": row.book_id if user is None or book is not None else None,
             "employee_name": emp.name_ar or emp.name_en,
             "employee_name_en": emp.name_en,
             "employee_title": emp.position_ar or emp.position,

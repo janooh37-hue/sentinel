@@ -2,10 +2,12 @@ import { useContext, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ExternalLink, Printer, Send } from 'lucide-react'
+import { ExternalLink, Forward, Printer, Send } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { SubmitForApprovalDialog } from './SubmitForApprovalDialog'
+import { ConfidentialityChip } from './ConfidentialityChip'
+import { SendRecordDialog } from './SendRecordDialog'
 import { api, ApiError } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { canSendForApproval, inmateReporterActionFor } from './book-detail-drawer-utils'
@@ -40,6 +42,7 @@ export function SavedRecordActions({
   const isInmateReporter = user?.role === 'inmate_reporter'
   const isMobile = useIsMobile()
   const [approvalOpen, setApprovalOpen] = useState(false)
+  const [sendOpen, setSendOpen] = useState(false)
   const bookQuery = useQuery({
     queryKey: ['books', 'detail', bookId],
     queryFn: () => api.getBook(bookId),
@@ -53,9 +56,9 @@ export function SavedRecordActions({
   const reporterAction = bookQuery.data
     ? inmateReporterActionFor(bookQuery.data, user?.id)
     : 'read-only'
-  const canSubmit = isInmateReporter
+  const canSubmit = !!bookQuery.data?.can_write && (isInmateReporter
     ? reporterAction === 'edit-submit'
-    : state === 'none' && canSendForApproval(state, { canSubmitBook: has('books.submit') })
+    : state === 'none' && canSendForApproval(state, { canSubmitBook: has('books.submit') }))
   const reporterSubmitMutation = useInmateReportSubmit({
     onSuccess: () => toast.success(t('books.approval.submitted')),
     onError: (err, message) => {
@@ -119,6 +122,20 @@ export function SavedRecordActions({
     </span>
   ) : null
 
+  const sendButton = bookQuery.data?.can_send ? (
+    <button
+      type="button"
+      onClick={() => setSendOpen(true)}
+      className={cn(
+        'inline-flex min-h-10 items-center gap-2 rounded-lg border border-hairline px-3 text-sm font-medium text-foreground transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        isMobile && 'w-full justify-center',
+      )}
+    >
+      <Forward className="h-4 w-4 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden="true" />
+      {t('books.send.menu')}
+    </button>
+  ) : null
+
   const openRecord = (
     <button
       type="button"
@@ -140,6 +157,9 @@ export function SavedRecordActions({
         <p className="text-sm text-muted-foreground">
           {t('books.completion.reference', { ref: bidi(refNumber) })}
         </p>
+        {bookQuery.data && bookQuery.data.confidentiality !== 'general' && (
+          <ConfidentialityChip level={bookQuery.data.confidentiality} className="self-start" />
+        )}
         {detail && <p className="text-sm text-muted-foreground">{detail}</p>}
         {notification === 'enabled' && (
           <p className="text-sm text-muted-foreground">{t('books.completion.notificationEnabled')}</p>
@@ -160,12 +180,14 @@ export function SavedRecordActions({
           <>
             {approvalAction}
             {printButton}
+            {sendButton}
             {openRecord}
           </>
         ) : (
           <>
             {printButton}
             {approvalAction}
+            {sendButton}
             {openRecord}
           </>
         )}
@@ -173,6 +195,9 @@ export function SavedRecordActions({
 
       {!isInmateReporter && approvalOpen && (
         <SubmitForApprovalDialog bookId={bookId} onClose={() => setApprovalOpen(false)} />
+      )}
+      {bookQuery.data && (
+        <SendRecordDialog book={bookQuery.data} open={sendOpen} onOpenChange={setSendOpen} />
       )}
     </section>
   )

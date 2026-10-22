@@ -58,7 +58,7 @@ export function EmailBasketTray(): React.JSX.Element | null {
     // Keep the basket's stored key so the correct (possibly mis-keyed, stale)
     // basket is the one cleared on a successful send.
     prefill.basketKey = key
-    navigate('/ledger', { state: { composePrefill: prefill } })
+    navigate('/ledger?tab=email', { state: { composePrefill: prefill } })
   }
 
   return (

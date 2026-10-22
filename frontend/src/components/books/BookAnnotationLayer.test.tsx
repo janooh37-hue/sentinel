@@ -10,7 +10,9 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { BookAnnotationLayer, MarksStepper } from './BookAnnotationLayer'
 import type { BookAnnotation, PageBox } from './annotation-utils'
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }))
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
+}))
 
 const { toastFn, toastError, toastSuccess, toastDismiss } = vi.hoisted(() => ({
   toastFn: vi.fn(),

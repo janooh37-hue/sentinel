@@ -15,6 +15,7 @@ import i18n from 'i18next'
 import { z } from 'zod'
 
 import en from '@/locales/en.json'
+import type * as ApiModule from '@/lib/api'
 import type { JobStatusResponse } from '@/lib/api'
 import { api } from '@/lib/api'
 import { ApplicationPage } from './ApplicationPage'
@@ -28,18 +29,22 @@ const toastWarning = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), warning: toastWarning, error: vi.fn(), info: vi.fn() },
 }))
-vi.mock('@/lib/api', () => ({
-  api: {
-    listTemplates: vi.fn(),
-    getEmployeeLookup: vi.fn(),
-    getSettings: vi.fn(),
-    getTemplateFields: vi.fn(),
-    generateDocument: vi.fn(),
-    getBook: vi.fn(),
-    getBookVersionFields: vi.fn(),
-  },
-  apiErrorMessage: (error: unknown) => String(error),
-}))
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof ApiModule>()
+  return {
+    ...actual,
+    api: {
+      listTemplates: vi.fn(),
+      getEmployeeLookup: vi.fn(),
+      getSettings: vi.fn(),
+      getTemplateFields: vi.fn(),
+      generateDocument: vi.fn(),
+      getBook: vi.fn(),
+      getBookVersionFields: vi.fn(),
+    },
+    apiErrorMessage: (error: unknown) => String(error),
+  }
+})
 vi.mock('@/lib/messageTemplates', async (importOriginal) => {
   const actual = await importOriginal<typeof MessageTemplatesModule>()
   return {
