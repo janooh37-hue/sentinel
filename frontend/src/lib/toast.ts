@@ -46,8 +46,8 @@ export interface ToastPromiseMessages<T> {
   error: string | ((error: unknown) => string)
 }
 
-/** Sileo's own default, and long enough to read a one-line error. */
-export const TOAST_DEFAULT_DURATION_MS = 6000
+/** Sonner's historical default, kept so existing call sites keep their timing. */
+export const TOAST_DEFAULT_DURATION_MS = 4000
 
 /** Longest message that still fits the collapsed pill without clipping. */
 export const TOAST_TITLE_MAX_CHARS = 36

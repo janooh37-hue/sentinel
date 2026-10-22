@@ -1507,7 +1507,7 @@ and `toast.dismiss(id?)` from `@/lib/toast`; options `id`, `description`,
 | Concern | Rule |
 | ------- | ---- |
 | Identity | Every call gets a unique id, so notices stack. Same `id` updates the visible toast in place (loading → success/error, `timesheet-cell-locked`). Sileo's own default shares one id and would replace every notice. |
-| Duration | 6 s default (Sileo's). `Infinity` stays until dismissed; `loading` always does. A deferred-delete Undo passes its own commit window as `duration`. The body stays open until the toast closes. |
+| Duration | 4 s default (Sonner's, unchanged by the Sileo migration; Sileo's own is 6 s). An explicit `duration` overrides it. `Infinity` stays until dismissed; `loading` always does. A deferred-delete Undo passes its own commit window as `duration`. The body stays open until the toast closes. |
 | Pill vs body | The collapsed pill holds one line (≤ 36 characters). A longer message moves into the body under a localized state title (`common.toastState.*`); a short message with a `description` keeps the message as the title. The body opens by itself on the newest toast and on hover or keyboard focus. |
 | Neutral | `toast(msg)` is `info`, or `action` when it carries an action. |
 | Action | Runs `onClick`, then closes the toast (Sileo does not). |

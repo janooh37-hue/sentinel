@@ -158,6 +158,42 @@ describe('AppToaster + toast adapter', () => {
     expect(toastEls().map(titleOf)).toEqual(['Sticky', 'Working'])
   })
 
+  it('closes at exactly 4000 ms by default, not earlier or later', () => {
+    vi.useFakeTimers()
+    act(() => {
+      toast.success('Default')
+    })
+    act(() => {
+      vi.advanceTimersByTime(3900)
+    })
+    expect(toastEls().map(titleOf)).toEqual(['Default'])
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(toastEls()).toHaveLength(0)
+  })
+
+  it('honours an explicit duration override and keeps loading persistent', () => {
+    vi.useFakeTimers()
+    act(() => {
+      toast.success('Long', { duration: 9000 })
+      toast.error('Short', { duration: 1000 })
+      toast.loading('Working')
+    })
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+    expect(toastEls().map(titleOf)).toEqual(['Long', 'Working'])
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+    expect(toastEls().map(titleOf)).toEqual(['Long', 'Working'])
+    act(() => {
+      vi.advanceTimersByTime(3000)
+    })
+    expect(toastEls().map(titleOf)).toEqual(['Working'])
+  })
+
   it('keeps auto-closing later toasts after one is dismissed under the pointer', async () => {
     // Sileo clears its hovered flag only on a mouseleave, which a toast closing
     // under the pointer never sends: without the host's release every later toast
