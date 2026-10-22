@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import type { BookFolderRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
+import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
 import { useInboxSummary } from '@/pages/books/useInboxCount'
 import { FolderButton } from './outlook/FolderRail'
@@ -102,6 +103,7 @@ export function BooksRail({ scope, folderId, switcher, onSelectScope, onSelectFo
   const skipMenuFocusRef = useRef(false)
   const folders = useBookFolders()
   const summary = useInboxSummary()
+  const isMobile = useIsMobile()
   const [editor, setEditor] = useState<FolderEdit | null>(null)
   const [deleting, setDeleting] = useState<BookFolderRead | null>(null)
   // A desk row is being dragged: every folder shows it accepts the drop.
@@ -162,16 +164,22 @@ export function BooksRail({ scope, folderId, switcher, onSelectScope, onSelectFo
     }
   }, [])
   function dropHandlers(folder: BookFolderRead) {
+    // Enter and over both claim the drop; Chromium can go quiet on dragover while the pointer rests.
+    const over = (event: DragEvent<HTMLDivElement>): void => {
+      // Only book rows are droppable; files or text dragged over the rail are ignored.
+      if (!event.dataTransfer.types.includes(BOOK_DRAG_TYPE)) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'copy'
+      setDropTarget(folder.id)
+    }
     return {
-      onDragOver: (event: DragEvent<HTMLDivElement>) => {
-        // Only book rows are droppable; files or text dragged over the rail are ignored.
-        if (!event.dataTransfer.types.includes(BOOK_DRAG_TYPE)) return
-        event.preventDefault()
-        event.dataTransfer.dropEffect = 'copy'
-        setDropTarget(folder.id)
-      },
+      onDragEnter: over,
+      onDragOver: over,
       onDragLeave: (event: DragEvent<HTMLDivElement>) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget((id) => id === folder.id ? null : id)
+        // Chromium reports no relatedTarget while dragging between children, so test the pointer.
+        const box = event.currentTarget.getBoundingClientRect()
+        const inside = event.clientX > box.left && event.clientX < box.right && event.clientY > box.top && event.clientY < box.bottom
+        if (!inside) setDropTarget((id) => id === folder.id ? null : id)
       },
       onDrop: (event: DragEvent<HTMLDivElement>) => {
         event.preventDefault()
@@ -236,7 +244,7 @@ export function BooksRail({ scope, folderId, switcher, onSelectScope, onSelectFo
             </div>
             {editor?.id === null && editor.team === team ? renderEditor() : null}
             {folders.isPending ? <div className="space-y-2 px-2 py-2" aria-label={t('common.loading')} aria-busy="true"><Skeleton className="h-5 w-4/5 bg-rail-2" /><Skeleton className="h-5 w-3/5 bg-rail-2" /></div> : null}
-            {folders.isSuccess && sectionFolders.length === 0 ? <p className="px-2.5 py-1.5 text-[0.72em] leading-relaxed text-rail-faint">{t(`${KEY}.${team ? 'emptyTeam' : 'emptyPersonal'}`)}</p> : null}
+            {folders.isSuccess && sectionFolders.length === 0 ? <p className="px-2.5 py-1.5 text-[0.72em] leading-relaxed text-rail-faint">{t(`${KEY}.${team ? 'emptyTeam' : isMobile ? 'emptyPersonalTouch' : 'emptyPersonal'}`)}</p> : null}
             {sectionFolders.map((folder) => (
               <div key={folder.id} data-folder-id={folder.id}>
                 {editor?.id === folder.id ? renderEditor() : (

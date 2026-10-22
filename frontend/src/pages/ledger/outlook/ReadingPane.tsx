@@ -160,19 +160,19 @@ export function ReadingPane({
               <Button
                 variant="primary"
                 onClick={() => onReply?.(entry)}
-                icon={<ReplyIcon className="h-[15px] w-[15px]" strokeWidth={2} />}
+                icon={<ReplyIcon className="h-[15px] w-[15px] rtl:-scale-x-100" strokeWidth={2} />}
               >
                 {t('ledger.outlook.reply')}
               </Button>
               <Button
                 onClick={() => onReplyAll?.(entry)}
-                icon={<ReplyAllIcon className="h-[15px] w-[15px]" strokeWidth={2} />}
+                icon={<ReplyAllIcon className="h-[15px] w-[15px] rtl:-scale-x-100" strokeWidth={2} />}
               >
                 {t('ledger.outlook.replyAll')}
               </Button>
               <Button
                 onClick={() => onForward?.(entry)}
-                icon={<ForwardIcon className="h-[15px] w-[15px]" strokeWidth={2} />}
+                icon={<ForwardIcon className="h-[15px] w-[15px] rtl:-scale-x-100" strokeWidth={2} />}
               >
                 {t('ledger.outlook.forward')}
               </Button>

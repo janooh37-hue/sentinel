@@ -2847,6 +2847,7 @@
         "addPersonal": "New personal folder",
         "addTeam": "New team folder",
         "emptyPersonal": "Create a folder, then drag books onto it.",
+        "emptyPersonalTouch": "Create a folder to organize your books.",
         "emptyTeam": "No team folders yet.",
         "name": "Folder name",
         "nameHint": "Use 1–80 characters. Enter saves; Escape cancels.",
