@@ -159,7 +159,8 @@ function SecurityRow({ row, zone }: { row: PermitListItem; zone: PermitZone | nu
           {row.permit_no ?? `#${row.id}`}
         </bdi>
         <PermitAccessBadge accessAreas={row.access_areas} zones={row.zones} square />
-        {remaining && <span>{remaining}</span>}
+        {/* Expired/revoked: the status badge already says it. */}
+        {remaining && (row.derived_status === 'active' || row.derived_status === 'expiring') && <span>{remaining}</span>}
       </span>
     </Link>
   )
