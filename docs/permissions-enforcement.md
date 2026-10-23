@@ -100,6 +100,21 @@ baseline gate (`main.py:175-176`). Genuinely open: `POST /register`, `POST /logi
 The WebDAV router (`dav.py`, mounted at `main.py:173`) is also gate-free by necessity —
 Word's HTTP stack sends no cookies, so it authenticates on a token in the URL.
 
+The token does not freeze its owner's permissions. Book-backed DAV `PUT` and
+write `LOCK` requests recheck current `books.edit` as well as full record write
+access. Inmate reporters instead use the same narrow own-Report authoring rule
+as the Word-session routes; they do not gain generic `books.edit`. Template-backed
+sessions require current `books.templates`. Denied DAV requests return 404 and
+leave the working file and save timestamp untouched.
+
+Alternate record entrances enforce the same resource policy as explicit book-ID
+routes: scan-back authorizes the barcode-selected record for writing before
+filing a signed copy. Item-permit update, deletion, regeneration and submission
+authorize the existing linked letter before changing permit or approval state.
+Personal, read-only Directed and uncleared Secret letters stay protected even
+when the caller holds the permit capability; confidential denials use the
+canonical record guard's 404 response.
+
 **Tier 1 — baseline session.** `auth_gate = [Depends(get_current_user)]` (`main.py:167`)
 is passed as `dependencies=` on every other `include_router` call. This means "logged in",
 never "authorized". Note two independent status checks behind it: `login` rejects
