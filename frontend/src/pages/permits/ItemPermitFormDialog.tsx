@@ -145,6 +145,7 @@ export function ItemPermitFormDialog({
     },
     onSuccess: (data) => {
       void qc.invalidateQueries({ queryKey: ['item-permits-list'] })
+      void qc.invalidateQueries({ queryKey: ['item-permits-summary'] })
       void qc.invalidateQueries({ queryKey: ['item-permit', data.id] })
       void qc.invalidateQueries({ queryKey: ['books', 'permit'] })
       if (permit) toast.success(t('common.savedToast'))
