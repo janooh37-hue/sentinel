@@ -142,14 +142,25 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   const [quickActionsDialogOpen, setQuickActionsDialogOpen] = useState(false)
   const [coverageOpen, setCoverageOpen] = useState(false)
   const boardRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
   const customizeRef = useRef<HTMLButtonElement>(null)
   const focusAfterMove = useRef<{ id: string; control: string } | null>(null)
   const focusCustomize = useRef(false)
+  const focusAfterRemove = useRef<WidgetId | null>(null)
 
   useLayoutEffect(() => {
     if (focusCustomize.current && !draft) {
       customizeRef.current?.focus()
       focusCustomize.current = false
+    }
+    if (focusAfterRemove.current) {
+      const canvas = canvasRef.current
+      const add = canvas?.querySelector<HTMLButtonElement>(
+        `[data-add-widget-id="${focusAfterRemove.current}"]:not(:disabled)`,
+      )
+      const target = add ?? canvas?.querySelector<HTMLButtonElement>('[data-control="save"]:not(:disabled)')
+      target?.focus()
+      focusAfterRemove.current = null
     }
     const target = focusAfterMove.current
     if (!target) return
@@ -253,13 +264,13 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
     if (visibleWidgets.some((item) => item.id === from)) moveWidget(from, id, 'drag')
   }
   const removeWidget = (id: WidgetId) => {
+    focusAfterRemove.current = id
     setDraft({
       ...activeLayout,
       widgets: activeLayout.widgets.map((item) =>
         item.id === id ? { ...item, visible: false } : item,
       ),
     })
-    customizeRef.current?.focus()
   }
   const addWidget = (id: WidgetId) => {
     const item = activeLayout.widgets.find((widget) => widget.id === id)!
@@ -294,6 +305,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       <div className="min-h-0 flex-1">
         <PullToRefresh>
           <div
+            ref={canvasRef}
             data-canvas-width={activeLayout.canvas_width}
             className={`w-full px-4 pb-12 pt-6 md:px-7 ${
               activeLayout.canvas_width === 'wide' ? '' : 'mx-auto max-w-[1180px]'

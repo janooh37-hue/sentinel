@@ -73,6 +73,7 @@ export function CustomizeBanner({
       </button>
       <button
         type="button"
+        data-control="save"
         onClick={onSave}
         disabled={isSaving}
         className={`${BUTTON} !bg-primary !text-primary-foreground hover:!bg-primary-hover`}
@@ -246,6 +247,7 @@ export function AddWidgetsPanel({ entries, widgets, onAdd, isSaving }: {
                   </span>
                   <button
                     type="button"
+                    data-add-widget-id={entry.id}
                     disabled={visible || isSaving}
                     onClick={() => onAdd(entry.id)}
                     aria-label={t(
