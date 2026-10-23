@@ -219,9 +219,7 @@ def create(db: Session, *, user_id: int, payload: SmartFolderCreate) -> SmartFol
     return row
 
 
-def rename(
-    db: Session, *, folder_id: int, user_id: int, payload: SmartFolderUpdate
-) -> SmartFolder:
+def rename(db: Session, *, folder_id: int, user_id: int, payload: SmartFolderUpdate) -> SmartFolder:
     """Rename either/both localized names of a caller-owned folder."""
     row = get_owned(db, folder_id=folder_id, user_id=user_id)
     if row is None:

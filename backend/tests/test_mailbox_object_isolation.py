@@ -42,8 +42,13 @@ def data_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Path]:
 
 
 def _user(db: Session, name: str, role: str = "manager") -> User:
-    user = User(email=f"{name}@example.invalid", password_hash="x", display_name=name,
-                role=role, status="active")
+    user = User(
+        email=f"{name}@example.invalid",
+        password_hash="x",
+        display_name=name,
+        role=role,
+        status="active",
+    )
     db.add(user)
     db.commit()
     return user
@@ -57,10 +62,16 @@ def _client(db: Session, user: User) -> TestClient:
 
 
 def _mail(db: Session, root: Path, owner: User | None, **fields) -> LedgerEntry:
-    entry = LedgerEntry(entry_date=date(2026, 10, 23), direction="incoming", channel="email",
-                        counterparty="sender@example.invalid", subject="Synthetic private mail",
-                        notes_html="<p>Private synthetic body</p>", tags=["email"],
-                        owner_user_id=owner.id if owner else None)
+    entry = LedgerEntry(
+        entry_date=date(2026, 10, 23),
+        direction="incoming",
+        channel="email",
+        counterparty="sender@example.invalid",
+        subject="Synthetic private mail",
+        notes_html="<p>Private synthetic body</p>",
+        tags=["email"],
+        owner_user_id=owner.id if owner else None,
+    )
     for key, value in fields.items():
         setattr(entry, key, value)
     db.add(entry)
@@ -81,8 +92,14 @@ def _snapshot(db: Session, root: Path) -> dict[str, object]:
     for table in LedgerEntry.metadata.sorted_tables:
         rows = db.execute(select(table)).mappings().all()
         tables[table.name] = [dict(row) for row in rows]
-    return {"rows": tables, "files": {str(p.relative_to(root)): sha256(p.read_bytes()).hexdigest()
-                                    for p in sorted(root.rglob("*")) if p.is_file()}}
+    return {
+        "rows": tables,
+        "files": {
+            str(p.relative_to(root)): sha256(p.read_bytes()).hexdigest()
+            for p in sorted(root.rglob("*"))
+            if p.is_file()
+        },
+    }
 
 
 _READS = ("detail", "index", "name", "zip", "thread")
@@ -125,8 +142,9 @@ def test_foreign_mail_is_404_unchanged_and_owner_still_succeeds(
 ) -> None:
     a, b = _user(api_db, "a"), _user(api_db, "b")
     legacy = direction == "legacy-null"
-    target = _mail(api_db, data_dir, None if legacy else b,
-                   direction="incoming" if legacy else direction)
+    target = _mail(
+        api_db, data_dir, None if legacy else b, direction="incoming" if legacy else direction
+    )
     _prepare_operation(api_db, target, a, operation)
     # Run the positive control even on RED: a failure must not hide a broken route.
     authorized = _mail(api_db, data_dir, b) if operation in _MUTATIONS else target
@@ -135,8 +153,12 @@ def test_foreign_mail_is_404_unchanged_and_owner_still_succeeds(
     before = _snapshot(api_db, data_dir)
     denied = _request(_client(api_db, a), target.id, operation, scope)
     after = _snapshot(api_db, data_dir)
-    positive = _request(_client(api_db, actor), authorized.id, operation,
-                        "?scope=all" if legacy and operation in _READS else "")
+    positive = _request(
+        _client(api_db, actor),
+        authorized.id,
+        operation,
+        "?scope=all" if legacy and operation in _READS else "",
+    )
     assert positive.status_code == (204 if operation == "delete" else 200), positive.text
     assert denied.status_code == 404, denied.text
     assert after == before
@@ -204,11 +226,13 @@ def test_employee_detail_keeps_private_mail_owned_and_shared_correspondence_visi
     own = _mail(api_db, data_dir, a, related_employee_id=employee.id)
     shared = _mail(api_db, data_dir, None, related_employee_id=employee.id, channel="letter")
     before = _snapshot(api_db, data_dir)
-    responses = [_client(api_db, actor).get(f"/api/v1/employees/{employee.id}/detail")
-                 for actor in (a, b)]
+    responses = [
+        _client(api_db, actor).get(f"/api/v1/employees/{employee.id}/detail") for actor in (a, b)
+    ]
     assert all(response.status_code == 200 for response in responses)
-    a_ids, b_ids = ({row["id"] for row in response.json()["recent_ledger"]}
-                    for response in responses)
+    a_ids, b_ids = (
+        {row["id"] for row in response.json()["recent_ledger"]} for response in responses
+    )
     assert _snapshot(api_db, data_dir) == before
     assert {draft.id, foreign.id, shared.id} <= b_ids
     assert own.id not in b_ids and legacy.id not in b_ids
@@ -222,14 +246,23 @@ def test_smart_folder_metadata_excludes_mail_linked_to_inaccessible_personal_boo
     a, b = _user(api_db, "a"), _user(api_db, "b")
     api_db.add(BookCategory(id="MAIL", name_en="Mail", name_ar="بريد", prefix="MAIL"))
     api_db.commit()
-    books = [Book(category_id="MAIL", ref_number=f"MAIL-{index}", subject="Synthetic",
-                  confidentiality="personal", created_by_user_id=owner.id)
-             for index, owner in enumerate((b, a))]
+    books = [
+        Book(
+            category_id="MAIL",
+            ref_number=f"MAIL-{index}",
+            subject="Synthetic",
+            confidentiality="personal",
+            created_by_user_id=owner.id,
+        )
+        for index, owner in enumerate((b, a))
+    ]
     api_db.add_all(books)
     api_db.commit()
     hidden, visible = [], []
-    for book, subject, entries in ((books[0], "Hidden synthetic cluster", hidden),
-                                   (books[1], "Visible synthetic cluster", visible)):
+    for book, subject, entries in (
+        (books[0], "Hidden synthetic cluster", hidden),
+        (books[1], "Visible synthetic cluster", visible),
+    ):
         for _ in range(5):
             entries.append(_mail(api_db, data_dir, a, related_book_id=book.id, subject=subject))
     client = _client(api_db, a)
@@ -242,15 +275,26 @@ def test_smart_folder_metadata_excludes_mail_linked_to_inaccessible_personal_boo
         response = client.get("/api/v1/ledger/smart-folders/suggestions")
         assert response.status_code == 200, response.text
         assert _snapshot(api_db, data_dir) == before
-        assert response.json() == [{"cluster_key": "visible synthetic cluster",
-                                    "name_suggestion": "Visible synthetic cluster", "count": 5,
-                                    "correspondent_count": 1,
-                                    "sample_subjects": ["Visible synthetic cluster"]}]
+        assert response.json() == [
+            {
+                "cluster_key": "visible synthetic cluster",
+                "name_suggestion": "Visible synthetic cluster",
+                "count": 5,
+                "correspondent_count": 1,
+                "sample_subjects": ["Visible synthetic cluster"],
+            }
+        ]
     else:
         created = []
         for name in ("Hidden", "Visible"):
-            response = client.post("/api/v1/ledger/smart-folders", json={
-                "name_en": name, "name_ar": "بريد", "rule_value": f"{name} synthetic cluster"})
+            response = client.post(
+                "/api/v1/ledger/smart-folders",
+                json={
+                    "name_en": name,
+                    "name_ar": "بريد",
+                    "rule_value": f"{name} synthetic cluster",
+                },
+            )
             assert response.status_code == 201, response.text
             created.append(response.json())
         if surface == "list-count":

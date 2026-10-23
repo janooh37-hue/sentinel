@@ -14,6 +14,7 @@ class LedgerAddress(BaseModel):
     name: str = ""
     address: str
 
+
 # ---------------------------------------------------------------------------
 # Enum literals
 # ---------------------------------------------------------------------------
@@ -148,8 +149,6 @@ class LedgerListResponse(BaseModel):
     total: int
     limit: int
     offset: int
-
-
 
 
 __all__ = [
