@@ -1021,6 +1021,10 @@ def list_evaluation_queue(user: Annotated[User, Depends(require_capability("work
 
 @router.post("/integration/evaluation-queue/{queue_id}/retry", response_model=EvaluationQueueRead)
 def retry_evaluation_queue(queue_id: int, user: Annotated[User, Depends(require_capability("workforce.integration.manage"))], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+    workforce_access_service.require_organization(
+        _scope(db, user),
+        message="Organization workforce scope is required for this change.",
+    )
     # The service raises NotFoundError / ValidationFailedError directly; both are
     # AppError subclasses the global handler renders. Catching ValueError here
     # would never fire and would mask a genuine 409 as a 404.

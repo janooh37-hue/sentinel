@@ -270,6 +270,7 @@ def test_department_manager_integration_actions_keep_queue_retry_organization_sc
     monkeypatch.setattr(attendance_sync_service, "sync_people", lambda *args, **kwargs: 2)
     monkeypatch.setattr(attendance_sync_service, "sync_punches", lambda *args, **kwargs: 3)
     client = _client(api_db, manager)
+    api_db.refresh(failed)
     queue_state = {column.name: getattr(failed, column.name) for column in failed.__table__.columns}
 
     tested = client.post("/api/v1/workforce/integration/test")
