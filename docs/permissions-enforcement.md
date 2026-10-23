@@ -126,6 +126,14 @@ record vs a scope capability otherwise), not on a static route-level id. Any rev
 only reads route signatures will misread these as ungated — hence the audit reports them
 as their own class.
 
+Interactive publication uses `document_service.authorize_interactive_generation`:
+`POST /documents/generate`, leave-return filing, and all four fleet publication
+workflows require `documents.generate`, `books.view`, and the template's category
+and effective service capabilities before rendering, reference allocation, or
+persistence. General Book publication also checks its classification capability
+(maintenance requests use `11/1`). Leave and fleet edit gates and nested-resource
+validation remain in force; permission denial leaves publication state unchanged.
+
 ## 4. Fixed: `books.view` was not enforced on the register listing
 
 **Status: fixed 2026-08-12.** Recorded because the failure mode is instructive — a
