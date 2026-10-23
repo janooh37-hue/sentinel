@@ -291,7 +291,8 @@
       "action": "Notice",
       "loading": "Working…"
     },
-    "toastServerError": "The request could not be completed"
+    "toastServerError": "The request could not be completed",
+    "forbiddenError": "You don't have permission for this"
   },
   "a11y": {
     "skipToContent": "Skip to main content"
@@ -600,6 +601,7 @@
       "pickNone": "No supervisor (root of the unit)",
       "pickPlaceholder": "Search this unit by name, number or post…",
       "cancel": "Cancel",
+      "changedTitle": "Reporting line updated",
       "changed": "{{name}} now reports to {{sup}}.",
       "changedRoot": "{{name}} is now a root — no supervisor.",
       "undo": "Undo",
@@ -849,8 +851,8 @@
     "resultCapped": "Showing the latest {{shown}} of {{total}}",
     "statusFilters": "Filter permits by status",
     "zoneFilters": "Filter permits by zone access",
-    "attachFailed_one": "Permit saved, but {{count}} scan could not be attached. Open the permit to attach it again.",
-    "attachFailed_other": "Permit saved, but {{count}} scans could not be attached. Open the permit to attach them again.",
+    "attachFailed_one": "Permit saved. {{count}} scan could not be attached. Open the permit to attach it again.",
+    "attachFailed_other": "Permit saved. {{count}} scans could not be attached. Open the permit to attach them again.",
     "quickView": {
       "description": "Permit summary and its 1/5 letter",
       "letter": "Permit letter (1/5)",
@@ -1451,7 +1453,7 @@
       "templateDescription": "Start with the approved bilingual workbook so columns, dates, and embedded images can be read reliably.",
       "downloadTemplate": "Download template",
       "downloadingTemplate": "Downloading template…",
-      "templateDownloaded": "Vehicle import template downloaded.",
+      "templateDownloaded": "Template downloaded",
       "reviewTitle": "Workbook review",
       "fileSummary": "{{filename}} · {{count}} rows",
       "siteMappingTitle": "Assign operating sites",
@@ -1701,7 +1703,8 @@
     "title": "Leave History",
     "subtitle": "Records and accrual balances for all employees",
     "empty": "No leaves match these filters.",
-    "signGated": "Record {{ref}} decides this leave. It is approved when the manager signs that record.",
+    "signGatedToast": "Decided by another record",
+    "signGated": "This leave is approved when the manager signs that record.",
     "tabs": {
       "records": "Records",
       "balance": "Balance"
@@ -1857,6 +1860,8 @@
       "clearFilters": "Clear filters",
       "print": "Print",
       "savePdf": "Save PDF",
+      "savingPdf": "Saving PDF…",
+      "pdfSaved": "PDF saved",
       "pdfFilename": "Leave report — {{scope}} — {{date}}",
       "viewLabel": "View",
       "view_register": "Register",
@@ -2112,6 +2117,7 @@
       "menu": "Send to…",
       "hint": "Send this record to people in the system",
       "title": "Send record",
+      "sending": "Sending record…",
       "recipients": "Recipients",
       "selected_one": "{{count}} selected",
       "selected_other": "{{count}} selected",
@@ -2285,7 +2291,8 @@
       "approve": "Approve",
       "signApprove": "Sign & approve",
       "signed": "Book signed & approved",
-      "noSignatureHint": "Add your profile signature in Settings or on your employee profile before approving.",
+      "noSignatureHint": "Add your signature first",
+      "noSignatureDescription": "Add your profile signature in Settings or on your employee profile before approving.",
       "signingManager": "Signing manager",
       "selectApprover": "Select a signing manager…",
       "singleSignerHint": "One manager signs and approves this book.",
@@ -2398,7 +2405,7 @@
       "reasonHint": "Required when forcing Returned or Rejected.",
       "reasonPlaceholder": "Why is this record's state being changed?",
       "confirm": "Force state",
-      "done": "Record set to {{state}}",
+      "done": "State updated: {{state}}",
       "warnApproved": "This approves the record without a signature; no signed copy is added.",
       "warnVoided": "This marks the record a discarded draft. Its reference stays reserved in the register.",
       "warnLeaveApproved": "The signed copy stays on file, but stops being served for view or download while the state isn't Approved."
@@ -2468,8 +2475,8 @@
       "selected_other": "{{count}} selected",
       "deleteMany_one": "Delete {{count}}",
       "deleteMany_other": "Delete {{count}}",
-      "skippedMany_one": "{{count}} signed/in-flight skipped",
-      "skippedMany_other": "{{count}} signed/in-flight skipped",
+      "skippedMany_one": "{{count}} record skipped. Signed or in progress.",
+      "skippedMany_other": "{{count}} records skipped. Signed or in progress.",
       "deletedMany_one": "{{count}} record deleted",
       "deletedMany_other": "{{count}} records deleted",
       "restoredMany_one": "{{count}} record restored",
@@ -2539,8 +2546,8 @@
       "deleted": "Record deleted",
       "pendingDelete": "This record is being deleted. Press Undo in the notification to keep it.",
       "restored": "Record restored",
-      "undoTooLate": "Too late to undo — record {{ref}} was already deleted.",
-      "deleteFailed": "Record {{ref}} wasn’t deleted: {{reason}}",
+      "undoTooLate": "Too late to undo — the record was already deleted.",
+      "deleteFailed": "Record wasn’t deleted",
       "copyRef": "Copy reference number",
       "copiedRef": "Reference copied",
       "prevRecord": "Previous record",
@@ -2599,10 +2606,11 @@
       "addScan": "Add scan",
       "addScanHint": "Scan or drop a returned paper — OCR matches the stamped ref and files it here",
       "scanReading": "Reading scan (OCR)…",
-      "scanFiledHere": "Scan filed with the record's papers",
+      "scanFiledHere": "Scan filed with record",
       "scanMatchedOther": "The scan's ref matches {{ref}}",
       "scanFileToOther": "File it to {{ref}}",
       "scanNoRef": "No stamped ref found — route it from the Scan drawer instead",
+      "scanOpenDrawer": "Open Scan drawer",
       "fit": "Fit",
       "fullPreview": "Full preview",
       "zoomIn": "Zoom in",
@@ -2623,6 +2631,7 @@
       "deletePaperBody": "This permanently removes the attached document from the record. This cannot be undone.",
       "paperDeleted": "Document deleted",
       "paperReplaced": "Document replaced",
+      "paperReplacing": "Replacing document…",
       "unfileSignedTitle": "Remove the signed copy?",
       "unfileSignedBody": "This deletes the filed signed copy and returns the record to awaiting its signed scan (or back for approval). Use Replace instead to swap in the correct file while keeping the approval.",
       "unfileSignedBtn": "Remove signed copy",
@@ -2678,6 +2687,7 @@
       "pageRangeLabel": "pages",
       "notReviewed": "Not reviewed yet",
       "saved": "Combined PDF saved",
+      "saving": "Saving combined PDF…",
       "discardTitle": "Discard unsaved changes?",
       "discardConfirm": "Your changes have not been saved.",
       "discard": "Discard changes"
@@ -2734,7 +2744,8 @@
       "templateNone": "No template",
       "saveAsTemplate": "Save as template",
       "saveAsTemplateHint": "The book's content becomes a shared template every book manager can use.",
-      "savedAsTemplate": "Saved to the template library: {{name}}",
+      "savingTemplate": "Saving template…",
+      "savedAsTemplate": "Saved as template",
       "saveAsTemplateName": "Template name",
       "protocolHint": "Word didn't open? Approve the browser prompt and choose «Always allow».",
       "lastSavedAt": "Saved from Word ✓ {{time}}",
@@ -3101,6 +3112,9 @@
       "forward": "Forward",
       "delete": "Delete",
       "movedToTrash": "Moved to Trash",
+      "movedToTrashMany_one": "{{count}} moved to Trash",
+      "movedToTrashMany_other": "{{count}} moved to Trash",
+      "undoTooLate": "Too late to undo — the entry was already deleted.",
       "more": "More",
       "back": "Back",
       "record": {
@@ -3230,7 +3244,7 @@
       "title": "Possible employee match",
       "body": "Detected {{gnumber}} in this message. Link to {{name}}?",
       "button": "Set as related",
-      "linked": "Linked to {{id}}"
+      "linked": "Employee linked"
     },
     "draftCompose": {
       "lastSaved": "Saved · {{time}}",
@@ -3247,7 +3261,7 @@
         "title": "Send attachment to vault",
         "kind": "Folder",
         "confirm": "Send",
-        "sentTo": "Sent to {{id}}'s vault"
+        "sentTo": "Sent to employee vault"
       }
     },
     "form": {
@@ -3481,6 +3495,7 @@
     },
     "email": {
       "heading": "Email integration",
+      "testing": "Testing connection…",
       "syncOk": "Imported {{imported}}, skipped {{skipped}}",
       "description": "Connect an IMAP mailbox so incoming and outgoing messages are auto-imported into the General Ledger. Password is encrypted locally on this machine.",
       "syncIntervalSuffix": "minutes (0 to disable)",
@@ -3875,11 +3890,11 @@
       "correctReport": "Correct report",
       "saved": "Draft saved · {{ref}}",
       "savedToast": "Draft saved",
-      "sent": "Report sent to the approval manager",
+      "sent": "Sent to approval manager",
       "continueEditing": "Continue editing",
-      "incomplete": "Complete these fields before sending:",
+      "incomplete": "This report is incomplete",
       "managerUnavailable": "No approval manager is available. Ask an administrator to configure one. Your draft is still saved.",
-      "stale": "This report or your linked employee record changed. Reload before continuing.",
+      "stale": "Report or employee data changed. Reload before continuing.",
       "reload": "Reload",
       "loadError": "The report could not be loaded. Reload and try again."
     },
@@ -4121,10 +4136,11 @@
     },
     "noTemplateSelected": "Select a form to begin",
     "noEmployeeSelected": "Pick an employee first",
-    "leaveAlreadyIssued": "Record {{ref}} already covers this leave. Open that record instead of issuing a new one.",
-    "leaveAlreadyIssuedNoRef": "Another record already covers this leave. Open that record instead of issuing a new one.",
+    "leaveAlreadyIssuedNoRef": "Leave already covered. Open the existing record instead of issuing a new one.",
     "toast": {
       "generated": "Document generated",
+      "saving": "Saving to Records…",
+      "generateFailed": "Could not generate document",
       "previewed": "Preview rendered",
       "saved": "Saved"
     },
@@ -4841,7 +4857,7 @@
     "autoDropTitle": "Don't know which record?",
     "autoDropHint": "Drop a General Book scan here. Its barcode will route it.",
     "autoFiled": "Scan filed. Barcode matched the record",
-    "parked": "Scan needs review in the Scan Inbox",
+    "parked": "Scan needs review",
     "viewInbox": "Open Scan Inbox",
     "filed": "Signed copy filed. Record closed",
     "filing": "Filing the signed copy…",
@@ -5282,6 +5298,10 @@
     "title": "Annual-leave digest",
     "subtitle": "Send this unit's supervisors a list of who's on annual leave this month",
     "preview": "Preview",
+    "previewing": "Preparing preview…",
+    "previewReady": "Preview ready",
+    "sending": "Sending digest…",
+    "sendComplete": "Digest sending complete",
     "sendNow": "Send now",
     "count": "{{count}} on annual leave this month",
     "sent": "Sent to {{count}} supervisor(s)",
@@ -5294,6 +5314,8 @@
   },
   "sendToGroup": {
     "title": "Send to Group",
+    "sending": "Sending announcement…",
+    "sendComplete": "Announcement sending complete",
     "subtitle": "Broadcast a message or attachment to one or more WhatsApp groups",
     "message": "Message",
     "messagePlaceholder": "Type your message here…",
