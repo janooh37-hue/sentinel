@@ -34,7 +34,7 @@ export function WaitingApprovalsCard({
   const summary = summaryQuery.data
   const isLoading = summaryQuery.isPending
 
-  if (summary && summary.available_received_kinds.length === 0) return null
+  if (summary && (summary.available_received_kinds ?? []).length === 0) return null
 
   const signatureCount = summary?.signature.count ?? 0
   const reviewCount = summary?.review.count ?? 0
