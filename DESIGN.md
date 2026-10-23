@@ -41,7 +41,7 @@ Other pages will be appended under §4 as they're documented.
    2.3  Row-as-button
    2.4  Inline button-link
    2.5  Pill button
-   2.6  Nav-link
+   2.6  Nav-link (TopNav)
    2.7  Icon-button
    2.8  Disabled state convention
 3. Chrome
@@ -58,10 +58,9 @@ Other pages will be appended under §4 as they're documented.
    4.3  Records, approvals and unread mail widgets
    4.4  Workforce and operational widget content
    4.5  WidgetFrame
-   4.6  ServiceTile (Quick Action)
-   4.7  SectionCard
-   4.8  Row variants (OnLeave / Upcoming / Document / Ledger)
-   4.9  Edit dialogs (WidgetEditDialog)
+   4.6  ServiceTile (shared service tile)
+   4.8  Widget list rows
+   4.9  In-place Customize and quick-action tile editor
    4.10 Monthly inmate report workspace
 5. Animation appendix
 6. Not yet documented
@@ -108,9 +107,9 @@ variable and the alias.**
 
 #### 1.1.3 Accent (GSSG red)
 
-Used **sparingly** per the locked TAMM spec — only for: PendingDocumentsCard
-progress bar, ledger outgoing-direction dot, error/destructive text, drafts
-breakdown, accent chips.
+Used **sparingly**: `MyDocumentsWidget` returned-state dot,
+`SentApprovalsWidget` needs-changes chip, `WaitingApprovalsWidget`
+high-priority label, and error/destructive text.
 
 | Tailwind class           | CSS var            | Light       | Dark        |
 | ------------------------ | ------------------ | ----------- | ----------- |
@@ -122,14 +121,14 @@ breakdown, accent chips.
 
 | Tailwind class    | CSS var            | Light       | Dark        | Where used                                  |
 | ----------------- | ------------------ | ----------- | ----------- | ------------------------------------------- |
-| `bg-success`      | `--success`        | `#047857`   | `#34d399`   | Active employee dot, ledger incoming dot    |
-| `bg-success-soft` | `--success-soft`   | `#d6f0e4`   | `#142d23`   | "Good" delta pill background, Manager chip  |
-| `bg-warning`      | `--warning`        | `#b45309`   | `#fbbf24`   | On-leave dot, link-account CTA              |
-| `bg-warning-soft` | `--warning-soft`   | `#fbedd8`   | `#3a2a10`   | "Warn" delta pill, link-account banner bg   |
+| `bg-success`      | `--success`        | `#047857`   | `#34d399`   | WorkforceWidget on-site dot, UnreadMailWidget sync-enabled dot |
+| `bg-success-soft` | `--success-soft`   | `#d6f0e4`   | `#142d23`   | ViolationMonthsWidget closable label, Manager chip |
+| `bg-warning`      | `--warning`        | `#b45309`   | `#fbbf24`   | WorkforceWidget on-leave dot, UnreadMailWidget sync-off dot |
+| `bg-warning-soft` | `--warning-soft`   | `#fbedd8`   | `#3a2a10`   | ViolationMonthsWidget blocked label, link-account banner |
 | `bg-caution`      | `--caution`        | `#ca8a04`   | `#facc15`   | Attendance's middle rung: arrived inside the grace |
 | `bg-caution-soft` | `--caution-soft`   | `#fef3c7`   | `#3b2f11`   | The same day's wash in the month grid       |
-| `bg-info`         | `--info`           | `#1d4ed8`   | `#60a5fa`   | Defined but unused on the Dashboard         |
-| `bg-info-soft`    | `--info-soft`      | `#e0e8f8`   | `#1c2940`   | Defined but unused on the Dashboard         |
+| `bg-info`         | `--info`           | `#1d4ed8`   | `#60a5fa`   | WorkforceWidget loaned dot, MyDocumentsWidget pending dot |
+| `bg-info-soft`    | `--info-soft`      | `#e0e8f8`   | `#1c2940`   | NavBellPopover approval and scan-inbox icons |
 
 #### 1.1.5 Text
 
@@ -152,7 +151,7 @@ breakdown, accent chips.
 | CSS var       | Light value                                                       | Dark value                                                        | Used by                                                |
 | ------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
 | `--hero-grad` | `linear-gradient(135deg, #0a1f3a 0%, #0d2845 50%, #1d3a5e 100%)` | `linear-gradient(135deg, #050816 0%, #0d1428 50%, #1a2540 100%)`  | DashboardHero background, LockOverlay backdrop         |
-| `--mountain`  | `rgba(13, 40, 69, 0.18)`                                          | `rgba(87, 120, 207, 0.22)`                                        | MountainAccent SVG fill                                |
+| `--mountain`  | `rgba(13, 40, 69, 0.18)`                                          | `rgba(87, 120, 207, 0.22)`                                        | Defined in index.css; no current consumer in frontend/src |
 
 > **Smart-link chips** (employee G-numbers and book refs auto-detected in
 > ledger email bodies) are defined inline in `index.css` via `color-mix(in
@@ -224,7 +223,7 @@ larger as the font scale moves up. Standard em stops seen on the dashboard:
 
 | Class            | Use                                                                |
 | ---------------- | ------------------------------------------------------------------ |
-| `text-[2.4em]`   | Big-number on cards (PendingDocuments, Workspace, WidgetCard)      |
+| `text-[2em]`     | Record and people widget metrics (`BIG_NUMBER`, `PEOPLE_BIG`) |
 | `text-[1.6em]`   | Hero headline                                                      |
 | `text-[1.15em]`  | TopNav logo wordmark, LockOverlay welcome line                     |
 | `text-[1.05em]`  | NavBell glyph, WidgetEditDialog title                              |
@@ -232,7 +231,7 @@ larger as the font scale moves up. Standard em stops seen on the dashboard:
 | `text-[0.95em]`  | TopNav nav links, AccountMenu name                                 |
 | `text-[0.92em]`  | LockOverlay Unlock button                                          |
 | `text-[0.9em]`   | LanguageToggle label, dropdown actions                             |
-| `text-[0.86em]`  | Card header labels, MyWidgets/QuickActions strap                   |
+| `text-[0.86em]`  | WidgetEditDialog description                                       |
 | `text-[0.85em]`  | WidgetEditDialog Save button                                       |
 | `text-[0.82em]`  | LockOverlay paragraph, dialog reset link                           |
 | `text-[0.78em]`  | Footnotes, breakdown rows, last-sync labels                        |
@@ -263,52 +262,43 @@ the font-scale slider; the em-based ones additionally cascade inside cards.
 
 ### 1.3 Spacing & layout
 
-The Dashboard's container is bounded to `max-w-[1180px]` and centered. Outside
-that, the page shell stretches edge-to-edge.
+The Dashboard supports compact and wide canvases. Compact is centered at
+`max-w-[1180px]`; wide uses the available width.
 
 **Page shell** (`<DashboardPage>` root):
 
 ```
-flex flex-1 flex-col overflow-auto bg-background
-  └ mx-auto w-full max-w-[1180px] px-7 pb-12 pt-6
+flex flex-1 flex-col overflow-hidden bg-background
+  └ min-h-0 flex-1
+      └ PullToRefresh
+          └ w-full px-4 pb-12 pt-6 md:px-7
+             + compact: mx-auto max-w-[1180px]
 ```
 
-- Horizontal padding: `px-7` (1.75rem)
-- Top padding: `pt-6` (1.5rem)
-- Bottom padding: `pb-12` (3rem) — extra space below the last section
-- Single column inside, vertical rhythm via per-section margins
+- Horizontal padding: `px-4`, switching to `md:px-7`.
+- Top padding: `pt-6`; bottom padding: `pb-12`.
+- The packed widget board replaces separate top, bottom and section grids.
 
 > All `rem`-based values scale with the `[data-font-scale]` stops in §1.2.
 > At root font-size = 16px, `1rem = 16px`; at root 19px, `1rem = 19px`;
 > etc. Don't translate rem to fixed px — the whole point of the rem-first
 > approach is that the AaSlider resizes paddings and gaps too.
 
-**Card padding standard:** `p-5` (1.25rem) — every card on the Dashboard
-except the Hero (`px-8`) uses `p-5`.
+**Card padding:** `WidgetFrame` uses `p-4`; the shared `ServiceTile` uses
+`p-5`. The Hero uses `px-4 py-4 md:px-8 md:py-6`.
 
-**Card-to-card gap standard:** `gap-3.5` (0.875rem) — used on every grid
-row.
+**Widget board:** `grid w-full min-w-0 flex-1 gap-3.5` with inline
+``gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` `` and
+`gridAutoRows: '9.25rem'`. Each packed article receives explicit
+`gridColumn` and `gridRow`; see §4.1 for sizes and tiers.
 
-**Grid rows on the Dashboard:**
+**Quick actions:** `QuickActionsWidget` owns an internal
+`grid min-h-0 flex-1 gap-2 overflow-hidden`; its inline column count depends
+on the packed box and tier, not a separate page-level four-column grid.
 
-| Grid                                  | Use                                          |
-| ------------------------------------- | -------------------------------------------- |
-| `grid-cols-1 md:grid-cols-2`          | Top widget pair (Pending + Workspace), Section pairs |
-| `grid-cols-1 md:grid-cols-3`          | Bottom widget row (3 WidgetCards)            |
-| `grid-cols-2 md:grid-cols-4`          | Quick Action tiles (8 max → 2 rows)          |
-| `grid-cols-1 lg:grid-cols-2`          | "On Leave Today" + "Returning soon" pair     |
-
-**Vertical rhythm (margins between sections):**
-
-```
-Hero               → mb-6
-"My Widgets" strap → mb-3.5
-Top widget row     → mb-3.5
-Bottom widget row  → mb-6
-"Quick Actions"    → mb-3.5  (mt-1.5 above strap)
-Tile grid          → mb-8
-Section-card rows  → mb-4 between pairs, gap-3.5 within
-```
+**Vertical rhythm:** Hero `mb-4 md:mb-6`; the “My Widgets” heading container
+uses `mb-3.5`. The board and Add widgets panel sit in
+`flex flex-col items-start gap-4 lg:flex-row`.
 
 **Chrome (TopNav):** `px-8 py-3.5` with `gap-7` between the logo block and
 the nav, and `ms-5` extra start margin on the nav itself. Right cluster
@@ -325,16 +315,15 @@ The system declares four radii in `@theme inline`:
 | `rounded-sm`    | `--radius-sm`    | `8px`  | Small interactive surfaces (NavLink, dialog row containers) |
 | `rounded-md`    | `--radius-md`    | `12px` | Medium surfaces (shadcn Button, AaSlider buttons, icon-button tiles) |
 | `rounded-lg`    | `--radius-lg`    | `16px` | Larger pills (TopNav nav-link, password input)       |
-| `rounded-full`  | `--radius-pill`  | `99px` | Pills (delta tags, Review pill, AccountMenu trigger) |
+| `rounded-full`  | `--radius-pill`  | `99px` | Pills (approval chips, dialog actions, AccountMenu trigger) |
 
-Additionally the Dashboard uses Tailwind's default `rounded-2xl` (1rem)
-**heavily** — every card surface on the page: Hero, PendingDocumentsCard,
-WorkspaceCard, WidgetCard, ServiceTile, SectionCard, dropdown panels,
-LockOverlay form, WidgetEditDialog body. Treat `rounded-2xl` as the
-"card radius" — it's a project convention not yet promoted to a named token.
+The Dashboard uses Tailwind's default `rounded-2xl` (1rem) for Hero,
+packed widget articles and `WidgetFrame`. Shared surfaces with the same
+radius include `ServiceTile`, dropdown panels, LockOverlay form and
+WidgetEditDialog body. This is a project convention rather than a named token.
 
 Other radii used inline:
-- `rounded-md` for row hover surfaces inside SectionCards
+- `rounded-md` for record-widget links; `rounded-lg` for people-widget links
 - `rounded-[30px]` for the ThemeToggle track (hard-coded inside the component)
 - `rounded` (4px) for the active-nav underline pseudo-element
 
@@ -342,62 +331,52 @@ Other radii used inline:
 
 ### 1.5 Motion tokens
 
-There is no `--motion-*` token — motion durations and easings are declared
-inline. The Dashboard uses **four** repeating durations and **three**
-easings. Treat the table below as the de facto motion vocabulary.
+Shared entrance motion is tokenized in `index.css`:
+`--motion-entrance: 220ms` and
+`--ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1)`.
+Other durations remain local to their components.
 
 | Duration  | Used by                                                      |
 | --------- | ------------------------------------------------------------ |
 | `120ms`   | Smart-link chip background fade                              |
 | `150ms`   | AaSlider thumb scale hover                                   |
-| `200ms`   | Card hover lift, arrow nudge, action-text color shift, NavLink hover, logo scale-up |
+| `200ms`   | ServiceTile hover lift, NavLink hover, logo scale-up         |
 | `300ms`   | ServiceTile emoji bob, ThemeToggle slider background swap    |
 | `400ms`   | ThemeToggle thumb translate (`transition: transform 0.4s`)   |
-| `420ms`   | Dashboard entrance fade-up (`dash-fade-up`)                  |
-| `1.4s`    | PendingDocumentsCard progress-bar grow                       |
-| `2.8s`    | Workspace active-dot glow + blink                            |
-| `3s`      | PendingDocumentsCard progress-bar pulse (loops after grow)   |
+| `220ms`   | Shared entrance fade-up (`gssg-fade-up`)                      |
 | `5s`      | ThemeToggle moon tilt                                        |
 | `15s`     | ThemeToggle sun rotation                                     |
 | `90s`     | Dashboard hero crest rotation                                |
 
 | Easing                                  | Used by                                                       |
 | --------------------------------------- | ------------------------------------------------------------- |
-| `cubic-bezier(0.16, 1, 0.3, 1)` (out-expo) | `dash-fade-up` entrance animation                          |
-| `ease-out`                              | Progress-bar grow, active-dot glow                           |
-| `ease-in-out`                           | Active-dot blink, progress-bar pulse                          |
+| `cubic-bezier(0.16, 1, 0.3, 1)` (out-expo) | `gssg-fade-up` entrance animation                          |
 | `linear`                                | Hero crest rotation, ThemeToggle sun rotate, ThemeToggle moon tilt |
 | `transition-colors` default (Tailwind, 150ms ease) | Most hover-tone changes                            |
 | `transition-all duration-200`           | Card hover lift + shadow                                      |
 
 **Reduced-motion handling:**
 
-Every animation on the Dashboard has a `@media (prefers-reduced-motion: reduce)`
-guard. The pattern looks like this (taken from DashboardPage):
+The shared entrance animation and Hero crest rotation have
+`@media (prefers-reduced-motion: reduce)` guards. The entrance rule lives
+in `index.css`:
 
 ```css
-.dash-anim { animation: dash-fade-up 0.42s cubic-bezier(0.16,1,0.3,1) both; }
-@media (prefers-reduced-motion: reduce) {
-  .dash-anim { animation: none; }
+.anim-fade-up {
+  animation: gssg-fade-up var(--motion-entrance) var(--ease-out-expo) both;
 }
 ```
 
-For Tailwind utilities, the dashboard uses the `motion-reduce:` variant:
+The shared reduced-motion block includes `.anim-fade-up` and sets
+`animation: none`.
 
-```
-motion-reduce:!transform-none
-motion-reduce:!shadow-sm
-motion-reduce:!transition-none
-```
+`ServiceTile` suppresses its card lift and artwork/emoji translation with
+`motion-reduce:!translate-none motion-reduce:transition-none`.
+WidgetFrame has no hover lift.
 
-The `!important` modifier (`!`) is required because the base utility (e.g.
-`hover:-translate-y-1`) loads later in the cascade than the
-`motion-reduce:` variant otherwise.
-
-**Stagger pattern:** The hero animates first (delay 0ms). After that, every
-direct child of the page shell carries `style={{ animationDelay: '<N>ms' }}`
-with N increasing in increments of 40ms for widget rows, 20ms for service
-tiles. See §5 for the full ordered table.
+**Entrance timing:** Hero uses `anim-fade-up` with
+`style={{ background: 'var(--hero-grad)', animationDelay: '0ms' }}`.
+The packed widget articles have no entrance class or stagger delay.
 
 ---
 
@@ -427,14 +406,14 @@ Variants per surface:
 
 | Surface                          | Offset                                          |
 | -------------------------------- | ----------------------------------------------- |
-| Big cards on page background     | `ring-offset-2` (offset = `--bg`)               |
-| Section-card rows (inside `bg-surface`) | `ring-offset-1` (offset = `--surface`)   |
+| Shared ServiceTile               | `ring-offset-2`                               |
+| Widget list links                | `ring-inset` (inside clipped WidgetFrame content) |
 | AaSlider buttons (inside tinted pill)   | `ring-offset-1 ring-offset-surface-tinted` |
 | TopNav nav-links                 | `ring-offset-2` (offset = `bg-surface` chrome)  |
 
 **ARIA patterns:**
 
-- All decorative icons get `aria-hidden` (Chevrons, MountainAccent SVG, etc.)
+- All decorative icons get `aria-hidden` (WidgetFrame chevron, Hero crest, etc.)
 - All icon-only buttons get `aria-label` (TopNav LanguageToggle, ThemeToggle,
   AaSlider buttons, NavBell, Edit pencils on Dashboard, attachment-paperclip)
 - Status pills (delta tags) are plain text — no role, no aria
@@ -480,28 +459,24 @@ mirror — the cases on the Dashboard are:
 
 | Element                                         | LTR                              | RTL override                          |
 | ----------------------------------------------- | -------------------------------- | ------------------------------------- |
-| WidgetCard action arrow (`→`)                   | `group-hover:translate-x-0.5`    | `rtl:group-hover:-translate-x-0.5`    |
 | WidgetEditDialog visibility-switch thumb        | `translate-x-4` when checked     | `rtl:-translate-x-4`                  |
-| MountainAccent SVG                              | natural orientation              | `rtl:-scale-x-100` (flips horizontally) |
+| WidgetFrame View all chevron                     | `<ChevronRight>` glyph           | `rtl:rotate-180`                      |
 | NavBellPopover footer "View all" arrow          | `<ArrowRight>` glyph             | `rtl:rotate-180`                      |
 
 **No mirror needed:**
 
 - Hero crest rotation — pure rotation, looks the same.
 - Card hover lift (`-translate-y-1`) — vertical, direction-agnostic.
-- ChevronRight inside cards is positioned with `end-5 top-5` — that already
-  flips. The chevron itself faces right in both LTR and RTL because the
-  arrow's *semantic* meaning ("next") follows reading direction; the
-  positioning, not the glyph, does the work.
+- Widget list links do not use a card-corner chevron or action-arrow nudge.
 
 **Arabic numerals:** All numbers (G-IDs, leave-day counts, dates, big
 numbers, badge counts) render as Western Arabic numerals (0-9) regardless
 of `lang="ar"`. This is enforced by `font-variant-numeric: tabular-nums`
 and the lack of any `lang="ar-u-nu-arab"` override.
 
-**Date formatting:** `date-fns` with the `ar` locale renders month names in
-Arabic when `i18n.language` starts with `ar`. See `formatStamp` /
-`formatDate` in DashboardPage:1073-1087.
+**Date formatting:** DashboardHero uses `date-fns` with
+`format(new Date(), 'EEE, dd MMM', { locale: isAr ? arLocale : undefined })`
+for its Gregorian label.
 
 ---
 
@@ -571,26 +546,23 @@ crisp navy ring on cream; Dark: light-blue ring on near-black.
 
 ### 2.2 Card-as-button
 
-The biggest pattern on the Dashboard. Every "card" (Hero excluded —
-non-interactive) is a `<button type="button">` so the whole surface is the
-click target.
+The shared `ServiceTile` is a `<button type="button">` whose whole surface
+is the click target. Dashboard widgets instead use structural `WidgetFrame`
+sections containing explicit links and buttons (§4.5).
 
-**Surfaces using this pattern:** PendingDocumentsCard, WorkspaceCard,
-WidgetCard (and its 7 variants), ServiceTile.
+**Surfaces using this pattern:** `ServiceTile` (shared component; the packed
+dashboard's `QuickActionsWidget` renders compact links instead).
 
 **Look (baseline):**
 
 ```
-group relative w-full overflow-hidden rounded-2xl bg-surface p-5 text-start
+service-tile cursor-pointer group relative flex h-full min-h-[190px] w-full flex-col overflow-hidden rounded-2xl bg-surface p-5 text-start
+border-t-[4px] border-t-primary
 ```
 
-- `group` — enables `group-hover:*` children (chevron nudge, dot scale, pill
-  scale, emoji bob).
-- `text-start` — first content line aligns to the reading-start edge in
-  both LTR and RTL.
-- `bg-surface` — except WorkspaceCard which overrides with a linear
-  gradient (see §4.4) and ServiceTile which keeps `bg-surface` plus a
-  navy top border.
+- `group` enables artwork/emoji hover and focus translation.
+- `text-start` aligns content to the reading-start edge in LTR and RTL.
+- `bg-surface` plus a primary top border defines the shared tile surface.
 
 **Hover (baseline):**
 
@@ -618,60 +590,32 @@ black). Visible navy/light-blue ring with a clear gap from the card edge.
 during the click. The whole interaction relies on the touch/click landing
 on the visible target.
 
-**Disabled:** not used on the Dashboard. Cards either render or don't —
-there's no "card-but-disabled" state. (Loading state replaces the big
-number with `—` instead of disabling the click; the click is still useful
-since it navigates.)
+**Disabled:** ServiceTile has no disabled prop.
 
-**Reduced motion:** `motion-reduce:!transform-none` would suppress the
-lift; the dashboard does *not* annotate cards with this variant directly —
-it relies on the global `.dash-anim` reduced-motion override and on
-Tailwind's `transition-all` becoming inert when `prefers-reduced-motion` is
-set (Tailwind doesn't actually suppress transition under reduced-motion;
-this is a small inconsistency, flagged in §6).
+**Reduced motion:** `motion-reduce:!translate-none
+motion-reduce:transition-none` suppresses the tile translation and transition.
 
 ---
 
 ### 2.3 Row-as-button
 
-Section-card rows (OnLeaveRow, UpcomingRow, DocumentRow, LedgerRow) are
-also `<button>`s, but use a quieter pattern than full cards.
+NavBellPopover entries use real buttons, while dashboard widget lists use
+semantic links to their destinations (§4.8).
 
-**Look:**
-
-```
-flex w-full items-center gap-3 rounded-md px-2 py-2 text-start text-sm
-cursor-pointer
-```
-
-- `rounded-md` (12px) — softer than cards.
-- `px-2 py-2` — tight padding (rows are dense).
-- `gap-3` — 12px between avatar/icon and name block.
-
-**Hover:**
+**NavBellPopover mail-entry look:**
 
 ```
-transition-colors
-hover:bg-surface-tinted
+flex w-full items-start gap-3 px-4 py-3 text-start
+transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted
+focus-visible:outline-none focus-visible:ring-2
+focus-visible:ring-inset focus-visible:ring-ring
 ```
 
-- Background fades to `--surface-tinted`. No lift, no shadow, no scale.
-- Inner elements (avatar bg, badge tone) don't change.
-
-**Focus:**
-
-```
-focus-visible:outline-none
-focus-visible:ring-2 focus-visible:ring-ring
-focus-visible:ring-offset-1
-```
-
-Offset is 1px (the row sits inside a `bg-surface` SectionCard, not on the
-page background).
-
-**NavBellPopover row variant** adds `ring-inset` instead of `ring-offset`
-because the row is full-width and an outset ring would clip on the dropdown
-edge.
+The inset focus ring stays inside the dropdown edge. Widget row links also
+use inset rings so the clipped frame cannot hide their focus indication.
+Record links use `rounded-md py-1 text-[0.72em] leading-tight`; people links
+use `rounded-lg py-2 text-start`. Both use `gap-2` and
+`hover:bg-surface-tinted`, without a hover lift or shadow.
 
 ---
 
@@ -682,8 +626,7 @@ background, primary color).
 
 **Surfaces using this pattern:**
 
-- "Edit My Widgets" + "Edit Quick Actions" on the Dashboard (with `Pencil`
-  icon).
+- “Customize” on the Dashboard (with `Pencil` icon).
 - "Mark all read" inside NavBellPopover.
 - "Reset to defaults" inside WidgetEditDialog.
 - AccountMenu "View all in inbox" (with `ArrowRight`).
@@ -731,43 +674,10 @@ indicate the network call is in flight.
 
 ### 2.5 Pill button
 
-Two flavours used on the Dashboard, both fully-rounded:
+Functional pills are used by LockOverlay Unlock and WidgetEditDialog
+Save/Cancel.
 
-#### 2.5a Inset "Review" pill (PendingDocumentsCard)
-
-This is a **decorative pill that visually reads as a button but isn't its
-own button** — the entire card is the click target. The pill is
-`aria-hidden` and shares the card's hover state via `group-hover`.
-
-**Look:**
-
-```
-rounded-full bg-primary px-4 py-1.5
-text-[0.78em] font-medium text-primary-foreground
-shadow-sm
-```
-
-**Hover (driven by `group-hover` on the parent card):**
-
-```
-transition-all duration-200
-group-hover:scale-105
-group-hover:bg-primary-hover
-group-hover:shadow-md
-```
-
-- Grows to 1.05× and brightens by one primary step.
-- Shadow upgrades from `sm` to `md`.
-
-**Reduced motion:**
-
-```
-motion-reduce:!transform-none motion-reduce:!shadow-sm
-```
-
-Pinned at scale-1 and shadow-sm; color still changes.
-
-#### 2.5b Functional pill (LockOverlay Unlock, WidgetEditDialog Save/Cancel)
+#### Functional pill (LockOverlay Unlock, WidgetEditDialog Save/Cancel)
 
 These are real `<button type="submit">` or `type="button"` elements.
 
@@ -1521,7 +1431,7 @@ replaces the former zones and separate quick-actions band.
 
 ### 4.2 Hero
 
-**Source:** `<DashboardHero>` inside `DashboardPage.tsx` (line 700).
+**Source:** `<DashboardHero>` inside `DashboardPage.tsx`.
 
 **Anatomy:**
 
@@ -1531,20 +1441,18 @@ replaces the former zones and separate quick-actions band.
 │ 12 documents · 3 returning this week                                │
 │  (white-on-gradient)                            (rotates 90s)       │
 └──────────────────────────────────────────────────────────────────┘
-   h-[140px] rounded-2xl px-8
+   rounded-2xl px-4 py-4 md:px-8 md:py-6
    background: var(--hero-grad)
 ```
 
 **Container:**
 
 ```
-dash-anim relative mb-6
-flex h-[140px] items-center overflow-hidden
-rounded-2xl px-8
-style={{ background: 'var(--hero-grad)' }}
+anim-fade-up relative mb-4 flex min-h-0 flex-col gap-4 overflow-hidden rounded-2xl px-4 py-4 md:mb-6 md:min-h-[150px] md:flex-row md:items-stretch md:gap-5 md:px-8 md:py-6
+style={{ background: 'var(--hero-grad)', animationDelay: '0ms' }}
 ```
 
-- 140px tall fixed (does NOT scale with font-scale — the headline does).
+- Content-driven height, with `md:min-h-[150px]` on wider screens.
 - `overflow-hidden` because the upper-right circle highlight extends
   beyond the rounded corners.
 
@@ -1737,11 +1645,13 @@ and always accompanied by a textual status.
 
 ---
 
-### 4.6 ServiceTile (Quick Action)
+### 4.6 ServiceTile (shared service tile)
 
 **Source:** `components/ui/service-tile.tsx`.
 
-Used by the 4-up quick-action row (max 8 visible → wraps to 2 rows).
+Shared whole-surface service button. The packed dashboard does not render
+this component: `QuickActionsWidget` uses compact links inside `WidgetFrame`
+with a tier-dependent count and column layout (§1.3).
 
 **Surface:**
 
@@ -1783,95 +1693,21 @@ button.group.relative
 **RTL:** No physical-direction utilities used. The whole tile flips
 naturally with `dir="rtl"`.
 
-**Empty state:** When `visibleQuickActions.length === 0`:
+**Dashboard quick-action empty state:** `QuickActionsWidget` renders
+`<p className="text-[0.78em] text-muted-foreground">` inside its existing
+frame. It does not add a separate dashed-outline card.
 
-```
-mb-8 rounded-2xl border border-dashed border-hairline
-bg-surface px-5 py-8 text-center
-  └ <p text-[0.86em] text-muted-foreground>{quickActionsEmpty}</p>
-```
-
-— a dashed-outline card with centered hint text.
+**Reduced motion:** Card and artwork/emoji translations use
+`motion-reduce:!translate-none motion-reduce:transition-none`.
 
 ---
 
-### 4.7 SectionCard
+### 4.8 Widget list rows
 
-**Source:** `<SectionCard>` inside DashboardPage.tsx (line 951).
-
-Used for the four "preserved-from-Phase-12, restyled" sections at the
-bottom of the dashboard: On Leave Today · Returning soon · Recent
-documents · Recent ledger.
-
-**Surface:**
-
-```
-<section class="rounded-2xl bg-surface">
-  <div class="flex items-center justify-between
-              border-b border-hairline px-5 py-3.5">
-    [Icon + Title]
-    [optional Badge — pill, neutral]
-  </div>
-  <div class="px-3 py-2">
-    {children}
-  </div>
-</section>
-```
-
-- Card radius `rounded-2xl`, no hover state (the *rows inside* are the
-  interactive surfaces — the section card itself is structural).
-- Header has its own `border-b border-hairline` separating title from body.
-
-**Header:**
-
-```
-<Icon h-4 w-4 text-muted-foreground strokeWidth={1.6} aria-hidden/>
-<h3 text-sm font-semibold text-foreground>{title}</h3>
-```
-
-Lucide icon stroked at 1.6 (thinner than the 1.8 used elsewhere — softer
-because it sits next to a heading).
-
-**Count badge:**
-
-```
-<Badge shape="pill" tone="neutral">{count}</Badge>
-```
-
-Only renders when `count > 0`. See `Badge` neutral tone in §1.1.8.
-
-**Body container:**
-
-`px-3 py-2` — 12px horizontal, 8px vertical padding around the row list.
-
-**Loading state:** delegates to `<PanelSkeleton>`:
-
-```
-flex flex-col gap-2 p-2
-  └ 3 placeholder rows:
-     flex items-center gap-3 px-2 py-2
-     ├ Skeleton h-8 w-8 rounded-full
-     └ Skeleton h-3 w-1/2 + Skeleton h-2.5 w-1/3 (stacked, gap-1.5)
-```
-
-**Empty state:** delegates to `<EmptyState icon={...} message={...}/>`
-(see `components/ui/empty-state.tsx`).
-
----
-
-### 4.8 Row variants
-
-All four row variants share the row-as-button base from §2.3:
-
-```
-flex w-full items-center gap-3 rounded-md px-2 py-2 text-start text-sm
-transition-colors
-hover:bg-surface-tinted
-focus-visible:* (ring-offset-1)
-cursor-pointer
-```
-
-They differ in the **leading visual** and the **trailing metadata**.
+The current rows are links inside `WidgetFrame`, not card-wide buttons.
+Shared primitives live in `pages/dashboard/widgets/peopleWidgetParts.tsx`
+and `recordWidgetParts.tsx`; their compact hover and inset-focus patterns
+are summarized in §2.3.
 
 #### 4.8a LeaveWidgetRow
 
@@ -2023,22 +1859,20 @@ transition-transform
 mt-5 flex items-center justify-between border-t border-hairline pt-4
   ├ "Reset to defaults" (inline-button-link, §2.4)
   └ flex items-center gap-2
-       ├ Cancel (outline pill, §2.5b)
-       └ Save   (primary pill, §2.5b; shows Loader2 spinner when isSaving)
+       ├ Cancel (outline pill, §2.5)
+       └ Save   (primary pill, §2.5; shows Loader2 spinner when isSaving)
 ```
 
 **Save behavior:**
 
-- Clamps visibility to `maxVisible` before persisting (belt-and-braces
-  guard — the dialog also blocks the off→on toggle once the cap is hit).
-- For the widgets dialog, `Save` merges the dialog's bottom-row draft
-  back onto the top-row pair (which is *never* edited in this dialog —
-  PendingDocuments + Workspace are locked).
-- For the quick-actions dialog, the merge is trivial (no locked items).
+- Clamps visibility to `maxVisible` before calling `onSave`; the dialog also
+  blocks the off→on toggle once the cap is hit.
+- Saves the quick-action tile list into the in-place layout draft. No widget
+  pair is locked outside this editor; Save layout persists the full draft.
 
 **Open/close behavior:**
 
-- Each dialog mounts its `<DialogBody>` only when `open === true`, so the
+- The dialog mounts its `<DialogBody>` only when `open === true`, so the
   local draft state is fresh on every open. Avoids a `useEffect` to sync
   props → state.
 - Outside-click / Escape / overlay-click all close.
@@ -2099,50 +1933,23 @@ Every named animation on the Dashboard and chrome.
 
 | Keyframe                  | Where (selector)                                                  | Property animated            | Duration | Easing                   | Iterations | Reduced-motion handling                                          |
 | ------------------------- | ----------------------------------------------------------------- | ---------------------------- | -------- | ------------------------ | ---------- | ---------------------------------------------------------------- |
-| `dash-fade-up`            | `.dash-anim` (every direct child of dashboard shell + hero)       | opacity 0→1 + translateY 8→0 | `0.42s`  | `cubic-bezier(.16,1,.3,1)` | once (`both`) | `.dash-anim { animation: none }` under `prefers-reduced-motion` |
+| `gssg-fade-up`           | `.anim-fade-up` (app main and Dashboard Hero)                     | opacity 0→1 + translateY 8px→0 | `220ms` | `cubic-bezier(0.16, 1, 0.3, 1)` | once (`both`) | `animation: none` under `prefers-reduced-motion` |
 | `gssg-crest-spin`         | `.dashboard-crest` (Hero crest img)                               | rotate 0→360deg              | `90s`    | `linear`                 | infinite   | rotation cancelled                                               |
-| `dash-pending-grow`       | inline style on PendingDocumentsCard progress fill                | width 0%→{pct}%              | `1.4s`   | `ease-out`               | once       | both animations cancelled via attribute-selector override        |
-| `dash-pending-pulse`      | same (delayed `1.4s` so it follows the grow)                      | opacity 0.85↔1               | `3s`     | `ease-in-out`            | infinite   | as above                                                         |
-| `dash-active-glow`        | `.dash-active-dot` (WorkspaceCard "Active" dot)                   | box-shadow ring 0px→6px transparent | `2.8s`   | `ease-out`               | infinite   | both animations cancelled                                        |
-| `dash-active-blink`       | same                                                              | opacity 1↔0.6                 | `2.8s`   | `ease-in-out`            | infinite   | as above                                                         |
 | `theme-switch-sun-rotate` | `.theme-switch-sun svg`                                           | rotate 0→360deg              | `15s`    | `linear`                 | infinite   | `animation: none !important` under reduced-motion                |
 | `theme-switch-moon-tilt`  | `.theme-switch-moon svg`                                          | rotate 0→-10°→+10°→0          | `5s`    | `linear`                 | infinite   | as above                                                         |
 | (thumb slide)             | `.theme-switch .theme-switch-slider::before`                      | transform translateX 0↔26px  | `0.4s`   | default (ease)           | once per toggle | `transition: none !important` under reduced-motion              |
 | (sun↔moon track bg)       | `.theme-switch .theme-switch-slider`                              | background-color             | `0.3s`   | default                  | once per toggle | not overridden (color change is harmless under reduced-motion)  |
 | (slider thumb hover)      | `.aa-slider::-webkit-slider-thumb`                                | transform scale 1→1.2        | `0.15s`  | default                  | once per hover  | not overridden                                                  |
-| Card hover lift           | Tailwind `transition-all duration-200` on card-as-button surfaces | translateY 0→-4px + shadow change | `200ms` | default                  | once per hover  | `motion-reduce:!transform-none` advised but not always applied — see §6 |
-| Arrow nudge               | WidgetCard action `→` glyph                                       | translateX 0↔2px              | `200ms`  | default                  | once per hover  | `motion-reduce:!transform-none`                                  |
-| Service emoji bob         | `.group-hover:-translate-y-1.5` on emoji                          | translateY 0→-6px             | `300ms`  | default                  | once per hover  | `motion-reduce:!transform-none` not applied — known gap          |
+| Card hover lift           | ServiceTile `transition-all duration-200`                       | translateY 0→-4px + shadow change | `200ms` | default                  | once per hover  | `motion-reduce:!translate-none motion-reduce:transition-none` |
+| Service artwork/emoji bob | ServiceTile `group-hover:-translate-y-1.5`                      | translateY 0→-6px             | `300ms`  | default                  | once per hover  | `motion-reduce:!translate-none motion-reduce:transition-none` |
 | TopNav link micro-lift    | `.hover:-translate-y-0.5` on inactive NavLinks                    | translateY 0→-2px             | `200ms`  | default                  | once per hover  | `motion-reduce:!transform-none` applied                          |
 | Logo scale-up             | `.hover:scale-[1.02]` on TopNav logo                              | scale 1→1.02                  | `200ms`  | default                  | once per hover  | not overridden                                                   |
 | Skeleton pulse            | Tailwind `animate-pulse` on Skeleton                              | opacity 1↔0.5                 | `2s`     | cubic-bezier(.4,0,.6,1)  | infinite        | Tailwind suppresses under reduced-motion                         |
 | Smart-link chip hover     | `[data-smart-link='*']:hover` background-color shift              | background-color              | `120ms`  | default                  | once per hover  | not overridden (subtle color shift)                              |
 
-**Stagger schedule for the entrance animation (`dash-fade-up`):**
-
-| Element                                          | `animationDelay` |
-| ------------------------------------------------ | ---------------- |
-| Hero                                             | `0ms`            |
-| "My Widgets" strap                               | `60ms`           |
-| PendingDocumentsCard                             | `80ms`           |
-| WorkspaceCard                                    | `120ms`          |
-| Bottom widget #1                                 | `160ms`          |
-| Bottom widget #2                                 | `200ms`          |
-| Bottom widget #3                                 | `240ms`          |
-| "Quick Actions" strap                            | `320ms`          |
-| Quick-action tile #1                             | `340ms`          |
-| Quick-action tile #2                             | `360ms`          |
-| Quick-action tile #3                             | `380ms`          |
-| Quick-action tile #4                             | `400ms`          |
-| Quick-action tile #5..N (each)                   | `+20ms`          |
-| Empty-quick-actions card (if shown)              | `340ms`          |
-| On Leave Today card                              | `460ms`          |
-| Returning soon card                              | `500ms`          |
-| Recent docs card                                 | `540ms`          |
-| Recent ledger card                               | `580ms`          |
-
-Total wall-clock: from page open to last card settled ≈ **1000ms** (the
-580ms last delay + 420ms animation length). Feels brisk, not slow.
+**Dashboard entrance timing:** Hero sets `animationDelay: '0ms'`.
+The My Widgets heading, packed widget articles and quick-action links have
+no per-element entrance delays. There is no dashboard card-stagger schedule.
 
 ---
 
@@ -2154,11 +1961,9 @@ documented.
 
 ### Out of scope for this pass
 
-- **Mobile / narrow-viewport behavior.** The dashboard's grids drop to
-  `grid-cols-1` below the `md` breakpoint (768px), but the TopNav and
-  Hero have no narrow-viewport adaptations. Behavior at <768px is
-  unspecified — confirm with operator whether mobile is supported before
-  documenting.
+- **Chrome narrow-viewport detail.** Dashboard compact/wide packing and
+  phone sizes are covered in §4.1, and Hero uses responsive padding and
+  layout. Full narrow-viewport chrome behavior is not catalogued here.
 - **Pages other than Dashboard.** Employees / Application / Ledger /
   Books / Settings each get their own §4.x section in a follow-up pass.
 - **AccountMenu when on Settings page.** AccountMenu hides the "Email
@@ -2175,17 +1980,13 @@ documented.
   code the Tailwind palette and **do not theme in dark mode**. The pale
   green / amber / red / blue backgrounds become harsh against `#131826`.
   Migrate to semantic soft-tones (`bg-success-soft text-success` etc.) —
-  the WidgetCard delta pills already do this.
+  `ViolationMonthsWidget` already uses those success/warning label pairs.
 - (Fixed) shadcn Button `secondary` / `outline` / `ghost` variants now hover to
   `bg-surface-tinted` instead of `bg-accent` (GSSG red).
 - shadcn Button `destructive` variant references `bg-destructive` and
   `text-destructive-foreground` which **don't exist in @theme inline** —
   the variant is effectively unstyled. Either delete the variant or wire
   it to `--accent` / `--accent-soft`.
-- Reduced-motion: card hover lifts (`hover:-translate-y-1`) on
-  Dashboard cards don't carry `motion-reduce:!transform-none`. The
-  ServiceTile emoji bob is also unmarked. Add the variant for full
-  parity with the rest of the page.
 
 ### Legacy color tokens (per CLAUDE.md "durable architectural notes")
 
@@ -2206,10 +2007,6 @@ will trip over them.
   In Arabic mode the line falls back through the system stack until
   something with Naskh-like proportions is found. Decide whether this is
   intentional (ceremonial fallback) or to be retired.
-- The placeholder "0" rendering for Violations / Drafts WidgetCards is
-  intentional (per source comment) until a dedicated backend summary
-  endpoint lands. Worth flagging in the variant matrix as "placeholder"
-  rather than "live data".
 
 ## 7. Ledger Books workspace
 
