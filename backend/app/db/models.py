@@ -62,58 +62,68 @@ def _utcnow() -> datetime:
 
 
 class Department(Base):
+    """A manager in the org tree plus everyone under them (rework R)."""
+
     __tablename__ = "departments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name_en: Mapped[str] = mapped_column(String(128))
     name_ar: Mapped[str] = mapped_column(String(128))
+    head_employee_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("employees.id", ondelete="RESTRICT"), nullable=False
+    )
+    # Derived from the org tree; written only by department_tree_service.recompute.
     parent_id: Mapped[int | None] = mapped_column(
-        ForeignKey("departments.id", ondelete="RESTRICT"), nullable=True
+        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
     )
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("1"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, server_default=func.current_timestamp()
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, onupdate=_utcnow, server_default=func.current_timestamp()
+    )
 
     __table_args__ = (
-        UniqueConstraint("parent_id", "name_en", name="uq_departments_parent_name_en"),
-        UniqueConstraint("parent_id", "name_ar", name="uq_departments_parent_name_ar"),
-        Index(
-            "uq_departments_root_name_en",
-            "name_en",
-            unique=True,
-            sqlite_where=text("parent_id IS NULL"),
-        ),
-        Index(
-            "uq_departments_root_name_ar",
-            "name_ar",
-            unique=True,
-            sqlite_where=text("parent_id IS NULL"),
-        ),
+        UniqueConstraint("name_en", name="uq_departments_name_en"),
+        UniqueConstraint("name_ar", name="uq_departments_name_ar"),
+        UniqueConstraint("head_employee_id", name="uq_departments_head_employee_id"),
     )
 
 
 class DepartmentMember(Base):
+    """User-level department grant: deputy or viewer. Heads come from the tree."""
+
     __tablename__ = "department_members"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     department_id: Mapped[int] = mapped_column(ForeignKey("departments.id", ondelete="CASCADE"))
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     role: Mapped[str] = mapped_column(String(8))
-    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, server_default=func.current_timestamp()
     )
 
     __table_args__ = (
         UniqueConstraint("department_id", "user_id", name="uq_department_members_user"),
-        CheckConstraint("role IN ('head', 'deputy', 'member')", name="ck_department_members_role"),
-        Index(
-            "uq_department_members_primary",
-            "user_id",
-            unique=True,
-            sqlite_where=text("is_primary = 1"),
-        ),
+        CheckConstraint("role IN ('deputy', 'viewer')", name="ck_department_members_role"),
+    )
+
+
+class DepartmentException(Base):
+    """Manual placement overriding the tree; NULL department = outside all departments."""
+
+    __tablename__ = "department_exceptions"
+
+    employee_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("employees.id", ondelete="CASCADE"), primary_key=True
+    )
+    department_id: Mapped[int | None] = mapped_column(
+        ForeignKey("departments.id", ondelete="CASCADE"), nullable=True
+    )
+    created_by: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
     )
 
 
@@ -426,10 +436,9 @@ def _stamp_book_department(_mapper: Mapper[Book], connection: Connection, book: 
     """Use the insertion connection, never a Session query/recursive flush."""
     if book.department_id is None and book.created_by_user_id is not None:
         book.department_id = connection.scalar(
-            select(DepartmentMember.department_id).where(
-                DepartmentMember.user_id == book.created_by_user_id,
-                DepartmentMember.is_primary.is_(True),
-            )
+            select(Employee.department_id)
+            .join(User, User.employee_id == Employee.id)
+            .where(User.id == book.created_by_user_id)
         )
 
 

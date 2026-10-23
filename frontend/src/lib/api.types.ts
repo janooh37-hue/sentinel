@@ -815,7 +815,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/departments/memberships/{user_id}": {
+    "/api/v1/departments/exceptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Exceptions */
+        get: operations["list_exceptions_api_v1_departments_exceptions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/departments/exceptions/{employee_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -823,10 +840,11 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Replace Memberships */
-        put: operations["replace_memberships_api_v1_departments_memberships__user_id__put"];
+        /** Put Exception */
+        put: operations["put_exception_api_v1_departments_exceptions__employee_id__put"];
         post?: never;
-        delete?: never;
+        /** Delete Exception */
+        delete: operations["delete_exception_api_v1_departments_exceptions__employee_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -843,23 +861,6 @@ export interface paths {
         get: operations["unassigned_employees_api_v1_departments_unassigned_employees_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/departments/assign-employees": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Assign Employees */
-        post: operations["assign_employees_api_v1_departments_assign_employees_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -902,16 +903,16 @@ export interface paths {
         patch: operations["update_department_api_v1_departments__department_id__patch"];
         trace?: never;
     };
-    "/api/v1/departments/{department_id}/members": {
+    "/api/v1/departments/{department_id}/people": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Members */
-        get: operations["list_members_api_v1_departments__department_id__members_get"];
-        put?: never;
+        get?: never;
+        /** Replace People */
+        put: operations["replace_people_api_v1_departments__department_id__people_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -7638,8 +7639,6 @@ export interface components {
              * @enum {string}
              */
             role: "operator" | "manager" | "admin" | "inmate_reporter";
-            /** Department Id */
-            department_id?: number | null;
         };
         /**
          * AdminUserCreateResult
@@ -7908,8 +7907,6 @@ export interface components {
             role: string;
             /** Employee Id */
             employee_id: string | null;
-            /** Department Id */
-            department_id?: number | null;
         };
         /** ApprovedViolationImportRead */
         ApprovedViolationImportRead: {
@@ -10432,59 +10429,46 @@ export interface components {
             /** Enabled */
             enabled: boolean;
         };
-        /** DepartmentAssignEmployees */
-        DepartmentAssignEmployees: {
-            /** Employee Ids */
-            employee_ids: string[];
-            /** Department Id */
-            department_id: number | null;
-        };
-        /** DepartmentAssignmentResult */
-        DepartmentAssignmentResult: {
-            /** Updated */
-            updated: number;
-        };
         /** DepartmentCreate */
         DepartmentCreate: {
             /** Name En */
             name_en: string;
             /** Name Ar */
             name_ar: string;
-            /** Parent Id */
-            parent_id?: number | null;
+            /** Head Employee Id */
+            head_employee_id: string;
         };
-        /** DepartmentMemberRead */
-        DepartmentMemberRead: {
-            /** User Id */
-            user_id: number;
-            /** Display Name */
-            display_name: string;
-            /**
-             * Role
-             * @enum {string}
-             */
-            role: "head" | "deputy" | "member";
-            /** Email */
-            email: string;
-            /** Is Primary */
-            is_primary: boolean;
-        };
-        /** DepartmentMembership */
-        DepartmentMembership: {
+        /** DepartmentExceptionRead */
+        DepartmentExceptionRead: {
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
             /** Department Id */
-            department_id: number;
+            department_id: number | null;
+            /** Tree Department Id */
+            tree_department_id: number | null;
+            /** Created By */
+            created_by: string | null;
             /**
-             * Role
-             * @enum {string}
+             * Created At
+             * Format: date-time
              */
-            role: "head" | "deputy" | "member";
-            /** Is Primary */
-            is_primary: boolean;
+            created_at: string;
         };
-        /** DepartmentMembershipsUpdate */
-        DepartmentMembershipsUpdate: {
-            /** Memberships */
-            memberships: components["schemas"]["DepartmentMembership"][];
+        /** DepartmentExceptionUpdate */
+        DepartmentExceptionUpdate: {
+            /** Department Id */
+            department_id: number | null;
+        };
+        /** DepartmentPeopleUpdate */
+        DepartmentPeopleUpdate: {
+            /** Deputy User Ids */
+            deputy_user_ids?: number[];
+            /** Viewer User Ids */
+            viewer_user_ids?: number[];
         };
         /** DepartmentPersonRead */
         DepartmentPersonRead: {
@@ -10496,7 +10480,7 @@ export interface components {
              * Role
              * @enum {string}
              */
-            role: "head" | "deputy" | "member";
+            role: "head" | "deputy" | "viewer" | "member";
         };
         /** DepartmentRead */
         DepartmentRead: {
@@ -10506,18 +10490,28 @@ export interface components {
             name_en: string;
             /** Name Ar */
             name_ar: string;
+            /** Head Employee Id */
+            head_employee_id: string;
+            /** Head Name En */
+            head_name_en: string;
+            /** Head Name Ar */
+            head_name_ar: string | null;
+            /** Head User Id */
+            head_user_id: number | null;
             /** Parent Id */
             parent_id: number | null;
             /** Active */
             active: boolean;
-            /** Member Count */
-            member_count: number;
             /** Employee Count */
             employee_count: number;
+            /** Deputies */
+            deputies: components["schemas"]["DepartmentPersonRead"][];
+            /** Viewers */
+            viewers: components["schemas"]["DepartmentPersonRead"][];
             /** Service Ids */
             service_ids: string[];
-            /** Heads */
-            heads: components["schemas"]["DepartmentPersonRead"][];
+            /** Exception Count */
+            exception_count: number;
         };
         /** DepartmentScopingDepartmentRead */
         DepartmentScopingDepartmentRead: {
@@ -10539,8 +10533,8 @@ export interface components {
             records_backfilled: number;
             /** Users Without Department */
             users_without_department: components["schemas"]["DepartmentScopingUserRead"][];
-            /** Departments Without Head */
-            departments_without_head: components["schemas"]["DepartmentScopingDepartmentRead"][];
+            /** Departments Without Receiver */
+            departments_without_receiver: components["schemas"]["DepartmentScopingDepartmentRead"][];
             /** Departments Without Services */
             departments_without_services: components["schemas"]["DepartmentScopingDepartmentRead"][];
         };
@@ -10578,8 +10572,8 @@ export interface components {
             name_en?: string | null;
             /** Name Ar */
             name_ar?: string | null;
-            /** Parent Id */
-            parent_id?: number | null;
+            /** Head Employee Id */
+            head_employee_id?: string | null;
             /** Active */
             active?: boolean | null;
         };
@@ -11347,8 +11341,6 @@ export interface components {
             transfer_return_date?: string | null;
             /** Department */
             department?: string | null;
-            /** Department Id */
-            department_id?: number | null;
             /** Position */
             position?: string | null;
             /** Position Ar */
@@ -11671,8 +11663,6 @@ export interface components {
             effective_date?: string | null;
             /** Department */
             department?: string | null;
-            /** Department Id */
-            department_id?: number | null;
             /** Position */
             position?: string | null;
             /** Position Ar */
@@ -13659,6 +13649,10 @@ export interface components {
             designation_ar?: string | null;
             /** Rank Order */
             rank_order?: number | null;
+            /** Department Id */
+            department_id?: number | null;
+            /** Head Of Department Id */
+            head_of_department_id?: number | null;
         };
         /** OrgSupervisorUpdate */
         OrgSupervisorUpdate: {
@@ -14809,7 +14803,7 @@ export interface components {
              * @default organization
              * @enum {string}
              */
-            department_scope_kind: "organization" | "department" | "self";
+            department_scope_kind: "organization" | "department" | "branch" | "self";
             /** Photo Url */
             photo_url?: string | null;
             /** Role */
@@ -15580,14 +15574,18 @@ export interface components {
         };
         /** UnassignedEmployeeGroup */
         UnassignedEmployeeGroup: {
+            /** Top Employee Id */
+            top_employee_id: string;
+            /** Top Name En */
+            top_name_en: string;
+            /** Top Name Ar */
+            top_name_ar: string | null;
             /** Duty Unit */
             duty_unit: string | null;
-            /** Legacy Department */
-            legacy_department: string | null;
-            /** Employee Ids */
-            employee_ids: string[];
             /** Count */
             count: number;
+            /** Employee Ids */
+            employee_ids: string[];
         };
         /**
          * UncountedRecordOut
@@ -15661,9 +15659,7 @@ export interface components {
              * Role
              * @enum {string}
              */
-            role: "head" | "deputy" | "member";
-            /** Is Primary */
-            is_primary: boolean;
+            role: "head" | "deputy" | "viewer" | "member";
         };
         /**
          * UserPermissionRead
@@ -19200,12 +19196,43 @@ export interface operations {
             };
         };
     };
-    replace_memberships_api_v1_departments_memberships__user_id__put: {
+    list_exceptions_api_v1_departments_exceptions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentExceptionRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_exception_api_v1_departments_exceptions__employee_id__put: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                user_id: number;
+                employee_id: string;
             };
             cookie?: {
                 gssg_session?: string | null;
@@ -19213,7 +19240,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DepartmentMembershipsUpdate"];
+                "application/json": components["schemas"]["DepartmentExceptionUpdate"];
             };
         };
         responses: {
@@ -19223,8 +19250,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserDepartmentRead"][];
+                    "application/json": components["schemas"]["DepartmentExceptionRead"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_exception_api_v1_departments_exceptions__employee_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -19255,41 +19313,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnassignedEmployeeGroup"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    assign_employees_api_v1_departments_assign_employees_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DepartmentAssignEmployees"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DepartmentAssignmentResult"];
                 };
             };
             /** @description Validation Error */
@@ -19437,7 +19460,7 @@ export interface operations {
             };
         };
     };
-    list_members_api_v1_departments__department_id__members_get: {
+    replace_people_api_v1_departments__department_id__people_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -19448,7 +19471,11 @@ export interface operations {
                 gssg_session?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentPeopleUpdate"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -19456,7 +19483,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DepartmentMemberRead"][];
+                    "application/json": components["schemas"]["DepartmentRead"];
                 };
             };
             /** @description Validation Error */

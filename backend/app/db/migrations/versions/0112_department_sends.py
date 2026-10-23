@@ -97,17 +97,28 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     connection = op.get_bind()
-    # Snapshot membership grants as explicit users: names and employee labels
-    # cannot represent the current department audience on the older schema.
+    # Snapshot each department audience as explicit users: names and employee
+    # labels cannot represent it on the older schema. The audience is the
+    # active users who belong to D: derived department, head, deputy or viewer.
     connection.execute(
         sa.text(
+            "WITH audience(department_id, user_id) AS ("
+            "SELECT employees.department_id, users.id FROM users "
+            "JOIN employees ON employees.id = users.employee_id "
+            "WHERE users.status = 'active' AND employees.department_id IS NOT NULL "
+            "UNION SELECT departments.id, users.id FROM departments "
+            "JOIN users ON users.employee_id = departments.head_employee_id "
+            "WHERE users.status = 'active' "
+            "UNION SELECT members.department_id, members.user_id "
+            "FROM department_members AS members JOIN users ON users.id = members.user_id "
+            "WHERE users.status = 'active') "
             "INSERT INTO book_folder_shares (folder_id, user_id) "
-            "SELECT DISTINCT shares.folder_id, members.user_id "
-            "FROM book_folder_shares AS shares JOIN department_members AS members "
-            "ON members.department_id = shares.department_id "
+            "SELECT DISTINCT shares.folder_id, audience.user_id "
+            "FROM book_folder_shares AS shares JOIN audience "
+            "ON audience.department_id = shares.department_id "
             "WHERE shares.department_id IS NOT NULL AND NOT EXISTS ("
             "SELECT 1 FROM book_folder_shares AS existing "
-            "WHERE existing.folder_id = shares.folder_id AND existing.user_id = members.user_id)"
+            "WHERE existing.folder_id = shares.folder_id AND existing.user_id = audience.user_id)"
         )
     )
     # With no remaining audience, deleting the last department leg would make

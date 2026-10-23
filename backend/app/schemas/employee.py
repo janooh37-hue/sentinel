@@ -107,9 +107,8 @@ class EmployeeCreate(BaseModel):
     transfer_site: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
     # Optional expected return; the daily job reactivates on this date.
     transfer_return_date: date | None = None
-    # Legacy hint only; department_id wins and its Arabic name is derived by the service.
+    # Legacy label; the department itself is derived from the org tree.
     department: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
-    department_id: int | None = None
     position: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
     position_ar: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
     other: str | None = Field(default=None, max_length=_LONG_TEXT_MAX)
@@ -148,9 +147,8 @@ class EmployeeUpdate(BaseModel):
     # non-working employee back to work or swaps Active <-> Loaned (defaults to
     # today). Never stored on the employee row; `end_date` still clears on reactivation.
     effective_date: date | None = None
-    # Assigned employees use the department's Arabic name; clearing the ID keeps the hint.
+    # Legacy label; the department itself is derived from the org tree.
     department: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
-    department_id: int | None = None
     position: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
     position_ar: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
     other: str | None = Field(default=None, max_length=_LONG_TEXT_MAX)

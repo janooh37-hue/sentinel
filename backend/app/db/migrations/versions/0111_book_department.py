@@ -1,4 +1,4 @@
-"""Stamp Records with their creator's primary department.
+"""Stamp Records with their creator's derived org-tree department.
 
 Revision ID: 0111_book_department
 Revises: 0110_departments
@@ -20,6 +20,14 @@ def upgrade() -> None:
     with op.batch_alter_table("books") as batch:
         batch.add_column(sa.Column("department_id", sa.Integer(), nullable=True))
         batch.create_index("ix_books_department_id", ["department_id"])
+    # Creator user -> linked employee -> derived department (no-op on a fresh 0110).
+    op.execute(
+        "UPDATE books SET department_id = ("
+        "SELECT employees.department_id FROM users "
+        "JOIN employees ON employees.id = users.employee_id "
+        "WHERE users.id = books.created_by_user_id) "
+        "WHERE department_id IS NULL AND created_by_user_id IS NOT NULL"
+    )
 
 
 def downgrade() -> None:

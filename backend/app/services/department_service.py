@@ -26,10 +26,7 @@ from app.db.models import (
     User,
 )
 from app.schemas.department import (
-    DepartmentAssignmentResult,
     DepartmentCreate,
-    DepartmentMemberRead,
-    DepartmentMembership,
     DepartmentPersonRead,
     DepartmentRead,
     DepartmentRole,
@@ -350,52 +347,6 @@ def delete_department(db: Session, department_id: int, *, actor: str | None) -> 
     db.commit()
 
 
-def list_members(db: Session, department_id: int) -> list[DepartmentMemberRead]:
-    require_department(db, department_id)
-    rows = db.execute(
-        select(DepartmentMember, User, Employee.name_en)
-        .join(User, User.id == DepartmentMember.user_id)
-        .outerjoin(Employee, Employee.id == User.employee_id)
-        .where(DepartmentMember.department_id == department_id)
-        .order_by(DepartmentMember.id)
-    )
-    return [
-        DepartmentMemberRead(
-            user_id=user.id,
-            display_name=user.display_name or name or user.email,
-            email=user.email,
-            role=cast(DepartmentRole, member.role),
-            is_primary=member.is_primary,
-        )
-        for member, user, name in rows
-    ]
-
-
-def replace_memberships(
-    db: Session, user_id: int, memberships: list[DepartmentMembership], *, actor: str | None
-) -> list[UserDepartmentRead]:
-    user = db.get(User, user_id)
-    if user is None:
-        raise NotFoundError("USER_NOT_FOUND", "User not found.")
-    if memberships and sum(member.is_primary for member in memberships) != 1:
-        raise ValidationFailedError(
-            "DEPARTMENT_PRIMARY_REQUIRED", "Choose exactly one primary department."
-        )
-    ids = [member.department_id for member in memberships]
-    if len(set(ids)) != len(ids):
-        raise ValidationFailedError(
-            "DEPARTMENT_MEMBERSHIP_DUPLICATE", "A user can belong to a department only once."
-        )
-    for department_id in ids:
-        require_active_department(db, department_id)
-    db.execute(delete(DepartmentMember).where(DepartmentMember.user_id == user_id))
-    db.add_all(DepartmentMember(user_id=user_id, **member.model_dump()) for member in memberships)
-    _audit_memberships(db, user, actor, [member.model_dump() for member in memberships])
-    db.commit()
-    department_scope_service.invalidate_department_scope(db, user_id)
-    return user_departments(db, [user_id]).get(user_id, [])
-
-
 def service_options(db: Session) -> list[DepartmentServiceOption]:
     options = []
     for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID):
@@ -442,31 +393,6 @@ def unassigned_employees(db: Session) -> list[UnassignedEmployeeGroup]:
         )
         for (unit, legacy), ids in groups.items()
     ]
-
-
-def assign_employees(
-    db: Session, employee_ids: list[str], department_id: int | None, *, actor: str | None
-) -> DepartmentAssignmentResult:
-    if department_id is not None:
-        require_active_department(db, department_id)
-    ids = list(dict.fromkeys(employee_ids))
-    found = list(db.scalars(select(Employee).where(Employee.id.in_(ids))))
-    if len(found) != len(ids):
-        raise ValidationFailedError("EMPLOYEE_NOT_FOUND", "One or more employees were not found.")
-    for employee in found:
-        employee.department_id = department_id
-        sync_employee_department_label(db, employee)
-    db.add(
-        AuditLog(
-            actor=actor,
-            action="assign_department",
-            entity_type="employee",
-            entity_id=None,
-            payload=json.dumps({"employee_ids": ids, "department_id": department_id}),
-        )
-    )
-    db.commit()
-    return DepartmentAssignmentResult(updated=len(found))
 
 
 def read_scoping(db: Session) -> DepartmentScopingRead:

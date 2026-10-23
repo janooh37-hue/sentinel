@@ -57,7 +57,7 @@ class SessionUser(BaseModel):
     position: str | None = None
     department: str | None = None
     departments: list[UserDepartmentRead] = Field(default_factory=list)
-    department_scope_kind: Literal["organization", "department", "self"] = "organization"
+    department_scope_kind: Literal["organization", "department", "branch", "self"] = "organization"
     photo_url: str | None = None
     role: str
     status: str
@@ -104,7 +104,6 @@ class AdminUserCreateRequest(BaseModel):
     employee_id: str | None = Field(max_length=16)
     display_name: str | None = Field(default=None, max_length=256)
     role: Literal["operator", "manager", "admin", "inmate_reporter"] = "operator"
-    department_id: int | None = None
 
 
 class AdminUserCreateResult(BaseModel):
@@ -125,7 +124,6 @@ class CompletePasswordSetupRequest(BaseModel):
 class ApproveRequest(BaseModel):
     role: str = "operator"
     employee_id: str | None = Field(max_length=16)
-    department_id: int | None = None
 
 
 class SetRoleRequest(BaseModel):
