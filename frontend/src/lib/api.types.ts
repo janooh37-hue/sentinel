@@ -8878,7 +8878,7 @@ export interface components {
              * Role
              * @enum {string}
              */
-            role: "head" | "deputy" | "member";
+            role: "head" | "deputy" | "viewer" | "member";
             /** Already Recipient */
             already_recipient: boolean;
             /** Cleared */
@@ -10198,7 +10198,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "organization" | "department" | "self";
+            kind: "organization" | "department" | "branch" | "self";
             /** Departments */
             departments?: components["schemas"]["UserDepartmentRead"][];
         };
