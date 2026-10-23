@@ -636,7 +636,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3 text-sm">
               {facts.map(({ label, value }) => <div key={label} className="contents"><dt className="text-muted-foreground">{label}</dt><dd className="min-w-0 break-words font-medium">{value}</dd></div>)}
             </dl>
-            {!loading && <div className="mt-6 space-y-6"><RecordRecipientsPanel bookId={book.id} /><RecordThreadSection book={book} /></div>}
+            {!loading && <div className="mt-6 space-y-6"><RecordRecipientsPanel bookId={book.id} bookRef={book.ref_number} /><RecordThreadSection book={book} /></div>}
           </aside>
         )}
       </div>

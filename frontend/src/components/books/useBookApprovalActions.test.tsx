@@ -19,8 +19,9 @@ describe('useBookApprovalActions', () => {
   it('decide invalidates books/awaiting/dashboard and calls onDecided(act)', async () => {
     const qc = new QueryClient()
     const spy = vi.spyOn(qc, 'invalidateQueries')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.spyOn(apiMod.api, 'decideBook').mockResolvedValue({} as any)
+    // This mutation only consumes the record reference from the response.
+    const decidedBook = { ref_number: 'GS-5' } as apiMod.BookRead
+    vi.spyOn(apiMod.api, 'decideBook').mockResolvedValue(decidedBook)
     const onDecided = vi.fn()
     const { result } = renderHook(
       () => useBookApprovalActions({ bookId: 5, versionId: 11, onDecided, onSigned: vi.fn() }),
@@ -46,7 +47,9 @@ describe('useBookApprovalActions', () => {
     )
     result.current.signMutation.mutate()
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith('books.approval.noSignatureHint'),
+      expect(toast.error).toHaveBeenCalledWith('books.approval.noSignatureHint', {
+        description: 'books.approval.noSignatureDescription',
+      }),
     )
     expect(onSigned).not.toHaveBeenCalled()
   })

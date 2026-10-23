@@ -31,7 +31,9 @@ vi.mock('@/lib/api', async (original) => {
   }
 })
 vi.mock('./useReplyActions', () => ({ useReplyActions: () => ({ actions: [], dialog: null }) }))
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({
+  toast: { success: vi.fn(), info: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'toast-1'), dismiss: vi.fn() },
+}))
 
 const INBOX: BookInboxRead = {
   id: 9, purpose: 'circulate', sent_by_user_id: 2,
@@ -139,7 +141,7 @@ describe('Arabic recipient surfaces and circulation', () => {
     }
     vi.spyOn(api, 'listBookRecipients').mockResolvedValue([recipient])
     const { wrapper } = setup()
-    render(<RecordRecipientsPanel bookId={7} />, { wrapper })
+    render(<RecordRecipientsPanel bookId={7} bookRef={BOOK.ref_number} />, { wrapper })
     const panel = await screen.findByTestId('record-recipients')
     expect(panel).toHaveTextContent('مريم المستلمة')
     expect(panel).toHaveTextContent('خالد المرسل')

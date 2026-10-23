@@ -129,13 +129,14 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
         approver_user_id: Number.parseInt(selectedUserId, 10),
         reviewer_user_ids: reviewerIds,
       }),
-    onSuccess: () => {
+    onSuccess: (submitted) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['books', 'awaiting'] })
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
       // Rare milestone — mark it with a one-shot settling check (frequency
       // gate; reduced-motion guarded by .anim-check-settle in index.css).
       toast.success(t(isReport ? 'books.approval.sentForReview' : 'books.approval.submitted'), {
+        reference: submitted.ref_number,
         icon: <CheckCircle2 className="anim-check-settle h-4 w-4" strokeWidth={2} />,
       })
       onClose()

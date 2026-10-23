@@ -45,10 +45,8 @@ export function EmployeeSuggestionBanner({
       void qc.invalidateQueries({ queryKey: ['ledger-entry', entryId] })
       void qc.invalidateQueries({ queryKey: ['ledger'] })
       toast.success(
-        t('ledger.suggestEmployee.linked', {
-          defaultValue: 'Linked to {{id}}',
-          id: gnumber,
-        }),
+        t('ledger.suggestEmployee.linked'),
+        { reference: gnumber },
       )
     },
     onError: (err) =>

@@ -17,9 +17,9 @@ export function useReviewVerdict(bookId: number, versionId: number | undefined):
   const mut = useMutation({
     mutationFn: (v: { decision: 'reviewed' | 'changes_requested'; note?: string }) =>
       api.reviewBook(bookId, versionId ?? 0, v.decision, v.note),
-    onSuccess: () => {
+    onSuccess: (book) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
-      toast.success(t('books.reviewers.recorded'))
+      toast.success(t('books.reviewers.recorded'), { reference: book.ref_number })
     },
     onError: (e) => {
       if (e instanceof ApiError && e.code === 'REVISION_CHANGED') {

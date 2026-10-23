@@ -55,7 +55,7 @@ export function useBookApprovalActions({ bookId, versionId, isReport = false, on
   const decideMutation = useMutation({
     mutationFn: ({ act, note }: { act: BookDecideAction; note?: string }) =>
       api.decideBook(bookId!, versionId!, act, note),
-    onSuccess: (_data, { act }) => {
+    onSuccess: (book, { act }) => {
       invalidateAll()
       const key =
         act === 'reject'
@@ -63,7 +63,7 @@ export function useBookApprovalActions({ bookId, versionId, isReport = false, on
           : act === 'return'
             ? 'books.approval.returned'
             : 'books.approval.noteAdded'
-      toast.success(t(key))
+      toast.success(t(key), { reference: book.ref_number })
       onDecided(act)
     },
     onError: handleMutationError,
@@ -71,14 +71,18 @@ export function useBookApprovalActions({ bookId, versionId, isReport = false, on
 
   const signMutation = useMutation({
     mutationFn: () => api.signBook(bookId!, versionId!),
-    onSuccess: () => {
+    onSuccess: (book) => {
       invalidateAll()
-      toast.success(t(isReport ? 'books.approval.reviewedToast' : 'books.approval.signed'))
+      toast.success(t(isReport ? 'books.approval.reviewedToast' : 'books.approval.signed'), {
+        reference: book.ref_number,
+      })
       onSigned()
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'NO_SIGNATURE') {
-        toast.error(t('books.approval.noSignatureHint'))
+        toast.error(t('books.approval.noSignatureHint'), {
+          description: t('books.approval.noSignatureDescription'),
+        })
       } else {
         handleMutationError(err)
       }

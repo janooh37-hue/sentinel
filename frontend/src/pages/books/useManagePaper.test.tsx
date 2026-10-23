@@ -7,9 +7,10 @@ import { useManagePaper } from './useManagePaper'
 import type { Paper } from './recordPapers'
 import * as apiMod from '@/lib/api'
 import { registerPdfCachePurger } from '@/lib/pdfCachePurge'
+import { toast } from '@/lib/toast'
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }))
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'loading-toast'), dismiss: vi.fn() } }))
 
 function wrapperFor(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) =>
@@ -40,27 +41,31 @@ describe('useManagePaper', () => {
     const qc = new QueryClient()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const spy = vi.spyOn(apiMod.api, 'deleteBookAttachment').mockResolvedValue({} as any)
-    const { result } = renderHook(() => useManagePaper(5), { wrapper: wrapperFor(qc) })
+    const { result } = renderHook(() => useManagePaper(5, 'HR-1'), { wrapper: wrapperFor(qc) })
     await result.current.deletePaper(scanPaper)
     await waitFor(() => expect(spy).toHaveBeenCalledWith(5, 2))
+    expect(toast.success).toHaveBeenCalledWith('books.pane.paperDeleted', { id: undefined, reference: 'HR-1' })
   })
 
   it('deletePaper routes a signed paper to unfileSignedCopy', async () => {
     const qc = new QueryClient()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const spy = vi.spyOn(apiMod.api, 'unfileSignedCopy').mockResolvedValue({} as any)
-    const { result } = renderHook(() => useManagePaper(5), { wrapper: wrapperFor(qc) })
+    const { result } = renderHook(() => useManagePaper(5, 'HR-1'), { wrapper: wrapperFor(qc) })
     await result.current.deletePaper(signedPaper)
     await waitFor(() => expect(spy).toHaveBeenCalledWith(5))
+    expect(toast.success).toHaveBeenCalledWith('books.pane.signedCopyUnfiled', { id: undefined, reference: 'HR-1' })
   })
 
   it('replacePaper routes a scan paper to replaceBookAttachment(index, file)', async () => {
     const qc = new QueryClient()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const spy = vi.spyOn(apiMod.api, 'replaceBookAttachment').mockResolvedValue({} as any)
-    const { result } = renderHook(() => useManagePaper(5), { wrapper: wrapperFor(qc) })
+    const { result } = renderHook(() => useManagePaper(5, 'HR-1'), { wrapper: wrapperFor(qc) })
     await result.current.replacePaper(scanPaper, file)
     await waitFor(() => expect(spy).toHaveBeenCalledWith(5, 2, file))
+    expect(toast.loading).toHaveBeenCalledWith('books.pane.paperReplacing')
+    expect(toast.success).toHaveBeenCalledWith('books.pane.paperReplaced', { id: 'loading-toast', reference: 'HR-1' })
   })
 
   it('replacePaper routes a signed paper to replaceSignedCopy(file)', async () => {
@@ -98,9 +103,10 @@ describe('useManagePaper', () => {
 
     it('keeps the caches when the request fails', async () => {
       vi.spyOn(apiMod.api, 'replaceBookAttachment').mockRejectedValue(new Error('boom'))
-      const { result } = renderHook(() => useManagePaper(5), { wrapper: wrapperFor(new QueryClient()) })
+      const { result } = renderHook(() => useManagePaper(5, 'HR-1'), { wrapper: wrapperFor(new QueryClient()) })
       await result.current.replacePaper(scanPaper, file)
       expect(purge).not.toHaveBeenCalled()
+      expect(toast.error).toHaveBeenCalledWith(expect.any(String), { id: 'loading-toast', reference: 'HR-1' })
     })
   })
 })

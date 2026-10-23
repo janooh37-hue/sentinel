@@ -177,7 +177,7 @@ export function RecordPane({
   const replaceRef = useRef<HTMLInputElement | null>(null)
   const closeRef = useRef<HTMLButtonElement | null>(null)
   const addScan = useAddScan(book?.id ?? null)
-  const manage = useManagePaper(book?.id ?? null)
+  const manage = useManagePaper(book?.id ?? null, book?.ref_number ?? undefined)
   const [deleteTarget, setDeleteTarget] = useState<Paper | null>(null)
   const [replaceTarget, setReplaceTarget] = useState<Paper | null>(null)
   const [deleteRecordOpen, setDeleteRecordOpen] = useState(false)
@@ -672,7 +672,7 @@ export function RecordPane({
             <WordSessionBanner book={book} compact live={false} />
           </div>
         )}
-        <RecordRecipientsPanel bookId={book.id} className="mt-2 border-t border-hairline" />
+        <RecordRecipientsPanel bookId={book.id} bookRef={book.ref_number} className="mt-2 border-t border-hairline" />
         <div className="flex min-h-[20rem] flex-col pt-2">
           <Suspense fallback={<DocumentState kind="loading" />}>
             <RecordPaperViewer

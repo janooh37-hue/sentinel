@@ -69,10 +69,8 @@ export function SendToVaultDialog({
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['vault', employeeId] })
       toast.success(
-        t('ledger.vault.dialog.sentTo', {
-          defaultValue: 'Sent to {{id}}',
-          id: employeeId,
-        }),
+        t('ledger.vault.dialog.sentTo'),
+        { reference: employeeId ?? undefined },
       )
       onClose()
     },

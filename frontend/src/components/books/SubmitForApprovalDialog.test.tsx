@@ -26,7 +26,7 @@ vi.mock('@/lib/api', async (orig) => {
       }),
       listApprovers: vi.fn().mockResolvedValue([{ id: 2, name: 'Manager Khalid', is_default: false }]),
       listReviewerCandidates: vi.fn().mockResolvedValue([]),
-      submitBook: vi.fn().mockResolvedValue({ id: 48 }),
+      submitBook: vi.fn().mockResolvedValue({ id: 48, ref_number: 'GS-48' }),
     },
   }
 })

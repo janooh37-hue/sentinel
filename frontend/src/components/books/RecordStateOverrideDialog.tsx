@@ -60,6 +60,7 @@ export function RecordStateOverrideDialog({ book, onClose }: Props): React.JSX.E
         t('books.stateOverride.done', {
           state: t(sealDescriptor(recordStateOf(updated)).labelKey),
         }),
+        { reference: book.ref_number },
       )
       onClose()
     },

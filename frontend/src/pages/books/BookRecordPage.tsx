@@ -395,7 +395,7 @@ function BookRecordPageBody(): React.JSX.Element {
   const canGenerate = has('documents.generate') && !!book?.can_write
   const canOverrideState = has('books.override_state') && !!book?.can_write
 
-  const manage = useManagePaper(book?.id ?? null)
+  const manage = useManagePaper(book?.id ?? null, book?.ref_number ?? undefined)
 
   const versions = useMemo(() => book?.versions ?? [], [book?.versions])
   const liveVersion = versions.length ? versions[versions.length - 1] : undefined
@@ -1254,7 +1254,7 @@ function BookRecordPageBody(): React.JSX.Element {
       )}
 
       {book && <RecordInboxStrip book={book} />}
-      {book && <RecordRecipientsPanel bookId={book.id} />}
+      {book && <RecordRecipientsPanel bookId={book.id} bookRef={book.ref_number} />}
       {book && <RecordThreadSection book={book} />}
 
       <RecordPhoneProgress book={book} view={view} />

@@ -37,7 +37,7 @@ export function useInboxActions(
       // Detail, lists, recipient rows and inbox summary all live under this key.
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
-      toast.success(t(`books.inbox.toast.${action}`))
+      toast.success(t(`books.inbox.toast.${action}`), { reference: book?.ref_number })
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })

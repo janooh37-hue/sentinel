@@ -35,7 +35,9 @@ function Body({ book, close }: { book: BookRead; close: () => void }): React.JSX
     mutationFn: () => api.setBookConfidentiality(book.id, level),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['books'] })
-      toast.success(t('books.confidentiality.changed', { level: t(`books.confidentiality.levels.${level}`) }))
+      toast.success(t('books.confidentiality.changed', { level: t(`books.confidentiality.levels.${level}`) }), {
+        reference: book.ref_number,
+      })
       close()
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
