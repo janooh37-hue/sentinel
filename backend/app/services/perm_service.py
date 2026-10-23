@@ -174,6 +174,7 @@ def _invalidate_caps_cache(db: Session, user_id: int) -> None:
     target = db.get(User, user_id)
     if target is not None:
         target._effective_caps_cache = None
+        target._department_scope_cache = None
 
 
 # ─── Override management (admin matrix) ───────────────────────────────────────

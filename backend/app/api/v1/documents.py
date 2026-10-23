@@ -37,6 +37,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
+from app.api.department_scope import require_visible_employee
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
@@ -447,6 +448,8 @@ def generate_document(
     db: Annotated[Session, Depends(get_db)],
     _viewer: Annotated[User, Depends(require_capability("books.view"))],
 ) -> DocumentGenerateResponse:
+    if payload.employee_id is not None:
+        require_visible_employee(db, user, payload.employee_id)
     effective_service = _effective_document_service(payload.template_id)
     category_id = document_service.record_category_for_template(payload.template_id)
     book_service.require_record_type_access(

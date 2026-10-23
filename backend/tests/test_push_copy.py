@@ -237,8 +237,8 @@ def test_inbox_counts_and_items_only_include_visible_unread_active_sends(api_db,
         api_db.add(row)
         rows.append(row)
     api_db.commit()
-    assert ns.relevant_counts(api_db, user, precomputed_leaves=0).inbox == 2
-    assert ns.relevant_counts(api_db, sender, precomputed_leaves=0).inbox == 0
+    assert ns.relevant_counts(api_db, user).inbox == 2
+    assert ns.relevant_counts(api_db, sender).inbox == 0
     batches = []
     resolve = ns.book_service.resolve_names_by_ids
 

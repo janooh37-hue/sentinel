@@ -356,6 +356,9 @@ the domain language above.
 | Send state | `Book.send_state` |
 | Level | `Book.confidentiality` |
 | Direct send | `BookRecipient` |
+| Department | `Department` / `departments` |
+| Department membership | `DepartmentMember` / `department_members` |
+| Department send | Reserved for a later phase |
 | Threaded reply confirmation | `ScanInbox.source = "email_reply_match"` |
 | Attendance case | `AttendanceCase` |
 | Automatic verdict | `AttendanceEvaluation` |

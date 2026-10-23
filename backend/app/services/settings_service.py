@@ -117,6 +117,10 @@ def _get(db: Session, key: str, default: object = None) -> object:
     return json.loads(row.value)
 
 
+def get_department_scoping_enabled(db: Session) -> bool:
+    return bool(_get(db, "settings.department_scoping_enabled", False))
+
+
 def _upsert_setting(db: Session, key: str, value: object) -> None:
     existing = db.execute(select(AppSetting).where(AppSetting.key == key)).scalar_one_or_none()
     encoded = json.dumps(value)

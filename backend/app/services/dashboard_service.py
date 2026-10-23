@@ -37,6 +37,7 @@ from app.db.models import (
 )
 from app.schemas.dashboard import (
     DASHBOARD_QUICK_ACTION_IDS,
+    DashboardDepartmentScope,
     DashboardLayout,
     DashboardLeaveItem,
     DashboardRecentDocument,
@@ -47,7 +48,14 @@ from app.schemas.dashboard import (
     DashboardUpcomingLeaveItem,
 )
 from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_LOANED, WORKING_STATUSES
-from app.services import book_service, email_service, ledger_service
+from app.services import book_service, department_service, email_service, ledger_service
+from app.services.department_scope_service import (
+    DepartmentScope,
+    employee_fk_visible,
+    employee_visibility_clause,
+    narrow_department_scope,
+    resolve_department_scope,
+)
 from app.services.ledger_service import DRAFT_TAG
 
 # How many "recent" rows to surface per stream.
@@ -110,6 +118,8 @@ def get_summary(
     user: User | None = None,
     today: date | None = None,
     owner_user_id: int | None = None,
+    department_id: int | None = None,
+    scope: DepartmentScope | None = None,
 ) -> DashboardSummary:
     """Compose the dashboard payload.
 
@@ -119,15 +129,27 @@ def get_summary(
 
     ``owner_user_id`` scopes only the email-sync widget to the signed-in
     user's mailbox/rows. ``user`` scopes Book-backed totals to visible record
-    types; ``None`` (legacy/no-user callers) preserves unscoped behavior.
+    types and people to department visibility; ``None`` preserves unscoped behavior.
     """
     if today is None:
         today = date.today()
+    resolved_scope = scope or (
+        resolve_department_scope(db, user)
+        if user is not None
+        else DepartmentScope(True, frozenset(), None, "organization")
+    )
+    scope = narrow_department_scope(db, resolved_scope, department_id)
+    departments = (
+        department_service.user_departments(db, [user.id]).get(user.id, []) if user else []
+    )
 
     return DashboardSummary(
-        totals=_compute_totals(db, today=today, user=user),
-        on_leave_today=_on_leave_today(db, today=today),
-        upcoming_leave_ends=_upcoming_leave_ends(db, today=today),
+        department_scope=DashboardDepartmentScope(
+            kind=resolved_scope.kind, departments=departments
+        ),
+        totals=_compute_totals(db, today=today, user=user, scope=scope),
+        on_leave_today=_on_leave_today(db, today=today, scope=scope),
+        upcoming_leave_ends=_upcoming_leave_ends(db, today=today, scope=scope),
         recent_documents=_recent_documents(db, user=user),
         recent_ledger=_recent_ledger(db, user=user),
         email_sync=_email_sync(db, today=today, owner_user_id=owner_user_id),
@@ -139,12 +161,17 @@ def get_summary(
 # ---------------------------------------------------------------------------
 
 
-def _compute_totals(db: Session, *, today: date, user: User | None = None) -> DashboardTotals:
+def _compute_totals(
+    db: Session, *, today: date, user: User | None = None, scope: DepartmentScope | None = None
+) -> DashboardTotals:
+    visibility = employee_visibility_clause(scope)
+    people_clauses = () if visibility is None else (visibility,)
     by_status: dict[str, int] = {
         status: count
         for status, count in db.execute(
             select(Employee.status, func.count())
             .where(Employee.status.in_(WORKING_STATUSES))
+            .where(*people_clauses)
             .group_by(Employee.status)
         ).tuples()
     }
@@ -156,6 +183,7 @@ def _compute_totals(db: Session, *, today: date, user: User | None = None) -> Da
             select(func.count(func.distinct(Leave.employee_id)))
             .select_from(Leave)
             .join(Employee, Employee.id == Leave.employee_id)
+            .where(*people_clauses)
             .where(
                 and_(
                     Employee.status == EMPLOYEE_STATUS_ACTIVE,
@@ -184,11 +212,11 @@ def _compute_totals(db: Session, *, today: date, user: User | None = None) -> Da
             forms_stmt = forms_stmt.where(document_visibility)
     forms_this_month = int(db.execute(forms_stmt).scalar_one())
 
-    open_violations_count = int(
-        db.execute(
-            select(func.count()).select_from(Violation).where(Violation.status == "Open")
-        ).scalar_one()
-    )
+    violations_stmt = select(func.count()).select_from(Violation).where(Violation.status == "Open")
+    violation_visibility = employee_fk_visible(scope, Violation.employee_id)
+    if violation_visibility is not None:
+        violations_stmt = violations_stmt.where(violation_visibility)
+    open_violations_count = int(db.execute(violations_stmt).scalar_one())
 
     draft_needle = f'%"{DRAFT_TAG}"%'
     draft_count = int(
@@ -233,7 +261,9 @@ def _compute_totals(db: Session, *, today: date, user: User | None = None) -> Da
 # ---------------------------------------------------------------------------
 
 
-def _on_leave_today(db: Session, *, today: date) -> list[DashboardLeaveItem]:
+def _on_leave_today(
+    db: Session, *, today: date, scope: DepartmentScope | None = None
+) -> list[DashboardLeaveItem]:
     stmt = (
         select(
             Leave.id,
@@ -253,6 +283,9 @@ def _on_leave_today(db: Session, *, today: date) -> list[DashboardLeaveItem]:
         )
         .order_by(Leave.end_date.asc(), Leave.id.asc())
     )
+    visibility = employee_visibility_clause(scope)
+    if visibility is not None:
+        stmt = stmt.where(visibility)
 
     return [
         DashboardLeaveItem(
@@ -268,7 +301,9 @@ def _on_leave_today(db: Session, *, today: date) -> list[DashboardLeaveItem]:
     ]
 
 
-def _upcoming_leave_ends(db: Session, *, today: date) -> list[DashboardUpcomingLeaveItem]:
+def _upcoming_leave_ends(
+    db: Session, *, today: date, scope: DepartmentScope | None = None
+) -> list[DashboardUpcomingLeaveItem]:
     horizon = date.fromordinal(today.toordinal() + UPCOMING_WINDOW_DAYS)
     stmt = (
         select(
@@ -289,6 +324,9 @@ def _upcoming_leave_ends(db: Session, *, today: date) -> list[DashboardUpcomingL
         )
         .order_by(Leave.end_date.asc(), Leave.id.asc())
     )
+    visibility = employee_visibility_clause(scope)
+    if visibility is not None:
+        stmt = stmt.where(visibility)
 
     return [
         DashboardUpcomingLeaveItem(

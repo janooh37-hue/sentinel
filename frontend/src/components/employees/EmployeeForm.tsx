@@ -17,7 +17,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Controller, useForm } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { DepartmentPicker } from '@/components/departments/DepartmentPicker'
 import type { EmployeeRead } from '@/lib/api'
 import { ExtractionDropzone } from '@/components/extraction/ExtractionDropzone'
 import { ExtractionReviewPanel } from '@/components/extraction/ExtractionReviewPanel'
@@ -116,7 +117,7 @@ function blankDefaults(): EmployeeFormValues {
     transfer_site: '',
     transfer_return_date: '',
     effective_date: todayIso(),
-    department: '',
+    department_id: null,
     position: '',
     position_ar: '',
     other: '',
@@ -146,7 +147,7 @@ function fromInitial(initial: Partial<EmployeeRead>): EmployeeFormValues {
     transfer_site: initial.transfer_site ?? '',
     transfer_return_date: initial.transfer_return_date ?? '',
     effective_date: todayIso(),
-    department: initial.department ?? '',
+    department_id: initial.department_id ?? null,
     position: initial.position ?? '',
     position_ar: initial.position_ar ?? '',
     other: initial.other ?? '',
@@ -179,12 +180,11 @@ export function EmployeeForm({
     register,
     handleSubmit,
     control,
-    watch,
     setValue,
     formState: { errors },
   } = form
 
-  const status = watch('status')
+  const status = useWatch({ control, name: 'status' })
   const endDateRequired = !isWorkingStatus(status)
   const isTransferred = status === 'Transferred'
   // Reactivating a departed/transferred employee (to Active or Loaned) asks for the return date.
@@ -331,9 +331,31 @@ export function EmployeeForm({
           <CardTitle>{t('employees.sections.employment')}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field id="department" label={fld('department')}>
-            <Input id="department" {...register('department')} />
-          </Field>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <Controller
+              name="department_id"
+              control={control}
+              render={({ field }) => (
+                <DepartmentPicker
+                  id="department_id"
+                  label={fld('department')}
+                  value={field.value ?? null}
+                  onChange={field.onChange}
+                  disabled={submitting}
+                />
+              )}
+            />
+            {initial?.department && (
+              <p className="break-words text-xs text-muted-foreground">
+                {t('departmentEmployees.previousValue')}: <bdi>{initial.department}</bdi>
+              </p>
+            )}
+            {errFor('department_id') && (
+              <span role="alert" className="text-xs text-destructive">
+                {errFor('department_id')}
+              </span>
+            )}
+          </div>
           <Field id="position" label={fld('position')}>
             <Input id="position" {...register('position')} />
           </Field>

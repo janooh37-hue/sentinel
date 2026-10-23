@@ -1,4 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render as renderComponent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -6,6 +8,12 @@ import type { EmployeeRead } from '@/lib/api'
 import { EmployeeForm } from './EmployeeForm'
 
 const BASE = { id: 'G3190', name_en: 'ABDULLA ALABRI', status: 'Active' } as Partial<EmployeeRead>
+
+function render(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
+  client.setQueryData(['departments'], [])
+  return renderComponent(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
+}
 
 async function chooseStatus(label: string) {
   await userEvent.click(screen.getByRole('combobox', { name: /^Status/ }))

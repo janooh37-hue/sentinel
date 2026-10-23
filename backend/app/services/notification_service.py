@@ -27,6 +27,11 @@ from app.services import (
     perm_service,
     scan_inbox_service,
 )
+from app.services.department_scope_service import (
+    DepartmentScope,
+    employee_fk_visible,
+    resolve_department_scope,
+)
 
 
 @dataclass(frozen=True)
@@ -217,18 +222,24 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
     return items
 
 
-def _leaves_needing_action(db: Session, today_iso: str) -> int:
+def _leaves_needing_action(
+    db: Session, today_iso: str, scope: DepartmentScope | None = None
+) -> int:
     """Count live leaves where ``leave_lifecycle.needs_action`` holds.
 
     needs_action reads the end date only as "overdue or not", so rows are
     counted per (type, status, overdue) and one end date judges each group.
     """
     overdue = Leave.end_date < date.fromisoformat(today_iso)
-    groups = db.execute(
+    stmt = (
         select(Leave.leave_type, Leave.status, func.min(Leave.end_date), func.count())
         .where(Leave.deleted_at.is_(None))
         .group_by(Leave.leave_type, Leave.status, overdue)
-    ).all()
+    )
+    visibility = employee_fk_visible(scope, Leave.employee_id)
+    if visibility is not None:
+        stmt = stmt.where(visibility)
+    groups = db.execute(stmt).all()
     return sum(
         n
         for leave_type, status, end_date, n in groups
@@ -236,29 +247,15 @@ def _leaves_needing_action(db: Session, today_iso: str) -> int:
     )
 
 
-def leaves_needing_action(db: Session) -> int:
-    """Return the org-wide leave-action count.
-
-    Exposed so the scheduler can compute this ONCE per tick and share the
-    result across all per-user ``relevant_counts`` calls, avoiding repeated
-    full-table leave pages when there are many active users.
-    """
-    return _leaves_needing_action(db, datetime.now(UTC).date().isoformat())
-
-
 def relevant_counts(
     db: Session,
     user: User,
-    *,
-    precomputed_leaves: int | None = None,
 ) -> NotificationCounts:
     """Compute per-user notification counts from existing queries.
 
     - approvals: books whose current pending step is assigned to this user.
-    - leaves:    org-wide leave rows that need someone's action (pending requests,
-                 overdue awaiting-return). No per-user filter — leaves have no owner.
-                 Pass ``precomputed_leaves`` to reuse a value computed earlier in
-                 the same tick (avoids repeating the org-wide paging per user).
+    - leaves:    visible employee leave rows that need action (pending requests,
+                 overdue awaiting-return).
     - scans:     scan-inbox items owned by this user (awaiting_confirmation + unrouted).
     - emails:    unread incoming email in this user's mailbox.
     - inbox:     unread active direct sends on records this user can open.
@@ -275,11 +272,7 @@ def relevant_counts(
     approvals = book_service.awaiting_count(db, user_id=user.id, reviewer_only=not can_sign)
     scans = scan_inbox_service.counts(db, owner_user_id=user.id)["total"]
     emails = ledger_service.unread_email_count(db, owner_user_id=user.id)
-    leaves = (
-        precomputed_leaves
-        if precomputed_leaves is not None
-        else _leaves_needing_action(db, today_iso)
-    )
+    leaves = _leaves_needing_action(db, today_iso, resolve_department_scope(db, user))
     monthly = _monthly_items(db, user)
     return NotificationCounts(
         approvals=approvals,

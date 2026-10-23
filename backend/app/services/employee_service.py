@@ -35,6 +35,12 @@ from app.schemas.employee import (
 )
 from app.services import employee_status_history as history
 from app.services import workforce_schedule_service
+from app.services.department_scope_service import (
+    DepartmentScope,
+    employee_visibility_clause,
+    narrow_department_scope,
+)
+from app.services.department_service import require_active_department
 from app.services.extraction_service import _MATCH_THRESHOLD, _name_scores
 
 LIST_MAX_LIMIT = 500
@@ -47,10 +53,12 @@ def list_employees(
     q: str | None = None,
     status: str | None = None,
     department: str | None = None,
+    department_id: int | None = None,
     duty_unit: str | None = None,
     pending: bool = False,
     limit: int = LIST_DEFAULT_LIMIT,
     offset: int = 0,
+    scope: DepartmentScope | None = None,
 ) -> tuple[list[Employee], int]:
     """Filtered + paginated list. Returns ``(rows, total_count)``.
 
@@ -93,6 +101,15 @@ def list_employees(
         stmt = stmt.where(clause)
         count_stmt = count_stmt.where(clause)
         non_q_clauses.append(clause)
+    if department_id is not None:
+        scope = narrow_department_scope(
+            db, scope or DepartmentScope(True, frozenset(), None, "organization"), department_id
+        )
+    visibility_clause = employee_visibility_clause(scope)
+    if visibility_clause is not None:
+        stmt = stmt.where(visibility_clause)
+        count_stmt = count_stmt.where(visibility_clause)
+        non_q_clauses.append(visibility_clause)
     if duty_unit:
         clause = Employee.duty_unit == duty_unit
         stmt = stmt.where(clause)
@@ -169,9 +186,30 @@ def _validate_transfer(
         ) from exc
 
 
+def _validate_department_assignment(
+    payload: EmployeeCreate | EmployeeUpdate, scope: DepartmentScope | None
+) -> None:
+    if (
+        scope is not None
+        and not scope.organization
+        and "department_id" in payload.model_fields_set
+        and payload.department_id not in scope.department_ids
+    ):
+        raise ValidationFailedError(
+            "DEPARTMENT_OUT_OF_SCOPE",
+            "Employee department is outside your visible departments.",
+            department_id=payload.department_id,
+        )
+
+
 def create_employee(
-    db: Session, payload: EmployeeCreate, *, actor_user_id: int | None = None
+    db: Session,
+    payload: EmployeeCreate,
+    *,
+    actor_user_id: int | None = None,
+    scope: DepartmentScope | None = None,
 ) -> Employee:
+    _validate_department_assignment(payload, scope)
     existing = db.get(Employee, payload.id)
     if existing is not None:
         raise ConflictError(
@@ -179,6 +217,8 @@ def create_employee(
             f"Employee {payload.id!r} already exists",
             id=payload.id,
         )
+    if payload.department_id is not None:
+        require_active_department(db, payload.department_id)
     data = payload.model_dump()
     target: str = payload.status
     end = payload.end_date
@@ -221,6 +261,7 @@ def update_employee(
     payload: EmployeeUpdate,
     *,
     actor_user_id: int | None = None,
+    scope: DepartmentScope | None = None,
 ) -> Employee:
     """Patch an employee, recording status history for real status changes.
 
@@ -243,7 +284,10 @@ def update_employee(
     ``effective_date`` is write-only: it never reaches the row.
     """
     row = get_employee(db, employee_id)
+    _validate_department_assignment(payload, scope)
     data: dict[str, Any] = payload.model_dump(exclude_unset=True)
+    if payload.department_id is not None:
+        require_active_department(db, payload.department_id)
     effective_date_in: date | None = data.pop("effective_date", None)
 
     # A human-entered/confirmed passport number is provenance 'manual'.

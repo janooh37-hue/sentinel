@@ -16,7 +16,7 @@
  * not-authorized notice as a defensive fallback.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -47,11 +47,11 @@ import {
 import {
   api,
   ApiError,
-  apiErrorMessage,
   type AdminUserCreateRequest,
   type AdminUserCreateResult,
   type AdminUserRead,
   type AuditEntryRead,
+  type DepartmentRead,
 } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { copyToClipboard } from '@/lib/clipboard'
@@ -68,6 +68,29 @@ import {
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmployeePicker } from '@/pages/application/EmployeePicker'
+import { DepartmentPicker } from '@/components/departments/DepartmentPicker'
+import { departmentErrorMessage, departmentName, orderDepartments } from '@/lib/departments'
+import { useCapabilities } from '@/lib/useCapabilities'
+import { DepartmentMembershipEditor } from './DepartmentMembershipEditor'
+import { groupDepartmentUsers, primaryDepartment, type DepartmentFilter } from './departmentMemberships'
+
+function useEmployeeDepartmentSelection(employeeId: string | null) {
+  const [override, setOverride] = useState<number | null | undefined>(undefined)
+  const employee = useQuery({
+    queryKey: ['employee-lookup', employeeId],
+    queryFn: () => api.getEmployeeLookup(employeeId!),
+    enabled: employeeId !== null,
+    staleTime: 30_000,
+  })
+  return {
+    value: override === undefined ? employee.data?.department_id ?? null : override,
+    onChange: setOverride,
+    reset: () => setOverride(undefined),
+    loading: employeeId !== null && employee.isPending,
+    error: employeeId !== null && employee.isError ? employee.error : null,
+    retry: () => void employee.refetch(),
+  }
+}
 
 type Role = 'admin' | 'manager' | 'operator' | 'inmate_reporter'
 type TabId = 'pending' | 'active' | 'suspended' | 'history' | 'permission-requests'
@@ -305,7 +328,7 @@ function Modal({
         aria-label={title}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="flex w-full max-w-[460px] flex-col gap-3 rounded-2xl bg-surface p-6 shadow-2xl focus:outline-none"
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-[460px] flex-col gap-3 overflow-y-auto rounded-2xl bg-surface p-6 shadow-2xl focus:outline-none"
       >
         <h2 className="text-[1.05em] font-semibold text-foreground">{title}</h2>
         {children}
@@ -326,7 +349,7 @@ function RequestCard({
 }: {
   req: AdminUserRead
   approving: boolean
-  onApprove: (role: Role, employeeId: string | null) => void
+  onApprove: (role: Role, employeeId: string | null, departmentId: number | null) => void
   onReject: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -337,15 +360,18 @@ function RequestCard({
   // verification. A real search result or explicit "no link" must be chosen.
   const [employeeId, setEmployeeId] = useState<string | null>(null)
   const [noLink, setNoLink] = useState(false)
-  const canApprove = !open || noLink || employeeId !== null
+  const department = useEmployeeDepartmentSelection(employeeId)
+  const canApprove = !open || ((noLink || employeeId !== null) && !department.loading && !department.error)
 
   function selectEmployee(id: string | null): void {
     setEmployeeId(id)
+    department.reset()
     if (id !== null) setNoLink(false)
   }
   function toggleNoLink(): void {
     setNoLink((v) => !v)
     setEmployeeId(null)
+    department.reset()
   }
   return (
     <div
@@ -434,7 +460,7 @@ function RequestCard({
           <button
             type="button"
             disabled={approving || !canApprove}
-            onClick={() => (open ? onApprove(role, noLink ? null : employeeId) : setOpen(true))}
+            onClick={() => (open ? onApprove(role, noLink ? null : employeeId, department.value) : setOpen(true))}
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60 md:flex-none"
           >
             {approving ? (
@@ -513,6 +539,20 @@ function RequestCard({
               {t('access.create.noEmployee')}
             </label>
           </div>
+          <DepartmentPicker
+            id={`approve-department-${req.id}`}
+            label={t('departmentAccess.department')}
+            value={department.value}
+            onChange={department.onChange}
+            disabled={approving || department.loading}
+          />
+          <p className="text-[0.78em] text-muted-foreground">{t('departmentAccess.employeeDefaultHint')}</p>
+          {department.error && (
+            <p role="alert" className="text-sm text-accent">
+              {departmentErrorMessage(department.error, t)}{' '}
+              <button type="button" className="underline" onClick={department.retry}>{t('departmentAccess.retry')}</button>
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -549,6 +589,7 @@ function DetailKV({
 
 export function UsersTable({
   users,
+  departments = [],
   emptyMessage,
   currentUserId,
   onReset,
@@ -556,11 +597,13 @@ export function UsersTable({
   onLinkEmployee,
   onEditPermissions,
   onSetDefaultManager,
+  onEditDepartments,
   onDisable,
   onUnlock,
   busyUserId,
 }: {
   users: AdminUserRead[]
+  departments?: DepartmentRead[]
   emptyMessage: string
   currentUserId: number | undefined
   onReset: (u: AdminUserRead) => void
@@ -568,6 +611,7 @@ export function UsersTable({
   onLinkEmployee?: (u: AdminUserRead) => void
   onEditPermissions?: (u: AdminUserRead) => void
   onSetDefaultManager: (u: AdminUserRead, enabled: boolean) => void
+  onEditDepartments?: (u: AdminUserRead) => void
   onDisable: (u: AdminUserRead) => void
   onUnlock: (u: AdminUserRead) => void
   /** A row whose disable/restore mutation is currently in flight — its row
@@ -576,19 +620,44 @@ export function UsersTable({
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const locale = i18n.language
+  const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>('all')
+  const groups = groupDepartmentUsers(users, departmentFilter)
+  const unassigned = users.filter((u) => !u.departments?.length).length
 
   if (users.length === 0) {
     return <EmptyState icon={Inbox} message={emptyMessage} className="py-12" />
   }
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-hairline bg-surface">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex min-w-0 flex-col gap-1 text-[0.82em] text-muted-foreground">
+          {t('departmentAccess.filter')}
+          <select
+            value={departmentFilter}
+            onChange={(event) => setDepartmentFilter(event.target.value === 'all' || event.target.value === 'none' ? event.target.value : Number(event.target.value))}
+            className="max-w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="all">{t('departmentAccess.allDepartments')}</option>
+            <option value="none">{t('departmentAccess.noDepartment')} ({unassigned})</option>
+            {orderDepartments(departments).map(({ department, depth }) => (
+              <option key={department.id} value={department.id}>{'\u00a0\u00a0'.repeat(depth)}{departmentName(department, locale)}</option>
+            ))}
+          </select>
+        </label>
+        <button type="button" aria-pressed={departmentFilter === 'none'} onClick={() => setDepartmentFilter(departmentFilter === 'none' ? 'all' : 'none')} className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning-soft px-3 py-2 text-[0.82em] font-semibold text-warning focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          {t('departmentAccess.noDepartment')} ({unassigned})
+        </button>
+      </div>
+      {groups.length === 0 ? <EmptyState icon={Inbox} message={t('departmentAccess.noMatches')} className="py-12" /> : (
+      <div className="overflow-x-auto rounded-2xl border border-hairline bg-surface">
       <table className="w-full border-collapse text-start">
         <thead>
           <tr className="border-b border-hairline text-[0.7em] uppercase tracking-[0.08em] text-muted-foreground">
             <th scope="col" className="w-14 py-2.5" />
             <th scope="col" className="px-2 py-2.5 text-start font-semibold">{t('access.active.name')}</th>
-            <th scope="col" className="px-2 py-2.5 text-start font-semibold">{t('access.active.role')}</th>
+            <th scope="col" className="hidden px-2 py-2.5 text-start font-semibold sm:table-cell">{t('access.active.role')}</th>
             <th scope="col" className="hidden px-2 py-2.5 text-start font-semibold md:table-cell">
               {t('access.active.lastSeen')}
             </th>
@@ -599,7 +668,21 @@ export function UsersTable({
           </tr>
         </thead>
         <tbody>
-          {users.map((u) => {
+          {groups.map(([departmentId, groupUsers]) => {
+            const department = departments.find((d) => d.id === departmentId) ?? groupUsers[0]?.departments?.find((d) => d.department_id === departmentId)
+            return (
+              <Fragment key={departmentId ?? 'none'}>
+                <tr className={departmentId === null ? 'bg-warning-soft text-warning' : 'bg-surface-tinted text-muted-foreground'}>
+                  <th scope="rowgroup" colSpan={6} className="px-3.5 py-2 text-start text-[0.8em] font-semibold">
+                    <span className="inline-flex items-center gap-2">
+                      {departmentId === null && <AlertTriangle className="h-3.5 w-3.5" />}
+                      <span dir="auto">{department ? departmentName(department, locale) : t('departmentAccess.noDepartment')}</span>
+                      <span className="font-mono">({groupUsers.length})</span>
+                    </span>
+                  </th>
+                </tr>
+          {groupUsers.map((u) => {
+            const primary = primaryDepartment(u)
             const locked = u.status === 'locked' || u.status === 'disabled'
             const isSelf = currentUserId != null && u.id === currentUserId
             const isBusy = busyUserId === u.id
@@ -625,13 +708,18 @@ export function UsersTable({
                         </span>
                       )}
                     </span>
-                    <span className="text-[0.76em] text-muted-foreground">
+                    <span className="break-all text-[0.76em] text-muted-foreground">
                       {u.employee_id && <span className="font-mono">{u.employee_id} · </span>}
                       <span className="font-mono">{u.email}</span>
                     </span>
+                    <span className={`mt-1 flex flex-wrap items-center gap-1 text-[0.76em] ${primary ? 'text-muted-foreground' : 'text-warning'}`}>
+                      <span dir="auto">{primary ? departmentName(primary, locale) : t('departmentAccess.noDepartment')}</span>
+                      {(u.departments?.length ?? 0) > 1 && <span className="rounded-full bg-surface-tinted px-1.5 py-px text-muted-foreground">{t('departmentAccess.more', { count: u.departments!.length - 1 })}</span>}
+                    </span>
+                    <span className="mt-1 sm:hidden"><RolePill role={u.role} status={u.status} /></span>
                   </div>
                 </td>
-                <td className="px-2 py-2.5">
+                <td className="hidden px-2 py-2.5 sm:table-cell">
                   <span className="flex flex-wrap items-center gap-1.5">
                     <RolePill role={u.role} status={u.status} />
                     {u.is_default_manager && (
@@ -678,6 +766,12 @@ export function UsersTable({
                           {t('access.active.linkEmployee')}
                         </DropdownMenuItem>
                       ) : null}
+                      {onEditDepartments && (
+                        <DropdownMenuItem onSelect={() => onEditDepartments(u)}>
+                          <UserCog className="h-3.5 w-3.5" strokeWidth={1.8} />
+                          {t('departmentAccess.editMemberships')}
+                        </DropdownMenuItem>
+                      )}
                       {canEditPermissions ? (
                         <DropdownMenuItem onSelect={() => onEditPermissions?.(u)}>
                           <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={1.8} />
@@ -732,8 +826,13 @@ export function UsersTable({
               </tr>
             )
           })}
+              </Fragment>
+            )
+          })}
         </tbody>
       </table>
+      </div>
+      )}
     </div>
   )
 }
@@ -875,6 +974,7 @@ function CreateAccountPanel({
   const [role, setRole] = useState<Role>('operator')
   const [employeeId, setEmployeeId] = useState<string | null>(null)
   const [noEmployee, setNoEmployee] = useState(false)
+  const department = useEmployeeDepartmentSelection(employeeId)
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [result, setResult] = useState<AdminUserCreateResult | null>(null)
   const [copied, setCopied] = useState(false)
@@ -893,18 +993,20 @@ function CreateAccountPanel({
       createMut.reset()
       onCreated()
     },
-    onError: (e) => setFieldError(apiErrorMessage(e)),
+    onError: (e) => setFieldError(departmentErrorMessage(e, t)),
   })
 
-  const canSubmit = email.trim().length > 0 && (noEmployee || employeeId !== null)
+  const canSubmit = email.trim().length > 0 && (noEmployee || employeeId !== null) && !department.loading && !department.error
 
   function selectEmployee(id: string | null): void {
     setEmployeeId(id)
+    department.reset()
     if (id !== null) setNoEmployee(false)
   }
   function toggleNoEmployee(): void {
     setNoEmployee((v) => !v)
     setEmployeeId(null)
+    department.reset()
   }
 
   function submit(e: React.FormEvent): void {
@@ -916,6 +1018,7 @@ function CreateAccountPanel({
       employee_id: noEmployee ? null : employeeId,
       display_name: displayNameInput.trim() || null,
       role,
+      department_id: department.value,
     })
   }
 
@@ -1023,6 +1126,20 @@ function CreateAccountPanel({
             {t('access.create.noEmployee')}
           </label>
         </div>
+        <DepartmentPicker
+          id="create-account-department"
+          label={t('departmentAccess.department')}
+          value={department.value}
+          onChange={department.onChange}
+          disabled={createMut.isPending || department.loading}
+        />
+        <p className="text-[0.78em] text-muted-foreground">{t('departmentAccess.employeeDefaultHint')}</p>
+        {department.error && (
+          <p role="alert" className="text-sm text-accent">
+            {departmentErrorMessage(department.error, t)}{' '}
+            <button type="button" className="underline" onClick={department.retry}>{t('departmentAccess.retry')}</button>
+          </p>
+        )}
         {fieldError && (
           <div className="flex items-center gap-1.5 text-[0.82em] text-accent" role="alert">
             <AlertTriangle className="h-3.5 w-3.5" strokeWidth={1.8} />
@@ -1052,6 +1169,8 @@ export function AccessRequestsPage(): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const { user } = useAuth()
+  const { has } = useCapabilities()
+  const canManageDepartments = has('departments.manage')
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   // One-shot URL → state sync: ?tab=permission-requests deep-links into that tab.
@@ -1078,6 +1197,7 @@ export function AccessRequestsPage(): React.JSX.Element {
   const [roleTarget, setRoleTarget] = useState<AdminUserRead | null>(null)
   const [linkTarget, setLinkTarget] = useState<AdminUserRead | null>(null)
   const [disableTarget, setDisableTarget] = useState<AdminUserRead | null>(null)
+  const [membershipTarget, setMembershipTarget] = useState<AdminUserRead | null>(null)
   const [approvingId, setApprovingId] = useState<number | null>(null)
   const [busyUserId, setBusyUserId] = useState<number | undefined>(undefined)
   const [showCreatePanel, setShowCreatePanel] = useState(false)
@@ -1085,6 +1205,11 @@ export function AccessRequestsPage(): React.JSX.Element {
   const usersQuery = useQuery({
     queryKey: ['auth-users'],
     queryFn: () => api.listAuthUsers(),
+  })
+  const departmentsQuery = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => api.departments.list(),
+    enabled: tab === 'active' || tab === 'suspended',
   })
   const auditQuery = useQuery({
     queryKey: ['auth-audit'],
@@ -1107,12 +1232,12 @@ export function AccessRequestsPage(): React.JSX.Element {
     void qc.invalidateQueries({ queryKey: ['auth-audit'] })
   }
   function onError(e: unknown): void {
-    toast.error(apiErrorMessage(e))
+    toast.error(departmentErrorMessage(e, t))
   }
 
   const approveMut = useMutation({
-    mutationFn: ({ id, role, employeeId }: { id: number; role: Role; employeeId: string | null }) =>
-      api.approveAuthUser(id, role, employeeId),
+    mutationFn: ({ id, role, employeeId, departmentId }: { id: number; role: Role; employeeId: string | null; departmentId: number | null }) =>
+      api.approveAuthUser(id, role, employeeId, departmentId),
     onMutate: ({ id }) => setApprovingId(id),
     onSuccess: (u) => {
       toast.success(t('access.toast.approved', { name: displayName(u) }))
@@ -1255,6 +1380,12 @@ export function AccessRequestsPage(): React.JSX.Element {
           <TabButton active={tab === 'history'} count={null} label={t('access.tabs.history')} onClick={() => setTab('history')} />
           <TabButton active={tab === 'permission-requests'} count={null} label={t('access.permReq.tab')} onClick={() => setTab('permission-requests')} />
         </div>
+        {(tab === 'active' || tab === 'suspended') && departmentsQuery.isError && (
+          <p role="alert" className="mb-3 text-sm text-accent">
+            {departmentErrorMessage(departmentsQuery.error, t)}{' '}
+            <button type="button" className="underline" onClick={() => void departmentsQuery.refetch()}>{t('departmentAccess.retry')}</button>
+          </p>
+        )}
 
         {usersQuery.isPending && tab !== 'history' ? (
           <div className="space-y-3">
@@ -1281,8 +1412,8 @@ export function AccessRequestsPage(): React.JSX.Element {
                       key={req.id}
                       req={req}
                       approving={approvingId === req.id}
-                      onApprove={(role, employeeId) =>
-                        approveMut.mutate({ id: req.id, role, employeeId })
+                      onApprove={(role, employeeId, departmentId) =>
+                        approveMut.mutate({ id: req.id, role, employeeId, departmentId })
                       }
                       onReject={() => setRejectTarget(req)}
                     />
@@ -1293,12 +1424,14 @@ export function AccessRequestsPage(): React.JSX.Element {
             {tab === 'active' && (
               <UsersTable
                 users={active}
+                departments={departmentsQuery.data}
                 emptyMessage={t('access.active.empty')}
                 currentUserId={user?.id}
                 busyUserId={busyUserId}
                 onReset={setResetTarget}
                 onChangeRole={setRoleTarget}
                 onLinkEmployee={setLinkTarget}
+                onEditDepartments={canManageDepartments ? setMembershipTarget : undefined}
                 onEditPermissions={(target) => navigate(`/permissions?user=${target.id}`)}
                 onSetDefaultManager={(u, enabled) => defaultManagerMut.mutate({ id: u.id, enabled })}
                 onDisable={setDisableTarget}
@@ -1309,11 +1442,13 @@ export function AccessRequestsPage(): React.JSX.Element {
             {tab === 'suspended' && (
               <UsersTable
                 users={suspended}
+                departments={departmentsQuery.data}
                 emptyMessage={t('access.active.suspendedEmpty')}
                 currentUserId={user?.id}
                 busyUserId={busyUserId}
                 onReset={setResetTarget}
                 onChangeRole={setRoleTarget}
+                onEditDepartments={canManageDepartments ? setMembershipTarget : undefined}
                 onSetDefaultManager={(u, enabled) => defaultManagerMut.mutate({ id: u.id, enabled })}
                 onDisable={setDisableTarget}
                 onUnlock={(u) => unlockMut.mutate(u.id)}
@@ -1336,6 +1471,11 @@ export function AccessRequestsPage(): React.JSX.Element {
         )}
       </div>
 
+      {membershipTarget && canManageDepartments && (
+        <Modal title={t('departmentAccess.editMemberships')} onClose={() => setMembershipTarget(null)}>
+          <DepartmentMembershipEditor user={membershipTarget} onCancel={() => setMembershipTarget(null)} onSaved={() => setMembershipTarget(null)} />
+        </Modal>
+      )}
       {rejectTarget && (
         <RejectModalView
           target={rejectTarget}

@@ -12,6 +12,7 @@ from app.db.models import Employee, TimesheetDesignation, User
 from app.db.session import get_db
 from app.schemas.org_tree import OrgNode, OrgSupervisorUpdate
 from app.services import org_tree_service as svc
+from app.services.department_scope_service import narrow_department_scope, resolve_department_scope
 
 router = APIRouter(prefix="/org-tree", tags=["org-tree"])
 
@@ -30,8 +31,12 @@ def _node(employee: Employee, designation: TimesheetDesignation | None = None) -
 def list_nodes(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("employees.view"))],
+    department_id: int | None = None,
 ) -> list[OrgNode]:
-    return [_node(employee, designation) for employee, designation in svc.list_nodes(db)]
+    scope = narrow_department_scope(db, resolve_department_scope(db, _user), department_id)
+    return [
+        _node(employee, designation) for employee, designation in svc.list_nodes(db, scope=scope)
+    ]
 
 
 @router.patch("/{employee_id}/supervisor", response_model=OrgNode)
@@ -46,5 +51,6 @@ def set_supervisor(
         employee_id=employee_id,
         supervisor_id=payload.supervisor_id,
         actor=user,
+        scope=resolve_department_scope(db, user),
     )
     return _node(row, svc.get_current_designation(db, row.id))

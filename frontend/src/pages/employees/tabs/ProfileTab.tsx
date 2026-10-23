@@ -14,13 +14,15 @@ import { toast } from 'sonner'
 import { IdentityDocCard } from '@/components/employees/IdentityDocCard'
 import { SignaturePad } from '@/components/employees/SignaturePad'
 import { PassportField } from './PassportField'
-import { api, apiErrorMessage } from '@/lib/api'
+import { api } from '@/lib/api'
+import { departmentErrorMessage } from '@/lib/departments'
 import type { EmployeeRead, EmployeeUpdate } from '@/lib/api'
 import { pickPosition } from '@/lib/employeePosition'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { TransferEmployeeDialog } from '../TransferEmployeeDialog'
+import { DepartmentPicker } from '@/components/departments/DepartmentPicker'
 
 // ── Module-level constants ───────────────────────────────────────────────────
 
@@ -106,7 +108,11 @@ function getFieldValue(
     case 'position':
       return pickPosition(employee, language)
     case 'department':
-      return employee.department
+      return employee.department_id != null
+        ? (language.startsWith('ar')
+          ? employee.department_name_ar || employee.department_name_en
+          : employee.department_name_en || employee.department_name_ar)
+        : employee.department
     case 'duty_unit':
       return employee.duty_unit
     case 'duty_post':
@@ -136,6 +142,8 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [value, setValue] = useState('')
+  const [departmentId, setDepartmentId] = useState<number | null>(null)
+  const isDepartment = field === 'department'
   const inputRef = useRef<HTMLInputElement>(null)
   const isDate = DATE_FIELDS.has(field)
   const isMono = MONO_FIELDS.has(field)
@@ -146,7 +154,12 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
 
   const save = useMutation({
     mutationFn: () =>
-      api.updateEmployee(employeeId, { [field]: value.trim() } as EmployeeUpdate),
+      api.updateEmployee(
+        employeeId,
+        isDepartment
+          ? { department_id: departmentId }
+          : ({ [field]: value.trim() } as EmployeeUpdate),
+      ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employee-detail', employeeId] })
       void qc.invalidateQueries({ queryKey: ['employees'] })
@@ -154,11 +167,11 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
       onDone()
     },
     onError: (err) => {
-      toast.error(apiErrorMessage(err))
+      toast.error(departmentErrorMessage(err, t))
     },
   })
 
-  const canSave = value.trim().length > 0 && !save.isPending
+  const canSave = (isDepartment ? departmentId != null : value.trim().length > 0) && !save.isPending
 
   return (
     <form
@@ -168,18 +181,31 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
         if (canSave) save.mutate()
       }}
     >
-      <input
-        ref={inputRef}
-        type={isDate ? 'date' : 'text'}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') onDone()
-        }}
-        dir={isDate || isMono ? 'ltr' : undefined}
-        className="h-8 min-w-0 flex-1 basis-36 rounded-md border border-amber-300 bg-surface px-2 text-start text-[0.9em] text-foreground outline-none focus:ring-2 focus:ring-amber-400"
-        aria-label={t(`employee.field.${field}`)}
-      />
+      {isDepartment ? (
+        <div className="min-w-0 flex-1 basis-36">
+          <DepartmentPicker
+            id={`profile-department-${employeeId}`}
+            label={t('employee.field.department')}
+            value={departmentId}
+            onChange={setDepartmentId}
+            allowNone={false}
+            disabled={save.isPending}
+          />
+        </div>
+      ) : (
+        <input
+          ref={inputRef}
+          type={isDate ? 'date' : 'text'}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') onDone()
+          }}
+          dir={isDate || isMono ? 'ltr' : undefined}
+          className="h-8 min-w-0 flex-1 basis-36 rounded-md border border-amber-300 bg-surface px-2 text-start text-[0.9em] text-foreground outline-none focus:ring-2 focus:ring-amber-400"
+          aria-label={t(`employee.field.${field}`)}
+        />
+      )}
       <button
         type="submit"
         disabled={!canSave}
@@ -397,6 +423,7 @@ export function ProfileTab({
   }
 
   const missingSet = new Set(missing)
+  if (employee.department_id != null) missingSet.delete('department')
   const uaeExpiryDays = nearExpiryDays(employee.uae_id_expiry)
 
   const transferFooter = canEdit && has('documents.duty_transfer') ? (

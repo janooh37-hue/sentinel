@@ -9,9 +9,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_capability
 from app.api.errors import ValidationFailedError
 from app.core.extraction.ocr import InvalidImageError
-from app.db.models import DocumentExtraction, Employee
+from app.db.models import DocumentExtraction, Employee, User
 from app.db.session import get_db
 from app.schemas.extraction import ExtractedFieldOut, ExtractionResponse
+from app.services.department_scope_service import (
+    employee_visibility_clause,
+    resolve_department_scope,
+)
 from app.services.document_reader import read_document
 from app.services.extraction_service import run_pipeline
 from app.services.vault_service import MAX_UPLOAD_BYTES
@@ -22,7 +26,7 @@ router = APIRouter(prefix="/extractions", tags=["extractions"])
 @router.post("", response_model=ExtractionResponse)
 def create_extraction(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[object, Depends(require_capability("documents.scan"))],
+    user: Annotated[User, Depends(require_capability("documents.scan"))],
     file: Annotated[UploadFile, File()],
 ) -> ExtractionResponse:
     raw = file.file.read(MAX_UPLOAD_BYTES + 1)
@@ -39,7 +43,11 @@ def create_extraction(
     if read.text_source == "unavailable":
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, read.unavailable_reason)
 
-    employees = list(db.execute(select(Employee)).scalars())
+    stmt = select(Employee)
+    visibility = employee_visibility_clause(resolve_department_scope(db, user))
+    if visibility is not None:
+        stmt = stmt.where(visibility)
+    employees = list(db.scalars(stmt))
     result = run_pipeline(ocr_text=read.text, employees=employees)
     ex = result.extraction
 

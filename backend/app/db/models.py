@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import datetime as dt
 from datetime import UTC, date, datetime
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from sqlalchemy import (
     JSON,
@@ -45,6 +45,9 @@ from sqlalchemy.orm import Mapped, foreign, mapped_column, query_expression, rel
 
 from app.db.base import Base
 
+if TYPE_CHECKING:
+    from app.services.department_scope_service import DepartmentScope
+
 # Single-row sequence is keyed by this constant so callers don't sprinkle
 # magic ``1`` literals through the codebase.
 REF_SEQUENCE_ID: Final[int] = 1
@@ -53,6 +56,71 @@ REF_SEQUENCE_ID: Final[int] = 1
 def _utcnow() -> datetime:
     """Naive UTC timestamp — matches the rest of the v3 data (no tz info)."""
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+class Department(Base):
+    __tablename__ = "departments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name_en: Mapped[str] = mapped_column(String(128))
+    name_ar: Mapped[str] = mapped_column(String(128))
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("departments.id", ondelete="RESTRICT"), nullable=True
+    )
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("1"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("parent_id", "name_en", name="uq_departments_parent_name_en"),
+        UniqueConstraint("parent_id", "name_ar", name="uq_departments_parent_name_ar"),
+        Index(
+            "uq_departments_root_name_en",
+            "name_en",
+            unique=True,
+            sqlite_where=text("parent_id IS NULL"),
+        ),
+        Index(
+            "uq_departments_root_name_ar",
+            "name_ar",
+            unique=True,
+            sqlite_where=text("parent_id IS NULL"),
+        ),
+    )
+
+
+class DepartmentMember(Base):
+    __tablename__ = "department_members"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    department_id: Mapped[int] = mapped_column(ForeignKey("departments.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(8))
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("department_id", "user_id", name="uq_department_members_user"),
+        CheckConstraint("role IN ('head', 'deputy', 'member')", name="ck_department_members_role"),
+        Index(
+            "uq_department_members_primary",
+            "user_id",
+            unique=True,
+            sqlite_where=text("is_primary = 1"),
+        ),
+    )
+
+
+class DepartmentService(Base):
+    __tablename__ = "department_services"
+
+    department_id: Mapped[int] = mapped_column(
+        ForeignKey("departments.id", ondelete="CASCADE"), primary_key=True
+    )
+    service_id: Mapped[str] = mapped_column(String, primary_key=True)
 
 
 class Employee(Base):
@@ -78,6 +146,13 @@ class Employee(Base):
     # employee on this date. NULL = open-ended transfer.
     transfer_return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     department: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Integrity is validated app-side: SQLite cannot add an FK without rebuilding this table.
+    department_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    department_record: Mapped[Department | None] = relationship(
+        primaryjoin=lambda: foreign(Employee.department_id) == Department.id,
+        viewonly=True,
+        lazy="joined",
+    )
     position: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # Deliberately not a ForeignKey: adding the constraint would force a full
@@ -113,6 +188,14 @@ class Employee(Base):
     documents: Mapped[list[Document]] = relationship(
         back_populates="employee", cascade="all, delete-orphan"
     )
+
+    @property
+    def department_name_en(self) -> str | None:
+        return self.department_record.name_en if self.department_record else None
+
+    @property
+    def department_name_ar(self) -> str | None:
+        return self.department_record.name_ar if self.department_record else None
 
     __table_args__ = (
         Index("ix_employees_status", "status"),
@@ -1850,6 +1933,7 @@ class User(Base):
     # The attribute is populated lazily by perm_service.effective_caps.
     __allow_unmapped__ = True
     _effective_caps_cache: frozenset[str] | None
+    _department_scope_cache: DepartmentScope | None
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(256), nullable=False)  # stored lowercased

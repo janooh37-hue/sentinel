@@ -199,6 +199,19 @@ export type EmployeeUpdate = components['schemas']['EmployeeUpdate'] & {
 }
 export type EmployeeStatus = EmployeeRead['status']
 
+export type DepartmentRead = components['schemas']['DepartmentRead']
+export type DepartmentCreate = components['schemas']['DepartmentCreate']
+export type DepartmentUpdate = components['schemas']['DepartmentUpdate']
+export type DepartmentMemberRead = components['schemas']['DepartmentMemberRead']
+export type DepartmentServiceOption = components['schemas']['DepartmentServiceOption']
+export type DepartmentServicesUpdate = components['schemas']['DepartmentServicesUpdate']
+export type DepartmentMembership = components['schemas']['DepartmentMembership']
+export type DepartmentMembershipsUpdate = components['schemas']['DepartmentMembershipsUpdate']
+export type UserDepartmentRead = components['schemas']['UserDepartmentRead']
+export type UnassignedEmployeeGroup = components['schemas']['UnassignedEmployeeGroup']
+export type DepartmentAssignEmployees = components['schemas']['DepartmentAssignEmployees']
+export type DepartmentAssignmentResult = components['schemas']['DepartmentAssignmentResult']
+
 // Unified outbound log read type (covers WhatsApp + SMS); used for the book/employee Messages surface.
 export type NotifyMessageRead = components['schemas']['NotifyMessageRead']
 export type EmployeeDetailRead = components['schemas']['EmployeeDetailRead']
@@ -445,6 +458,7 @@ export interface SessionUser {
   name_ar: string | null
   position: string | null
   department: string | null
+  departments?: UserDepartmentRead[]
   photo_url: string | null
   role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
   status: 'pending' | 'active' | 'locked' | 'disabled'
@@ -472,6 +486,7 @@ export interface AdminUserRead {
   employee_id: string | null
   display_name: string | null
   name_en: string | null
+  departments?: UserDepartmentRead[]
   role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
   status: 'pending' | 'active' | 'locked' | 'disabled' | 'rejected'
   failed_attempts: number
@@ -489,6 +504,7 @@ export interface AdminUserCreateRequest {
   email: string
   employee_id: string | null
   display_name?: string | null
+  department_id?: number | null
   role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
 }
 
@@ -1373,6 +1389,27 @@ function qs(params: Record<string, unknown>): string {
 export const api = {
   // --- system ---
   health: () => request<HealthResponse>('GET', '/system/health'),
+
+  departments: {
+    list: () => request<DepartmentRead[]>('GET', '/departments'),
+    create: (body: DepartmentCreate) =>
+      request<DepartmentRead>('POST', '/departments', body),
+    update: (id: number, body: DepartmentUpdate) =>
+      request<DepartmentRead>('PATCH', `/departments/${id}`, body),
+    delete: (id: number) => request<void>('DELETE', `/departments/${id}`),
+    members: (id: number) =>
+      request<DepartmentMemberRead[]>('GET', `/departments/${id}/members`),
+    serviceOptions: () =>
+      request<DepartmentServiceOption[]>('GET', '/departments/service-options'),
+    setServices: (id: number, body: DepartmentServicesUpdate) =>
+      request<DepartmentRead>('PUT', `/departments/${id}/services`, body),
+    setMemberships: (userId: number, body: DepartmentMembershipsUpdate) =>
+      request<UserDepartmentRead[]>('PUT', `/departments/memberships/${userId}`, body),
+    unassignedEmployees: () =>
+      request<UnassignedEmployeeGroup[]>('GET', '/departments/unassigned-employees'),
+    assignEmployees: (body: DepartmentAssignEmployees) =>
+      request<DepartmentAssignmentResult>('POST', '/departments/assign-employees', body),
+  },
 
   // --- employees ---
   listEmployees: (params: ListEmployeesParams = {}) =>
@@ -2764,8 +2801,17 @@ export const api = {
    * it is never retained or shown again after this call returns. */
   createAuthUser: (body: AdminUserCreateRequest) =>
     request<AdminUserCreateResult>('POST', '/auth/users', body),
-  approveAuthUser: (id: number, role: string, employee_id: string | null) =>
-    request<AdminUserRead>('POST', `/auth/users/${id}/approve`, { role, employee_id }),
+  approveAuthUser: (
+    id: number,
+    role: string,
+    employee_id: string | null,
+    department_id?: number | null,
+  ) =>
+    request<AdminUserRead>('POST', `/auth/users/${id}/approve`, {
+      role,
+      employee_id,
+      ...(department_id === undefined ? {} : { department_id }),
+    }),
   rejectAuthUser: (id: number, reason?: string | null) =>
     request<AdminUserRead>('POST', `/auth/users/${id}/reject`, { reason }),
   resetAuthPassword: (id: number, password: string) =>

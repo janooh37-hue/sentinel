@@ -23,7 +23,8 @@ import { EmployeeSearchHero } from '@/components/employees/EmployeeSearchHero'
 import { EmployeesSectionTabs } from '@/components/employees/EmployeesSectionTabs'
 import { LookupHeroCards } from '@/components/employees/LookupHeroCards'
 import type { EmployeeFormOutput } from '@/components/employees/schema'
-import { ApiError, api, apiErrorMessage } from '@/lib/api'
+import { api } from '@/lib/api'
+import { departmentErrorMessage } from '@/lib/departments'
 import type { EmployeeCreate } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
@@ -87,8 +88,9 @@ export function EmployeeLookupPage(): React.JSX.Element {
       navigate(`/employees/${encodeURIComponent(row.id)}`, { replace: true })
     },
     onError: (err) => {
-      setCreateError(humanError(err))
-      toast.error(apiErrorMessage(err))
+      const message = departmentErrorMessage(err, t)
+      setCreateError(message)
+      toast.error(message)
     },
   })
 
@@ -167,12 +169,3 @@ export function EmployeeLookupPage(): React.JSX.Element {
   )
 }
 
-function humanError(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.code === 'EMPLOYEE_INVALID_STATUS_END_DATE') {
-      return err.message
-    }
-    return `${err.code}: ${err.message}`
-  }
-  return err instanceof Error ? err.message : String(err)
-}

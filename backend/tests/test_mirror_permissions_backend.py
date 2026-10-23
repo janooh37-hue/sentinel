@@ -906,7 +906,6 @@ def test_assignment_access_bypasses_type_denials_and_retains_decided_revision(
     counts = notification_service.relevant_counts(
         mirror_api.db,
         manager,
-        precomputed_leaves=0,
     )
     assert counts.approvals == 2
 
