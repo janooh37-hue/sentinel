@@ -12,7 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from '@/lib/toast'
 
-import { api, ApiError, type BookRead } from '@/lib/api'
+import { api, apiErrorMessage, type BookRead } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 
 export type AgeGroup = 'overMonth' | 'weeks' | 'recent'
@@ -96,14 +96,14 @@ export function useFileSignedCopy(): {
     // the record in the toast without a second lookup.
     mutationFn: ({ bookId, f }: { bookId: number; ref: string; f: File }) =>
       api.addBookAttachment(bookId, f, true),
-    onMutate: ({ bookId }) => { toast.loading(t('scanBack.filing'), { id: `scan-back-file-${bookId}` }) },
-    onSuccess: (_data: unknown, vars: { bookId: number; ref: string; f: File }) => {
+    onMutate: () => toast.loading(t('scanBack.filing')),
+    onSuccess: (_data, vars, toastId) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
-      toast.success(t('scanBack.filed'), { id: `scan-back-file-${vars.bookId}`, reference: vars.ref })
+      toast.success(t('scanBack.filed'), { id: toastId, reference: vars.ref })
     },
-    onError: (e: unknown, vars) =>
-      toast.error(e instanceof ApiError ? e.message : t('scanBack.uploadError'), { id: `scan-back-file-${vars.bookId}` }),
+    onError: (e: unknown, vars, toastId) =>
+      toast.error(apiErrorMessage(e), { id: toastId, reference: vars.ref }),
   })
 
   return {
@@ -138,12 +138,21 @@ export function useScanBackUpload(): {
       if (result.outcome === 'filed') {
         void qc.invalidateQueries({ queryKey: ['books'] })
         void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
-        toast.success(t('scanBack.autoFiled'), { id: toastId, reference: result.ref_number })
+        toast.success(t('scanBack.autoFiled'), {
+          id: toastId,
+          reference: result.ref_number,
+          duration: 8000,
+          action: {
+            label: t('books.pane.openRecord'),
+            onClick: () => navigate(`/books/${result.book_id}`),
+          },
+        })
       } else {
         void qc.invalidateQueries({ queryKey: ['scan-inbox'] })
         toast.info(t('scanBack.parked'), {
           id: toastId,
           reference: result.ref_number,
+          duration: 8000,
           action: {
             label: t('scanBack.viewInbox'),
             onClick: () => navigate('/scan-inbox'),
@@ -151,8 +160,8 @@ export function useScanBackUpload(): {
         })
       }
     },
-    onError: (e: unknown, _file, toastId) =>
-      toast.error(e instanceof ApiError ? e.message : t('scanBack.uploadError'), { id: toastId }),
+    onError: (e: unknown, file, toastId) =>
+      toast.error(apiErrorMessage(e), { id: toastId, description: file.name }),
   })
 
   return {

@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
+import type * as Router from 'react-router-dom'
 import { toast } from '@/lib/toast'
 
 import { ageDays, ageGroup, useFileSignedCopy, useScanBack, useScanBackUpload } from './useScanBack'
@@ -10,6 +11,11 @@ import * as apiMod from '@/lib/api'
 
 
 const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
+const navigate = vi.hoisted(() => vi.fn())
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal<typeof Router>()),
+  useNavigate: () => navigate,
+}))
 
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
@@ -18,7 +24,7 @@ vi.mock('@/lib/useCapabilities', () => ({
 }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }))
 vi.mock('@/lib/toast', () => ({
-  toast: { success: vi.fn(), info: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'upload-toast') },
+  toast: { success: vi.fn(), info: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'upload-toast'), dismiss: vi.fn() },
 }))
 
 function wrapperFor(qc: QueryClient) {
@@ -92,8 +98,8 @@ describe('useFileSignedCopy', () => {
     vi.spyOn(apiMod.api, 'addBookAttachment').mockResolvedValue({} as apiMod.BookRead)
     const { result } = renderHook(() => useFileSignedCopy(), { wrapper: wrapperFor(qc) })
     await result.current.file(1, 'GS-0410', new File([], 'x.pdf'))
-    expect(toast.loading).toHaveBeenCalledWith('scanBack.filing', { id: 'scan-back-file-1' })
-    expect(toast.success).toHaveBeenCalledWith('scanBack.filed', { id: 'scan-back-file-1', reference: 'GS-0410' })
+    expect(toast.loading).toHaveBeenCalledWith('scanBack.filing')
+    expect(toast.success).toHaveBeenCalledWith('scanBack.filed', { id: 'upload-toast', reference: 'GS-0410' })
   })
 
   it('resolves (never rejects) on a failed upload, and toasts the error exactly once', async () => {
@@ -109,8 +115,8 @@ describe('useFileSignedCopy', () => {
     ).resolves.toBeUndefined()
 
     expect(toast.error).toHaveBeenCalledTimes(1)
-    expect(toast.loading).toHaveBeenCalledWith('scanBack.filing', { id: 'scan-back-file-1' })
-    expect(toast.error).toHaveBeenCalledWith('scanBack.uploadError', { id: 'scan-back-file-1' })
+    expect(toast.loading).toHaveBeenCalledWith('scanBack.filing')
+    expect(toast.error).toHaveBeenCalledWith('Error: boom', { id: 'upload-toast', reference: 'GS-0410' })
     expect(toast.success).not.toHaveBeenCalled()
   })
 
@@ -121,15 +127,30 @@ describe('useFileSignedCopy', () => {
     )
     const { result } = renderHook(() => useFileSignedCopy(), { wrapper: wrapperFor(qc) })
     await result.current.file(1, 'GS-0410', new File([], 'x.pdf'))
-    expect(toast.error).toHaveBeenCalledWith('Reference barcode does not match', { id: 'scan-back-file-1' })
+    expect(toast.error).toHaveBeenCalledWith('Reference barcode does not match', { id: 'upload-toast', reference: 'GS-0410' })
   })
 
-  it('uses the localized fallback for an unstructured error', async () => {
+  it('surfaces an unstructured error with the record reference', async () => {
     const qc = new QueryClient()
     vi.spyOn(apiMod.api, 'addBookAttachment').mockRejectedValue(new Error('boom'))
     const { result } = renderHook(() => useFileSignedCopy(), { wrapper: wrapperFor(qc) })
     await result.current.file(1, 'GS-0410', new File([], 'x.pdf'))
-    expect(toast.error).toHaveBeenCalledWith('scanBack.uploadError', { id: 'scan-back-file-1' })
+    expect(toast.error).toHaveBeenCalledWith('Error: boom', { id: 'upload-toast', reference: 'GS-0410' })
+  })
+
+  it('keeps concurrent filing jobs on their own returned toast ids', async () => {
+    const qc = new QueryClient()
+    vi.mocked(toast.loading).mockReturnValueOnce('first').mockReturnValueOnce('second')
+    vi.spyOn(apiMod.api, 'addBookAttachment').mockResolvedValue({} as apiMod.BookRead)
+    const { result } = renderHook(() => useFileSignedCopy(), { wrapper: wrapperFor(qc) })
+    await act(async () => {
+      await Promise.all([
+        result.current.file(1, 'GS-0410', new File([], 'a.pdf')),
+        result.current.file(1, 'GS-0410', new File([], 'b.pdf')),
+      ])
+    })
+    expect(toast.success).toHaveBeenCalledWith('scanBack.filed', { id: 'first', reference: 'GS-0410' })
+    expect(toast.success).toHaveBeenCalledWith('scanBack.filed', { id: 'second', reference: 'GS-0410' })
   })
 })
 
@@ -139,7 +160,7 @@ describe('scan upload failures', () => {
     vi.spyOn(apiMod.api, 'scanBack').mockRejectedValue(new Error('failed'))
     const { result } = renderHook(() => useScanBackUpload(), { wrapper: wrapperFor(qc) })
     act(() => result.current.upload(new File([], 'x.pdf')))
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('scanBack.uploadError', { id: 'upload-toast' }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: failed', { id: 'upload-toast', description: 'x.pdf' }))
     expect(toast.loading).toHaveBeenCalledWith('scanBack.uploading')
   })
 })
@@ -156,7 +177,12 @@ describe('useScanBackUpload', () => {
     const { result } = renderHook(() => useScanBackUpload(), { wrapper: wrapperFor(qc) })
 
     act(() => result.current.upload(new File([], 'x.pdf')))
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('scanBack.autoFiled', { id: 'upload-toast', reference: '1/5/141' }))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('scanBack.autoFiled', {
+      id: 'upload-toast', reference: '1/5/141', duration: 8000,
+      action: { label: 'books.pane.openRecord', onClick: expect.any(Function) },
+    }))
+    vi.mocked(toast.success).mock.calls[0][1]!.action!.onClick()
+    expect(navigate).toHaveBeenCalledWith('/books/1')
     expect(toast.loading).toHaveBeenCalledWith('scanBack.uploading')
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] })
@@ -178,6 +204,7 @@ describe('useScanBackUpload', () => {
     expect(toast.info).toHaveBeenCalledWith('scanBack.parked', {
       id: 'upload-toast',
       reference: '1/5/141',
+      duration: 8000,
       action: { label: 'scanBack.viewInbox', onClick: expect.any(Function) },
     })
 
@@ -198,7 +225,7 @@ describe('useScanBackUpload', () => {
       result.current.upload(new File([], 'b.pdf'))
     })
     await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(2))
-    expect(toast.success).toHaveBeenCalledWith('scanBack.autoFiled', { id: 'first', reference: '1/5/141' })
-    expect(toast.success).toHaveBeenCalledWith('scanBack.autoFiled', { id: 'second', reference: '1/5/142' })
+    expect(toast.success).toHaveBeenCalledWith('scanBack.autoFiled', expect.objectContaining({ id: 'first', reference: '1/5/141' }))
+    expect(toast.success).toHaveBeenCalledWith('scanBack.autoFiled', expect.objectContaining({ id: 'second', reference: '1/5/142' }))
   })
 })

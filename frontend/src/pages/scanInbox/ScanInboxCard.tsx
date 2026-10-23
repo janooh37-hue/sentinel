@@ -14,7 +14,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import { ChevronDown, ChevronUp, ExternalLink, TriangleAlert } from 'lucide-react'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { ScanInboxItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { cn } from '@/lib/utils'
@@ -45,28 +45,64 @@ export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Elem
       : ''
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['scan-inbox'] })
-  const onErr = (e: unknown) =>
-    toast.error(e instanceof ApiError ? e.message : t('scanInbox.toast.error'))
+  const destination = item.proposed_route === 'book_attach'
+    ? { reference: item.proposed_ref ?? undefined }
+    : { description: empName }
+  const onErr = (e: unknown, id?: string | number) =>
+    toast.error(apiErrorMessage(e), { id, ...destination })
+  const undoAction = (target: typeof destination) => ({
+    label: t('scanInbox.actions.undo'),
+    onClick: async () => {
+      const id = toast.loading(t('common.saving'))
+      try {
+        await api.undoScanItem(item.id)
+        invalidate()
+        toast.dismiss(id)
+      } catch (err) {
+        toast.error(apiErrorMessage(err), { id, ...target })
+      }
+    },
+  })
 
   const confirm = useMutation({
     mutationFn: () => api.confirmScanItem(item.id),
-    onSuccess: () => { invalidate(); toast.success(t('scanInbox.toast.filed')) },
-    onError: onErr,
+    onMutate: () => toast.loading(t('common.saving')),
+    onSuccess: (_data, _vars, id) => {
+      invalidate()
+      toast.success(t('scanInbox.toast.filed'), { id, ...destination, action: undoAction(destination), duration: 8000 })
+    },
+    onError: (e, _vars, id) => onErr(e, id),
   })
   const dismiss = useMutation({
     mutationFn: () => api.dismissScanItem(item.id),
-    onSuccess: () => { invalidate(); toast.success(t('scanInbox.toast.dismissed')) },
-    onError: onErr,
+    onMutate: () => toast.loading(t('common.saving')),
+    onSuccess: (_data, _vars, id) => {
+      invalidate()
+      toast.success(t('scanInbox.toast.dismissed'), { id, action: undoAction(destination), duration: 8000 })
+    },
+    onError: (e, _vars, id) => onErr(e, id),
   })
   const undo = useMutation({
     mutationFn: () => api.undoScanItem(item.id),
-    onSuccess: () => { invalidate(); toast.success(t('scanInbox.toast.undone')) },
-    onError: onErr,
+    onMutate: () => toast.loading(t('common.saving')),
+    onSuccess: (_data, silent: boolean, id) => {
+      invalidate()
+      if (silent) toast.dismiss(id)
+      else toast.success(t('scanInbox.toast.undone'), { id, ...destination })
+    },
+    onError: (e, _vars, id) => onErr(e, id),
   })
   const chipRoute = useMutation({
-    mutationFn: (employeeId: string) => api.routeScanItem(item.id, { employee_id: employeeId }),
-    onSuccess: () => { invalidate(); toast.success(t('scanInbox.toast.filed')) },
-    onError: onErr,
+    mutationFn: ({ employeeId }: { employeeId: string; name: string }) =>
+      api.routeScanItem(item.id, { employee_id: employeeId }),
+    onMutate: () => toast.loading(t('common.saving')),
+    onSuccess: (_data, vars, id) => {
+      invalidate()
+      toast.success(t('scanInbox.toast.filed'), {
+        id, description: vars.name, action: undoAction({ description: vars.name }), duration: 8000,
+      })
+    },
+    onError: (e, vars, id) => toast.error(apiErrorMessage(e), { id, description: vars.name }),
   })
 
   const destLabel =
@@ -194,7 +230,10 @@ export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Elem
                 type="button"
                 dir="auto"
                 disabled={chipRoute.isPending}
-                onClick={() => chipRoute.mutate(c.employee_id)}
+                onClick={() => chipRoute.mutate({
+                  employeeId: c.employee_id,
+                  name: pickEmployeeName({ name_en: c.name_en, name_ar: c.name_ar }, i18n.language),
+                })}
                 className="rounded-full border border-primary/40 bg-primary-soft px-3 py-1 text-[0.8em] font-medium text-primary hover:bg-primary/10"
               >
                 {t('scanInbox.fileTo', { dest: pickEmployeeName({ name_en: c.name_en, name_ar: c.name_ar }, i18n.language) })}
@@ -217,7 +256,7 @@ export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Elem
                 <ExternalLink className="h-3 w-3" aria-hidden />
               </a>
             )}
-            <Button variant="outline" size="sm" onClick={() => undo.mutate()} disabled={undo.isPending}>
+            <Button variant="outline" size="sm" onClick={() => undo.mutate(false)} disabled={undo.isPending}>
               {t('scanInbox.actions.undo')}
             </Button>
             <Button
@@ -226,7 +265,7 @@ export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Elem
               disabled={undo.isPending}
               onClick={async () => {
                 try {
-                  await undo.mutateAsync()
+                  await undo.mutateAsync(true)
                   setMatchOpen(true)
                 } catch { /* toast already shown */ }
               }}

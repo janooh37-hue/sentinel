@@ -43,15 +43,17 @@ function Dropzone({
 
   async function runExtraction(file: File): Promise<void> {
     setScanning(true)
+    const id = toast.loading(t('books.pane.scanReading'))
     try {
       const result = await extractDocument(file)
       onExtracted(result)
+      toast.dismiss(id)
     } catch (err) {
       const message =
         err instanceof Error && err.message.includes('OCR is not available')
           ? t('extraction.dropzone.errorUnavailable')
           : t('extraction.dropzone.errorGeneric')
-      toast.error(message)
+      toast.error(message, { id })
     } finally {
       setScanning(false)
     }

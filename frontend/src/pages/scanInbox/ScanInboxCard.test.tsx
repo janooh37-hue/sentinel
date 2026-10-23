@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { ScanInboxCard } from './ScanInboxCard'
 import type { ScanInboxItem } from '../../lib/api'
 import * as apiMod from '../../lib/api'
+import { toast } from '@/lib/toast'
 
 const localeState = vi.hoisted(() => ({ language: 'en' }))
 
@@ -15,6 +16,11 @@ vi.mock('react-i18next', () => ({
     i18n: { language: localeState.language },
   }),
 }))
+// pdf.js needs DOMMatrix, which jsdom lacks; the preview is not under test here.
+vi.mock('./ScanPdfCanvas', () => ({ default: () => <div data-testid="pdf-canvas" /> }))
+vi.mock('@/lib/toast', () => ({ toast: {
+  loading: vi.fn(() => 'scan-job'), success: vi.fn(), error: vi.fn(), dismiss: vi.fn(),
+} }))
 
 function base(overrides: Partial<ScanInboxItem>): ScanInboxItem {
   return {
@@ -42,6 +48,7 @@ describe('ScanInboxCard', () => {
   beforeEach(() => {
     localeState.language = 'en'
     vi.restoreAllMocks()
+    vi.clearAllMocks()
     vi.spyOn(apiMod.api, 'scanDocumentUrl').mockReturnValue('/x')
   })
 
@@ -52,6 +59,9 @@ describe('ScanInboxCard', () => {
     }))
     fireEvent.click(screen.getByText(/scanInbox.fileTo:Ahmed Ali/))
     await waitFor(() => expect(route).toHaveBeenCalledWith(1, { employee_id: 'G1' }))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('scanInbox.toast.filed', expect.objectContaining({
+      id: 'scan-job', description: 'Ahmed Ali', duration: 8000,
+    })))
   })
 
   it('shows a destination deep-link for an auto-filed item', () => {
@@ -74,6 +84,8 @@ describe('ScanInboxCard', () => {
     fireEvent.click(screen.getByText('scanInbox.reMatch'))
     await waitFor(() => expect(undo).toHaveBeenCalledWith(1))
     await screen.findByPlaceholderText('scanInbox.match.searchPlaceholder')
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(toast.dismiss).toHaveBeenCalledWith('scan-job')
   })
 
   it('auto-expands an awaiting_confirmation item (preview visible without a click)', () => {
@@ -115,5 +127,38 @@ describe('ScanInboxCard', () => {
 
     expect(screen.getByText(/^scanInbox\.barcodeDateMismatch:/).textContent)
       .not.toMatch(/[\u200e\u200f]/)
+  })
+
+  it.each(['confirm', 'dismiss'])('keeps %s Undo usable after the card unmounts', async (operation) => {
+    const undo = vi.spyOn(apiMod.api, 'undoScanItem').mockResolvedValue({} as never)
+    vi.spyOn(apiMod.api, 'confirmScanItem').mockResolvedValue({} as never)
+    vi.spyOn(apiMod.api, 'dismissScanItem').mockResolvedValue({} as never)
+    const view = renderCard(base({
+      state: 'awaiting_confirmation', proposed_route: 'book_attach',
+      proposed_ref: 'GS-0410', proposed_book_id: 42, confidence_tier: 'confirm',
+    }))
+    fireEvent.click(screen.getByRole('button', {
+      name: operation === 'confirm' ? 'scanInbox.fileTo:GS-0410' : 'scanInbox.actions.dismiss',
+    }))
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+    const options = vi.mocked(toast.success).mock.calls[0][1]!
+    expect(options.duration).toBe(8000)
+    if (operation === 'confirm') expect(options.reference).toBe('GS-0410')
+    view.unmount()
+    await options.action!.onClick()
+    expect(undo).toHaveBeenCalledWith(1)
+    expect(toast.dismiss).toHaveBeenCalledWith('scan-job')
+  })
+
+  it('shows an Undo failure after the card unmounts', async () => {
+    vi.spyOn(apiMod.api, 'dismissScanItem').mockResolvedValue({} as never)
+    vi.spyOn(apiMod.api, 'undoScanItem').mockRejectedValue(new apiMod.ApiError(409, 'CONFLICT', 'Cannot undo'))
+    const view = renderCard(base({}))
+    fireEvent.click(screen.getByRole('button', { name: 'scanInbox.actions.dismiss' }))
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+    const action = vi.mocked(toast.success).mock.calls[0][1]!.action!
+    view.unmount()
+    await action.onClick()
+    expect(toast.error).toHaveBeenCalledWith('Cannot undo', expect.objectContaining({ id: 'scan-job' }))
   })
 })

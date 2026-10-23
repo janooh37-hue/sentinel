@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from '@/lib/toast'
 
-import { ApiError, api, type ExternalOut, type IntakeResponse, type ReturnedFormOut, type StagedAttachmentRead } from '@/lib/api'
+import { ApiError, api, apiErrorMessage, type ExternalOut, type IntakeResponse, type ReturnedFormOut, type StagedAttachmentRead } from '@/lib/api'
 import { SICK_ONLY_SLOT_KEY } from '@/components/application/attachmentsState'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { pickEmployeeName } from '@/lib/employeeName'
@@ -72,15 +72,17 @@ function Dropzone({ onResult }: DropzoneProps): React.JSX.Element {
 
   async function runIntake(file: File): Promise<void> {
     setScanning(true)
+    const id = toast.loading(t('books.pane.scanReading'))
     try {
       const result = await api.postIntake(file)
       onResult(file, result)
+      toast.dismiss(id)
     } catch (err) {
       const is503 = err instanceof ApiError && err.status === 503
       const message = is503
         ? t('intake.error.unavailable')
-        : t('intake.error.generic')
-      toast.error(message)
+        : err instanceof ApiError ? apiErrorMessage(err) : t('intake.error.generic')
+      toast.error(message, { id })
     } finally {
       setScanning(false)
     }
@@ -213,6 +215,7 @@ export function ReturnedFormCard({ result, file, onDismiss }: ReturnedFormCardPr
 
   async function run(asSigned: boolean): Promise<void> {
     setAttaching(true)
+    const id = toast.loading(t(asSigned ? 'scanBack.filing' : 'common.saving'))
     try {
       await api.addBookAttachment(result.book_id, file, asSigned)
       setAttached(true)
@@ -220,11 +223,13 @@ export function ReturnedFormCard({ result, file, onDismiss }: ReturnedFormCardPr
         asSigned
           ? t('intake.returnedForm.approved')
           : t('intake.returnedForm.attachedToast'),
-        { reference: result.ref_number },
+        { id, reference: result.ref_number },
       )
       void qc.invalidateQueries({ queryKey: ['books'] })
-    } catch {
-      toast.error(t('intake.error.generic'))
+    } catch (err) {
+      toast.error(err instanceof ApiError ? apiErrorMessage(err) : t('intake.error.generic'), {
+        id, reference: result.ref_number,
+      })
     } finally {
       setAttaching(false)
     }
