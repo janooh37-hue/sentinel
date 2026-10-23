@@ -13,7 +13,7 @@ import { toast } from '@/lib/toast'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 
-import { api, type RecipientCreate } from '@/lib/api'
+import { api, apiErrorMessage, type RecipientCreate } from '@/lib/api'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface RecipientManagerDialogProps {
@@ -48,7 +48,7 @@ export function RecipientManagerDialog({
       void qc.invalidateQueries({ queryKey: ['general-book', 'recipients'] })
       toast.success(isAr ? 'تم حذف المستلم' : 'Recipient deleted')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(apiErrorMessage(e)),
   })
 
   const [showAdd, setShowAdd] = useState(false)
@@ -64,7 +64,7 @@ export function RecipientManagerDialog({
       setNewName('')
       setNewNameAr('')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(apiErrorMessage(e)),
   })
 
   return (

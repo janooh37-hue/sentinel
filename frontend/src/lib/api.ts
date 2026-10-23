@@ -13,6 +13,8 @@
  *    only place we POST FormData).
  */
 
+import i18n from 'i18next'
+
 import type { components, paths } from './api.types'
 import type { ExtractedFieldOut } from './extraction'
 import type { LockLayout } from './useLockState'
@@ -1129,9 +1131,15 @@ export class ApiError extends Error {
 
 /** Human-readable message for any thrown value — the ApiError message when it is
  * one, else the stringified error. Replaces the `x instanceof ApiError ?
- * x.message : String(x)` idiom that was copy-pasted across the app. */
+ * x.message : String(x)` idiom that was copy-pasted across the app.
+ *
+ * A 403 is the one refusal every screen can explain the same way, so it reads as
+ * the localized permission message instead of the server's English detail
+ * ("Admin access required."). Call sites that need a code-specific 403 message
+ * check `err.code` before calling this. */
 export function apiErrorMessage(err: unknown): string {
-  return err instanceof ApiError ? err.message : String(err)
+  if (!(err instanceof ApiError)) return String(err)
+  return err.status === 403 ? i18n.t('common.forbiddenError') : err.message
 }
 
 const BASE = '/api/v1'

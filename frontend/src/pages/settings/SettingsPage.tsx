@@ -9,6 +9,7 @@ import { Loader2, Copy as CopyIcon, ArrowRight } from 'lucide-react'
 
 import {
   api,
+  apiErrorMessage,
   type AppSettingsRead,
   type AppSettingsUpdate,
   type SubmitterCreate,
@@ -361,7 +362,7 @@ function SubmittersSection(): React.JSX.Element {
       void qc.invalidateQueries({ queryKey: ['submitters'] })
       toast.success(t('settings.submitters.deletedToast'))
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(apiErrorMessage(e)),
   })
 
   const [showAdd, setShowAdd] = useState(false)
@@ -378,7 +379,7 @@ function SubmittersSection(): React.JSX.Element {
       setNewName('')
       setNewEmpId('')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(apiErrorMessage(e)),
   })
 
   return (
@@ -681,7 +682,7 @@ function AdvancedSection({
           : t('settings.advanced.adminGateOffToast'),
       )
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(apiErrorMessage(e)),
   })
 
   function copyPath(path: string): void {
@@ -790,7 +791,7 @@ export function SettingsPage(): React.JSX.Element {
       qc.setQueryData(['settings'], updated)
       toast.success(t('settings.savedToast'))
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(apiErrorMessage(e)),
   })
 
   const handleUpdate = (body: AppSettingsUpdate): void => {

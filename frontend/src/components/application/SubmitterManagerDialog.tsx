@@ -11,7 +11,7 @@ import { toast } from '@/lib/toast'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 
-import { api, type SubmitterCreate } from '@/lib/api'
+import { api, apiErrorMessage, type SubmitterCreate } from '@/lib/api'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface SubmitterManagerDialogProps {
@@ -46,7 +46,7 @@ export function SubmitterManagerDialog({
       void qc.invalidateQueries({ queryKey: ['submitters'] })
       toast.success(isAr ? 'تم حذف مقدم الطلب' : 'Submitter deleted')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(apiErrorMessage(e)),
   })
 
   const [showAdd, setShowAdd] = useState(false)
@@ -62,7 +62,7 @@ export function SubmitterManagerDialog({
       setNewName('')
       setNewEmpId('')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(apiErrorMessage(e)),
   })
 
   return (

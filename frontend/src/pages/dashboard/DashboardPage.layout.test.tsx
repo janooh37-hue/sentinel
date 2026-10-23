@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type * as ApiModule from '@/lib/api'
 import { api } from '@/lib/api'
 import { DEFAULT_LAYOUT } from '@/lib/dashboardLayout'
 import { DashboardPage } from './DashboardPage'
@@ -11,7 +12,8 @@ const authState = vi.hoisted(() => ({
   user: { id: 1 } as { id: number } | null,
 }))
 
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: {
     getDashboardSummary: vi.fn().mockResolvedValue({
       totals: {

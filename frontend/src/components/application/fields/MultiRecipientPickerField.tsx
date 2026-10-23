@@ -31,7 +31,7 @@ import { X } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { CapabilityGate } from '@/components/shell/CapabilityGate'
-import { api } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { RecipientRead } from '@/lib/api'
 import { RecipientManagerDialog } from '../RecipientManagerDialog'
 import type { FieldProps } from '../types'
@@ -82,7 +82,7 @@ export function MultiRecipientPickerField({
       toast.success(t('application.cc.addedToast'))
       return created
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(apiErrorMessage(e)),
   })
 
   const error = (errors[name] as { message?: string } | undefined)?.message

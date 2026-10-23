@@ -33,7 +33,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-import { api } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import { APPROVALS_LOG_PATH, approvalQueueUrl, defaultApprovalContext } from '@/lib/approvals'
 import type {
   DashboardLayout,
@@ -226,7 +226,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       }
       toast.success(isAr ? 'تم حفظ تخطيط لوحة التحكم' : 'Dashboard layout saved')
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(apiErrorMessage(err)),
   })
 
   const [widgetDialogOpen, setWidgetDialogOpen] = useState(false)
