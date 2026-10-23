@@ -184,7 +184,7 @@ export function WidgetControls({
       >
         <GripVertical aria-hidden className="size-3.5" />
       </button>
-      <h4 title={title} className="line-clamp-2 min-w-0 flex-1 break-words text-start text-[0.8125em] font-semibold leading-tight text-foreground">
+      <h4 title={title} className="line-clamp-3 min-w-0 flex-1 break-words text-start text-[0.8125em] font-semibold leading-tight text-foreground">
         {title}
       </h4>
       <DropdownMenu dir={i18n.dir()} modal={false}>
