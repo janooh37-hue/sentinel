@@ -1,16 +1,16 @@
-"""The request's people visibility; capabilities still gate each action."""
+"""People and Records visibility; capabilities still gate each action."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import SQLColumnExpression, or_, select
+from sqlalchemy import SQLColumnExpression, false, func, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.roles import ADMIN_ROLE
-from app.db.models import Department, DepartmentMember, Employee, User
+from app.db.models import Book, Department, DepartmentMember, Employee, User
 from app.services import perm_service, settings_service
 
 
@@ -30,14 +30,20 @@ def descendant_department_ids(db: Session, roots: frozenset[int]) -> frozenset[i
     return frozenset(db.scalars(select(tree.c.id)))
 
 
-def resolve_department_scope(db: Session, user: User) -> DepartmentScope:
+def resolve_department_scope(
+    db: Session, user: User, *, capabilities: set[str] | None = None
+) -> DepartmentScope:
     cached: DepartmentScope | None = getattr(user, "_department_scope_cache", None)
     if cached is not None:
         return cached
     organization = (
         not settings_service.get_department_scoping_enabled(db)
         or user.role == ADMIN_ROLE
-        or perm_service.has_capability(db, user, "departments.all")
+        or (
+            "departments.all" in capabilities
+            if capabilities is not None
+            else perm_service.has_capability(db, user, "departments.all")
+        )
     )
     ids: frozenset[int] = frozenset()
     if not organization:
@@ -67,6 +73,7 @@ def invalidate_department_scope(db: Session, user_id: int) -> None:
     user = db.get(User, user_id)
     if user is not None:
         user._department_scope_cache = None
+        user._effective_caps_cache = None
 
 
 def invalidate_all_department_scopes(db: Session) -> None:
@@ -106,4 +113,43 @@ def employee_in_scope(scope: DepartmentScope, employee: Employee) -> bool:
         scope.organization
         or employee.department_id in scope.department_ids
         or (scope.own_employee_id is not None and employee.id == scope.own_employee_id)
+    )
+
+
+def book_department_clause(scope: DepartmentScope, user: User) -> ColumnElement[bool] | None:
+    """The department gate only narrows ADR 0006; assignments remain revision-scoped."""
+    if scope.organization:
+        return None
+    from app.services import book_service
+
+    # A two-valued predicate also stays safe when document gates negate it.
+    return func.coalesce(
+        or_(
+            Book.created_by_user_id == user.id,
+            Book.submitted_by_user_id == user.id,
+            Book.department_id.in_(scope.department_ids),
+            book_service.active_recipient_clause(user.id),
+            book_service.assignment_access_clause(user.id),
+        ),
+        false(),
+    )
+
+
+def book_in_scope(db: Session, user: User, book: Book) -> bool:
+    """Object mirror of book_department_clause, including retained revision grants."""
+    from app.services import book_service
+
+    scope = resolve_department_scope(db, user)
+    return (
+        scope.organization
+        or book.created_by_user_id == user.id
+        or book.submitted_by_user_id == user.id
+        or book.department_id in scope.department_ids
+        or book_service.is_active_recipient(db, user.id, book.id)
+        or db.scalar(
+            select(Book.id).where(
+                Book.id == book.id, book_service.assignment_access_clause(user.id)
+            )
+        )
+        is not None
     )

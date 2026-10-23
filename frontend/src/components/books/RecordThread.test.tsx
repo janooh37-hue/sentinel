@@ -66,6 +66,7 @@ beforeEach(() => {
   auth.role = 'operator'
   auth.authenticated = true
   auth.denied.clear()
+  vi.spyOn(api.departments, 'list').mockResolvedValue([])
   vi.spyOn(api, 'getBookThread').mockResolvedValue([])
 })
 afterEach(cleanup)
@@ -353,7 +354,7 @@ describe('send with references', () => {
     await userEvent.click(references)
     await userEvent.click(screen.getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(send).toHaveBeenCalledWith(7, {
-      user_ids: [12], purpose: 'reply', note: null, make_directed: false, include_references: false,
+      user_ids: [12], department_ids: [], purpose: 'reply', note: null, make_directed: false, include_references: false,
     }))
     await waitFor(() => expect(toast.info).toHaveBeenCalledWith('Nothing new was sent', {
       description: expect.stringContaining('Reference deliveries: 1 sent, 2 skipped.'),
@@ -382,7 +383,7 @@ describe('send with references', () => {
     await userEvent.click(recipient)
     await userEvent.click(screen.getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(send).toHaveBeenCalledWith(7, {
-      user_ids: [12], purpose: 'info', note: null, make_directed: false, include_references: true,
+      user_ids: [12], department_ids: [], purpose: 'info', note: null, make_directed: false, include_references: true,
     }))
   })
 
@@ -402,7 +403,7 @@ describe('send with references', () => {
     await userEvent.click(recipient)
     await userEvent.click(screen.getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(send).toHaveBeenCalledWith(7, {
-      user_ids: [13], purpose: 'reply', note: null, make_directed: false, include_references: true,
+      user_ids: [13], department_ids: [], purpose: 'reply', note: null, make_directed: false, include_references: true,
     }))
   })
 })

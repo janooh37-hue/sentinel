@@ -36,7 +36,14 @@ from app.core.permissions import (
     default_caps_for_role,
 )
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
-from app.db.models import BookCategory, RolePermission, User, UserPermission
+from app.db.models import (
+    BookCategory,
+    DepartmentMember,
+    DepartmentService,
+    RolePermission,
+    User,
+    UserPermission,
+)
 
 
 def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
@@ -154,6 +161,26 @@ def effective_caps(db: Session, user: User) -> set[str]:
             # default) can never widen this role past its fixed scope. A deny
             # override still narrows it — it was already applied above.
             caps &= INMATE_REPORTER_CAPS
+        # Pass the unfiltered caps to avoid scope -> caps -> scope recursion.
+        from app.services.department_scope_service import resolve_department_scope
+
+        if not resolve_department_scope(db, user, capabilities=caps).organization:
+            allowed = set(
+                db.scalars(
+                    select(DepartmentService.service_id)
+                    .join(
+                        DepartmentMember,
+                        DepartmentMember.department_id == DepartmentService.department_id,
+                    )
+                    .where(DepartmentMember.user_id == user.id)
+                )
+            )
+            caps = {
+                cap
+                for cap in caps
+                if not cap.startswith(SERVICE_CAP_PREFIX)
+                or cap.removeprefix(SERVICE_CAP_PREFIX) in allowed
+            }
 
     user._effective_caps_cache = frozenset(caps)
     return caps

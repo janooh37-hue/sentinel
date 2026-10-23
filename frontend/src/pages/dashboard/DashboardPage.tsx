@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
@@ -34,6 +34,8 @@ import {
 } from 'lucide-react'
 
 import { api } from '@/lib/api'
+import { DepartmentPicker } from '@/components/departments/DepartmentPicker'
+import { departmentName } from '@/lib/departments'
 import { APPROVALS_LOG_PATH, approvalQueueUrl, defaultApprovalContext } from '@/lib/approvals'
 import type {
   DashboardLayout,
@@ -170,6 +172,9 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   const { user } = useAuth()
   const qc = useQueryClient()
   const navigate = useNavigate()
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null)
+  const isOrganizationScope = user?.department_scope_kind === 'organization'
+  const departmentId = isOrganizationScope ? selectedDepartmentId ?? undefined : undefined
 
   // Row-level deep-link helper for recent-activity sections. The destination
   // page reads `?open=<id>` and auto-opens that entry's detail surface (drawer
@@ -183,9 +188,12 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   )
 
   const summaryQuery = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: api.getDashboardSummary,
+    queryKey: ['dashboard', departmentId],
+    queryFn: () => api.getDashboardSummary(departmentId),
     staleTime: 60_000,
+    // Switching the department filter keeps the current numbers on screen
+    // until the narrowed summary arrives, instead of blanking the dashboard.
+    placeholderData: keepPreviousData,
   })
 
   const summary: DashboardSummary | undefined = summaryQuery.data
@@ -419,9 +427,9 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       case 'email_sync_status':
         return <EmailSyncStatusWidget summary={summary} />
       case 'expiring_soon':
-        return <ExpiringSoonWidget />
+        return <ExpiringSoonWidget departmentId={departmentId} />
       case 'pending_departures':
-        return <PendingDeparturesWidget />
+        return <PendingDeparturesWidget departmentId={departmentId} />
       case 'violation_months':
         return <ViolationMonthsWidget />
       case 'permits':
@@ -544,6 +552,9 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         {/* ============ HERO ============ */}
         <DashboardHero
           name={welcomeName}
+          scopeLabel={summary?.department_scope?.kind === 'department'
+            ? summary.department_scope.departments?.map((department) => departmentName(department, i18n.language)).join(isAr ? '، ' : ', ')
+            : summary?.department_scope?.kind === 'self' ? t('departmentScope.ownWork') : undefined}
           isAr={isAr}
           isLoading={summaryQuery.isPending}
           welcomeGuest={t('dashboard.welcomeBackGuest')}
@@ -556,13 +567,19 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
 
         {/* ============ MY WIDGETS HEADER ============ */}
         <div
-          className="anim-fade-up mb-3.5 flex items-center justify-between"
+          className="anim-fade-up mb-3.5 flex flex-wrap items-center justify-between gap-3"
           style={{ animationDelay: '60ms' }}
         >
           <h3 className="text-lg font-semibold tracking-tight text-foreground">
             {t('dashboard.myWidgets')}
           </h3>
-          <div className="flex items-center gap-2">
+          {isOrganizationScope && (
+            <div className="w-full min-w-0 sm:ms-auto sm:w-64">
+              <DepartmentPicker value={selectedDepartmentId} onChange={setSelectedDepartmentId}
+                label={t('departments.label')} noneLabel={t('departmentScope.allDepartments')} />
+            </div>
+          )}
+          <div className="ms-auto flex flex-wrap items-center gap-2">
             <RefreshButton />
             <button
               type="button"
@@ -722,6 +739,7 @@ interface HeroReturner {
 
 interface DashboardHeroProps {
   name: string | null
+  scopeLabel?: string
   isAr: boolean
   isLoading: boolean
   welcomeGuest: string
@@ -743,6 +761,7 @@ interface DashboardHeroProps {
  */
 function DashboardHero({
   name,
+  scopeLabel,
   isAr,
   isLoading,
   welcomeGuest,
@@ -822,6 +841,7 @@ function DashboardHero({
         <span className="text-[0.68em] font-medium uppercase tracking-[0.08em] text-white/60">
           {greeting}
         </span>
+        {scopeLabel && <p dir="auto" className="break-words text-sm text-white/85">{scopeLabel}</p>}
         {isLoading && !name ? (
           <Skeleton className="h-7 w-72 bg-white/20" />
         ) : (

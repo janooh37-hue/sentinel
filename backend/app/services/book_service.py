@@ -42,6 +42,7 @@ from app.db.models import (
     BookAnnotation,
     BookApprovalStep,
     BookCategory,
+    BookDepartmentSend,
     BookEditSession,
     BookFolderItem,
     BookRecipient,
@@ -387,6 +388,48 @@ def is_active_recipient(db: Session, user_id: int, book_id: int) -> bool:
     )
 
 
+def assignment_access_clause(user_id: int) -> ColumnElement[bool]:
+    """ADR 0002: retained revisions or a current pending approver/reviewer."""
+    newest = aliased(BookVersion)
+    current = ~exists(
+        select(newest.id)
+        .where(newest.book_id == Book.id, newest.version_no > BookVersion.version_no)
+        .correlate(Book, BookVersion)
+    )
+    retained = exists(
+        select(BookRevisionAccess.id)
+        .join(BookVersion, BookVersion.id == BookRevisionAccess.version_id)
+        .where(
+            BookVersion.book_id == Book.id,
+            BookRevisionAccess.user_id == user_id,
+            BookRevisionAccess.revoked_at.is_(None),
+        )
+        .correlate(Book)
+    )
+    pending = exists(
+        select(BookApprovalStep.id)
+        .join(BookVersion, BookVersion.id == BookApprovalStep.version_id)
+        .where(
+            BookVersion.book_id == Book.id,
+            Book.deleted_at.is_(None),
+            Book.voided_at.is_(None),
+            current,
+            BookApprovalStep.assignee_user_id == user_id,
+            BookApprovalStep.state == "pending",
+            BookApprovalStep.kind.in_(("approver", "reviewer")),
+        )
+        .correlate(Book)
+    )
+    return or_(retained, pending)
+
+
+def _require_department_access(db: Session, user: User, book: Book) -> None:
+    from app.services.department_scope_service import book_in_scope
+
+    if not book_in_scope(db, user, book):
+        raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
+
+
 def _confidentiality_clause(
     db: Session, user: User, type_ok: ColumnElement[bool]
 ) -> ColumnElement[bool]:
@@ -453,7 +496,14 @@ def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | Non
     type_ok = and_(*clauses) if clauses else None
     if user.role == ADMIN_ROLE:
         return type_ok
-    return _confidentiality_clause(db, user, type_ok if type_ok is not None else true())
+    from app.services.department_scope_service import (
+        book_department_clause,
+        resolve_department_scope,
+    )
+
+    level_ok = _confidentiality_clause(db, user, type_ok if type_ok is not None else true())
+    department = book_department_clause(resolve_department_scope(db, user), user)
+    return level_ok if department is None else and_(level_ok, department)
 
 
 def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | None:
@@ -528,6 +578,14 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
     if user.role == ADMIN_ROLE:
         return type_ok
     level_ok = _confidentiality_clause(db, user, true())
+    from app.services.department_scope_service import (
+        book_department_clause,
+        resolve_department_scope,
+    )
+
+    department = book_department_clause(resolve_department_scope(db, user), user)
+    if department is not None:
+        level_ok = and_(level_ok, department)
     owner_document = aliased(Document)
 
     def owning_book_matches(condition: ColumnElement[bool]) -> ColumnElement[bool]:
@@ -634,6 +692,7 @@ def resolve_book_read_access(
     version_id: int | None = None,
 ) -> BookReadAccess:
     """Resolve the exact readable revisions without granting record mutation authority."""
+    _require_department_access(db, user, book)
     if book.deleted_at is not None and not perm_service.has_capability(db, user, "users.manage"):
         raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
     versions = sorted(book.versions, key=lambda version: version.version_no)
@@ -728,6 +787,7 @@ def require_full_book_access(db: Session, user: User, row: Book, *, write: bool 
 
     Never satisfied by an assignment.
     """
+    _require_department_access(db, user, row)
     has_view = perm_service.has_capability(db, user, "books.view")
     record_type_error: AppError | None = None
     if has_view:
@@ -975,6 +1035,14 @@ def inbox_clause(user: User | None, inbox: InboxFilter) -> ColumnElement[bool]:
             BookRecipient.revoked_at.is_(None),
         )
         .correlate_except(BookRecipient)
+    ) | exists(
+        select(BookDepartmentSend.id)
+        .where(
+            BookDepartmentSend.book_id == Book.id,
+            BookDepartmentSend.sent_by_user_id == user.id,
+            BookDepartmentSend.revoked_at.is_(None),
+        )
+        .correlate_except(BookDepartmentSend)
     )
 
 

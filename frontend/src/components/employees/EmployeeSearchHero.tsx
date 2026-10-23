@@ -31,6 +31,8 @@ interface Props {
   onLeaveIds: ReadonlySet<string>
   /** Optional content rendered below the search column (Task 6 info-cards). */
   children?: React.ReactNode
+  departmentId?: number
+  filters?: React.ReactNode
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -39,6 +41,8 @@ export function EmployeeSearchHero({
   onCreate,
   onLeaveIds,
   children,
+  departmentId,
+  filters,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
@@ -48,8 +52,8 @@ export function EmployeeSearchHero({
 
   // Fetch roster — enabled only when there is a non-empty debounced query.
   const { data, isPending } = useQuery({
-    queryKey: ['employee-search', debounced],
-    queryFn: () => api.listEmployees({ q: debounced, limit: 30 }),
+    queryKey: ['employee-search', debounced, departmentId],
+    queryFn: () => api.listEmployees({ q: debounced, limit: 30, department_id: departmentId }),
     enabled: debounced.trim().length > 0,
     staleTime: 30_000,
   })
@@ -87,6 +91,7 @@ export function EmployeeSearchHero({
 
         {/* Subtitle */}
         <p className="text-[13.5px] opacity-75">{t('employees.lookup.subtitle')}</p>
+        {filters && <div className="mt-4 rounded-xl bg-surface p-3 text-start">{filters}</div>}
 
         {/* ── Search wrap — position:relative anchors the dropdown ─── */}
         <div className="relative mt-[22px] text-start">

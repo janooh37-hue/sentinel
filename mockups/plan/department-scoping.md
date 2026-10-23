@@ -36,8 +36,8 @@ administration work. A book can be sent directed to a department.
 - **A2.** After the switch, a user with no department sees only their own work
   and no services. The pre-flight report lists these users before the switch.
 - **A3.** Permits, item permits, vehicles, ledger email, timesheet and
-  Workforce keep today's rules. Workforce keeps its own scope; only its
-  department legs move to `department_id` in P5.
+  Workforce keep today's rules. Workforce keeps its own text-based scope;
+  P5 synchronizes employee labels from their Department's Arabic name.
 - **A4.** Personal, Secret and Directed Levels (ADR 0006) apply as they do now.
   A department send cannot carry a Personal record, and a Secret record reaches
   only cleared heads, deputies and members.
@@ -59,7 +59,7 @@ is expected to be `0110`). If #247's ADR number changed, renumber ADR 0007.
 | `departments` | `id`, `name_en`, `name_ar`, `parent_id` (self FK, nullable), `active`, `created_at` | Unique name per parent. A parent cannot be its own descendant |
 | `department_members` | `id`, `department_id`, `user_id`, `role` (`head`\|`deputy`\|`member`), `is_primary`, `created_at` | Unique (`department_id`, `user_id`). Partial unique index: one primary per user |
 | `department_services` | `department_id`, `service_id` | Empty means no services (D10) |
-| `employees.department_id` | FK, nullable | The free-text `department` stays read-only as a backfill hint until P5 |
+| `employees.department_id` | FK, nullable | The legacy `department` label is synchronized from `name_ar`; clearing the FK retains the hint |
 | `books.department_id` | FK, nullable | Stamped from the creator's primary department at creation |
 | `book_department_sends` | `id`, `book_id`, `department_id`, `parent_send_id`, `sent_by_user_id`, `purpose`, `note`, `created_at`, `revoked_at`, `revoked_by_user_id` | One active row per (book, department) |
 | `book_recipients.department_send_id` | FK, nullable | Links a hand-down to its department send |
@@ -196,7 +196,7 @@ verification in AR and EN, on desktop and mobile.
     beneath it.
   - A head can recall their own hand-downs.
 - **Levels**:
-  - A Personal record cannot be sent to a department (skip reason `personal`).
+  - A Personal record cannot be sent to a department (`409 PERSONAL_DEPARTMENT_SEND`).
   - For a Secret record, uncleared heads, deputies and members are skipped and
     reported (`not_cleared`).
 - **Push and notifications**:
@@ -212,16 +212,21 @@ verification in AR and EN, on desktop and mobile.
   - A sub-department chain works.
   - Recall cascades.
   - A deputy can distribute.
-  - Secret and Personal sends are skipped.
+  - Secret skips uncleared recipients; Personal department sends are refused.
 
-### P5: Cleanup
-- The department legs of `UserWorkforceScope` move from text to
-  `department_id`.
-- The free-text `employees.department` is dropped, along with its form hint
-  and filter.
-- `CONTEXT.md` implementation mappings are updated, along with
-  `docs/permissions-enforcement.md` (rerun
-  `backend/scripts/audit_capability_gates.py`) and the README access section.
+### P5: Cleanup — implemented label-sync decision
+- Keep `UserWorkforceScope` and staffing requirements text-based; do not rewrite
+  Workforce or drop `employees.department`. Existing attendance snapshots and
+  duty history remain historical facts.
+- Synchronize `employees.department` from the assigned Department's `name_ar`
+  on employee create/PATCH, bulk assignment and Arabic department rename.
+  `department_id` wins over conflicting input; clearing it preserves the
+  previous label as a read-only form hint and backfill filter.
+- The rollout data has Arabic names on 36/304 employees and no
+  `user_workforce_scopes` or `work_staffing_requirements` rows, so there are no
+  existing Workforce scope/requirement values to migrate. No P5 migration.
+- Update `CONTEXT.md` implementation mappings, `docs/permissions-enforcement.md`
+  (rerun `backend/scripts/audit_capability_gates.py`) and the README access section.
 
 ## Verify (every phase)
 - Narrowest `pytest` for the changed services and routes, plus
@@ -247,4 +252,49 @@ verification in AR and EN, on desktop and mobile.
 
 ## Evidence
 
-(append per phase)
+### 2026-10-23: user approval and sequencing
+- PR #247 merged (55addd37). This branch was rebased on `origin/main`, the
+  next migration is `0110`, and ADR 0007 is unique.
+- The user said "proceed" with assumptions A1–A4 as written.
+- P5 decision: retain `employees.department` as the Department's synchronized
+  Arabic label. Workforce matches it deeply (attendance snapshots, duty events,
+  staffing requirements and scopes), while existing scope/requirement tables are
+  empty. This keeps current Workforce rules without a schema rewrite.
+
+### P1 and P2 (commit e6957a7d)
+- **Backend**:
+  - Migration `0110_departments` adds the departments, members and services
+    tables and `employees.department_id`.
+  - `departments.manage` and `departments.all`, the `/departments` API,
+    `department_scope_service`, router-level object 404s, the switch with its
+    preflight, and scoped people routes. The route table is in the P2 backend
+    agent report.
+- **Frontend**: the Settings Departments panel, Access grouping with a
+  highlighted "No department" bucket and a membership editor, department
+  defaults on create and approve, and the employee department picker with the
+  previous-value hint.
+- **Tests**:
+  - `test_departments.py`, plus four `test_department_scope*.py` files.
+  - 75 passing for departments and scope. The affected regression batches pass.
+  - Fixture engine disposal was fixed for the Python 3.13 `ResourceWarning`.
+    The same warnings also fail on unchanged `origin/main`.
+- **Reviews**:
+  - `alembic-migration-reviewer`: clean.
+  - `i18n-rtl-reviewer`: two must-fix items, both fixed. Department error
+    codes are now mapped to AR/EN, and the `department_memberships` history
+    label was added.
+- **Smoke** on a local copy of the dev database (backend :8790, Vite :5181,
+  QA accounts):
+  - The UI creates departments, assigns the 64-employee duty-unit group, saves
+    a membership through the editor, and groups the Access list. The API
+    refuses `DEPARTMENT_CYCLE` and `DEPARTMENT_PRIMARY_REQUIRED`.
+  - Switch off: every persona sees 304 employees and 835 leaves.
+  - Switch on:
+    - admin: 304 employees.
+    - Operations head: 68 employees, including the Field Unit sub-department.
+    - Operations member: 67 employees, not the sub-department (A1).
+    - Finance member: 1 employee.
+    - User with no department: 1 employee (self).
+  - Out-of-scope `GET /employees/{id}` answers 404. Search for a Finance
+    G-number as an Operations member returns 0. The `department_id` filter
+    only narrows. Dashboard totals are scoped (67 for the Operations member).

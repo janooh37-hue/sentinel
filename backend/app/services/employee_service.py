@@ -40,7 +40,10 @@ from app.services.department_scope_service import (
     employee_visibility_clause,
     narrow_department_scope,
 )
-from app.services.department_service import require_active_department
+from app.services.department_service import (
+    require_active_department,
+    sync_employee_department_label,
+)
 from app.services.extraction_service import _MATCH_THRESHOLD, _name_scores
 
 LIST_MAX_LIMIT = 500
@@ -236,6 +239,7 @@ def create_employee(
         data["pending_status"] = target
         data["status"] = EMPLOYEE_STATUS_ACTIVE
     row = Employee(**data)
+    sync_employee_department_label(db, row)
     db.add(row)
     if target not in WORKING_STATUSES:
         history.record_status_event(
@@ -288,6 +292,9 @@ def update_employee(
     data: dict[str, Any] = payload.model_dump(exclude_unset=True)
     if payload.department_id is not None:
         require_active_department(db, payload.department_id)
+    elif "department_id" in data:
+        # Clearing the assignment keeps its last label as the backfill hint.
+        data.pop("department", None)
     effective_date_in: date | None = data.pop("effective_date", None)
 
     # A human-entered/confirmed passport number is provenance 'manual'.
@@ -484,6 +491,7 @@ def update_employee(
 
     for k, v in data.items():
         setattr(row, k, v)
+    sync_employee_department_label(db, row)
     if "duty_unit" in data:
         # A raw duty-unit edit changes only this row; the crew that actually
         # generates shifts is `WorkCrewMembership`, which never moved on its

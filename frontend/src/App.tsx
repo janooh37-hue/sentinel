@@ -21,6 +21,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 import { AuthProvider } from '@/lib/AuthProvider'
 import { useAuth } from '@/lib/authContext'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { AppLockContext } from '@/lib/appLockContext'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { DEFAULT_IDLE_LOCK_SECONDS, useLockState } from '@/lib/useLockState'
@@ -160,6 +161,34 @@ function DashboardRoute(): React.JSX.Element {
 function LedgerRoute(): React.JSX.Element {
   const navigatePage = useNavigatePage()
   return <LedgerPage onNavigate={navigatePage} />
+}
+
+function ServicesRoute(): React.JSX.Element {
+  const { t } = useTranslation()
+  const { user } = useAuth()
+  const { capabilities, isLoading } = useCapabilities()
+  const scope = user?.department_scope_kind
+  if (
+    !isLoading &&
+    (scope === 'department' || scope === 'self') &&
+    ![...capabilities].some((capability) => capability.startsWith('books.service.'))
+  ) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-background p-8 text-center">
+        <h2 className="text-xl font-bold text-foreground">{t('application.servicesTitle')}</h2>
+        <p className="max-w-lg text-sm text-muted-foreground">
+          {t(scope === 'self' ? 'application.noDepartmentServices' : 'application.departmentHasNoServices')}
+        </p>
+      </div>
+    )
+  }
+  return (
+    <RequireCapability cap="documents.generate">
+      <RequireCapability cap="books.view">
+        <ApplicationPage />
+      </RequireCapability>
+    </RequireCapability>
+  )
 }
 
 /** `/application?form=x&…` links already went out by SMS/push/bookmark. */
@@ -316,13 +345,7 @@ function Shell(): React.JSX.Element {
                   mounted page (see the <main> key above). */}
               <Route
                 path="/services/:slug?"
-                element={
-                  <RequireCapability cap="documents.generate">
-                    <RequireCapability cap="books.view">
-                      <ApplicationPage />
-                    </RequireCapability>
-                  </RequireCapability>
-                }
+                element={<ServicesRoute />}
               />
               <Route path="/application" element={<LegacyApplicationRedirect />} />
               <Route

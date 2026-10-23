@@ -67,6 +67,7 @@ import { IconAction } from '@/components/ui/icon-action'
 import { useAuth } from '@/lib/authContext'
 import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { departmentName } from '@/lib/departments'
 import { currentBookDocId } from '@/lib/bookDocument'
 import { copyToClipboard } from '@/lib/clipboard'
 import { serviceHref } from '@/lib/quickActions'
@@ -650,6 +651,12 @@ export function RecordPane({
             {' · '}
             <bdi dir="ltr" className="font-mono tabular-nums">{book.created_at.slice(0, 10)}</bdi>
           </p>
+          {(book.department_name_en || book.department_name_ar) && (
+            <p className="mt-0.5 text-[0.7em] text-muted-foreground">
+              {t('books.record.department')}{' '}
+              <bdi>{departmentName({ name_en: book.department_name_en ?? '', name_ar: book.department_name_ar ?? '' }, i18n.language)}</bdi>
+            </p>
+          )}
           {/* Status: the sentence the record page header shows, with the returner's note */}
           <p className="mt-2 text-[0.78em] text-foreground">
             <StatusText status={ns.status} />
@@ -672,7 +679,7 @@ export function RecordPane({
             <WordSessionBanner book={book} compact live={false} />
           </div>
         )}
-        <RecordRecipientsPanel bookId={book.id} className="mt-2 border-t border-hairline" />
+        <RecordRecipientsPanel bookId={book.id} departmentSends={book.department_sends} className="mt-2 border-t border-hairline" />
         <div className="flex min-h-[20rem] flex-col pt-2">
           <Suspense fallback={<DocumentState kind="loading" />}>
             <RecordPaperViewer

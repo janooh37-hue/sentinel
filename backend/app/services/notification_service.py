@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core import leave_lifecycle
-from app.db.models import Book, BookRecipient, Leave, User
+from app.db.models import Book, BookDepartmentSend, BookRecipient, Department, Leave, User
 from app.schemas.notifications import NotificationCounts
 from app.services import (
     book_send_service,
@@ -48,6 +48,8 @@ class ActionableItem:
     attachments: int = 0  # attachment count, for the email body's "size" line
     confidential: bool = False
     requester_ar: str | None = None
+    department_name_en: str | None = None
+    department_name_ar: str | None = None
 
 
 def inbox_item(
@@ -55,8 +57,11 @@ def inbox_item(
     row: BookRecipient,
     sender_name: str | None,
     sender_name_ar: str | None = None,
+    *,
+    department_name_en: str | None = None,
+    department_name_ar: str | None = None,
 ) -> ActionableItem:
-    """Direct-send push item, with record details only for general records."""
+    """Inbox push item, with record details only for general records."""
     confidential = book.confidentiality != "general"
     return ActionableItem(
         kind="inbox",
@@ -67,6 +72,8 @@ def inbox_item(
         requester=None if confidential else sender_name,
         requester_ar=None if confidential else sender_name_ar,
         confidential=confidential,
+        department_name_en=department_name_en,
+        department_name_ar=department_name_ar,
     )
 
 
@@ -208,15 +215,36 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
                 )
             )
 
-    items.extend(
-        inbox_item(
-            book,
-            row,
-            sender_names.get(row.sent_by_user_id),
-            sender_names_ar.get(row.sent_by_user_id),
+    department_row_ids = [row.id for row, _ in received if row.department_send_id is not None]
+    department_names = {}
+    if department_row_ids:
+        # Initial head/deputy deliveries share the send's sender and timestamp.
+        # Current membership must not relabel a member's later hand-down.
+        department_names = {
+            recipient_id: (name_en, name_ar)
+            for recipient_id, name_en, name_ar in db.execute(
+                select(BookRecipient.id, Department.name_en, Department.name_ar)
+                .join(BookDepartmentSend, BookDepartmentSend.id == BookRecipient.department_send_id)
+                .join(Department, Department.id == BookDepartmentSend.department_id)
+                .where(
+                    BookRecipient.id.in_(department_row_ids),
+                    BookRecipient.sent_by_user_id == BookDepartmentSend.sent_by_user_id,
+                    BookRecipient.created_at == BookDepartmentSend.created_at,
+                )
+            )
+        }
+    for row, book in received:
+        department_name_en, department_name_ar = department_names.get(row.id, (None, None))
+        items.append(
+            inbox_item(
+                book,
+                row,
+                sender_names.get(row.sent_by_user_id),
+                sender_names_ar.get(row.sent_by_user_id),
+                department_name_en=department_name_en,
+                department_name_ar=department_name_ar,
+            )
         )
-        for row, book in received
-    )
 
     items.extend(_monthly_items(db, user))
     return items

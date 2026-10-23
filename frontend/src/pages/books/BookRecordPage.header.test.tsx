@@ -8,12 +8,15 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import i18n from 'i18next'
+import ar from '@/locales/ar.json'
 
 import type * as ApiModule from '@/lib/api'
 import type * as AuthContextModule from '@/lib/authContext'
 import { api } from '@/lib/api'
 import { BookRecordPage } from './BookRecordPage'
 import { RecordDeleteProvider } from './RecordDeleteProvider'
+import { BookPreview } from '@/components/books/BookPreview'
 
 const mockHas = vi.fn<(cap: string) => boolean>(() => false)
 const viewport = vi.hoisted(() => ({ mobile: false }))
@@ -127,13 +130,56 @@ function renderRecord(entry = '/books/48'): void {
 }
 
 describe('BookRecordPage — header', () => {
-  afterEach(() => {
+  afterEach(async () => {
     vi.unstubAllGlobals()
+    await i18n.changeLanguage('en')
   })
   beforeEach(() => {
     viewport.mobile = false
     mockHas.mockImplementation(() => false)
     vi.mocked(api.getBook).mockReset()
+  })
+
+  it.each([
+    [false, 'en', 'Department', 'Operations'],
+    [true, 'en', 'Department', 'Operations'],
+    [false, 'ar', 'القسم', 'العمليات'],
+    [true, 'ar', 'القسم', 'العمليات'],
+  ] as const)('shows the owning department (mobile=%s, language=%s)', async (mobile, language, label, name) => {
+    i18n.addResourceBundle('ar', 'translation', ar)
+    await i18n.changeLanguage(language)
+    viewport.mobile = mobile
+    vi.mocked(api.getBook).mockResolvedValue(fixture({
+      department_id: 3, department_name_en: 'Operations', department_name_ar: 'العمليات',
+    }) as never)
+    renderRecord()
+    const meta = await screen.findByTestId('record-meta')
+    expect(meta).toHaveTextContent(label)
+    expect(meta).toHaveTextContent(name)
+  })
+
+  it('omits the department row when no department is present', async () => {
+    vi.mocked(api.getBook).mockResolvedValue(fixture() as never)
+    renderRecord()
+    expect(await screen.findByTestId('record-meta')).not.toHaveTextContent('Department')
+  })
+
+  it.each([['en', 'Operations'], ['ar', 'العمليات']] as const)('shows the draft preview department in %s', async (language, name) => {
+    i18n.addResourceBundle('ar', 'translation', ar)
+    await i18n.changeLanguage(language)
+    vi.mocked(api.getBook).mockResolvedValue(fixture({
+      department_id: 3, department_name_en: 'Operations', department_name_ar: 'العمليات',
+    }) as never)
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <RecordDeleteProvider>
+            <BookPreview bookId={48} onClose={vi.fn()} onSubmitForApproval={vi.fn()} />
+          </RecordDeleteProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText(name)).toBeVisible()
   })
 
   it.each([false, true])('hides Link from the record tools and denies its URL overlay without books.edit (mobile=%s)', async (mobile) => {

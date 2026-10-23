@@ -38,10 +38,13 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
     func,
+    select,
     text,
 )
-from sqlalchemy.orm import Mapped, foreign, mapped_column, query_expression, relationship
+from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Mapped, Mapper, foreign, mapped_column, query_expression, relationship
 
 from app.db.base import Base
 
@@ -352,6 +355,15 @@ class Book(Base):
     # Original creator (users.id): immutable; set once at creation. No FK, same
     # SQLite batch-ALTER reason as submitted_by_user_id.
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Immutable creation stamp, resolved for EVERY ORM insertion by the mapper
+    # event below (including form generation, Word drafts and manual Records).
+    # No FK: existing SQLite tables use application-side integrity.
+    department_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    department: Mapped[Department | None] = relationship(
+        primaryjoin="foreign(Book.department_id) == Department.id",
+        viewonly=True,
+        lazy="joined",
+    )
     # Record level (migration 0102): general | personal | secret | directed.
     # Gates who can open the record; see book_service.user_visibility_clause.
     confidentiality: Mapped[str] = mapped_column(
@@ -389,6 +401,14 @@ class Book(Base):
         cascade="all, delete-orphan",
     )
 
+    @property
+    def department_name_en(self) -> str | None:
+        return self.department.name_en if self.department is not None else None
+
+    @property
+    def department_name_ar(self) -> str | None:
+        return self.department.name_ar if self.department is not None else None
+
     __table_args__ = (
         UniqueConstraint("ref_number", name="uq_books_ref_number"),
         Index("ix_books_employee_id", "employee_id"),
@@ -399,6 +419,18 @@ class Book(Base):
             name="ck_books_confidentiality",
         ),
     )
+
+
+@event.listens_for(Book, "before_insert")
+def _stamp_book_department(_mapper: Mapper[Book], connection: Connection, book: Book) -> None:
+    """Use the insertion connection, never a Session query/recursive flush."""
+    if book.department_id is None and book.created_by_user_id is not None:
+        book.department_id = connection.scalar(
+            select(DepartmentMember.department_id).where(
+                DepartmentMember.user_id == book.created_by_user_id,
+                DepartmentMember.is_primary.is_(True),
+            )
+        )
 
 
 class BookApprovalStep(Base):
@@ -565,6 +597,41 @@ class BookRevisionAccess(Base):
     )
 
 
+class BookDepartmentSend(Base):
+    """A department delivery and the root of its recallable hand-downs."""
+
+    __tablename__ = "book_department_sends"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    department_id: Mapped[int] = mapped_column(ForeignKey("departments.id"), nullable=False)
+    parent_send_id: Mapped[int | None] = mapped_column(
+        ForeignKey("book_department_sends.id"), nullable=True
+    )
+    sent_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    __table_args__ = (
+        Index("ix_book_department_sends_book", "book_id"),
+        Index("ix_book_department_sends_parent", "parent_send_id"),
+        Index(
+            "uq_book_department_sends_active",
+            "book_id",
+            "department_id",
+            unique=True,
+            sqlite_where=text("revoked_at IS NULL"),
+        ),
+        CheckConstraint(
+            "purpose IN ('info', 'action', 'reply', 'circulate')",
+            name="ck_book_department_sends_purpose",
+        ),
+    )
+
+
 class BookRecipient(Base):
     """A direct send of a record to one user (migration 0102).
 
@@ -579,6 +646,8 @@ class BookRecipient(Base):
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False)
     sent_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Existing tables add this nullable link without a named SQLite batch FK.
+    department_send_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # info | action | reply | circulate (للاطلاع / للتنفيذ / للإفادة / للتعميم)
     purpose: Mapped[str] = mapped_column(String(16), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -592,6 +661,7 @@ class BookRecipient(Base):
     __table_args__ = (
         Index("ix_book_recipients_user_revoked", "user_id", "revoked_at"),
         Index("ix_book_recipients_book", "book_id"),
+        Index("ix_book_recipients_department_send_id", "department_send_id"),
         Index(
             "uq_book_recipients_active",
             "book_id",
@@ -661,18 +731,21 @@ class BookFolderShare(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     department: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    department_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
     )
 
     __table_args__ = (
         CheckConstraint(
-            "(user_id IS NOT NULL AND department IS NULL) OR "
-            "(user_id IS NULL AND department IS NOT NULL)",
+            "(user_id IS NOT NULL AND department_id IS NULL AND department IS NULL) OR "
+            "(user_id IS NULL AND department_id IS NOT NULL AND department IS NULL) OR "
+            "(user_id IS NULL AND department_id IS NULL AND department IS NOT NULL)",
             name="ck_book_folder_shares_target",
         ),
         UniqueConstraint("folder_id", "user_id", name="uq_book_folder_shares_user"),
         UniqueConstraint("folder_id", "department", name="uq_book_folder_shares_department"),
+        UniqueConstraint("folder_id", "department_id", name="uq_book_folder_shares_department_id"),
     )
 
 

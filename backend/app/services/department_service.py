@@ -14,7 +14,17 @@ from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
 from app.core.permissions import SERVICE_CAP_PREFIX
 from app.core.roles import ADMIN_ROLE
-from app.db.models import AuditLog, Department, DepartmentMember, DepartmentService, Employee, User
+from app.db.models import (
+    AuditLog,
+    Book,
+    BookDepartmentSend,
+    BookFolderShare,
+    Department,
+    DepartmentMember,
+    DepartmentService,
+    Employee,
+    User,
+)
 from app.schemas.department import (
     DepartmentAssignmentResult,
     DepartmentCreate,
@@ -47,6 +57,12 @@ def require_active_department(db: Session, department_id: int) -> Department:
     if row is None or not row.active:
         raise ValidationFailedError("DEPARTMENT_NOT_FOUND", "Choose an active department.")
     return row
+
+
+def sync_employee_department_label(db: Session, employee: Employee) -> None:
+    """Keep Workforce's text label aligned; unassigned employees retain their hint."""
+    if employee.department_id is not None:
+        employee.department = require_department(db, employee.department_id).name_ar
 
 
 def user_departments(db: Session, user_ids: list[int]) -> dict[int, list[UserDepartmentRead]]:
@@ -265,6 +281,7 @@ def update_department(
 ) -> DepartmentRead:
     row = require_department(db, department_id)
     data = payload.model_dump(exclude_unset=True)
+    name_ar_changed = "name_ar" in data and data["name_ar"] != row.name_ar
     parent_id = data.get("parent_id", row.parent_id)
     if "parent_id" in data and parent_id is not None:
         current: Department | None = require_active_department(db, parent_id)
@@ -287,6 +304,9 @@ def update_department(
     )
     for key, value in data.items():
         setattr(row, key, value)
+    if name_ar_changed:
+        for employee in db.scalars(select(Employee).where(Employee.department_id == row.id)):
+            sync_employee_department_label(db, employee)
     _audit(db, actor, "update_department", row)
     _save_department(db)
     department_scope_service.invalidate_all_department_scopes(db)
@@ -306,10 +326,24 @@ def delete_department(db: Session, department_id: int, *, actor: str | None) -> 
         is not None
         or db.scalar(select(Employee.id).where(Employee.department_id == department_id).limit(1))
         is not None
+        or db.scalar(select(Book.id).where(Book.department_id == department_id).limit(1))
+        is not None
+        or db.scalar(
+            select(BookDepartmentSend.id)
+            .where(BookDepartmentSend.department_id == department_id)
+            .limit(1)
+        )
+        is not None
+        or db.scalar(
+            select(BookFolderShare.id)
+            .where(BookFolderShare.department_id == department_id)
+            .limit(1)
+        )
+        is not None
     ):
         raise ConflictError(
             "DEPARTMENT_IN_USE",
-            "Remove children, members and employee assignments before deleting this department.",
+            "This department is referenced by existing assignments or Records; deactivate it instead.",
         )
     _audit(db, actor, "delete_department", row)
     db.delete(row)
@@ -390,6 +424,7 @@ def replace_services(
     )
     _audit(db, actor, "department_services", row, service_ids=service_ids)
     db.commit()
+    department_scope_service.invalidate_all_department_scopes(db)
     return read_department(db, department_id)
 
 
@@ -415,10 +450,12 @@ def assign_employees(
     if department_id is not None:
         require_active_department(db, department_id)
     ids = list(dict.fromkeys(employee_ids))
-    found = list(db.scalars(select(Employee.id).where(Employee.id.in_(ids))))
+    found = list(db.scalars(select(Employee).where(Employee.id.in_(ids))))
     if len(found) != len(ids):
         raise ValidationFailedError("EMPLOYEE_NOT_FOUND", "One or more employees were not found.")
-    db.execute(update(Employee).where(Employee.id.in_(ids)).values(department_id=department_id))
+    for employee in found:
+        employee.department_id = department_id
+        sync_employee_department_label(db, employee)
     db.add(
         AuditLog(
             actor=actor,
@@ -475,6 +512,24 @@ def read_scoping(db: Session) -> DepartmentScopingRead:
 
 
 def set_scoping(db: Session, enabled: bool, *, actor: str) -> DepartmentScopingRead:
+    records_backfilled = 0
+    if enabled:
+        primary = (
+            select(DepartmentMember.department_id)
+            .where(
+                DepartmentMember.user_id == Book.created_by_user_id,
+                DepartmentMember.is_primary.is_(True),
+            )
+            .scalar_subquery()
+        )
+        # The stamp and switch commit together; NULL/no-membership rows stay NULL.
+        result = db.connection().execute(
+            update(Book)
+            .where(Book.department_id.is_(None), primary.is_not(None))
+            .values(department_id=primary)
+        )
+        records_backfilled = result.rowcount
+        db.expire_all()
     settings_service.set_audited_setting(
         db,
         "settings.department_scoping_enabled",
@@ -483,6 +538,7 @@ def set_scoping(db: Session, enabled: bool, *, actor: str) -> DepartmentScopingR
         action="department_scoping.enabled" if enabled else "department_scoping.disabled",
         entity_type="settings",
         entity_id="department_scoping_enabled",
+        audit_extra={"records_backfilled": records_backfilled},
     )
     department_scope_service.invalidate_all_department_scopes(db)
-    return read_scoping(db)
+    return read_scoping(db).model_copy(update={"records_backfilled": records_backfilled})

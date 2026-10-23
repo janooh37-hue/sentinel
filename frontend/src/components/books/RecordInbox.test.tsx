@@ -51,6 +51,7 @@ function setup() {
 beforeEach(async () => {
   vi.restoreAllMocks()
   vi.clearAllMocks()
+  vi.spyOn(api.departments, 'list').mockResolvedValue([])
   for (const method of [api.markBookInboxDone, api.undoBookInboxDone, api.archiveBookInbox, api.unarchiveBookInbox]) {
     vi.mocked(method).mockReset().mockResolvedValue(INBOX)
   }

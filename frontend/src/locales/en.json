@@ -1,4 +1,24 @@
 {
+  "departmentScope": {
+    "title": "Department scoping",
+    "description": "Limit people data and work to each user's departments. Organization-wide access is unchanged.",
+    "enabled": "Department scoping is on",
+    "disabled": "Department scoping is off",
+    "turnedOn": "Department scoping turned on",
+    "turnedOff": "Department scoping turned off",
+    "turnOn": "Turn on department scoping",
+    "turnOff": "Turn off department scoping",
+    "confirmOn": "Turn on department scoping?",
+    "confirmOff": "Turn off department scoping?",
+    "warning": "Users without a department will see only their own work and no services. Members of departments without configured services will see no services. Review these assignments before turning scoping on.",
+    "offWarning": "Department restrictions will be removed. Users will see organization-wide data wherever their permissions allow.",
+    "usersWithoutDepartment": "Users without a department ({{count}})",
+    "departments_without_head": "Departments without a head or deputy ({{count}})",
+    "departments_without_services": "Departments without services ({{count}})",
+    "none": "None",
+    "allDepartments": "All departments",
+    "ownWork": "Your own work"
+  },
   "departmentAccess": {
     "department": "Department (optional)",
     "filter": "Filter users by department",
@@ -30,7 +50,7 @@
   "departmentSettings": {
     "title": "Departments",
     "description": "Manage the department hierarchy, members and service lists.",
-    "phaseNote": "Assign departments now. Department scoping is not enabled by these changes.",
+    "phaseNote": "Department membership controls visibility when department scoping is on. Configure each department's services before turning it on.",
     "tree": "Department hierarchy",
     "create": "Create department",
     "edit": "Rename or move",
@@ -2216,6 +2236,9 @@
       "hint": "Send this record to people in the system",
       "title": "Send record",
       "recipients": "Recipients",
+      "departments": "Departments",
+      "noHead": "No head assigned",
+      "deliveryCount": "Sent to {{count}} recipients",
       "selected_one": "{{count}} selected",
       "selected_other": "{{count}} selected",
       "searchPlaceholder": "Search by name or G-number",
@@ -2240,10 +2263,19 @@
       "skipped": "Skipped: {{list}}",
       "skippedSelf": "you",
       "skippedAlready": "{{name}} (already has it)",
+      "skippedDepartment": "{{name}} (already sent)",
+      "skippedNotCleared": "{{name}} (no Secret clearance)",
       "errors": {
         "notCleared": "Some recipients don't have Secret clearance.",
         "invalid": "Some recipients can't receive records.",
-        "personal": "A Personal record must be switched to Directed before sending."
+        "personal": "A Personal record must be switched to Directed before sending.",
+        "personalDepartment": "Personal records cannot be sent to a department.",
+        "noHead": "A selected department has no active head or deputy.",
+        "noClearedHead": "A selected department has no head or deputy with Secret clearance.",
+        "revoked": "This department send was recalled and can no longer be distributed.",
+        "notMember": "Some selected users are no longer members of this department.",
+        "notSubdepartment": "Choose a direct sub-department of this department.",
+        "sendNotFound": "This department send is no longer available or you no longer have access."
       },
       "sentTo_one": "Sent to {{count}} person",
       "sentTo_other": "Sent to {{count}} people",
@@ -2258,6 +2290,25 @@
       "recallBody": "They will no longer be able to open this record through this send.",
       "recalled": "Send recalled",
       "recalledChip": "Recalled"
+    },
+    "distribute": {
+      "title": "Distribute",
+      "forDepartment": "Distribute to {{name}}",
+      "forInbox": "For {{name}}",
+      "audience": "Who should receive it?",
+      "modes": {
+        "all": "Everyone in the department",
+        "members": "Chosen members",
+        "subdepartment": "A sub-department",
+        "keep": "Keep it with me"
+      },
+      "alreadyRecipient": "Already has this record",
+      "notCleared": "No Secret clearance",
+      "noMembers": "No members available.",
+      "noSubdepartments": "No active sub-departments.",
+      "result": "Sent: {{sent}} · Skipped: {{skipped}}",
+      "progress": "Head read {{read}}/{{total}} · Members reached {{reached}} · Done {{done}}",
+      "recallBody": "This recalls the department send and removes access for everyone the head shared it with, including sub-department deliveries. Independent sends are kept."
     },
     "inbox": {
       "sentToMe": "Sent to me",
@@ -2652,6 +2703,7 @@
       "hideProgress": "Hide progress",
       "showProgress": "Show progress",
       "createdBy": "Created by",
+      "department": "Department",
       "creatorUnknown": "Not recorded",
       "focus": "Focus on document",
       "exitFocus": "Exit focus",
@@ -3010,6 +3062,7 @@
         "errorNotTeam": "Only team folders can be shared.",
         "errorSharesEmpty": "Choose at least one person or department.",
         "errorShareUserInvalid": "A selected person is no longer available. Choose active users.",
+        "errorShareLegacyInvalid": "An old department name can only be kept or removed. Reopen sharing to load the current audience.",
         "filedBy": "Filed by {{name}}",
         "unknownPerson": "Unknown person"
       },
@@ -3924,6 +3977,8 @@
     "searchServices": "Search services…",
     "paperLanguage": "Paper language",
     "noServicesMatch": "No forms match your search.",
+    "departmentHasNoServices": "Your department has no services yet. Ask an administrator to add services to your department.",
+    "noDepartmentServices": "You are not assigned to a department yet. Ask an administrator to assign you to a department.",
     "groupCount_one": "{{count}} service",
     "groupCount_other": "{{count}} services",
     "backToAllServices": "All services",

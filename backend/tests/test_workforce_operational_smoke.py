@@ -18,7 +18,7 @@ from datetime import UTC, date, datetime, time, timedelta
 import pytest
 from sqlalchemy import select
 
-from app.db.models import Employee, Leave, User
+from app.db.models import Department, Employee, Leave, User
 from app.db.workforce_models import (
     AttendanceCase,
     AttendanceEvaluation,
@@ -355,9 +355,7 @@ def test_stale_punch_freshness_suppresses_the_dashboard_judgment(seeded, db_sess
     assert snapshot["current_shift"]["working"] is None
 
 
-def test_later_sick_approval_appends_an_excused_revision_preserving_raw_punches(
-    seeded, db_session
-):
+def test_later_sick_approval_appends_an_excused_revision_preserving_raw_punches(seeded, db_session):
     """A retroactive Sick approval supersedes the judgment without deleting evidence."""
     employee = seeded["employee"]
     now = SHIFT_START + timedelta(hours=2)
@@ -526,9 +524,7 @@ def test_a_rostered_employee_who_never_punched_gets_a_case_and_an_absence(seeded
     assert (
         len(
             db_session.scalars(
-                select(AttendanceCase).where(
-                    AttendanceCase.employee_id == seeded["employee"].id
-                )
+                select(AttendanceCase).where(AttendanceCase.employee_id == seeded["employee"].id)
             ).all()
         )
         == 1
@@ -537,14 +533,15 @@ def test_a_rostered_employee_who_never_punched_gets_a_case_and_an_absence(seeded
 
 def test_materialization_is_dormant_until_a_configuration_exists(seeded, db_session):
     """No configuration means no evaluation boundary, so nothing may be judged."""
-    assert scheduler_service._materialize_scheduled_cases(
-        db_session, now=SHIFT_START + timedelta(hours=2)
-    ) == 0
+    assert (
+        scheduler_service._materialize_scheduled_cases(
+            db_session, now=SHIFT_START + timedelta(hours=2)
+        )
+        == 0
+    )
 
 
-def test_directionless_punches_read_as_arrival_and_departure_once_the_duty_ends(
-    seeded, db_session
-):
+def test_directionless_punches_read_as_arrival_and_departure_once_the_duty_ends(seeded, db_session):
     """This site's terminals report no in/out, so punch order carries the day.
 
     Mid-duty a single punch means the person is here and nothing more. When the
@@ -657,9 +654,7 @@ def test_a_shift_that_has_not_started_is_on_the_register_without_a_verdict(seede
     )
     assert upcoming is not None
     evaluation = db_session.scalar(
-        select(AttendanceEvaluation).where(
-            AttendanceEvaluation.attendance_case_id == upcoming.id
-        )
+        select(AttendanceEvaluation).where(AttendanceEvaluation.attendance_case_id == upcoming.id)
     )
     assert evaluation is not None
     assert evaluation.presence_state == "scheduled"
@@ -686,6 +681,9 @@ def test_office_to_company_move_replaces_future_attendance_only(db_session):
     actor = fixture.admin
     target, office_control = fixture.employees
     trusted_scope = organization_scope()
+    department = Department(name_en="Company Operations", name_ar="عمليات السرايا")
+    db_session.add(department)
+    db_session.flush()
 
     crew_2 = db_session.scalar(select(WorkCrew).where(WorkCrew.code == "crew_2"))
     assert crew_2 is not None
@@ -822,10 +820,22 @@ def test_office_to_company_move_replaces_future_attendance_only(db_session):
         employee_service.update_employee(
             db_session,
             target.id,
-            EmployeeUpdate(duty_unit="السرية الثانية", duty_post="البوابة الرئيسية"),
+            EmployeeUpdate(
+                duty_unit="السرية الثانية",
+                duty_post="البوابة الرئيسية",
+                department_id=department.id,
+                department="Ignored conflicting label",
+            ),
         )
     finally:
         monkeypatch.undo()
+    assignment = db_session.scalar(
+        select(DutyAssignmentEvent)
+        .where(DutyAssignmentEvent.employee_id == target.id)
+        .order_by(DutyAssignmentEvent.effective_at.desc(), DutyAssignmentEvent.id.desc())
+    )
+    assert assignment is not None
+    assert assignment.to_department == "عمليات السرايا"
 
     # A shift that had already started is untouched by the move.
     unchanged = db_session.get(AttendanceCase, started_case_id)
@@ -867,6 +877,7 @@ def test_office_to_company_move_replaces_future_attendance_only(db_session):
     assert [(r["crew_code"], r["shift_code"]) for r in target_aug18] == [("crew_2", "noon")]
     assert target_aug18[0]["duty_unit"] == "السرية الثانية"
     assert target_aug18[0]["duty_post"] == "البوابة الرئيسية"
+    assert target_aug18[0]["department"] == "عمليات السرايا"
 
     office_control_aug18 = _rows_for(office_control.id, date(2026, 8, 18))
     assert [(r["crew_code"], r["shift_code"]) for r in office_control_aug18] == [

@@ -24,6 +24,7 @@ export type PassportSuggestion = components['schemas']['PassportSuggestion']
 
 // Employee lookup completeness summary (Task 3).
 export type CompletenessSummaryOut = components['schemas']['CompletenessSummaryOut']
+export type DepartmentScopingRead = components['schemas']['DepartmentScopingRead']
 
 // ─── Attendance (الحضور) ─────────────────────────────────────────────────────
 // `api.types.ts` exports only `paths` and `components`, so every named type here
@@ -459,6 +460,7 @@ export interface SessionUser {
   position: string | null
   department: string | null
   departments?: UserDepartmentRead[]
+  department_scope_kind?: components['schemas']['SessionUser']['department_scope_kind']
   photo_url: string | null
   role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
   status: 'pending' | 'active' | 'locked' | 'disabled'
@@ -866,6 +868,9 @@ export const SEND_PURPOSES = ['info', 'action', 'reply', 'circulate'] as const s
 export type BookSendResult = components['schemas']['BookSendResponse']
 export type BookRecipientRead = components['schemas']['BookRecipientRead']
 export type BookInboxRead = components['schemas']['BookInboxRead']
+export type BookDepartmentSendRead = components['schemas']['BookDepartmentSendRead']
+export type BookDistributeRequest = components['schemas']['BookDistributeRequest']
+export type BookDistributionOptions = components['schemas']['BookDistributionOptions']
 export type RecipientCandidateRead = components['schemas']['RecipientCandidateRead']
 export type BookDeriveRequest = components['schemas']['BookDeriveRequest']
 export type BookThreadItem = components['schemas']['BookThreadItem']
@@ -1035,6 +1040,7 @@ export interface DashboardEmailSync {
 }
 
 export interface DashboardSummary {
+  department_scope?: components['schemas']['DashboardDepartmentScope']
   totals: {
     /** Total working: our staff + loaned. */
     employees_active: number
@@ -1365,6 +1371,7 @@ export interface ListEmployeesParams {
   q?: string
   status?: EmployeeStatus
   department?: string
+  department_id?: number
   /** Only scheduled departures — Active or Loaned employees with a pending_status. */
   pending?: boolean
   limit?: number
@@ -1392,6 +1399,9 @@ export const api = {
 
   departments: {
     list: () => request<DepartmentRead[]>('GET', '/departments'),
+    getScoping: () => request<DepartmentScopingRead>('GET', '/departments/scoping'),
+    setScoping: (enabled: boolean) =>
+      request<DepartmentScopingRead>('PUT', '/departments/scoping', { enabled }),
     create: (body: DepartmentCreate) =>
       request<DepartmentRead>('POST', '/departments', body),
     update: (id: number, body: DepartmentUpdate) =>
@@ -1471,8 +1481,8 @@ export const api = {
     ),
   getEmployeeDetail: (id: string) =>
     request<EmployeeDetailRead>('GET', `/employees/${encodeURIComponent(id)}/detail`),
-  getEmployeesCompleteness: () =>
-    request<CompletenessSummaryOut>('GET', '/employees/completeness'),
+  getEmployeesCompleteness: (department_id?: number) =>
+    request<CompletenessSummaryOut>('GET', `/employees/completeness${qs({ department_id })}`),
   createEmployee: (payload: EmployeeCreate) =>
     request<EmployeeRead>('POST', '/employees', payload),
   updateEmployee: (id: string, payload: EmployeeUpdate) =>
@@ -1533,8 +1543,8 @@ export const api = {
     limit?: number
     offset?: number
   } = {}) => request<LeaveListResponse>('GET', `/leaves${qs({ ...params })}`),
-  getLeaveAwaitingReturnCount: () =>
-    request<LeaveAwaitingReturnCount>('GET', '/leaves/awaiting-return/count'),
+  getLeaveAwaitingReturnCount: (department_id?: number) =>
+    request<LeaveAwaitingReturnCount>('GET', `/leaves/awaiting-return/count${qs({ department_id })}`),
   getLeave: (id: number) => request<LeaveRead>('GET', `/leaves/${id}`),
   updateLeave: (id: number, body: LeaveUpdate) =>
     request<LeaveRead>('PATCH', `/leaves/${id}`, body),
@@ -2391,6 +2401,12 @@ export const api = {
   /** DELETE /books/{id}/recipients/{recipientId} — recall a send (sender, manager, admin). */
   recallBookRecipient: (id: number, recipientId: number) =>
     request<void>('DELETE', `/books/${id}/recipients/${recipientId}`),
+  getBookDistributionOptions: (id: number, sendId: number) =>
+    request<BookDistributionOptions>('GET', `/books/${id}/department-sends/${sendId}/distribution-options`),
+  distributeBookDepartmentSend: (id: number, sendId: number, body: BookDistributeRequest) =>
+    request<BookSendResult>('POST', `/books/${id}/department-sends/${sendId}/distribute`, body),
+  recallBookDepartmentSend: (id: number, sendId: number) =>
+    request<void>('DELETE', `/books/${id}/department-sends/${sendId}`),
   markBookInboxDone: (id: number) =>
     request<BookInboxRead>('POST', `/books/${id}/inbox/done`),
   undoBookInboxDone: (id: number) =>
@@ -2718,7 +2734,8 @@ export const api = {
     request<void>('DELETE', `/editor-templates/${id}`),
 
   // --- dashboard (Phase 12) ---
-  getDashboardSummary: () => request<DashboardSummary>('GET', '/dashboard/summary'),
+  getDashboardSummary: (department_id?: number) =>
+    request<DashboardSummary>('GET', `/dashboard/summary${qs({ department_id })}`),
   getDashboardLayout: () => request<DashboardLayout | null>('GET', '/dashboard/layout'),
   updateDashboardLayout: (body: DashboardLayout) =>
     request<DashboardLayout>('PUT', '/dashboard/layout', body),
@@ -2873,9 +2890,10 @@ export const api = {
   ) => request<unknown>('POST', `/permissions/requests/${id}/decide`, body),
 
   // --- expiry (Phase B) ---
-  getExpiry: (within = 90, type: 'all' | 'uae_id' | 'passport' = 'all') =>
-    request<ExpiryItem[]>('GET', `/expiry${qs({ within, type })}`),
-  getExpirySummary: () => request<ExpirySummary>('GET', '/expiry/summary'),
+  getExpiry: (within = 90, type: 'all' | 'uae_id' | 'passport' = 'all', department_id?: number) =>
+    request<ExpiryItem[]>('GET', `/expiry${qs({ within, type, department_id })}`),
+  getExpirySummary: (department_id?: number) =>
+    request<ExpirySummary>('GET', `/expiry/summary${qs({ department_id })}`),
 
   // --- documents / jobs (Phase 04) ---
   generateDocument: (body: DocumentGenerateRequest) =>

@@ -53,6 +53,7 @@ import { SendRecordDialog } from '@/components/books/SendRecordDialog'
 import { ChangeConfidentialityDialog } from '@/components/books/ChangeConfidentialityDialog'
 import { RecordInboxStrip, RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
 import { DeriveRecordDialog } from '@/components/books/DeriveRecordDialog'
+import { DistributeDialog } from '@/components/books/DistributeDialog'
 import { LinkRecordDialog } from '@/components/books/LinkRecordDialog'
 import { RecordThreadSection } from '@/components/books/RecordThreadSection'
 import { useBookApprovalActions } from '@/components/books/useBookApprovalActions'
@@ -528,6 +529,7 @@ function BookRecordPageBody(): React.JSX.Element {
         canMutateCurrent) ||
       (value === 'decision' && action === 'decide') ||
       (value === 'send' && book.can_send) ||
+      (value.startsWith('distribute:') && (book.department_sends ?? []).some((send) => send.can_distribute && value === `distribute:${send.id}`)) ||
       (value === 'level' && book.can_change_confidentiality) ||
       ((value === 'reply' || value === 'createFrom') && canDerive) ||
       (value === 'link' && canEdit && book.access_scope === 'full')
@@ -1265,7 +1267,7 @@ function BookRecordPageBody(): React.JSX.Element {
       )}
 
       {book && <RecordInboxStrip book={book} />}
-      {book && <RecordRecipientsPanel bookId={book.id} />}
+      {book && <RecordRecipientsPanel bookId={book.id} departmentSends={book.department_sends} />}
       {book && <RecordThreadSection book={book} />}
 
       <RecordPhoneProgress book={book} view={view} />
@@ -1314,6 +1316,9 @@ function BookRecordPageBody(): React.JSX.Element {
       {book && canDerive && (
         <DeriveRecordDialog book={book} kind={overlay.value === 'reply' ? 'reply' : 'based_on'} open={overlay.value === 'reply' || overlay.value === 'createFrom'} onOpenChange={(open) => { if (!open) overlay.close() }} />
       )}
+      {book && (book.department_sends ?? []).filter((send) => send.can_distribute && overlay.value === `distribute:${send.id}`).map((send) => (
+        <DistributeDialog key={send.id} book={book} send={send} open onOpenChange={(open) => { if (!open) overlay.close() }} />
+      ))}
       {book && (
         <LinkRecordDialog book={book} open={overlay.value === 'link' && canEdit && book.access_scope === 'full'} onOpenChange={(open) => { if (!open) overlay.close() }} />
       )}

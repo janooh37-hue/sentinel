@@ -146,12 +146,16 @@ def set_audited_setting(
     action: str,
     entity_type: str,
     entity_id: str,
+    audit_extra: dict[str, object] | None = None,
 ) -> None:
-    """Upsert (or delete, when ``value`` is None) one setting and write an AuditLog
-    row with before/after, then commit. No row is written when nothing changes."""
+    """Upsert/delete one setting and commit with a before/after audit.
+
+    Unchanged values are skipped unless the caller supplies audit_extra (for
+    operations such as the department switch's idempotent Records backfill).
+    """
     row = db.execute(select(AppSetting).where(AppSetting.key == key)).scalar_one_or_none()
     before = json.loads(row.value) if row is not None else None
-    if before == value:
+    if before == value and not audit_extra:
         return
     if value is None:
         db.delete(row)
@@ -163,7 +167,9 @@ def set_audited_setting(
             action=action,
             entity_type=entity_type,
             entity_id=entity_id,
-            payload=json.dumps({"before": before, "after": value}, ensure_ascii=False),
+            payload=json.dumps(
+                {"before": before, "after": value, **(audit_extra or {})}, ensure_ascii=False
+            ),
         )
     )
     db.commit()

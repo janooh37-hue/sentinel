@@ -6,6 +6,7 @@ import { DialogRoot, DialogTrigger } from '@/components/ui/dialog'
 import type { BookFolderRead } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { departmentName } from '@/lib/departments'
 import { ShareFolderDialog } from './ShareFolderDialog'
 
 const KEY = 'ledger.booksDesk.folders'
@@ -21,11 +22,12 @@ export function BookFolderHeader({ folder }: { folder: BookFolderRead }): React.
     const title = isAr ? user.title_ar || user.title : user.title || user.title_ar
     return { short: name, full: title ? `${bidi(name)} (${bidi(title)})` : bidi(name) }
   })
-  const departments = folder.shared_departments.map((department) => t(`${KEY}.departmentAudience`, { name: bidi(department) }))
-  const audience = [...people.map((person) => bidi(person.short)), ...departments]
+  const departments = folder.shared_departments.map((department) => t(`${KEY}.departmentAudience`, { name: bidi(departmentName(department, i18n.language)) }))
+  const legacyDepartments = folder.legacy_departments.map((department) => `${isAr ? 'اسم قسم قديم' : 'Old department name'}: ${bidi(department)}`)
+  const audience = [...people.map((person) => bidi(person.short)), ...departments, ...legacyDepartments]
   const separator = isAr ? '، ' : ', '
   const audienceSentence = (items: string[]): string => t(`${KEY}.restrictedAudience`, { audience: items.join(separator) })
-  const fullAudience = audienceSentence([...people.map((person) => person.full), ...departments])
+  const fullAudience = audienceSentence([...people.map((person) => person.full), ...departments, ...legacyDepartments])
   const visibleAudience = audienceSentence(audience.slice(0, 3))
 
   return (

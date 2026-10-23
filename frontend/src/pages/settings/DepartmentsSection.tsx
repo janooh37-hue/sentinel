@@ -59,6 +59,7 @@ export function DepartmentsSection(): React.JSX.Element {
 
   return (
     <div className="space-y-5">
+      <DepartmentScoping />
       <SectionCard title={t('departmentSettings.title')} description={t('departmentSettings.description')}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="max-w-prose text-[0.82em] text-muted-foreground">{t('departmentSettings.phaseNote')}</p>
@@ -156,6 +157,70 @@ export function DepartmentsSection(): React.JSX.Element {
           else activeMutation.mutate({ id: selected.id, active: false })
         }} />
     </div>
+  )
+}
+
+function DepartmentScoping(): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+  const qc = useQueryClient()
+  const [confirming, setConfirming] = useState(false)
+  const scoping = useQuery({
+    queryKey: ['department-scoping'],
+    queryFn: api.departments.getScoping,
+  })
+  const save = useMutation({
+    mutationFn: api.departments.setScoping,
+    onSuccess: (updated) => {
+      qc.setQueryData(['department-scoping'], updated)
+      // Scope changes affect all session-bound lists and counts, not just this panel.
+      void qc.invalidateQueries()
+      toast.success(t(updated.enabled ? 'departmentScope.turnedOn' : 'departmentScope.turnedOff'))
+    },
+    onError: (error) => toast.error(departmentErrorMessage(error, t)),
+  })
+  const report = scoping.data
+  return (
+    <SectionCard title={t('departmentScope.title')} description={t('departmentScope.description')}>
+      {scoping.isPending ? <Skeleton className="h-16 w-full rounded-xl" /> : scoping.isError ? (
+        <QueryFailure error={scoping.error} retry={() => { void scoping.refetch() }} />
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p role="status" className="text-sm font-medium">{t(scoping.data.enabled ? 'departmentScope.enabled' : 'departmentScope.disabled')}</p>
+          <OutlineButton disabled={save.isPending || scoping.isFetching} onClick={() => {
+            void scoping.refetch().then((result) => { if (result.isSuccess) setConfirming(true) })
+          }}>
+            {t(scoping.data.enabled ? 'departmentScope.turnOff' : 'departmentScope.turnOn')}
+          </OutlineButton>
+        </div>
+      )}
+      <ConfirmDialog open={confirming} onOpenChange={setConfirming}
+        title={t(report?.enabled ? 'departmentScope.confirmOff' : 'departmentScope.confirmOn')}
+        confirmLabel={t(report?.enabled ? 'departmentScope.turnOff' : 'departmentScope.turnOn')}
+        onConfirm={() => { if (report && !save.isPending) save.mutate(!report.enabled) }}
+        description={report?.enabled ? t('departmentScope.offWarning') : report ? (
+          <div className="max-h-[55vh] space-y-4 overflow-y-auto break-words pe-1 text-start [overflow-wrap:anywhere]">
+            <p>{t('departmentScope.warning')}</p>
+            <section>
+              <h4 className="font-semibold">{t('departmentScope.usersWithoutDepartment', { count: report.users_without_department.length })}</h4>
+              {report.users_without_department.length === 0 ? <p>{t('departmentScope.none')}</p> : (
+                <ul className="list-inside list-disc">
+                  {report.users_without_department.map((user) => <li key={user.user_id}><bdi>{user.display_name}</bdi> (<bdi>{user.email}</bdi>)</li>)}
+                </ul>
+              )}
+            </section>
+            {(['departments_without_head', 'departments_without_services'] as const).map((key) => (
+              <section key={key}>
+                <h4 className="font-semibold">{t(`departmentScope.${key}`, { count: report[key].length })}</h4>
+                {report[key].length === 0 ? <p>{t('departmentScope.none')}</p> : (
+                  <ul className="list-inside list-disc">
+                    {report[key].map((department) => <li key={department.id}><bdi>{departmentName(department, i18n.language)}</bdi></li>)}
+                  </ul>
+                )}
+              </section>
+            ))}
+          </div>
+        ) : undefined} />
+    </SectionCard>
   )
 }
 

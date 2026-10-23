@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next'
-import { ApiError, apiErrorMessage, type DepartmentRead } from './api'
+import { ApiError, apiErrorMessage, type DepartmentRead, type UserDepartmentRead } from './api'
 
 const DEPARTMENT_ERROR_KEYS: Record<string, string | undefined> = {
   DEPARTMENT_IN_USE: 'departments.errors.inUse',
@@ -11,6 +11,13 @@ const DEPARTMENT_ERROR_KEYS: Record<string, string | undefined> = {
   DEPARTMENT_NOT_FOUND: 'departments.errors.notFound',
   DEPARTMENT_OUT_OF_SCOPE: 'departments.errors.outOfScope',
   EMPLOYEE_NOT_FOUND: 'departments.errors.employeeNotFound',
+  PERSONAL_DEPARTMENT_SEND: 'books.send.errors.personalDepartment',
+  DEPARTMENT_HAS_NO_HEAD: 'books.send.errors.noHead',
+  DEPARTMENT_NO_CLEARED_HEAD: 'books.send.errors.noClearedHead',
+  DEPARTMENT_SEND_REVOKED: 'books.send.errors.revoked',
+  DISTRIBUTE_NOT_MEMBER: 'books.send.errors.notMember',
+  DISTRIBUTE_NOT_SUBDEPARTMENT: 'books.send.errors.notSubdepartment',
+  DEPARTMENT_SEND_NOT_FOUND: 'books.send.errors.sendNotFound',
 }
 
 export function departmentErrorMessage(error: unknown, t: TFunction): string {
@@ -69,4 +76,17 @@ export function departmentDescendantIds(departments: DepartmentRead[], id: numbe
     for (const child of children.get(next) ?? []) pending.push(child.id)
   }
   return descendants
+}
+
+/** Picker options mirror member-only visibility and head/deputy subtree visibility. */
+export function visibleDepartmentIds(
+  departments: DepartmentRead[],
+  memberships: UserDepartmentRead[],
+): Set<number> {
+  const visible = new Set<number>()
+  for (const membership of memberships) {
+    if (membership.role === 'member') visible.add(membership.department_id)
+    else for (const id of departmentDescendantIds(departments, membership.department_id)) visible.add(id)
+  }
+  return visible
 }

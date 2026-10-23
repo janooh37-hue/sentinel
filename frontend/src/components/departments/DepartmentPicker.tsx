@@ -15,6 +15,8 @@ type DepartmentPickerProps = {
   value: number | null
   onChange: (id: number | null) => void
   allowNone?: boolean
+  noneLabel?: string
+  allowedDepartmentIds?: ReadonlySet<number>
   excludeDepartmentId?: number
   excludeDepartmentIds?: number[]
   label?: string
@@ -26,6 +28,8 @@ export function DepartmentPicker({
   value,
   onChange,
   allowNone = true,
+  noneLabel,
+  allowedDepartmentIds,
   excludeDepartmentId,
   excludeDepartmentIds = [],
   label,
@@ -42,7 +46,8 @@ export function DepartmentPicker({
     : departmentDescendantIds(departments, excludeDepartmentId)
   for (const id of excludeDepartmentIds) excluded.add(id)
   const options = orderDepartments(departments).filter(
-    ({ department }) => !excluded.has(department.id) && (department.active || department.id === value),
+    ({ department }) => !excluded.has(department.id) && (department.active || department.id === value)
+      && (!allowedDepartmentIds || allowedDepartmentIds.has(department.id)),
   )
 
   return (
@@ -60,7 +65,7 @@ export function DepartmentPicker({
           <SelectValue placeholder={t(query.isPending ? 'departments.loading' : 'departments.choose')} />
         </SelectTrigger>
         <SelectContent>
-          {allowNone && <SelectItem value="none">{t('departments.none')}</SelectItem>}
+          {allowNone && <SelectItem value="none">{noneLabel ?? t('departments.none')}</SelectItem>}
           {options.map(({ department, depth }) => (
             <SelectItem key={department.id} value={String(department.id)}>
               <span style={{ paddingInlineStart: `${depth}rem` }}>

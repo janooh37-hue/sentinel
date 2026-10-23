@@ -179,11 +179,12 @@ interface Props {
    * without the capability keeps the original three-column hero.
    */
   extraCard?: React.ReactNode
+  departmentId?: number
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function LookupHeroCards({ onOpen, extraCard }: Props): React.JSX.Element {
+export function LookupHeroCards({ onOpen, extraCard, departmentId }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
   const { has } = useCapabilities()
@@ -194,8 +195,8 @@ export function LookupHeroCards({ onOpen, extraCard }: Props): React.JSX.Element
 
   // ── Expiring documents ────────────────────────────────────────────────────
   const expiryQuery = useQuery({
-    queryKey: ['expiry', 90] as const,
-    queryFn: () => api.getExpiry(90),
+    queryKey: ['expiry', 90, departmentId] as const,
+    queryFn: () => api.getExpiry(90, 'all', departmentId),
     enabled: canViewExpiry,
     staleTime: 60_000,
   })
@@ -207,8 +208,8 @@ export function LookupHeroCards({ onOpen, extraCard }: Props): React.JSX.Element
 
   // ── Completeness / data gaps ──────────────────────────────────────────────
   const completenessQuery = useQuery({
-    queryKey: ['employees-completeness'] as const,
-    queryFn: () => api.getEmployeesCompleteness(),
+    queryKey: ['employees-completeness', departmentId] as const,
+    queryFn: () => api.getEmployeesCompleteness(departmentId),
     staleTime: 60_000,
   })
 

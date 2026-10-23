@@ -1,7 +1,7 @@
 import { createInstance } from 'i18next'
 import { describe, expect, it } from 'vitest'
 import { ApiError, type DepartmentRead } from './api'
-import { departmentDescendantIds, departmentErrorMessage, departmentName, orderDepartments } from './departments'
+import { departmentDescendantIds, departmentErrorMessage, departmentName, orderDepartments, visibleDepartmentIds } from './departments'
 import en from '@/locales/en.json'
 import ar from '@/locales/ar.json'
 
@@ -38,6 +38,15 @@ describe('department tree', () => {
     expect(departmentName(departments[0]!, 'ar-AE')).toBe('فرعي')
     expect(departmentName(departments[0]!, 'en')).toBe('Child')
   })
+
+  it('limits members to memberships and includes head and deputy descendants', () => {
+    const member = { department_id: 1, name_en: 'First', name_ar: 'الأول', role: 'member' as const, is_primary: true }
+    expect(visibleDepartmentIds(departments, [member])).toEqual(new Set([1]))
+    expect(visibleDepartmentIds(departments, [{ ...member, role: 'head' }])).toEqual(new Set([1, 2, 3]))
+    expect(visibleDepartmentIds(departments, [{ ...member, department_id: 2, role: 'deputy' }])).toEqual(new Set([2, 3]))
+    expect(visibleDepartmentIds(departments, [member, { ...member, department_id: 4 }])).toEqual(new Set([1, 4]))
+    expect(visibleDepartmentIds(departments, [])).toEqual(new Set())
+  })
 })
 
 describe('department error messages', () => {
@@ -46,6 +55,7 @@ describe('department error messages', () => {
     await i18n.init({ lng: language, resources: { en: { translation: en }, ar: { translation: ar } } })
     const t = i18n.getFixedT(language)
     const messages = language === 'ar' ? ar.departments.errors : en.departments.errors
+    const sendMessages = language === 'ar' ? ar.books.send.errors : en.books.send.errors
     const expected = {
       DEPARTMENT_IN_USE: messages.inUse,
       DEPARTMENT_NAME_TAKEN: messages.nameTaken,
@@ -56,6 +66,13 @@ describe('department error messages', () => {
       DEPARTMENT_NOT_FOUND: messages.notFound,
       DEPARTMENT_OUT_OF_SCOPE: messages.outOfScope,
       EMPLOYEE_NOT_FOUND: messages.employeeNotFound,
+      PERSONAL_DEPARTMENT_SEND: sendMessages.personalDepartment,
+      DEPARTMENT_HAS_NO_HEAD: sendMessages.noHead,
+      DEPARTMENT_NO_CLEARED_HEAD: sendMessages.noClearedHead,
+      DEPARTMENT_SEND_REVOKED: sendMessages.revoked,
+      DISTRIBUTE_NOT_MEMBER: sendMessages.notMember,
+      DISTRIBUTE_NOT_SUBDEPARTMENT: sendMessages.notSubdepartment,
+      DEPARTMENT_SEND_NOT_FOUND: sendMessages.sendNotFound,
     }
     for (const [code, message] of Object.entries(expected)) {
       expect(departmentErrorMessage(new ApiError(409, code, 'Raw English server message'), t)).toBe(message)

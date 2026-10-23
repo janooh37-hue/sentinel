@@ -101,6 +101,10 @@ def test_employee_assignment_grouping_and_service_validation(client, api_db):
         json={"employee_ids": ["G1", "G2"], "department_id": target["id"]},
     )
     assert response.json() == {"updated": 2}
+    for employee_id in ("G1", "G2"):
+        assert (
+            client.get(f"/api/v1/employees/{employee_id}").json()["department"] == target["name_ar"]
+        )
     assert client.get(f"{API}/unassigned-employees").json() == []
     assert client.delete(f"{API}/{target['id']}").status_code == 409
     invalid = client.put(f"{API}/{target['id']}/services", json={"service_ids": ["invented"]})
@@ -114,6 +118,66 @@ def test_employee_assignment_grouping_and_service_validation(client, api_db):
     )
     assert response.status_code == 200
     assert set(response.json()["service_ids"]) == {"General Book", "Employment Application Form"}
+    cleared = client.post(
+        f"{API}/assign-employees",
+        json={"employee_ids": ["G1", "G2"], "department_id": None},
+    )
+    assert cleared.json() == {"updated": 2}
+    for employee_id in ("G1", "G2"):
+        employee = client.get(f"/api/v1/employees/{employee_id}").json()
+        assert employee["department_id"] is None
+        assert employee["department"] == target["name_ar"]
+
+
+def test_department_arabic_rename_updates_assigned_labels_only(client, api_db):
+    target = department(client)
+    api_db.add_all(
+        [
+            Employee(
+                id="GRENAME",
+                name_en="Assigned",
+                department_id=target["id"],
+                department=target["name_ar"],
+            ),
+            Employee(id="GHINT", name_en="Unassigned", department=target["name_ar"]),
+        ]
+    )
+    api_db.commit()
+    renamed = client.patch(f"{API}/{target['id']}", json={"name_ar": "قسم العمليات"})
+    assert renamed.status_code == 200, renamed.text
+    assert client.get("/api/v1/employees/GRENAME").json()["department"] == "قسم العمليات"
+    assert client.get("/api/v1/employees/GHINT").json()["department"] == target["name_ar"]
+
+
+@pytest.mark.parametrize("operation", ["create", "patch"])
+def test_employee_writes_derive_department_label_and_clearing_keeps_hint(client, operation):
+    target = department(client)
+    payload = {"department_id": target["id"], "department": "Conflicting free text"}
+    if operation == "create":
+        response = client.post(
+            "/api/v1/employees", json={"id": "GLABEL", "name_en": "Label", **payload}
+        )
+        assert response.status_code == 201, response.text
+    else:
+        original = department(client, "Original")
+        created = client.post(
+            "/api/v1/employees",
+            json={"id": "GLABEL", "name_en": "Label", "department_id": original["id"]},
+        )
+        assert created.status_code == 201, created.text
+        response = client.patch("/api/v1/employees/GLABEL", json=payload)
+        assert response.status_code == 200, response.text
+    assert response.json()["department"] == target["name_ar"]
+    text_only = client.patch("/api/v1/employees/GLABEL", json={"department": "Still conflicting"})
+    assert text_only.status_code == 200, text_only.text
+    assert text_only.json()["department"] == target["name_ar"]
+    cleared = client.patch(
+        "/api/v1/employees/GLABEL",
+        json={"department_id": None, "department": "Do not replace the hint"},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["department_id"] is None
+    assert cleared.json()["department"] == target["name_ar"]
 
 
 @pytest.mark.parametrize("explicit", [False, True])
@@ -328,6 +392,7 @@ def test_scoping_switch_preflight_audit_and_cache_invalidation(client, api_db):
     assert preflight.status_code == 200, preflight.text
     assert preflight.json() == {
         "enabled": False,
+        "records_backfilled": 0,
         "users_without_department": [
             {"user_id": user.id, "display_name": "Unassigned", "email": user.email}
         ],

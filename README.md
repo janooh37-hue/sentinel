@@ -67,6 +67,13 @@ and HR pages keep their existing permission gates. Announcement recipient and
 WhatsApp-mention searches still require `employees.view` because they use
 contact numbers rather than only employee identities.
 
+Departments narrow people data, Records and services only after an administrator
+enables **Settings → People & access → Departments → department scoping**;
+deploying leaves the switch off. Members see their departments, heads/deputies
+also see subdepartments, and unassigned users keep their own work. Admins and
+users granted `departments.all` retain the organization-wide view; action
+capabilities and Record Levels still apply. `departments.manage` controls setup.
+
 ## Record category permissions
 
 The Permissions page lists the 15 General Book classifications, then the legacy

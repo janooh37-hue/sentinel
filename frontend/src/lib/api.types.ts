@@ -3526,6 +3526,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/department-sends/{send_id}/distribution-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Department Distribution Options */
+        get: operations["department_distribution_options_api_v1_books__book_id__department_sends__send_id__distribution_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/department-sends/{send_id}/distribute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Distribute Department Send */
+        post: operations["distribute_department_send_api_v1_books__book_id__department_sends__send_id__distribute_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/department-sends/{send_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Recall Department Send */
+        delete: operations["recall_department_send_api_v1_books__book_id__department_sends__send_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/submit": {
         parameters: {
             query?: never;
@@ -8729,6 +8780,51 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /** BookDepartmentSendRead */
+        BookDepartmentSendRead: {
+            /** Id */
+            id: number;
+            /** Department Id */
+            department_id: number;
+            /** Department Name En */
+            department_name_en: string;
+            /** Department Name Ar */
+            department_name_ar: string;
+            /** Parent Send Id */
+            parent_send_id: number | null;
+            /** Sent By User Id */
+            sent_by_user_id: number;
+            /** Sent By Name */
+            sent_by_name: string | null;
+            /** Sent By Name Ar */
+            sent_by_name_ar: string | null;
+            /**
+             * Purpose
+             * @enum {string}
+             */
+            purpose: "info" | "action" | "reply" | "circulate";
+            /** Note */
+            note: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Heads Total */
+            heads_total: number;
+            /** Heads Read */
+            heads_read: number;
+            /** Members Reached */
+            members_reached: number;
+            /** Done Count */
+            done_count: number;
+            /** Can Recall */
+            can_recall: boolean;
+            /** Can Distribute */
+            can_distribute: boolean;
+        };
         /** BookDeriveRequest */
         BookDeriveRequest: {
             /**
@@ -8745,6 +8841,58 @@ export interface components {
             attach_reference: boolean;
             /** Classification Code */
             classification_code?: string | null;
+        };
+        /** BookDistributeRequest */
+        BookDistributeRequest: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "all" | "members" | "subdepartment";
+            /** User Ids */
+            user_ids?: number[];
+            /** Subdepartment Id */
+            subdepartment_id?: number | null;
+            /** Purpose */
+            purpose?: ("info" | "action" | "reply" | "circulate") | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** BookDistributionDepartment */
+        BookDistributionDepartment: {
+            /** Id */
+            id: number;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /** Has Head */
+            has_head: boolean;
+        };
+        /** BookDistributionMember */
+        BookDistributionMember: {
+            /** User Id */
+            user_id: number;
+            /** Name */
+            name: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "head" | "deputy" | "member";
+            /** Already Recipient */
+            already_recipient: boolean;
+            /** Cleared */
+            cleared: boolean;
+        };
+        /** BookDistributionOptions */
+        BookDistributionOptions: {
+            /** Members */
+            members: components["schemas"]["BookDistributionMember"][];
+            /** Subdepartments */
+            subdepartments: components["schemas"]["BookDistributionDepartment"][];
         };
         /**
          * BookEditSessionRead
@@ -8794,6 +8942,15 @@ export interface components {
              */
             team: boolean;
         };
+        /** BookFolderDepartment */
+        BookFolderDepartment: {
+            /** Id */
+            id: number;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+        };
         /** BookFolderRead */
         BookFolderRead: {
             /** Id */
@@ -8817,7 +8974,9 @@ export interface components {
             /** Shared Users */
             shared_users: components["schemas"]["BookFolderShareUser"][];
             /** Shared Departments */
-            shared_departments: string[];
+            shared_departments: components["schemas"]["BookFolderDepartment"][];
+            /** Legacy Departments */
+            legacy_departments: string[];
         };
         /** BookFolderShareOption */
         BookFolderShareOption: {
@@ -8831,15 +8990,15 @@ export interface components {
             title: string | null;
             /** Title Ar */
             title_ar: string | null;
-            /** Department */
-            department: string | null;
+            /** Department Id */
+            department_id: number | null;
         };
         /** BookFolderShareOptions */
         BookFolderShareOptions: {
             /** Users */
             users: components["schemas"]["BookFolderShareOption"][];
             /** Departments */
-            departments: string[];
+            departments: components["schemas"]["BookFolderDepartment"][];
         };
         /** BookFolderShareUser */
         BookFolderShareUser: {
@@ -8860,8 +9019,10 @@ export interface components {
             everyone: boolean;
             /** User Ids */
             user_ids?: number[];
-            /** Departments */
-            departments?: string[];
+            /** Department Ids */
+            department_ids?: number[];
+            /** Legacy Departments */
+            legacy_departments?: string[];
         };
         /** BookFolderUpdate */
         BookFolderUpdate: {
@@ -8875,6 +9036,12 @@ export interface components {
         BookInboxRead: {
             /** Id */
             id: number;
+            /** Department Send Id */
+            department_send_id?: number | null;
+            /** Department Name En */
+            department_name_en?: string | null;
+            /** Department Name Ar */
+            department_name_ar?: string | null;
             /**
              * Purpose
              * @enum {string}
@@ -8929,6 +9096,12 @@ export interface components {
             /** Category Id */
             category_id: string | null;
             category?: components["schemas"]["BookCategoryRead"] | null;
+            /** Department Id */
+            department_id?: number | null;
+            /** Department Name En */
+            department_name_en?: string | null;
+            /** Department Name Ar */
+            department_name_ar?: string | null;
             /** Employee Id */
             employee_id?: string | null;
             /** Employee Name Snapshot */
@@ -8981,6 +9154,8 @@ export interface components {
              */
             can_change_confidentiality: boolean;
             my_inbox?: components["schemas"]["BookInboxRead"] | null;
+            /** Department Sends */
+            department_sends?: components["schemas"]["BookDepartmentSendRead"][];
             /** Selected Version Id */
             selected_version_id?: number | null;
             /**
@@ -9109,6 +9284,8 @@ export interface components {
             id: number;
             /** User Id */
             user_id: number;
+            /** Department Send Id */
+            department_send_id?: number | null;
             /** User Name */
             user_name?: string | null;
             /** User Name Ar */
@@ -9207,7 +9384,9 @@ export interface components {
         /** BookSendRequest */
         BookSendRequest: {
             /** User Ids */
-            user_ids: number[];
+            user_ids?: number[];
+            /** Department Ids */
+            department_ids?: number[];
             /**
              * Purpose
              * @enum {string}
@@ -9238,12 +9417,14 @@ export interface components {
         /** BookSendSkipped */
         BookSendSkipped: {
             /** User Id */
-            user_id: number;
+            user_id?: number | null;
+            /** Department Id */
+            department_id?: number | null;
             /**
              * Reason
              * @enum {string}
              */
-            reason: "already_recipient" | "self";
+            reason: "already_recipient" | "self" | "already_sent" | "not_cleared";
         };
         /** BookSignRequest */
         BookSignRequest: {
@@ -10351,6 +10532,11 @@ export interface components {
         DepartmentScopingRead: {
             /** Enabled */
             enabled: boolean;
+            /**
+             * Records Backfilled
+             * @default 0
+             */
+            records_backfilled: number;
             /** Users Without Department */
             users_without_department: components["schemas"]["DepartmentScopingUserRead"][];
             /** Departments Without Head */
@@ -25233,6 +25419,110 @@ export interface operations {
             path: {
                 book_id: number;
                 recipient_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    department_distribution_options_api_v1_books__book_id__department_sends__send_id__distribution_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                send_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookDistributionOptions"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    distribute_department_send_api_v1_books__book_id__department_sends__send_id__distribute_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                send_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookDistributeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookSendResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recall_department_send_api_v1_books__book_id__department_sends__send_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                send_id: number;
             };
             cookie?: {
                 gssg_session?: string | null;

@@ -219,18 +219,18 @@ def _compute_totals(
     open_violations_count = int(db.execute(violations_stmt).scalar_one())
 
     draft_needle = f'%"{DRAFT_TAG}"%'
-    draft_count = int(
-        db.execute(
-            select(func.count())
-            .select_from(LedgerEntry)
-            .where(
-                and_(
-                    LedgerEntry.deleted_at.is_(None),
-                    cast(LedgerEntry.tags, Text).like(draft_needle),
-                )
-            )
-        ).scalar_one()
+    draft_stmt = (
+        select(func.count())
+        .select_from(LedgerEntry)
+        .where(
+            LedgerEntry.deleted_at.is_(None),
+            cast(LedgerEntry.tags, Text).like(draft_needle),
+        )
     )
+    draft_visibility = ledger_service.related_book_visible(db, user)
+    if draft_visibility is not None:
+        draft_stmt = draft_stmt.where(draft_visibility)
+    draft_count = int(db.execute(draft_stmt).scalar_one())
 
     book_draft_stmt = (
         select(func.count())

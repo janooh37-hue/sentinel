@@ -113,6 +113,7 @@ class DepartmentScopingDepartmentRead(BaseModel):
 
 class DepartmentScopingRead(BaseModel):
     enabled: bool
+    records_backfilled: int = 0
     users_without_department: list[DepartmentScopingUserRead]
     departments_without_head: list[DepartmentScopingDepartmentRead]
     departments_without_services: list[DepartmentScopingDepartmentRead]

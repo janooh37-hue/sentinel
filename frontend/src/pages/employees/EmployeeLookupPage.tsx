@@ -29,6 +29,8 @@ import type { EmployeeCreate } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { useUrlOverlay } from '@/lib/urlState'
+import { DepartmentPicker } from '@/components/departments/DepartmentPicker'
+import { visibleDepartmentIds } from '@/lib/departments'
 
 export function EmployeeLookupPage(): React.JSX.Element {
   const { t } = useTranslation()
@@ -41,8 +43,10 @@ export function EmployeeLookupPage(): React.JSX.Element {
     injectedExtraction?: ExtractionResponse
   } | null
   const overlay = useUrlOverlay('create')
+  const openCreate = overlay.open
   const creating = overlay.value === '1'
   const [createError, setCreateError] = useState<string | null>(null)
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null)
   const [createInjection, setCreateInjection] = useState<
     ExtractionResponse | undefined
   >(() => intakeState?.injectedExtraction)
@@ -61,13 +65,24 @@ export function EmployeeLookupPage(): React.JSX.Element {
   }, [creating])
 
 
-  // Cheap shared cache with Dashboard — exposes today's on-leave set so we
-  // can both filter and tint status pills without a new endpoint.
   const dashboardQuery = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: api.getDashboardSummary,
+    queryKey: ['dashboard', undefined],
+    queryFn: () => api.getDashboardSummary(),
     staleTime: 60_000,
   })
+  const scope = dashboardQuery.data?.department_scope
+  const departments = useQuery({
+    queryKey: ['departments'],
+    queryFn: api.departments.list,
+    enabled: scope?.kind === 'organization' || scope?.kind === 'department',
+  })
+  const allowedIds = scope?.kind === 'department'
+    ? visibleDepartmentIds(departments.data ?? [], scope.departments ?? [])
+    : undefined
+  const showDepartmentFilter = scope?.kind === 'organization'
+    || (scope?.kind === 'department' && (departments.data ?? []).filter((department) => department.active && allowedIds?.has(department.id)).length > 1)
+  const departmentId = showDepartmentFilter && (allowedIds === undefined || (selectedDepartmentId !== null && allowedIds.has(selectedDepartmentId)))
+    ? selectedDepartmentId ?? undefined : undefined
   const onLeaveIds = useMemo(() => {
     const set = new Set<string>()
     for (const item of dashboardQuery.data?.on_leave_today ?? []) {
@@ -96,7 +111,7 @@ export function EmployeeLookupPage(): React.JSX.Element {
 
   useShortcutAction(
     'newItem',
-    useCallback(() => overlay.open('1'), [overlay.open]),
+    useCallback(() => openCreate('1'), [openCreate]),
   )
 
   const submitCreate = async (values: EmployeeFormOutput): Promise<void> => {
@@ -112,9 +127,9 @@ export function EmployeeLookupPage(): React.JSX.Element {
   )
 
   const handleCreate = useCallback(() => {
-    overlay.open('1')
+    openCreate('1')
     setCreateError(null)
-  }, [overlay.open])
+  }, [openCreate])
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
@@ -123,9 +138,15 @@ export function EmployeeLookupPage(): React.JSX.Element {
         onSelect={handleSelect}
         onCreate={handleCreate}
         onLeaveIds={onLeaveIds}
+        departmentId={departmentId}
+        filters={showDepartmentFilter ? (
+          <DepartmentPicker value={departmentId ?? null} onChange={setSelectedDepartmentId}
+            allowedDepartmentIds={allowedIds} noneLabel={t('departmentScope.allDepartments')} />
+        ) : undefined}
       >
         <LookupHeroCards
           onOpen={handleSelect}
+          departmentId={departmentId}
           extraCard={<AttendanceHeroCard onOpen={() => navigate('/employees/attendance')} />}
         />
         {/* The lookup band is centre-composed, so the strip sits on its axis. */}

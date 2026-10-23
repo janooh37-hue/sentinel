@@ -358,7 +358,9 @@ the domain language above.
 | Direct send | `BookRecipient` |
 | Department | `Department` / `departments` |
 | Department membership | `DepartmentMember` / `department_members` |
-| Department send | Reserved for a later phase |
+| Department scope | `department_scope_service.DepartmentScope` |
+| Organization-wide view | `departments.all` |
+| Department send | `BookDepartmentSend` |
 | Threaded reply confirmation | `ScanInbox.source = "email_reply_match"` |
 | Attendance case | `AttendanceCase` |
 | Automatic verdict | `AttendanceEvaluation` |

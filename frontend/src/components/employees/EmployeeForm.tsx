@@ -185,6 +185,7 @@ export function EmployeeForm({
   } = form
 
   const status = useWatch({ control, name: 'status' })
+  const departmentId = useWatch({ control, name: 'department_id' })
   const endDateRequired = !isWorkingStatus(status)
   const isTransferred = status === 'Transferred'
   // Reactivating a departed/transferred employee (to Active or Loaned) asks for the return date.
@@ -345,7 +346,7 @@ export function EmployeeForm({
                 />
               )}
             />
-            {initial?.department && (
+            {initial?.department_id == null && departmentId == null && initial?.department && (
               <p className="break-words text-xs text-muted-foreground">
                 {t('departmentEmployees.previousValue')}: <bdi>{initial.department}</bdi>
               </p>
