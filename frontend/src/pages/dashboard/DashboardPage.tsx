@@ -1,15 +1,39 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { format } from 'date-fns'
 import { ar as arLocale } from 'date-fns/locale'
 import { Pencil } from 'lucide-react'
-import { api, type DashboardLayout, type WorkforceAccess, type WorkforceSnapshot } from '@/lib/api'
+import {
+  api,
+  type DashboardLayout,
+  type DashboardQuickActionConfig,
+  type WorkforceSnapshot,
+} from '@/lib/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { WidgetEditDialog } from '@/components/dashboard/WidgetEditDialog'
-import { AddWidgetsPanel, CustomizeBanner, WidgetControls } from '@/components/dashboard/CustomizeWidgets'
-import { DEFAULT_LAYOUT, MAX_VISIBLE_QUICK_ACTIONS, QUICK_ACTION_IDS, WIDGET_IDS, isQuickActionAllowed, mergeQuickActionsPreservingDenied, packLayout, resolveLayout, rowsPerHeight, tierOf, widgetsForApi, type QuickActionId, type WidgetId, type WidgetSize } from '@/lib/dashboardLayout'
+import {
+  AddWidgetsPanel,
+  CustomizeBanner,
+  WidgetControls,
+} from '@/components/dashboard/CustomizeWidgets'
+import {
+  DEFAULT_LAYOUT,
+  MAX_VISIBLE_QUICK_ACTIONS,
+  QUICK_ACTION_IDS,
+  WIDGET_IDS,
+  isQuickActionAllowed,
+  mergeQuickActionsPreservingDenied,
+  packLayout,
+  resolveLayout,
+  rowsPerHeight,
+  tierOf,
+  widgetsForApi,
+  type QuickActionId,
+  type WidgetId,
+  type WidgetSize,
+} from '@/lib/dashboardLayout'
 import { hijriToday } from '@/lib/hijri'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { useAuth } from '@/lib/authContext'
@@ -93,10 +117,24 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   const { user } = useAuth()
   const qc = useQueryClient()
   const isMobile = useIsMobile()
-  const summaryQuery = useQuery({ queryKey: ['dashboard'], queryFn: api.getDashboardSummary, staleTime: 60_000 })
+  const summaryQuery = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: api.getDashboardSummary,
+    staleTime: 60_000,
+  })
   const summary = summaryQuery.data
   const approvalSummary = useApprovalSummary().data
-  const layoutQuery = useQuery<DashboardLayout | null>({ queryKey: ['dashboard-layout', user?.id], queryFn: api.getDashboardLayout, enabled: Boolean(user) })
+  const workforceAccessQuery = useQuery({
+    queryKey: ['workforce', 'access'],
+    queryFn: api.getWorkforceAccess,
+    enabled: !capabilitiesLoading && (has('workforce.self.view') || has('workforce.dashboard.view')),
+    staleTime: 60_000,
+  })
+  const layoutQuery = useQuery<DashboardLayout | null>({
+    queryKey: ['dashboard-layout', user?.id],
+    queryFn: api.getDashboardLayout,
+    enabled: Boolean(user),
+  })
   const layout = useMemo(() => resolveLayout(layoutQuery.data), [layoutQuery.data])
   const [draft, setDraft] = useState<DashboardLayout | null>(null)
   const editing = draft !== null
@@ -107,6 +145,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   const customizeRef = useRef<HTMLButtonElement>(null)
   const focusAfterMove = useRef<{ id: string; control: string } | null>(null)
   const focusCustomize = useRef(false)
+
   useLayoutEffect(() => {
     if (focusCustomize.current && !draft) {
       customizeRef.current?.focus()
@@ -114,9 +153,14 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
     }
     const target = focusAfterMove.current
     if (!target) return
-    boardRef.current?.querySelector<HTMLElement>(`[data-widget-id="${target.id}"] [data-control="${target.control}"]`)?.focus()
+    boardRef.current
+      ?.querySelector<HTMLElement>(
+        `[data-widget-id="${target.id}"] [data-control="${target.control}"]`,
+      )
+      ?.focus()
     focusAfterMove.current = null
   }, [draft])
+
   const updateLayout = useMutation({
     mutationFn: (next: DashboardLayout) => {
       if (!user) throw new Error('Cannot save a dashboard layout without an authenticated user')
@@ -128,23 +172,61 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
     },
     onError: (err: Error) => toast.error(err.message),
   })
-  const availableIds = WIDGET_IDS.filter((id) => widgetRegistry[id].available({ has, approvalSummary, capabilitiesLoading, workforceAccess: qc.getQueryData<WorkforceAccess>(['workforce', 'access']) }))
-  const visibleWidgets = [...activeLayout.widgets].sort((a, b) => a.order - b.order).filter((widget) => widget.visible && availableIds.includes(widget.id))
+  const availableIds = WIDGET_IDS.filter((id) =>
+    widgetRegistry[id].available({
+      has,
+      approvalSummary,
+      capabilitiesLoading,
+      workforceAccess: workforceAccessQuery.data,
+    }),
+  )
+  const visibleWidgets = [...activeLayout.widgets]
+    .sort((a, b) => a.order - b.order)
+    .filter((widget) => widget.visible && availableIds.includes(widget.id))
   const cols = isMobile ? 2 : activeLayout.canvas_width === 'wide' ? 6 : 4
   const packed = packLayout(visibleWidgets, cols)
-  const catalog = availableIds.map((id) => ({ id, title: t(widgetRegistry[id].titleKey), source: widgetRegistry[id].source }))
-  const quickActionLabels = Object.fromEntries(QUICK_ACTION_IDS.map((id) => [id, t(`dashboard.quickActionLabels.${QUICK_ACTION_META[id].slug}`)])) as Record<QuickActionId, string>
-  const allowedQuickActions = activeLayout.quick_actions.filter((item) => isQuickActionAllowed(item.id, has))
-  const allowedQuickActionDefaults = DEFAULT_LAYOUT.quick_actions.filter((item) => isQuickActionAllowed(item.id, has))
-  const coverageOperationalDate = qc.getQueryData<WorkforceSnapshot>(['workforce', 'snapshot'])?.operational_date ?? ''
+  const catalog = availableIds.map((id) => ({
+    id,
+    title: t(widgetRegistry[id].titleKey),
+    source: widgetRegistry[id].source,
+  }))
+  const quickActionLabels = Object.fromEntries(
+    QUICK_ACTION_IDS.map((id) => [
+      id,
+      t(`dashboard.quickActionLabels.${QUICK_ACTION_META[id].slug}`),
+    ]),
+  ) as Record<QuickActionId, string>
+  const allowedQuickActions = activeLayout.quick_actions.filter((item) =>
+    isQuickActionAllowed(item.id, has),
+  )
+  const allowedQuickActionDefaults = DEFAULT_LAYOUT.quick_actions.filter((item) =>
+    isQuickActionAllowed(item.id, has),
+  )
+  const coverageOperationalDate =
+    qc.getQueryData<WorkforceSnapshot>(['workforce', 'snapshot'])?.operational_date ?? ''
   const welcomeName = useMemo(() => {
     if (!identity?.linked) return null
     const full = isAr && identity.name_ar ? identity.name_ar : identity.name_en
     return full ? firstSecondFamilyName(full) : null
   }, [identity, isAr])
-  const heroReturners = useMemo<HeroReturner[]>(() => (summary?.upcoming_leave_ends ?? []).filter((row) => row.days_remaining <= 0).map((row) => ({ name: pickName(row, isAr), employee_id: row.employee_id })), [summary, isAr])
+  const heroReturners = useMemo<HeroReturner[]>(
+    () =>
+      (summary?.upcoming_leave_ends ?? [])
+        .filter((row) => row.days_remaining <= 0)
+        .map((row) => ({ name: pickName(row, isAr), employee_id: row.employee_id })),
+    [summary, isAr],
+  )
 
-  const changeSize = (id: WidgetId, size: WidgetSize) => setDraft((current) => current && ({ ...current, widgets: current.widgets.map((widget) => widget.id === id ? { ...widget, size } : widget) }))
+  const changeSize = (id: WidgetId, size: WidgetSize) => {
+    setDraft((current) =>
+      current && {
+        ...current,
+        widgets: current.widgets.map((widget) =>
+          widget.id === id ? { ...widget, size } : widget,
+        ),
+      },
+    )
+  }
   const moveWidget = (id: WidgetId, targetId: WidgetId, control: string) => {
     if (!draft || id === targetId) return
     const next = [...draft.widgets]
@@ -155,59 +237,209 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
     focusAfterMove.current = { id, control }
     setDraft({ ...draft, widgets: widgetsForApi(next) })
   }
+  const moveRelative = (id: WidgetId, index: number, direction: -1 | 1) => {
+    const target = visibleWidgets[index + direction]
+    if (target) moveWidget(id, target.id, direction < 0 ? 'earlier' : 'later')
+  }
+  const allowDrop = (event: DragEvent<HTMLElement>) => {
+    if (editing && !updateLayout.isPending && event.dataTransfer.types.includes('text/plain')) {
+      event.preventDefault()
+    }
+  }
+  const dropWidget = (event: DragEvent<HTMLElement>, id: WidgetId) => {
+    if (!editing || updateLayout.isPending) return
+    event.preventDefault()
+    const from = event.dataTransfer.getData('text/plain') as WidgetId
+    if (visibleWidgets.some((item) => item.id === from)) moveWidget(from, id, 'drag')
+  }
+  const removeWidget = (id: WidgetId) => {
+    setDraft({
+      ...activeLayout,
+      widgets: activeLayout.widgets.map((item) =>
+        item.id === id ? { ...item, visible: false } : item,
+      ),
+    })
+    customizeRef.current?.focus()
+  }
+  const addWidget = (id: WidgetId) => {
+    const item = activeLayout.widgets.find((widget) => widget.id === id)!
+    setDraft({
+      ...activeLayout,
+      widgets: widgetsForApi([
+        ...activeLayout.widgets.filter((widget) => widget.id !== id),
+        { ...item, visible: true, size: 'S' },
+      ]),
+    })
+  }
   const closeCustomize = () => {
     focusCustomize.current = true
     setDraft(null)
   }
+  const saveLayout = () => {
+    updateLayout.mutate(
+      { ...activeLayout, widgets: widgetsForApi(activeLayout.widgets) },
+      { onSuccess: closeCustomize },
+    )
+  }
+  const saveQuickActions = (items: DashboardQuickActionConfig[]) => {
+    setDraft({
+      ...activeLayout,
+      quick_actions: mergeQuickActionsPreservingDenied(activeLayout.quick_actions, items),
+    })
+    setQuickActionsDialogOpen(false)
+  }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
-      <div className="min-h-0 flex-1"><PullToRefresh>
-        <div data-canvas-width={activeLayout.canvas_width} className={`w-full px-4 pb-12 pt-6 md:px-7 ${activeLayout.canvas_width === 'wide' ? '' : 'mx-auto max-w-[1180px]'}`}>
-          <DashboardHero name={welcomeName} isAr={isAr} isLoading={summaryQuery.isPending} welcomeGuest={t('dashboard.welcomeBackGuest')} staffOnSite={summary?.totals.present_today ?? 0} onLeaveToday={summary?.totals.on_leave_today ?? 0} returnersToday={heroReturners} upcomingThisWeek={summary?.upcoming_leave_ends.length ?? 0} onReviewLeaves={() => onNavigate('leaves')} />
-          <div className="mb-3.5 flex items-center justify-between gap-2">
-            <h3 className="text-lg font-semibold tracking-tight text-foreground">{t('dashboard.myWidgets')}</h3>
-            <div className="flex items-center gap-2">
-              <RefreshButton />
-              <button ref={customizeRef} type="button" aria-expanded={editing} disabled={editing || !user || layoutQuery.isPending} onClick={() => setDraft(structuredClone(layout))} className="inline-flex items-center gap-1.5 rounded-sm text-[0.85em] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
-                {t('dashboard.customize.action')}<Pencil className="size-3.5" aria-hidden />
-              </button>
+      <div className="min-h-0 flex-1">
+        <PullToRefresh>
+          <div
+            data-canvas-width={activeLayout.canvas_width}
+            className={`w-full px-4 pb-12 pt-6 md:px-7 ${
+              activeLayout.canvas_width === 'wide' ? '' : 'mx-auto max-w-[1180px]'
+            }`}
+          >
+            <DashboardHero
+              name={welcomeName}
+              isAr={isAr}
+              isLoading={summaryQuery.isPending}
+              welcomeGuest={t('dashboard.welcomeBackGuest')}
+              staffOnSite={summary?.totals.present_today ?? 0}
+              onLeaveToday={summary?.totals.on_leave_today ?? 0}
+              returnersToday={heroReturners}
+              upcomingThisWeek={summary?.upcoming_leave_ends.length ?? 0}
+              onReviewLeaves={() => onNavigate('leaves')}
+            />
+            <div className="mb-3.5 flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold tracking-tight text-foreground">
+                {t('dashboard.myWidgets')}
+              </h3>
+              <div className="flex items-center gap-2">
+                <RefreshButton />
+                <button
+                  ref={customizeRef}
+                  type="button"
+                  aria-expanded={editing}
+                  disabled={editing || !user || layoutQuery.isPending}
+                  onClick={() => setDraft(structuredClone(layout))}
+                  className="inline-flex items-center gap-1.5 rounded-sm text-[0.85em] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                >
+                  {t('dashboard.customize.action')}
+                  <Pencil className="size-3.5" aria-hidden />
+                </button>
+              </div>
+            </div>
+            {editing && (
+              <CustomizeBanner
+                width={activeLayout.canvas_width ?? 'compact'}
+                onWidth={(width) => setDraft({ ...activeLayout, canvas_width: width })}
+                onReset={() => setDraft(structuredClone(DEFAULT_LAYOUT))}
+                onCancel={closeCustomize}
+                isSaving={updateLayout.isPending}
+                onSave={saveLayout}
+              />
+            )}
+            <div className="flex flex-col items-start gap-4 lg:flex-row">
+              <div
+                ref={boardRef}
+                data-testid="widget-grid"
+                data-columns={cols}
+                className="grid w-full min-w-0 flex-1 gap-3.5"
+                style={{
+                  gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                  gridAutoRows: '9.25rem',
+                }}
+              >
+                {packed.placed.map((box, index) => {
+                  const id = box.id as WidgetId
+                  const { Component, titleKey } = widgetRegistry[id]
+                  const title = t(titleKey)
+                  const widget = visibleWidgets.find((item) => item.id === id)!
+                  return (
+                    <article
+                      key={id}
+                      data-widget-id={id}
+                      aria-label={title}
+                      className={`relative min-h-0 min-w-0 overflow-hidden rounded-2xl ${
+                        editing ? 'ring-1 ring-border-strong' : ''
+                      }`}
+                      style={{
+                        gridColumn: `${box.c + 1} / span ${box.w}`,
+                        gridRow: `${box.r + 1} / span ${box.h}`,
+                      }}
+                      onDragOver={allowDrop}
+                      onDrop={(event) => dropWidget(event, id)}
+                    >
+                      {editing && (
+                        <WidgetControls
+                          item={widget}
+                          title={title}
+                          atStart={index === 0}
+                          atEnd={index === visibleWidgets.length - 1}
+                          isSaving={updateLayout.isPending}
+                          onSize={(size) => changeSize(id, size)}
+                          onMove={(direction) => moveRelative(id, index, direction)}
+                          onRemove={() => removeWidget(id)}
+                          onEditTiles={
+                            id === 'quick_actions'
+                              ? () => setQuickActionsDialogOpen(true)
+                              : undefined
+                          }
+                        />
+                      )}
+                      <div
+                        className={`h-full min-h-0 overflow-hidden ${
+                          editing ? 'pointer-events-none opacity-50' : ''
+                        }`}
+                        inert={editing}
+                      >
+                        <DashboardRuntimeContext.Provider
+                          value={{
+                            layout: activeLayout,
+                            has,
+                            onNavigate,
+                            onOpenCoverage: () => setCoverageOpen(true),
+                            box: { w: box.w, h: box.h, cols },
+                          }}
+                        >
+                          <Component tier={tierOf(box.w, box.h)} rows={rowsPerHeight(box.h)} />
+                        </DashboardRuntimeContext.Provider>
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+              {editing && (
+                <AddWidgetsPanel
+                  entries={catalog}
+                  widgets={activeLayout.widgets}
+                  isSaving={updateLayout.isPending}
+                  onAdd={addWidget}
+                />
+              )}
             </div>
           </div>
-          {editing && <CustomizeBanner width={activeLayout.canvas_width ?? 'compact'} onWidth={(width) => setDraft({ ...activeLayout, canvas_width: width })} onReset={() => setDraft(structuredClone(DEFAULT_LAYOUT))} onCancel={closeCustomize} isSaving={updateLayout.isPending} onSave={() => updateLayout.mutate({ ...activeLayout, widgets: widgetsForApi(activeLayout.widgets) }, { onSuccess: closeCustomize })} />}
-          <div className="flex flex-col items-start gap-4 lg:flex-row">
-            <div ref={boardRef} data-testid="widget-grid" data-columns={cols} className="grid w-full min-w-0 flex-1 gap-3.5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: '9.25rem' }}>
-              {packed.placed.map((box, index) => {
-                const id = box.id as WidgetId
-                const { Component, titleKey } = widgetRegistry[id]
-                const title = t(titleKey)
-                const widget = visibleWidgets.find((item) => item.id === id)!
-                return (
-                  <article key={id} data-widget-id={id} aria-label={title} className={`relative min-h-0 min-w-0 overflow-hidden rounded-2xl ${editing ? 'ring-1 ring-border-strong' : ''}`} style={{ gridColumn: `${box.c + 1} / span ${box.w}`, gridRow: `${box.r + 1} / span ${box.h}` }}
-                    onDragOver={(event) => { if (editing && !updateLayout.isPending && event.dataTransfer.types.includes('text/plain')) event.preventDefault() }}
-                    onDrop={(event) => { if (!editing || updateLayout.isPending) return; event.preventDefault(); const from = event.dataTransfer.getData('text/plain') as WidgetId; if (visibleWidgets.some((item) => item.id === from)) moveWidget(from, id, 'drag') }}>
-                    {editing && <WidgetControls item={widget} title={title} atStart={index === 0} atEnd={index === visibleWidgets.length - 1} isSaving={updateLayout.isPending} onSize={(size) => changeSize(id, size)} onMove={(direction) => { const target = visibleWidgets[index + direction]; if (target) moveWidget(id, target.id, direction < 0 ? 'earlier' : 'later') }} onRemove={() => { setDraft({ ...activeLayout, widgets: activeLayout.widgets.map((item) => item.id === id ? { ...item, visible: false } : item) }); customizeRef.current?.focus() }} onEditTiles={id === 'quick_actions' ? () => setQuickActionsDialogOpen(true) : undefined} />}
-                    <div className={`h-full min-h-0 overflow-hidden ${editing ? 'pointer-events-none opacity-50' : ''}`} inert={editing}>
-                      <DashboardRuntimeContext.Provider value={{ layout: activeLayout, has, onNavigate, onOpenCoverage: () => setCoverageOpen(true), box: { w: box.w, h: box.h, cols } }}>
-                        <Component tier={tierOf(box.w, box.h)} rows={rowsPerHeight(box.h)} />
-                      </DashboardRuntimeContext.Provider>
-                    </div>
-                  </article>
-                )
-              })}
-            </div>
-            {editing && <AddWidgetsPanel entries={catalog} widgets={activeLayout.widgets} isSaving={updateLayout.isPending} onAdd={(id) => {
-              const item = activeLayout.widgets.find((widget) => widget.id === id)!
-              setDraft({ ...activeLayout, widgets: widgetsForApi([...activeLayout.widgets.filter((widget) => widget.id !== id), { ...item, visible: true, size: 'S' }]) })
-            }} />}
-          </div>
-        </div>
-      </PullToRefresh></div>
-      <WidgetEditDialog<QuickActionId> open={quickActionsDialogOpen} onOpenChange={setQuickActionsDialogOpen} title={t('dashboard.editWidgets.quickActionsTitle')} description={t('dashboard.editWidgets.quickActionsDescription')} items={allowedQuickActions} labels={quickActionLabels} defaults={allowedQuickActionDefaults} maxVisible={MAX_VISIBLE_QUICK_ACTIONS} maxVisibleHint={t('dashboard.editWidgets.quickActionsMaxVisibleHint', { count: MAX_VISIBLE_QUICK_ACTIONS })} onSave={(items) => {
-        setDraft({ ...activeLayout, quick_actions: mergeQuickActionsPreservingDenied(activeLayout.quick_actions, items) })
-        setQuickActionsDialogOpen(false)
-      }} />
-      <WorkforceCoverageSheet open={coverageOpen} onOpenChange={setCoverageOpen} operationalDate={coverageOperationalDate} />
+        </PullToRefresh>
+      </div>
+      <WidgetEditDialog<QuickActionId>
+        open={quickActionsDialogOpen}
+        onOpenChange={setQuickActionsDialogOpen}
+        title={t('dashboard.editWidgets.quickActionsTitle')}
+        description={t('dashboard.editWidgets.quickActionsDescription')}
+        items={allowedQuickActions}
+        labels={quickActionLabels}
+        defaults={allowedQuickActionDefaults}
+        maxVisible={MAX_VISIBLE_QUICK_ACTIONS}
+        maxVisibleHint={t('dashboard.editWidgets.quickActionsMaxVisibleHint', {
+          count: MAX_VISIBLE_QUICK_ACTIONS,
+        })}
+        onSave={saveQuickActions}
+      />
+      <WorkforceCoverageSheet
+        open={coverageOpen}
+        onOpenChange={setCoverageOpen}
+        operationalDate={coverageOperationalDate}
+      />
     </div>
   )
 }

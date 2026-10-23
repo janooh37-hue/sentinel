@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
+import type { WorkforceAccess } from '@/lib/api'
 import { DEFAULT_LAYOUT, packLayout } from '@/lib/dashboardLayout'
 import { DashboardPage } from './DashboardPage'
+import { widgetRegistry } from './widgetRegistry'
 
 const state = vi.hoisted(() => ({
   user: { id: 1 } as { id: number } | null,
@@ -17,6 +19,7 @@ vi.mock('@/lib/api', () => ({ api: {
   getDashboardSummary: vi.fn().mockResolvedValue({ totals: { present_today: 0, on_leave_today: 0 }, on_leave_today: [], upcoming_leave_ends: [] }),
   getDashboardLayout: vi.fn(),
   updateDashboardLayout: vi.fn(),
+  getWorkforceAccess: vi.fn(),
 } }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ status: state.user ? 'authed' : 'anonymous', user: state.user }) }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => !state.denied.has(cap), isLoading: false }) }))
@@ -58,6 +61,10 @@ describe('packed per-user dashboard', () => {
     state.mobile = false
     mockedApi.getDashboardLayout.mockResolvedValue(null)
     mockedApi.updateDashboardLayout.mockImplementation(async (layout) => layout)
+    mockedApi.getWorkforceAccess.mockResolvedValue({
+      workforce_access_tier: 'none',
+      scopes: [],
+    })
   })
   it.each([false, true])('renders one packed grid with explicit boxes on mobile=%s', async (mobile) => {
     state.mobile = mobile
@@ -73,6 +80,39 @@ describe('packed per-user dashboard', () => {
     }
     expect(screen.getByTestId('body-waiting_approvals')).toHaveAttribute('data-tier', 'list')
     expect(screen.getByTestId('body-waiting_approvals')).toHaveAttribute('data-rows', '4')
+  })
+  it('repacks a workforce widget when its access query resolves', async () => {
+    let resolveAccess!: (access: WorkforceAccess) => void
+    mockedApi.getWorkforceAccess.mockReturnValue(new Promise((resolve) => {
+      resolveAccess = resolve
+    }))
+    mockedApi.getDashboardLayout.mockResolvedValue({
+      ...DEFAULT_LAYOUT,
+      widgets: DEFAULT_LAYOUT.widgets.map((item) =>
+        item.id === 'workforce_pulse' ? { ...item, visible: true } : item,
+      ),
+    })
+    // The registry is migrated independently; exercise an access-dependent gate here.
+    const available = vi.spyOn(widgetRegistry.workforce_pulse, 'available')
+      .mockImplementation(({ has, workforceAccess }) =>
+        has('workforce.dashboard.view') &&
+        workforceAccess?.workforce_access_tier === 'organization',
+      )
+    try {
+      renderPage()
+      await waitFor(() => expect(mockedApi.getWorkforceAccess).toHaveBeenCalledTimes(1))
+      await waitFor(() => expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(1))
+      expect(boardIds()).not.toContain('workforce_pulse')
+
+      await act(async () => {
+        resolveAccess({ workforce_access_tier: 'organization', scopes: [] })
+      })
+
+      await waitFor(() => expect(boardIds()).toContain('workforce_pulse'))
+      expect(screen.getByTestId('body-workforce_pulse')).toBeInTheDocument()
+    } finally {
+      available.mockRestore()
+    }
   })
   it('removes unavailable entries before packing and from the add catalog', async () => {
     state.denied.add('books.view')
