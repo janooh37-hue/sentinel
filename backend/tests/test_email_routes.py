@@ -568,6 +568,163 @@ def test_sync_route_serializes_real_mailbox_import_and_account_status(
     assert not (isolated_data_dir / "ledger_attachments").exists()
 
 
+@pytest.mark.parametrize("legacy_null_owner", [False, True])
+def test_sync_message_id_cannot_backfill_another_mailbox(
+    api_db: Session,
+    isolated_data_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    legacy_null_owner: bool,
+) -> None:
+    owner_a = _user(api_db, email="owner-a@test.ae")
+    owner_b = _user(api_db, email="owner-b@test.ae")
+    _account(api_db, owner_a)
+    account_b = _account(api_db, owner_b)
+    original = _ledger_email(
+        api_db, owner_user_id=owner_a.id, subject="Original A", counterparty="a@example.com"
+    )
+    original.owner_user_id = None if legacy_null_owner else owner_a.id
+    original.tags = ["email", "msgid:shared@example.com"]
+    original.message_id = "<shared@example.com>"
+    original.notes_html = "<p>Original body</p>"
+    api_db.commit()
+
+    message = EmailMessage()
+    message["From"] = "b@example.com"
+    message["To"] = account_b.email
+    message["Cc"] = "copy@example.com"
+    message["Subject"] = "B's independent message"
+    message["Message-ID"] = "<shared@example.com>"
+    message["In-Reply-To"] = "<unrelated@example.com>"
+    message.set_content("B's body")
+    message.add_attachment(b"owned by B", maintype="text", subtype="plain", filename="note.txt")
+    server = FakeImapServer()
+    server.add_folder(account_b.sent_folder)
+    server.add_message(account_b.inbox_folder, message.as_bytes())
+    monkeypatch.setattr(email_service, "connect_imap", server.connector)
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: api_db
+    app.dependency_overrides[get_current_user] = lambda: owner_b
+    with TestClient(app, raise_server_exceptions=True) as client:
+        response = client.post("/api/v1/email/sync")
+        assert response.status_code == 200, response.text
+        assert response.json()["errors"] == []
+        api_db.refresh(original)
+        assert original.attachment_paths == []
+        assert original.inline_images == {}
+        assert original.to_recipients == []
+        assert original.cc_recipients == []
+        assert original.in_reply_to is None
+        assert original.subject == "Original A"
+        assert original.notes_html == "<p>Original body</p>"
+        assert not (isolated_data_dir / "ledger_attachments" / str(original.id)).exists()
+        imported = api_db.query(LedgerEntry).filter_by(owner_user_id=owner_b.id).one()
+        assert response.json()["imported"] == 1
+        assert imported.id != original.id
+        assert imported.message_id == "<shared@example.com>"
+        assert (isolated_data_dir / imported.attachment_paths[0]).read_bytes() == b"owned by B"
+        repeat = client.post("/api/v1/email/sync")
+        assert repeat.status_code == 200, repeat.text
+        assert repeat.json()["imported"] == 0
+        assert repeat.json()["skipped_duplicate"] == 1
+
+    if not legacy_null_owner:
+        app.dependency_overrides[get_current_user] = lambda: owner_a
+        with TestClient(app, raise_server_exceptions=True) as client:
+            authorized = client.post("/api/v1/email/sync")
+        assert authorized.status_code == 200, authorized.text
+        assert authorized.json()["skipped_duplicate"] == 1
+        api_db.refresh(original)
+        assert original.to_recipients == [{"name": "", "address": account_b.email}]
+        assert (isolated_data_dir / original.attachment_paths[0]).read_bytes() == b"owned by B"
+        assert original.subject == "Original A"
+        assert original.notes_html == "<p>Original body</p>"
+
+
+@pytest.mark.parametrize("has_full_header", [False, True])
+def test_sync_does_not_trust_a_truncated_message_id(
+    api_db: Session,
+    isolated_data_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    has_full_header: bool,
+) -> None:
+    owner = _user(api_db)
+    account = _account(api_db, owner)
+    prefix = "x" * 160
+    original = _ledger_email(
+        api_db, owner_user_id=owner.id, subject="Original", counterparty="old@example.com"
+    )
+    original.tags = ["email", f"msgid:{prefix}"]
+    original.message_id = f"<{prefix}-a@example.com>" if has_full_header else None
+    api_db.commit()
+    message = EmailMessage()
+    message["From"] = "new@example.com"
+    message["To"] = account.email
+    message["Subject"] = "Distinct full identity"
+    message["Message-ID"] = f"<{prefix}-b@example.com>"
+    message.set_content("New body")
+    message.add_attachment(b"new file", maintype="text", subtype="plain", filename="new.txt")
+    server = FakeImapServer()
+    server.add_folder(account.sent_folder)
+    server.add_message(account.inbox_folder, message.as_bytes())
+    monkeypatch.setattr(email_service, "connect_imap", server.connector)
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: api_db
+    app.dependency_overrides[get_current_user] = lambda: owner
+    with TestClient(app, raise_server_exceptions=True) as client:
+        response = client.post("/api/v1/email/sync")
+        assert response.status_code == 200, response.text
+        assert response.json()["errors"] == []
+        api_db.refresh(original)
+        assert original.attachment_paths == []
+        assert original.to_recipients == []
+        assert not (isolated_data_dir / "ledger_attachments" / str(original.id)).exists()
+        assert response.json()["imported"] == 1
+        imported = api_db.query(LedgerEntry).filter(LedgerEntry.id != original.id).one()
+        assert imported.message_id == f"<{prefix}-b@example.com>"
+        assert (isolated_data_dir / imported.attachment_paths[0]).read_bytes() == b"new file"
+        repeat = client.post("/api/v1/email/sync")
+    assert repeat.status_code == 200, repeat.text
+    assert repeat.json()["imported"] == 0
+    assert repeat.json()["skipped_duplicate"] == 1
+
+
+def test_sync_distinct_long_message_ids_remain_independent_and_idempotent(
+    api_db: Session,
+    isolated_data_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owner = _user(api_db)
+    account = _account(api_db, owner)
+    server = FakeImapServer()
+    server.add_folder(account.sent_folder)
+    for suffix in ("a", "b"):
+        message = EmailMessage()
+        message["From"] = "vendor@example.com"
+        message["To"] = account.email
+        message["Subject"] = f"Distinct message {suffix}"
+        message["Message-ID"] = f"<{'x' * 600}-{suffix}@example.com>"
+        message.set_content(f"Body {suffix}")
+        server.add_message(account.inbox_folder, message.as_bytes())
+    monkeypatch.setattr(email_service, "connect_imap", server.connector)
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: api_db
+    app.dependency_overrides[get_current_user] = lambda: owner
+    with TestClient(app, raise_server_exceptions=True) as client:
+        response = client.post("/api/v1/email/sync")
+        assert response.status_code == 200, response.text
+        assert response.json()["errors"] == []
+        assert response.json()["imported"] == 2
+        assert {row.subject for row in api_db.query(LedgerEntry)} == {
+            "Distinct message a",
+            "Distinct message b",
+        }
+        repeat = client.post("/api/v1/email/sync")
+    assert repeat.status_code == 200, repeat.text
+    assert repeat.json()["imported"] == 0
+    assert repeat.json()["skipped_duplicate"] == 2
+    assert not (isolated_data_dir / "ledger_attachments").exists()
+
+
 def test_sync_route_returns_409_while_a_real_mailbox_sync_holds_the_lock(
     api_db: Session,
     isolated_data_dir: Path,
