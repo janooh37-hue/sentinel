@@ -2120,7 +2120,7 @@ def test_dashboard_document_stats_exclude_denied_service_and_category(
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["totals"]["forms_this_month"] == 1
-    assert [item["id"] for item in payload["recent_documents"]] == [visible.id]
+    assert "recent_documents" not in payload
     assert hidden_service.id != visible.id
     assert hidden_category.id != visible.id
     assert hidden_category_companion.id != visible.id

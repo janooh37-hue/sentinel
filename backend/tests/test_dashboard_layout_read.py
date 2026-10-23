@@ -152,3 +152,11 @@ def test_duplicate_widget_ids_are_rejected():
         DashboardLayout.model_validate(
             {"widgets": [{"id": "pending", "order": 0}, {"id": "pending", "order": 1}]}
         )
+
+
+def test_pre_zone_layout_keeps_legacy_role_for_frontend_migration(db_session):
+    user = _store_layout(db_session, {"widgets": [{"id": "pending", "order": 4, "visible": False}]})
+    layout = dashboard_service.get_user_layout(db_session, user.id)
+    assert layout is not None
+    assert layout.widgets[0].size == "M"
+    assert layout.widgets[0].zone == "top"

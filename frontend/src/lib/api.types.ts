@@ -5496,6 +5496,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/item-permits/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Item Permit Summary */
+        get: operations["item_permit_summary_api_v1_item_permits_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/item-permits/{permit_id}": {
         parameters: {
             query?: never;
@@ -9852,6 +9869,26 @@ export interface components {
             /** Next Cursor */
             next_cursor?: string | null;
         };
+        /** DashboardApprovedRecord */
+        DashboardApprovedRecord: {
+            /** Book Id */
+            book_id: number;
+            /** Ref Number */
+            ref_number: string;
+            /** Subject */
+            subject: string | null;
+            /** Employee Id */
+            employee_id: string | null;
+            /** Employee Name En */
+            employee_name_en: string | null;
+            /** Employee Name Ar */
+            employee_name_ar: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** DashboardLayout */
         DashboardLayout: {
             /** Widgets */
@@ -9888,6 +9925,65 @@ export interface components {
              */
             end_date: string;
         };
+        /**
+         * DashboardMyRecords
+         * @description Caller-owned records by creation day, matching the Records page filters.
+         */
+        DashboardMyRecords: {
+            /** Month */
+            month: string;
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            /** Approved */
+            approved: number;
+            /** Pending */
+            pending: number;
+            /** Awaiting Scan */
+            awaiting_scan: number;
+            /** Returned */
+            returned: number;
+            /** Rejected */
+            rejected: number;
+            /** Not Submitted */
+            not_submitted: number;
+            /** Drafts */
+            drafts: number;
+            /** Latest Approved */
+            latest_approved: components["schemas"]["DashboardApprovedRecord"][];
+        };
+        /** DashboardOpenViolation */
+        DashboardOpenViolation: {
+            /** Id */
+            id: number;
+            /** Employee Id */
+            employee_id: string;
+            /** Employee Name En */
+            employee_name_en: string;
+            /** Employee Name Ar */
+            employee_name_ar: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+        };
+        /** DashboardOpenViolations */
+        DashboardOpenViolations: {
+            /** Count */
+            count: number;
+            /** Latest */
+            latest: components["schemas"]["DashboardOpenViolation"][];
+        };
         /** DashboardQuickActionConfig */
         DashboardQuickActionConfig: {
             /**
@@ -9903,57 +9999,6 @@ export interface components {
             /** Order */
             order: number;
         };
-        /** DashboardRecentDocument */
-        DashboardRecentDocument: {
-            /** Id */
-            id: number;
-            /** Employee Id */
-            employee_id: string | null;
-            /** Employee Name En */
-            employee_name_en: string;
-            /** Employee Name Ar */
-            employee_name_ar: string | null;
-            /** Template Id */
-            template_id: string;
-            /** Ref Number */
-            ref_number: string | null;
-            /** Role */
-            role: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-        };
-        /** DashboardRecentLedger */
-        DashboardRecentLedger: {
-            /** Id */
-            id: number;
-            /**
-             * Entry Date
-             * Format: date
-             */
-            entry_date: string;
-            /** Direction */
-            direction: string;
-            /** Channel */
-            channel: string;
-            /** Counterparty */
-            counterparty: string;
-            /** Subject */
-            subject: string;
-            /** Related Employee Id */
-            related_employee_id: string | null;
-            /** Related Employee Name En */
-            related_employee_name_en: string | null;
-            /** Related Employee Name Ar */
-            related_employee_name_ar: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-        };
         /** DashboardSummary */
         DashboardSummary: {
             totals: components["schemas"]["DashboardTotals"];
@@ -9961,10 +10006,9 @@ export interface components {
             on_leave_today: components["schemas"]["DashboardLeaveItem"][];
             /** Upcoming Leave Ends */
             upcoming_leave_ends: components["schemas"]["DashboardUpcomingLeaveItem"][];
-            /** Recent Documents */
-            recent_documents: components["schemas"]["DashboardRecentDocument"][];
-            /** Recent Ledger */
-            recent_ledger: components["schemas"]["DashboardRecentLedger"][];
+            my_records: components["schemas"]["DashboardMyRecords"] | null;
+            unread_mail: components["schemas"]["DashboardUnreadMail"] | null;
+            open_violations: components["schemas"]["DashboardOpenViolations"] | null;
             email_sync: components["schemas"]["DashboardSyncStatus"];
         };
         /**
@@ -10005,15 +10049,36 @@ export interface components {
              */
             open_violations_count: number;
             /**
-             * Draft Count
-             * @default 0
-             */
-            draft_count: number;
-            /**
              * Book Draft Count
              * @default 0
              */
             book_draft_count: number;
+        };
+        /** DashboardUnreadMail */
+        DashboardUnreadMail: {
+            /** Count */
+            count: number;
+            /** Latest */
+            latest: components["schemas"]["DashboardUnreadMailItem"][];
+        };
+        /** DashboardUnreadMailItem */
+        DashboardUnreadMailItem: {
+            /** Id */
+            id: number;
+            /** Subject */
+            subject: string;
+            /** Counterparty */
+            counterparty: string;
+            /**
+             * Entry Date
+             * Format: date
+             */
+            entry_date: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** DashboardUpcomingLeaveItem */
         DashboardUpcomingLeaveItem: {
@@ -11878,6 +11943,42 @@ export interface components {
             created_at: string;
             /** Updated At */
             updated_at: string | null;
+        };
+        /**
+         * ItemPermitSummary
+         * @description Approval-state counts in the same zone scope as the item register.
+         */
+        ItemPermitSummary: {
+            /**
+             * None
+             * @default 0
+             */
+            none: number;
+            /**
+             * Pending
+             * @default 0
+             */
+            pending: number;
+            /**
+             * Awaiting Scan
+             * @default 0
+             */
+            awaiting_scan: number;
+            /**
+             * Approved
+             * @default 0
+             */
+            approved: number;
+            /**
+             * Returned
+             * @default 0
+             */
+            returned: number;
+            /**
+             * Rejected
+             * @default 0
+             */
+            rejected: number;
         };
         /**
          * ItemPermitUpdate
@@ -18545,6 +18646,7 @@ export interface operations {
                 department?: string | null;
                 duty_unit?: string | null;
                 pending?: boolean;
+                open_violations?: boolean;
                 limit?: number;
                 offset?: number;
             };
@@ -29409,6 +29511,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: string | null;
+                zone?: ("red" | "green" | "work_residence") | null;
                 limit?: number;
                 offset?: number;
             };
@@ -29462,6 +29565,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemPermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    item_permit_summary_api_v1_item_permits_summary_get: {
+        parameters: {
+            query?: {
+                zone?: ("red" | "green" | "work_residence") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemPermitSummary"];
                 };
             };
             /** @description Validation Error */

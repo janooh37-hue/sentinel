@@ -956,89 +956,11 @@ export type GenerateAttachmentSpec = components['schemas']['GenerateAttachmentSp
 export type StagedAttachmentRead = components['schemas']['StagedAttachmentRead']
 
 // Phase 12 — Dashboard
-// Hand-mirrored until backend lands and `npm run gen:api` picks it up.
-export interface DashboardOnLeaveItem {
-  employee_id: string
-  employee_name_en: string
-  employee_name_ar: string | null
-  leave_id: number
-  leave_type: string
-  start_date: string
-  end_date: string
-}
-
-export interface DashboardUpcomingItem {
-  employee_id: string
-  employee_name_en: string
-  employee_name_ar: string | null
-  leave_id: number
-  leave_type: string
-  end_date: string
-  days_remaining: number
-}
-
-export interface DashboardRecentDocument {
-  id: number
-  employee_id: string
-  employee_name_en: string
-  employee_name_ar: string | null
-  template_id: string
-  ref_number: string | null
-  role: string | null
-  created_at: string
-}
-
-export interface DashboardRecentLedger {
-  id: number
-  entry_date: string
-  direction: string
-  channel: string
-  counterparty: string
-  subject: string
-  related_employee_id: string | null
-  related_employee_name_en: string | null
-  related_employee_name_ar: string | null
-  created_at: string
-}
-
-/**
- * Email sync snapshot embedded in the dashboard summary. Drives the
- * `email_sync_status` widget. Hand-typed here until openapi-typescript
- * regenerates against the new backend response shape — keep in sync with
- * `backend/app/schemas/dashboard.py::EmailSyncSnapshot`.
- */
-export interface DashboardEmailSync {
-  /** ISO-8601 timestamp of the last successful sync, or `null` if never synced. */
-  last_synced_at: string | null
-  /** Whether email sync is configured (account exists + has credentials). */
-  enabled: boolean
-  /** Configured cadence in minutes. `0` means scheduled sync is off. */
-  interval_minutes: number
-  /** Count of emails imported today (per local calendar day). */
-  incoming_today: number
-}
-
-export interface DashboardSummary {
-  totals: {
-    /** Total working: our staff + loaned. */
-    employees_active: number
-    our_staff: number
-    loaned: number
-    /** Our staff only; a loaned employee counts only as loaned. */
-    on_leave_today: number
-    present_today: number
-    forms_this_month: number
-    open_violations_count: number
-    draft_count: number
-    book_draft_count: number
-  }
-  on_leave_today: DashboardOnLeaveItem[]
-  upcoming_leave_ends: DashboardUpcomingItem[]
-  recent_documents: DashboardRecentDocument[]
-  recent_ledger: DashboardRecentLedger[]
-  /** Phase 18 — email sync widget payload. Always present (backend always returns it). */
-  email_sync: DashboardEmailSync
-}
+// Dashboard responses come from the generated backend contract.
+export type DashboardOnLeaveItem = components['schemas']['DashboardLeaveItem']
+export type DashboardUpcomingItem = components['schemas']['DashboardUpcomingLeaveItem']
+export type DashboardSummary = components['schemas']['DashboardSummary']
+export type DashboardEmailSync = components['schemas']['DashboardSyncStatus']
 
 // Monthly time sheet (site JD 908) — one month of one workbook, plus the two
 // deliverables it produces. `sheet` on the response is the generated `string`,

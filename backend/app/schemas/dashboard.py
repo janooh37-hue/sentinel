@@ -111,7 +111,9 @@ class DashboardWidgetConfig(BaseModel):
             widget_id = value.get("id")
             if widget_id == "quick_actions":
                 size = "W"
-            elif value.get("zone") == "top":
+            elif value.get("zone") == "top" or (
+                "zone" not in value and widget_id in {"pending", "workspace"}
+            ):
                 size = "M"
             elif widget_id in {
                 "waiting_approvals",
@@ -126,7 +128,10 @@ class DashboardWidgetConfig(BaseModel):
                 size = "L"
             else:
                 size = "S"
-            return {**value, "size": size}
+            zone = value.get("zone") or (
+                "top" if widget_id in {"pending", "workspace"} else "under_workspace"
+            )
+            return {**value, "size": size, "zone": zone}
         return value
 
 
@@ -157,7 +162,6 @@ class DashboardTotals(BaseModel):
     present_today: int
     forms_this_month: int
     open_violations_count: int = 0
-    draft_count: int = 0
     book_draft_count: int = 0
 
 
@@ -175,29 +179,57 @@ class DashboardUpcomingLeaveItem(DashboardLeaveItem):
     days_remaining: int
 
 
-class DashboardRecentDocument(ORMBase):
-    id: int
-    # Nullable: admin-category docs (e.g. General Book) have no employee.
+class DashboardApprovedRecord(BaseModel):
+    book_id: int
+    ref_number: str
+    subject: str | None
     employee_id: str | None
+    employee_name_en: str | None
+    employee_name_ar: str | None
+    created_at: datetime
+
+
+class DashboardMyRecords(BaseModel):
+    """Caller-owned records by creation day, matching the Records page filters."""
+
+    month: str
+    from_date: date
+    to_date: date
+    approved: int
+    pending: int
+    awaiting_scan: int
+    returned: int
+    rejected: int
+    not_submitted: int
+    drafts: int
+    latest_approved: list[DashboardApprovedRecord]
+
+
+class DashboardUnreadMailItem(ORMBase):
+    id: int
+    subject: str
+    counterparty: str
+    entry_date: date
+    created_at: datetime
+
+
+class DashboardUnreadMail(BaseModel):
+    count: int
+    latest: list[DashboardUnreadMailItem]
+
+
+class DashboardOpenViolation(BaseModel):
+    id: int
+    employee_id: str
     employee_name_en: str
     employee_name_ar: str | None
-    template_id: str
-    ref_number: str | None
-    role: str | None
-    created_at: datetime
+    title: str
+    date: date
 
 
-class DashboardRecentLedger(ORMBase):
-    id: int
-    entry_date: date
-    direction: str
-    channel: str
-    counterparty: str
-    subject: str
-    related_employee_id: str | None
-    related_employee_name_en: str | None
-    related_employee_name_ar: str | None
-    created_at: datetime
+class DashboardOpenViolations(BaseModel):
+    count: int
+    latest: list[DashboardOpenViolation]
 
 
 class DashboardSyncStatus(ORMBase):
@@ -218,24 +250,29 @@ class DashboardSummary(BaseModel):
     totals: DashboardTotals
     on_leave_today: list[DashboardLeaveItem]
     upcoming_leave_ends: list[DashboardUpcomingLeaveItem]
-    recent_documents: list[DashboardRecentDocument]
-    recent_ledger: list[DashboardRecentLedger]
+    my_records: DashboardMyRecords | None
+    unread_mail: DashboardUnreadMail | None
+    open_violations: DashboardOpenViolations | None
     email_sync: DashboardSyncStatus
 
 
 __all__ = [
     "DASHBOARD_QUICK_ACTION_IDS",
     "DASHBOARD_WIDGET_IDS",
+    "DashboardApprovedRecord",
     "DashboardCanvasWidth",
     "DashboardLayout",
     "DashboardLeaveItem",
+    "DashboardMyRecords",
+    "DashboardOpenViolation",
+    "DashboardOpenViolations",
     "DashboardQuickActionConfig",
     "DashboardQuickActionId",
-    "DashboardRecentDocument",
-    "DashboardRecentLedger",
     "DashboardSummary",
     "DashboardSyncStatus",
     "DashboardTotals",
+    "DashboardUnreadMail",
+    "DashboardUnreadMailItem",
     "DashboardUpcomingLeaveItem",
     "DashboardWidgetConfig",
     "DashboardWidgetId",

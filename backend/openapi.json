@@ -2542,6 +2542,16 @@
             }
           },
           {
+            "name": "open_violations",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Open Violations"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -23741,6 +23751,27 @@
             }
           },
           {
+            "name": "zone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "red",
+                    "green",
+                    "work_residence"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Zone"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -23844,6 +23875,76 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ItemPermitRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/item-permits/summary": {
+      "get": {
+        "tags": [
+          "item-permits"
+        ],
+        "summary": "Item Permit Summary",
+        "operationId": "item_permit_summary_api_v1_item_permits_summary_get",
+        "parameters": [
+          {
+            "name": "zone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "red",
+                    "green",
+                    "work_residence"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Zone"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemPermitSummary"
                 }
               }
             }
@@ -40339,6 +40440,78 @@
         ],
         "title": "CursorPage[dict[str, Any]]"
       },
+      "DashboardApprovedRecord": {
+        "properties": {
+          "book_id": {
+            "type": "integer",
+            "title": "Book Id"
+          },
+          "ref_number": {
+            "type": "string",
+            "title": "Ref Number"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "employee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "employee_name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name En"
+          },
+          "employee_name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name Ar"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "book_id",
+          "ref_number",
+          "subject",
+          "employee_id",
+          "employee_name_en",
+          "employee_name_ar",
+          "created_at"
+        ],
+        "title": "DashboardApprovedRecord"
+      },
       "DashboardLayout": {
         "properties": {
           "widgets": {
@@ -40420,6 +40593,142 @@
         ],
         "title": "DashboardLeaveItem"
       },
+      "DashboardMyRecords": {
+        "properties": {
+          "month": {
+            "type": "string",
+            "title": "Month"
+          },
+          "from_date": {
+            "type": "string",
+            "format": "date",
+            "title": "From Date"
+          },
+          "to_date": {
+            "type": "string",
+            "format": "date",
+            "title": "To Date"
+          },
+          "approved": {
+            "type": "integer",
+            "title": "Approved"
+          },
+          "pending": {
+            "type": "integer",
+            "title": "Pending"
+          },
+          "awaiting_scan": {
+            "type": "integer",
+            "title": "Awaiting Scan"
+          },
+          "returned": {
+            "type": "integer",
+            "title": "Returned"
+          },
+          "rejected": {
+            "type": "integer",
+            "title": "Rejected"
+          },
+          "not_submitted": {
+            "type": "integer",
+            "title": "Not Submitted"
+          },
+          "drafts": {
+            "type": "integer",
+            "title": "Drafts"
+          },
+          "latest_approved": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardApprovedRecord"
+            },
+            "type": "array",
+            "title": "Latest Approved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "month",
+          "from_date",
+          "to_date",
+          "approved",
+          "pending",
+          "awaiting_scan",
+          "returned",
+          "rejected",
+          "not_submitted",
+          "drafts",
+          "latest_approved"
+        ],
+        "title": "DashboardMyRecords",
+        "description": "Caller-owned records by creation day, matching the Records page filters."
+      },
+      "DashboardOpenViolation": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "employee_name_en": {
+            "type": "string",
+            "title": "Employee Name En"
+          },
+          "employee_name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name Ar"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "employee_id",
+          "employee_name_en",
+          "employee_name_ar",
+          "title",
+          "date"
+        ],
+        "title": "DashboardOpenViolation"
+      },
+      "DashboardOpenViolations": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "latest": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardOpenViolation"
+            },
+            "type": "array",
+            "title": "Latest"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "latest"
+        ],
+        "title": "DashboardOpenViolations"
+      },
       "DashboardQuickActionConfig": {
         "properties": {
           "id": {
@@ -40463,164 +40772,6 @@
         ],
         "title": "DashboardQuickActionConfig"
       },
-      "DashboardRecentDocument": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "employee_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Employee Id"
-          },
-          "employee_name_en": {
-            "type": "string",
-            "title": "Employee Name En"
-          },
-          "employee_name_ar": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Employee Name Ar"
-          },
-          "template_id": {
-            "type": "string",
-            "title": "Template Id"
-          },
-          "ref_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ref Number"
-          },
-          "role": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Role"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "employee_id",
-          "employee_name_en",
-          "employee_name_ar",
-          "template_id",
-          "ref_number",
-          "role",
-          "created_at"
-        ],
-        "title": "DashboardRecentDocument"
-      },
-      "DashboardRecentLedger": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "entry_date": {
-            "type": "string",
-            "format": "date",
-            "title": "Entry Date"
-          },
-          "direction": {
-            "type": "string",
-            "title": "Direction"
-          },
-          "channel": {
-            "type": "string",
-            "title": "Channel"
-          },
-          "counterparty": {
-            "type": "string",
-            "title": "Counterparty"
-          },
-          "subject": {
-            "type": "string",
-            "title": "Subject"
-          },
-          "related_employee_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Employee Id"
-          },
-          "related_employee_name_en": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Employee Name En"
-          },
-          "related_employee_name_ar": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Employee Name Ar"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "entry_date",
-          "direction",
-          "channel",
-          "counterparty",
-          "subject",
-          "related_employee_id",
-          "related_employee_name_en",
-          "related_employee_name_ar",
-          "created_at"
-        ],
-        "title": "DashboardRecentLedger"
-      },
       "DashboardSummary": {
         "properties": {
           "totals": {
@@ -40640,19 +40791,35 @@
             "type": "array",
             "title": "Upcoming Leave Ends"
           },
-          "recent_documents": {
-            "items": {
-              "$ref": "#/components/schemas/DashboardRecentDocument"
-            },
-            "type": "array",
-            "title": "Recent Documents"
+          "my_records": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DashboardMyRecords"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "recent_ledger": {
-            "items": {
-              "$ref": "#/components/schemas/DashboardRecentLedger"
-            },
-            "type": "array",
-            "title": "Recent Ledger"
+          "unread_mail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DashboardUnreadMail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "open_violations": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DashboardOpenViolations"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "email_sync": {
             "$ref": "#/components/schemas/DashboardSyncStatus"
@@ -40663,8 +40830,9 @@
           "totals",
           "on_leave_today",
           "upcoming_leave_ends",
-          "recent_documents",
-          "recent_ledger",
+          "my_records",
+          "unread_mail",
+          "open_violations",
           "email_sync"
         ],
         "title": "DashboardSummary"
@@ -40737,11 +40905,6 @@
             "title": "Open Violations Count",
             "default": 0
           },
-          "draft_count": {
-            "type": "integer",
-            "title": "Draft Count",
-            "default": 0
-          },
           "book_draft_count": {
             "type": "integer",
             "title": "Book Draft Count",
@@ -40758,6 +40921,62 @@
           "forms_this_month"
         ],
         "title": "DashboardTotals"
+      },
+      "DashboardUnreadMail": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "latest": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardUnreadMailItem"
+            },
+            "type": "array",
+            "title": "Latest"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "latest"
+        ],
+        "title": "DashboardUnreadMail"
+      },
+      "DashboardUnreadMailItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty"
+          },
+          "entry_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Entry Date"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "subject",
+          "counterparty",
+          "entry_date",
+          "created_at"
+        ],
+        "title": "DashboardUnreadMailItem"
       },
       "DashboardUpcomingLeaveItem": {
         "properties": {
@@ -46488,6 +46707,43 @@
           "updated_at"
         ],
         "title": "ItemPermitRead"
+      },
+      "ItemPermitSummary": {
+        "properties": {
+          "none": {
+            "type": "integer",
+            "title": "None",
+            "default": 0
+          },
+          "pending": {
+            "type": "integer",
+            "title": "Pending",
+            "default": 0
+          },
+          "awaiting_scan": {
+            "type": "integer",
+            "title": "Awaiting Scan",
+            "default": 0
+          },
+          "approved": {
+            "type": "integer",
+            "title": "Approved",
+            "default": 0
+          },
+          "returned": {
+            "type": "integer",
+            "title": "Returned",
+            "default": 0
+          },
+          "rejected": {
+            "type": "integer",
+            "title": "Rejected",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ItemPermitSummary",
+        "description": "Approval-state counts in the same zone scope as the item register."
       },
       "ItemPermitUpdate": {
         "properties": {
