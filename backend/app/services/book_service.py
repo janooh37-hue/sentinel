@@ -877,6 +877,46 @@ def require_inmate_report_write_access(
     return version
 
 
+def require_inmate_report_word_access(db: Session, user: User, book_id: int) -> Book:
+    """Authorize Word actions on this reporter's own Report only."""
+    row = get_book(db, book_id)
+    if user.employee_id is None:
+        raise AppError(
+            "INMATE_REPORTER_EMPLOYEE_REQUIRED",
+            "Your account has no linked employee record yet.",
+            http_status=409,
+        )
+    if row.voided_at is not None:
+        raise AppError(
+            "INMATE_REPORTER_STATE_LOCKED",
+            "This report can no longer be edited.",
+            http_status=409,
+        )
+    if row.category_id != "GS" or not row.ref_number.startswith("REPORT-"):
+        raise AppError("INMATE_REPORTER_NOT_OWNER", "This is not a Report.", http_status=403)
+    if row.approval_state not in ("none", "returned"):
+        raise AppError(
+            "INMATE_REPORTER_STATE_LOCKED",
+            "This report can no longer be edited.",
+            http_status=409,
+        )
+    from app.services import included_papers_service
+
+    creator_id = (
+        included_papers_service.original_creator_user_id(row)
+        if row.versions
+        else row.submitted_by_user_id
+    )
+    session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
+    if creator_id != user.id or (session is not None and session.user_id != user.id):
+        raise AppError(
+            "INMATE_REPORTER_NOT_OWNER", "You are not the author of this report.", http_status=403
+        )
+    if row.versions:
+        require_inmate_report_write_access(db, user, row, action="revise")
+    return row
+
+
 def require_revise_access(db: Session, user: User, book: Book | None) -> BookVersion | None:
     """Require revise authority; ``None`` skips only the non-reporter book check."""
     if user.role == INMATE_REPORTER_ROLE:

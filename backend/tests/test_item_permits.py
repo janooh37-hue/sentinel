@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -10,13 +11,29 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.core.arabic_rtl import html_to_docx
 from app.core.permit_letter import _access_chips, build_item_permit_letter_html
-from app.db.models import Book, BookCategory, Employee, Manager, User, UserPermission
+from app.db.models import (
+    AuditLog,
+    Book,
+    BookApprovalStep,
+    BookCategory,
+    BookRecipient,
+    BookVersion,
+    Employee,
+    ItemPermit,
+    Manager,
+    User,
+    UserPermission,
+)
+from app.db.models import (
+    Document as GeneratedDocument,
+)
 from app.db.session import get_db
 from app.main import create_app
 from app.schemas.item_permit import ItemPermitCreate, ItemPermitUpdate
@@ -24,10 +41,12 @@ from app.services import document_service, item_permit_service
 
 
 @pytest.fixture()
-def env(api_db: Session, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> Session:
+def env(api_db: Session, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> Iterator[Session]:
     """Tmp data dir + stubbed PDF chain, with an employee and an operator."""
-    from app.config import Settings
+    from app.config import Settings, get_settings
 
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path / "data"))
+    get_settings.cache_clear()
     settings = Settings(data_dir=tmp_path / "data")
     monkeypatch.setattr(document_service, "get_settings", lambda: settings)
     monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda p: None)
@@ -35,7 +54,8 @@ def env(api_db: Session, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> Sess
     api_db.add(Employee(id="G3082", name_en="Ali", name_ar="علي", position_ar="مهندس"))
     api_db.add(User(email="op@x.ae", password_hash="x", role="admin", status="active"))
     api_db.commit()
-    return api_db
+    yield api_db
+    get_settings.cache_clear()
 
 
 def _linked_manager(db: Session) -> Manager:
@@ -64,7 +84,9 @@ def _latest_version(db: Session, book_id: int):
 
 
 def test_create_generates_1_5_letter_on_security_permit_paper(env: Session) -> None:
-    row = item_permit_service.create_item_permit(env, _payload(), actor="op@x.ae")
+    row = item_permit_service.create_item_permit(
+        env, _payload(), user=env.query(User).filter_by(email="op@x.ae").one()
+    )
     book, latest = _latest_version(env, row.book_id)
     assert book.ref_number.startswith("1/5/")
     assert latest.template_id == "Security Permit"
@@ -79,13 +101,15 @@ def test_create_generates_1_5_letter_on_security_permit_paper(env: Session) -> N
 
 
 def test_update_regenerates_letter(env: Session) -> None:
-    row = item_permit_service.create_item_permit(env, _payload(), actor="op@x.ae")
+    row = item_permit_service.create_item_permit(
+        env, _payload(), user=env.query(User).filter_by(email="op@x.ae").one()
+    )
     ref = env.get_one(Book, row.book_id).ref_number
     row = item_permit_service.update_item_permit(
         env,
         row.id,
         ItemPermitUpdate(zones=["green"], items=[{"name": "طابعة", "quantity": 2}]),
-        actor="op@x.ae",
+        user=env.query(User).filter_by(email="op@x.ae").one(),
     )
     book, latest = _latest_version(env, row.book_id)
     assert book.ref_number == ref and len(book.versions) == 1  # draft re-rendered in place
@@ -94,7 +118,12 @@ def test_update_regenerates_letter(env: Session) -> None:
     # A signed letter is never edited in place: the edit appends a new version.
     book.approval_state = "approved"
     env.commit()
-    item_permit_service.update_item_permit(env, row.id, ItemPermitUpdate(site="مبنى آخر"))
+    item_permit_service.update_item_permit(
+        env,
+        row.id,
+        ItemPermitUpdate(site="مبنى آخر"),
+        user=env.query(User).filter_by(email="op@x.ae").one(),
+    )
     book, latest = _latest_version(env, row.book_id)
     assert len(book.versions) == 2 and "مبنى آخر" in latest.fields["body"]
 
@@ -102,11 +131,16 @@ def test_update_regenerates_letter(env: Session) -> None:
 def test_pending_letter_resubmits_after_edit(env: Session) -> None:
     mgr = _linked_manager(env)
     row = item_permit_service.create_item_permit(
-        env, _payload(manager_id=mgr.id, send_for_approval=True), actor="op@x.ae"
+        env,
+        _payload(manager_id=mgr.id, send_for_approval=True),
+        user=env.query(User).filter_by(email="op@x.ae").one(),
     )
     assert item_permit_service.to_read(row, db=env).approval_state == "pending"
     row = item_permit_service.update_item_permit(
-        env, row.id, ItemPermitUpdate(site="مبنى آخر"), actor="op@x.ae"
+        env,
+        row.id,
+        ItemPermitUpdate(site="مبنى آخر"),
+        user=env.query(User).filter_by(email="op@x.ae").one(),
     )
     book, latest = _latest_version(env, row.book_id)
     assert book.approval_state == "pending"
@@ -117,9 +151,13 @@ def test_manual_submit_surfaces_chain_errors(env: Session) -> None:
     m = Manager(name_en="No Login")
     env.add(m)
     env.commit()
-    row = item_permit_service.create_item_permit(env, _payload(manager_id=m.id), actor="op@x.ae")
+    row = item_permit_service.create_item_permit(
+        env, _payload(manager_id=m.id), user=env.query(User).filter_by(email="op@x.ae").one()
+    )
     with pytest.raises(ValidationFailedError):
-        item_permit_service.submit_item_permit_book(env, row.id, actor="op@x.ae")
+        item_permit_service.submit_item_permit_book(
+            env, row.id, user=env.query(User).filter_by(email="op@x.ae").one()
+        )
 
 
 @pytest.mark.parametrize(
@@ -138,13 +176,21 @@ def test_schema_rejects_invalid_payload(bad: dict[str, Any]) -> None:
 
 def test_unknown_employee_rejected(env: Session) -> None:
     with pytest.raises(ValidationFailedError) as exc:
-        item_permit_service.create_item_permit(env, _payload(employee_id="G0000"))
+        item_permit_service.create_item_permit(
+            env,
+            _payload(employee_id="G0000"),
+            user=env.query(User).filter_by(email="op@x.ae").one(),
+        )
     assert exc.value.code == "ITEM_PERMIT_EMPLOYEE_NOT_FOUND"
 
 
 def test_soft_delete_hides_from_list_and_get(env: Session) -> None:
-    row = item_permit_service.create_item_permit(env, _payload(), actor="op@x.ae")
-    item_permit_service.soft_delete_item_permit(env, row.id, actor="op@x.ae")
+    row = item_permit_service.create_item_permit(
+        env, _payload(), user=env.query(User).filter_by(email="op@x.ae").one()
+    )
+    item_permit_service.soft_delete_item_permit(
+        env, row.id, user=env.query(User).filter_by(email="op@x.ae").one()
+    )
     assert item_permit_service.list_item_permits(env) == ([], 0)
     with pytest.raises(NotFoundError):
         item_permit_service.get_item_permit(env, row.id)
@@ -186,6 +232,81 @@ def test_api_requires_permits_capabilities(env: Session) -> None:
     assert c.get("/api/v1/item-permits").status_code == 200
     r = c.post("/api/v1/item-permits", json={})
     assert r.status_code == 403 and r.json()["error"]["details"]["capability"] == "permits.create"
+
+
+@pytest.mark.parametrize("level", ["personal", "directed", "secret"])
+@pytest.mark.parametrize("operation", ["update", "submit", "delete"])
+def test_item_permit_mutations_require_linked_letter_write_access(
+    env: Session, level: str, operation: str
+) -> None:
+    creator = env.query(User).filter_by(email="op@x.ae").one()
+    editor = User(email="editor@x.ae", password_hash="x", role="manager", status="active")
+    env.add(editor)
+    env.commit()
+    manager = _linked_manager(env)
+    row = item_permit_service.create_item_permit(
+        env, _payload(manager_id=manager.id, send_for_approval=operation == "update"), user=creator
+    )
+    book = env.get_one(Book, row.book_id)
+    book.confidentiality = level
+    if level == "directed":
+        env.add(
+            BookRecipient(
+                book_id=book.id,
+                user_id=editor.id,
+                sent_by_user_id=creator.id,
+                purpose="info",
+            )
+        )
+    env.commit()
+
+    def snapshot():
+        env.expire_all()
+        return {
+            model.__tablename__: [
+                tuple(record)
+                for record in env.execute(select(*model.__table__.columns).order_by(model.id))
+            ]
+            for model in (
+                ItemPermit,
+                Book,
+                BookVersion,
+                BookApprovalStep,
+                GeneratedDocument,
+                AuditLog,
+            )
+        }
+
+    before = snapshot()
+    output_dir = document_service.get_settings().data_dir / "output"
+    files_before = {p: p.read_bytes() for p in output_dir.rglob("*") if p.is_file()}
+    path = f"/api/v1/item-permits/{row.id}"
+
+    def request(user):
+        client = _client(env, user)
+        if operation == "update":
+            return client.patch(path, json={"site": "Changed site"})
+        if operation == "submit":
+            return client.post(f"{path}/submit-approval")
+        return client.delete(path)
+
+    response = request(editor)
+    assert response.status_code == 404, response.text
+    assert snapshot() == before
+    assert {p: p.read_bytes() for p in output_dir.rglob("*") if p.is_file()} == files_before
+    response = request(creator)
+    assert response.status_code == (204 if operation == "delete" else 200), response.text
+    env.expire_all()
+    if operation == "update":
+        assert row.site == "Changed site"
+        assert "Changed site" in book.versions[-1].fields["body"]
+        assert book.approval_state == "pending"
+    elif operation == "submit":
+        assert book.approval_state == "pending"
+        assert book.submitted_by_user_id == creator.id
+        assert book.versions[-1].approval_steps
+    else:
+        assert row.deleted_at is not None
 
 
 # ─── letter body builder (pure) ────────────────────────────────────────────────
@@ -230,7 +351,9 @@ def test_zones_default_normalize_and_letter_chips(env: Session) -> None:
     assert _payload().zones == ["red"]
     assert _payload(zones=["work_residence", "red", "red"]).zones == ["red", "work_residence"]
     row = item_permit_service.create_item_permit(
-        env, _payload(zones=["work_residence", "green"]), actor="op@x.ae"
+        env,
+        _payload(zones=["work_residence", "green"]),
+        user=env.query(User).filter_by(email="op@x.ae").one(),
     )
     assert row.zones == ["green", "work_residence"]
     _, latest = _latest_version(env, row.book_id)
@@ -240,14 +363,24 @@ def test_zones_default_normalize_and_letter_chips(env: Session) -> None:
 
 
 def test_update_zones_regenerates_letter_and_null_is_unchanged(env: Session) -> None:
-    row = item_permit_service.create_item_permit(env, _payload(), actor="op@x.ae")
+    row = item_permit_service.create_item_permit(
+        env, _payload(), user=env.query(User).filter_by(email="op@x.ae").one()
+    )
     row = item_permit_service.update_item_permit(
-        env, row.id, ItemPermitUpdate(zones=["green", "red"]), actor="op@x.ae"
+        env,
+        row.id,
+        ItemPermitUpdate(zones=["green", "red"]),
+        user=env.query(User).filter_by(email="op@x.ae").one(),
     )
     assert row.zones == ["red", "green"]
     _, latest = _latest_version(env, row.book_id)
     assert " و ".join(_access_chips([z]) for z in ("red", "green")) in latest.fields["body"]
-    row = item_permit_service.update_item_permit(env, row.id, ItemPermitUpdate(zones=None))
+    row = item_permit_service.update_item_permit(
+        env,
+        row.id,
+        ItemPermitUpdate(zones=None),
+        user=env.query(User).filter_by(email="op@x.ae").one(),
+    )
     assert row.zones == ["red", "green"]
 
 
