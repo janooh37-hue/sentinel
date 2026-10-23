@@ -363,3 +363,28 @@ verification in AR and EN, on desktop and mobile.
   - `tsc -b` clean.
   - `eslint .` has 1 error, in `e2e/signature-placement.spec.ts`, which this
     branch does not touch.
+
+### Final verification (commits ab0a11b8, 32b303c2), run on dtop
+- **Backend full suite** (`-n 6`, `PytestUnraisableExceptionWarning`
+  ignored):
+  - 3844 passed, 4 failed. All 4 also fail on unchanged `main`:
+    `test_inmate_reporter` worklist, the `test_migration_inmate_violations_category`
+    0099 fixture, `test_schema_utc_serialization` Word schemas, and
+    `test_vehicle_reminders` FakeScheduler.
+  - The baseline run had 3 permission-catalog failures that this branch fixes
+    (the counts are now correct).
+  - Our first run broke 3 tests. All 3 were fixed in ab0a11b8:
+    - The activity test now stamps owning departments.
+    - Document generation configures department services (D10).
+    - The caps memo budget now counts the scoping-switch read.
+- **Frontend full Vitest**: everything passes except two failures that are
+  not ours. `PermitDocumentVersions` also fails on `main`, and `PdfPages` is a
+  known observer timing flake. The missing `departments` permission-domain
+  label was fixed in 32b303c2, and `src/locales` now passes 862/862.
+- **`vite build`** passes.
+- **Browser smoke**: the Send dialog's Departments section shows tree order,
+  a disabled department with no head, and department-only sends.
+- **Cleanup**: the smoke servers and the dev database copy in `.tmp`, the
+  baseline worktree, and the dtop worktrees and branches were removed.
+- **Not done, waiting for the user**: merging into `dev` and publishing to
+  the dev URL, pushing to `origin`, and opening the PR.
