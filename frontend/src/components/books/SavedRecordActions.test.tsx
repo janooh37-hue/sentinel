@@ -127,7 +127,7 @@ describe('SavedRecordActions', () => {
 
   it('disables Print and explains when no current or imported PDF exists', async () => {
     vi.mocked(api.getBook).mockResolvedValue(
-      makeBook({ versions: [{ pdf_url: null } as BookRead['versions'][number]] }),
+      makeBook({ versions: [{ pdf_url: null } as NonNullable<BookRead['versions']>[number]] }),
     )
     renderActions()
 
@@ -144,7 +144,7 @@ describe('SavedRecordActions', () => {
             status: 'approved',
             pdf_url: null,
             signed_pdf_url: '/signed.pdf',
-          } as BookRead['versions'][number],
+          } as NonNullable<BookRead['versions']>[number],
         ],
       }),
     )
