@@ -208,11 +208,11 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   )
 
   const allowedQuickActions = useMemo(
-    () => layout.quick_actions.filter((item) => isQuickActionAllowed(item.id, has)),
+    () => (layout.quick_actions ?? []).filter((item) => isQuickActionAllowed(item.id, has)),
     [has, layout.quick_actions],
   )
   const allowedQuickActionDefaults = useMemo(
-    () => DEFAULT_LAYOUT.quick_actions.filter((item) => isQuickActionAllowed(item.id, has)),
+    () => (DEFAULT_LAYOUT.quick_actions ?? []).filter((item) => isQuickActionAllowed(item.id, has)),
     [has],
   )
   const updateLayout = useMutation({
@@ -299,7 +299,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
     return counts
   }, [summary])
 
-  const zones = useMemo(() => visibleByZone(layout.widgets), [layout.widgets])
+  const zones = useMemo(() => visibleByZone(layout.widgets ?? []), [layout.widgets])
 
   // Quick-action grid: render whatever's marked `visible` in the saved
   // layout, sorted by `order`, capped at MAX_VISIBLE_QUICK_ACTIONS. The
@@ -678,7 +678,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       <CustomizeWidgetsDialog
         open={widgetDialogOpen}
         onOpenChange={setWidgetDialogOpen}
-        items={layout.widgets}
+        items={layout.widgets ?? []}
         labels={widgetLabels}
         canvasWidth={layout.canvas_width ?? DEFAULT_CANVAS_WIDTH}
         isSaving={updateLayout.isPending}
@@ -707,7 +707,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           count: MAX_VISIBLE_QUICK_ACTIONS,
         })}
         onSave={(items) => {
-          const quickActions = mergeQuickActionsPreservingDenied(layout.quick_actions, items)
+          const quickActions = mergeQuickActionsPreservingDenied(layout.quick_actions ?? [], items)
           updateLayout.mutate(
             { ...layout, quick_actions: quickActions },
             { onSuccess: () => setQuickActionsDialogOpen(false) },
