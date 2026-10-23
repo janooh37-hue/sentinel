@@ -33,7 +33,7 @@ describe('companion quick-actions are gone', () => {
     } as unknown as DashboardLayout
 
     const resolved = resolveLayout(saved)
-    const ids = resolved.quick_actions.map((q) => q.id)
+    const ids = (resolved.quick_actions ?? []).map((q) => q.id)
     expect(ids).not.toContain('Leave Undertaking')
     expect(ids).toContain('Leave Application Form')
   })
@@ -118,7 +118,7 @@ describe('permission-filtered quick-action saves', () => {
 
 describe('pending_departures widget is hidden by default', () => {
   it('is present but not visible in DEFAULT_LAYOUT', () => {
-    const widget = DEFAULT_LAYOUT.widgets.find((w) => w.id === 'pending_departures')
+    const widget = DEFAULT_LAYOUT.widgets?.find((w) => w.id === 'pending_departures')
     expect(widget).toMatchObject({ visible: false, zone: 'under_workspace' })
   })
 
@@ -129,14 +129,14 @@ describe('pending_departures widget is hidden by default', () => {
     } as unknown as DashboardLayout
 
     const resolved = resolveLayout(saved)
-    const widget = resolved.widgets.find((w) => w.id === 'pending_departures')
+    const widget = resolved.widgets?.find((w) => w.id === 'pending_departures')
     expect(widget).toMatchObject({ visible: false })
   })
 })
 
 describe('violation_months widget defaults', () => {
   it('is visible in the action-needed zone in DEFAULT_LAYOUT', () => {
-    const widget = DEFAULT_LAYOUT.widgets.find((w) => w.id === 'violation_months')
+    const widget = DEFAULT_LAYOUT.widgets?.find((w) => w.id === 'violation_months')
     expect(widget).toMatchObject({
       id: 'violation_months',
       visible: true,
@@ -151,7 +151,7 @@ describe('violation_months widget defaults', () => {
     } as unknown as DashboardLayout
 
     const resolved = resolveLayout(saved)
-    const widget = resolved.widgets.find((w) => w.id === 'violation_months')
+    const widget = resolved.widgets?.find((w) => w.id === 'violation_months')
     expect(widget).toMatchObject({ visible: false })
   })
 
@@ -171,7 +171,7 @@ describe('workforce_pulse widget is hidden by default', () => {
 
     const resolved = resolveLayout(saved)
 
-    expect(resolved.widgets.find((w) => w.id === 'workforce_pulse')).toMatchObject({
+    expect(resolved.widgets?.find((w) => w.id === 'workforce_pulse')).toMatchObject({
       visible: false,
       zone: 'under_workspace',
     })

@@ -160,7 +160,7 @@ function Body({
   }
 
   const handleReset = () => {
-    setDraft([...DEFAULT_LAYOUT.widgets].sort((a, b) => a.order - b.order))
+    setDraft([...(DEFAULT_LAYOUT.widgets ?? [])].sort((a, b) => a.order - b.order))
     setWidth(DEFAULT_CANVAS_WIDTH)
   }
 
