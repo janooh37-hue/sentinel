@@ -42,12 +42,12 @@ CASES = [
     "denied", ["documents.generate", "books.view", "category", "service", "classification"]
 )
 def test_publication_denial_is_atomic_and_authorized_actor_succeeds(
-    gen_env,
+    gen_env,  # noqa: F811
     entrance,
     category,
     service,
     denied,
-    monkeypatch,  # noqa: F811
+    monkeypatch,
 ):
     if denied == "classification" and entrance != "maintenance":
         pytest.skip("Only the General Book entrance applies classification authorization")
