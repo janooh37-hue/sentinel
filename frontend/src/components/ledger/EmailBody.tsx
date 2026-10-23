@@ -66,7 +66,7 @@ export function BodyContent({
   // run before any sanitisation step downstream — broken cid hits would render
   // as 404 boxes otherwise.
   const renderedHtml = html
-    ? rewriteCidReferences(html, inlineImages ?? {}, entryId, attachmentPaths)
+    ? rewriteCidReferences(html, inlineImages ?? {}, entryId, attachmentPaths ?? [])
     : ''
 
   // Phase 5 — render the body in its OWN source direction "as sent", not the

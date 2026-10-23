@@ -416,9 +416,10 @@ function BookMobileCard({
   onSubmit,
 }: BookMobileCardProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const category = row.category
   const catLabel = isAr
-    ? (row.category.name_ar ?? row.category.name_en)
-    : (row.category.name_en ?? row.category.name_ar)
+    ? (category?.name_ar ?? category?.name_en)
+    : (category?.name_en ?? category?.name_ar)
   const Wrapper = selectMode ? 'label' : 'div'
   return (
     <Wrapper
@@ -474,12 +475,12 @@ function BookMobileCard({
                   className={cn(
                     'relative z-10 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[0.72em] font-medium transition-colors motion-reduce:transition-none',
                     'border border-hairline text-muted-foreground hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    row.category.requires_approval &&
+                    category?.requires_approval &&
                       'border-warning/50 text-warning hover:border-warning hover:text-warning',
                   )}
                 >
                   <Send className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
-                  {row.category.requires_approval
+                  {category?.requires_approval
                     ? t('books.approval.needsApproval')
                     : t('books.approval.submitForApproval')}
                 </button>
