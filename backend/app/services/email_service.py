@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Final, Protocol
 
 import nh3
-from sqlalchemy import select, text
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import TextClause
 
@@ -764,6 +764,7 @@ def _find_pending_match(
     raw_message_id = msg.get("Message-ID")
     if raw_message_id:
         message_id_tag = _msgid_tag(str(raw_message_id))
+        canonical_id = str(raw_message_id).strip().strip("<>")
         pending = (
             db.execute(
                 select(LedgerEntry)
@@ -772,7 +773,13 @@ def _find_pending_match(
                     LedgerEntry.channel == "email",
                     LedgerEntry.deleted_at.is_(None),
                     _tag_filter(HANDOFF_TAG, "handoff_exact_tag"),
-                    _tag_filter(message_id_tag, "handoff_msgid_tag"),
+                    or_(
+                        LedgerEntry.message_id.in_((canonical_id, f"<{canonical_id}>")),
+                        and_(
+                            LedgerEntry.message_id.is_(None),
+                            _tag_filter(message_id_tag, "handoff_msgid_tag"),
+                        ),
+                    ),
                 )
                 .order_by(LedgerEntry.created_at.asc(), LedgerEntry.id.asc())
                 .limit(1)
@@ -921,11 +928,18 @@ def _parent_message_ids(entry: LedgerEntry) -> list[str]:
 
 
 def _thread_matched_book(db: Session, entry: LedgerEntry) -> Book | None:
-    """The Book whose own outgoing handoff Message-ID this reply's thread names.
+    """The Book named by a live outgoing email in this reply owner's mailbox.
 
+    Thread headers are correlation evidence only inside that owner's namespace.
     Subject/ref-number heuristics are deliberately NOT consulted — see
     docs/adr/0005-send-state-confirms-only-on-thread-match.md.
     """
+    if (
+        entry.channel != "email"
+        or entry.direction not in {"incoming", "internal"}
+        or entry.deleted_at is not None
+    ):
+        return None
     parents = _parent_message_ids(entry)
     if not parents:
         return None
@@ -934,6 +948,9 @@ def _thread_matched_book(db: Session, entry: LedgerEntry) -> Book | None:
             select(LedgerEntry)
             .where(
                 LedgerEntry.message_id.in_(parents),
+                LedgerEntry.owner_user_id == entry.owner_user_id,
+                LedgerEntry.channel == "email",
+                LedgerEntry.deleted_at.is_(None),
                 LedgerEntry.direction.in_(("outgoing", "internal")),
                 LedgerEntry.related_book_id.is_not(None),
             )
@@ -975,11 +992,7 @@ def reconcile_incoming_reply(
     ref-number only, or a thread match with no attachment) is left to the ordinary
     Scan Inbox triage, which parks it for a person.
     """
-    if (
-        entry.channel != "email"
-        or entry.direction not in {"incoming", "internal"}
-        or entry.deleted_at is not None
-    ):
+    if entry.owner_user_id != account.owner_user_id:
         return
     book = _thread_matched_book(db, entry)
     if book is None or not _has_real_attachment(msg):
@@ -1639,10 +1652,11 @@ def _sync_account_locked(
                 "UPDATE ledger_entries "
                 "SET direction = 'internal' "
                 "WHERE channel = 'email' "
+                "AND owner_user_id IS :owner_user_id "
                 "AND direction IN ('incoming', 'outgoing') "
                 "AND lower(counterparty) LIKE :pat"
             ),
-            {"pat": domain_pattern},
+            {"pat": domain_pattern, "owner_user_id": account.owner_user_id},
         )
 
     # Only advance the high-water mark on a CLEAN run. On a partial failure

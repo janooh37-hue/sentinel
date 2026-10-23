@@ -591,7 +591,7 @@ def test_sync_message_id_cannot_backfill_another_mailbox(
     _account(api_db, owner_a)
     account_b = _account(api_db, owner_b)
     original = _ledger_email(
-        api_db, owner_user_id=owner_a.id, subject="Original A", counterparty="a@example.com"
+        api_db, owner_user_id=owner_a.id, subject="Original A", counterparty="a@gssg.ae"
     )
     original.owner_user_id = None if legacy_null_owner else owner_a.id
     original.tags = ["email", "msgid:shared@example.com"]
@@ -627,6 +627,7 @@ def test_sync_message_id_cannot_backfill_another_mailbox(
         assert original.in_reply_to is None
         assert original.subject == "Original A"
         assert original.notes_html == "<p>Original body</p>"
+        assert original.direction == "incoming"
         assert not (isolated_data_dir / "ledger_attachments" / str(original.id)).exists()
         imported = api_db.query(LedgerEntry).filter_by(owner_user_id=owner_b.id).one()
         assert response.json()["imported"] == 1
@@ -760,9 +761,7 @@ def test_sync_reply_requires_a_same_owner_live_email_parent_before_signing(
     )
     api_db.add(book)
     api_db.flush()
-    version = BookVersion(
-        book_id=book.id, version_no=1, trigger="initial", status="awaiting_scan"
-    )
+    version = BookVersion(book_id=book.id, version_no=1, trigger="initial", status="awaiting_scan")
     api_db.add(version)
     api_db.flush()
     step = BookApprovalStep(
@@ -866,6 +865,51 @@ def test_sync_reply_requires_a_same_owner_live_email_parent_before_signing(
     assert filed.proposed_book_id == book.id
     api_db.refresh(rejected_item)
     assert rejected_item.state == "pending_ocr"
+
+
+def test_sync_legacy_long_pending_id_reconciles_without_backfilling_a_draft(
+    api_db: Session,
+    isolated_data_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owner = _user(api_db)
+    account = _account(api_db, owner)
+    message_id = f"<{'p' * 200}@example.com>"
+    pending = _ledger_email(
+        api_db, owner_user_id=owner.id, subject="Original draft", counterparty="vendor@example.com"
+    )
+    pending.direction = "outgoing"
+    pending.tags = ["email", email_service.HANDOFF_TAG, f"msgid:{'p' * 160}"]
+    pending.message_id = message_id
+    api_db.commit()
+    message = EmailMessage()
+    message["From"] = account.email
+    message["To"] = "vendor@example.com"
+    message["Subject"] = "Changed by Outlook"
+    message["Message-ID"] = message_id
+    message.set_content("Sent body")
+    message.add_attachment(b"sent bytes", maintype="text", subtype="plain", filename="sent.txt")
+    server = FakeImapServer()
+    server.add_folder(account.inbox_folder)
+    server.add_message(account.sent_folder, message.as_bytes())
+    monkeypatch.setattr(email_service, "connect_imap", server.connector)
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: api_db
+    app.dependency_overrides[get_current_user] = lambda: owner
+    with TestClient(app, raise_server_exceptions=True) as client:
+        response = client.post("/api/v1/email/sync")
+    assert response.status_code == 200, response.text
+    assert response.json()["errors"] == []
+    assert response.json()["imported"] == 1
+    api_db.refresh(pending)
+    assert pending.deleted_at is not None
+    assert pending.subject == "Original draft"
+    assert pending.attachment_paths == []
+    assert not (isolated_data_dir / "ledger_attachments" / str(pending.id)).exists()
+    sent = api_db.query(LedgerEntry).filter(LedgerEntry.id != pending.id).one()
+    assert sent.message_id == message_id
+    assert sent.deleted_at is None
+    assert (isolated_data_dir / sent.attachment_paths[0]).read_bytes() == b"sent bytes"
 
 
 def test_sync_route_returns_409_while_a_real_mailbox_sync_holds_the_lock(
