@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { api } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { ItemPermitsTab } from './ItemPermitsTab'
 
@@ -45,8 +46,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
       ...mod.api,
       getBook: vi.fn().mockReturnValue(new Promise<never>(() => {})),
       listItemPermits: vi.fn().mockResolvedValue({
-        items: [row(1, 'Ahmed Khan', 'pending'), row(2, 'Sara Ali', 'approved'), row(3, 'Omar Zayed', null)],
-        total: 3,
+        items: [row(1, 'Ahmed Khan', 'pending'), row(2, 'Sara Ali', 'approved'), row(3, 'Omar Zayed', null), row(4, 'Awaiting Scan', 'awaiting_scan')],
+        total: 4,
         limit: 500,
         offset: 0,
       }),
@@ -72,6 +73,7 @@ function renderTab(url = '/permits?tab=items') {
 }
 
 beforeEach(async () => {
+  vi.clearAllMocks()
   mobileState.value = false
   await i18n.changeLanguage('en')
 })
@@ -97,6 +99,47 @@ describe('ItemPermitsTab', () => {
     expect(await screen.findByText('Sara Ali')).toBeInTheDocument()
   })
 
+  it.each(['red', 'green', 'work_residence'])('passes URL zone %s to the server and preserves it when selecting approval', async (zone) => {
+    const user = userEvent.setup()
+    renderTab(`/permits?tab=items&zone=${zone}`)
+    await screen.findByText('Ahmed Khan')
+    expect(api.listItemPermits).toHaveBeenCalledWith({ q: undefined, zone, limit: 500 })
+    expect(screen.getByRole('combobox', { name: 'Zone' })).toHaveValue(zone)
+    await user.click(screen.getByRole('button', { name: /pending/i }))
+    expect(screen.getByTestId('location')).toHaveTextContent(`zone=${zone}`)
+    expect(screen.getByTestId('location')).toHaveTextContent('istatus=pending')
+    await user.click(screen.getByRole('button', { name: /clear filters/i }))
+    await waitFor(() => expect(api.listItemPermits).toHaveBeenLastCalledWith({ q: undefined, zone: undefined, limit: 500 }))
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/permits\?tab=items$/)
+  })
+
+  it('opens an awaiting-scan tile URL without losing its zone', async () => {
+    renderTab('/permits?tab=items&zone=red&istatus=awaiting_scan')
+    expect(await screen.findByText('Awaiting Scan')).toBeInTheDocument()
+    expect(screen.queryByText('Ahmed Khan')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Awaiting signed copy/i })).toHaveAttribute('aria-pressed', 'true')
+    expect(api.listItemPermits).toHaveBeenCalledWith({ q: undefined, zone: 'red', limit: 500 })
+  })
+
+  it('does not cap a summary-linked approval bucket at the first register page', async () => {
+    vi.mocked(api.listItemPermits).mockResolvedValueOnce({ items: [{ id: 5, employee_id: 'G5', employee_name: 'First approved', employee_name_en: 'First approved', approval_state: 'approved', items: [], zones: ['red'], created_at: '2026-10-23' }], total: 2 } as never)
+    vi.mocked(api.listItemPermits).mockResolvedValueOnce({ items: [{ id: 6, employee_id: 'G6', employee_name: 'Last approved', employee_name_en: 'Last approved', approval_state: 'approved', items: [], zones: ['red'], created_at: '2026-10-23' }], total: 2 } as never)
+    renderTab('/permits?tab=items&zone=red&istatus=approved')
+    expect(await screen.findByText('Last approved')).toBeInTheDocument()
+    expect(api.listItemPermits).toHaveBeenLastCalledWith({ q: undefined, zone: 'red', limit: 500, offset: 1 })
+    expect(screen.getByText('2 permits')).toBeInTheDocument()
+  })
+
+  it('refetches server-side when changing zone and ignores invalid URL zones', async () => {
+    const user = userEvent.setup()
+    renderTab('/permits?tab=items&zone=invalid')
+    await screen.findByText('Ahmed Khan')
+    expect(api.listItemPermits).toHaveBeenLastCalledWith({ q: undefined, zone: undefined, limit: 500 })
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Zone' }), 'green')
+    await waitFor(() => expect(api.listItemPermits).toHaveBeenLastCalledWith({ q: undefined, zone: 'green', limit: 500 }))
+    expect(screen.getByTestId('location')).toHaveTextContent('zone=green')
+  })
+
   it('renders cards instead of the table on mobile', async () => {
     mobileState.value = true
     renderTab()
@@ -107,12 +150,13 @@ describe('ItemPermitsTab', () => {
 
   it('opens the quick view from a row and reflects it as itemPreview', async () => {
     const user = userEvent.setup()
-    renderTab()
+    renderTab('/permits?tab=items&zone=red')
     await screen.findByText('Ahmed Khan')
     const row = screen.getByText('Ahmed Khan').closest('tr') as HTMLElement
     await user.click(within(row).getByRole('button', { name: /^view$/i }))
 
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('itemPreview=1'))
+    expect(screen.getByTestId('location')).toHaveTextContent('zone=red')
     expect(await screen.findByRole('dialog', { name: /GSSG-1/ })).toBeInTheDocument()
   })
 })

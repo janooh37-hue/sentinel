@@ -18647,6 +18647,9 @@ export interface operations {
                 duty_unit?: string | null;
                 pending?: boolean;
                 open_violations?: boolean;
+                present?: boolean;
+                working?: boolean;
+                on_leave?: boolean;
                 limit?: number;
                 offset?: number;
             };
@@ -19784,6 +19787,9 @@ export interface operations {
                 leave_type?: string | null;
                 from_date?: string | null;
                 to_date?: string | null;
+                on_date?: string | null;
+                end_from?: string | null;
+                end_to?: string | null;
                 q?: string | null;
                 include_deleted?: boolean;
                 limit?: number;

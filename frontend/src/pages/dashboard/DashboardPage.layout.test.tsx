@@ -31,11 +31,15 @@ vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: s
 vi.mock('@/lib/useIdentity', () => ({ useIdentity: () => ({ identity: null }) }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => state.mobile }))
 vi.mock('@/lib/useApprovalSummary', () => ({ useApprovalSummary: () => ({ data: { available_received_kinds: state.received } }) }))
-vi.mock('./widgets/legacyAdapters', () => ({
-  LegacyWidget: ({ id, tier, rows }: { id: string; tier: string; rows: number }) => (
-    <div data-testid={`body-${id}`} data-tier={tier} data-rows={rows}>{id}</div>
-  ),
-}))
+vi.mock('./widgets/WorkforceWidget', () => ({ WorkforceWidget: (props: WidgetProps) => <div data-testid="body-workspace" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/OnLeaveTodayWidget', () => ({ OnLeaveTodayWidget: (props: WidgetProps) => <div data-testid="body-on_leave_today" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/ReturningWidget', () => ({ ReturningWidget: (props: WidgetProps) => <div data-testid="body-upcoming_leave" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/OpenViolationsWidget', () => ({ OpenViolationsWidget: (props: WidgetProps) => <div data-testid="body-violations" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/ExpiringSoonWidget', () => ({ ExpiringSoonWidget: (props: WidgetProps) => <div data-testid="body-expiring_soon" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/PendingDeparturesWidget', () => ({ PendingDeparturesWidget: (props: WidgetProps) => <div data-testid="body-pending_departures" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/ViolationMonthsWidget', () => ({ ViolationMonthsWidget: (props: WidgetProps) => <div data-testid="body-violation_months" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/PermitsWidget', () => ({ PermitsWidget: (props: WidgetProps) => <div data-testid="body-permits" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/WorkforcePulseWidget', () => ({ WorkforcePulseWidget: (props: WidgetProps) => <div data-testid="body-workforce_pulse" data-tier={props.tier} data-rows={props.rows} /> }))
 vi.mock('./widgets/MyDocumentsWidget', () => ({ MyDocumentsWidget: (props: WidgetProps) => <div data-testid="body-pending" data-tier={props.tier} data-rows={props.rows} /> }))
 vi.mock('./widgets/WaitingApprovalsWidget', () => ({ WaitingApprovalsWidget: (props: WidgetProps) => <div data-testid="body-waiting_approvals" data-tier={props.tier} data-rows={props.rows} /> }))
 vi.mock('./widgets/SentApprovalsWidget', () => ({ SentApprovalsWidget: (props: WidgetProps) => <div data-testid="body-sent_approvals" data-tier={props.tier} data-rows={props.rows} /> }))

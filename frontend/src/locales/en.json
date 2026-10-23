@@ -3601,24 +3601,17 @@
     },
     "expiryDate": "Expiry",
     "empty": "No expiring documents match your filters.",
-    "dashboardTitle": "Expiring Soon",
     "bellTitle": "Expiring documents",
-    "bellCount": "{{count}} urgent",
-    "viewAll": "View all",
-    "awaitingReturnDash": "Awaiting return form",
-    "awaitingReturnDashCount_one": "{{count}} employee awaiting",
-    "awaitingReturnDashCount_other": "{{count}} employees awaiting"
+    "bellCount": "{{count}} urgent"
   },
   "pendingDepartures": {
-    "empty": "No scheduled departures",
     "daysLeft_one": "{{count}} day left",
     "daysLeft_other": "{{count}} days left",
     "dueToday": "Last day today",
     "overdue": "Past due",
     "cancel": "Cancel",
     "cancelled": "Scheduled departure cancelled",
-    "alreadyApplied": "This departure has already been applied",
-    "viewAll": "View all employees"
+    "alreadyApplied": "This departure has already been applied"
   },
   "viewer": {
     "title": "Preview",
@@ -4212,10 +4205,6 @@
       "calm": "Quiet day. {{n}} on site, nothing returning today.",
       "calmUpcoming": "{{n}} returning later this week."
     },
-    "heroSubtitle_one": "{{count}} document needs your attention",
-    "heroSubtitle_other": "{{count}} documents need your attention",
-    "heroLeavesReturning_one": "{{count}} leave returning this week",
-    "heroLeavesReturning_other": "{{count}} leaves returning this week",
     "myWidgets": "My Widgets",
     "viewAll": "View All",
     "customize": {
@@ -4271,8 +4260,6 @@
       "openCoverage": "Open coverage",
       "self": {
         "heading": "My shift",
-        "status": "Status",
-        "reason": "Reason",
         "start": "Starts",
         "end": "Ends",
         "presence": {
@@ -4284,9 +4271,6 @@
           "off": "Off duty",
           "unknown": "Not yet verified"
         }
-      },
-      "aggregate": {
-        "heading": "Current shift"
       },
       "metrics": {
         "scheduled": "Scheduled",
@@ -4341,17 +4325,6 @@
         }
       }
     },
-    "widgetLabels": {
-      "workspace": "My Workspace",
-      "violations": "Open Violations",
-      "on_leave_today": "On Leave Today",
-      "upcoming_leave": "Upcoming Returns",
-      "expiring_soon": "Expiring Soon",
-      "pending_departures": "Pending Departures",
-      "workforce_pulse": "Workforce Pulse",
-      "violation_months": "Monthly report workflow",
-      "permits": "Permits"
-    },
     "quickActionLabels": {
       "general_book": "General Book",
       "acknowledgment": "Acknowledgment",
@@ -4391,14 +4364,6 @@
       "passport_release_list": "Release passports to a list of employees.",
       "report": "File an incident or duty report.",
       "inmate_conduct_violations": "Record inmate conduct violations."
-    },
-    "workspace": {
-      "title": "My Workspace",
-      "total": "TOTAL",
-      "ourStaff": "our staff",
-      "onSite": "on site",
-      "loaned": "loaned",
-      "onLeave": "on leave"
     },
     "widgets": {
       "quickActions": {
@@ -4451,17 +4416,97 @@
         "empty": "No received records. Open the routing desk to view earlier correspondence.",
         "more": "+{{count}} more"
       },
+      "workspace": {
+        "title": "Workforce",
+        "working": "working",
+        "ourStaff": "our staff",
+        "onSite": "on site",
+        "loaned": "loaned",
+        "onLeave": "on leave",
+        "empty": "No working employees. Open Employees to review the roster.",
+        "results": "Filtered employees",
+        "clearFilters": "Clear filters",
+        "noMatches": "No employees match these filters. Clear the filters to review the roster.",
+        "pages": "Employee result pages",
+        "previous": "Previous",
+        "next": "Next",
+        "filteredSearch": "Search is limited to the selected filters"
+      },
+      "on_leave_today": {
+        "title": "On leave today",
+        "records": "leave records",
+        "tomorrow": "{{count}} ending tomorrow",
+        "until": "Until {{date}}",
+        "empty": "No approved leave overlaps today. Open Leaves to review or record leave.",
+        "more": "+{{count}} more",
+        "filter": "Approved leave on {{date}}"
+      },
+      "upcoming_leave": {
+        "title": "Returning this week",
+        "today": "Ends today",
+        "tomorrow": "Ends tomorrow",
+        "inDays": "Ends in {{count}} days",
+        "tomorrowCount": "{{count}} tomorrow",
+        "empty": "No approved leave ends in the next seven days. Open Leaves to review return dates.",
+        "more": "+{{count}} more",
+        "filter": "Approved leave ending {{from}} to {{to}}"
+      },
+      "expiring_soon": {
+        "title": "Expiring documents",
+        "within90": "within 90 days",
+        "expired": "{{count}} expired",
+        "critical": "{{count}} within 30 days",
+        "empty": "No documents expire within 90 days. Open Expiry to review document dates.",
+        "more": "+{{count}} more"
+      },
+      "pending_departures": {
+        "title": "Pending departures",
+        "due": "{{count}} due in the next seven days",
+        "cancelFor": "Cancel departure for {{name}}",
+        "empty": "No scheduled departures. Open an employee record to schedule a departure.",
+        "more": "+{{count}} more"
+      },
       "permits": {
-        "latest": "Latest"
+        "title": "Permits",
+        "awaitingScan": "Awaiting signed copy",
+        "latestEntries": "Latest permits",
+        "empty": "No permits in this zone. Open the register to issue a permit or choose another zone.",
+        "noAccess": "Permit access is unavailable. Ask an administrator for access.",
+        "itemCount_one": "{{count}} item permit",
+        "itemCount_other": "{{count}} item permits",
+        "moreSecurity_one": "+{{count}} more security permit",
+        "moreSecurity_other": "+{{count}} more security permits",
+        "moreItems_one": "+{{count}} more item permit",
+        "moreItems_other": "+{{count}} more item permits"
+      },
+      "workforce_pulse": {
+        "title": "Workforce pulse",
+        "onDutyOf": "{{working}} of {{scheduled}} on duty",
+        "updated": "Updated {{time}}",
+        "reasonUnknown": "Attendance reason is not yet available.",
+        "reasons": {
+          "verified_punch": "Verified attendance punch",
+          "shift_override_off": "Off duty by shift override",
+          "shift_override_work": "Scheduled by shift override",
+          "no_crew_membership": "No crew assignment",
+          "no_crew_schedule": "No crew schedule",
+          "crew_schedule_off": "Off duty on the crew schedule",
+          "no_scheduled_occurrence": "Scheduled shift is not available"
+        }
+      },
+      "violation_months": {
+        "title": "Monthly inmate reports",
+        "monthsOpen": "months open",
+        "readyMonth": "{{month}} ready to close",
+        "pending": "Complete pending entries or continue the assigned review.",
+        "empty": "No ended month is awaiting close. Open the register to review this month.",
+        "more": "+{{count}} more"
       },
       "violations": {
-        "header": "Open Violations",
-        "action": "Review",
-        "active": "Active",
-        "escalated": "Escalated",
-        "pendingClose": "Pending close",
-        "deltaWarn": "{{count}} open",
-        "deltaSteady": "— stable"
+        "title": "Open violations",
+        "newest": "Newest: {{title}} · {{date}}",
+        "empty": "No open violations. Open Employees to review employee violation records.",
+        "more": "+{{count}} more"
       },
       "drafts": {
         "title": "My drafts",
@@ -4484,65 +4529,7 @@
         "configure": "Configure",
         "syncSuccess": "Imported: {{imported}}. Duplicates skipped: {{skipped}}.",
         "syncError": "Email sync failed."
-      },
-      "onLeaveToday": {
-        "header": "On Leave Today",
-        "action": "View details",
-        "deltaHigh": "High",
-        "deltaNormal": "Normal"
-      },
-      "upcomingLeave": {
-        "header": "Upcoming Returns",
-        "action": "View",
-        "returningTomorrow": "Returning tomorrow",
-        "thisWeek": "This week",
-        "deltaSoon": "Soon",
-        "deltaSteady": "Quiet"
       }
-    },
-    "services": {
-      "hr": {
-        "title": "HR Requests",
-        "description": "Issue, approve, and track HR documents."
-      },
-      "violations": {
-        "title": "Violations",
-        "description": "Open, escalate, and close cases."
-      },
-      "leaves": {
-        "title": "Leaves",
-        "description": "Manage leave balances and applications."
-      },
-      "books": {
-        "title": "Book Refs",
-        "description": "Search and stamp the records book."
-      }
-    },
-    "kpi": {
-      "totalEmployees": "Total employees",
-      "onLeaveToday": "On leave today",
-      "presentToday": "Present today",
-      "formsThisMonth": "Forms this month"
-    },
-    "quickNav": {
-      "title": "Jump to",
-      "employees": "Employees",
-      "application": "Application",
-      "leaves": "Leave History",
-      "books": "Book Reference",
-      "ledger": "Ledger"
-    },
-    "onLeave": {
-      "title": "On leave today",
-      "empty": "No one is on leave today",
-      "until": "Until {{date}}"
-    },
-    "upcoming": {
-      "title": "Returning in the next 7 days",
-      "empty": "No returns expected this week",
-      "endsIn": "Ends in {{days}} days",
-      "endsToday": "Ends today",
-      "endsTomorrow": "Ends tomorrow"
     }
   },
   "extraction": {
@@ -6182,12 +6169,9 @@
       }
     },
     "awaiting": {
-      "empty": "No ended month is awaiting close.",
       "rows": "{{count}} rows",
       "closable": "Ready to close",
-      "blocked": "{{count}} pending",
-      "more": "More months awaiting close: {{count}}",
-      "open": "Open the monthly register"
+      "blocked": "{{count}} pending"
     },
     "toasts": {
       "created": "The manual entry was added.",

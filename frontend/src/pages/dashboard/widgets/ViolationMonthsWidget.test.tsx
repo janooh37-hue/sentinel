@@ -8,6 +8,7 @@ import { api } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { NavBellPopover } from '@/components/shell/NavBellPopover'
 import { ViolationMonthsWidget } from './ViolationMonthsWidget'
+import type { WidgetProps } from './types'
 
 
 function LocationProbe(): React.JSX.Element {
@@ -54,14 +55,14 @@ vi.mock('@/pages/scanInbox/useScanInboxCount', () => ({
   useScanInboxCount: () => 0,
 }))
 
-function renderWidget(language = 'en') {
+function renderWidget(language = 'en', props: WidgetProps = { tier: 'list', rows: 4 }) {
   void i18n.changeLanguage(language)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
       <I18nextProvider i18n={i18n}>
         <MemoryRouter>
-          <ViolationMonthsWidget />
+          <ViolationMonthsWidget {...props} />
         </MemoryRouter>
       </I18nextProvider>
     </QueryClientProvider>,
@@ -75,7 +76,7 @@ function renderWidgetAndBell() {
     <QueryClientProvider client={client}>
       <I18nextProvider i18n={i18n}>
         <MemoryRouter>
-          <ViolationMonthsWidget />
+          <ViolationMonthsWidget tier="list" rows={4} />
           <NavBellPopover />
           <LocationProbe />
         </MemoryRouter>
@@ -106,13 +107,13 @@ describe('ViolationMonthsWidget', () => {
     expect(screen.getByText('اعتماد وإغلاق · 4 سطر')).toBeInTheDocument()
     expect(screen.getByText('إرسال للمراجعة · 7 سطر')).toBeInTheDocument()
     expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
-      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-07',
       '/services/inmate_conduct_violations?mode=stats&stats_month=2026-08',
+      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-07',
       '/services/inmate_conduct_violations?mode=stats&stats_month=2026-08',
     ])
   })
 
-  it('shows how many months the five-row preview omits and links to the newest', async () => {
+  it('clips to the requested rows and links omitted months to the newest register', async () => {
     vi.mocked(api.getInmateRegisterAwaitingClose).mockResolvedValue({
       months: Array.from({ length: 7 }, (_, index) => ({
         year: 2026,
@@ -126,17 +127,52 @@ describe('ViolationMonthsWidget', () => {
       count: 7,
     })
 
-    renderWidget()
+    renderWidget('en', { tier: 'tall', rows: 2 })
 
-    expect(await screen.findByText('More months awaiting close: 2')).toBeInTheDocument()
+    expect(await screen.findByText('+5 more')).toBeInTheDocument()
     expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-07',
       '/services/inmate_conduct_violations?mode=stats&stats_month=2026-01',
       '/services/inmate_conduct_violations?mode=stats&stats_month=2026-02',
-      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-03',
-      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-04',
-      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-05',
       '/services/inmate_conduct_violations?mode=stats&stats_month=2026-07',
     ])
+  })
+
+  it.each(['glance', 'summary'] as const)('shows a real ready-to-close month at %s tier', async (tier) => {
+    vi.mocked(api.getInmateRegisterAwaitingClose).mockResolvedValue({
+      months: [
+        { year: 2026, month: 7, row_count: 4, pending_count: 0, closable: true, stage: 'approve', assigned: true },
+        { year: 2026, month: 8, row_count: 7, pending_count: 2, closable: false, stage: 'prepare', assigned: false },
+      ],
+      count: 2,
+    })
+    renderWidget('en', { tier, rows: 0 })
+
+    expect(await screen.findByText('2')).toBeInTheDocument()
+    const ready = screen.getByRole('link', { name: 'July 2026 ready to close' })
+    expect(ready).toHaveAttribute('href', '/services/inmate_conduct_violations?mode=stats&stats_month=2026-07')
+    expect(screen.queryByText(/7 rows/)).not.toBeInTheDocument()
+  })
+
+  it('does not label a blocked month ready to close', async () => {
+    vi.mocked(api.getInmateRegisterAwaitingClose).mockResolvedValue({
+      months: [{ year: 2026, month: 8, row_count: 7, pending_count: 2, closable: false, stage: 'prepare', assigned: false }],
+      count: 1,
+    })
+    renderWidget('en', { tier: 'summary', rows: 0 })
+    expect(await screen.findByText('Complete pending entries or continue the assigned review.')).toBeInTheDocument()
+    expect(screen.queryByText(/ready to close/)).not.toBeInTheDocument()
+  })
+
+  it('keeps loading and retriable errors in the monthly reports frame', async () => {
+    vi.mocked(api.getInmateRegisterAwaitingClose)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue({ months: [], count: 0 })
+    renderWidget()
+    expect(screen.getByRole('region', { name: 'Monthly inmate reports' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Loading…')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }))
+    expect(await screen.findByText('No ended month is awaiting close. Open the register to review this month.')).toBeInTheDocument()
   })
 
   it('shares one awaiting-close query and adds its month count to the bell', async () => {
@@ -171,6 +207,6 @@ describe('ViolationMonthsWidget', () => {
 
     renderWidget()
 
-    expect(await screen.findByText('No ended month is awaiting close.')).toBeInTheDocument()
+    expect(await screen.findByText('No ended month is awaiting close. Open the register to review this month.')).toBeInTheDocument()
   })
 })
