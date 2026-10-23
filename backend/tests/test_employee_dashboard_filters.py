@@ -1,12 +1,13 @@
 from datetime import UTC, date, datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user
 from app.db.models import Employee, Leave, User, Violation
 from app.db.session import get_db
 from app.main import create_app
-from app.services import dashboard_service, employee_service
+from app.services import dashboard_service, employee_service, perm_service
 
 
 def test_employee_dashboard_filters_compose_and_do_not_duplicate_employees(api_db):
@@ -142,3 +143,39 @@ def test_presence_working_and_on_leave_match_dashboard_headcounts(api_db, monkey
         rows, total = employee_service.list_employees(db, q="Mohamad Farsi", **filters)
         assert {row.id for row in rows} == expected
         assert total == len(expected)
+
+
+@pytest.mark.parametrize(
+    ("params", "capability"),
+    [
+        ({"open_violations": True}, "violations.view"),
+        ({"present": True}, "leaves.view"),
+        ({"on_leave": True}, "leaves.view"),
+        ({"present": True, "open_violations": True}, "violations.view"),
+        ({"present": True, "open_violations": True}, "leaves.view"),
+    ],
+)
+def test_employee_dashboard_filters_require_source_capability(api_db, params, capability):
+    user = User(email="filtered-employees@x.ae", password_hash="x", role="manager", status="active")
+    api_db.add(user)
+    api_db.commit()
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: api_db
+    app.dependency_overrides[get_current_user] = lambda: user
+    client = TestClient(app)
+    allowed = client.get("/api/v1/employees", params=params)
+    assert allowed.status_code == 200, allowed.text
+
+    perm_service.set_user_override(api_db, user.id, capability, "deny")
+    denied = client.get("/api/v1/employees", params=params)
+    assert denied.status_code == 403
+    assert denied.json()["error"]["code"] == "FORBIDDEN"
+    assert denied.json()["error"]["details"]["capability"] == capability
+
+    unfiltered = client.get("/api/v1/employees")
+    assert unfiltered.status_code == 200, unfiltered.text
+    disabled = client.get(
+        "/api/v1/employees",
+        params={"open_violations": False, "present": False, "on_leave": False},
+    )
+    assert disabled.status_code == 200, disabled.text

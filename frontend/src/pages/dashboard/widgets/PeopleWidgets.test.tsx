@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, expect, it } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
 import { siteToday } from '@/components/employees/useAttendanceAttention'
 import { computeEndDate } from '@/lib/leaveDateMath'
@@ -11,6 +11,9 @@ import { OnLeaveTodayWidget } from './OnLeaveTodayWidget'
 import { ReturningWidget } from './ReturningWidget'
 import { OpenViolationsWidget } from './OpenViolationsWidget'
 import type { WidgetTier } from './types'
+
+const capabilities = vi.hoisted(() => ({ denied: new Set<string>() }))
+vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => !capabilities.denied.has(cap) }) }))
 
 const today = siteToday()
 const tomorrow = computeEndDate(today, 2)
@@ -26,12 +29,12 @@ const summary = {
     { id: 51, employee_id: 'G2', employee_name_en: 'Sara Ali', employee_name_ar: 'سارة علي', title: 'Uniform', date: today },
   ] },
 }
-function setup(widget: React.ReactElement) {
+function setup(widget: React.ReactElement, data = summary) {
   const client = new QueryClient()
-  client.setQueryData(['dashboard'], summary)
+  client.setQueryData(['dashboard'], data)
   return render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><MemoryRouter>{widget}</MemoryRouter></I18nextProvider></QueryClientProvider>)
 }
-beforeEach(() => { void i18n.changeLanguage('en') })
+beforeEach(() => { capabilities.denied.clear(); void i18n.changeLanguage('en') })
 
 it.each<WidgetTier>(['glance', 'summary', 'tall', 'list'])('renders Workforce at %s without My and keeps each count in its own scope', (tier) => {
   setup(<WorkforceWidget tier={tier} rows={1} />)
@@ -41,8 +44,32 @@ it.each<WidgetTier>(['glance', 'summary', 'tall', 'list'])('renders Workforce at
   if (tier !== 'glance') {
     expect(screen.getByRole('link', { name: /10.*our staff/ })).toHaveAttribute('href', '/employees?status=Active')
     expect(screen.getByRole('link', { name: /2.*loaned/ })).toHaveAttribute('href', '/employees?status=Loaned')
-    expect(screen.getByRole('link', { name: /2.*on leave/ })).toHaveAttribute('href', '/employees?on_leave=true')
+    expect(screen.getByRole('link', { name: /2.*on leave/ })).toHaveAttribute('href', `/leaves?status=Approved&on=${today}`)
   }
+})
+
+it.each<WidgetTier>(['glance', 'summary', 'tall', 'list'])('keeps %s Workforce leave-derived counts informational without leaves.view', (tier) => {
+  capabilities.denied.add('leaves.view')
+  setup(<WorkforceWidget tier={tier} rows={1} />)
+  expect(screen.getByText(/on site/).closest('a')).toBeNull()
+  expect(screen.getByText(/on site/)).toHaveTextContent('8')
+  expect(screen.getByRole('link', { name: /12.*working/ })).toHaveAttribute('href', '/employees?working=true')
+  if (tier !== 'glance') {
+    expect(screen.getByText(/on leave/).closest('a')).toBeNull()
+    expect(screen.getByText(/on leave/)).toHaveTextContent('2')
+    expect(screen.getByRole('link', { name: /10.*our staff/ })).toHaveAttribute('href', '/employees?status=Active')
+    expect(screen.getByRole('link', { name: /2.*loaned/ })).toHaveAttribute('href', '/employees?status=Loaned')
+  }
+})
+
+it('requires employees.view for employee destinations but only leaves.view for the leave destination', () => {
+  capabilities.denied.add('employees.view')
+  setup(<WorkforceWidget tier="summary" rows={1} />)
+  for (const label of [/working/, /our staff/, /on site/, /loaned/]) {
+    expect(screen.getByText(label).closest('a')).toBeNull()
+  }
+  expect(screen.queryByRole('link', { name: /View all/i })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /2.*on leave/ })).toHaveAttribute('href', `/leaves?status=Approved&on=${today}`)
 })
 
 it.each<WidgetTier>(['glance', 'summary', 'tall', 'list'])('renders today leave at %s with overlap filters, clipping and matching more', (tier) => {
@@ -54,6 +81,11 @@ it.each<WidgetTier>(['glance', 'summary', 'tall', 'list'])('renders today leave 
     expect(screen.queryByText('Sara Ali')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '+1 more' })).toHaveAttribute('href', target)
   } else expect(screen.getByText('1 ending tomorrow')).toBeInTheDocument()
+})
+
+it('uses the singular record label for one leave record', () => {
+  setup(<OnLeaveTodayWidget tier="summary" rows={1} />, { ...summary, on_leave_today: leaves.slice(0, 1) })
+  expect(screen.getByText('leave record')).toBeInTheDocument()
 })
 
 it.each<WidgetTier>(['glance', 'summary', 'tall', 'list'])('renders returners at %s including today and inclusive ending-window links', (tier) => {
@@ -74,6 +106,19 @@ it.each<WidgetTier>(['glance', 'summary', 'tall', 'list'])('renders open violati
     expect(screen.queryByText('Uniform')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '+3 more' })).toHaveAttribute('href', '/employees?violations=open')
   } else expect(screen.getByRole('link', { name: '4' })).toHaveAttribute('href', '/employees?violations=open')
+})
+
+it.each<WidgetTier>(['glance', 'summary', 'tall', 'list'])('preserves %s violation content without inaccessible employee links', (tier) => {
+  capabilities.denied.add('employees.view')
+  setup(<OpenViolationsWidget tier={tier} rows={1} />)
+  expect(screen.getByRole('region', { name: 'Open violations' })).toBeInTheDocument()
+  expect(screen.getByText('4')).toBeInTheDocument()
+  expect(screen.queryByRole('link')).not.toBeInTheDocument()
+  if (tier === 'tall' || tier === 'list') {
+    expect(screen.getByText('Late arrival')).toBeInTheDocument()
+    expect(screen.getByText('Aisha Noor')).toBeInTheDocument()
+    expect(screen.getByText('+3 more')).toBeInTheDocument()
+  }
 })
 
 it('keeps Arabic names and dates isolated while preserving filtered links', () => {
