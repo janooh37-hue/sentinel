@@ -84,7 +84,8 @@ def test_unlinked_account_cannot_claim_or_access_another_employee_signature(
     before = _snapshot(api_db, data_dir)
 
     claim = client.post("/api/v1/auth/me/link", json={"employee_id": "G-2"})
-    assert claim.status_code == 404
+    # The existing frontend GET catchall makes removed POST routes return 405.
+    assert claim.status_code == 405
     assert _snapshot(api_db, data_dir) == before
     assert client.get("/api/v1/signatures/me").status_code == 404
     # An unlinked account may still manage its own isolated signature.

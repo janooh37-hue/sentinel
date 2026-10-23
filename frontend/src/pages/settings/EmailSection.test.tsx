@@ -23,14 +23,12 @@ vi.mock('@/lib/api', async (orig) => {
       testEmailConnection: vi.fn(),
       syncEmail: vi.fn(),
       deleteEmailAccount: vi.fn(),
-      linkMyEmployee: vi.fn(),
     },
   }
 })
 vi.mock('@/lib/useIdentity', () => ({
   useIdentity: vi.fn(),
 }))
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ setUser: vi.fn() }) }))
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }))

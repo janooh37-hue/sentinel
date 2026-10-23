@@ -1880,7 +1880,7 @@ class User(Base):
     # operator | manager | admin | inmate_reporter — stored (admin-assigned),
     # authoritative for auth. inmate_reporter is a fixed-scope role (see
     # core.permissions.INMATE_REPORTER_CAPS) bound to one admin-linked G
-    # number; it never self-links (auth_service.link_self blocks it).
+    # number; employee identity links are assigned only by administrators.
     role: Mapped[str] = mapped_column(
         String(16), nullable=False, default="operator", server_default="operator"
     )

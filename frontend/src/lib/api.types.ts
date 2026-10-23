@@ -249,30 +249,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/me/link": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Link My Employee
-         * @description Link the signed-in user to their own employee record (G-number).
-         *
-         *     Sets ``User.employee_id`` — the authoritative identity source — so the
-         *     "Link your employee record" picker actually flips ``identity.linked``.
-         *     Changing/clearing an existing link is admin-only (enforced in the service).
-         */
-        post: operations["link_my_employee_api_v1_auth_me_link_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/auth/me/signature": {
         parameters: {
             query?: never;
@@ -473,11 +449,7 @@ export interface paths {
         head?: never;
         /**
          * Set User Link
-         * @description Admin-set/clear a target account's employee link (G number).
-         *
-         *     Distinct from ``POST /auth/me/link`` (self-service, blocked entirely for
-         *     ``inmate_reporter``): this is how an admin binds/rebinds that role's fixed
-         *     G number, or repairs any account's link after review.
+         * @description Administrator-reviewed assignment or clearing of an account's employee identity.
          */
         patch: operations["set_user_link_api_v1_auth_users__user_id__link_patch"];
         trace?: never;
@@ -2225,7 +2197,7 @@ export interface paths {
         put?: never;
         /**
          * Create Manager
-         * @description Create a new manager row. Requires ``settings.edit`` (admin-only).
+         * @description Create a manager; employee-linked accounts also require ``employees.edit``.
          */
         post: operations["create_manager_api_v1_managers_post"];
         delete?: never;
@@ -2249,7 +2221,7 @@ export interface paths {
         head?: never;
         /**
          * Update Manager
-         * @description Update any manager field (name, title, active, user link). settings.edit.
+         * @description Update a manager; employee-linked user assignments also require employees.edit.
          */
         patch: operations["update_manager_api_v1_managers__manager_id__patch"];
         trace?: never;
@@ -12495,16 +12467,6 @@ export interface components {
             scan_url?: string | null;
         };
         /**
-         * LinkSelfRequest
-         * @description Set (or clear, admin-only) the signed-in user's own employee link.
-         *
-         *     ``employee_id`` is the G-number to claim; ``null`` clears the link.
-         */
-        LinkSelfRequest: {
-            /** Employee Id */
-            employee_id?: string | null;
-        };
-        /**
          * LinkedDocumentRead
          * @description A committed generated Document attached to a leave/violation.
          */
@@ -14331,6 +14293,14 @@ export interface components {
         SetRoleRequest: {
             /** Role */
             role: string;
+        };
+        /**
+         * SetUserEmployeeLinkRequest
+         * @description Administrator-confirmed employee identity; null clears the link.
+         */
+        SetUserEmployeeLinkRequest: {
+            /** Employee Id */
+            employee_id?: string | null;
         };
         /** ShiftOverrideWrite */
         ShiftOverrideWrite: {
@@ -17453,41 +17423,6 @@ export interface operations {
             };
         };
     };
-    link_my_employee_api_v1_auth_me_link_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LinkSelfRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionUser"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     upload_my_signature_api_v1_auth_me_signature_post: {
         parameters: {
             query?: never;
@@ -17913,7 +17848,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LinkSelfRequest"];
+                "application/json": components["schemas"]["SetUserEmployeeLinkRequest"];
             };
         };
         responses: {

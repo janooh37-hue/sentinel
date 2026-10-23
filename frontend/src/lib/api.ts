@@ -2754,11 +2754,6 @@ export const api = {
     request<SessionUser>('PATCH', '/auth/me/lock-layout', {
       lock_layout: lockLayout,
     }),
-  /** Link the signed-in user to their own employee record (G-number). Sets
-   * `User.employee_id` — the authoritative identity source — so the link
-   * picker actually flips `identity.linked`. Pass `null` to clear (admin). */
-  linkMyEmployee: (employee_id: string | null) =>
-    request<SessionUser>('POST', '/auth/me/link', { employee_id }),
   listAuthUsers: () => request<AdminUserRead[]>('GET', '/auth/users'),
   /** Admin-issued account. Response carries a one-time temporary password —
    * it is never retained or shown again after this call returns. */
@@ -2772,9 +2767,7 @@ export const api = {
     request<AdminUserRead>('POST', `/auth/users/${id}/reset-password`, { password }),
   setAuthUserRole: (id: number, role: string) =>
     request<AdminUserRead>('PATCH', `/auth/users/${id}/role`, { role }),
-  /** Admin-set/clear a target account's employee link (G number) — how an
-   * admin binds/rebinds inmate_reporter's fixed G number, or repairs any
-   * account's link. Distinct from `linkMyEmployee` (self-service). */
+  /** Administrator-reviewed assignment or clearing of an account's employee identity. */
   setAuthUserLink: (id: number, employee_id: string | null) =>
     request<AdminUserRead>('PATCH', `/auth/users/${id}/link`, { employee_id }),
   disableAuthUser: (id: number) => request<AdminUserRead>('POST', `/auth/users/${id}/disable`),

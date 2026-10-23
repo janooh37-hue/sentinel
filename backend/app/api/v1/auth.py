@@ -46,7 +46,7 @@ from app.schemas.auth import (
     CapabilityRead,
     CompletePasswordSetupRequest,
     DefaultManagerRequest,
-    LinkSelfRequest,
+    SetUserEmployeeLinkRequest,
     LockLayoutRequest,
     LockTimerRequest,
     LoginRequest,
@@ -214,22 +214,6 @@ def complete_password_setup(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/me/link", response_model=SessionUser)
-def link_my_employee(
-    body: LinkSelfRequest,
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[Session, Depends(get_db)],
-) -> SessionUser:
-    """Link the signed-in user to their own employee record (G-number).
-
-    Sets ``User.employee_id`` — the authoritative identity source — so the
-    "Link your employee record" picker actually flips ``identity.linked``.
-    Changing/clearing an existing link is admin-only (enforced in the service).
-    """
-    updated = auth_service.link_self(db, user, employee_id=body.employee_id)
-    return auth_service.to_session_user(db, updated)
-
-
 @router.post("/me/signature", response_model=SessionUser)
 async def upload_my_signature(
     user: Annotated[User, Depends(get_current_user)],
@@ -379,16 +363,11 @@ def set_role(
 @router.patch("/users/{user_id}/link", response_model=AdminUserRead)
 def set_user_link(
     user_id: int,
-    body: LinkSelfRequest,
+    body: SetUserEmployeeLinkRequest,
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[Session, Depends(get_db)],
 ) -> AdminUserRead:
-    """Admin-set/clear a target account's employee link (G number).
-
-    Distinct from ``POST /auth/me/link`` (self-service, blocked entirely for
-    ``inmate_reporter``): this is how an admin binds/rebinds that role's fixed
-    G number, or repairs any account's link after review.
-    """
+    """Administrator-reviewed assignment or clearing of an account's employee identity."""
     user = auth_service.set_user_employee_link(
         db, user_id, employee_id=body.employee_id, actor=_actor(admin)
     )
