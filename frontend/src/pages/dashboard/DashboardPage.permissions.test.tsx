@@ -74,12 +74,12 @@ function summary(): DashboardSummary {
   }
 }
 
-function renderPage(data = summary()) {
+function renderPage(data = summary(), widgets = DEFAULT_LAYOUT.widgets.map((widget) => ({ ...widget, visible: Boolean(visibleWidgets[widget.id]) }))) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
   client.setQueryData(['dashboard'], data)
   client.setQueryData(['dashboard-layout', 1], {
     ...DEFAULT_LAYOUT,
-    widgets: DEFAULT_LAYOUT.widgets.map((widget) => ({ ...widget, visible: Boolean(visibleWidgets[widget.id]) })),
+    widgets,
   })
   vi.mocked(api.getDashboardSummary).mockResolvedValue(data)
   return render(
@@ -166,7 +166,39 @@ describe.each([
     const workspace = screen.getByText(i18n.t('dashboard.workspace.title')).closest('button')!
     expect(within(workspace).getAllByText('—')).toHaveLength(2)
     expect(within(workspace).queryByText('0')).not.toBeInTheDocument()
+    expect(within(workspace).getAllByText(language === 'ar' ? 'غير متاح' : 'Not available')).toHaveLength(2)
+    expect(within(workspace).getAllByText('—').every((node) => node.getAttribute('aria-hidden') === 'true')).toBe(true)
     expect(screen.queryByText(i18n.t('dashboard.hero.allPresent'))).not.toBeInTheDocument()
     expect(screen.queryByText(i18n.t('dashboard.hero.calm', { n: 0 }))).not.toBeInTheDocument()
+  })
+
+  it('omits calm insight when employee counts are unavailable', () => {
+    capabilityState.allowed.delete('employees.view')
+    const data = summary()
+    data.totals.present_today = null
+    data.upcoming_leave_ends = []
+    renderPage(data)
+    expect(screen.queryByText(i18n.t('dashboard.hero.calm', { n: '—' }))).not.toBeInTheDocument()
+  })
+
+  it('lets the sole rendered top card fill the row', () => {
+    capabilityState.allowed.delete('employees.view')
+    const widgets = DEFAULT_LAYOUT.widgets.map((widget) => ({
+      ...widget, visible: widget.id === 'workspace' || widget.id === 'pending', zone: 'top' as const,
+    }))
+    renderPage(summary(), widgets)
+    const card = screen.getByRole('button', { name: new RegExp(i18n.t('dashboard.pending.title')) })
+    expect(card.parentElement?.parentElement).not.toHaveClass('md:grid-cols-2')
+  })
+
+  it('omits zone wrappers when every configured card is denied', () => {
+    capabilityState.allowed = new Set()
+    const widgets = DEFAULT_LAYOUT.widgets.map((widget) => ({
+      ...widget,
+      visible: ['workspace', 'violations', 'ledger'].includes(widget.id),
+      zone: widget.id === 'workspace' ? 'top' as const : widget.id === 'violations' ? 'under_workspace' as const : 'under_quick_actions' as const,
+    }))
+    const { container } = renderPage(summary(), widgets)
+    expect(container.querySelectorAll('.mb-6.grid')).toHaveLength(0)
   })
 })
