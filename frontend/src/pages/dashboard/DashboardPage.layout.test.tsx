@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
-import type { WorkforceAccess } from '@/lib/api'
+import type { DashboardSummary, WorkforceAccess } from '@/lib/api'
+import type { WidgetProps } from './widgets/types'
 import { DEFAULT_LAYOUT, packLayout } from '@/lib/dashboardLayout'
 import { DashboardPage } from './DashboardPage'
 import { widgetRegistry } from './widgetRegistry'
@@ -16,7 +17,11 @@ const state = vi.hoisted(() => ({
   mobile: false,
 }))
 vi.mock('@/lib/api', () => ({ api: {
-  getDashboardSummary: vi.fn().mockResolvedValue({ totals: { present_today: 0, on_leave_today: 0 }, on_leave_today: [], upcoming_leave_ends: [] }),
+  getDashboardSummary: vi.fn().mockResolvedValue({
+    totals: { employees_active: 0, our_staff: 0, loaned: 0, present_today: 0, on_leave_today: 0, forms_this_month: 0, open_violations_count: 0, book_draft_count: 0 },
+    on_leave_today: [], upcoming_leave_ends: [], my_records: null, unread_mail: null, open_violations: null,
+    email_sync: { enabled: false, interval_minutes: 0, last_synced_at: null, incoming_today: 0 },
+  } satisfies DashboardSummary),
   getDashboardLayout: vi.fn(),
   updateDashboardLayout: vi.fn(),
   getWorkforceAccess: vi.fn(),
@@ -31,6 +36,12 @@ vi.mock('./widgets/legacyAdapters', () => ({
     <div data-testid={`body-${id}`} data-tier={tier} data-rows={rows}>{id}</div>
   ),
 }))
+vi.mock('./widgets/MyDocumentsWidget', () => ({ MyDocumentsWidget: (props: WidgetProps) => <div data-testid="body-pending" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/WaitingApprovalsWidget', () => ({ WaitingApprovalsWidget: (props: WidgetProps) => <div data-testid="body-waiting_approvals" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/SentApprovalsWidget', () => ({ SentApprovalsWidget: (props: WidgetProps) => <div data-testid="body-sent_approvals" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/InboxWidget', () => ({ InboxWidget: (props: WidgetProps) => <div data-testid="body-inbox" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/MyDraftsWidget', () => ({ MyDraftsWidget: (props: WidgetProps) => <div data-testid="body-drafts" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/UnreadMailWidget', () => ({ UnreadMailWidget: (props: WidgetProps) => <div data-testid="body-ledger" data-tier={props.tier} data-rows={props.rows} /> }))
 vi.mock('./widgets/WorkforceCoverageSheet', () => ({ WorkforceCoverageSheet: () => null }))
 vi.mock('@/components/refresh/PullToRefresh', () => ({ PullToRefresh: ({ children }: { children: React.ReactNode }) => children }))
 vi.mock('@/components/refresh/RefreshButton', () => ({ RefreshButton: () => null }))
@@ -122,8 +133,8 @@ describe('packed per-user dashboard', () => {
     await customize()
     expect(boardIds()).toEqual(['ledger', 'workspace', 'expiring_soon'])
     const panel = screen.getByRole('complementary', { name: 'Add widgets' })
-    expect(within(panel).queryByText('Documents Completed')).not.toBeInTheDocument()
-    expect(within(panel).queryByText('Waiting Approvals')).not.toBeInTheDocument()
+    expect(within(panel).queryByText('My documents')).not.toBeInTheDocument()
+    expect(within(panel).queryByText('Needs your signature')).not.toBeInTheDocument()
     expect(within(panel).queryByText('On Leave Today')).not.toBeInTheDocument()
     expect(within(panel).getByText('Open Violations')).toBeInTheDocument()
     expect(screen.getByTestId('widget-grid').querySelectorAll('article')).toHaveLength(3)
@@ -132,7 +143,7 @@ describe('packed per-user dashboard', () => {
     renderPage()
     await customize()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    const move = within(widget('pending')).getByRole('button', { name: 'Move Documents Completed earlier' })
+    const move = within(widget('pending')).getByRole('button', { name: 'Move My documents earlier' })
     move.focus()
     fireEvent.click(move)
     expect(boardIds()[0]).toBe('pending')
@@ -141,7 +152,7 @@ describe('packed per-user dashboard', () => {
     fireEvent.click(within(widget('pending')).getByRole('radio', { name: 'Large' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Wide' }))
     expect(screen.getByTestId('widget-grid')).toHaveAttribute('data-columns', '6')
-    fireEvent.click(within(widget('drafts')).getByRole('button', { name: 'Remove Drafts' }))
+    fireEvent.click(within(widget('drafts')).getByRole('button', { name: 'Remove My drafts' }))
     expect(boardIds()).not.toContain('drafts')
     fireEvent.click(screen.getByRole('button', { name: 'Add Open Violations' }))
     expect(boardIds().at(-1)).toBe('violations')
@@ -165,12 +176,12 @@ describe('packed per-user dashboard', () => {
     await user.keyboard(' ')
     expect(small).toBeChecked()
     const dataTransfer = { getData: () => 'drafts', setData: vi.fn(), types: ['text/plain'], effectAllowed: '' }
-    fireEvent.dragStart(within(widget('drafts')).getByRole('button', { name: 'Drag Drafts to move it' }), { dataTransfer })
+    fireEvent.dragStart(within(widget('drafts')).getByRole('button', { name: 'Drag My drafts to move it' }), { dataTransfer })
     expect(dataTransfer.setData).toHaveBeenCalledWith('text/plain', 'drafts')
     fireEvent.dragOver(widget('pending'), { dataTransfer })
     fireEvent.drop(widget('pending'), { dataTransfer })
     expect(boardIds().indexOf('drafts')).toBeLessThan(boardIds().indexOf('pending'))
-    expect(within(widget('drafts')).getByRole('button', { name: 'Drag Drafts to move it' })).toHaveFocus()
+    expect(within(widget('drafts')).getByRole('button', { name: 'Drag My drafts to move it' })).toHaveFocus()
   })
   it('cancels all draft changes, including tile edits, without writing', async () => {
     renderPage()
@@ -208,7 +219,7 @@ describe('packed per-user dashboard', () => {
     mockedApi.getDashboardLayout.mockImplementation(async () => state.user?.id === 1 ? privateLayout : null)
     const { queryClient, rerender } = renderPage()
     await customize()
-    fireEvent.click(within(widget('pending')).getByRole('button', { name: 'Remove Documents Completed' }))
+    fireEvent.click(within(widget('pending')).getByRole('button', { name: 'Remove My documents' }))
     state.user = { id: 2 }
     rerender(<QueryClientProvider client={queryClient}><MemoryRouter><DashboardPage onNavigate={vi.fn()} /></MemoryRouter></QueryClientProvider>)
     await waitFor(() => expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(2))

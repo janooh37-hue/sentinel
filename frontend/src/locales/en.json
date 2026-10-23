@@ -4342,22 +4342,10 @@
       }
     },
     "widgetLabels": {
-      "inbox": "Sent to Me",
-      "pending": "Documents Completed",
       "workspace": "My Workspace",
       "violations": "Open Violations",
-      "drafts": "Drafts",
-      "ledger": "Ledger unread",
       "on_leave_today": "On Leave Today",
       "upcoming_leave": "Upcoming Returns",
-      "waiting_approvals": "Waiting Approvals",
-      "waiting_approvals_cta": "Review",
-      "waiting_approvals_oldest": "Oldest: {{subject}}",
-      "waiting_approvals_aria_one": "Waiting approvals: {{count}}. Review.",
-      "waiting_approvals_aria_other": "Waiting approvals: {{count}}. Review.",
-      "waiting_reviews_aria_one": "To review: {{count}}. Open.",
-      "waiting_reviews_aria_other": "To review: {{count}}. Open.",
-      "sent_approvals": "Sent Approvals",
       "expiring_soon": "Expiring Soon",
       "pending_departures": "Pending Departures",
       "workforce_pulse": "Workforce Pulse",
@@ -4404,13 +4392,6 @@
       "report": "File an incident or duty report.",
       "inmate_conduct_violations": "Record inmate conduct violations."
     },
-    "pending": {
-      "title": "Documents Completed",
-      "review": "View",
-      "currency": "DOCS",
-      "footnote_one": "{{count}} document this month",
-      "footnote_other": "{{count}} documents this month"
-    },
     "workspace": {
       "title": "My Workspace",
       "total": "TOTAL",
@@ -4424,12 +4405,51 @@
         "title": "Quick actions",
         "empty": "No quick actions selected. Use Customize, then Edit tiles to add some."
       },
+      "pending": {
+        "title": "My documents",
+        "monthTitle": "My documents · {{month}}",
+        "approved": "completed",
+        "pending": "in approval",
+        "awaiting_scan": "awaiting signed scan",
+        "returned": "returned",
+        "rejected": "rejected",
+        "not_submitted": "not submitted",
+        "general": "General record",
+        "empty": "No records this month. Create a record from Services.",
+        "more": "+{{count}} more"
+      },
+      "waiting_approvals": {
+        "title": "Needs your signature",
+        "reviewTitle": "To review",
+        "toSign": "to sign",
+        "toReview": "to review",
+        "reviewMore": "+{{count}} to review",
+        "oldest": "Oldest: {{detail}}",
+        "unknownSender": "Sender not recorded",
+        "empty": "No pending assignments. Open the approval log to view earlier work.",
+        "more": "+{{count}} more"
+      },
+      "sent_approvals": {
+        "title": "Sent for approval",
+        "pending": "pending",
+        "needsChanges": "{{count}} need changes",
+        "waitingOn": "Waiting on {{name}}",
+        "unassigned": "no assigned signer",
+        "oldest": "Oldest: {{subject}}",
+        "empty": "No pending submissions. Submit a record from Records.",
+        "more": "+{{count}} more"
+      },
       "inbox": {
+        "title": "Sent to me",
         "unread": "unread",
         "received": "Received",
         "sent": "Sent",
         "byPurpose": "Received by purpose",
-        "open": "Open records sent to me"
+        "needAction": "For action: {{count}}",
+        "from": "From {{name}}",
+        "unknownSender": "Sender not recorded",
+        "empty": "No received records. Open the routing desk to view earlier correspondence.",
+        "more": "+{{count}} more"
       },
       "permits": {
         "latest": "Latest"
@@ -4444,25 +4464,26 @@
         "deltaSteady": "— stable"
       },
       "drafts": {
-        "header": "Drafts",
-        "action": "Review drafts",
-        "promotion": "Promotion",
-        "leave": "Leave",
-        "violation": "Violation",
-        "deltaWarn": "{{count}} unsubmitted",
-        "deltaSteady": "All submitted"
+        "title": "My drafts",
+        "action": "Continue in Records",
+        "continue": "Your unfinished records, from any month.",
+        "empty": "No unfinished records. Start a record from Services."
       },
       "ledger": {
-        "header": "Ledger unread",
-        "action": "Open inbox",
-        "incoming": "Incoming",
-        "outgoing": "Outgoing",
-        "internal": "Internal",
-        "deltaWarn_one": "↑ {{count}} today",
-        "deltaWarn_other": "↑ {{count}} today",
-        "deltaSteady": "— stable",
-        "metaRecent_one": "{{count}} in the last 24h",
-        "metaRecent_other": "{{count}} in the last 24h"
+        "title": "Unread mail",
+        "unread": "unread",
+        "receivedToday": "Received today: {{count}}",
+        "empty": "No unread mail. Open the inbox to view earlier mail.",
+        "noSubject": "No subject",
+        "more": "+{{count}} more",
+        "syncOff": "Email sync is off",
+        "synced": "Synced {{age}}",
+        "neverSynced": "Not synced yet",
+        "syncNow": "Sync now",
+        "syncing": "Syncing…",
+        "configure": "Configure",
+        "syncSuccess": "Imported: {{imported}}. Duplicates skipped: {{skipped}}.",
+        "syncError": "Email sync failed."
       },
       "onLeaveToday": {
         "header": "On Leave Today",
@@ -4477,37 +4498,6 @@
         "thisWeek": "This week",
         "deltaSoon": "Soon",
         "deltaSteady": "Quiet"
-      },
-      "recentDocs": {
-        "header": "Recent Documents",
-        "action": "Browse",
-        "deltaActive": "Active",
-        "deltaIdle": "Idle",
-        "metaRecent_one": "{{count}} in the recent slice",
-        "metaRecent_other": "{{count}} in the recent slice"
-      },
-      "emailSync": {
-        "header": "Email Sync",
-        "lastSync": "Last sync",
-        "interval": "Interval",
-        "status": "Status",
-        "never": "never",
-        "minutesAgo_one": "{{count}} min ago",
-        "minutesAgo_other": "{{count}} min ago",
-        "hoursAgo_one": "{{count}}h ago",
-        "hoursAgo_other": "{{count}}h ago",
-        "daysAgo_one": "{{count}}d ago",
-        "daysAgo_other": "{{count}}d ago",
-        "minutesUnit_one": "{{count}} min",
-        "minutesUnit_other": "{{count}} min",
-        "intervalOff": "Off",
-        "statusActive": "Active",
-        "statusOff": "Off",
-        "deltaOff": "Off",
-        "deltaLive": "Live",
-        "deltaSynced": "Synced",
-        "actionSync": "Sync now",
-        "actionConfigure": "Configure"
       }
     },
     "services": {
@@ -4553,12 +4543,6 @@
       "endsIn": "Ends in {{days}} days",
       "endsToday": "Ends today",
       "endsTomorrow": "Ends tomorrow"
-    },
-    "recent": {
-      "title": "Recent activity",
-      "documents": "Latest documents",
-      "ledger": "Latest correspondence",
-      "empty": "Nothing yet"
     }
   },
   "extraction": {

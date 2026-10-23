@@ -3,6 +3,12 @@ import type { ApprovalSummaryResponse, WorkforceAccess } from '@/lib/api'
 import { hasServiceCap, hasServiceRecordsCap, type WidgetId, type WidgetSource } from '@/lib/dashboardLayout'
 import { LegacyWidget } from './widgets/legacyAdapters'
 import { QuickActionsWidget } from './widgets/QuickActionsWidget'
+import { MyDocumentsWidget } from './widgets/MyDocumentsWidget'
+import { WaitingApprovalsWidget } from './widgets/WaitingApprovalsWidget'
+import { SentApprovalsWidget } from './widgets/SentApprovalsWidget'
+import { InboxWidget } from './widgets/InboxWidget'
+import { MyDraftsWidget } from './widgets/MyDraftsWidget'
+import { UnreadMailWidget } from './widgets/UnreadMailWidget'
 import type { WidgetProps } from './widgets/types'
 
 export interface WidgetAvailabilityContext {
@@ -27,14 +33,14 @@ function legacyWidget(id: Exclude<WidgetId, 'quick_actions'>): ComponentType<Wid
   }
 }
 export const widgetRegistry: Record<WidgetId, WidgetRegistration> = {
-  pending: { titleKey: 'dashboard.widgetLabels.pending', source: 'records', available: books, Component: legacyWidget('pending') },
+  pending: { titleKey: 'dashboard.widgets.pending.title', source: 'records', available: books, Component: MyDocumentsWidget },
   workspace: { titleKey: 'dashboard.widgetLabels.workspace', source: 'employees', available: employees, Component: legacyWidget('workspace') },
-  waiting_approvals: { titleKey: 'dashboard.widgetLabels.waiting_approvals', source: 'approvals', available: ({ approvalSummary }) => (approvalSummary?.available_received_kinds?.length ?? 0) > 0, Component: legacyWidget('waiting_approvals') },
-  sent_approvals: { titleKey: 'dashboard.widgetLabels.sent_approvals', source: 'approvals', available: books, Component: legacyWidget('sent_approvals') },
-  inbox: { titleKey: 'dashboard.widgetLabels.inbox', source: 'records', available: books, Component: legacyWidget('inbox') },
+  waiting_approvals: { titleKey: 'dashboard.widgets.waiting_approvals.title', source: 'approvals', available: ({ approvalSummary }) => (approvalSummary?.available_received_kinds?.length ?? 0) > 0, Component: WaitingApprovalsWidget },
+  sent_approvals: { titleKey: 'dashboard.widgets.sent_approvals.title', source: 'approvals', available: books, Component: SentApprovalsWidget },
+  inbox: { titleKey: 'dashboard.widgets.inbox.title', source: 'records', available: books, Component: InboxWidget },
   violations: { titleKey: 'dashboard.widgetLabels.violations', source: 'employees', available: ({ has }) => has('violations.view'), Component: legacyWidget('violations') },
-  drafts: { titleKey: 'dashboard.widgetLabels.drafts', source: 'records', available: books, Component: legacyWidget('drafts') },
-  ledger: { titleKey: 'dashboard.widgetLabels.ledger', source: 'ledger', available: ({ has }) => has('ledger.view'), Component: legacyWidget('ledger') },
+  drafts: { titleKey: 'dashboard.widgets.drafts.title', source: 'records', available: books, Component: MyDraftsWidget },
+  ledger: { titleKey: 'dashboard.widgets.ledger.title', source: 'ledger', available: ({ has }) => has('ledger.view'), Component: UnreadMailWidget },
   expiring_soon: { titleKey: 'dashboard.widgetLabels.expiring_soon', source: 'employees', available: ({ has }) => has('expiry.view'), Component: legacyWidget('expiring_soon') },
   on_leave_today: { titleKey: 'dashboard.widgetLabels.on_leave_today', source: 'leaves', available: leaves, Component: legacyWidget('on_leave_today') },
   upcoming_leave: { titleKey: 'dashboard.widgetLabels.upcoming_leave', source: 'leaves', available: leaves, Component: legacyWidget('upcoming_leave') },
