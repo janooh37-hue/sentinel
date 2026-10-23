@@ -37,6 +37,7 @@ from app.db.models import (
 )
 from app.schemas.dashboard import (
     DASHBOARD_QUICK_ACTION_IDS,
+    DASHBOARD_WIDGET_IDS,
     DashboardLayout,
     DashboardLeaveItem,
     DashboardRecentDocument,
@@ -59,6 +60,7 @@ UPCOMING_WINDOW_DAYS = 7
 # Only Approved leaves are considered real absences.
 _APPROVED_STATUS = "Approved"
 _VALID_QUICK_ACTION_IDS = frozenset(DASHBOARD_QUICK_ACTION_IDS)
+_VALID_WIDGET_IDS = frozenset(DASHBOARD_WIDGET_IDS)
 
 
 def get_user_layout(db: Session, user_id: int) -> DashboardLayout | None:
@@ -77,6 +79,16 @@ def get_user_layout(db: Session, user_id: int) -> DashboardLayout | None:
                 if isinstance(action, dict) and action.get("id") in _VALID_QUICK_ACTION_IDS
             ],
         }
+    widgets = raw.get("widgets") if isinstance(raw, dict) else None
+    if isinstance(raw, dict) and isinstance(widgets, list):
+        raw = {
+            **raw,
+            "widgets": [
+                widget
+                for widget in widgets
+                if isinstance(widget, dict) and widget.get("id") in _VALID_WIDGET_IDS
+            ],
+        }
     try:
         return DashboardLayout.model_validate(raw)
     except ValidationError:
@@ -89,14 +101,14 @@ def set_user_layout(
     layout: DashboardLayout,
 ) -> DashboardLayout:
     """Persist a complete private layout for one user."""
-    payload = layout.model_dump(mode="json")
+    payload = layout.model_dump(mode="json", exclude={"widgets": {"__all__": {"zone"}}})
     row = db.get(UserDashboardLayout, user_id)
     if row is None:
         db.add(UserDashboardLayout(user_id=user_id, layout=payload))
     else:
         row.layout = payload
     db.commit()
-    return layout
+    return DashboardLayout.model_validate(payload)
 
 
 def _first_of_month(today: date) -> datetime:

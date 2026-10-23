@@ -10046,7 +10046,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "sent_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures" | "workforce_pulse" | "violation_months" | "inbox" | "permits";
+            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "quick_actions" | "waiting_approvals" | "sent_approvals" | "expiring_soon" | "pending_departures" | "workforce_pulse" | "violation_months" | "inbox" | "permits";
             /**
              * Visible
              * @default true
@@ -10055,11 +10055,13 @@ export interface components {
             /** Order */
             order: number;
             /**
-             * Zone
-             * @default under_workspace
+             * Size
+             * @default S
              * @enum {string}
              */
-            zone: "top" | "under_workspace" | "under_quick_actions";
+            size: "S" | "M" | "L" | "W";
+            /** Zone */
+            zone?: ("top" | "under_workspace" | "under_quick_actions") | null;
         };
         /** DecideIn */
         DecideIn: {

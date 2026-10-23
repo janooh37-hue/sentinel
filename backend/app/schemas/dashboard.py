@@ -5,27 +5,11 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas._base import ORMBase
 
-# Known widget / quick-action ids. Add to these lists when the Dashboard
-# component grows a new tile so the API validates instead of silently storing
-# stale ids. Frontend mirrors these in `lib/dashboardLayout.ts`.
-#
-# Widget IDs:
-#   - Top row (fixed, always visible): pending, workspace
-#   - Original bottom row: violations, drafts, ledger
-#   - Promoted section cards: on_leave_today, upcoming_leave
-#   - New widgets:           recent_docs, email_sync_status,
-#                            waiting_approvals, expiring_soon, recent_ledger,
-#                            pending_departures, violation_months, permits
-#
-# Quick-action IDs are services only: one entry per selectable ``template_id``
-# from `app.core.constants.TEMPLATE_FILES`, so every tile deep-links into a
-# pre-selected form. The section shortcuts (hr/violations/leaves/books) were
-# dropped — the nav owns wayfinding — and the tolerant read path prunes them
-# from layouts saved before the removal.
+# Stable widget and service ids, mirrored in frontend/lib/dashboardLayout.ts.
 DASHBOARD_WIDGET_IDS = (
     "pending",
     "workspace",
@@ -34,12 +18,10 @@ DASHBOARD_WIDGET_IDS = (
     "ledger",
     "on_leave_today",
     "upcoming_leave",
-    "recent_docs",
-    "email_sync_status",
+    "quick_actions",
     "waiting_approvals",
     "sent_approvals",
     "expiring_soon",
-    "recent_ledger",
     "pending_departures",
     "workforce_pulse",
     "violation_months",
@@ -75,12 +57,10 @@ DashboardWidgetId = Literal[
     "ledger",
     "on_leave_today",
     "upcoming_leave",
-    "recent_docs",
-    "email_sync_status",
+    "quick_actions",
     "waiting_approvals",
     "sent_approvals",
     "expiring_soon",
-    "recent_ledger",
     "pending_departures",
     "workforce_pulse",
     "violation_months",
@@ -121,7 +101,33 @@ class DashboardWidgetConfig(BaseModel):
     id: DashboardWidgetId
     visible: bool = True
     order: int
-    zone: DashboardWidgetZone = "under_workspace"
+    size: Literal["S", "M", "L", "W"] = "S"
+    zone: DashboardWidgetZone | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_size(cls, value: object) -> object:
+        if isinstance(value, dict) and "size" not in value:
+            widget_id = value.get("id")
+            if widget_id == "quick_actions":
+                size = "W"
+            elif value.get("zone") == "top":
+                size = "M"
+            elif widget_id in {
+                "waiting_approvals",
+                "expiring_soon",
+                "on_leave_today",
+                "upcoming_leave",
+                "pending_departures",
+                "workforce_pulse",
+                "violation_months",
+                "permits",
+            }:
+                size = "L"
+            else:
+                size = "S"
+            return {**value, "size": size}
+        return value
 
 
 class DashboardQuickActionConfig(BaseModel):
@@ -134,6 +140,12 @@ class DashboardLayout(BaseModel):
     widgets: list[DashboardWidgetConfig] = Field(default_factory=list)
     quick_actions: list[DashboardQuickActionConfig] = Field(default_factory=list)
     canvas_width: DashboardCanvasWidth = "compact"
+
+    @model_validator(mode="after")
+    def reject_duplicate_widgets(self) -> DashboardLayout:
+        if len({widget.id for widget in self.widgets}) != len(self.widgets):
+            raise ValueError("Duplicate dashboard widget ids")
+        return self
 
 
 class DashboardTotals(BaseModel):
