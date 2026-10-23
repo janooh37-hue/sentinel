@@ -2289,6 +2289,7 @@ async def scan_back_book(
                 "هذا السجل غير جاهز لاستلام النسخة الموقعة",
             )
         if match.confidence == 1.0:
+            _require_full_book(db, user, match.book.book_id, write=True)
             row = book_service.add_attachment(
                 db,
                 match.book.book_id,
