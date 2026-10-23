@@ -70,7 +70,8 @@ export function resolveLayout(saved: SavedLayout | null | undefined): DashboardL
   if (!saved) return DEFAULT_LAYOUT
   const seen = new Set<string>()
   const raw = [...(saved.widgets ?? [])].sort((a, b) => a.order - b.order)
-  const legacy = raw.some((item) => !item.size || item.zone != null)
+  // V2 saves include quick_actions even when hidden; legacy widgets may all be pruned on read.
+  const legacy = raw.length === 0 || raw.some((item) => !item.size || item.zone != null)
   // Zone order was visual order, even when stored orders interleaved zones.
   if (legacy) raw.sort((a, b) => {
     const rank = (w: SavedWidget) => w.zone === 'top' || (!w.zone && ['pending', 'workspace'].includes(w.id)) ? 0 : w.zone === 'under_quick_actions' ? 2 : 1

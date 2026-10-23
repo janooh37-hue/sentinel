@@ -149,6 +149,43 @@ describe('size-based layouts', () => {
     expect(layout.widgets[0]).toMatchObject({ id: 'pending', visible: false, size: 'M' })
     expect(layout.canvas_width).toBe('compact')
   })
+  it('restores the actions band from the empty or fully pruned legacy GET response', () => {
+    // GET /dashboard/layout emits this same shape for empty, all-retired and all-unknown layouts.
+    const layout = resolveLayout({
+      widgets: [],
+      quick_actions: [
+        { id: 'Report', visible: true, order: 0 },
+        { id: 'General Book', visible: false, order: 1 },
+      ],
+      canvas_width: 'wide',
+    })
+    expect(layout.widgets.filter((item) => item.visible)).toEqual([
+      { id: 'quick_actions', visible: true, size: 'W', order: 0 },
+    ])
+    expect(layout.widgets).toHaveLength(WIDGET_IDS.length)
+    expect(layout.quick_actions.slice(0, 2)).toEqual([
+      { id: 'Report', visible: true, order: 0 },
+      { id: 'General Book', visible: false, order: 1 },
+    ])
+    expect(layout.quick_actions.filter((item) => item.visible).map((item) => item.id)).toEqual(['Report'])
+    expect(layout.canvas_width).toBe('wide')
+  })
+  it('keeps explicitly hidden v2 actions hidden after other widgets are pruned on read', () => {
+    const layout = resolveLayout({
+      widgets: [{ id: 'quick_actions', visible: false, order: 1, size: 'W' }],
+      quick_actions: [
+        { id: 'Report', visible: true, order: 0 },
+        { id: 'General Book', visible: false, order: 1 },
+      ],
+      canvas_width: 'wide',
+    })
+    expect(layout.widgets.filter((item) => item.visible)).toEqual([])
+    expect(layout.widgets[0]).toEqual({ id: 'quick_actions', visible: false, order: 0, size: 'W' })
+    expect(layout.quick_actions.slice(0, 2)).toEqual([
+      { id: 'Report', visible: true, order: 0 },
+      { id: 'General Book', visible: false, order: 1 },
+    ])
+  })
   it('round-trips a size layout without adding actions or enforcing old slot limits', () => {
     const saved = { ...DEFAULT_LAYOUT, widgets: DEFAULT_LAYOUT.widgets.map((item) => ({ ...item, visible: item.id !== 'quick_actions' })) }
     expect(resolveLayout(saved)).toEqual(saved)

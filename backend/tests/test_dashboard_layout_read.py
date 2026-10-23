@@ -5,9 +5,13 @@ from __future__ import annotations
 from typing import get_args
 
 import pytest
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from app.api.deps import get_current_user
 from app.db.models import User, UserDashboardLayout
+from app.db.session import get_db
+from app.main import create_app
 from app.schemas.dashboard import (
     DASHBOARD_QUICK_ACTION_IDS,
     DASHBOARD_WIDGET_IDS,
@@ -160,3 +164,63 @@ def test_pre_zone_layout_keeps_legacy_role_for_frontend_migration(db_session):
     assert layout is not None
     assert layout.widgets[0].size == "M"
     assert layout.widgets[0].zone == "top"
+
+
+@pytest.mark.parametrize(
+    ("widgets", "expected_widgets"),
+    [
+        pytest.param([], [], id="empty-legacy"),
+        pytest.param(
+            [
+                {"id": "recent_docs", "visible": True, "order": 0, "zone": "under_workspace"},
+                {"id": "recent_ledger", "visible": True, "order": 1, "zone": "under_workspace"},
+                {"id": "email_sync_status", "visible": True, "order": 2, "zone": "top"},
+            ],
+            [],
+            id="all-retired-legacy",
+        ),
+        pytest.param(
+            [{"id": "unknown_widget", "visible": True, "order": 0}],
+            [],
+            id="all-unknown-legacy",
+        ),
+        pytest.param(
+            [
+                {"id": "recent_docs", "visible": True, "order": 0},
+                {"id": "quick_actions", "visible": False, "order": 1, "size": "W"},
+            ],
+            [{"id": "quick_actions", "visible": False, "order": 1, "size": "W"}],
+            id="hidden-v2-actions",
+        ),
+    ],
+)
+def test_layout_read_serializes_legacy_and_v2_shapes_for_frontend(
+    api_db, widgets, expected_widgets
+):
+    user = _store_layout(
+        api_db,
+        {
+            "widgets": widgets,
+            "quick_actions": [
+                {"id": "Report", "visible": True, "order": 0},
+                {"id": "General Book", "visible": False, "order": 1},
+            ],
+            "canvas_width": "wide",
+        },
+    )
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: api_db
+    app.dependency_overrides[get_current_user] = lambda: user
+
+    response = TestClient(app).get("/api/v1/dashboard/layout")
+
+    assert response.status_code == 200, response.text
+    # These exact response shapes are exercised by resolveLayout's regression tests.
+    assert response.json() == {
+        "widgets": expected_widgets,
+        "quick_actions": [
+            {"id": "Report", "visible": True, "order": 0},
+            {"id": "General Book", "visible": False, "order": 1},
+        ],
+        "canvas_width": "wide",
+    }
