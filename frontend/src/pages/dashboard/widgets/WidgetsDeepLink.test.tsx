@@ -199,6 +199,13 @@ it('keeps incoming/outgoing routing links, real purposes and supported record ov
   expect(api.listBooks).toHaveBeenCalledWith({ inbox: 'received', sort: '-date', limit: 2 })
 })
 
+it('keeps outgoing correspondence reachable when nothing was received', async () => {
+  vi.mocked(api.getInboxSummary).mockResolvedValue({ ...INBOX, unread: 0, received: 0, sent: 5 })
+  mount(<InboxWidget tier="summary" rows={0} />)
+  expect(await screen.findByRole('link', { name: 'Sent: 5' })).toHaveAttribute('href', '/ledger?tab=books&scope=outgoing')
+  expect(screen.getByRole('link', { name: 'Open routing desk' })).toHaveAttribute('href', '/ledger?tab=books&scope=incoming')
+})
+
 it('uses the own-drafts count and same filtered destination at every tier', async () => {
   mount(<MyDraftsWidget tier="list" rows={7} />)
   expect(await screen.findByRole('link', { name: '8' })).toHaveAttribute('href', '/books?mine=1&drafts=1')

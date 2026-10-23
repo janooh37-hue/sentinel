@@ -4258,7 +4258,7 @@
       "saved": "Dashboard layout saved",
       "controls": "Customize {{name}}",
       "size": "Size of {{name}}",
-      "sizes": { "S": "Small · 1×1", "M": "Summary · 2×1", "L": "Large · 2×2", "W": "Full width", "XL": "Extra large · full width" },
+      "sizes": { "S": "Small · {{dims}}", "M": "Summary · {{dims}}", "L": "Large · {{dims}}", "W": "Full width", "XL": "Extra large · full width" },
       "drag": "Drag {{name}} to move it",
       "earlier": "Move {{name}} earlier",
       "later": "Move {{name}} later",

@@ -311,7 +311,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
       <div className="min-h-0 flex-1">
-        <PullToRefresh>
+        <PullToRefresh scrollerClassName={editing ? 'max-sm:scroll-pb-32' : ''}>
           <div
             ref={canvasRef}
             data-canvas-width={activeLayout.canvas_width}

@@ -33,15 +33,15 @@ export function InboxWidget({ tier, rows }: WidgetProps): React.JSX.Element {
     <WidgetFrame title={t('dashboard.widgets.inbox.title')} viewAllTo={RECEIVED_URL} compact={tier === 'glance'}>
       {query.isPending || query.isError || !summary ? <WidgetFeedback pending={query.isPending} retry={query.refetch} /> : <>
         <Link to={RECEIVED_URL} className={`${INLINE_LINK} flex shrink-0 items-baseline gap-2`}><bdi dir="ltr" className={BIG_NUMBER}>{summary.unread}</bdi>{' '}<span className="text-[0.75em] text-muted-foreground">{t('dashboard.widgets.inbox.unread')}</span></Link>
-        {summary.received > 0 && (tier === 'glance' ? <p className="pt-2 text-[0.75em] text-muted-foreground">{t('dashboard.widgets.inbox.needAction', { count: summary.by_purpose.action })}</p> : <>
-          <div className="flex shrink-0 flex-wrap gap-x-3 gap-y-1 py-1 text-[0.75em] text-muted-foreground">
+        {tier === 'glance' ? summary.received > 0 && <p className="pt-2 text-[0.75em] text-muted-foreground">{t('dashboard.widgets.inbox.needAction', { count: summary.by_purpose.action })}</p> : <>
+          {(summary.received > 0 || summary.sent > 0) && <div className="flex shrink-0 flex-wrap gap-x-3 gap-y-1 py-1 text-[0.75em] text-muted-foreground">
             <Link to={RECEIVED_URL} className={INLINE_LINK}>{t('dashboard.widgets.inbox.received')}: <bdi dir="ltr">{summary.received}</bdi></Link>
             <Link to={SENT_URL} className={INLINE_LINK}>{t('dashboard.widgets.inbox.sent')}: <bdi dir="ltr">{summary.sent}</bdi></Link>
-          </div>
+          </div>}
           {summary.received > 0 && <ul aria-label={t('dashboard.widgets.inbox.byPurpose')} className="flex shrink-0 flex-wrap gap-x-3 gap-y-1 pb-1 text-[0.75em] text-muted-foreground">
             {PURPOSES.filter((purpose) => summary.by_purpose[purpose] > 0).map((purpose) => <li key={purpose}><Link to={RECEIVED_URL} className={INLINE_LINK}><bdi dir="ltr" className="font-mono font-semibold text-foreground">{summary.by_purpose[purpose]}</bdi> {t(`books.send.purposes.${purpose}`)}</Link></li>)}
           </ul>}
-        </>)}
+        </>}
         {summary.received === 0 ? <WidgetEmpty message={t('dashboard.widgets.inbox.empty')} to={RECEIVED_URL} action={t('dashboard.widgets.inbox.emptyAction')} /> : list && (preview.isPending || preview.isError ? <WidgetFeedback pending={preview.isPending} retry={preview.refetch} /> : <>
           <ul ref={listRef} className="min-h-0 flex-1 overflow-hidden divide-y divide-hairline">
             {visible.map((item) => <li key={item.id}><Link to={`${RECEIVED_URL}&book=${item.id}`} className={RECORD_ROW}>

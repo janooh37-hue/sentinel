@@ -174,7 +174,7 @@ describe('packed per-user dashboard', () => {
     expect(trigger).toHaveFocus()
     await openWidgetMenu('pending')
     expect(screen.getByRole('menuitem', { name: 'Move My documents earlier' })).toHaveAttribute('aria-disabled', 'true')
-    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Large · 2×2' }))
+    await userEvent.click(screen.getByRole('menuitemradio', { name: /^Large · .?2×2.?$/ }))
     fireEvent.click(screen.getByRole('radio', { name: 'Wide' }))
     expect(screen.getByTestId('widget-grid')).toHaveAttribute('data-columns', '6')
     fireEvent.click(within(widget('drafts')).getByRole('button', { name: 'Remove My drafts' }))
@@ -225,7 +225,7 @@ describe('packed per-user dashboard', () => {
     within(widget('pending')).getByRole('button', { name: 'Edit widget: My documents' }).focus()
     await user.keyboard('{Enter}{Home}{Enter}')
     await openWidgetMenu('pending')
-    expect(screen.getByRole('menuitemradio', { name: 'Small · 1×1' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('menuitemradio', { name: /^Small · .?1×1.?$/ })).toHaveAttribute('aria-checked', 'true')
     await user.keyboard('{Escape}')
     const dataTransfer = { getData: () => 'drafts', setData: vi.fn(), types: ['text/plain'], effectAllowed: '' }
     fireEvent.dragStart(within(widget('drafts')).getByRole('button', { name: 'Drag My drafts to move it' }), { dataTransfer })

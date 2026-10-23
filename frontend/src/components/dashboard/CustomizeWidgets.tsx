@@ -18,6 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { bidi } from '@/lib/bidi'
 import { SheetTrigger } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -114,11 +115,19 @@ export function CustomizeBanner({
   )
 }
 
+const SIZE_DIMENSIONS: Partial<Record<WidgetSize, string>> = { S: '1×1', M: '2×1', L: '2×2' }
+
+/** Localised size name; the columns×rows run stays LTR so Arabic never reads 2×1 as 1×2. */
+function useSizeLabel(): (size: WidgetSize) => string {
+  const { t } = useTranslation()
+  return (size) => t(`dashboard.customize.sizes.${size}`, { dims: bidi(SIZE_DIMENSIONS[size] ?? '') })
+}
+
 function SizeFootprint({ size }: { size: WidgetSize }): React.JSX.Element {
   const width = size === 'S' ? 6 : size === 'W' || size === 'XL' ? 24 : 12
   const height = size === 'L' || size === 'XL' ? 12 : 6
   return (
-    <svg aria-hidden="true" width="16" height="12" viewBox="0 0 24 12" className="shrink-0">
+    <svg aria-hidden="true" width="16" height="12" viewBox="0 0 24 12" className="shrink-0 rtl:-scale-x-100">
       <rect x="0.5" y="0.5" width={width - 1} height={height - 1} rx="1" fill="currentColor" fillOpacity="0.15" stroke="currentColor" />
     </svg>
   )
@@ -146,6 +155,7 @@ export function WidgetControls({
   isSaving: boolean
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const sizeLabel = useSizeLabel()
   const preserveFocus = useRef(false)
   const startDrag = (event: DragEvent<HTMLButtonElement>) => {
     event.dataTransfer.setData('text/plain', item.id)
@@ -184,7 +194,7 @@ export function WidgetControls({
             data-control="menu"
             disabled={isSaving}
             aria-label={t('dashboard.customize.editWidget', { name: title })}
-            title={t(`dashboard.customize.sizes.${item.size}`)}
+            title={sizeLabel(item.size)}
             className={CONTROL}
           >
             <MoreHorizontal aria-hidden className="size-4 sm:hidden" />
@@ -195,6 +205,7 @@ export function WidgetControls({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
+          className="max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto"
           onCloseAutoFocus={(event) => {
             if (preserveFocus.current) event.preventDefault()
             preserveFocus.current = false
@@ -211,7 +222,7 @@ export function WidgetControls({
                 onSelect={() => onSize(size)}
               >
                 <SizeFootprint size={size} />
-                {t(`dashboard.customize.sizes.${size}`)}
+                {sizeLabel(size)}
                 {item.size === size && <Check aria-hidden className="ms-auto size-3.5" />}
               </DropdownMenuItem>
             ))}
