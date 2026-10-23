@@ -394,21 +394,6 @@ function BookRecordPageBody(): React.JSX.Element {
   // Revise regenerates via POST /documents/generate.
   const canGenerate = has('documents.generate') && !!book?.can_write
   const canOverrideState = has('books.override_state') && !!book?.can_write
-  const reporterSubmitMutation = useInmateReportSubmit({
-    onSuccess: () => toast.success(t('books.approval.submitted')),
-    onError: (err, message) => {
-      if (err instanceof ApiError && err.code === 'INMATE_REPORT_INCOMPLETE') {
-        toast.error(message, {
-          action: {
-            label: t('books.pane.continueDraft'),
-            onClick: handleRevise,
-          },
-        })
-      } else {
-        toast.error(message)
-      }
-    },
-  })
 
   const manage = useManagePaper(book?.id ?? null)
 
@@ -696,6 +681,10 @@ function BookRecordPageBody(): React.JSX.Element {
     if (!book || !current?.template_id) return
     navigate(`${serviceHref(current.template_id)}?revise=${book.id}`)
   }, [book, current, navigate])
+  const reporterSubmitMutation = useInmateReportSubmit({
+    onSuccess: () => toast.success(t('books.approval.submitted')),
+    onRevise: handleRevise,
+  })
 
   // "Email via Outlook" — the record's own handoff entry point. It builds the
   // SAME one-item basket prefill the tray builds (subject/body templates,

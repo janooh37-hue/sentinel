@@ -80,21 +80,22 @@ export function TransferEmployeeDialog({ open, employee, onOpenChange }: Props):
         }),
       )
     },
-    onMutate: () => { toast.loading(t(issueLetter ? 'dutyLocations.transfer.generating' : 'common.saving'), { id: `employee-duty-transfer-${employee.id}` }) },
-    onSuccess: (result) => {
+    onMutate: () => toast.loading(t(issueLetter ? 'dutyLocations.transfer.generating' : 'common.saving')),
+    onSuccess: (result, _variables, toastId) => {
       void qc.invalidateQueries({ queryKey: ['employee-detail', employee.id] })
       void qc.invalidateQueries({ queryKey: ['employees'] })
       if (result == null) {
-        toast.success(t('dutyLocations.assign.saved'), { id: `employee-duty-transfer-${employee.id}` })
+        toast.success(t('dutyLocations.assign.saved'), { id: toastId })
       } else {
         const v = methods.getValues()
         saveTransferDefaults({ recipientId: v.recipient_id, managerId: v.manager_id, cc: v.cc })
         void qc.invalidateQueries({ queryKey: ['books'] })
         if (result.book_id == null) {
-          toast.success(t('dutyLocations.transfer.movedNoBook', { count: result.moved.length }), { id: `employee-duty-transfer-${employee.id}` })
+          toast.success(t('dutyLocations.transfer.movedNoBook', { count: result.moved.length }), { id: toastId })
         } else {
           toast.success(t('dutyLocations.transfer.success'), {
-            id: `employee-duty-transfer-${employee.id}`,
+            id: toastId,
+            duration: 8000,
             reference: result.ref ?? undefined,
             action: {
               label: t('dutyLocations.transfer.viewRecord'),
@@ -105,7 +106,7 @@ export function TransferEmployeeDialog({ open, employee, onOpenChange }: Props):
       }
       onOpenChange(false)
     },
-    onError: (err) => toast.error(apiErrorMessage(err), { id: `employee-duty-transfer-${employee.id}` }),
+    onError: (err, _variables, toastId) => toast.error(apiErrorMessage(err), { id: toastId }),
   })
 
   // The letter path needs a destination unit (backend requires to_unit); the

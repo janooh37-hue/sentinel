@@ -66,10 +66,9 @@ interface DeleteBatch {
 type ScheduledItem = RecordDeleteItem & { batch: DeleteBatch }
 
 function createBatch(
-  toastId: string,
   size: number,
   qc: QueryClient,
-  describeFailures: (failures: DeleteFailure[]) => string,
+  notifyFailures: (failures: DeleteFailure[]) => void,
 ): DeleteBatch {
   let open = size
   let sent = 0
@@ -81,7 +80,7 @@ function createBatch(
 
   const close = async (): Promise<void> => {
     try {
-      if (failures.length > 0) toast.error(describeFailures(failures))
+      if (failures.length > 0) notifyFailures(failures)
       // Nothing reached the server when every item was undone.
       if (sent > 0) {
         await Promise.all([
@@ -99,7 +98,7 @@ function createBatch(
   }
 
   return {
-    toastId,
+    toastId: '',
     done,
     undos: [],
     deleted: () => {
@@ -115,16 +114,17 @@ function createBatch(
   }
 }
 
-/** One message per batch: the ref + reason for a single failure, else the count + refs. */
-function failureMessage(failures: DeleteFailure[], t: TFunction, language: string): string {
+/** One notice per batch; a single failure keeps its reference and reason separate. */
+function notifyFailures(failures: DeleteFailure[], t: TFunction, language: string): void {
   if (failures.length === 1) {
     const [{ ref, err }] = failures
-    return t('books.record.deleteFailed', { ref: bidi(ref), reason: apiErrorMessage(err) })
+    toast.error(t('books.record.deleteFailed'), { reference: ref, description: apiErrorMessage(err) })
+    return
   }
   const refs = new Intl.ListFormat(language, { type: 'conjunction' }).format(
     failures.map((f) => bidi(f.ref)),
   )
-  return t('books.list.deleteFailedMany', { count: failures.length, refs })
+  toast.error(t('books.list.deleteFailedMany', { count: failures.length, refs }))
 }
 
 export interface RecordDeleteApi {
@@ -139,7 +139,6 @@ const RecordDeleteContext = createContext<RecordDeleteApi | null>(null)
 export function RecordDeleteProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
-  const batchSeq = useRef(0)
   // Ids with a delete scheduled or in flight. Scheduling one again is dropped:
   // the pending delete already covers it, and a re-armed timer would orphan the
   // first batch (it would never see that item's outcome).
@@ -190,19 +189,17 @@ export function RecordDeleteProvider({ children }: { children: ReactNode }): Rea
         fresh.push(item)
       }
       if (fresh.length === 0) return
-      batchSeq.current += 1
-      const batch = createBatch(`record-delete-${batchSeq.current}`, fresh.length, qc, (failures) =>
-        failureMessage(failures, t, i18n.language),
+      const batch = createBatch(fresh.length, qc, (failures) =>
+        notifyFailures(failures, t, i18n.language),
       )
       for (const item of fresh) scheduleOne({ ...item, batch })
       const single = fresh.length === 1 ? fresh[0] : null
       let handled = false
-      toast(
+      batch.toastId = toast(
         single
           ? t('books.record.deleted')
           : t('books.list.deletedMany', { count: fresh.length }),
         {
-          id: batch.toastId,
           reference: single?.ref,
           duration: RECORD_DELETE_DELAY_MS,
           action: {
@@ -214,18 +211,17 @@ export function RecordDeleteProvider({ children }: { children: ReactNode }): Rea
               // committed one (timer paused by hover, toast still up) is gone.
               const tooLate = batch.undos.filter((undo) => !undo()).length
               if (tooLate === 0) {
-                toast.success(
-                  single
-                    ? t('books.record.restored')
-                    : t('books.list.restoredMany', { count: fresh.length }),
-                  { reference: single?.ref },
-                )
+                if (single) {
+                  toast.success(t('books.record.restored'), { reference: single.ref })
+                } else {
+                  toast.success(t('books.list.restoredMany', { count: fresh.length }))
+                }
               } else {
-                toast.error(
-                  single
-                    ? t('books.record.undoTooLate', { ref: bidi(single.ref) })
-                    : t('books.list.undoTooLateMany', { count: tooLate }),
-                )
+                if (single) {
+                  toast.error(t('books.record.undoTooLate'), { reference: single.ref })
+                } else {
+                  toast.error(t('books.list.undoTooLateMany', { count: tooLate }))
+                }
               }
             },
           },

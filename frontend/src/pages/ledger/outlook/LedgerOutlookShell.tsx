@@ -99,6 +99,15 @@ interface ComposeState {
  */
 const UNDO_DELAY_MS = 6000
 
+interface TrashBatch {
+  toastId: string
+  undos: (() => boolean)[]
+}
+
+interface TrashItem extends PendingDelete {
+  batch: TrashBatch
+}
+
 export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellProps = {}): React.JSX.Element {
   const { t } = useTranslation()
   const isMobile = useIsMobile()
@@ -410,40 +419,62 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
     composePage.close()
   }, [composePage.close, queryClient])
 
-  const { pendingIds, scheduleDelete } = useDeferredDelete({
+  const { pendingIds, scheduleDelete } = useDeferredDelete<TrashItem>({
     delayMs: UNDO_DELAY_MS,
-    onCommit: async (p: PendingDelete) => {
+    onCommit: async (p) => {
       try {
         await api.deleteLedgerEntry(p.id)
       } finally {
-        void queryClient.invalidateQueries({ queryKey: ['ledger'] })
+        await queryClient.invalidateQueries({ queryKey: ['ledger'] })
       }
     },
-    notify: ({ onUndo }) => {
-      toast(t('ledger.outlook.movedToTrash', { defaultValue: 'Moved to Trash' }), {
-        duration: UNDO_DELAY_MS,
-        action: { label: t('common.undo', { defaultValue: 'Undo' }), onClick: onUndo },
-      })
+    notify: ({ pending, onUndo }) => {
+      pending.batch.undos.push(onUndo)
+      return () => toast.dismiss(pending.batch.toastId)
     },
   })
 
+  const scheduleTrash = useCallback((ids: number[]) => {
+    const fresh = [...new Set(ids)].filter((id) => !pendingIds.has(id))
+    if (fresh.length === 0) return
+    const batch: TrashBatch = { toastId: '', undos: [] }
+    fresh.forEach((id) => scheduleDelete({ id, batch }))
+    let handled = false
+    batch.toastId = toast(
+      fresh.length === 1
+        ? t('ledger.outlook.movedToTrash')
+        : t('ledger.outlook.movedToTrashMany', { count: fresh.length }),
+      {
+        duration: UNDO_DELAY_MS,
+        action: {
+          label: t('common.undo'),
+          onClick: () => {
+            if (handled) return
+            handled = true
+            const results = batch.undos.map((undo) => undo())
+            if (results.some((undone) => !undone)) toast.error(t('ledger.outlook.undoTooLate'))
+          },
+        },
+      },
+    )
+  }, [pendingIds, scheduleDelete, t])
+
   const handleDelete = useCallback(
     (entry: { id: number }) => {
-      scheduleDelete({ id: entry.id })
+      scheduleTrash([entry.id])
       // If the deleted entry is the one open in the pane, clear the selection.
       if (selectedId === entry.id) setSelectedId(null)
     },
-    [scheduleDelete, selectedId, setSelectedId],
+    [scheduleTrash, selectedId, setSelectedId],
   )
 
-  // Bulk Trash (D4) — schedule each id through the same deferred-delete so every
-  // entry gets its own Undo toast, identical to the per-row Trash.
+  // Bulk Trash shares one commit window and one Undo action for all selected rows.
   const handleBulkTrash = useCallback(
     (ids: number[]) => {
-      ids.forEach((id) => scheduleDelete({ id }))
+      scheduleTrash(ids)
       if (selectedId != null && ids.includes(selectedId)) setSelectedId(null)
     },
-    [scheduleDelete, selectedId, setSelectedId],
+    [scheduleTrash, selectedId, setSelectedId],
   )
 
   // Hide optimistically-deleted rows from the list until the timer commits.

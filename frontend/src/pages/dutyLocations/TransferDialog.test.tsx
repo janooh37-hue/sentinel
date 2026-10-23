@@ -29,7 +29,7 @@ vi.mock('@/lib/api', () => ({
   api: { transferDuty: vi.fn() },
   apiErrorMessage: (e: unknown) => String(e),
 }))
-vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'loading-toast-id'), success: vi.fn(), error: vi.fn() } }))
 vi.mock('./transferDefaults', () => ({
   loadTransferDefaults: () => ({ recipientId: null, managerId: null, cc: [] }),
   saveTransferDefaults: vi.fn(),
@@ -115,12 +115,13 @@ test('apply to all fills every row and a per-row edit overrides it', async () =>
   await waitFor(() => expect(toast.success).toHaveBeenCalledWith(
     i18n.t('dutyLocations.transfer.success'),
     {
-      id: 'duty-transfer',
+      id: 'loading-toast-id',
+      duration: 8000,
       reference: 'GB-1',
       action: { label: i18n.t('dutyLocations.transfer.viewRecord'), onClick: expect.any(Function) },
     },
   ))
-  expect(toast.loading).toHaveBeenCalledWith(i18n.t('dutyLocations.transfer.generating'), { id: 'duty-transfer' })
+  expect(toast.loading).toHaveBeenCalledWith(i18n.t('dutyLocations.transfer.generating'))
   vi.mocked(toast.success).mock.calls[0][1]?.action?.onClick()
   expect(navigate).toHaveBeenCalledWith('/books/7')
 })
@@ -149,9 +150,9 @@ test('a move without a book resolves the loading toast without a reference or ac
   await user.click(generateBtn())
 
   await waitFor(() => expect(toast.success).toHaveBeenCalledWith(
-    i18n.t('dutyLocations.transfer.movedNoBook', { count: 2 }), { id: 'duty-transfer' },
+    i18n.t('dutyLocations.transfer.movedNoBook', { count: 2 }), { id: 'loading-toast-id' },
   ))
-  expect(toast.loading).toHaveBeenCalledWith(i18n.t('dutyLocations.transfer.generating'), { id: 'duty-transfer' })
+  expect(toast.loading).toHaveBeenCalledWith(i18n.t('dutyLocations.transfer.generating'))
 })
 
 test('a rejected transfer resolves the loading toast with an error', async () => {
@@ -162,7 +163,7 @@ test('a rejected transfer resolves the loading toast with an error', async () =>
   await user.click(screen.getByRole('button', { name: 'Apply to all' }))
   await user.click(generateBtn())
 
-  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: Transfer failed', { id: 'duty-transfer' }))
-  expect(toast.loading).toHaveBeenCalledWith(i18n.t('dutyLocations.transfer.generating'), { id: 'duty-transfer' })
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: Transfer failed', { id: 'loading-toast-id' }))
+  expect(toast.loading).toHaveBeenCalledWith(i18n.t('dutyLocations.transfer.generating'))
   expect(toast.success).not.toHaveBeenCalled()
 })

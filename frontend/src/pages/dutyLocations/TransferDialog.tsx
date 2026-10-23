@@ -108,17 +108,18 @@ export function TransferDialog({
         }),
       )
     },
-    onMutate: () => { toast.loading(t('dutyLocations.transfer.generating'), { id: 'duty-transfer' }) },
-    onSuccess: (result) => {
+    onMutate: () => toast.loading(t('dutyLocations.transfer.generating')),
+    onSuccess: (result, _variables, toastId) => {
       const v = methods.getValues()
       saveTransferDefaults({ recipientId: v.recipient_id, managerId: v.manager_id, cc: v.cc })
       void qc.invalidateQueries({ queryKey: ['employees'] })
       void qc.invalidateQueries({ queryKey: ['books'] })
       if (result.book_id == null) {
-        toast.success(t('dutyLocations.transfer.movedNoBook', { count: result.moved.length }), { id: 'duty-transfer' })
+        toast.success(t('dutyLocations.transfer.movedNoBook', { count: result.moved.length }), { id: toastId })
       } else {
         toast.success(t('dutyLocations.transfer.success'), {
-          id: 'duty-transfer',
+          id: toastId,
+          duration: 8000,
           reference: result.ref ?? undefined,
           action: {
             label: t('dutyLocations.transfer.viewRecord'),
@@ -129,7 +130,7 @@ export function TransferDialog({
       onTransferred(result)
       onOpenChange(false)
     },
-    onError: (err) => toast.error(apiErrorMessage(err), { id: 'duty-transfer' }),
+    onError: (err, _variables, toastId) => toast.error(apiErrorMessage(err), { id: toastId }),
   })
 
   const canSubmit = employees.length > 0 && missing === 0 && !mutation.isPending

@@ -75,7 +75,6 @@ import { useRecordDelete } from './RecordDeleteProvider'
 import { openRecord, useListReturnFocus, type RecordNavState } from './useRecordNavContext'
 import { useListTier } from './useListTier'
 import { ScanBackEntry } from '@/pages/scanBack/ScanBackEntry'
-import { ApiError } from '@/lib/api'
 import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
 import { serviceHref } from '@/lib/quickActions'
 import { newRecordHref } from './newRecordHref'
@@ -204,19 +203,7 @@ function BooksRegister(): React.JSX.Element {
   const [previewBookId, setPreviewBookId] = useState<number | null>(null)
   const reporterSubmitMutation = useInmateReportSubmit({
     onSuccess: () => toast.success(t('books.approval.submitted')),
-    onError: (err, message, bookId) => {
-      if (err instanceof ApiError && err.code === 'INMATE_REPORT_INCOMPLETE') {
-        toast.error(message, {
-          action: {
-            label: t('books.pane.continueDraft'),
-            onClick: () =>
-              navigate(`${serviceHref('Inmate Conduct Violations')}?revise=${bookId}`),
-          },
-        })
-      } else {
-        toast.error(message)
-      }
-    },
+    onRevise: (bookId) => navigate(`${serviceHref('Inmate Conduct Violations')}?revise=${bookId}`),
   })
   const submitBook = (bookId: number): void => {
     if (isInmateReporter) reporterSubmitMutation.mutate(bookId)

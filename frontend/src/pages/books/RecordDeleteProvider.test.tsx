@@ -124,7 +124,7 @@ beforeEach(() => {
   deleteBook.mockReset().mockImplementation(async (id: number) => {
     serverIds = serverIds.filter((x) => x !== id)
   })
-  toastFn.mockReset()
+  toastFn.mockReset().mockImplementation(() => `toast-${toastFn.mock.calls.length}`)
   toastSuccess.mockReset()
   toastError.mockReset()
   toastDismiss.mockReset()
@@ -145,7 +145,7 @@ describe('RecordDeleteProvider', () => {
     expect(opts.reference).toBe('A-1')
     expect(opts.duration).toBe(6000)
     expect(opts.action.label).toBe('Undo')
-    expect(opts.id).toEqual(expect.any(String))
+    expect(opts.id).toBeUndefined()
     expect(deleteBook).not.toHaveBeenCalled()
   })
 
@@ -153,7 +153,7 @@ describe('RecordDeleteProvider', () => {
     setup()
     click('one')
     click('two')
-    const ids = toastFn.mock.calls.map((c) => (c[1] as ToastOpts).id)
+    const ids = toastFn.mock.results.map((result) => result.value)
     expect(ids).toHaveLength(2)
     expect(new Set(ids).size).toBe(2)
   })
@@ -198,7 +198,7 @@ describe('RecordDeleteProvider', () => {
   it('dismisses the Undo toast, by the id it was shown with, when the delete commits', async () => {
     setup()
     click('one')
-    const { id } = lastToast()[1]
+    const id = toastFn.mock.results.at(-1)?.value
     await advance(5_999)
     expect(toastDismiss).not.toHaveBeenCalled()
     await advance(1)
@@ -235,7 +235,7 @@ describe('RecordDeleteProvider', () => {
   it('unmounting the provider commits at once and dismisses the toast', async () => {
     const { unmount } = setup()
     click('one')
-    const { id } = lastToast()[1]
+    const id = toastFn.mock.results.at(-1)?.value
     unmount()
     expect(toastDismiss).toHaveBeenCalledWith(id)
     await advance(0)
@@ -261,7 +261,7 @@ describe('RecordDeleteProvider', () => {
     expect(lastToast()[0]).toBe('2 records deleted')
     expect(lastToast()[1].reference).toBeUndefined()
     act(() => lastToast()[1].action.onClick())
-    expect(toastSuccess).toHaveBeenCalledWith('2 records restored', { reference: undefined })
+    expect(toastSuccess).toHaveBeenCalledWith('2 records restored')
     expect(screen.getByText('row-2')).toBeInTheDocument()
     expect(screen.getByText('row-3')).toBeInTheDocument()
     await advance(10_000)
@@ -299,7 +299,7 @@ describe('RecordDeleteProvider', () => {
     await advance(6_000)
     expect(toastError).toHaveBeenCalledTimes(1)
     expect(toastError).toHaveBeenCalledWith(
-      `Record ${bidi('A-1')} wasn’t deleted: Record is in flight`,
+      'Record wasn’t deleted', { reference: 'A-1', description: 'Record is in flight' },
     )
     expect(invalidatedKeys(invalidate)).toEqual(['books', 'dashboard'])
     // The refetch is the real check: until it lands the row stays hidden...
@@ -322,9 +322,9 @@ describe('RecordDeleteProvider', () => {
     await advance(10)
     expect(deleteBook).toHaveBeenCalledTimes(2)
     expect(toastError).toHaveBeenCalledTimes(1)
-    const msg = toastError.mock.calls[0][0] as string
-    expect(msg).toBe(`Record ${bidi('A-3')} wasn’t deleted: Record is in flight`)
-    expect(msg).not.toContain('A-2')
+    expect(toastError).toHaveBeenCalledWith(
+      'Record wasn’t deleted', { reference: 'A-3', description: 'Record is in flight' },
+    )
     expect(invalidatedKeys(invalidate)).toEqual(['books', 'dashboard'])
     // A-2 is gone for good; A-3 is back (the server kept it).
     expect(screen.queryByText('row-2')).toBeNull()
@@ -354,7 +354,7 @@ describe('RecordDeleteProvider', () => {
     expect(toastSuccess).not.toHaveBeenCalled()
     expect(toastError).toHaveBeenCalledTimes(1)
     expect(toastError).toHaveBeenCalledWith(
-      `Too late to undo — record ${bidi('A-1')} was already deleted.`,
+      'Too late to undo — the record was already deleted.', { reference: 'A-1' },
     )
     expect(deleteBook).toHaveBeenCalledTimes(1)
   })

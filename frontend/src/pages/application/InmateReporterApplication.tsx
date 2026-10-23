@@ -21,7 +21,7 @@ import type {
 import { nowHM, todayIso } from './resignationDate'
 import { savedGenerationFromJob, type SavedGeneration } from './savedGeneration'
 
-import { useInmateReportSubmit, inmateReportSubmitErrorMessage } from '@/components/books/useInmateReportSubmit'
+import { useInmateReportSubmit, inmateReportFieldLabel, inmateReportSubmitErrorMessage, notifyInmateReportSubmitError } from '@/components/books/useInmateReportSubmit'
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { JobStatus } from './JobStatus'
@@ -38,13 +38,6 @@ const EDITABLE_FIELDS: Record<string, true> = {
   action_other: true,
 }
 const INMATE_ROW_KEYS = ['name', 'nationality', 'wing', 'uid', 'holding_no'] as const
-const INMATE_FIELD_LOCALE_KEY: Record<string, string> = {
-  name: 'application.inmatesTable.name',
-  nationality: 'application.inmatesTable.nationality',
-  wing: 'application.inmatesTable.wing',
-  uid: 'application.inmatesTable.uid',
-  holding_no: 'application.inmatesTable.holdingNo',
-}
 
 
 interface SubmissionIssue {
@@ -158,11 +151,9 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
     newFormSeededRef.current = true
   }, [form, initialBookId, revisionFieldsQuery.data, schema])
 
-  const handleSubmitError = useCallback((error: unknown) => {
-    const message = inmateReportSubmitErrorMessage(error, t)
+  const handleSubmitError = useCallback((error: unknown, message: string) => {
     if (!(error instanceof ApiError)) {
       setSubmissionIssue({ kind: 'other', message })
-      toast.error(message)
       return
     }
     if (error.code === 'INMATE_REPORT_INCOMPLETE') {
@@ -183,8 +174,7 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
     } else {
       setSubmissionIssue({ kind: 'other', message })
     }
-    toast.error(message)
-  }, [t])
+  }, [])
 
   const submitMutation = useInmateReportSubmit({
     onSuccess: () => {
@@ -192,7 +182,11 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
       setSubmissionIssue(null)
       toast.success(t('application.inmateReporter.sent'))
     },
-    onError: (error) => handleSubmitError(error),
+    onError: handleSubmitError,
+    onRevise: () => {
+      setLastSaved(null)
+      setActiveTab('fields')
+    },
   })
 
   const buildPayload = useCallback((values: Record<string, unknown>): DocumentGenerateRequest => ({
@@ -222,7 +216,11 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
     },
     onError: (error) => {
       submitAfterSaveRef.current = false
-      handleSubmitError(error)
+      handleSubmitError(error, inmateReportSubmitErrorMessage(error, t))
+      notifyInmateReportSubmitError(error, t, i18n.language, schema, () => {
+        setLastSaved(null)
+        setActiveTab('fields')
+      })
     },
   })
 
@@ -461,15 +459,6 @@ function SubmissionIssuePanel({
   onContinue: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
-  const isAr = i18n.language.startsWith('ar')
-  const fieldLabel = (path: string): string => {
-    const fieldId = path.match(/^[^.[\]]+/)?.[0] ?? path
-    const field = schema?.fields.find((candidate) => candidate.id === fieldId)
-    const base = field ? (isAr ? field.label_ar || field.label_en : field.label_en) : path
-    const inmateCell = path.match(/^inmates\[(\d+)\]\.(name|nationality|wing|uid|holding_no)$/)
-    if (!inmateCell) return base
-    return `${base} · ${t(INMATE_FIELD_LOCALE_KEY[inmateCell[2]])} · ${Number(inmateCell[1]) + 1}`
-  }
   const message = issue.kind === 'incomplete'
     ? t('application.inmateReporter.incomplete')
     : issue.kind === 'manager'
@@ -482,7 +471,7 @@ function SubmissionIssuePanel({
       <p>{message}</p>
       {issue.fields && issue.fields.length > 0 && (
         <ul className="mt-2 list-disc space-y-1 ps-5 text-xs" dir="auto">
-          {issue.fields.map((field) => <li key={field}>{fieldLabel(field)}</li>)}
+          {issue.fields.map((field) => <li key={field}>{inmateReportFieldLabel(field, schema, t, i18n.language)}</li>)}
         </ul>
       )}
       {issue.kind === 'incomplete' && (
@@ -510,7 +499,6 @@ export function WordReportForm({ user, onBack }: { user: SessionUser; onBack: ()
   const [date, setDate] = useState(todayIso())
   const isMobile = useIsMobile()
   const submit = useInmateReportSubmit({
-    onError: (_error, message) => toast.error(message),
     onSuccess: () => toast.success(t('application.inmateReporter.sent')),
   })
   const create = useMutation({

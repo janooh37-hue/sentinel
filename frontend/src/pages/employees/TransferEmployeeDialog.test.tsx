@@ -18,7 +18,7 @@ vi.mock('react-router-dom', async (importOriginal) => ({
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
 }))
-vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'loading-toast-id'), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/api', () => ({
   api: {
     updateEmployee: vi.fn(),
@@ -71,11 +71,12 @@ test('checkbox on (default): confirms via POST /duty/transfer', async () => {
   })
   expect(api.updateEmployee).not.toHaveBeenCalled()
   await waitFor(() => expect(toast.success).toHaveBeenCalledWith('dutyLocations.transfer.success', {
-    id: 'employee-duty-transfer-G100',
+    id: 'loading-toast-id',
+    duration: 8000,
     reference: 'GB-1',
     action: { label: 'dutyLocations.transfer.viewRecord', onClick: expect.any(Function) },
   }))
-  expect(toast.loading).toHaveBeenCalledWith('dutyLocations.transfer.generating', { id: 'employee-duty-transfer-G100' })
+  expect(toast.loading).toHaveBeenCalledWith('dutyLocations.transfer.generating')
   vi.mocked(toast.success).mock.calls[0][1]?.action?.onClick()
   expect(navigate).toHaveBeenCalledWith('/books/7')
 })
@@ -98,8 +99,8 @@ test('checkbox off: confirms via plain PATCH', async () => {
     }),
   )
   expect(api.transferDuty).not.toHaveBeenCalled()
-  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('dutyLocations.assign.saved', { id: 'employee-duty-transfer-G100' }))
-  expect(toast.loading).toHaveBeenCalledWith('common.saving', { id: 'employee-duty-transfer-G100' })
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('dutyLocations.assign.saved', { id: 'loading-toast-id' }))
+  expect(toast.loading).toHaveBeenCalledWith('common.saving')
 })
 
 test('a move without a book resolves the loading toast without a reference or action', async () => {
@@ -109,8 +110,8 @@ test('a move without a book resolves the loading toast without a reference or ac
   renderDialog()
   fireEvent.click(screen.getByRole('button', { name: 'dutyLocations.transfer.generate' }))
 
-  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('dutyLocations.transfer.movedNoBook', { id: 'employee-duty-transfer-G100' }))
-  expect(toast.loading).toHaveBeenCalledWith('dutyLocations.transfer.generating', { id: 'employee-duty-transfer-G100' })
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('dutyLocations.transfer.movedNoBook', { id: 'loading-toast-id' }))
+  expect(toast.loading).toHaveBeenCalledWith('dutyLocations.transfer.generating')
 })
 
 test.each([true, false])('a rejected transfer resolves loading (issue letter: %s)', async (issueLetter) => {
@@ -120,7 +121,7 @@ test.each([true, false])('a rejected transfer resolves loading (issue letter: %s
   if (!issueLetter) fireEvent.click(screen.getByLabelText('dutyLocations.transfer.issueLetter'))
   fireEvent.click(screen.getByRole('button', { name: issueLetter ? 'dutyLocations.transfer.generate' : 'common.save' }))
 
-  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: Transfer failed', { id: 'employee-duty-transfer-G100' }))
-  expect(toast.loading).toHaveBeenCalledWith(issueLetter ? 'dutyLocations.transfer.generating' : 'common.saving', { id: 'employee-duty-transfer-G100' })
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: Transfer failed', { id: 'loading-toast-id' }))
+  expect(toast.loading).toHaveBeenCalledWith(issueLetter ? 'dutyLocations.transfer.generating' : 'common.saving')
   expect(toast.success).not.toHaveBeenCalled()
 })
