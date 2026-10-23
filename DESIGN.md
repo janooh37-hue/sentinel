@@ -233,9 +233,11 @@ larger as the font scale moves up. Standard em stops seen on the dashboard:
 | `text-[0.92em]`  | LockOverlay Unlock button                                          |
 | `text-[0.9em]`   | LanguageToggle label, dropdown actions                             |
 | `text-[0.86em]`  | WidgetEditDialog description                                       |
-| `text-[0.85em]`  | WidgetEditDialog Save button                                       |
+| `text-[0.85em]`  | Widget frame titles, people names, WidgetEditDialog Save button    |
 | `text-[0.82em]`  | LockOverlay paragraph, dialog reset link                           |
+| `text-[0.8em]`   | Quick-action tile labels                                           |
 | `text-[0.78em]`  | Footnotes, breakdown rows, last-sync labels                        |
+| `text-[0.75em]`  | Widget support copy, record rows, metadata, footers and View all    |
 | `text-[0.72em]`  | Service-tile description, smaller meta, role chips                 |
 | `text-[0.7em]`   | NavBell-popover row timestamp                                      |
 | `text-[0.65em]`  | Admin/Manager role chips                                           |
@@ -285,8 +287,9 @@ flex flex-1 flex-col overflow-hidden bg-background
 > etc. Don't translate rem to fixed px — the whole point of the rem-first
 > approach is that the AaSlider resizes paddings and gaps too.
 
-**Card padding:** `WidgetFrame` uses `p-4`; the shared `ServiceTile` uses
-`p-5`. The Hero uses `px-4 py-4 md:px-8 md:py-6`.
+**Card padding:** `WidgetFrame` uses `p-4`, switching to `px-3 py-2`
+while editing; the shared `ServiceTile` uses `p-5`. The Hero uses
+`px-4 py-4 md:px-8 md:py-6`.
 
 **Widget board:** `grid w-full min-w-0 flex-1 gap-3.5` with inline
 ``gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` `` and
@@ -294,8 +297,12 @@ flex flex-1 flex-col overflow-hidden bg-background
 `gridColumn` and `gridRow`; see §4.1 for sizes and tiers.
 
 **Quick actions:** `QuickActionsWidget` owns an internal
-`grid min-h-0 flex-1 gap-2 overflow-hidden`; its inline column count depends
-on the packed box and tier, not a separate page-level four-column grid.
+`grid min-h-0 flex-1 auto-rows-fr gap-x-2 gap-y-1`. Glance stacks two
+horizontal artwork-and-label links in one column; other tiers center artwork
+above labels. The column budget is 2 on a two-column board, otherwise
+`Math.min(box.w * 2, 8)`, capped to the number of visible actions. Other tiers
+show at most `columns * Math.max(box.h, 1)` actions, not a separate page-level
+four-column grid.
 
 **Vertical rhythm:** Hero `mb-4 md:mb-6`; the “My Widgets” heading container
 uses `mb-3.5`. The board and Add widgets panel sit in
@@ -552,7 +559,8 @@ is the click target. Dashboard widgets instead use structural `WidgetFrame`
 sections containing explicit links and buttons (§4.5).
 
 **Surfaces using this pattern:** `ServiceTile` (shared component; the packed
-dashboard's `QuickActionsWidget` renders compact links instead).
+dashboard's `QuickActionsWidget` instead renders artwork-and-label link tiles
+inside `WidgetFrame`, without the shared button's primary cap or hover lift).
 
 **Look (baseline):**
 
@@ -614,9 +622,9 @@ focus-visible:ring-inset focus-visible:ring-ring
 
 The inset focus ring stays inside the dropdown edge. Widget row links also
 use inset rings so the clipped frame cannot hide their focus indication.
-Record links use `rounded-md py-1 text-[0.72em] leading-tight`; people links
-use `rounded-lg py-2 text-start`. Both use `gap-2` and
-`hover:bg-surface-tinted`, without a hover lift or shadow.
+Record links use `rounded-md py-1` plus `WIDGET_SUPPORT`
+(`text-[0.75em] leading-tight`); people links use `rounded-lg py-2 text-start`.
+Both use `gap-2` and `hover:bg-surface-tinted`, without a hover lift or shadow.
 
 ---
 
@@ -1584,10 +1592,14 @@ replaces the former zones and separate quick-actions band.
   grows neighbours to absorb gaps. CSS grid mirrors logical columns in RTL.
 - `pages/dashboard/widgetRegistry.tsx` removes unavailable widgets before
   packing. The final box determines glance, summary, tall, or list content.
-- `components/dashboard/WidgetFrame.tsx` is the shared card frame: header
-  title, optional count and View all link, then a filling, clipped body.
-- Quick actions are a regular `quick_actions` widget. Tile count follows its
-  final box and every tile retains its service-specific capability gate.
+- `components/dashboard/WidgetFrame.tsx` is the shared card frame: two-line
+  title, optional count and View all, then a filling, clipped body. Narrow
+  cards and compact/glance frames show only the labelled View all chevron.
+  While editing, the frame header is omitted in favor of the named in-flow
+  controls header (§4.9).
+- Quick actions are a regular `quick_actions` widget with `ServiceArtwork`
+  link tiles. Tile count follows its final box and every tile retains its
+  service-specific capability gate.
 - Private layouts use `{ id, visible, order, size }`; legacy zones are read
   only for migration and never written.
   Empty legacy layouts (including those pruned to no surviving ids) restore
@@ -1712,8 +1724,10 @@ Every size uses `WidgetFrame`, never a nested card or a self-hidden body.
 Glance and summary show linked metrics; tall and list use compact two-line
 rows, capped by the packed box's `rows`. The remainder stays in a separate
 `shrink-0` “+N more” link outside the clipped list. Loading skeletons and
-load-error/retry feedback remain inside the same frame. Empty states explain
-where to continue. Colors, focus rings and surfaces use the existing tokens;
+load-error/retry feedback remain inside the same frame. Empty states use
+short copy plus a direct, capability-appropriate action, not a long
+instruction sentence squeezed into a truncated line (§4.5).
+Colors, focus rings and surfaces use the existing tokens;
 references and numeric metrics use isolated Western digits.
 
 Preview lists share `components/dashboard/useFitCount.ts`: viewport and row
@@ -1721,10 +1735,12 @@ measurements reserve whole rows after each resize or font-scale change.
 `WidgetProps.rows` limits preview fetching/candidates, not measured capacity;
 remainder links subtract only rows actually displayed.
 
-Glance and summary secondary text stays on one truncated line with complete
-tooltip text. My documents shows at most one secondary state in glance and
-two legend states in summary; +N opens that month's complete Records breakdown.
-Frame titles also stay on one line while preserving the full accessible name.
+Glance and summary secondary text uses the shared support scale. Compact
+state labels truncate with complete tooltip text; oldest-approval details
+can use `line-clamp-2`. My documents shows at most one secondary state in
+glance and two legend states in summary; +N opens that month's complete
+Records breakdown. Frame titles use two lines while preserving the full
+accessible name.
 
 - **My documents:** title includes the localized month from `my_records.month`.
   The large completed count is `my_records.approved`, not generated-document
@@ -1772,9 +1788,10 @@ Frame titles also stay on one line while preserving the full accessible name.
 `ViolationMonthsWidget.tsx`, `PermitsWidget.tsx`, `WorkforcePulseWidget.tsx`.
 
 Every widget uses `WidgetFrame` and its packed-box tier. Glance and summary
-show compact metrics; tall/list show at most the supplied `rows` with a
-separate `+N more` footer. Loading skeletons, errors with Retry, and instructive
-empty states stay inside the same clipped frame.
+show compact metrics; tall/list preview candidates are capped by the supplied
+`rows`, with whole visible rows measured by `useFitCount` and a separate
+`+N more` footer. Loading skeletons, errors with Retry, and short empty-state
+copy with direct actions stay inside the same clipped frame.
 
 - **Workforce:** working headcount links to `working=true`; our staff to
   `status=Active`, on site to `present=true`, loaned to `status=Loaned`, and
@@ -1789,6 +1806,11 @@ empty states stay inside the same clipped frame.
   `end_from`/`end_to` covering today through today+7. Both the mobile list and
   desktop report read these filters. Counts represent leave records (one
   employee can have more than one record); rows open `/leaves?open=<id>`.
+  The desktop report's filter chip bidi-isolates each interpolated ISO date
+  with the shared `bidi()` helper, preserving YYYY-MM-DD order in Arabic text.
+  Dashboard leave-row end dates use Western-digit `DD/MM/YYYY` via
+  `formatDmy`, wrapped in `bidi()` before interpolation into the translated
+  “Until” label. Returning rows keep translated relative-end labels.
 - **Expiring documents:** all working-employee documents within 90 days,
   including expired ones. Rows open the employee Documents tab only with
   `employees.view`; otherwise they remain informational.
@@ -1826,18 +1848,47 @@ one/other and all six Arabic plural categories.
 
 **Source:** `components/dashboard/WidgetFrame.tsx`.
 
-One `section` fills every packed widget box using `h-full min-h-0 min-w-0`,
-`overflow-hidden`, `rounded-2xl border border-hairline bg-surface p-4`.
-Its accessible name is the translated title. The non-shrinking header holds
-the `h3` (`text-[0.78em] font-medium text-muted-foreground`), optional count
-pill (`bg-surface-tinted font-mono tabular-nums`) and a separate View all
-link (`text-[0.7em] text-primary`). The link's chevron mirrors in RTL.
+One `section` fills every packed widget box using
+`@container/widget flex h-full min-h-0 min-w-0 flex-col overflow-hidden`,
+`rounded-2xl border border-hairline bg-surface` and `p-4`.
+Its accessible name is the translated title.
+
+- Header: `flex shrink-0 items-start justify-between gap-1 pb-2`.
+- `h3`: `flex min-w-0 items-start text-[0.85em] font-medium leading-snug text-muted-foreground`;
+  title span: `line-clamp-2`, with the complete title in `title`.
+- Optional count: `ms-1.5 inline-flex shrink-0 rounded-full bg-surface-tinted px-1.5 font-mono tabular-nums text-foreground`.
+- View all: `inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-sm text-[0.75em] font-medium text-primary`,
+  with hover underline and a visible focus ring. The text uses
+  `hidden @[20rem]/widget:inline` and is omitted entirely with `compact`.
+  The `size-3.5 rtl:rotate-180` chevron remains; translated `aria-label` and
+  tooltip name the destination even when text is hidden.
+- Editing: omit the entire frame header and use `px-3 py-2`. The named
+  in-flow controls header supplies the title, without duplicating it (§4.9).
 
 The filling body is `flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden`.
 There is no fixed minimum content height and no card-wide button containing
 other links. Widgets own their explicit metric, row, state and footer
 contents. Every actual action has a visible focus ring; dots are decorative
 and always accompanied by a textual status.
+
+**Shared widget type scale:**
+
+- `BIG_NUMBER` / `PEOPLE_BIG`: `font-mono text-[2em] font-bold leading-none tracking-tight`,
+  `tabular-nums text-foreground`.
+- Frame titles and `PEOPLE_NAME`: `text-[0.85em] font-medium`;
+  names also use `block truncate`.
+- `WIDGET_SUPPORT`: `text-[0.75em] leading-tight`, shared by record rows,
+  people metadata, remainder links and empty-state copy. Metadata adds
+  `text-muted-foreground`; direct actions use `text-primary`.
+
+**Empty states:** `WidgetEmpty` keeps a short message and a direct action in
+`flex shrink-0 flex-col items-start gap-0.5 pt-1` with `WIDGET_SUPPORT`.
+Its link uses `rounded-sm font-medium text-primary hover:underline` and
+the shared visible focus ring. Omit the link when no permitted destination
+is supplied. Create-oriented record actions open Services only when allowed;
+otherwise they open the relevant register. Keep the state inside the existing
+frame, not a nested or dashed card. Quick actions retains its own instructional
+empty state (§4.6).
 
 ---
 
@@ -1846,8 +1897,8 @@ and always accompanied by a textual status.
 **Source:** `components/ui/service-tile.tsx`.
 
 Shared whole-surface service button. The packed dashboard does not render
-this component: `QuickActionsWidget` uses compact links inside `WidgetFrame`
-with a tier-dependent count and column layout (§1.3).
+this component: `QuickActionsWidget` uses `ServiceArtwork` link tiles inside
+`WidgetFrame`, with a tier-dependent count and column layout (§1.3).
 
 **Surface:**
 
@@ -1868,30 +1919,40 @@ button.group.relative
 **Content:**
 
 ```
-1. Emoji         text-[2em] leading-none, aria-hidden
-                 group-hover:-translate-y-1.5  (0.375rem bob upward)
-                 transition-transform duration-300
+1. Artwork       ServiceArtwork when artwork is supplied; otherwise
+                 emoji text-[2em] leading-none, aria-hidden
+                 wrapper: block w-14 transition-transform duration-300
+                 group-hover:-translate-y-1.5 group-focus-visible:-translate-y-1.5
 2. Title         mt-3 text-[0.95em] font-semibold tracking-tight text-foreground
 3. Description   mt-1 text-[0.72em] leading-relaxed text-muted-foreground
 ```
 
-- Emoji is the variant's icon (defined in `lib/quickActions.ts` —
-  📄 / 🌴 / ⚠️ / 📚 / etc.).
-- Title and description come from `dashboard.quickActionLabels.*` /
-  `dashboard.quickActionDesc.*` i18n keys.
+- `ServiceTile` receives `artwork`, fallback `emoji`, `title` and `description`
+  as props. It does not select dashboard translation keys itself.
+- Dashboard tiles use `QUICK_ACTION_META` from `lib/quickActions.ts`:
+  `ServiceArtwork` with `size="gallery"` and `className="shrink-0"`,
+  then `dashboard.quickActionLabels.${meta.slug}`. They have no description;
+  `dashboard.quickActionDesc.*` keys have been removed.
+- Dashboard links use `rounded-md px-2 py-0.5 text-[0.8em] font-semibold leading-normal text-foreground`,
+  `hover:bg-surface-tinted`, `focus-visible:bg-surface-tinted` and an inset
+  focus ring. Glance uses `gap-2 text-start`; other tiers use
+  `flex-col justify-center gap-1 text-center`. No shared `ServiceTile`
+  border cap, lift or shadow is applied.
 
 **Hover composite:**
 
 - Card lifts 4px + `shadow-lg`.
-- Emoji bobs upward 0.375rem over 300ms (slower than the card lift's 200ms
-  — the emoji visibly settles after the card).
+- Artwork/emoji wrapper bobs upward 0.375rem over 300ms on hover and keyboard
+  focus, slower than the shared card lift's 200ms.
 
 **RTL:** No physical-direction utilities used. The whole tile flips
 naturally with `dir="rtl"`.
 
-**Dashboard quick-action empty state:** `QuickActionsWidget` renders
-`<p className="text-[0.78em] text-muted-foreground">` inside its existing
-frame. It does not add a separate dashed-outline card.
+**Dashboard quick-action empty state:** no selected/allowed tiles renders
+`text-[0.78em] text-muted-foreground` copy inside the existing frame,
+directing the user to Customize, then Edit tiles. The frame's View all
+destination remains `/services`; there is no separate dashed-outline card
+or inline `WidgetEmpty` action.
 
 **Reduced motion:** Card and artwork/emoji translations use
 `motion-reduce:!translate-none motion-reduce:transition-none`.
@@ -1910,8 +1971,11 @@ are summarized in §2.3.
 `peopleWidgetParts.tsx` supplies both leave lists with a compact semantic
 link: token-colored initials avatar, locale-selected name, G-number, translated
 leave type and a trailing end-date/relative-end label. Names and metadata
-truncate inside the available inline size; focus rings are inset so clipping
-does not hide them. Each row opens `/leaves?open=<leave_id>`.
+truncate inside the available inline size; the trailing label uses
+`WIDGET_SUPPORT max-w-[45%] text-end text-warning`. Leave end dates use
+`bidi(formatDmy(item.end_date))` for isolated Western-digit `DD/MM/YYYY`
+inside translated copy. Focus rings are inset so clipping does not hide
+them. Each row opens `/leaves?open=<leave_id>`.
 
 #### 4.8b Returning rows
 
@@ -1947,21 +2011,54 @@ generic `?open=` link for unrelated pages.
 ### 4.9 In-place Customize and quick-action tile editor
 
 **Sources:** `components/dashboard/CustomizeWidgets.tsx`,
-`components/dashboard/WidgetEditDialog.tsx`.
+`pages/dashboard/DashboardPage.tsx`, `components/dashboard/WidgetEditDialog.tsx`.
 
-Customize edits the dashboard in place, not in a modal. The banner offers
-Compact/Wide, Reset, Cancel and Save layout. Gap filling is always on.
-Each box overlays a native drag handle, native S/M/L/W radios, keyboard
-move-earlier/move-later controls, and Remove. A moved control keeps focus.
-Removing a widget moves focus after rendering to its enabled Add button,
-falling back to the banner Save layout button.
-The Add widgets side panel groups only available widgets by source page;
-visible entries read “On board”. It sits below the grid on smaller screens.
-Cancel discards the complete draft, including edits to quick-action tiles.
+Customize edits the dashboard in place, not in a modal. Gap filling is
+always on; the packed boxes remain the preview.
 
-The quick-actions box adds Edit tiles, opening the existing Radix
-`WidgetEditDialog`. That dialog changes the in-place draft; only Save layout
-persists the full private layout. Its retained visual treatment follows.
+- Banner: Compact/Wide native radios and Reset, Cancel, Save layout.
+  Below `sm`, instructions use `basis-full` and width/reset controls wrap.
+  Reset only replaces the draft with `DEFAULT_LAYOUT`; it never saves.
+- Each box has a named in-flow controls header:
+  `flex min-h-11 shrink-0 items-center gap-1 border-b border-hairline bg-surface-raised px-2 sm:min-h-10`.
+  The title uses `min-w-0 flex-1 truncate text-start text-[0.8125em] font-semibold text-foreground`.
+  It replaces the regular frame header, not an overlay over the preview.
+- At `sm` and above, show a native drag handle, footprint/chevron menu
+  trigger and separate Remove button. On phones, hide drag and the separate
+  Remove button; the menu trigger is `MoreHorizontal`.
+- The menu offers localized Small · 1×1, Summary · 2×1, Large · 2×2 and
+  Full width, plus Extra large · full width (full width, three rows; the
+  permits two-pane panel), names (`dashboard.customize.sizes.*`), each with an `aria-hidden`
+  SVG footprint. Selected size is `menuitemradio` with `aria-checked` and
+  a checkmark. Earlier, Later and Remove share this menu; quick actions
+  also includes Edit tiles. Boundary moves and saving controls are disabled.
+- Control targets use `min-h-11 min-w-11`, shrinking to
+  `sm:min-h-7 sm:min-w-7` on fine pointers; coarse pointers keep
+  `[@media(pointer:coarse)]:min-h-11` / `min-w-11`. Menu items use
+  `min-h-11 sm:min-h-8 [@media(pointer:coarse)]:min-h-11`.
+- Previews stay at full opacity. Their wrapper is `min-h-0 flex-1 overflow-hidden`
+  plus `pointer-events-none` and `inert` while editing; content is readable
+  but cannot receive pointer or keyboard interaction.
+- The available-first Add panel groups addable widgets by source page.
+  Already-added widgets move into a collapsed native `details` list with a
+  translated on-dashboard count and checkmarks, not disabled Add rows.
+  Add appends the widget at S. At `sm` it sits below the board; at `lg`
+  it is a sticky `lg:w-64` side panel with `lg:max-h-[75vh] lg:overflow-y-auto`.
+- Below `sm`, hide the inline Add panel. Add widget opens a Radix Sheet,
+  `w-[min(100%,24rem)] overflow-y-auto`, with safe-area top/bottom padding.
+  Add, Cancel and Save layout stay in a phone action bar:
+  `fixed inset-x-3 bottom-[calc(5.5rem+var(--safe-bottom))] z-40`.
+  The bar is portalled to `document.body`; at `sm` it becomes static.
+  The editing canvas adds `max-sm:pb-24` for clearance.
+- Moving keeps focus on the moved widget's menu or drag control. Removing
+  focuses its enabled Add button, or the phone Add widget trigger; Save
+  layout is the fallback. Exiting restores focus to Customize.
+- Cancel discards the entire draft, including width, Reset and tile edits.
+  Only Save layout persists the full private layout.
+
+Edit tiles opens the existing Radix `WidgetEditDialog` from the quick-actions
+menu. Its Save changes only the in-place draft. Its retained visual treatment
+follows.
 
 #### Overlay
 
