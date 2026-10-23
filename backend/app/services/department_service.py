@@ -27,6 +27,7 @@ from app.db.models import (
     User,
 )
 from app.schemas.department import (
+    DepartmentCandidateUserRead,
     DepartmentCreate,
     DepartmentExceptionRead,
     DepartmentPersonRead,
@@ -381,6 +382,24 @@ def replace_people(
     for user_id in previous | set(wanted):
         department_scope_service.invalidate_department_scope(db, user_id)
     return read_department(db, department_id)
+
+
+def candidate_users(db: Session) -> list[DepartmentCandidateUserRead]:
+    """Active, non-inmate-reporter accounts for the deputy and viewer pickers."""
+    rows = [
+        DepartmentCandidateUserRead(
+            user_id=user.id,
+            display_name=user.display_name or name or user.email,
+            email=user.email,
+            employee_id=user.employee_id,
+        )
+        for user, name in db.execute(
+            select(User, Employee.name_en)
+            .outerjoin(Employee, Employee.id == User.employee_id)
+            .where(User.status == "active", User.role != INMATE_REPORTER_ROLE)
+        ).tuples()
+    ]
+    return sorted(rows, key=lambda row: (row.display_name.casefold(), row.user_id))
 
 
 def service_options(db: Session) -> list[DepartmentServiceOption]:

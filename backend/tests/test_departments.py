@@ -546,3 +546,34 @@ def test_scoping_preflight_receivers_audit_and_cache_invalidation(client, api_db
         "department_scoping.disabled",
     ]
     assert [json.loads(row.payload)["after"] for row in audits] == [True, False]
+
+
+def test_candidate_users_are_active_non_inmate_and_gated_by_manage(client, api_db):
+    from app.db.models import UserPermission
+
+    employee(api_db, "NAMED", name_en="Bader")
+    account(api_db, "zed", display_name="Zed")
+    account(api_db, "linked", "NAMED")
+    account(api_db, "aaa-email-only")
+    account(api_db, "off", status="disabled", display_name="Off")
+    account(api_db, "inmate", display_name="Inmate").role = "inmate_reporter"
+    manager = api_db.scalar(select(User).where(User.role == "admin"))
+    manager.role = "operator"
+    manager.display_name = "Manager"
+    api_db.add(UserPermission(user_id=manager.id, capability="departments.manage", effect="grant"))
+    api_db.commit()
+    response = client.get(f"{API}/candidate-users")
+    assert response.status_code == 200, response.text
+    rows = response.json()
+    assert [row["email"] for row in rows] == [
+        "aaa-email-only@departments.test",
+        "linked@departments.test",
+        "admin@departments.test",
+        "zed@departments.test",
+    ]
+    linked = rows[1]
+    assert linked["display_name"] == "Bader" and linked["employee_id"] == "NAMED"
+    api_db.query(UserPermission).delete()
+    api_db.commit()
+    manager._effective_caps_cache = None
+    assert client.get(f"{API}/candidate-users").status_code == 403

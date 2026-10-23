@@ -84,6 +84,15 @@ class DepartmentPeopleUpdate(BaseModel):
         return self
 
 
+class DepartmentCandidateUserRead(BaseModel):
+    """An active account that may be granted deputy or viewer access."""
+
+    user_id: int
+    display_name: str
+    email: str
+    employee_id: str | None
+
+
 class DepartmentServicesUpdate(BaseModel):
     service_ids: list[str]
 
