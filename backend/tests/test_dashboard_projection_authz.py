@@ -1,4 +1,5 @@
 """Dashboard projections honor subsystem denies without denying the whole page."""
+
 from datetime import date, timedelta
 
 import pytest
@@ -37,8 +38,16 @@ def _seed(db: Session, actor: User, other: User) -> None:
     today = date.today()
     db.add(Employee(id="DASH", name_en="Dashboard Person", status="Active"))
     db.flush()
-    db.add(Leave(employee_id="DASH", leave_type="Annual Leave", start_date=today,
-                 end_date=today + timedelta(days=2), days=3, status="Approved"))
+    db.add(
+        Leave(
+            employee_id="DASH",
+            leave_type="Annual Leave",
+            start_date=today,
+            end_date=today + timedelta(days=2),
+            days=3,
+            status="Approved",
+        )
+    )
     db.add(Violation(employee_id="DASH", violation_type="Late", date=today, status="Open"))
     for subject, channel, owner, tags in [
         ("Own mail", "email", actor.id, []),
@@ -48,9 +57,17 @@ def _seed(db: Session, actor: User, other: User) -> None:
         ("Own draft", "email", actor.id, [DRAFT_TAG]),
         ("Foreign draft", "email", other.id, [DRAFT_TAG]),
     ]:
-        db.add(LedgerEntry(entry_date=today, direction="incoming", channel=channel,
-                           counterparty="Synthetic", subject=subject, owner_user_id=owner,
-                           tags=tags))
+        db.add(
+            LedgerEntry(
+                entry_date=today,
+                direction="incoming",
+                channel=channel,
+                counterparty="Synthetic",
+                subject=subject,
+                owner_user_id=owner,
+                tags=tags,
+            )
+        )
     db.commit()
 
 
@@ -61,7 +78,9 @@ def _snapshot(db: Session):
     }
 
 
-@pytest.mark.parametrize("denied", ["leaves.view", "violations.view", "ledger.view", "employees.view"])
+@pytest.mark.parametrize(
+    "denied", ["leaves.view", "violations.view", "ledger.view", "employees.view"]
+)
 def test_dashboard_denies_hide_only_protected_sections(api_db: Session, denied: str) -> None:
     actor = _user(api_db, "denied@example.test", deny=denied)
     allowed = _user(api_db, "allowed@example.test")
@@ -104,6 +123,9 @@ def test_dashboard_mail_is_private_and_drafts_are_owner_scoped(api_db: Session, 
     assert data["totals"]["draft_count"] == 1
     assert _snapshot(api_db) == before
     other_data = _get(api_db, other)
-    assert {row["subject"] for row in other_data["recent_ledger"]} == {"Foreign mail", "Shared letter"}
+    assert {row["subject"] for row in other_data["recent_ledger"]} == {
+        "Foreign mail",
+        "Shared letter",
+    }
     assert other_data["totals"]["draft_count"] == 1
     assert _snapshot(api_db) == before

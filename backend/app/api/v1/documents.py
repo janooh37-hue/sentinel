@@ -33,7 +33,6 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, StringConstraints
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
@@ -84,8 +83,6 @@ log = logging.getLogger(__name__)
 def _effective_document_service(template_id: str) -> str:
     resolved = SERVICE_ALIASES.get(template_id, template_id)
     return resolved if resolved in SERVICE_IDS else OTHER_SERVICE_ID
-
-
 
 
 def _should_autosend(
@@ -628,7 +625,9 @@ def download_document(
             "This role can only download the current PDF.",
             http_status=status.HTTP_403_FORBIDDEN,
         )
-    version = document_service.require_document_record_access(db, user, row, expected_version_id=version_id)
+    version = document_service.require_document_record_access(
+        db, user, row, expected_version_id=version_id
+    )
 
     artifact = document_service.resolve_document_artifact(
         db, document_id, format=format, original=original, version=version

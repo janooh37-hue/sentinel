@@ -853,9 +853,7 @@ def require_document_record_access(
     owning_version = document_owning_version(db, row)
     if owning_version is not None:
         if expected_version_id is not None and expected_version_id != owning_version.id:
-            raise NotFoundError(
-                "DOCUMENT_NOT_FOUND", f"Document {row.id} not found", id=row.id
-            )
+            raise NotFoundError("DOCUMENT_NOT_FOUND", f"Document {row.id} not found", id=row.id)
         book_service.resolve_book_read_access(
             db, user, owning_version.book, version_id=owning_version.id
         )

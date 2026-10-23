@@ -92,7 +92,9 @@ def get_employee_detail(
     violation_count = (
         int(
             db.execute(
-                select(func.count(models.Violation.id)).where(models.Violation.employee_id == emp.id)
+                select(func.count(models.Violation.id)).where(
+                    models.Violation.employee_id == emp.id
+                )
             ).scalar_one()
         )
         if can_view_violations

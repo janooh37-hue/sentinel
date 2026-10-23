@@ -341,8 +341,10 @@ def list_employee_activity(
         )
     if kind in (None, "leave"):
         sources.append(_leaves(db, employee_id=employee_id, requested=requested))
-    if kind in (None, "violation") and caller is not None and perm_service.has_capability(
-        db, caller, "violations.view"
+    if (
+        kind in (None, "violation")
+        and caller is not None
+        and perm_service.has_capability(db, caller, "violations.view")
     ):
         sources.append(_violations(db, employee_id=employee_id, requested=requested))
     if kind in (None, "ledger"):

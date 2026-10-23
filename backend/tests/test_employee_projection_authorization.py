@@ -56,8 +56,15 @@ def records(api_db, monkeypatch, tmp_path):
     app.dependency_overrides[get_current_user] = lambda: actor["user"]
     with TestClient(app) as client:
         yield SimpleNamespace(
-            db=api_db, reader=reader, admin=admin, employee=employee,
-            leave=leave, violation=violation, actor=actor, client=client, root=tmp_path,
+            db=api_db,
+            reader=reader,
+            admin=admin,
+            employee=employee,
+            leave=leave,
+            violation=violation,
+            actor=actor,
+            client=client,
+            root=tmp_path,
         )
     get_settings.cache_clear()
 
@@ -65,7 +72,10 @@ def records(api_db, monkeypatch, tmp_path):
 def _state(records):
     tables = (Book, BookVersion, Document, Leave, Violation, BookRevisionAccess, BookApprovalStep)
     rows = tuple(
-        (model.__tablename__, tuple(tuple(row) for row in records.db.execute(select(model.__table__))))
+        (
+            model.__tablename__,
+            tuple(tuple(row) for row in records.db.execute(select(model.__table__))),
+        )
         for model in tables
     )
     files = tuple((path.name, path.read_bytes()) for path in sorted(records.root.glob("*.docx")))
@@ -73,9 +83,13 @@ def _state(records):
 
 
 def test_violation_deny_hides_detail_counts_and_both_activity_queries(records):
-    records.db.add(UserPermission(
-        user_id=records.reader.id, capability="violations.view", effect="deny",
-    ))
+    records.db.add(
+        UserPermission(
+            user_id=records.reader.id,
+            capability="violations.view",
+            effect="deny",
+        )
+    )
     records.db.commit()
     before = _state(records)
     try:
@@ -132,8 +146,12 @@ def _revision(records, book, number):
         documents.append(document)
     records.db.flush()
     version = BookVersion(
-        book_id=book.id, version_no=number, template_id="Leave Application Form",
-        document_id=documents[0].id, status="approved", fields={},
+        book_id=book.id,
+        version_no=number,
+        template_id="Leave Application Form",
+        document_id=documents[0].id,
+        status="approved",
+        fields={},
         created_by_user_id=records.admin.id,
     )
     records.db.add(version)
@@ -144,8 +162,11 @@ def _revision(records, book, number):
 @pytest.mark.parametrize("restriction", ["personal", "secret", "deleted", "revision"])
 def test_document_metadata_uses_exact_owning_revision_on_every_employee_route(records, restriction):
     book = Book(
-        category_id="HR", ref_number="HR-PROJECTION", subject="Protected Record",
-        employee_id=records.employee.id, created_by_user_id=records.admin.id,
+        category_id="HR",
+        ref_number="HR-PROJECTION",
+        subject="Protected Record",
+        employee_id=records.employee.id,
+        created_by_user_id=records.admin.id,
         confidentiality=restriction if restriction in ("personal", "secret") else "general",
         approval_state="approved",
     )
@@ -154,13 +175,18 @@ def test_document_metadata_uses_exact_owning_revision_on_every_employee_route(re
     v1, readable = _revision(records, book, 1)
     _, protected = _revision(records, book, 2)
     if restriction == "revision":
-        records.db.add_all([
-            UserPermission(user_id=records.reader.id, capability="books.view", effect="deny"),
-            BookRevisionAccess(
-                version_id=v1.id, user_id=records.reader.id, kind="reviewer",
-                state="reviewed", decided_at=datetime(2026, 10, 20),
-            ),
-        ])
+        records.db.add_all(
+            [
+                UserPermission(user_id=records.reader.id, capability="books.view", effect="deny"),
+                BookRevisionAccess(
+                    version_id=v1.id,
+                    user_id=records.reader.id,
+                    kind="reviewer",
+                    state="reviewed",
+                    decided_at=datetime(2026, 10, 20),
+                ),
+            ]
+        )
     else:
         protected = readable + protected
         readable = []
@@ -185,9 +211,15 @@ def test_document_metadata_uses_exact_owning_revision_on_every_employee_route(re
             detail = response.json()
             assert detail["stats"]["documents"] == len(expected_ids)
             assert {doc["id"] for doc in detail["recent_documents"]} == expected_ids
-            assert {doc["id"] for doc in detail["recent_leaves"][0]["linked_documents"]} == expected_ids
-            assert {doc["id"] for doc in detail["recent_violations"][0]["linked_documents"]} == expected_ids
-            assert {row["ref_id"] for row in detail["recent_activity"] if row["kind"] == "document"} == expected_ids
+            assert {
+                doc["id"] for doc in detail["recent_leaves"][0]["linked_documents"]
+            } == expected_ids
+            assert {
+                doc["id"] for doc in detail["recent_violations"][0]["linked_documents"]
+            } == expected_ids
+            assert {
+                row["ref_id"] for row in detail["recent_activity"] if row["kind"] == "document"
+            } == expected_ids
             response = records.client.get(
                 "/api/v1/employees/activity",
                 params={"employee_id": records.employee.id, "kind": "document", "limit": 1},
