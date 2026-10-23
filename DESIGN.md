@@ -1510,19 +1510,25 @@ and `toast.dismiss(id?)` from `@/lib/toast`; options `id`, `description`,
 | Duration | 4 s default (Sonner's, unchanged by the Sileo migration; Sileo's own is 6 s). An explicit `duration` overrides it. `Infinity` stays until dismissed; `loading` always does. A deferred-delete Undo passes its own commit window as `duration`. The body stays open until the toast closes. |
 | Pill vs body | The collapsed pill holds one line (≤ 36 characters). A longer message moves into the body under a localized state title (`common.toastState.*`); a short message with a `description` keeps the message as the title. The body opens by itself on the newest toast and on hover or keyboard focus. |
 | Neutral | `toast(msg)` is `info`, or `action` when it carries an action. |
-| Action | Runs `onClick`, then closes the toast (Sileo does not). |
+| Action | Runs `onClick`, then closes the toast (Sileo does not). The button is sized to its label at the start of the body; with no body text it is centred in the body (`toast-action-only`), which keeps Sileo's body height so a hovered stack does not shift under the pointer. |
 | Dismiss | Swipe, click (not on a loading toast), or Escape while focused. `dismiss()` with no id clears all. |
 
 **Theme and colour.** The host passes the app theme (`<html data-theme>`) to
-Sileo, which draws the *inverse* pill (dark pill on the cream page, light pill
-on the near-black page). State tones in `AppToaster.css` are the inverse
+Sileo, which draws the *inverse* pill. The pill is filled from the app, not
+Sileo's neutrals: the navy `--rail` on the cream page, the light theme's raised
+cream `#fafaf6` on the near-black page; the light pill's body text is
+`--rail-text`. State tones in `AppToaster.css` are the inverse
 theme's `--success`/`--accent`/`--warning`/`--info` values, tuned for ≥ 4.5:1
 against the pill (warning on the light pill is `#9a4507`, a shade darker than
 `--warning`). A theme change flips live toasts.
 
 **RTL.** The viewport stays physically `bottom-right` in both languages (as the
 previous host did). `ScanBackDock` sits at the inline end, so it is on the far side in wide Arabic, but on a narrow screen the two share the corner in both languages; the dock's 12rem bottom band (see Known limits) keeps it clear of one expanded toast either way. Text, the badge and the action follow `<html dir>`; the body uses
-`text-align: start`. Titles are not title-cased.
+`text-align: start` and Arabic body text a 1.6 line height. Titles are not title-cased.
+Sileo positions the pill header by physical `left` and leaves its 10px of spare
+room on the right, so in Arabic the host shifts the header right by that room:
+the badge sits 8px from the pill's right edge and the room trails the title,
+mirroring English.
 
 **Motion.** Sileo's CSS honours `prefers-reduced-motion`; its pill is animated
 by motion's JS springs, which the host switches off with
@@ -1548,6 +1554,10 @@ and a body, and caps its open panel to the room above it (the rows scroll), so t
 header and "View all" stay on screen on short laptops and at larger font scales. A
 stack of several toasts or a long multi-line message can still reach the dock.
 `Infinity`-duration toasts with a description open on hover/focus only.
+Hovering an older toast opens it and closes the newest; when their open bodies
+differ in height (a three-line English error over a one-line Undo), the stack
+shifts by the difference and can slide the hovered pill out from under the
+pointer, which closes it again.
 
 ## 4. Dashboard page
 

@@ -113,6 +113,8 @@ function buildOptions(kind: ToastKind, id: string, message: string, opts: ToastO
     // Sileo collapses the body 2s before closing by default; a long message or
     // an Undo needs the whole window, so the body stays open until the toast goes.
     autopilot: duration === null ? undefined : { collapse: duration },
+    // A body that holds only the action drops its text gap (AppToaster.css).
+    styles: action && !description ? { description: 'toast-action-only' } : undefined,
     button: action
       ? {
           title: action.label,
