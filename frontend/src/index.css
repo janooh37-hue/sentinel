@@ -129,6 +129,10 @@
   --border-strong: #d4d1c8;
   --hairline: #efece5;
   --hero-grad: linear-gradient(135deg, #0a1f3a 0%, #0d2845 50%, #1d3a5e 100%);
+  /* Dashboard hero (staff-file folder): flat navy slab, no gradient. */
+  --hero-slab: #0d2845;
+  --hero-slab-raised: #1d3a5e;
+  --hero-slab-ring: transparent;
   --mountain: rgba(13, 40, 69, 0.18);
   --org-card: #0d2845;
   --org-conn: #5b7191;
@@ -299,6 +303,9 @@
   --border-strong: #3a4360;
   --hairline: #1f263b;
   --hero-grad: linear-gradient(135deg, #050816 0%, #0d1428 50%, #1a2540 100%);
+  --hero-slab: #131f3a;
+  --hero-slab-raised: #22325a;
+  --hero-slab-ring: #24304f;
   --mountain: rgba(87, 120, 207, 0.22);
   --org-card: #1a2034;
   --org-conn: #3a4360;
@@ -1106,6 +1113,76 @@ body {
 .anim-pop-in-end { --pop-origin: top right; }
 [dir="rtl"] .anim-pop-in-end { --pop-origin: top left; }
 
+/* ─── Dashboard hero: staff-file folder ──────────────────────────────────────
+   A flat navy folder with a tab cut at the GSSG swoosh angle. The tab carries
+   the official wordmark, drawn from two masks of /brand/gssg-wordmark.png so
+   the letters can be white on navy while the swoosh stays GSSG red. The mark
+   is never mirrored; only the tab's cut flips with the writing direction. */
+.hero-slab {
+  background: var(--hero-slab);
+  box-shadow: inset 0 0 0 1px var(--hero-slab-ring);
+}
+.hero-folder-tab {
+  background: var(--hero-slab);
+  box-shadow: inset 1px 1px 0 var(--hero-slab-ring);
+  clip-path: polygon(0 0, calc(100% - 30px) 0, 100% 100%, 0 100%);
+}
+[dir="rtl"] .hero-folder-tab {
+  box-shadow: inset -1px 1px 0 var(--hero-slab-ring);
+  clip-path: polygon(30px 0, 100% 0, 100% 100%, 0 100%);
+}
+.gssg-mark {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  direction: ltr;
+  aspect-ratio: 720 / 112;
+}
+.gssg-mark::before,
+.gssg-mark::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  mask-repeat: no-repeat;
+  mask-size: 100% 100%;
+}
+.gssg-mark::before {
+  top: 0;
+  width: 100%;
+  height: 41.07%;
+  background: var(--accent);
+  mask-image: url('/brand/gssg-wordmark-swoosh.png');
+}
+.gssg-mark::after {
+  top: 39.29%;
+  width: 94.86%;
+  height: 60.71%;
+  background: #fff;
+  mask-image: url('/brand/gssg-wordmark-letters.png');
+}
+
+/* First dashboard visit of the day: the folder fills in reading order, one
+   part after another, travelling in the writing direction (left to right in
+   English, right to left in Arabic). Later visits render it settled. */
+@keyframes hero-seq-in {
+  from { opacity: 0; transform: translateX(var(--hero-seq-from)); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes hero-rule-in {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+.hero-intro { --hero-seq-from: -14px; }
+[dir="rtl"] .hero-intro { --hero-seq-from: 14px; }
+.hero-intro .hero-seq {
+  animation: hero-seq-in 360ms var(--ease-out-expo) calc(var(--seq, 0) * 70ms) both;
+}
+.hero-intro .hero-rule {
+  transform-origin: left;
+  animation: hero-rule-in 520ms var(--ease-out-expo) calc(var(--seq, 0) * 70ms) both;
+}
+[dir="rtl"] .hero-intro .hero-rule { transform-origin: right; }
+
 /* Gentle scrim fade for full-screen overlays (lock screen, shortcuts) so they
    don't hard-cut over the whole app. Opacity-only — no vestibular zoom. */
 @keyframes gssg-scrim-in {
@@ -1744,6 +1821,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .anim-fade-up,
+  .hero-intro .hero-seq,
+  .hero-intro .hero-rule,
   .anim-stagger > *,
   .anim-pop-in,
   .anim-scrim-in,

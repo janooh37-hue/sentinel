@@ -4194,7 +4194,6 @@
       "next": "Next",
       "pageRange": "{{from}}–{{to}} of {{total}}"
     },
-    "welcomeBack": "Welcome back, {{name}}",
     "welcomeBackGuest": "Welcome back",
     "greeting": {
       "morning": "Good morning",
@@ -4202,15 +4201,11 @@
       "evening": "Good evening"
     },
     "hero": {
+      "staffFile": "Staff file",
+      "idLabel": "ID",
       "onLeaveChip": "on leave today",
       "allPresent": "All present today",
-      "returnsSingle": "returns from leave today",
-      "returnPlural": "return from leave today",
-      "peopleCount": "{{n}} people",
-      "reviewLeave": "Review leave records",
-      "seeAll": "See all",
-      "calm": "Quiet day. {{n}} on site, nothing returning today.",
-      "calmUpcoming": "{{n}} returning later this week."
+      "reviewLeave": "Review leave records"
     },
     "heroSubtitle_one": "{{count}} document needs your attention",
     "heroSubtitle_other": "{{count}} documents need your attention",

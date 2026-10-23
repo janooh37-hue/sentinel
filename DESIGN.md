@@ -151,7 +151,10 @@ breakdown, accent chips.
 
 | CSS var       | Light value                                                       | Dark value                                                        | Used by                                                |
 | ------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
-| `--hero-grad` | `linear-gradient(135deg, #0a1f3a 0%, #0d2845 50%, #1d3a5e 100%)` | `linear-gradient(135deg, #050816 0%, #0d1428 50%, #1a2540 100%)`  | DashboardHero background, LockOverlay backdrop         |
+| `--hero-grad` | `linear-gradient(135deg, #0a1f3a 0%, #0d2845 50%, #1d3a5e 100%)` | `linear-gradient(135deg, #050816 0%, #0d1428 50%, #1a2540 100%)`  | LockOverlay backdrop, employee/attendance bands, login |
+| `--hero-slab` | `#0d2845`                                                         | `#131f3a`                                                         | Dashboard hero folder + tab (flat, no gradient)        |
+| `--hero-slab-raised` | `#1d3a5e`                                                  | `#22325a`                                                         | Dashboard hero portrait well                           |
+| `--hero-slab-ring` | `transparent`                                                | `#24304f`                                                         | 1px inset edge on the hero folder in dark theme        |
 | `--mountain`  | `rgba(13, 40, 69, 0.18)`                                          | `rgba(87, 120, 207, 0.22)`                                        | MountainAccent SVG fill                                |
 
 > **Smart-link chips** (employee G-numbers and book refs auto-detected in
@@ -1526,110 +1529,74 @@ Command band.
 
 ### 4.2 Hero
 
-**Source:** `<DashboardHero>` inside `DashboardPage.tsx` (line 700).
+**Source:** `pages/dashboard/DashboardHero.tsx`; CSS in `index.css`
+("Dashboard hero: staff-file folder").
+
+The signed-in person's staff-file folder. Flat navy, no gradient, no
+decorative circles, no crest.
 
 **Anatomy:**
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│ "Welcome back, Hamdan"                                  [🪯 crest] │
-│ 12 documents · 3 returning this week                                │
-│  (white-on-gradient)                            (rotates 90s)       │
-└──────────────────────────────────────────────────────────────────┘
-   h-[140px] rounded-2xl px-8
-   background: var(--hero-grad)
+ ┌[GSSG] STAFF FILE ╲
+ │                   ╲─────────────────────────────────────────────┐
+ │ ┌────┐  Good evening,                                            │
+ │ │ HA │  Hamdan Saeed Ali                                         │
+ │ └────┘  HR Officer · Human Resources  [ID G-10482]               │
+ │ ───────────────────────────────────────────────────────────────  │
+ │ ● 3 on leave today                 Friday 23 October 2026  hijri │
+ └──────────────────────────────────────────────────────────────────┘
 ```
 
-**Container:**
+**Folder tab:** `.hero-folder-tab`, `absolute start-0 top-0 h-[34px]
+w-[160px] md:w-[236px] rounded-ss-[14px]`. Its inline-end edge is cut at
+the swoosh angle (`clip-path`, flipped under `[dir="rtl"]`). It carries
+`.gssg-mark` (92px) and, from `md`, the label `dashboard.hero.staffFile`.
 
-```
-dash-anim relative mb-6
-flex h-[140px] items-center overflow-hidden
-rounded-2xl px-8
-style={{ background: 'var(--hero-grad)' }}
-```
+**GSSG mark:** `.gssg-mark` draws the official wordmark from two masks
+(`/brand/gssg-wordmark-swoosh.png`, `/brand/gssg-wordmark-letters.png`,
+cut from `gssg-wordmark.png`) so the letters are white on navy and the
+swoosh is `--accent`. `direction: ltr`; the mark is never mirrored.
 
-- 140px tall fixed (does NOT scale with font-scale — the headline does).
-- `overflow-hidden` because the upper-right circle highlight extends
-  beyond the rounded corners.
+**Folder body:** `<header class="hero-slab">`,
+`rounded-[18px] rounded-ss-none px-4 pb-3.5 pt-5 md:px-[34px] md:pb-5
+md:pt-[30px] text-white`.
 
-**Upper-right highlight:**
+- Portrait (linked users only): 4:5, `w-[58px] md:w-[104px] rounded-xl
+  bg-[var(--hero-slab-raised)]`, 3px 16%-white ring. Shows `photo_url`
+  (falls back on load error) or initials.
+- `<h2>`: greeting (`dashboard.greeting.*`, light, 65% white, 0.6em) over
+  the name (`font-[750]`, `text-[1.45em] md:text-[2.5em]`). The name is
+  `firstSecondFamilyName()` of the language's name; unlinked users see
+  `dashboard.welcomeBackGuest`.
+- Meta: position · department, then an ID field (`dashboard.hero.idLabel` +
+  mono G-number, `dir="ltr"`).
+- Foot: a 1px 20%-white rule, then the on-leave status at the inline start
+  and the dates at the inline end. Status: `<button>` to Leaves (amber dot,
+  mono count, `dashboard.hero.onLeaveChip`) when `on_leave_today > 0`;
+  otherwise a check + `dashboard.hero.allPresent`; a skeleton while the
+  summary loads. Dates: Gregorian `EEEE d MMMM yyyy` (mono in English) and
+  the Umm al-Qura Hijri date (hidden below `md`).
 
-```
-<span aria-hidden
-      class="pointer-events-none absolute -top-20 end-[-80px]
-             h-[280px] w-[280px] rounded-full bg-white/[0.06]"/>
-```
+**Motion:** on the first dashboard visit of the local day
+(`localStorage['gssg.dashboardHero.introDate']`), the wrapper gets
+`.hero-intro` and the parts arrive in reading order (tab, portrait,
+greeting, name, meta, rule, status, dates), each sliding 14px in the writing
+direction. See §5. Later visits render settled.
 
-- A faint 6%-white circle, half-clipped by the hero edge. RTL-aware
-  positioning via `end-[-80px]` (sits at the inline-end corner in both
-  directions).
+**Dark theme:** `--hero-slab` deepens to `#131f3a` with a 1px `#24304f`
+inset edge. Text stays white.
 
-**Headline:**
-
-```
-m-0 text-[1.6em] font-semibold tracking-tight text-white
-```
-
-Composition (`headline` in code):
-
-- Linked: `"Welcome back, {name}"` (the linked employee's `name_ar` when
-  AR, else `name_en`).
-- Un-linked: i18n string `dashboard.welcomeBackGuest`.
-
-While `summaryQuery.isPending && !name`:
-
-```
-<Skeleton class="h-7 w-72 bg-white/20"/>
-```
-
-(28px tall × 288px wide bar, white at 20% opacity.)
-
-**Subtitle (`sub`):**
-
-```
-mt-1.5 text-[0.86em] opacity-90 text-white
-```
-
-Built from two optional parts joined by ` · `:
-
-- `i18n('dashboard.heroSubtitle', { count: docsCount })` — only when
-  `docsCount > 0`.
-- `i18n('dashboard.heroLeavesReturning', { count: leavesReturning })` —
-  only when `leavesReturning > 0`.
-
-If both are 0, the subtitle node doesn't render.
-
-**Crest:**
-
-```
-<img src="/brand/gssg-logo.png" aria-hidden
-     class="dashboard-crest
-            h-[84px] w-[84px] rounded-full object-cover
-            shadow-[0_0_0_2px_rgba(255,255,255,0.18)]"/>
-```
-
-- 84px circle.
-- Drop shadow is a 2px ring at 18%-white (acts as a subtle ring outline
-  against the gradient).
-- Animates `transform: rotate(0deg → 360deg)` over 90s, linear, infinite.
-- Reduced-motion: rotation suppressed.
-
-**Dark theme:** hero gradient deepens (`--hero-grad` flips to its dark
-recipe). Text stays explicit `text-white`. Skeleton bar uses `bg-white/20`
-in both themes — slightly more washed-out against the dark hero, but
-still readable.
-
-**RTL:** Crest moves to the *start* edge implicitly (it follows DOM order
-inside a flex container — flex-direction flips with `dir="rtl"`). The
-upper-right highlight uses `end-[-80px]` so it lives at the *inline-end*
-corner in both modes.
+**RTL:** the tab, portrait and status sit at the inline start (right). The
+tab cut flips, and the intro travels right to left.
 
 **a11y:**
 
-- Headline is a real `<h2>` (semantic page heading).
-- Crest is `alt=""` + `aria-hidden` — purely decorative.
-- Subtitle is a plain `<p>`.
+- The name is a real `<h2>`; the mark is `role="img" aria-label="GSSG"`;
+  the portrait is `aria-hidden`.
+- The on-leave button's accessible name includes the count and "Review leave
+  records".
+- Reduced motion cancels the intro.
 
 ---
 
@@ -2387,7 +2354,8 @@ Every named animation on the Dashboard and chrome.
 | Keyframe                  | Where (selector)                                                  | Property animated            | Duration | Easing                   | Iterations | Reduced-motion handling                                          |
 | ------------------------- | ----------------------------------------------------------------- | ---------------------------- | -------- | ------------------------ | ---------- | ---------------------------------------------------------------- |
 | `dash-fade-up`            | `.dash-anim` (every direct child of dashboard shell + hero)       | opacity 0→1 + translateY 8→0 | `0.42s`  | `cubic-bezier(.16,1,.3,1)` | once (`both`) | `.dash-anim { animation: none }` under `prefers-reduced-motion` |
-| `gssg-crest-spin`         | `.dashboard-crest` (Hero crest img)                               | rotate 0→360deg              | `90s`    | `linear`                 | infinite   | rotation cancelled                                               |
+| `hero-seq-in`             | `.hero-intro .hero-seq` (Dashboard hero parts)                    | opacity 0→1 + translateX ∓14px→0 in the writing direction | `360ms` + `--seq × 70ms` | `var(--ease-out-expo)` | once, first dashboard visit of the day | cancelled |
+| `hero-rule-in`            | `.hero-intro .hero-rule` (Dashboard hero foot line)               | scaleX 0→1 from the inline start | `520ms` | `var(--ease-out-expo)` | once, as above | cancelled                                                        |
 | `dash-pending-grow`       | inline style on PendingDocumentsCard progress fill                | width 0%→{pct}%              | `1.4s`   | `ease-out`               | once       | both animations cancelled via attribute-selector override        |
 | `dash-pending-pulse`      | same (delayed `1.4s` so it follows the grow)                      | opacity 0.85↔1               | `3s`     | `ease-in-out`            | infinite   | as above                                                         |
 | `dash-active-glow`        | `.dash-active-dot` (WorkspaceCard "Active" dot)                   | box-shadow ring 0px→6px transparent | `2.8s`   | `ease-out`               | infinite   | both animations cancelled                                        |
@@ -2409,7 +2377,7 @@ Every named animation on the Dashboard and chrome.
 
 | Element                                          | `animationDelay` |
 | ------------------------------------------------ | ---------------- |
-| Hero                                             | `0ms`            |
+| Hero (own sequence, first visit of the day only) | `0ms`–`490ms`    |
 | "My Widgets" strap                               | `60ms`           |
 | PendingDocumentsCard                             | `80ms`           |
 | WorkspaceCard                                    | `120ms`          |
