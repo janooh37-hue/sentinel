@@ -62,7 +62,7 @@ function Body({
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success(t('leaves.report.sendDone', { ref: res.ref }))
+      toast.success(t('leaves.report.sendDone'), { reference: res.ref })
       close()
     },
     onError: (err) => toast.error(apiErrorMessage(err)),

@@ -199,10 +199,11 @@ export function RecordDeleteProvider({ children }: { children: ReactNode }): Rea
       let handled = false
       toast(
         single
-          ? t('books.record.deleted', { ref: bidi(single.ref) })
+          ? t('books.record.deleted')
           : t('books.list.deletedMany', { count: fresh.length }),
         {
           id: batch.toastId,
+          reference: single?.ref,
           duration: RECORD_DELETE_DELAY_MS,
           action: {
             label: t('common.undo'),
@@ -215,8 +216,9 @@ export function RecordDeleteProvider({ children }: { children: ReactNode }): Rea
               if (tooLate === 0) {
                 toast.success(
                   single
-                    ? t('books.record.restored', { ref: bidi(single.ref) })
+                    ? t('books.record.restored')
                     : t('books.list.restoredMany', { count: fresh.length }),
+                  { reference: single?.ref },
                 )
               } else {
                 toast.error(

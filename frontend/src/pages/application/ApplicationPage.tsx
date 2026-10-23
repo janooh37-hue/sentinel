@@ -719,7 +719,7 @@ function StandardApplicationPage(): React.JSX.Element {
       if (pendingCommitRef.current && selectedTemplate) {
         if (saved) {
           setLastSaved({ ...saved, notification: pendingNotificationRef.current })
-          toast.success(t('application.toast.saved', { ref: saved.ref }))
+          toast.success(t('application.toast.saved'), { reference: saved.ref })
         } else {
           toast.success(t('application.toast.generated'))
         }

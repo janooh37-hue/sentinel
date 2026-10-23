@@ -878,7 +878,7 @@ function BookRecordPageBody(): React.JSX.Element {
     if (!book) return
     const refNumber = book.ref_number
     void copyToClipboard(refNumber).then((ok) => {
-      if (ok) toast.success(t('books.record.copiedRef', { ref: bidi(refNumber) }))
+      if (ok) toast.success(t('books.record.copiedRef'), { reference: refNumber })
       else toast.error(t('common.copyFailed'))
     })
   }, [book, t])

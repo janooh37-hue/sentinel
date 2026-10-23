@@ -5,12 +5,20 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
+import type * as ReactRouter from 'react-router-dom'
 import { vi, test, expect, beforeEach } from 'vitest'
+import { toast } from '@/lib/toast'
+
+const navigate = vi.hoisted(() => vi.fn())
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactRouter>()),
+  useNavigate: () => navigate,
+}))
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
 }))
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/api', () => ({
   api: {
     updateEmployee: vi.fn(),
@@ -62,6 +70,14 @@ test('checkbox on (default): confirms via POST /duty/transfer', async () => {
     moves: [{ employee_id: 'G100', to_unit: 'السرية الثانية' }],
   })
   expect(api.updateEmployee).not.toHaveBeenCalled()
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('dutyLocations.transfer.success', {
+    id: 'employee-duty-transfer-G100',
+    reference: 'GB-1',
+    action: { label: 'dutyLocations.transfer.viewRecord', onClick: expect.any(Function) },
+  }))
+  expect(toast.loading).toHaveBeenCalledWith('dutyLocations.transfer.generating', { id: 'employee-duty-transfer-G100' })
+  vi.mocked(toast.success).mock.calls[0][1]?.action?.onClick()
+  expect(navigate).toHaveBeenCalledWith('/books/7')
 })
 
 test('checkbox off: confirms via plain PATCH', async () => {
@@ -82,4 +98,29 @@ test('checkbox off: confirms via plain PATCH', async () => {
     }),
   )
   expect(api.transferDuty).not.toHaveBeenCalled()
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('dutyLocations.assign.saved', { id: 'employee-duty-transfer-G100' }))
+  expect(toast.loading).toHaveBeenCalledWith('common.saving', { id: 'employee-duty-transfer-G100' })
+})
+
+test('a move without a book resolves the loading toast without a reference or action', async () => {
+  vi.mocked(api.transferDuty).mockResolvedValue({
+    moved: ['G100'], book_id: null, ref: null, document_id: null,
+  })
+  renderDialog()
+  fireEvent.click(screen.getByRole('button', { name: 'dutyLocations.transfer.generate' }))
+
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('dutyLocations.transfer.movedNoBook', { id: 'employee-duty-transfer-G100' }))
+  expect(toast.loading).toHaveBeenCalledWith('dutyLocations.transfer.generating', { id: 'employee-duty-transfer-G100' })
+})
+
+test.each([true, false])('a rejected transfer resolves loading (issue letter: %s)', async (issueLetter) => {
+  vi.mocked(api.transferDuty).mockRejectedValue(new Error('Transfer failed'))
+  vi.mocked(api.updateEmployee).mockRejectedValue(new Error('Transfer failed'))
+  renderDialog()
+  if (!issueLetter) fireEvent.click(screen.getByLabelText('dutyLocations.transfer.issueLetter'))
+  fireEvent.click(screen.getByRole('button', { name: issueLetter ? 'dutyLocations.transfer.generate' : 'common.save' }))
+
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: Transfer failed', { id: 'employee-duty-transfer-G100' }))
+  expect(toast.loading).toHaveBeenCalledWith(issueLetter ? 'dutyLocations.transfer.generating' : 'common.saving', { id: 'employee-duty-transfer-G100' })
+  expect(toast.success).not.toHaveBeenCalled()
 })

@@ -169,11 +169,12 @@ export function ExportWorkspace({ month }: { month: InmateRegisterMonth }): Reac
         { year: month.year, month: month.month, language: 'ar', populations },
         `inmate-violations-${month.year}-${String(month.month).padStart(2, '0')}.xlsx`,
       ),
+    onMutate: () => { toast.loading(t('inmateStats.export.downloading'), { id: 'inmate-register-download' }) },
     onSuccess: (file) => {
       saveBlob(file)
-      toast.success(t('inmateStats.export.downloaded'))
+      toast.success(t('inmateStats.export.downloaded'), { id: 'inmate-register-download' })
     },
-    onError: (error) => toast.error(apiErrorMessage(error)),
+    onError: (error) => toast.error(apiErrorMessage(error), { id: 'inmate-register-download' }),
   })
 
   useEffect(() => {

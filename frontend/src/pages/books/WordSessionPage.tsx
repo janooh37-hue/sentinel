@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from '@/lib/toast'
 
 import { api, ApiError, apiErrorMessage } from '@/lib/api'
-import { bidi } from '@/lib/bidi'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -37,13 +36,14 @@ export function WordSessionPage(): React.JSX.Element {
   const session = sessionQuery.data
   const finishMutation = useMutation({
     mutationFn: () => api.finishWordSession(bookId),
+    onMutate: () => { toast.loading(t('books.word.finishing'), { id: `word-session-finish-${bookId}` }) },
     onSuccess: (book) => {
       qc.setQueryData(['books', bookId], book)
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['word-session', bookId] })
-      toast.success(t('books.word.finished', { ref: bidi(book.ref_number) }))
+      toast.success(t('books.word.finished'), { id: `word-session-finish-${bookId}`, reference: book.ref_number })
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err) => toast.error(apiErrorMessage(err), { id: `word-session-finish-${bookId}` }),
   })
   const noActiveSession = sessionQuery.error instanceof ApiError && sessionQuery.error.status === 409 && sessionQuery.error.code === 'NO_ACTIVE_SESSION'
   const finishedBook = finishMutation.data ?? (noActiveSession ? bookQuery.data : undefined)

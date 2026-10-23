@@ -245,7 +245,7 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
     }
     setLastSaved(saved)
     setEditingBookId(saved.bookId)
-    toast.success(t('application.inmateReporter.saved', { ref: saved.ref }))
+    toast.success(t('application.inmateReporter.savedToast'), { reference: saved.ref })
     void qc.invalidateQueries({ queryKey: ['books'] })
     if (submitAfterSaveRef.current) {
       submitAfterSaveRef.current = false

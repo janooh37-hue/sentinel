@@ -352,7 +352,7 @@ describe('PermitsPage', () => {
       expect(screen.getByText('Brand New Co')).toBeInTheDocument()
       // Not bounced to the full dialog as a "missing" permit.
       expect(screen.getByTestId('location')).not.toHaveTextContent('open=')
-      expect(success).toHaveBeenCalledWith('Permit PMT-0009 issued')
+      expect(success).toHaveBeenCalledWith('Permit issued', { reference: 'PMT-0009' })
     } finally {
       success.mockRestore()
     }

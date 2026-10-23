@@ -91,7 +91,7 @@ function MaintenanceRequestForm({ vehicle, lastMaintenance, onOpenChange, onBusy
       invalidateVehicleQueries(queryClient, { vehicleId: vehicle.id })
       void queryClient.invalidateQueries({ queryKey: ['books'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success(t('vehicles.letterSaved', { ref: result.letter.ref_number }))
+      toast.success(t('vehicles.letterSaved'), { reference: result.letter.ref_number })
       navigate(`/books/${result.letter.book_id}`)
     },
     onError: (error) => {

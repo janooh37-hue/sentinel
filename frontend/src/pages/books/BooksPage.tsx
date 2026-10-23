@@ -33,7 +33,6 @@ import { toast } from '@/lib/toast'
 
 import { api } from '@/lib/api'
 import type { BookRead } from '@/lib/api'
-import { bidi } from '@/lib/bidi'
 import { copyToClipboard } from '@/lib/clipboard'
 import { addToBasket } from '@/lib/emailBasket'
 import { buildRecordBasketItem } from './recordsBasket'
@@ -631,7 +630,7 @@ function BooksRegister(): React.JSX.Element {
     if (!keysActive || selectedBook === null) return false
     const { ref_number: ref } = selectedBook
     void copyToClipboard(ref).then((ok) => {
-      if (ok) toast.success(t('books.record.copiedRef', { ref: bidi(ref) }))
+      if (ok) toast.success(t('books.record.copiedRef'), { reference: ref })
       else toast.error(t('common.copyFailed'))
     })
   })

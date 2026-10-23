@@ -17,7 +17,9 @@ vi.mock('@/lib/useCapabilities', () => ({
   }),
 }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }))
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({
+  toast: { success: vi.fn(), info: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'upload-toast') },
+}))
 
 function wrapperFor(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) =>
@@ -85,6 +87,15 @@ describe('useScanBack permissions', () => {
 })
 
 describe('useFileSignedCopy', () => {
+  it('morphs filing into success with the raw record reference', async () => {
+    const qc = new QueryClient()
+    vi.spyOn(apiMod.api, 'addBookAttachment').mockResolvedValue({} as apiMod.BookRead)
+    const { result } = renderHook(() => useFileSignedCopy(), { wrapper: wrapperFor(qc) })
+    await result.current.file(1, 'GS-0410', new File([], 'x.pdf'))
+    expect(toast.loading).toHaveBeenCalledWith('scanBack.filing', { id: 'scan-back-file-1' })
+    expect(toast.success).toHaveBeenCalledWith('scanBack.filed', { id: 'scan-back-file-1', reference: 'GS-0410' })
+  })
+
   it('resolves (never rejects) on a failed upload, and toasts the error exactly once', async () => {
     const qc = new QueryClient()
     vi.spyOn(apiMod.api, 'addBookAttachment').mockRejectedValue(new Error('boom'))
@@ -98,6 +109,8 @@ describe('useFileSignedCopy', () => {
     ).resolves.toBeUndefined()
 
     expect(toast.error).toHaveBeenCalledTimes(1)
+    expect(toast.loading).toHaveBeenCalledWith('scanBack.filing', { id: 'scan-back-file-1' })
+    expect(toast.error).toHaveBeenCalledWith('scanBack.uploadError', { id: 'scan-back-file-1' })
     expect(toast.success).not.toHaveBeenCalled()
   })
 
@@ -108,7 +121,7 @@ describe('useFileSignedCopy', () => {
     )
     const { result } = renderHook(() => useFileSignedCopy(), { wrapper: wrapperFor(qc) })
     await result.current.file(1, 'GS-0410', new File([], 'x.pdf'))
-    expect(toast.error).toHaveBeenCalledWith('Reference barcode does not match')
+    expect(toast.error).toHaveBeenCalledWith('Reference barcode does not match', { id: 'scan-back-file-1' })
   })
 
   it('uses the localized fallback for an unstructured error', async () => {
@@ -116,7 +129,18 @@ describe('useFileSignedCopy', () => {
     vi.spyOn(apiMod.api, 'addBookAttachment').mockRejectedValue(new Error('boom'))
     const { result } = renderHook(() => useFileSignedCopy(), { wrapper: wrapperFor(qc) })
     await result.current.file(1, 'GS-0410', new File([], 'x.pdf'))
-    expect(toast.error).toHaveBeenCalledWith('scanBack.uploadError')
+    expect(toast.error).toHaveBeenCalledWith('scanBack.uploadError', { id: 'scan-back-file-1' })
+  })
+})
+
+describe('scan upload failures', () => {
+  it('morphs uploading into an error when the request throws', async () => {
+    const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    vi.spyOn(apiMod.api, 'scanBack').mockRejectedValue(new Error('failed'))
+    const { result } = renderHook(() => useScanBackUpload(), { wrapper: wrapperFor(qc) })
+    act(() => result.current.upload(new File([], 'x.pdf')))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('scanBack.uploadError', { id: 'upload-toast' }))
+    expect(toast.loading).toHaveBeenCalledWith('scanBack.uploading')
   })
 })
 
@@ -132,7 +156,8 @@ describe('useScanBackUpload', () => {
     const { result } = renderHook(() => useScanBackUpload(), { wrapper: wrapperFor(qc) })
 
     act(() => result.current.upload(new File([], 'x.pdf')))
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('scanBack.autoFiled'))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('scanBack.autoFiled', { id: 'upload-toast', reference: '1/5/141' }))
+    expect(toast.loading).toHaveBeenCalledWith('scanBack.uploading')
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['notifications', 'counts'] })
@@ -150,8 +175,30 @@ describe('useScanBackUpload', () => {
 
     act(() => result.current.upload(new File([], 'x.pdf')))
     await waitFor(() => expect(toast.info).toHaveBeenCalled())
+    expect(toast.info).toHaveBeenCalledWith('scanBack.parked', {
+      id: 'upload-toast',
+      reference: '1/5/141',
+      action: { label: 'scanBack.viewInbox', onClick: expect.any(Function) },
+    })
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['scan-inbox'] })
     expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('resolves each of two concurrent uploads in its own toast', async () => {
+    const qc = new QueryClient()
+    vi.mocked(toast.loading).mockReturnValueOnce('first').mockReturnValueOnce('second')
+    vi.spyOn(apiMod.api, 'scanBack')
+      .mockResolvedValueOnce({ book_id: 1, ref_number: '1/5/141', outcome: 'filed' })
+      .mockResolvedValueOnce({ book_id: 2, ref_number: '1/5/142', outcome: 'filed' })
+    const { result } = renderHook(() => useScanBackUpload(), { wrapper: wrapperFor(qc) })
+
+    act(() => {
+      result.current.upload(new File([], 'a.pdf'))
+      result.current.upload(new File([], 'b.pdf'))
+    })
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(2))
+    expect(toast.success).toHaveBeenCalledWith('scanBack.autoFiled', { id: 'first', reference: '1/5/141' })
+    expect(toast.success).toHaveBeenCalledWith('scanBack.autoFiled', { id: 'second', reference: '1/5/142' })
   })
 })

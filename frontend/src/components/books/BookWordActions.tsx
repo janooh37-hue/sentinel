@@ -8,7 +8,6 @@ import { toast } from '@/lib/toast'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { api, apiErrorMessage } from '@/lib/api'
 import type { BookRead, WordSessionRead } from '@/lib/api'
-import { bidi } from '@/lib/bidi'
 import { cn } from '@/lib/utils'
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 
@@ -53,12 +52,13 @@ export function WordSessionActions({
 
   const finishMutation = useMutation({
     mutationFn: () => api.finishWordSession(book.id),
+    onMutate: () => { toast.loading(t('books.word.finishing'), { id: `word-finish-${book.id}` }) },
     onSuccess: (finishedBook) => {
       invalidate()
-      toast.success(t('books.word.finished', { ref: bidi(book.ref_number) }))
+      toast.success(t('books.word.finished'), { id: `word-finish-${book.id}`, reference: book.ref_number })
       onFinished?.(finishedBook)
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err) => toast.error(apiErrorMessage(err), { id: `word-finish-${book.id}` }),
   })
 
   const discardMutation = useMutation({
@@ -153,12 +153,14 @@ export function WordReopenButton({
 
   const reopenMutation = useMutation({
     mutationFn: () => api.reopenWordSession(book.id),
+    onMutate: () => { toast.loading(t('books.word.opening'), { id: `word-reopen-${book.id}` }) },
     onSuccess: (session) => {
       invalidate()
+      toast.dismiss(`word-reopen-${book.id}`)
       if (onFinished) setReopenSession(session)
       else navigate(`/books/${session.book_id}/word`)
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err) => toast.error(apiErrorMessage(err), { id: `word-reopen-${book.id}` }),
   })
   const hasActiveSession = book.edit_session?.state === 'active'
   const isFinished = ((book.versions?.length ?? 0) > 0 || book.is_word_book) && !hasActiveSession

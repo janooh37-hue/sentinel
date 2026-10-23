@@ -1,13 +1,21 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/lib/i18n'
+import { api } from '@/lib/api'
+import { toast } from '@/lib/toast'
 import { ExportWorkspace } from './ExportWorkspace'
 import { workflowMonth } from './workflowFixtures'
 
-afterEach(() => vi.restoreAllMocks())
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
+beforeEach(() => vi.clearAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
 describe('ExportWorkspace', () => {
   it('offers a fixed Arabic portrait report and exports the month in Arabic', async () => {
@@ -35,6 +43,40 @@ describe('ExportWorkspace', () => {
     await waitFor(() => expect(download).toHaveBeenCalled())
     const request = new URL(String(download.mock.calls[0][0]), 'http://localhost')
     expect(request.pathname).toBe('/api/v1/inmate-violations/statistics/2026/8/export')
+    expect(toast.loading).toHaveBeenCalledWith(i18n.t('inmateStats.export.downloading'), { id: 'inmate-register-download' })
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it.each(['success', 'request error', 'save error'] as const)('resolves the download loading toast on %s', async (outcome) => {
+    vi.stubGlobal('URL', class extends URL {
+      static createObjectURL = vi.fn(() => 'blob:register')
+      static revokeObjectURL = vi.fn()
+    })
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const request = vi.spyOn(api, 'fetchInmateRegisterExport')
+    if (outcome === 'request error') request.mockRejectedValue(new Error('Download failed'))
+    else request.mockResolvedValue({ blob: new Blob(['register']), filename: 'register.xlsx' })
+    if (outcome === 'save error') {
+      vi.spyOn(URL, 'createObjectURL').mockImplementation(() => { throw new Error('Download failed') })
+    }
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}>
+        <ExportWorkspace month={workflowMonth()} />
+      </QueryClientProvider>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'XLSX file' }))
+
+    if (outcome === 'success') {
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith(i18n.t('inmateStats.export.downloaded'), { id: 'inmate-register-download' }))
+      await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:register'))
+      expect(toast.error).not.toHaveBeenCalled()
+    } else {
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: Download failed', { id: 'inmate-register-download' }))
+      expect(toast.success).not.toHaveBeenCalled()
+    }
+    expect(toast.loading).toHaveBeenCalledWith(i18n.t('inmateStats.export.downloading'), { id: 'inmate-register-download' })
   })
 
   describe('save as pdf', () => {

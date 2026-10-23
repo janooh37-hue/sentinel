@@ -218,8 +218,9 @@ export function ReturnedFormCard({ result, file, onDismiss }: ReturnedFormCardPr
       setAttached(true)
       toast.success(
         asSigned
-          ? t('intake.returnedForm.approved', { ref: result.ref_number })
-          : t('intake.returnedForm.attached', { ref: result.ref_number }),
+          ? t('intake.returnedForm.approved')
+          : t('intake.returnedForm.attachedToast'),
+        { reference: result.ref_number },
       )
       void qc.invalidateQueries({ queryKey: ['books'] })
     } catch {

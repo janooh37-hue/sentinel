@@ -7,13 +7,14 @@ import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import ar from '@/locales/ar.json'
 import { api, ApiError } from '@/lib/api'
+import { toast } from '@/lib/toast'
 import type { BookRead, WordSessionDetailRead } from '@/lib/api'
 import { WordSessionPage } from './WordSessionPage'
 
 void i18n.use(initReactI18next).init({ lng: 'ar', resources: { ar: { translation: ar } }, interpolation: { escapeValue: false } })
 const capabilities = vi.hoisted(() => ({ templates: true }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => cap !== 'books.templates' || capabilities.templates }) }))
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn() } }))
 vi.mock('@/pages/application/DocPdfCanvas', () => ({ default: ({ pdfUrl }: { pdfUrl: string }) => <div data-testid="paper" data-url={pdfUrl} /> }))
 vi.mock('@/components/books/SavedRecordActions', () => ({ SavedRecordActions: ({ bookId }: { bookId: number }) => <div>saved:{bookId}</div> }))
 
@@ -36,6 +37,7 @@ function setup() {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  vi.clearAllMocks()
   capabilities.templates = true
   vi.spyOn(api, 'getBook').mockResolvedValue(book)
   vi.spyOn(api, 'getWordSession').mockResolvedValue(session)
@@ -117,6 +119,19 @@ describe('WordSessionPage in Arabic', () => {
     expect(await screen.findByText('saved:42')).toBeVisible()
     await waitFor(() => expect(screen.getByTestId('paper')).toHaveAttribute('data-url', '/final.pdf'))
     expect(screen.getByRole('button', { name: 'حفظ كقالب' })).toBeVisible()
+    expect(toast.loading).toHaveBeenCalledWith(ar.books.word.finishing, { id: 'word-session-finish-42' })
+    expect(toast.success).toHaveBeenCalledWith(ar.books.word.finished, { id: 'word-session-finish-42', reference: session.ref_number })
+  })
+
+  it('morphs finish loading into an error when saving fails', async () => {
+    vi.mocked(api.getWordSession).mockResolvedValue({ ...session, last_put_at: '2026-10-12T10:05:00Z' })
+    vi.spyOn(api, 'finishWordSession').mockRejectedValue(new Error('failed'))
+    setup()
+    const finish = await screen.findByRole('button', { name: 'حفظ الكتاب' })
+    await waitFor(() => expect(finish).toBeEnabled())
+    await userEvent.click(finish)
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.any(String), { id: 'word-session-finish-42' }))
+    expect(toast.loading).toHaveBeenCalledWith(ar.books.word.finishing, { id: 'word-session-finish-42' })
   })
 
   it('creates a new template Word session and navigates to it', async () => {

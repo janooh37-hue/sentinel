@@ -214,7 +214,7 @@ describe('BookRecordPage — keys', () => {
     press('c', 'KeyC')
     await waitFor(() => expect(copyToClipboard).toHaveBeenCalledWith('GS-0048'))
     await waitFor(() => expect(toastSuccess).toHaveBeenCalled())
-    expect(String(toastSuccess.mock.calls[0][0])).toContain('GS-0048')
+    expect(toastSuccess).toHaveBeenCalledWith('Reference copied', { reference: 'GS-0048' })
   })
 
   it('S opens the sign confirmation for the decider and never signs', async () => {

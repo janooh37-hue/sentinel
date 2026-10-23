@@ -287,8 +287,9 @@ export function ItemPermitsTab(): React.JSX.Element {
             setHighlightedId(created.id)
             toast.success(
               created.book_ref
-                ? t('permits.items.createdToast', { ref: created.book_ref })
+                ? t('permits.items.createdToast')
                 : t('permits.items.createdToastNoRef'),
+              { reference: created.book_ref || undefined },
             )
             replaceSearch(['itemAction', 'iq', 'istatus'], { itemPreview: String(created.id) }, false)
           } else if (actionOverlay.value === 'new') {

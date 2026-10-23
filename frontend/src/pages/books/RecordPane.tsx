@@ -568,7 +568,7 @@ export function RecordPane({
             aria-label={t('books.record.copyRef')}
             onClick={() => {
               void copyToClipboard(book.ref_number).then((ok) => {
-                if (ok) toast.success(t('books.record.copiedRef', { ref: bidi(book.ref_number) }))
+                if (ok) toast.success(t('books.record.copiedRef'), { reference: book.ref_number })
                 else toast.error(t('common.copyFailed'))
               })
             }}

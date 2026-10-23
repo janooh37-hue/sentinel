@@ -28,7 +28,7 @@ vi.mock('react-i18next', () => ({
         'books.word.noSavesYet': 'لم يصل أي حفظ من Word بعد',
         'books.word.discardConfirm': 'سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟',
         'books.word.discardConfirmLabel': 'تجاهل المسودة',
-        'books.word.finished': opts?.ref ? `تم اعتماد الإصدار — ${String(opts.ref)}` : 'تم اعتماد الإصدار',
+        'books.word.finished': 'تم حفظ الإصدار',
         'books.word.finishedPdfTitle': opts?.ref ? `تم حفظ الكتاب — ${String(opts.ref)}` : 'تم حفظ الكتاب',
         'books.word.pdfPending': 'جارٍ تجهيز ملف PDF — يمكنك تنزيل ملف DOCX الآن',
         'books.word.close': 'إغلاق',
@@ -276,7 +276,7 @@ describe('WordHandoffDialog', () => {
 
     await user.click(screen.getByText('إنهاء التحرير'))
     await waitFor(() => expect(finishSpy).toHaveBeenCalledWith(42))
-    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('تم حفظ الإصدار', { reference: FAKE_SESSION.ref_number }))
     // Dialog stays open showing the PDF — onClose NOT called automatically.
     expect(onClose).not.toHaveBeenCalled()
     const canvas = await screen.findByTestId('doc-pdf-canvas')

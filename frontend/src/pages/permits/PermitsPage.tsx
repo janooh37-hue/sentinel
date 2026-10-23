@@ -480,7 +480,7 @@ export function PermitsPage(): React.JSX.Element {
             createdRef.current = p
             setLastCreated(p)
             setHighlightedId(p.id)
-            toast.success(t('permits.createdToast', { no: p.permit_no ?? `#${p.id}` }))
+            toast.success(t('permits.createdToast'), { reference: p.permit_no ?? `#${p.id}` })
             return
           }
           // After editing from the detail dialog, keep the detail open on it.

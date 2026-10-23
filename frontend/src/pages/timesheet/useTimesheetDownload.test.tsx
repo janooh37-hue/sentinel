@@ -10,7 +10,10 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { toast } from '@/lib/toast'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}))
 vi.mock('@/lib/api', () => ({
   api: { fetchTimesheetExport: vi.fn(), fetchTimesheetEmployeeExport: vi.fn() },
   apiErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
@@ -18,7 +21,7 @@ vi.mock('@/lib/api', () => ({
 
 import { api } from '@/lib/api'
 
-import { useTimesheetDownload } from './useTimesheet'
+import { useEmployeeSheetDownload, useTimesheetDownload } from './useTimesheet'
 
 const fetchExport = vi.mocked(api.fetchTimesheetExport)
 
@@ -29,11 +32,11 @@ const revokeObjectURL = vi.fn()
 /** Revoke calls counted at the moment the browser was handed the anchor. */
 let revokedAtClick = -1
 
-function renderDownload() {
+function renderDownload<T>(hook: () => T) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
-  return renderHook(() => useTimesheetDownload(), {
+  return renderHook(hook, {
     wrapper: ({ children }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>,
   })
 }
@@ -55,12 +58,14 @@ afterEach(() => vi.restoreAllMocks())
 describe('useTimesheetDownload', () => {
   it('revokes the object URL only after the download has started', async () => {
     fetchExport.mockResolvedValue({ blob: new Blob(['x']), filename: 'kashf.xlsx' })
-    const { result } = renderDownload()
+    const { result } = renderDownload(useTimesheetDownload)
 
     await act(async () => {
       await result.current.download(ARGS)
     })
 
+    expect(toast.loading).toHaveBeenCalledWith('timesheet.release.downloadingWorkbook', { id: 'timesheet-workbook-download' })
+    expect(toast.success).toHaveBeenCalledWith('timesheet.release.workbookDownloaded', { id: 'timesheet-workbook-download' })
     expect(createObjectURL).toHaveBeenCalledTimes(1)
     // Firefox CANCELS the download when the blob URL is revoked before the
     // download's own fetch begins — no file, and no error to explain it.
@@ -75,17 +80,66 @@ describe('useTimesheetDownload', () => {
 
   it('reports a failure without rejecting the promise the caller will not catch', async () => {
     fetchExport.mockRejectedValue(new Error('The month is closed.'))
-    const { result } = renderDownload()
+    const { result } = renderDownload(useTimesheetDownload)
 
     // The natural Task 9 handler: `onClick={() => void download(args)}`. A
     // rethrow here is an unhandled promise rejection, which vitest fails on.
     await act(async () => {
       void result.current.download(ARGS)
     })
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('The month is closed.'))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('The month is closed.', { id: 'timesheet-workbook-download' }))
+    expect(toast.loading).toHaveBeenCalledWith('timesheet.release.downloadingWorkbook', { id: 'timesheet-workbook-download' })
     expect(revokeObjectURL).not.toHaveBeenCalled()
 
     // And the awaited form resolves rather than throwing.
     await expect(result.current.download(ARGS)).resolves.toBeUndefined()
+  })
+
+  it('resolves the loading toast when saving the workbook throws', async () => {
+    fetchExport.mockResolvedValue({ blob: new Blob(['x']), filename: 'kashf.xlsx' })
+    createObjectURL.mockImplementationOnce(() => { throw new Error('Download unavailable') })
+    const { result } = renderDownload(useTimesheetDownload)
+
+    await act(async () => { await result.current.download(ARGS) })
+
+    expect(toast.loading).toHaveBeenCalledWith('timesheet.release.downloadingWorkbook', { id: 'timesheet-workbook-download' })
+    expect(toast.error).toHaveBeenCalledWith('Download unavailable', { id: 'timesheet-workbook-download' })
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+})
+
+describe('useEmployeeSheetDownload', () => {
+  const args = { employeeId: 'G100', year: 2026, month: 7, months: 1 } as const
+
+  it('morphs loading into success after downloading the employee sheet', async () => {
+    vi.mocked(api.fetchTimesheetEmployeeExport).mockResolvedValue({ blob: new Blob(['x']), filename: 'employee.xlsx' })
+    const { result } = renderDownload(useEmployeeSheetDownload)
+
+    await act(async () => { await result.current.download(args) })
+
+    expect(toast.loading).toHaveBeenCalledWith('timesheet.employee.downloadingSheet', { id: 'timesheet-employee-sheet-download' })
+    expect(toast.success).toHaveBeenCalledWith('timesheet.employee.sheetDownloaded', { id: 'timesheet-employee-sheet-download' })
+  })
+
+  it('morphs loading into an error without rejecting the download promise', async () => {
+    vi.mocked(api.fetchTimesheetEmployeeExport).mockRejectedValue(new Error('Sheet unavailable'))
+    const { result } = renderDownload(useEmployeeSheetDownload)
+
+    await act(async () => { await expect(result.current.download(args)).resolves.toBeUndefined() })
+
+    expect(toast.loading).toHaveBeenCalledWith('timesheet.employee.downloadingSheet', { id: 'timesheet-employee-sheet-download' })
+    expect(toast.error).toHaveBeenCalledWith('Sheet unavailable', { id: 'timesheet-employee-sheet-download' })
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  it('resolves the loading toast when saving the employee sheet throws', async () => {
+    vi.mocked(api.fetchTimesheetEmployeeExport).mockResolvedValue({ blob: new Blob(['x']), filename: 'employee.xlsx' })
+    createObjectURL.mockImplementationOnce(() => { throw new Error('Download unavailable') })
+    const { result } = renderDownload(useEmployeeSheetDownload)
+
+    await act(async () => { await result.current.download(args) })
+
+    expect(toast.error).toHaveBeenCalledWith('Download unavailable', { id: 'timesheet-employee-sheet-download' })
+    expect(toast.success).not.toHaveBeenCalled()
   })
 })

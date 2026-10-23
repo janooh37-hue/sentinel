@@ -47,19 +47,20 @@ export function EmailSyncStatusWidget({ summary }: Props): React.JSX.Element {
   // synced counts/sync timestamp flow through the rest of the UI.
   const syncMutation = useMutation({
     mutationFn: () => api.syncEmail(),
+    onMutate: () => { toast.loading(t('dashboard.widgets.emailSync.syncingToast'), { id: 'dashboard-email-sync' }) },
     onSuccess: (r) => {
       toast.success(
         t('settings.email.syncOk', {
           imported: r.imported,
           skipped: r.skipped_duplicate,
-          defaultValue: 'Imported {{imported}}, skipped {{skipped}}',
         }),
+        { id: 'dashboard-email-sync' },
       )
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
       void qc.invalidateQueries({ queryKey: ['email-account'] })
       void qc.invalidateQueries({ queryKey: ['ledger'] })
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err) => toast.error(apiErrorMessage(err), { id: 'dashboard-email-sync' }),
   })
 
   const total = emailSync?.incoming_today ?? 0

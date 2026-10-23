@@ -96,13 +96,14 @@ export function useFileSignedCopy(): {
     // the record in the toast without a second lookup.
     mutationFn: ({ bookId, f }: { bookId: number; ref: string; f: File }) =>
       api.addBookAttachment(bookId, f, true),
+    onMutate: ({ bookId }) => { toast.loading(t('scanBack.filing'), { id: `scan-back-file-${bookId}` }) },
     onSuccess: (_data: unknown, vars: { bookId: number; ref: string; f: File }) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
-      toast.success(t('scanBack.filed', { ref: vars.ref }))
+      toast.success(t('scanBack.filed'), { id: `scan-back-file-${vars.bookId}`, reference: vars.ref })
     },
-    onError: (e: unknown) =>
-      toast.error(e instanceof ApiError ? e.message : t('scanBack.uploadError')),
+    onError: (e: unknown, vars) =>
+      toast.error(e instanceof ApiError ? e.message : t('scanBack.uploadError'), { id: `scan-back-file-${vars.bookId}` }),
   })
 
   return {
@@ -131,14 +132,18 @@ export function useScanBackUpload(): {
   const qc = useQueryClient()
   const mutation = useMutation({
     mutationFn: (file: File) => api.scanBack(file),
-    onSuccess: (result) => {
+    // Each upload gets its own toast: scans dropped on two rows at once are two jobs.
+    onMutate: () => toast.loading(t('scanBack.uploading')),
+    onSuccess: (result, _file, toastId) => {
       if (result.outcome === 'filed') {
         void qc.invalidateQueries({ queryKey: ['books'] })
         void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
-        toast.success(t('scanBack.autoFiled', { ref: result.ref_number }))
+        toast.success(t('scanBack.autoFiled'), { id: toastId, reference: result.ref_number })
       } else {
         void qc.invalidateQueries({ queryKey: ['scan-inbox'] })
-        toast.info(t('scanBack.parked', { ref: result.ref_number }), {
+        toast.info(t('scanBack.parked'), {
+          id: toastId,
+          reference: result.ref_number,
           action: {
             label: t('scanBack.viewInbox'),
             onClick: () => navigate('/scan-inbox'),
@@ -146,8 +151,8 @@ export function useScanBackUpload(): {
         })
       }
     },
-    onError: (e: unknown) =>
-      toast.error(e instanceof ApiError ? e.message : t('scanBack.uploadError')),
+    onError: (e: unknown, _file, toastId) =>
+      toast.error(e instanceof ApiError ? e.message : t('scanBack.uploadError'), { id: toastId }),
   })
 
   return {

@@ -110,7 +110,7 @@ export function WordHandoffDialog({ session, open, onClose, onFinished }: Props)
     mutationFn: () => api.finishWordSession(session!.book_id),
     onSuccess: (book) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
-      toast.success(t('books.word.finished', { ref: bidi(session?.ref_number ?? '') }))
+      toast.success(t('books.word.finished'), { reference: session?.ref_number })
       // Keep the dialog open showing the finished PDF instead of closing.
       setFinishedBook(book)
       onFinished?.(book)

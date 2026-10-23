@@ -54,14 +54,16 @@ function Body({ book, kind, close }: Pick<Props, 'book' | 'kind'> & { close: () 
       attach_reference: attached,
       classification_code: classification,
     }),
+    onMutate: () => { toast.loading(t('books.word.opening'), { id: `word-derive-${book.id}-${kind}` }) },
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
+      toast.dismiss(`word-derive-${book.id}-${kind}`)
       close()
       navigate(`/books/${res.book_id}/word`)
     },
     onError: (err) => {
       const key = err instanceof ApiError ? ERROR_KEYS[err.code] : undefined
-      toast.error(key ? t(key) : apiErrorMessage(err))
+      toast.error(key ? t(key) : apiErrorMessage(err), { id: `word-derive-${book.id}-${kind}` })
     },
   })
   return (

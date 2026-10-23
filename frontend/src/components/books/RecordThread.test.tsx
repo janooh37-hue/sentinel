@@ -28,7 +28,7 @@ vi.mock('react-router-dom', async (original) => ({
 }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: auth.authenticated ? { role: auth.role } : null }) }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => !auth.denied.has(cap) }) }))
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() } }))
 
 const BOOK: BookRead = {
   id: 7, ref_number: '1/1/196', category_id: 'GS',
@@ -123,7 +123,7 @@ describe('derive and reply actions', () => {
     mount(<DeriveRecordDialog book={BOOK} kind="reply" open onOpenChange={vi.fn()} />)
     expect(screen.queryByRole('combobox', { name: /Classification/ })).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: 'Reply' }))
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(message))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(message, expect.anything()))
   })
 
   it('exports read-only reply actions and never carries an open dialog to a different record', async () => {

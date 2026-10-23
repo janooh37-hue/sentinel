@@ -156,7 +156,7 @@ function FinesLetterWizard(): React.JSX.Element {
       // themselves are untouched, so no vehicle query needs refreshing.
       void queryClient.invalidateQueries({ queryKey: ['books'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success(t('vehicles.letterSaved', { ref: result.ref_number }))
+      toast.success(t('vehicles.letterSaved'), { reference: result.ref_number })
       navigate(`/books/${result.book_id}`)
     },
     onError: (err) => {

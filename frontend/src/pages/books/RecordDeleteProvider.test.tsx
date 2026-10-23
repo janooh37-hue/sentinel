@@ -27,7 +27,7 @@ vi.mock('@/lib/toast', () => ({
   }),
 }))
 
-type ToastOpts = { id: string; duration: number; action: { label: string; onClick: () => void } }
+type ToastOpts = { id: string; reference?: string; duration: number; action: { label: string; onClick: () => void } }
 const lastToast = (): [string, ToastOpts] => {
   const call = toastFn.mock.calls[toastFn.mock.calls.length - 1] as [string, ToastOpts]
   return call
@@ -141,7 +141,8 @@ describe('RecordDeleteProvider', () => {
     expect(screen.getByText('row-2')).toBeInTheDocument()
     expect(toastFn).toHaveBeenCalledTimes(1)
     const [msg, opts] = lastToast()
-    expect(msg).toBe(`Record ${bidi('A-1')} deleted`)
+    expect(msg).toBe('Record deleted')
+    expect(opts.reference).toBe('A-1')
     expect(opts.duration).toBe(6000)
     expect(opts.action.label).toBe('Undo')
     expect(opts.id).toEqual(expect.any(String))
@@ -162,7 +163,7 @@ describe('RecordDeleteProvider', () => {
     click('one')
     act(() => lastToast()[1].action.onClick())
     expect(screen.getByText('row-1')).toBeInTheDocument()
-    expect(toastSuccess).toHaveBeenCalledWith(`Record ${bidi('A-1')} restored`)
+    expect(toastSuccess).toHaveBeenCalledWith('Record restored', { reference: 'A-1' })
     expect(toastError).not.toHaveBeenCalled()
     await advance(10_000)
     expect(deleteBook).not.toHaveBeenCalled()
@@ -258,8 +259,9 @@ describe('RecordDeleteProvider', () => {
     expect(screen.queryByText('row-3')).toBeNull()
     expect(toastFn).toHaveBeenCalledTimes(1)
     expect(lastToast()[0]).toBe('2 records deleted')
+    expect(lastToast()[1].reference).toBeUndefined()
     act(() => lastToast()[1].action.onClick())
-    expect(toastSuccess).toHaveBeenCalledWith('2 records restored')
+    expect(toastSuccess).toHaveBeenCalledWith('2 records restored', { reference: undefined })
     expect(screen.getByText('row-2')).toBeInTheDocument()
     expect(screen.getByText('row-3')).toBeInTheDocument()
     await advance(10_000)
