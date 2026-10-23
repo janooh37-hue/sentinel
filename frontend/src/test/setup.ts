@@ -93,6 +93,7 @@ if (typeof globalThis.IntersectionObserver === 'undefined') {
     }
     readonly root = null
     readonly rootMargin = ''
+    readonly scrollMargin = ''
     readonly thresholds: readonly number[] = []
   }
 }
