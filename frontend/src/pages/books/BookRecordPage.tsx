@@ -713,6 +713,7 @@ function BookRecordPageBody(): React.JSX.Element {
       // dropped: this is not a basket send, and carrying it would let a
       // successful handoff clear a same-kind basket the operator is still
       // filling. Clear only the persisted-basket identity, not the prefill.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { basketKey: _droppedBasketKey, ...prefill } = buildBasketPrefill(
         [item],
         getRecentRecipientsForForm(key),

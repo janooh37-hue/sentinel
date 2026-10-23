@@ -498,9 +498,11 @@ function BookMobileCard({
 
         {/* category · direction */}
         <div className="flex flex-wrap items-center gap-2 text-[0.72em] text-muted-foreground">
-          <span className="inline-flex items-center rounded-full bg-surface-tinted px-2.5 py-0.5 font-medium uppercase tracking-[0.06em]">
-            {catLabel}
-          </span>
+          {catLabel ? (
+            <span className="inline-flex items-center rounded-full bg-surface-tinted px-2.5 py-0.5 font-medium uppercase tracking-[0.06em]">
+              {catLabel}
+            </span>
+          ) : null}
           {row.direction && <DirectionPill direction={row.direction} t={t} />}
           <ConfidentialityChip level={row.confidentiality} />
         </div>
