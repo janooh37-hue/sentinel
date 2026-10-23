@@ -798,6 +798,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/departments/candidate-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Candidate Users */
+        get: operations["candidate_users_api_v1_departments_candidate_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/departments/service-options": {
         parameters: {
             query?: never;
@@ -10429,6 +10446,20 @@ export interface components {
             /** Enabled */
             enabled: boolean;
         };
+        /**
+         * DepartmentCandidateUserRead
+         * @description An active account that may be granted deputy or viewer access.
+         */
+        DepartmentCandidateUserRead: {
+            /** User Id */
+            user_id: number;
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string;
+            /** Employee Id */
+            employee_id: string | null;
+        };
         /** DepartmentCreate */
         DepartmentCreate: {
             /** Name En */
@@ -19152,6 +19183,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DepartmentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    candidate_users_api_v1_departments_candidate_users_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentCandidateUserRead"][];
                 };
             };
             /** @description Validation Error */
