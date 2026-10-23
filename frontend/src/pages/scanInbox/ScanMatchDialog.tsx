@@ -59,22 +59,6 @@ export function ScanMatchDialog({
         id,
         reference: vars.reference,
         description: vars.description,
-        duration: 8000,
-        action: {
-          label: t('scanInbox.actions.undo'),
-          onClick: async () => {
-            const undoId = toast.loading(t('common.saving'))
-            try {
-              await api.undoScanItem(item.id)
-              void qc.invalidateQueries({ queryKey: ['scan-inbox'] })
-              toast.dismiss(undoId)
-            } catch (err) {
-              toast.error(apiErrorMessage(err), {
-                id: undoId, reference: vars.reference, description: vars.description,
-              })
-            }
-          },
-        },
       })
       onClose()
     },

@@ -2452,7 +2452,7 @@ export const api = {
   /** Dismiss an item (mark as not actionable). */
   dismissScanItem: (id: number) =>
     request<ScanInboxItem>('POST', `/scan-inbox/${id}/dismiss`),
-  /** Undo a dismiss or confirm — returns item to its previous state. */
+  /** Undo only an auto_filed attach, returning it to awaiting_confirmation. */
   undoScanItem: (id: number) =>
     request<ScanInboxItem>('POST', `/scan-inbox/${id}/undo`),
 

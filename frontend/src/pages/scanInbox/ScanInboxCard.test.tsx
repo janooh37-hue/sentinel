@@ -59,9 +59,9 @@ describe('ScanInboxCard', () => {
     }))
     fireEvent.click(screen.getByText(/scanInbox.fileTo:Ahmed Ali/))
     await waitFor(() => expect(route).toHaveBeenCalledWith(1, { employee_id: 'G1' }))
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('scanInbox.toast.filed', expect.objectContaining({
-      id: 'scan-job', description: 'Ahmed Ali', duration: 8000,
-    })))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('scanInbox.toast.filed', {
+      id: 'scan-job', description: 'Ahmed Ali',
+    }))
   })
 
   it('shows a destination deep-link for an auto-filed item', () => {
@@ -71,6 +71,19 @@ describe('ScanInboxCard', () => {
     }))
     const link = screen.getByText('scanInbox.openInFile').closest('a')
     expect(link).toHaveAttribute('href', '/employees/G5')
+  })
+
+  it('keeps Undo available for an auto-filed item', async () => {
+    const undo = vi.spyOn(apiMod.api, 'undoScanItem').mockResolvedValue({} as never)
+    renderCard(base({
+      state: 'auto_filed', proposed_route: 'book_attach',
+      proposed_ref: 'GS-0410', proposed_book_id: 42,
+    }))
+    fireEvent.click(screen.getByRole('button', { name: 'scanInbox.actions.undo' }))
+    await waitFor(() => expect(undo).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('scanInbox.toast.undone', {
+      id: 'scan-job', reference: 'GS-0410',
+    }))
   })
 
   it('re-match: undo is called then ScanMatchDialog opens', async () => {
@@ -129,36 +142,22 @@ describe('ScanInboxCard', () => {
       .not.toMatch(/[\u200e\u200f]/)
   })
 
-  it.each(['confirm', 'dismiss'])('keeps %s Undo usable after the card unmounts', async (operation) => {
-    const undo = vi.spyOn(apiMod.api, 'undoScanItem').mockResolvedValue({} as never)
+  it.each(['confirm', 'dismiss'])('shows %s success without an Undo action', async (operation) => {
     vi.spyOn(apiMod.api, 'confirmScanItem').mockResolvedValue({} as never)
     vi.spyOn(apiMod.api, 'dismissScanItem').mockResolvedValue({} as never)
-    const view = renderCard(base({
+    renderCard(base({
       state: 'awaiting_confirmation', proposed_route: 'book_attach',
       proposed_ref: 'GS-0410', proposed_book_id: 42, confidence_tier: 'confirm',
     }))
     fireEvent.click(screen.getByRole('button', {
       name: operation === 'confirm' ? 'scanInbox.fileTo:GS-0410' : 'scanInbox.actions.dismiss',
     }))
-    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(
+      operation === 'confirm' ? 'scanInbox.toast.filed' : 'scanInbox.toast.dismissed',
+      operation === 'confirm' ? { id: 'scan-job', reference: 'GS-0410' } : { id: 'scan-job' },
+    ))
     const options = vi.mocked(toast.success).mock.calls[0][1]!
-    expect(options.duration).toBe(8000)
-    if (operation === 'confirm') expect(options.reference).toBe('GS-0410')
-    view.unmount()
-    await options.action!.onClick()
-    expect(undo).toHaveBeenCalledWith(1)
-    expect(toast.dismiss).toHaveBeenCalledWith('scan-job')
-  })
-
-  it('shows an Undo failure after the card unmounts', async () => {
-    vi.spyOn(apiMod.api, 'dismissScanItem').mockResolvedValue({} as never)
-    vi.spyOn(apiMod.api, 'undoScanItem').mockRejectedValue(new apiMod.ApiError(409, 'CONFLICT', 'Cannot undo'))
-    const view = renderCard(base({}))
-    fireEvent.click(screen.getByRole('button', { name: 'scanInbox.actions.dismiss' }))
-    await waitFor(() => expect(toast.success).toHaveBeenCalled())
-    const action = vi.mocked(toast.success).mock.calls[0][1]!.action!
-    view.unmount()
-    await action.onClick()
-    expect(toast.error).toHaveBeenCalledWith('Cannot undo', expect.objectContaining({ id: 'scan-job' }))
+    expect(options).not.toHaveProperty('action')
+    expect(options).not.toHaveProperty('duration')
   })
 })

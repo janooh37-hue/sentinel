@@ -1520,6 +1520,11 @@ adapter owns:
 | Glyphs | The badge carries the app's lucide set: Check, X, TriangleAlert, Info, LoaderCircle (spinning), and ArrowRight for actions, mirrored in Arabic (`rtl:-scale-x-100`). `icon` replaces it. |
 | Dismiss | Swipe, click (not on a loading toast), or Escape while focused. `dismiss()` with no id clears all. |
 
+**Scan inbox.** Only `auto_filed` scans can be undone. Operator-filed (`filed`)
+and dismissed scans are terminal: their success toasts carry no Undo action
+and use the default duration. Keep destination references/descriptions and
+per-call toast ids; the auto-file follow-up to open the record keeps its 8 s window.
+
 **Theme and colour.** The host passes the app theme (`<html data-theme>`) to
 Sileo, which draws the *inverse* pill. The pill is filled from the app, not
 Sileo's neutrals: the navy `--rail` on the cream page, the light theme's raised

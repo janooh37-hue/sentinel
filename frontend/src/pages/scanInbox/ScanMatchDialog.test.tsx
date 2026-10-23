@@ -68,18 +68,17 @@ describe('ScanMatchDialog', () => {
     const row = await screen.findByText('Ahmed Ali')
     fireEvent.click(row)
     await waitFor(() => expect(route).toHaveBeenCalledWith(7, { employee_id: 'G1' }))
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('scanInbox.toast.filed', expect.objectContaining({
-      id: 'scan-job', description: 'Ahmed Ali', duration: 8000,
-    })))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('scanInbox.toast.filed', {
+      id: 'scan-job', description: 'Ahmed Ali', reference: undefined,
+    }))
   })
 
-  it('keeps the selected book reference and can undo after the dialog unmounts', async () => {
+  it('keeps the selected book reference without an Undo action', async () => {
     const route = vi.spyOn(apiMod.api, 'routeScanItem').mockResolvedValue({} as never)
-    const undo = vi.spyOn(apiMod.api, 'undoScanItem').mockResolvedValue({} as never)
     vi.spyOn(apiMod.api, 'listBooks').mockResolvedValue({
       items: [{ id: 42, ref_number: 'GS-0410', subject: 'Leave' }], total: 1,
     } as never)
-    const view = renderDialog()
+    renderDialog()
     fireEvent.change(screen.getByPlaceholderText('scanInbox.match.searchPlaceholder'), {
       target: { value: 'GS-0410' },
     })
@@ -87,10 +86,6 @@ describe('ScanMatchDialog', () => {
     await waitFor(() => expect(route).toHaveBeenCalledWith(7, { book_id: 42, employee_id: undefined }))
     await waitFor(() => expect(toast.success).toHaveBeenCalled())
     const options = vi.mocked(toast.success).mock.calls[0][1]!
-    expect(options.reference).toBe('GS-0410')
-    view.unmount()
-    await options.action!.onClick()
-    expect(undo).toHaveBeenCalledWith(7)
-    expect(toast.dismiss).toHaveBeenCalledWith('scan-job')
+    expect(options).toEqual({ id: 'scan-job', reference: 'GS-0410', description: undefined })
   })
 })

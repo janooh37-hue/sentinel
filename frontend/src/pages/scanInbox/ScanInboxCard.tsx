@@ -50,26 +50,13 @@ export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Elem
     : { description: empName }
   const onErr = (e: unknown, id?: string | number) =>
     toast.error(apiErrorMessage(e), { id, ...destination })
-  const undoAction = (target: typeof destination) => ({
-    label: t('scanInbox.actions.undo'),
-    onClick: async () => {
-      const id = toast.loading(t('common.saving'))
-      try {
-        await api.undoScanItem(item.id)
-        invalidate()
-        toast.dismiss(id)
-      } catch (err) {
-        toast.error(apiErrorMessage(err), { id, ...target })
-      }
-    },
-  })
 
   const confirm = useMutation({
     mutationFn: () => api.confirmScanItem(item.id),
     onMutate: () => toast.loading(t('common.saving')),
     onSuccess: (_data, _vars, id) => {
       invalidate()
-      toast.success(t('scanInbox.toast.filed'), { id, ...destination, action: undoAction(destination), duration: 8000 })
+      toast.success(t('scanInbox.toast.filed'), { id, ...destination })
     },
     onError: (e, _vars, id) => onErr(e, id),
   })
@@ -78,7 +65,7 @@ export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Elem
     onMutate: () => toast.loading(t('common.saving')),
     onSuccess: (_data, _vars, id) => {
       invalidate()
-      toast.success(t('scanInbox.toast.dismissed'), { id, action: undoAction(destination), duration: 8000 })
+      toast.success(t('scanInbox.toast.dismissed'), { id })
     },
     onError: (e, _vars, id) => onErr(e, id),
   })
@@ -99,7 +86,7 @@ export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Elem
     onSuccess: (_data, vars, id) => {
       invalidate()
       toast.success(t('scanInbox.toast.filed'), {
-        id, description: vars.name, action: undoAction({ description: vars.name }), duration: 8000,
+        id, description: vars.name,
       })
     },
     onError: (e, vars, id) => toast.error(apiErrorMessage(e), { id, description: vars.name }),
