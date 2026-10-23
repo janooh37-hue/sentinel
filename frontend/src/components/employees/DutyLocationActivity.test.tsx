@@ -4,10 +4,8 @@ import { DutyLocationActivity } from './DutyLocationActivity'
 
 const language = vi.hoisted(() => ({ value: 'en' }))
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    i18n: { language: language.value },
-    t: (key: string) => ({
+vi.mock('react-i18next', () => {
+  const messages: Record<string, Record<string, string> | undefined> = {
       en: {
         'employees.activity.dutyLocation.initial_placement': 'Initial placement',
         'employees.activity.dutyLocation.transfer': 'Transferred',
@@ -20,9 +18,14 @@ vi.mock('react-i18next', () => ({
         'employees.activity.dutyLocation.unassigned': 'غير محدد',
         'employees.activity.dutyLocation.historyBegins': 'يبدأ السجل من',
       },
-    })[language.value][key] ?? key,
-  }),
-}))
+  }
+  return {
+    useTranslation: () => ({
+      i18n: { language: language.value },
+      t: (key: string) => messages[language.value]?.[key] ?? key,
+    }),
+  }
+})
 
 describe('DutyLocationActivity', () => {
   afterEach(() => {

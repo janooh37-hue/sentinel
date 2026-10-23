@@ -77,6 +77,7 @@ export function RecordExpansion({
   // (the safe choice) instead of collapsing the whole expansion.
   useEffect(() => {
     if (!onRequestClose) return
+    const close = onRequestClose
     function onKey(e: KeyboardEvent): void {
       if (e.defaultPrevented) return
       if (e.key === 'Escape') {
@@ -85,7 +86,7 @@ export function RecordExpansion({
           setConfirmDelete(false)
           return
         }
-        onRequestClose()
+        close()
       }
     }
     window.addEventListener('keydown', onKey)

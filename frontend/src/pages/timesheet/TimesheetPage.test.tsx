@@ -493,7 +493,7 @@ describe('TimesheetPage code filtering', () => {
       expect(document.activeElement).not.toBe(bar)
     } finally {
       if (descriptor) Object.defineProperty(HTMLElement.prototype, 'animate', descriptor)
-      else delete (HTMLElement.prototype as HTMLElement & { animate?: unknown }).animate
+      else Reflect.deleteProperty(HTMLElement.prototype, 'animate')
     }
   })
 
@@ -767,7 +767,7 @@ describe('TimesheetPage side glance', () => {
     } finally {
       scroll.mockRestore()
       if (descriptor) Object.defineProperty(HTMLElement.prototype, 'animate', descriptor)
-      else delete (HTMLElement.prototype as HTMLElement & { animate?: unknown }).animate
+      else Reflect.deleteProperty(HTMLElement.prototype, 'animate')
     }
   })
   it('clears a stale row-jump cue when a code filter supersedes it', async () => {
@@ -796,7 +796,7 @@ describe('TimesheetPage side glance', () => {
       expect(animate).toHaveBeenCalledTimes(afterFilter)
     } finally {
       if (descriptor) Object.defineProperty(HTMLElement.prototype, 'animate', descriptor)
-      else delete (HTMLElement.prototype as HTMLElement & { animate?: unknown }).animate
+      else Reflect.deleteProperty(HTMLElement.prototype, 'animate')
     }
   })
 
@@ -826,7 +826,7 @@ describe('TimesheetPage side glance', () => {
       scroll.mockRestore()
       restore()
       if (descriptor) Object.defineProperty(HTMLElement.prototype, 'animate', descriptor)
-      else delete (HTMLElement.prototype as HTMLElement & { animate?: unknown }).animate
+      else Reflect.deleteProperty(HTMLElement.prototype, 'animate')
     }
   })
 
