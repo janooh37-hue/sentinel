@@ -52,8 +52,8 @@ function renderTable() {
 
 describe('RegisterTable quick approve', () => {
   it.each([
-    ['en', 'Record HR-42 decides this leave. It is approved when the manager signs that record.'],
-    ['ar', 'يُبتّ في هذه الإجازة عبر السجل HR-42، وتُعتمد عند توقيع المدير على ذلك السجل.'],
+    ['en', 'Decided by another record'],
+    ['ar', 'يُبتّ فيها عبر سجل آخر'],
   ])('explains a sign-gated leave in %s', async (lang, expected) => {
     await i18n.changeLanguage(lang)
     const rawMessage = 'This leave is controlled by the record signature.'
@@ -64,7 +64,10 @@ describe('RegisterTable quick approve', () => {
 
     fireEvent.click(screen.getByRole('button', { name: i18n.t('leaves.report.quickApprove') }))
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expected))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expected, {
+      reference: 'HR-42',
+      description: i18n.t('leaves.signGated'),
+    }))
     expect(toast.error).not.toHaveBeenCalledWith(rawMessage)
   })
 })

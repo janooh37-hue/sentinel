@@ -124,7 +124,10 @@ export function SendToGroupPage(): React.JSX.Element {
         : null
 
   const sendMut = useMutation({
-    onMutate: () => setResult(null),
+    onMutate: () => {
+      setResult(null)
+      return toast.loading(t('sendToGroup.sending'))
+    },
     mutationFn: () => {
       const form = new FormData()
       for (const id of selectedIds) {
@@ -148,11 +151,12 @@ export function SendToGroupPage(): React.JSX.Element {
       }
       return api.sendAnnouncement(form)
     },
-    onSuccess: (data) => {
+    onSuccess: (data, _vars, toastId) => {
       setResult(data)
+      toast.success(t('sendToGroup.sendComplete'), { id: toastId })
     },
-    onError: () => {
-      toast.error(t('sendToGroup.sendError'))
+    onError: (_err, _vars, toastId) => {
+      toast.error(t('sendToGroup.sendError'), { id: toastId })
     },
   })
 

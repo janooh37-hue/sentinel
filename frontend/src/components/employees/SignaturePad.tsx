@@ -44,15 +44,16 @@ export function SignaturePad({
 
   const save = async (dataUrl: string): Promise<void> => {
     setBusy(true)
+    const toastId = toast.loading(t('application.attachments.uploading'))
     try {
       const blob = await (await fetch(dataUrl)).blob()
       await api.uploadSignature(employeeId, blob)
-      toast.success(t('empSig.saved'))
+      toast.success(t('empSig.saved'), { id: toastId })
       setReplacing(false)
       void qc.invalidateQueries({ queryKey: ['employee-signature', employeeId] })
       onSaved?.()
     } catch (err) {
-      toast.error(apiErrorMessage(err))
+      toast.error(apiErrorMessage(err), { id: toastId })
     } finally {
       setBusy(false)
     }

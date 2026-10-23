@@ -10,7 +10,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { toast } from '@/lib/toast'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'pending-download'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }))
@@ -64,8 +64,8 @@ describe('useTimesheetDownload', () => {
       await result.current.download(ARGS)
     })
 
-    expect(toast.loading).toHaveBeenCalledWith('timesheet.release.downloadingWorkbook', { id: 'timesheet-workbook-download' })
-    expect(toast.success).toHaveBeenCalledWith('timesheet.release.workbookDownloaded', { id: 'timesheet-workbook-download' })
+    expect(toast.loading).toHaveBeenCalledWith('timesheet.release.downloadingWorkbook')
+    expect(toast.success).toHaveBeenCalledWith('timesheet.release.workbookDownloaded', { id: 'pending-download' })
     expect(createObjectURL).toHaveBeenCalledTimes(1)
     // Firefox CANCELS the download when the blob URL is revoked before the
     // download's own fetch begins — no file, and no error to explain it.
@@ -87,8 +87,8 @@ describe('useTimesheetDownload', () => {
     await act(async () => {
       void result.current.download(ARGS)
     })
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('The month is closed.', { id: 'timesheet-workbook-download' }))
-    expect(toast.loading).toHaveBeenCalledWith('timesheet.release.downloadingWorkbook', { id: 'timesheet-workbook-download' })
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('The month is closed.', { id: 'pending-download' }))
+    expect(toast.loading).toHaveBeenCalledWith('timesheet.release.downloadingWorkbook')
     expect(revokeObjectURL).not.toHaveBeenCalled()
 
     // And the awaited form resolves rather than throwing.
@@ -102,8 +102,8 @@ describe('useTimesheetDownload', () => {
 
     await act(async () => { await result.current.download(ARGS) })
 
-    expect(toast.loading).toHaveBeenCalledWith('timesheet.release.downloadingWorkbook', { id: 'timesheet-workbook-download' })
-    expect(toast.error).toHaveBeenCalledWith('Download unavailable', { id: 'timesheet-workbook-download' })
+    expect(toast.loading).toHaveBeenCalledWith('timesheet.release.downloadingWorkbook')
+    expect(toast.error).toHaveBeenCalledWith('Download unavailable', { id: 'pending-download' })
     expect(toast.success).not.toHaveBeenCalled()
   })
 })
@@ -117,8 +117,8 @@ describe('useEmployeeSheetDownload', () => {
 
     await act(async () => { await result.current.download(args) })
 
-    expect(toast.loading).toHaveBeenCalledWith('timesheet.employee.downloadingSheet', { id: 'timesheet-employee-sheet-download' })
-    expect(toast.success).toHaveBeenCalledWith('timesheet.employee.sheetDownloaded', { id: 'timesheet-employee-sheet-download' })
+    expect(toast.loading).toHaveBeenCalledWith('timesheet.employee.downloadingSheet')
+    expect(toast.success).toHaveBeenCalledWith('timesheet.employee.sheetDownloaded', { id: 'pending-download' })
   })
 
   it('morphs loading into an error without rejecting the download promise', async () => {
@@ -127,8 +127,8 @@ describe('useEmployeeSheetDownload', () => {
 
     await act(async () => { await expect(result.current.download(args)).resolves.toBeUndefined() })
 
-    expect(toast.loading).toHaveBeenCalledWith('timesheet.employee.downloadingSheet', { id: 'timesheet-employee-sheet-download' })
-    expect(toast.error).toHaveBeenCalledWith('Sheet unavailable', { id: 'timesheet-employee-sheet-download' })
+    expect(toast.loading).toHaveBeenCalledWith('timesheet.employee.downloadingSheet')
+    expect(toast.error).toHaveBeenCalledWith('Sheet unavailable', { id: 'pending-download' })
     expect(toast.success).not.toHaveBeenCalled()
   })
 
@@ -139,7 +139,7 @@ describe('useEmployeeSheetDownload', () => {
 
     await act(async () => { await result.current.download(args) })
 
-    expect(toast.error).toHaveBeenCalledWith('Download unavailable', { id: 'timesheet-employee-sheet-download' })
+    expect(toast.error).toHaveBeenCalledWith('Download unavailable', { id: 'pending-download' })
     expect(toast.success).not.toHaveBeenCalled()
   })
 })

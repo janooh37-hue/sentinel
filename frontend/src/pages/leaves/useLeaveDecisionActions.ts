@@ -15,12 +15,15 @@ import { toast } from '@/lib/toast'
 import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import type { LeaveStatus } from '@/lib/api'
 
-/** A leave decision error for a toast; a sign-gated leave names its deciding record. */
-export function leaveErrorMessage(t: TFunction, err: unknown): string {
+/** A sign-gated leave keeps its deciding record in the toast's reference chip. */
+export function leaveErrorToast(t: TFunction, err: unknown): Parameters<typeof toast.error> {
   if (err instanceof ApiError && err.code === 'LEAVE_SIGN_GATED') {
-    return t('leaves.signGated', { ref: String(err.details.ref_number ?? '') })
+    return [t('leaves.signGatedToast'), {
+      reference: String(err.details.ref_number ?? ''),
+      description: t('leaves.signGated'),
+    }]
   }
-  return apiErrorMessage(err)
+  return [apiErrorMessage(err)]
 }
 
 interface Params {
@@ -70,7 +73,7 @@ export function useLeaveDecisionActions({
       else toast.success(t('common.savedToast'))
       onMutated()
     },
-    onError: (err) => toast.error(leaveErrorMessage(t, err)),
+    onError: (err) => toast.error(...leaveErrorToast(t, err)),
   })
 
   const deleteMutation = useMutation({

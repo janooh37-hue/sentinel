@@ -15,7 +15,7 @@ vi.mock('react-i18next', () => ({
     return k
   }, i18n: { language: 'ar' } }),
 }))
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'pending-send'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 const mockHas = vi.fn((cap: string) => cap === 'messages.broadcast')
 vi.mock('../../lib/useCapabilities', () => ({
   useCapabilities: () => ({ has: mockHas }),

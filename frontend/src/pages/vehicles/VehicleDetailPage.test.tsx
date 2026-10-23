@@ -12,7 +12,7 @@ import i18n from '@/lib/i18n'
 
 import { VehicleDetailPage } from './VehicleDetailPage'
 
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'pending-photo'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
 const mobileViewport = vi.hoisted(() => ({ value: false }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => mobileViewport.value }))

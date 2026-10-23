@@ -142,30 +142,34 @@ export function EmailSection(): React.JSX.Element {
   })
 
   const testMutation = useMutation({
+    onMutate: () => toast.loading(t('settings.email.testing')),
     mutationFn: () => api.testEmailConnection(),
-    onSuccess: () =>
+    onSuccess: (_data, _vars, toastId) =>
       toast.success(
         t('settings.email.testOk', { defaultValue: 'Connection successful' }),
+        { id: toastId },
       ),
-    onError: (err) =>
-      toast.error(apiErrorMessage(err)),
+    onError: (err, _vars, toastId) =>
+      toast.error(apiErrorMessage(err), { id: toastId }),
   })
 
   const syncMutation = useMutation({
+    onMutate: () => toast.loading(t('dashboard.widgets.emailSync.syncingToast')),
     mutationFn: () => api.syncEmail(),
-    onSuccess: (r) => {
+    onSuccess: (r, _vars, toastId) => {
       toast.success(
         t('settings.email.syncOk', {
           imported: r.imported,
           skipped: r.skipped_duplicate,
           defaultValue: 'Imported {{imported}}, skipped {{skipped}}',
         }),
+        { id: toastId },
       )
       void qc.invalidateQueries({ queryKey: ['email-account'] })
       void qc.invalidateQueries({ queryKey: ['ledger'] })
     },
-    onError: (err) =>
-      toast.error(apiErrorMessage(err)),
+    onError: (err, _vars, toastId) =>
+      toast.error(apiErrorMessage(err), { id: toastId }),
   })
 
   const deleteMutation = useMutation({

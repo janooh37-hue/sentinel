@@ -436,7 +436,7 @@ describe('PermitFormDialog', () => {
 
   it('warns (and still resolves) when the permit-paper scan fails to attach; create does not toast saved', async () => {
     vi.mocked(toast.success).mockClear()
-    vi.spyOn(api, 'createPermit').mockResolvedValue({ id: 7, people: [], vehicles: [] } as never)
+    vi.spyOn(api, 'createPermit').mockResolvedValue({ id: 7, permit_no: 'P-7', people: [], vehicles: [] } as never)
     vi.spyOn(api, 'uploadPermitDocument').mockRejectedValue(new Error('boom'))
     const onSaved = vi.fn()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -455,6 +455,6 @@ describe('PermitFormDialog', () => {
     await userEvent.click(screen.getByRole('button', { name: /issue permit/i }))
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ id: 7 })))
-    expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining('1 scan could not be attached'))
+    expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining('1 scan could not be attached'), { reference: 'P-7' })
     expect(toast.success).not.toHaveBeenCalled()
   })

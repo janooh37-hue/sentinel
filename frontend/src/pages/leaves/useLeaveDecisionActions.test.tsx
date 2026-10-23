@@ -93,7 +93,8 @@ describe('useLeaveDecisionActions', () => {
     result.current.updateMutation.mutate({ status: 'Approved', n: '' })
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
-      'Record HR-42 decides this leave. It is approved when the manager signs that record.',
+      'Decided by another record',
+      { reference: 'HR-42', description: 'This leave is approved when the manager signs that record.' },
     ))
     expect(toast.error).not.toHaveBeenCalledWith(rawMessage)
   })

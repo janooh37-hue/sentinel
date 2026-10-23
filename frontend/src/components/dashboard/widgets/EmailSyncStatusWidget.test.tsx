@@ -10,7 +10,7 @@ import type { DashboardSummary, EmailSyncResult } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { EmailSyncStatusWidget } from './EmailSyncStatusWidget'
 
-vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'pending-sync'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/api', () => ({
   api: { syncEmail: vi.fn() },
   apiErrorMessage: (error: unknown) => String(error),
@@ -47,18 +47,18 @@ test.each([true, false])('resolves the pending email-sync toast (success: %s)', 
 
   await userEvent.click(screen.getByRole('button', { name: i18n.t('dashboard.widgets.emailSync.header') }))
 
-  await waitFor(() => expect(toast.loading).toHaveBeenCalledWith(i18n.t('dashboard.widgets.emailSync.syncingToast'), { id: 'dashboard-email-sync' }))
+  await waitFor(() => expect(toast.loading).toHaveBeenCalledWith(i18n.t('dashboard.widgets.emailSync.syncingToast')))
   expect(toast.success).not.toHaveBeenCalled()
   expect(toast.error).not.toHaveBeenCalled()
   await act(async () => { finish() })
 
   if (succeeds) {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith(
-      i18n.t('settings.email.syncOk', { imported: 3, skipped: 2 }), { id: 'dashboard-email-sync' },
+      i18n.t('settings.email.syncOk', { imported: 3, skipped: 2 }), { id: 'pending-sync' },
     ))
     expect(toast.error).not.toHaveBeenCalled()
   } else {
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: Sync failed', { id: 'dashboard-email-sync' }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: Sync failed', { id: 'pending-sync' }))
     expect(toast.success).not.toHaveBeenCalled()
   }
 })

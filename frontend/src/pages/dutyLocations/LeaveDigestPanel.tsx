@@ -35,24 +35,28 @@ export function LeaveDigestPanel({ unit }: Props): React.JSX.Element {
   const [sendResult, setSendResult] = useState<DigestSendResult | null>(null)
 
   const previewMut = useMutation({
+    onMutate: () => toast.loading(t('leaveDigest.previewing')),
     mutationFn: () => api.previewLeaveDigest(unit),
-    onSuccess: (data) => {
+    onSuccess: (data, _vars, toastId) => {
       setPreview(data)
       setSendResult(null)
+      toast.success(t('leaveDigest.previewReady'), { id: toastId })
     },
-    onError: () => {
-      toast.error(t('leaveDigest.previewError'))
+    onError: (_err, _vars, toastId) => {
+      toast.error(t('leaveDigest.previewError'), { id: toastId })
     },
   })
 
   const sendMut = useMutation({
+    onMutate: () => toast.loading(t('leaveDigest.sending')),
     mutationFn: () => api.sendLeaveDigest(unit),
-    onSuccess: (data) => {
+    onSuccess: (data, _vars, toastId) => {
       setSendResult(data)
       setPreview(null)
+      toast.success(t('leaveDigest.sendComplete'), { id: toastId })
     },
-    onError: () => {
-      toast.error(t('leaveDigest.sendError'))
+    onError: (_err, _vars, toastId) => {
+      toast.error(t('leaveDigest.sendError'), { id: toastId })
     },
   })
 

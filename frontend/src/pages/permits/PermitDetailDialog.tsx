@@ -189,12 +189,14 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
   })
 
   const uploadDoc = useMutation({
+    onMutate: () => toast.loading(t('application.attachments.uploading'), { reference: permit?.permit_no ?? undefined }),
     mutationFn: (file: File) => api.uploadPermitDocument(permitId, file),
-    onSuccess: () => {
+    onSuccess: (_data, _vars, toastId) => {
       invalidate()
-      toast.success(t('common.savedToast'))
+      toast.success(t('common.savedToast'), { id: toastId, reference: permit?.permit_no ?? undefined })
     },
-    onError: onErr,
+    onError: (err, _vars, toastId) =>
+      toast.error(apiErrorMessage(err), { id: toastId, reference: permit?.permit_no ?? undefined }),
   })
 
   const removeDoc = useMutation({
@@ -210,13 +212,15 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
   }
 
   const personDoc = useMutation({
+    onMutate: () => toast.loading(t('application.attachments.uploading'), { reference: permit?.permit_no ?? undefined }),
     mutationFn: ({ personId, file }: { personId: number; file: File }) =>
       api.uploadPersonDocument(permitId, personId, file),
-    onSuccess: () => {
+    onSuccess: (_data, _vars, toastId) => {
       invalidate()
-      toast.success(t('permits.doc.scanAttached'))
+      toast.success(t('permits.doc.scanAttached'), { id: toastId, reference: permit?.permit_no ?? undefined })
     },
-    onError: onErr,
+    onError: (err, _vars, toastId) =>
+      toast.error(apiErrorMessage(err), { id: toastId, reference: permit?.permit_no ?? undefined }),
   })
 
   const addVehicle = useMutation({
@@ -264,13 +268,15 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
   })
 
   const vehicleDoc = useMutation({
+    onMutate: () => toast.loading(t('application.attachments.uploading'), { reference: permit?.permit_no ?? undefined }),
     mutationFn: ({ vehicleId, file }: { vehicleId: number; file: File }) =>
       api.uploadVehicleDocument(permitId, vehicleId, file),
-    onSuccess: () => {
+    onSuccess: (_data, _vars, toastId) => {
       invalidate()
-      toast.success(t('permits.doc.scanAttached'))
+      toast.success(t('permits.doc.scanAttached'), { id: toastId, reference: permit?.permit_no ?? undefined })
     },
-    onError: onErr,
+    onError: (err, _vars, toastId) =>
+      toast.error(apiErrorMessage(err), { id: toastId, reference: permit?.permit_no ?? undefined }),
   })
 
   const openBlob = async (fetcher: () => Promise<Blob>): Promise<void> => {

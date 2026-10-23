@@ -73,15 +73,16 @@ export function NsControls({
   })
 
   const certUploadMutation = useMutation({
+    onMutate: () => toast.loading(t('application.attachments.uploading')),
     mutationFn: (file: File) => api.uploadLeaveCertificate(row.id, file),
-    onSuccess: () => {
+    onSuccess: (_data, _vars, toastId) => {
       void qc.invalidateQueries({ queryKey: ['leaves-list'] })
       void qc.invalidateQueries({ queryKey: ['leave', row.id] })
       void qc.invalidateQueries({ queryKey: ['leave-balance', row.employee_id] })
-      toast.success(t('leaves.toast.certificateUploaded'))
+      toast.success(t('leaves.toast.certificateUploaded'), { id: toastId })
       onMutated()
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err, _vars, toastId) => toast.error(apiErrorMessage(err), { id: toastId }),
   })
 
   const certInputRef = useRef<HTMLInputElement>(null)

@@ -15,7 +15,7 @@ vi.mock('@/lib/useCapabilities', () => ({
   }),
 }))
 
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'pending-upload'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
 const basePermit = {
   id: 99,

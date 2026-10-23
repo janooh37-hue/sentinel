@@ -247,7 +247,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
         if (file && created.vehicles[i]) await attach(() => api.uploadVehicleDocument(created.id, created.vehicles[i].id, file))
       }
 
-      if (failed > 0) toast.warning(t('permits.attachFailed', { count: failed }))
+      if (failed > 0) toast.warning(t('permits.attachFailed', { count: failed }), { reference: created.permit_no ?? undefined })
       return created
     },
     onSuccess: (data) => {

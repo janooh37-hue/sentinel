@@ -724,16 +724,16 @@ export function useTimesheetDownload(): {
         args,
         monthWorkbookNames(args.year, args.month)[args.variant],
       ),
-    onMutate: () => { toast.loading(t('timesheet.release.downloadingWorkbook'), { id: 'timesheet-workbook-download' }) },
-    onSuccess: (file, args) => {
+    onMutate: () => toast.loading(t('timesheet.release.downloadingWorkbook')),
+    onSuccess: (file, args, toastId) => {
       saveBlob(file)
-      toast.success(t('timesheet.release.workbookDownloaded'), { id: 'timesheet-workbook-download' })
+      toast.success(t('timesheet.release.workbookDownloaded'), { id: toastId })
       // The export sealed the month, so the cached grid is now stale.
       void qc.invalidateQueries({
         queryKey: keyOf({ year: args.year, month: args.month, sheet: args.sheet }),
       })
     },
-    onError: (err) => toast.error(apiErrorMessage(err), { id: 'timesheet-workbook-download' }),
+    onError: (err, _vars, toastId) => toast.error(apiErrorMessage(err), { id: toastId }),
   })
   return {
     download: async (args) => {
@@ -764,12 +764,12 @@ export function useEmployeeSheetDownload(): {
         args,
         employeeWorkbookName(args.employeeId, args.year, args.month),
       ),
-    onMutate: () => { toast.loading(t('timesheet.employee.downloadingSheet'), { id: 'timesheet-employee-sheet-download' }) },
-    onSuccess: (file) => {
+    onMutate: () => toast.loading(t('timesheet.employee.downloadingSheet')),
+    onSuccess: (file, _vars, toastId) => {
       saveBlob(file)
-      toast.success(t('timesheet.employee.sheetDownloaded'), { id: 'timesheet-employee-sheet-download' })
+      toast.success(t('timesheet.employee.sheetDownloaded'), { id: toastId })
     },
-    onError: (err) => toast.error(apiErrorMessage(err), { id: 'timesheet-employee-sheet-download' }),
+    onError: (err, _vars, toastId) => toast.error(apiErrorMessage(err), { id: toastId }),
   })
   return {
     download: async (args) => {

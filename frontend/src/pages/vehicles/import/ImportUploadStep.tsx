@@ -36,16 +36,17 @@ export function ImportUploadStep({
   const { t } = useTranslation()
   const [downloadError, setDownloadError] = useState<string | null>(null)
   const download = useMutation({
+    onMutate: () => toast.loading(t('vehicles.import.downloadingTemplate')),
     mutationFn: () => api.downloadVehicleImportTemplate(),
-    onSuccess: (blob) => {
+    onSuccess: (blob, _vars, toastId) => {
       saveTemplate(blob)
       setDownloadError(null)
-      toast.success(t('vehicles.import.templateDownloaded'))
+      toast.success(t('vehicles.import.templateDownloaded'), { id: toastId })
     },
-    onError: (err) => {
+    onError: (err, _vars, toastId) => {
       const message = vehicleErrorMessage(err, t)
       setDownloadError(message)
-      toast.error(message)
+      toast.error(message, { id: toastId })
     },
   })
 
