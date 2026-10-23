@@ -23577,6 +23577,7 @@ export interface operations {
                 to_date?: string | null;
                 include_deleted?: boolean;
                 created_by_me?: boolean;
+                drafts?: boolean;
                 inbox?: ("received" | "done" | "sent" | "archived" | "any") | null;
                 folder_id?: number | null;
                 sort?: string;

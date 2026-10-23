@@ -1083,6 +1083,7 @@ def list_books(
     offset: int = 0,
     include_deleted: bool = False,
     created_by_me: bool = False,
+    drafts: bool = False,
     inbox: InboxFilter | None = None,
     folder_id: int | None = None,
     sort: str = "-date",
@@ -1133,6 +1134,11 @@ def list_books(
         mine = _created_by_clause(user)
         stmt = stmt.where(mine)
         count_stmt = count_stmt.where(mine)
+
+    if drafts:
+        draft_filter = and_(Book.voided_at.is_(None), ~Book.versions.any())
+        stmt = stmt.where(draft_filter)
+        count_stmt = count_stmt.where(draft_filter)
 
     if inbox is not None:
         inbox_filter = inbox_clause(user, inbox)

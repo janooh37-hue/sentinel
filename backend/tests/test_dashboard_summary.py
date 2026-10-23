@@ -110,6 +110,89 @@ def test_my_records_matches_records_page_state_dates_and_drafts(api_db):
     assert "draft_count" not in summary.totals.model_dump()
 
 
+def test_dashboard_record_filters_apply_before_pagination_and_keep_full_counts(api_db):
+    db = api_db
+    user = _user(db, "many-records@x.ae")
+    other = _user(db, "many-records-other@x.ae")
+    db.add(BookCategory(id="GS", prefix="GS"))
+    db.flush()
+    for state, created_at in [
+        ("approved", datetime(2026, 10, 1)),
+        ("pending", datetime(2026, 10, 31, 23, 59, 59)),
+    ]:
+        db.add_all(
+            [
+                Book(
+                    category_id="GS",
+                    ref_number=f"{state}-{index}",
+                    approval_state=state,
+                    created_by_user_id=user.id,
+                    created_at=created_at,
+                    versions=[BookVersion(version_no=1, template_id="General Book")],
+                )
+                for index in range(501)
+            ]
+        )
+    for name, extra in [
+        ("draft-old", {"created_at": datetime(2026, 9, 1)}),
+        ("draft", {}),
+        ("voided", {"voided_at": datetime(2026, 10, 2)}),
+        ("deleted", {"deleted_at": datetime(2026, 10, 2)}),
+        ("other", {"created_by_user_id": other.id}),
+        ("outside-month", {"created_at": datetime(2026, 11, 1)}),
+    ]:
+        values = dict(
+            category_id="GS",
+            created_by_user_id=user.id,
+            created_at=datetime(2026, 10, 2),
+        )
+        values.update(extra)
+        book = Book(ref_number=name, **values)
+        if name == "outside-month":
+            book.approval_state = "approved"
+            book.versions = [BookVersion(version_no=1, template_id="General Book")]
+        db.add(book)
+    db.commit()
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    client = TestClient(app)
+    records = dashboard_service.get_summary(db, user=user, today=TODAY).my_records
+    assert records is not None
+    assert records.approved == records.pending == 501
+    assert len(records.latest_approved) == 5
+    for state in ["approved", "pending", "none"]:
+        params = {
+            "created_by_me": True,
+            "approval_state": state,
+            "from_date": records.from_date.isoformat(),
+            "to_date": records.to_date.isoformat(),
+            "limit": 500,
+        }
+        first = client.get("/api/v1/books", params=params)
+        assert first.status_code == 200, first.text
+        page = first.json()
+        field = "not_submitted" if state == "none" else state
+        expected = 2 if state == "none" else 501
+        assert getattr(records, field) == page["total"] == expected
+        rows = page["items"]
+        assert len(rows) == min(expected, 500)
+        if expected > 500:
+            second = client.get("/api/v1/books", params={**params, "offset": 500})
+            assert second.status_code == 200, second.text
+            assert second.json()["total"] == expected
+            rows += second.json()["items"]
+        assert len({row["id"] for row in rows}) == expected
+        assert all(row["approval_state"] == state for row in rows)
+        assert all("2026-10-01" <= row["created_at"][:10] <= "2026-10-31" for row in rows)
+    drafts = client.get(
+        "/api/v1/books", params={"created_by_me": True, "drafts": True, "limit": 500}
+    )
+    assert drafts.status_code == 200, drafts.text
+    assert records.drafts == drafts.json()["total"] == 2
+    assert {row["ref_number"] for row in drafts.json()["items"]} == {"draft-old", "draft"}
+
+
 def test_summary_mail_is_owner_scoped_and_matches_unread_count_and_leaves_include_today(api_db):
     db = api_db
     user = _user(db, "mail@x.ae")

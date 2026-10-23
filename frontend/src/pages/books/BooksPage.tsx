@@ -296,6 +296,29 @@ function BooksRegister(): React.JSX.Element {
   })
   const { count: myRecordsCount } = useMyRecordsCount({ enabled: !isInmateReporter })
 
+
+  // Dashboard links must filter before the server's 500-row page window.
+  // Keep facets and non-mine list paths on their existing scopes.
+  const dashboardScope = mine ? {
+    ...(status === 'all' ? {} : { approval_state: status }),
+    ...(fromParam ? { from_date: fromParam } : {}),
+    ...(toParam ? { to_date: toParam } : {}),
+    ...(showDrafts ? { drafts: true } : {}),
+  } : {}
+  const dashboardFiltered = mine && (status !== 'all' || !!fromParam || !!toParam || showDrafts)
+  const fetchBooks = async (params: Parameters<typeof api.listBooks>[0]) => {
+    const first = await api.listBooks(params)
+    if (!dashboardFiltered) return first
+    const items = [...first.items]
+    let total = first.total
+    while (items.length < total) {
+      const next = await api.listBooks({ ...params, offset: items.length })
+      if (next.items.length === 0) break
+      items.push(...next.items)
+      total = next.total
+    }
+    return { ...first, items, total }
+  }
   // ── Data: one server-scoped fetch; both branches filter client-side ────────
   // `serviceParam` (`?service=`) is the single source for the service scope: the
   // desktop rail, the desktop Service popover and the mobile Service popover all
@@ -305,12 +328,13 @@ function BooksRegister(): React.JSX.Element {
   // Application Form: 276 true vs 230 visible).
   const railScope = serviceParam
   const listQuery = useQuery({
-    queryKey: ['books', 'all', railScope, mine],
+    queryKey: ['books', 'all', railScope, mine, dashboardScope],
     queryFn: () =>
-      api.listBooks({
+      fetchBooks({
         limit: 500,
         ...(railScope === 'all' ? {} : { service_id: railScope }),
         ...serverScope,
+        ...dashboardScope,
       }),
   })
   // Rows whose delete is pending (6 s Undo window) are gone everywhere here —
@@ -333,8 +357,8 @@ function BooksRegister(): React.JSX.Element {
   }, [search])
   const serverSearchActive = debouncedSearch.trim().length >= 2
   const searchQuery = useQuery({
-    queryKey: ['books', 'search', debouncedSearch, mine],
-    queryFn: () => api.listBooks({ q: debouncedSearch, limit: 500, ...serverScope }),
+    queryKey: ['books', 'search', debouncedSearch, mine, dashboardScope],
+    queryFn: () => fetchBooks({ q: debouncedSearch, limit: 500, ...serverScope, ...dashboardScope }),
     enabled: serverSearchActive,
     staleTime: 30_000,
   })

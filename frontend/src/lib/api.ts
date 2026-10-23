@@ -2039,7 +2039,7 @@ export const api = {
     category_id?: string
     service_id?: string
     direction?: 'incoming' | 'outgoing'
-    approval_state?: 'none' | 'pending' | 'approved' | 'returned' | 'rejected'
+    approval_state?: 'none' | 'pending' | 'awaiting_scan' | 'approved' | 'returned' | 'rejected'
     q?: string
     from_date?: string
     to_date?: string
@@ -2047,6 +2047,7 @@ export const api = {
     limit?: number
     offset?: number
     created_by_me?: boolean
+    drafts?: boolean
     inbox?: 'received' | 'done' | 'sent' | 'archived' | 'any'
     folder_id?: number
     sort?: BookSortKey
