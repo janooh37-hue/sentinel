@@ -29,9 +29,7 @@ _ADMIN_KEY = "settings.admin_employee_id"
 
 
 def get_admin_id(db: Session) -> str | None:
-    row = db.execute(
-        select(AppSetting).where(AppSetting.key == _ADMIN_KEY)
-    ).scalar_one_or_none()
+    row = db.execute(select(AppSetting).where(AppSetting.key == _ADMIN_KEY)).scalar_one_or_none()
     if row is None:
         return None
     try:
@@ -90,9 +88,7 @@ def _from_user(db: Session, user: User) -> IdentityRead:
     }
     employee = db.get(Employee, user.employee_id) if user.employee_id else None
     if employee is None:
-        return IdentityRead(
-            linked=False, email=user.email, name_en=user.display_name, **booleans
-        )
+        return IdentityRead(linked=False, email=user.email, name_en=user.display_name, **booleans)
     return IdentityRead(
         linked=True,
         employee_id=employee.id,
@@ -100,6 +96,7 @@ def _from_user(db: Session, user: User) -> IdentityRead:
         name_en=employee.name_en,
         name_ar=employee.name_ar,
         position=employee.position,
+        position_ar=employee.position_ar,
         department=employee.department,
         photo_url=photo_url_for(db, employee.id),
         **booleans,

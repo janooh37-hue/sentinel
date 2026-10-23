@@ -4195,6 +4195,7 @@
       "pageRange": "{{from}}–{{to}} of {{total}}"
     },
     "welcomeBackGuest": "Welcome back",
+    "greetingLine": "{{greeting}},",
     "greeting": {
       "morning": "Good morning",
       "afternoon": "Good afternoon",
@@ -4205,7 +4206,8 @@
       "idLabel": "ID",
       "onLeaveChip": "on leave today",
       "allPresent": "All present today",
-      "reviewLeave": "Review leave records"
+      "onLeaveAria_one": "{{count}} on leave today. Review leave records",
+      "onLeaveAria_other": "{{count}} on leave today. Review leave records"
     },
     "heroSubtitle_one": "{{count}} document needs your attention",
     "heroSubtitle_other": "{{count}} documents need your attention",

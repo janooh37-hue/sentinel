@@ -19,6 +19,7 @@ import { ar as arLocale } from 'date-fns/locale'
 import { Check } from 'lucide-react'
 
 import type { IdentityRead } from '@/lib/api'
+import { pickPosition } from '@/lib/employeePosition'
 import { hijriToday } from '@/lib/hijri'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -82,15 +83,16 @@ export function DashboardHero({
   onLeaveToday,
   onReviewLeaves,
 }: DashboardHeroProps): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const intro = useFirstVisitToday()
   const [photoFailed, setPhotoFailed] = useState(false)
 
   const linked = Boolean(identity?.linked && name)
-  const greeting = t(`dashboard.greeting.${greetingKey()}`)
+  const greeting = t('dashboard.greetingLine', { greeting: t(`dashboard.greeting.${greetingKey()}`) })
   const gregorian = format(new Date(), 'EEEE d MMMM yyyy', { locale: isAr ? arLocale : undefined })
   const hijri = hijriToday()
-  const roleLine = [identity?.position, identity?.department].filter(Boolean).join(' · ')
+  const position = identity ? pickPosition(identity, i18n.language) : null
+  const roleLine = [position, identity?.department].filter(Boolean).join(' · ')
   const photoUrl = identity?.photo_url && !photoFailed ? identity.photo_url : null
 
   return (
@@ -130,7 +132,6 @@ export function DashboardHero({
             <h2 className="m-0 text-[1.45em] leading-[1.02] tracking-[-0.035em] [text-wrap:balance] md:text-[2.5em] rtl:leading-[1.28] rtl:tracking-normal">
               <span className="hero-seq mb-0.5 block text-[0.6em] font-light text-white/65" style={seq(2)}>
                 {greeting}
-                {isAr ? '،' : ','}
               </span>
               <span className="hero-seq block font-[750]" style={seq(3)}>
                 {name ?? t('dashboard.welcomeBackGuest')}
@@ -165,7 +166,7 @@ export function DashboardHero({
               <button
                 type="button"
                 onClick={onReviewLeaves}
-                aria-label={`${onLeaveToday} ${t('dashboard.hero.onLeaveChip')}. ${t('dashboard.hero.reviewLeave')}`}
+                aria-label={t('dashboard.hero.onLeaveAria', { count: onLeaveToday })}
                 className="inline-flex cursor-pointer items-center gap-2 rounded-sm text-[0.76em] font-semibold text-white underline decoration-white/35 underline-offset-4 transition-colors hover:decoration-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--hero-slab)]"
               >
                 <span aria-hidden className="h-[9px] w-[9px] rounded-full bg-amber-300" />

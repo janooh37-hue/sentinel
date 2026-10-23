@@ -444,6 +444,7 @@ export interface SessionUser {
   name_en: string | null
   name_ar: string | null
   position: string | null
+  position_ar: string | null
   department: string | null
   photo_url: string | null
   role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
