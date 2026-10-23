@@ -558,7 +558,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
                         </div>
                         <div className="flex flex-none items-center gap-1.5">
                           <RowDocButton
-                            docName={p.id_doc_name}
+                            docName={p.id_doc_name ?? null}
                             label={t('permits.person.idDoc')}
                             canManage={canEdit && !isRevoked}
                             busy={personDoc.isPending}
@@ -712,7 +712,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
                         </div>
                         <div className="flex flex-none items-center gap-1.5">
                           <RowDocButton
-                            docName={v.license_doc_name}
+                            docName={v.license_doc_name ?? null}
                             label={t('permits.vehicle.licence')}
                             canManage={canEdit && !isRevoked}
                             busy={vehicleDoc.isPending}
