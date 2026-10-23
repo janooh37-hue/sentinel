@@ -1,0 +1,15 @@
+# Keep tsc on TypeScript 7 while these tools use the classic JavaScript API.
+# Remove this isolation when both tools support the native API:
+# https://github.com/typescript-eslint/typescript-eslint/issues/10940
+# https://github.com/openapi-ts/openapi-typescript/issues/2841
+packageExtensions:
+  typescript-eslint:
+    dependencies:
+      typescript: npm:typescript@6.0.3
+  openapi-typescript:
+    dependencies:
+      typescript: npm:typescript@6.0.3
+# Remove only the semver peers, not the aliased private dependencies above.
+overrides:
+  'typescript-eslint>typescript@>=4.8.4 <6.1.0': '-'
+  'openapi-typescript>typescript@^5.x': '-'
