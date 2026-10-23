@@ -116,8 +116,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
 }))
 
-// Silence sonner
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+// Silence the toast adapter
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 import { EmployeeLookupPage } from './EmployeeLookupPage'

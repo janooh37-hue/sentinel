@@ -21,7 +21,7 @@ import { lazy, Suspense, useContext, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import { AppLockContext } from '@/lib/appLockContext'
@@ -108,15 +108,16 @@ export function WordHandoffDialog({ session, open, onClose, onFinished }: Props)
 
   const finishMutation = useMutation({
     mutationFn: () => api.finishWordSession(session!.book_id),
-    onSuccess: (book) => {
+    onMutate: () => toast.loading(t('books.word.finishing')),
+    onSuccess: (book, _vars, toastId) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
-      toast.success(t('books.word.finished', { ref: bidi(session?.ref_number ?? '') }))
+      toast.success(t('books.word.finished'), { id: toastId, reference: book.ref_number })
       // Keep the dialog open showing the finished PDF instead of closing.
       setFinishedBook(book)
       onFinished?.(book)
     },
-    onError: (err) => {
-      toast.error(apiErrorMessage(err))
+    onError: (err, _vars, toastId) => {
+      toast.error(apiErrorMessage(err), { id: toastId, reference: session?.ref_number })
     },
   })
 
@@ -133,13 +134,16 @@ export function WordHandoffDialog({ session, open, onClose, onFinished }: Props)
 
   const saveTemplateMutation = useMutation({
     mutationFn: () => api.saveBookAsTemplate(finishedBook!.id, tplName.trim()),
-    onSuccess: (tpl) => {
+    onMutate: () => toast.loading(t('books.word.savingTemplate')),
+    onSuccess: (tpl, _vars, toastId) => {
       setSaveTplOpen(false)
       void qc.invalidateQueries({ queryKey: ['word-templates'] })
-      toast.success(t('books.word.savedAsTemplate', { name: tpl.name.replace(/\.docx$/i, '') }))
+      toast.success(t('books.word.savedAsTemplate'), {
+        id: toastId, reference: finishedBook?.ref_number, description: tpl.name.replace(/\.docx$/i, ''),
+      })
     },
-    onError: (err) => {
-      toast.error(apiErrorMessage(err))
+    onError: (err, _vars, toastId) => {
+      toast.error(apiErrorMessage(err), { id: toastId, reference: finishedBook?.ref_number })
     },
   })
 

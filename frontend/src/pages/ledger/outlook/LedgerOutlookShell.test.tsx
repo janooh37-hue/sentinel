@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import type { LedgerEntryRead, LedgerListItem } from '@/lib/api'
 import { api } from '@/lib/api'
 import { LedgerOutlookShell } from './LedgerOutlookShell'
 import { activityEmoji } from './contextResolve'
+import { toast } from '@/lib/toast'
 
 vi.mock('@/lib/api', async (orig) => {
   const real = await orig<typeof import('@/lib/api')>()
@@ -16,6 +17,7 @@ vi.mock('@/lib/api', async (orig) => {
       ...real.api,
       listLedger: vi.fn(),
       getLedgerEntry: vi.fn(),
+      deleteLedgerEntry: vi.fn().mockResolvedValue(undefined),
       getSmartFolderSuggestions: vi.fn().mockResolvedValue([]),
       // Reached through the hosted handoff dialog.
       listLedgerContacts: vi.fn().mockResolvedValue([]),
@@ -38,12 +40,11 @@ vi.mock('@/components/ui/rich-editor', () => ({
 }))
 const { isMobile } = vi.hoisted(() => ({ isMobile: { value: false } }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => isMobile.value }))
-vi.mock('sonner', () => ({
-  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+vi.mock('@/lib/toast', () => ({
+  toast: Object.assign(vi.fn(() => 'trash-toast-id'), { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }),
 }))
 vi.mock('./useSyncStatus', () => ({ useSyncStatus: () => ({ status: null }) }))
 vi.mock('./useContextSource', () => ({ useContextSource: () => ({ peopleCount: 0, entry: null }) }))
-vi.mock('@/lib/useDeferredDelete', () => ({ useDeferredDelete: () => ({ pendingIds: new Set(), scheduleDelete: vi.fn() }) }))
 // Stubbed down to the one shell-relevant affordance: the ＋New email button.
 // The stub reproduces the real rail's accessible name (`aria-label` →
 // `ledger.outlook.newEmail`) so the click target is the same one users hit.
@@ -54,9 +55,18 @@ vi.mock('./FolderRail', () => ({
 }))
 vi.mock('./ContextPanel', () => ({ ContextPanel: () => null }))
 vi.mock('./ReadingPaneSlot', () => ({ ReadingPaneSlot: ({ selectedId }: { selectedId: number | null }) => <div data-testid="reading-pane">{selectedId ?? 'none'}</div> }))
-vi.mock('./MessageList', () => ({ MessageList: ({ items, onSelect }: { items: LedgerListItem[]; onSelect: (id: number) => void }) => (
+vi.mock('./MessageList', () => ({ MessageList: ({ items, onSelect, onBulkTrash, onDelete }: {
+  items: LedgerListItem[]
+  onSelect: (id: number) => void
+  onBulkTrash: (ids: number[]) => void
+  onDelete: (entry: { id: number }) => void
+}) => (
   <div data-testid="message-list">
-    {items.map((item) => <button type="button" key={item.id} onClick={() => onSelect(item.id)}>{item.id}</button>)}
+    <button type="button" onClick={() => onBulkTrash(items.map((item) => item.id))}>Trash all</button>
+    {items.map((item) => <span key={item.id}>
+      <button type="button" onClick={() => onSelect(item.id)}>{item.id}</button>
+      <button type="button" onClick={() => onDelete(item)}>Trash {item.id}</button>
+    </span>)}
   </div>
 ) }))
 // (the retired SMTP composer is no longer rendered by the shell)
@@ -255,5 +265,47 @@ describe('LedgerOutlookShell Outlook handoff surface', () => {
 describe('activityEmoji', () => {
   it('supports duty location history in the unified activity feed', () => {
     expect(activityEmoji('duty_location')).toBe('📍')
+  })
+})
+
+describe('LedgerOutlookShell deferred Trash', () => {
+  beforeEach(() => {
+    vi.mocked(toast).mockClear()
+    vi.mocked(toast.dismiss).mockClear()
+    vi.mocked(toast.error).mockClear()
+    vi.mocked(api.deleteLedgerEntry).mockClear()
+    vi.mocked(api.listLedger).mockResolvedValue({ items: [entry(42), entry(7)], total: 2, limit: 500, offset: 0 })
+    vi.mocked(api.getSmartFolderSuggestions).mockResolvedValue([])
+  })
+
+  afterEach(() => vi.useRealTimers())
+
+  it('offers one Undo restoring the entire bulk selection without deleting anything', async () => {
+    renderShell('/ledger')
+    await screen.findByRole('button', { name: '42' })
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: 'Trash all' }))
+    expect(toast).toHaveBeenCalledTimes(1)
+    expect(toast).toHaveBeenCalledWith('ledger.outlook.movedToTrashMany', expect.objectContaining({ duration: 6000 }))
+    expect(screen.queryByRole('button', { name: '42' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '7' })).not.toBeInTheDocument()
+    act(() => vi.mocked(toast).mock.calls[0][1]?.action?.onClick())
+    expect(screen.getByRole('button', { name: '42' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '7' })).toBeInTheDocument()
+    await act(() => vi.advanceTimersByTimeAsync(6000))
+    expect(api.deleteLedgerEntry).not.toHaveBeenCalled()
+  })
+
+  it('dismisses the returned toast id on commit and explains a late Undo', async () => {
+    renderShell('/ledger')
+    await screen.findByRole('button', { name: '42' })
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: 'Trash 42' }))
+    const undo = vi.mocked(toast).mock.calls[0][1]?.action?.onClick
+    await act(() => vi.advanceTimersByTimeAsync(6000))
+    expect(api.deleteLedgerEntry).toHaveBeenCalledWith(42)
+    expect(toast.dismiss).toHaveBeenCalledWith('trash-toast-id')
+    act(() => undo?.())
+    expect(toast.error).toHaveBeenCalledWith('ledger.outlook.undoTooLate')
   })
 })

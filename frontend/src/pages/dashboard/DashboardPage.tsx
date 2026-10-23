@@ -19,7 +19,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { useTranslation } from 'react-i18next'
 import { format, parseISO, type Locale } from 'date-fns'
 import { ar as arLocale } from 'date-fns/locale'
@@ -33,7 +33,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-import { api } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import { APPROVALS_LOG_PATH, approvalQueueUrl, defaultApprovalContext } from '@/lib/approvals'
 import type {
   DashboardLayout,
@@ -226,7 +226,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       }
       toast.success(isAr ? 'تم حفظ تخطيط لوحة التحكم' : 'Dashboard layout saved')
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(apiErrorMessage(err)),
   })
 
   const [widgetDialogOpen, setWidgetDialogOpen] = useState(false)

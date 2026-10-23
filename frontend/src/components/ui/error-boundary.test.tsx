@@ -28,15 +28,16 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('all good')).toBeInTheDocument()
   })
 
-  it('shows the fallback with the cable scene and diagnostics on a render error', () => {
+  it('shows the localized fallback while retaining diagnostics in the crash report', () => {
     const { container } = render(
       <ErrorBoundary>
         <Bomb />
       </ErrorBoundary>,
     )
-    // headline + error message surfaced
+    // Raw render errors are diagnostic data, not user-facing error text.
     expect(screen.getByText('errors.generic')).toBeInTheDocument()
-    expect(screen.getByText('kaboom from test')).toBeInTheDocument()
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument()
+    expect(screen.queryByText('kaboom from test')).not.toBeInTheDocument()
     // illustration: disconnected cable halves + spark, and the globe
     expect(container.querySelector('.eb-conn-male')).not.toBeNull()
     expect(container.querySelector('.eb-conn-female')).not.toBeNull()
@@ -47,5 +48,6 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('errors.boundary.reload')).toBeInTheDocument()
     // crash report fired
     expect(api.postCrashReport).toHaveBeenCalledOnce()
+    expect(api.postCrashReport).toHaveBeenCalledWith(expect.objectContaining({ message: 'kaboom from test' }))
   })
 })

@@ -12,7 +12,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/api', () => ({
   api: {
     listManagers: vi.fn(),

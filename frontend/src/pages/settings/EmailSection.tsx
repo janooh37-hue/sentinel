@@ -13,7 +13,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import {
   Mail,
   RefreshCw,
@@ -134,7 +134,7 @@ export function EmailSection(): React.JSX.Element {
     onSuccess: (account, { submittedEdits }) => {
       qc.setQueryData(['email-account'], account)
       setFormEdits((current) => discardSavedEdits(current, submittedEdits))
-      toast.success(t('settings.email.saved', { defaultValue: 'Email settings saved' }))
+      toast.success(t('settings.email.saved'))
       void qc.invalidateQueries({ queryKey: ['email-account'] })
     },
     onError: (err) =>
@@ -142,36 +142,40 @@ export function EmailSection(): React.JSX.Element {
   })
 
   const testMutation = useMutation({
+    onMutate: () => toast.loading(t('settings.email.testing')),
     mutationFn: () => api.testEmailConnection(),
-    onSuccess: () =>
+    onSuccess: (_data, _vars, toastId) =>
       toast.success(
-        t('settings.email.testOk', { defaultValue: 'Connection successful' }),
+        t('settings.email.testOk'),
+        { id: toastId },
       ),
-    onError: (err) =>
-      toast.error(apiErrorMessage(err)),
+    onError: (err, _vars, toastId) =>
+      toast.error(apiErrorMessage(err), { id: toastId }),
   })
 
   const syncMutation = useMutation({
+    onMutate: () => toast.loading(t('dashboard.widgets.emailSync.syncingToast')),
     mutationFn: () => api.syncEmail(),
-    onSuccess: (r) => {
+    onSuccess: (r, _vars, toastId) => {
       toast.success(
         t('settings.email.syncOk', {
           imported: r.imported,
           skipped: r.skipped_duplicate,
           defaultValue: 'Imported {{imported}}, skipped {{skipped}}',
         }),
+        { id: toastId },
       )
       void qc.invalidateQueries({ queryKey: ['email-account'] })
       void qc.invalidateQueries({ queryKey: ['ledger'] })
     },
-    onError: (err) =>
-      toast.error(apiErrorMessage(err)),
+    onError: (err, _vars, toastId) =>
+      toast.error(apiErrorMessage(err), { id: toastId }),
   })
 
   const deleteMutation = useMutation({
     mutationFn: () => api.deleteEmailAccount(),
     onSuccess: () => {
-      toast.success(t('settings.email.deleted', { defaultValue: 'Email account removed' }))
+      toast.success(t('settings.email.deleted'))
       qc.setQueryData(['email-account'], null)
       setFormEdits({})
       void qc.invalidateQueries({ queryKey: ['email-account'] })

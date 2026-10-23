@@ -27,7 +27,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import type { AbsenceRegisterRowRead } from '@/lib/api'

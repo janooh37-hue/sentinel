@@ -29,7 +29,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarClock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { EmployeesSectionTabs } from '@/components/employees/EmployeesSectionTabs'
 import { useAttendanceAttention } from '@/components/employees/useAttendanceAttention'

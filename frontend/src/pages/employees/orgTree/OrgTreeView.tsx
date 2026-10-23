@@ -3,11 +3,12 @@ import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Crosshair, Expand, GripVertical, Minimize2, Pencil, Search, Shrink, ZoomIn, ZoomOut } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, api, type OrgNodeRead } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { bidi } from '@/lib/bidi'
 import {
   LINE_W,
   LINE_W_LIN,
@@ -104,7 +105,7 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
   const scopeChain = useMemo(() => (scopeId ? supervisorChain(people, scopeId).toReversed() : []), [people, scopeId])
 
   const setSupervisor = useMutation({
-    mutationFn: ({ employeeId, supervisorId }: { employeeId: string; supervisorId: string | null }) =>
+    mutationFn: ({ employeeId, supervisorId }: { employeeId: string; supervisorId: string | null; isUndo?: boolean }) =>
       api.setOrgSupervisor(employeeId, { supervisor_id: supervisorId }),
     onSuccess: (updated, variables) => {
       void queryClient.invalidateQueries({ queryKey: ['org-tree'] })
@@ -114,12 +115,14 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
       const supervisor = people.find((person) => person.id === variables.supervisorId)
       const fallbackName = pickEmployeeName(updated, lang)
       const message = variables.supervisorId
-        ? t('employees.orgTree.changed', { name: employee ? nameOf(employee) : fallbackName, sup: supervisor ? nameOf(supervisor) : variables.supervisorId })
-        : t('employees.orgTree.changedRoot', { name: employee ? nameOf(employee) : fallbackName })
-      toast.success(message, {
-        action: {
+        ? t('employees.orgTree.changed', { name: bidi(employee ? nameOf(employee) : fallbackName), sup: bidi(supervisor ? nameOf(supervisor) : variables.supervisorId) })
+        : t('employees.orgTree.changedRoot', { name: bidi(employee ? nameOf(employee) : fallbackName) })
+      toast.success(t('employees.orgTree.changedTitle'), {
+        description: message,
+        duration: 8000,
+        action: variables.isUndo ? undefined : {
           label: t('employees.orgTree.undo'),
-          onClick: () => setSupervisor.mutate({ employeeId: variables.employeeId, supervisorId: previousSupervisor }),
+          onClick: () => setSupervisor.mutate({ employeeId: variables.employeeId, supervisorId: previousSupervisor, isUndo: true }),
         },
       })
     },

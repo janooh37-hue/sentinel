@@ -17,7 +17,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { FileDown, Loader2, PenLine, Printer } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage, type LeaveListItem } from '@/lib/api'
 import { isQuickActionAllowed } from '@/lib/dashboardLayout'
@@ -199,12 +199,13 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
   // prints it, so the file matches the print without a print dialog.
   const sheetRef = useRef<HTMLDivElement>(null)
   const savePdf = useMutation({
+    onMutate: () => toast.loading(t('leaves.report.savingPdf')),
     mutationFn: () =>
       api.leaveReportPdf({
         html: sheetRef.current?.querySelector('.print-leave-report')?.outerHTML ?? '',
         lang: i18n.language.startsWith('ar') ? 'ar' : 'en',
       }),
-    onSuccess: (blob) => {
+    onSuccess: (blob, _vars, toastId) => {
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
@@ -220,8 +221,9 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
       anchor.click()
       anchor.remove()
       setTimeout(() => URL.revokeObjectURL(url), 0) // Firefox cancels a download revoked before it starts
+      toast.success(t('leaves.report.pdfSaved'), { id: toastId })
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err, _vars, toastId) => toast.error(apiErrorMessage(err), { id: toastId }),
   })
 
   const paper = (

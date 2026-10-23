@@ -43,7 +43,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, ExternalLink, FileText, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { RequireCapability } from '@/components/shell/RequireCapability'
@@ -137,7 +137,7 @@ function AccidentLetter(): React.JSX.Element {
       })
       void queryClient.invalidateQueries({ queryKey: ['books'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success(t('vehicles.letterSaved', { ref: result.ref_number }))
+      toast.success(t('vehicles.letterSaved'), { reference: result.ref_number })
       navigate(`/books/${result.book_id}`)
     },
     onError: (err) => {

@@ -16,7 +16,7 @@ import type { RecordActions, RecordCaps, RecordView } from './recordActions'
 import { RecordDock } from './RecordDock'
 
 const { toastFn } = vi.hoisted(() => ({ toastFn: vi.fn() }))
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: Object.assign(toastFn, { success: vi.fn(), error: vi.fn() }),
 }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 7, role: 'admin' } }) }))

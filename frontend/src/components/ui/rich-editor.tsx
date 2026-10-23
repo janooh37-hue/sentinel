@@ -21,7 +21,7 @@ import { Controller, useFormContext } from 'react-hook-form'
 import { Editor as HugeRTEEditor } from '@hugerte/hugerte-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import type { EditorTemplateListItem, EditorTemplateRead } from '@/lib/api'
@@ -212,7 +212,7 @@ function LoadTemplateDialog({ open, onOpenChange, onLoad }: LoadTemplateDialogPr
     mutationFn: ({ id, name }: { id: number; name: string }) =>
       api.updateEditorTemplate(id, { name }),
     onSuccess: () => {
-      toast.success(t('editor.template.renamedToast', { defaultValue: 'Template renamed' }))
+      toast.success(t('editor.template.renamedToast'))
       void qc.invalidateQueries({ queryKey: ['editor-templates'] })
       setRenamingId(null)
       setRenameValue('')
@@ -280,7 +280,7 @@ function LoadTemplateDialog({ open, onOpenChange, onLoad }: LoadTemplateDialogPr
           )}
           {listQuery.isError && (
             <p className="py-8 text-center text-sm text-destructive">
-              {(listQuery.error as Error).message}
+              {apiErrorMessage(listQuery.error)}
             </p>
           )}
           {!listQuery.isLoading && items.length === 0 && (

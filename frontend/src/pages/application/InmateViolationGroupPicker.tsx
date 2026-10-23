@@ -8,7 +8,7 @@
 import { useId } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { MessageCircle } from 'lucide-react'
 
 import { api, type GroupOut } from '@/lib/api'

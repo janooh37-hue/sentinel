@@ -27,7 +27,8 @@
 import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import type {
@@ -710,6 +711,7 @@ export function useTimesheetDownload(): {
   }) => Promise<void>
   pending: boolean
 } {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const mutation = useMutation({
     mutationFn: (args: {
@@ -722,14 +724,16 @@ export function useTimesheetDownload(): {
         args,
         monthWorkbookNames(args.year, args.month)[args.variant],
       ),
-    onSuccess: (file, args) => {
+    onMutate: () => toast.loading(t('timesheet.release.downloadingWorkbook')),
+    onSuccess: (file, args, toastId) => {
       saveBlob(file)
+      toast.success(t('timesheet.release.workbookDownloaded'), { id: toastId })
       // The export sealed the month, so the cached grid is now stale.
       void qc.invalidateQueries({
         queryKey: keyOf({ year: args.year, month: args.month, sheet: args.sheet }),
       })
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err, _vars, toastId) => toast.error(apiErrorMessage(err), { id: toastId }),
   })
   return {
     download: async (args) => {
@@ -753,14 +757,19 @@ export function useEmployeeSheetDownload(): {
   }) => Promise<void>
   pending: boolean
 } {
+  const { t } = useTranslation()
   const mutation = useMutation({
     mutationFn: (args: { employeeId: string; year: number; month: number; months: 1 | 2 }) =>
       api.fetchTimesheetEmployeeExport(
         args,
         employeeWorkbookName(args.employeeId, args.year, args.month),
       ),
-    onSuccess: saveBlob,
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onMutate: () => toast.loading(t('timesheet.employee.downloadingSheet')),
+    onSuccess: (file, _vars, toastId) => {
+      saveBlob(file)
+      toast.success(t('timesheet.employee.sheetDownloaded'), { id: toastId })
+    },
+    onError: (err, _vars, toastId) => toast.error(apiErrorMessage(err), { id: toastId }),
   })
   return {
     download: async (args) => {

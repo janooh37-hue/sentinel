@@ -13,6 +13,8 @@
  *    only place we POST FormData).
  */
 
+import i18n from 'i18next'
+
 import type { components, paths } from './api.types'
 import type { ExtractedFieldOut } from './extraction'
 import type { LockLayout } from './useLockState'
@@ -1127,11 +1129,23 @@ export class ApiError extends Error {
   }
 }
 
-/** Human-readable message for any thrown value — the ApiError message when it is
- * one, else the stringified error. Replaces the `x instanceof ApiError ?
- * x.message : String(x)` idiom that was copy-pasted across the app. */
+const ARABIC_LETTER = /(?=\p{L})\p{Script=Arabic}/u
+
+/** Localized user-facing error text. A 403 always uses the shared permission
+ * message; other server details pass through unless an Arabic UI receives text
+ * without Arabic letters. Network TypeErrors and unexpected thrown values use
+ * localized network and generic messages respectively. Callers with translated
+ * code-specific refusals check `err.code` before calling this. */
 export function apiErrorMessage(err: unknown): string {
-  return err instanceof ApiError ? err.message : String(err)
+  if (!(err instanceof ApiError)) {
+    return i18n.t(err instanceof TypeError ? 'errors.network' : 'errors.generic')
+  }
+  if (err.status === 403) return i18n.t('common.forbiddenError')
+  // ponytail: Arabic users lose specific server detail until err.code maps to locale keys.
+  if (i18n.language.startsWith('ar') && !ARABIC_LETTER.test(err.message)) {
+    return i18n.t('common.toastServerError')
+  }
+  return err.message
 }
 
 const BASE = '/api/v1'
@@ -2444,7 +2458,7 @@ export const api = {
   /** Dismiss an item (mark as not actionable). */
   dismissScanItem: (id: number) =>
     request<ScanInboxItem>('POST', `/scan-inbox/${id}/dismiss`),
-  /** Undo a dismiss or confirm — returns item to its previous state. */
+  /** Undo only an auto_filed attach, returning it to awaiting_confirmation. */
   undoScanItem: (id: number) =>
     request<ScanInboxItem>('POST', `/scan-inbox/${id}/undo`),
 
