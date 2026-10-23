@@ -285,7 +285,9 @@ def test_department_manager_integration_actions_keep_queue_retry_organization_sc
     assert listed.status_code == 403, listed.text
     assert retried.status_code == 403, retried.text
     api_db.expire_all()
-    assert {column.name: getattr(failed, column.name) for column in failed.__table__.columns} == queue_state
+    assert {
+        column.name: getattr(failed, column.name) for column in failed.__table__.columns
+    } == queue_state
 
     organization_manager = _user(api_db, email="organization-integration@test.ae")
     perm_service.set_user_override(
@@ -301,11 +303,17 @@ def test_department_manager_integration_actions_keep_queue_retry_organization_sc
     assert failed.failed_at is None
     assert failed.attempts == 0
     assert failed.last_error_code is None
-    retried_state = {column.name: getattr(failed, column.name) for column in failed.__table__.columns}
-    nonterminal = authorized.post(f"/api/v1/workforce/integration/evaluation-queue/{failed.id}/retry")
+    retried_state = {
+        column.name: getattr(failed, column.name) for column in failed.__table__.columns
+    }
+    nonterminal = authorized.post(
+        f"/api/v1/workforce/integration/evaluation-queue/{failed.id}/retry"
+    )
     assert nonterminal.status_code == 422, nonterminal.text
     api_db.expire_all()
-    assert {column.name: getattr(failed, column.name) for column in failed.__table__.columns} == retried_state
+    assert {
+        column.name: getattr(failed, column.name) for column in failed.__table__.columns
+    } == retried_state
 
 
 def test_double_shift_attendance_responses_publish_exact_case_ids(api_db: Session) -> None:

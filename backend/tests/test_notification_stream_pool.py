@@ -67,9 +67,7 @@ def test_stream_releases_its_connection_before_the_endless_body(tmp_path: Path) 
     user_row = injected.get(User, user_id)
     assert user_row is not None
 
-    response = anyio.run(
-        lambda: notifications.stream(_NeverDisconnects(token), injected, user_row)
-    )
+    response = anyio.run(lambda: notifications.stream(_NeverDisconnects(token), injected, user_row))
 
     # Consume exactly the initial counts event, then stop: this is the moment a
     # real viewer reaches and then sits at for hours.
