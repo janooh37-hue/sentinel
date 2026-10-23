@@ -36,9 +36,7 @@ def _linked_employee_id(db: Session, user_id: int | None) -> str | None:
     return linked.employee_id if linked is not None else None
 
 
-def _require_employee_signature_edit(
-    db: Session, actor: User, user_id: int | None
-) -> str | None:
+def _require_employee_signature_edit(db: Session, actor: User, user_id: int | None) -> str | None:
     employee_id = _linked_employee_id(db, user_id)
     if employee_id is not None and not perm_service.has_capability(db, actor, "employees.edit"):
         raise AppError(

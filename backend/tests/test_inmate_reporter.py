@@ -191,9 +191,12 @@ def test_self_link_route_is_removed(api_db: Session, role: str) -> None:
     api_db.refresh(user)
     assert user.employee_id is None
     admin = _user(api_db, email="admin@x.ae", role=ADMIN_ROLE)
-    assert _client(api_db, admin).patch(
-        f"/api/v1/auth/users/{user.id}/link", json={"employee_id": "G100"}
-    ).status_code == 200
+    assert (
+        _client(api_db, admin)
+        .patch(f"/api/v1/auth/users/{user.id}/link", json={"employee_id": "G100"})
+        .status_code
+        == 200
+    )
 
 
 def test_admin_link_route_binds_inmate_reporter_g_number(api_db: Session) -> None:

@@ -230,7 +230,6 @@ __all__ = [
     "ApproveRequest",
     "AuditEntryRead",
     "CapabilityRead",
-    "SetUserEmployeeLinkRequest",
     "LoginRequest",
     "RegisterRequest",
     "RegisterResult",
@@ -240,6 +239,7 @@ __all__ = [
     "SetPermissionBulkRequest",
     "SetPermissionRequest",
     "SetRoleRequest",
+    "SetUserEmployeeLinkRequest",
     "UserPermissionRead",
     "VerifyPasswordRequest",
 ]

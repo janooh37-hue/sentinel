@@ -35,10 +35,10 @@ def _png(color: str) -> bytes:
     return output.getvalue()
 
 
-def _user(db: Session, email: str, *, role: str = "operator", employee_id: str | None = None) -> User:
-    user = User(
-        email=email, password_hash="x", role=role, status="active", employee_id=employee_id
-    )
+def _user(
+    db: Session, email: str, *, role: str = "operator", employee_id: str | None = None
+) -> User:
+    user = User(email=email, password_hash="x", role=role, status="active", employee_id=employee_id)
     db.add(user)
     db.commit()
     return user
@@ -54,7 +54,10 @@ def _client(db: Session, user: User) -> TestClient:
 def _snapshot(db: Session, data_dir: Path) -> dict[str, object]:
     db.expire_all()
     return {
-        "users": [(u.id, u.employee_id, u.signature_path) for u in db.scalars(select(User).order_by(User.id))],
+        "users": [
+            (u.id, u.employee_id, u.signature_path)
+            for u in db.scalars(select(User).order_by(User.id))
+        ],
         "managers": [
             (m.id, m.name_en, m.user_id, m.sig_path)
             for m in db.scalars(select(Manager).order_by(Manager.id))
@@ -89,9 +92,12 @@ def test_unlinked_account_cannot_claim_or_access_another_employee_signature(
     assert _snapshot(api_db, data_dir) == before
     assert client.get("/api/v1/signatures/me").status_code == 404
     # An unlinked account may still manage its own isolated signature.
-    assert client.post(
-        "/api/v1/auth/me/signature", files={"file": ("sig.png", _png("blue"), "image/png")}
-    ).status_code == 200
+    assert (
+        client.post(
+            "/api/v1/auth/me/signature", files={"file": ("sig.png", _png("blue"), "image/png")}
+        ).status_code
+        == 200
+    )
     assert client.get("/api/v1/signatures/me").content != original
     assert profile.read_bytes() == original
     assert client.delete("/api/v1/auth/me/signature").status_code == 204
@@ -101,21 +107,29 @@ def test_unlinked_account_cannot_claim_or_access_another_employee_signature(
     assert _client(api_db, victim).get("/api/v1/signatures/me").content == original
 
     # The reviewed admin flow remains the only way to assign employee identity.
-    assert _client(api_db, admin).patch(
-        f"/api/v1/auth/users/{attacker.id}/link", json={"employee_id": "G-2"}
-    ).status_code == 200
+    assert (
+        _client(api_db, admin)
+        .patch(f"/api/v1/auth/users/{attacker.id}/link", json={"employee_id": "G-2"})
+        .status_code
+        == 200
+    )
     assert client.get("/api/v1/signatures/me").content == original
     replacement = _png("green")
-    assert client.post(
-        "/api/v1/auth/me/signature", files={"file": ("sig.png", replacement, "image/png")}
-    ).status_code == 200
+    assert (
+        client.post(
+            "/api/v1/auth/me/signature", files={"file": ("sig.png", replacement, "image/png")}
+        ).status_code
+        == 200
+    )
     assert profile.read_bytes() == replacement
     assert client.delete("/api/v1/auth/me/signature").status_code == 204
     assert not profile.exists()
 
 
 @pytest.mark.parametrize("profile_exists", [True, False])
-@pytest.mark.parametrize("operation", ["create", "link", "relink", "unlink", "same_link", "upload", "delete"])
+@pytest.mark.parametrize(
+    "operation", ["create", "link", "relink", "unlink", "same_link", "upload", "delete"]
+)
 def test_employee_linked_manager_mutations_require_employee_edit_before_any_changes(
     api_db: Session, data_dir: Path, profile_exists: bool, operation: str
 ) -> None:
@@ -141,7 +155,9 @@ def test_employee_linked_manager_mutations_require_employee_edit_before_any_chan
     victim.signature_path = "signatures/legacy.png"
     manager = Manager(
         name_en="Victim alias",
-        user_id=victim.id if operation in {"relink", "unlink", "same_link", "upload", "delete"} else None,
+        user_id=victim.id
+        if operation in {"relink", "unlink", "same_link", "upload", "delete"}
+        else None,
         sig_path=str(legacy),
     )
     api_db.add(manager)
@@ -150,14 +166,18 @@ def test_employee_linked_manager_mutations_require_employee_edit_before_any_chan
 
     def mutate(client: TestClient):
         if operation == "create":
-            return client.post("/api/v1/managers", json={"name_en": "New alias", "user_id": victim.id})
+            return client.post(
+                "/api/v1/managers", json={"name_en": "New alias", "user_id": victim.id}
+            )
         if operation in {"upload", "delete"}:
             url = f"/api/v1/managers/{manager.id}/signature"
             if operation == "delete":
                 return client.delete(url)
             return client.post(url, files={"file": ("sig.png", _png("blue"), "image/png")})
         target = other.id if operation == "relink" else None if operation == "unlink" else victim.id
-        return client.patch(f"/api/v1/managers/{manager.id}", json={"name_en": "Changed", "user_id": target})
+        return client.patch(
+            f"/api/v1/managers/{manager.id}", json={"name_en": "Changed", "user_id": target}
+        )
 
     response = mutate(_client(api_db, editor))
     assert response.status_code == 403
@@ -166,7 +186,9 @@ def test_employee_linked_manager_mutations_require_employee_edit_before_any_chan
     assert profile.read_bytes() == original if profile_exists else not profile.exists()
 
     allowed = mutate(_client(api_db, authorized))
-    assert allowed.status_code == (201 if operation in {"create", "upload"} else 204 if operation == "delete" else 200), allowed.text
+    assert allowed.status_code == (
+        201 if operation in {"create", "upload"} else 204 if operation == "delete" else 200
+    ), allowed.text
     if operation == "upload":
         assert profile.read_bytes() == _png("blue")
     elif operation == "delete":
@@ -185,7 +207,10 @@ def test_settings_only_editor_can_manage_standalone_manager_signature(
     response = client.post("/api/v1/managers", json={"name_en": "Standalone"})
     assert response.status_code == 201
     manager_id = response.json()["id"]
-    assert client.patch(f"/api/v1/managers/{manager_id}", json={"title": "Director"}).status_code == 200
+    assert (
+        client.patch(f"/api/v1/managers/{manager_id}", json={"title": "Director"}).status_code
+        == 200
+    )
     signature = _png("blue")
     url = f"/api/v1/managers/{manager_id}/signature"
     assert client.post(url, files={"file": ("sig.png", signature, "image/png")}).status_code == 201

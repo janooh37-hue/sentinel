@@ -46,7 +46,6 @@ from app.schemas.auth import (
     CapabilityRead,
     CompletePasswordSetupRequest,
     DefaultManagerRequest,
-    SetUserEmployeeLinkRequest,
     LockLayoutRequest,
     LockTimerRequest,
     LoginRequest,
@@ -58,6 +57,7 @@ from app.schemas.auth import (
     SetPermissionBulkRequest,
     SetPermissionRequest,
     SetRoleRequest,
+    SetUserEmployeeLinkRequest,
     UserPermissionRead,
     VerifyPasswordRequest,
 )
