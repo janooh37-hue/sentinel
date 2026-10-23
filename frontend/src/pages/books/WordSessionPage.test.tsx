@@ -23,10 +23,18 @@ const session: WordSessionDetailRead = {
   created_at: '2026-10-12T10:00:00Z', last_put_at: null, template_name: 'نموذج.docx',
   subject: 'التصاريح الأمنية', recipient_name: 'مدير الموارد البشرية', cc: ['الإدارة'],
 }
-const book = {
-  id: 42, ref_number: session.ref_number, subject: session.subject, service_id: 'General Book',
-  created_at: session.created_at, submitted_by_name: 'SAEED ALHARBI', submitted_by_g: 'G1234', classification_code: '1/5', versions: [],
-} as BookRead
+const book: BookRead = {
+  id: 42, ref_number: session.ref_number, category_id: 'GS',
+  category: { id: 'GS', name_ar: 'عام', name_en: 'General', requires_approval: false, prefix: 'G' },
+  subject: session.subject, direction: null, stamp_style: null, approval_state: 'none',
+  created_at: session.created_at, deleted_at: null, priority: 'Normal', is_draft: false,
+  voided_at: null, edit_session: null, classification_code: '1/5', is_word_book: true,
+  service_id: 'General Book', versions: [], doc_manager_has_signature: false, current_template_id: null,
+  included_papers_revision: 0, included_papers_fixed_page_count: 0, included_papers_total_page_count: 0,
+  access_scope: 'full', can_write: true, can_sign: false, can_review: false,
+  confidentiality: 'general', can_send: true, can_change_confidentiality: true,
+  submitted_by_name: 'SAEED ALHARBI', submitted_by_g: 'G1234',
+}
 
 function setup() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
