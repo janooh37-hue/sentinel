@@ -357,12 +357,18 @@ def _letter_dicts(row: Permit) -> tuple[list[dict[str, Any]], list[dict[str, Any
     return people, vehicles
 
 
-def submit_letter_book(db: Session, book_id: int, *, actor: str | None) -> None:
+def submit_letter_book(
+    db: Session, book_id: int, *, actor: str | None, record_access_user: User | None = None
+) -> None:
     """Send a permit-style letter into the book approval chain (shared by the
     security- and item-permit services). Raises ``ValidationFailedError`` when
     the submitter can't be resolved or the chain refuses (e.g. the manager has
     no login account); the auto paths catch it, the manual path surfaces it."""
     from app.services import book_service
+    if record_access_user is not None:
+        book_service.require_full_book_access(
+            db, record_access_user, book_service.get_book(db, book_id), write=True
+        )
 
     submitter = db.scalar(select(User).where(User.email == actor)) if actor else None
     if submitter is None:
@@ -409,6 +415,7 @@ def regenerate_letter_book(
     body: str,
     recipient: str,
     actor: str | None,
+    record_access_user: User | None = None,
 ) -> tuple[int | None, str | None]:
     """Generate (or re-version) a 1/5 letter on the Security Permit paper and
     return ``(book_id, prior_approval_state)``. Shared by the security- and
@@ -428,6 +435,10 @@ def regenerate_letter_book(
     prior_state: str | None = None
     if book_id is not None:
         prior = db.get(Book, book_id)
+        if record_access_user is not None:
+            book_service.require_full_book_access(
+                db, record_access_user, book_service.get_book(db, book_id), write=True
+            )
         prior_state = prior.approval_state if prior is not None else None
         if prior is not None and prior_state == "pending":
             # Withdraw the stale request. Freeze its revision metadata before
@@ -512,6 +523,7 @@ def regenerate_letter_book(
         manager_id=manager_id,
         revise_of_book_id=book_id,  # None on first gen → fresh 1/5 ref
         current_user=submitter,
+        record_access_user=record_access_user,
     )
     if book_id is not None:
         current_book = db.get(Book, book_id)
