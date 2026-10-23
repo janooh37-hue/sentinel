@@ -22,7 +22,7 @@ from app.api.errors import ConflictError, NotFoundError
 from app.core.subject import normalise_subject
 from app.db.models import LedgerEntry, SmartFolder, SmartFolderDismissal
 from app.schemas.smart_folder import SmartFolderCreate, SmartFolderUpdate
-from app.services.ledger_service import DRAFT_TAG, _tags_contain, _utcnow
+from app.services.ledger_service import DRAFT_TAG, _caller_book_clause, _tags_contain, _utcnow
 
 # A cluster needs at least this many related emails before it's suggested.
 SUGGEST_MIN_COUNT = 5
@@ -79,6 +79,9 @@ def suggest(db: Session, *, user_id: int) -> list[Suggestion]:
         .where(_owned_email_clause(user_id))
         .where(_tags_contain(DRAFT_TAG, negate=True))
     )
+    book_clause = _caller_book_clause(db, user_id)
+    if book_clause is not None:
+        stmt = stmt.where(book_clause)
     rows = db.execute(stmt).all()
 
     # Group by normalised subject in Python (the normaliser is not SQL-able).
@@ -180,6 +183,9 @@ def count_for(db: Session, *, folder: SmartFolder, user_id: int) -> int:
         .where(_tags_contain(DRAFT_TAG, negate=True))
         .where(func.lower(LedgerEntry.subject).like(needle))
     )
+    book_clause = _caller_book_clause(db, user_id)
+    if book_clause is not None:
+        stmt = stmt.where(book_clause)
     return int(db.execute(stmt).scalar_one())
 
 

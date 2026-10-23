@@ -84,6 +84,7 @@ class LedgerEntryRead(ORMBase):
     entry_date: date
     direction: str
     channel: str
+    owner_user_id: int | None = None
     counterparty: str
     subject: str
     notes_html: str | None
