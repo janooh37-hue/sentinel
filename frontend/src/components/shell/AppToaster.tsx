@@ -8,6 +8,7 @@ import {
   type AnnouncementPriority,
 } from '@/lib/toastAnnouncements'
 import { reconcileToastGenerations, toast } from '@/lib/toast'
+import { setToastHeld } from '@/lib/toastHold'
 
 import './AppToaster.css'
 
@@ -17,19 +18,32 @@ const MAX_ANNOUNCEMENTS = 5
 
 type ThemeName = 'light' | 'dark'
 
-function subscribeTheme(onChange: () => void): () => void {
+function subscribeRootAttributes(onChange: () => void): () => void {
   const observer = new MutationObserver(onChange)
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'dir'] })
   return () => observer.disconnect()
-}
-
-function readTheme(): ThemeName {
-  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
 }
 
 /** `<html data-theme>` is the app's theme source (lib/theme.ts); Sileo has no way to read it. */
 function useDocumentTheme(): ThemeName {
-  return useSyncExternalStore(subscribeTheme, readTheme, () => 'light')
+  return useSyncExternalStore(
+    subscribeRootAttributes,
+    () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'),
+    () => 'light',
+  )
+}
+
+/**
+ * Toasts sit in the bottom corner at the inline end: bottom-right in English,
+ * bottom-left in Arabic (`<html dir>`, set by lib/i18n.ts). A toast keeps the
+ * corner it was raised in if the language changes while it is up.
+ */
+function useToastCorner(): 'bottom-right' | 'bottom-left' {
+  return useSyncExternalStore(
+    subscribeRootAttributes,
+    () => (document.documentElement.dir === 'rtl' ? 'bottom-left' : 'bottom-right'),
+    () => 'bottom-right',
+  )
 }
 
 /**
@@ -133,6 +147,7 @@ function releaseStaleHover(root: HTMLElement, engaged: { current: HTMLElement | 
   const live = root.querySelector<HTMLElement>('[data-sileo-toast]:not([data-exiting="true"])')
   if (!live) return
   engaged.current = null
+  setToastHeld(false)
   replayHover(live, 'mouseout')
 }
 
@@ -157,6 +172,7 @@ function tidyAccessibility(root: HTMLElement): void {
  */
 export function AppToaster(): React.JSX.Element {
   const theme = useDocumentTheme()
+  const corner = useToastCorner()
   const rootRef = useRef<HTMLDivElement>(null)
   // The toast currently holding Sileo's hover flag, by pointer or by focus.
   const engaged = useRef<HTMLElement | null>(null)
@@ -196,24 +212,29 @@ export function AppToaster(): React.JSX.Element {
       }}
       onMouseOver={(event) => {
         const toastEl = closestToast(event.target)
-        if (toastEl) engaged.current = toastEl
+        if (!toastEl) return
+        engaged.current = toastEl
+        setToastHeld(true)
       }}
       onMouseOut={(event) => {
         const toastEl = closestToast(event.target)
         if (toastEl && toastEl === engaged.current && !toastEl.contains(event.relatedTarget as Node | null)) {
           engaged.current = null
+          setToastHeld(false)
         }
       }}
       onFocus={(event) => {
         const toastEl = closestToast(event.target)
         if (!toastEl) return
         engaged.current = toastEl
+        setToastHeld(true)
         replayHover(toastEl, 'mouseover')
       }}
       onBlur={(event) => {
         const toastEl = closestToast(event.target)
         if (toastEl && !toastEl.contains(event.relatedTarget as Node | null)) {
           engaged.current = null
+          setToastHeld(false)
           replayHover(toastEl, 'mouseout')
         }
       }}
@@ -224,7 +245,7 @@ export function AppToaster(): React.JSX.Element {
         if (id) toast.dismiss(id)
       }}
     >
-      <Toaster position="bottom-right" offset={12} theme={theme} />
+      <Toaster position={corner} offset={12} theme={theme} />
       <AnnouncementRegion priority="polite" items={announcements} />
       <AnnouncementRegion priority="assertive" items={announcements} />
     </div>

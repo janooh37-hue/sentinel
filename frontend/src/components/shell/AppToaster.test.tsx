@@ -6,7 +6,9 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { toast, TOAST_DEFAULT_DURATION_MS, TOAST_TITLE_MAX_CHARS } from '@/lib/toast'
+import i18n from '@/lib/i18n'
+import { toast, TOAST_DEFAULT_DURATION_MS } from '@/lib/toast'
+import { TOAST_TITLE_MAX_CHARS } from '@/lib/toastFit'
 
 import { AppToaster } from './AppToaster'
 
@@ -101,6 +103,140 @@ describe('AppToaster + toast adapter', () => {
     expect(titleOf(el)).toBe('Error')
     const body = el.querySelector('[data-sileo-description]')!
     expect(body.textContent).toBe(`${message}\nTemplate: leave-notice`)
+  })
+
+  it('leads with the first clause of a long message and moves the rest into the body', () => {
+    act(() => {
+      toast.error('Could not add to the basket — the record no longer exists')
+      toast.warning('تعذّر الإضافة إلى السلة؛ السجل لم يعد موجودًا في النظام الآن')
+    })
+    const [latin, arabic] = toastEls()
+    expect(titleOf(latin)).toBe('Could not add to the basket')
+    expect(latin.querySelector('[data-sileo-description]')!.textContent).toBe('the record no longer exists')
+    expect(titleOf(arabic)).toBe('تعذّر الإضافة إلى السلة')
+    expect(arabic.querySelector('[data-sileo-description]')!.textContent).toBe('السجل لم يعد موجودًا في النظام الآن')
+  })
+
+  it('titles English server text in Arabic and shows the text itself left-to-right in the body', async () => {
+    await act(async () => {
+      await i18n.changeLanguage('ar')
+    })
+    try {
+      act(() => {
+        toast.error('attachment not found')
+        // A loading body never opens, so a Latin-only loading message stays the title.
+        toast.loading('report.pdf')
+      })
+      const [error, loading] = toastEls()
+      expect(titleOf(error)).toBe('تعذّر إكمال الطلب')
+      const server = error.querySelector('[data-sileo-description] [lang="en"]')!
+      expect(server).toHaveTextContent('attachment not found')
+      expect(server).toHaveAttribute('dir', 'ltr')
+      expect(titleOf(loading)).toBe('report.pdf')
+    } finally {
+      await act(async () => {
+        await i18n.changeLanguage('en')
+      })
+    }
+  })
+
+  it('puts a reference in the pill, isolated, when the toast has no body', () => {
+    act(() => {
+      toast.success('Version saved', { reference: 'GB-2026-0142' })
+    })
+    const el = toastEls()[0]
+    expect(titleOf(el)).toBe('Version saved · \u2068GB-2026-0142\u2069')
+    expect(el.querySelector('[data-sileo-description]')).toBeNull()
+    expect(document.querySelector('[data-toast-announcer="polite"]')).toHaveTextContent('GB-2026-0142')
+  })
+
+  it('shows a reference as a left-to-right chip when the toast has a body anyway', () => {
+    act(() => {
+      toast('Record deleted', { reference: 'GB-2026-0139', action: { label: 'Undo', onClick: () => {} } })
+    })
+    const el = toastEls()[0]
+    expect(titleOf(el)).toBe('Record deleted')
+    const chip = el.querySelector('[data-sileo-description] .toast-ref')!
+    expect(chip).toHaveTextContent('GB-2026-0139')
+    expect(chip).toHaveAttribute('dir', 'ltr')
+  })
+
+  it('counts a notice raised again while it is up instead of stacking copies', () => {
+    act(() => {
+      toast.error('Network error')
+      toast.error('Network error')
+      toast.error('Network error')
+    })
+    expect(toastEls().map(titleOf)).toEqual(['Network error \u00d73'])
+
+    act(() => {
+      toast.error('Network error', { id: 'own' })
+      toast('Network error', { action: { label: 'Retry', onClick: () => {} } })
+    })
+    expect(toastEls()).toHaveLength(3)
+  })
+
+  it('starts a fresh count once the counted toast has closed', async () => {
+    act(() => {
+      toast.error('Network error')
+      toast.error('Network error')
+    })
+    act(() => toast.dismiss())
+    await waitFor(() => expect(document.querySelector('[data-sileo-toast]')).toBeNull())
+    act(() => {
+      toast.error('Network error')
+    })
+    expect(toastEls().map(titleOf)).toEqual(['Network error'])
+  })
+
+  it('drains an Undo countdown over the toast window, pauses it while held, and restarts it on release', () => {
+    act(() => {
+      toast('Record deleted', { duration: 5000, action: { label: 'Undo', onClick: () => {} } })
+    })
+    const el = toastEls()[0]
+    const fill = (): SVGCircleElement => el.querySelector<SVGCircleElement>('[data-sileo-header-inner][data-layer="current"] .toast-countdown-fill')!
+    const before = fill()
+    expect(before.style.animationDuration).toBe('5000ms')
+    expect(before.style.animationPlayState).toBe('running')
+
+    fireEvent.mouseOver(el)
+    expect(fill().style.animationPlayState).toBe('paused')
+
+    fireEvent.mouseOut(el, { relatedTarget: document.body })
+    expect(fill().style.animationPlayState).toBe('running')
+    expect(fill()).not.toBe(before)
+  })
+
+  it('keeps the newest toast open while an older one is hovered, so the stack does not shift', async () => {
+    act(() => {
+      toast.info('Older', { description: 'First body', duration: Infinity })
+      toast.info('Newer', { description: 'Second body', duration: Infinity })
+    })
+    const [older, newer] = toastEls()
+    await waitFor(() => expect(newer.dataset.expanded).toBe('true'))
+
+    fireEvent.mouseEnter(older)
+    await waitFor(() => expect(older.dataset.expanded).toBe('true'))
+    expect(newer.dataset.expanded).toBe('true')
+  })
+
+  it('sits at the inline end: bottom-right in English, bottom-left in Arabic', async () => {
+    act(() => {
+      toast.success('Saved')
+    })
+    expect(document.querySelector('[data-sileo-viewport]')).toHaveAttribute('data-position', 'bottom-right')
+    // The MutationObserver on <html dir> reports in a microtask; an async act flushes it.
+    await act(async () => {
+      document.documentElement.dir = 'rtl'
+    })
+    try {
+      act(() => {
+        toast.success('محفوظ')
+      })
+      expect(document.querySelector('[data-sileo-viewport][data-position="bottom-left"]')).not.toBeNull()
+    } finally {
+      document.documentElement.dir = 'ltr'
+    }
   })
 
   it('runs the action, then closes the toast (Sileo does not close it for us)', async () => {
@@ -475,7 +611,8 @@ describe('AppToaster + toast adapter', () => {
       document.documentElement.dataset.theme = 'dark'
     })
     await waitFor(() => expect(document.querySelector('[data-sileo-viewport]')).toHaveAttribute('data-theme', 'dark'))
-    // Fill is derived from the theme at render time, so the live toast flips too.
-    expect(document.querySelector('[data-sileo-pill]')).toHaveAttribute('fill', '#f2f2f2')
+    // Fill is derived from the theme, so the live toast flips too. Sileo copies it
+    // into its view in an effect, one render after the viewport's data-theme.
+    await waitFor(() => expect(document.querySelector('[data-sileo-pill]')).toHaveAttribute('fill', '#f2f2f2'))
   })
 })

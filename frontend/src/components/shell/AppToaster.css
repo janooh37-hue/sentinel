@@ -103,16 +103,101 @@
 }
 
 /* An action with no body text (lib/toast.ts adds the class): centre the button
-   in the body instead of under an empty text line. The body keeps Sileo's
-   height (16 + 12 + 28 + 16 = 22 + 28 + 22 px): hovering an older toast opens it
-   while the newest closes, and a height change there slides the stack out from
-   under the pointer, which closes it again. */
+   in the body instead of under an empty text line. */
 [data-sileo-viewport] .toast-action-only {
-  padding-block: 1.375rem;
+  padding-block: 0.75rem;
 }
 
 [data-sileo-viewport] .toast-action-only [data-sileo-button] {
   margin-top: 0;
+}
+
+/* Body pieces lib/toast.ts builds from toastParts.tsx. Each is a block, so a
+   reference chip or a line of server text sits on its own row. */
+[data-sileo-viewport] :is(.toast-text, .toast-foreign) {
+  display: block;
+}
+
+/* Server English under an Arabic title (only raised in an Arabic UI): its own
+   direction, aligned to the Arabic body's start edge, which is its own end. */
+[data-sileo-viewport] .toast-foreign {
+  text-align: end;
+  unicode-bidi: isolate;
+}
+
+/* A record number in the app's mono face, like the ref chips on record rows. */
+[data-sileo-viewport] .toast-ref {
+  display: block;
+  width: fit-content;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+[data-sileo-viewport] :is(.toast-text, .toast-foreign) + .toast-ref {
+  margin-top: 0.5rem;
+}
+
+[data-sileo-viewport][data-theme='light'] .toast-ref {
+  background: rgb(255 255 255 / 0.1);
+  color: var(--rail-text);
+}
+
+[data-sileo-viewport][data-theme='dark'] .toast-ref {
+  background: rgb(13 40 69 / 0.08);
+  color: #0d2845;
+}
+
+/* The Undo countdown: a ring around the badge glyph that drains over the close
+   window. Drawn from 12 o'clock; the svg mirrors in Arabic (rtl:-scale-x-100),
+   so it drains the other way there. */
+[data-sileo-viewport] .toast-countdown {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+[data-sileo-viewport] .toast-countdown-ring {
+  position: absolute;
+  inset: -2px;
+  width: 24px;
+  height: 24px;
+  overflow: visible;
+}
+
+[data-sileo-viewport] .toast-countdown-ring circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+[data-sileo-viewport] .toast-countdown-track {
+  opacity: 0.25;
+}
+
+[data-sileo-viewport] .toast-countdown-fill {
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  animation-name: toast-countdown-drain;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes toast-countdown-drain {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 100;
+  }
 }
 
 /* The toast sits on the page (ring in the app's primary); its action sits on the
@@ -129,11 +214,13 @@
 
 /* Sileo's own reduced-motion rule is `[data-sileo-viewport] *` (specificity
    0,1,0), which every `[data-sileo-toast][data-ready]` transition outranks, so it
-   changes nothing. Re-state it so it wins. The loading spinner is exempt: it is
-   the only cue that work is in progress. The pill's JS springs are switched off
-   in AppToaster.tsx. */
+   changes nothing. Re-state it so it wins. Exempt: the loading spinner, the only
+   cue that work is in progress, and the Undo countdown, a slow in-place drain
+   that says how long Undo is still on offer. The pill's JS springs are switched
+   off in AppToaster.tsx. */
 @media (prefers-reduced-motion: reduce) {
-  [data-sileo-viewport] :is([data-sileo-toast], [data-sileo-toast] *):not([data-sileo-icon='spin']) {
+  [data-sileo-viewport]
+    :is([data-sileo-toast], [data-sileo-toast] *):not([data-sileo-icon='spin'], .toast-countdown-fill) {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

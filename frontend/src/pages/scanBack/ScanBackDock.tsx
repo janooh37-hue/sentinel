@@ -4,7 +4,7 @@
  *
  * Positioned with `inset-inline-end` so it flips in Arabic, and lifted clear
  * of both BottomTabBar (mobile, `fixed inset-x-0 bottom-0 z-40`) and the toast
- * host's app-wide bottom-right viewport (same corner in LTR, z-index far above ours)
+ * host's viewport (bottom corner at the inline end, like this dock, z-index far above ours)
  * — see the `bottom-[...]` comment below for the clearance arithmetic.
  */
 import { useRef, useState } from 'react'
@@ -120,8 +120,8 @@ export function ScanBackDock(): React.JSX.Element | null {
         // `end-4` is the logical utility (inset-inline-end) — it flips in RTL.
         // Never `right-4`. Precedent: IdentityDocCard.tsx:97.
         'fixed z-30 flex flex-col items-end gap-2 end-4',
-        // The toast viewport (AppToaster, position="bottom-right", 12px offset) sits at
-        // the same corner in LTR and paints over anything under it (z-index
+        // The toast viewport (AppToaster: bottom-right in LTR, bottom-left in RTL, 12px
+        // offset) shares this corner in both languages and paints over anything under it (z-index
         // 999999999 — we clear it spatially, not by fighting z-index). A single
         // Sileo toast opens its body for an Undo, a description or a message longer
         // than the pill: ~136px tall, ~176px when it carries an action and a body

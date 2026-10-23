@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  sileo@0.1.6: cd904d48c5f4515b0787ce937c47f0d9643a064a6b92d187006f9816ceee1284
+
 importers:
 
   .:
@@ -124,7 +127,7 @@ importers:
         version: 1.1.0-alpha.2(@types/react@19.2.14)(prop-types@15.8.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       sileo:
         specifier: 0.1.6
-        version: 0.1.6(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+        version: 0.1.6(patch_hash=cd904d48c5f4515b0787ce937c47f0d9643a064a6b92d187006f9816ceee1284)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
@@ -4841,7 +4844,7 @@ snapshots:
 
   signature_pad@2.3.2: {}
 
-  sileo@0.1.6(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
+  sileo@0.1.6(patch_hash=cd904d48c5f4515b0787ce937c47f0d9643a064a6b92d187006f9816ceee1284)(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
     dependencies:
       motion: 12.43.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       react: 19.2.6

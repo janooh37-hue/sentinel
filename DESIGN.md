@@ -1493,24 +1493,31 @@ Command band.
 
 ### 3.8 Toasts (AppToaster)
 
-**Sources:** `lib/toast.ts` (the API), `components/shell/AppToaster.tsx` +
-`AppToaster.css` (the Sileo host), `lib/toastAnnouncements.ts` (screen-reader
-channel). Notices come from [Sileo](https://sileo.aaryan.design) `0.1.6`
-(pinned: the host reads two of its internals), mounted once in `App.tsx` for
-both the signed-out and signed-in shells. **Never import `sileo` outside
-`lib/toast.ts` / `AppToaster.tsx`.**
+**Sources:** `lib/toast.ts` (the API), `lib/toastFit.ts` (pill measuring and
+clause split), `lib/toastHold.ts` (hover/focus hold), `components/shell/AppToaster.tsx` +
+`AppToaster.css` (the Sileo host), `components/shell/toastParts.tsx` (badge
+glyphs, countdown, reference chip, server text), `lib/toastAnnouncements.ts`
+(screen-reader channel). Notices come from [Sileo](https://sileo.aaryan.design)
+`0.1.6`, pinned and patched (`frontend/patches/sileo@0.1.6.patch`, see Hover),
+mounted once in `App.tsx` for both the signed-out and signed-in shells.
+**Never import `sileo` outside `lib/toast.ts` / `AppToaster.tsx`.**
 
 **API.** `toast`, `toast.success|error|warning|info|loading`, `toast.promise`
 and `toast.dismiss(id?)` from `@/lib/toast`; options `id`, `description`,
-`duration`, `action: { label, onClick }`, `icon`. Behaviour the adapter owns:
+`reference`, `duration`, `action: { label, onClick }`, `icon`. Behaviour the
+adapter owns:
 
 | Concern | Rule |
 | ------- | ---- |
 | Identity | Every call gets a unique id, so notices stack, and every id a call returns can be passed back as `id` to update that toast in place (`const id = toast.loading(…)` then `toast.success(…, { id })`; `timesheet-cell-locked`). A fixed id raised again after its toast closed is a fresh toast. Sileo's own default shares one id and would replace every notice. |
 | Duration | 4 s default (Sonner's, unchanged by the Sileo migration; Sileo's own is 6 s). An explicit `duration` overrides it. `Infinity` stays until dismissed; `loading` always does. A deferred-delete Undo passes its own commit window as `duration`. The body stays open until the toast closes. |
-| Pill vs body | The collapsed pill holds one line (≤ 36 characters). A longer message moves into the body under a localized state title (`common.toastState.*`); a short message with a `description` keeps the message as the title. The body opens by itself on the newest toast and on hover or keyboard focus. |
+| Pill vs body | The collapsed pill holds one line, measured in the page's font (about 284px of title; 36 characters where nothing can be measured). A message too wide for it leads with its first clause (split after `.` `:` `;` `؛`, after `?` `!` `؟`, or at a spaced dash) and the rest moves into the body; with no clause that fits, the whole message moves into the body under a localized state title (`common.toastState.*`). A short message with a `description` keeps the message as the title. The newest toast opens its body by itself; any toast opens on hover or keyboard focus. |
+| Server text | In the Arabic UI, a message with Latin letters and no Arabic (the server's English error detail, a file name, a status) is not used as the title: an error is titled `common.toastServerError` ("تعذّر إكمال الطلب") and the text sits in the body as `lang="en" dir="ltr"`, aligned to the body's start edge. Loading toasts are exempt: Sileo never opens their body, so the text stays in the pill. |
+| Reference | `reference` (a record number) rides in the pill as `message · REF`, direction-isolated with U+2068/U+2069, when the toast has no other body and it fits; otherwise it is a mono chip (`.toast-ref`) in the body. Announced either way. |
+| Repeats | An id-less, action-less notice raised again while its toast is up updates that toast in place with a count (`Network error ×3`) and restarts its timer. A fixed id or an action is never merged. |
 | Neutral | `toast(msg)` is `info`, or `action` when it carries an action. |
-| Action | Runs `onClick`, then closes the toast (Sileo does not). The button is sized to its label at the start of the body; with no body text it is centred in the body (`toast-action-only`), which keeps Sileo's body height so a hovered stack does not shift under the pointer. |
+| Action | Runs `onClick`, then closes the toast (Sileo does not). The button is sized to its label on its own row at the start of the body; with no body text it is centred in the body (`toast-action-only`). A timed action toast (an Undo) wraps its badge glyph in a countdown ring that drains over the toast's window, pauses while the stack is held by pointer or focus, and restarts with Sileo's timers on release (they restart from the full duration). |
+| Glyphs | The badge carries the app's lucide set: Check, X, TriangleAlert, Info, LoaderCircle (spinning), and ArrowRight for actions, mirrored in Arabic (`rtl:-scale-x-100`). `icon` replaces it. |
 | Dismiss | Swipe, click (not on a loading toast), or Escape while focused. `dismiss()` with no id clears all. |
 
 **Theme and colour.** The host passes the app theme (`<html data-theme>`) to
@@ -1522,17 +1529,29 @@ theme's `--success`/`--accent`/`--warning`/`--info` values, tuned for ≥ 4.5:1
 against the pill (warning on the light pill is `#9a4507`, a shade darker than
 `--warning`). A theme change flips live toasts.
 
-**RTL.** The viewport stays physically `bottom-right` in both languages (as the
-previous host did). `ScanBackDock` sits at the inline end, so it is on the far side in wide Arabic, but on a narrow screen the two share the corner in both languages; the dock's 12rem bottom band (see Known limits) keeps it clear of one expanded toast either way. Text, the badge and the action follow `<html dir>`; the body uses
-`text-align: start` and Arabic body text a 1.6 line height. Titles are not title-cased.
-Sileo positions the pill header by physical `left` and leaves its 10px of spare
-room on the right, so in Arabic the host shifts the header right by that room:
-the badge sits 8px from the pill's right edge and the room trails the title,
-mirroring English.
+**RTL.** Toasts sit in the bottom corner at the inline end: `bottom-right` in
+English, `bottom-left` in Arabic (the host follows `<html dir>`; a toast stays in
+the corner it was raised in). `ScanBackDock` is also at the inline end, so the two
+share the corner in both languages, and the dock's 12rem bottom band (see Known
+limits) keeps it clear of one expanded toast either way. Text, the badge and the
+action follow `<html dir>`; the body uses `text-align: start` and Arabic body
+text a 1.6 line height. Titles are not title-cased. Sileo positions the pill
+header by physical `left` and leaves its 10px of spare room on the right, so in
+Arabic the host shifts the header right by that room: the badge sits 8px from the
+pill's right edge and the room trails the title, mirroring English.
+
+**Hover.** Sileo 0.1.6 gave the hovered toast the single "open" slot, collapsing
+the newest under it; when their bodies differed in height the stack shifted, slid
+the hovered pill from under the pointer and closed it again. The patch removes
+that hand-off: a hovered toast opens on its own and the newest stays open, so
+nothing below the pointer moves. On a Sileo upgrade, re-check the patch applies and
+`AppToaster.test.tsx` "keeps the newest toast open…" still passes (it fails without it).
 
 **Motion.** Sileo's CSS honours `prefers-reduced-motion`; its pill is animated
 by motion's JS springs, which the host switches off with
-`MotionGlobalConfig.skipAnimations` when the preference is `reduce`.
+`MotionGlobalConfig.skipAnimations` when the preference is `reduce`. Two
+animations stay under `reduce`: the loading spinner and the Undo countdown, a
+slow in-place drain that says how long Undo is on offer.
 
 **Accessibility.** Sileo's viewport is `aria-live` only while a toast exists and
 its SVG titles would name the toast, so the host (1) silences the viewport and
@@ -1547,17 +1566,14 @@ viewer). The lock overlay hides the viewport and the announcers
 (`LockOverlay.css`); print hides both and the wrapper carries `data-print-hide`.
 
 **Known limits (Sileo 0.1.6).** Only the newest toast shows its body without
-hover, so in a stack older toasts read as their state title until hovered (the
+hover, so in a stack older toasts read as their title until hovered (the
 announcers still carry their full text). `ScanBackDock` reserves a bottom band of
 `min(12rem, 50dvh)`, enough for one expanded toast, including one with an action
 and a body, and caps its open panel to the room above it (the rows scroll), so the
 header and "View all" stay on screen on short laptops and at larger font scales. A
 stack of several toasts or a long multi-line message can still reach the dock.
-`Infinity`-duration toasts with a description open on hover/focus only.
-Hovering an older toast opens it and closes the newest; when their open bodies
-differ in height (a three-line English error over a one-line Undo), the stack
-shifts by the difference and can slide the hovered pill out from under the
-pointer, which closes it again.
+`Infinity`-duration toasts with a description open on hover/focus only. Sileo's
+body is always its full 350px wide, which is why a lone reference goes in the pill.
 
 ## 4. Dashboard page
 

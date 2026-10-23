@@ -10,19 +10,32 @@
  *   id-less calls would replace each other. Every call here gets a unique id
  *   unless the caller names one (same id = update in place, as in Sonner).
  *   `id` is read by Sileo's store but missing from its `SileoOptions` type.
- * - The pill is a single line of ~36 characters; the description is revealed on
- *   hover or auto-expand. Longer messages move into the description under a
- *   localized state title, so nothing is clipped.
+ * - The pill is a single line about 284px wide; the description is revealed on
+ *   hover or auto-expand. A message too wide for it is split after its first
+ *   clause, or moved whole into the body under a localized state title, so
+ *   nothing is clipped (lib/toastFit.ts).
  * - Sileo's action button does not close its toast, Sonner's did.
  * - Sileo's default title is the English state name, so a title is always set.
+ *
+ * On top of Sileo it adds: app glyphs in the badge, a countdown ring on an
+ * action toast, a record reference (in the pill, or as a mono chip when there
+ * is a body), server English shown as such under an Arabic title, and one
+ * counted toast for a repeated notice.
  *
  * Do not import `sileo` anywhere else; `AppToaster` renders the host.
  */
 import i18n from 'i18next'
-import type { ReactNode } from 'react'
+import { createElement, Fragment, type ReactNode } from 'react'
 import { sileo, type SileoOptions, type SileoState } from 'sileo'
 
+import {
+  ToastCountdown,
+  ToastForeignText,
+  ToastReference,
+  ToastStateIcon,
+} from '@/components/shell/toastParts'
 import { publishAnnouncement } from '@/lib/toastAnnouncements'
+import { fitsPill, splitClause } from '@/lib/toastFit'
 
 export interface ToastAction {
   label: string
@@ -33,6 +46,11 @@ export interface ToastOptions {
   /** Same id updates the visible toast in place instead of stacking another. */
   id?: string | number
   description?: string
+  /**
+   * A record number or code (`GB-2026-0142`). Rides in the pill after the
+   * message when that is the whole toast; otherwise a mono chip in the body.
+   */
+  reference?: string
   /** Milliseconds before the toast closes; `Infinity` keeps it until dismissed. */
   duration?: number
   action?: ToastAction
@@ -48,9 +66,6 @@ export interface ToastPromiseMessages<T> {
 
 /** Sonner's historical default, kept so existing call sites keep their timing. */
 export const TOAST_DEFAULT_DURATION_MS = 4000
-
-/** Longest message that still fits the collapsed pill without clipping. */
-export const TOAST_TITLE_MAX_CHARS = 36
 
 type ToastKind = 'neutral' | 'success' | 'error' | 'warning' | 'info' | 'loading'
 
@@ -81,34 +96,83 @@ function resolveDuration(kind: ToastKind, duration: number | undefined): number 
   return Number.isFinite(duration) ? duration : null
 }
 
-function compose(
-  state: SileoState,
-  message: string,
-  description: string | undefined,
-): { title: string; description: string | undefined } {
-  if (message.length <= TOAST_TITLE_MAX_CHARS) return { title: message, description }
-  return {
-    title: stateLabel(state),
-    description: description ? `${message}\n${description}` : message,
-  }
+const LATIN = /[A-Za-z]/
+const ARABIC = /[\u0600-\u06FF]/
+
+/**
+ * Text with no Arabic in an Arabic UI: the server's English error detail, a
+ * file name, an HTTP status. It is not a sentence the pill can lead with.
+ */
+function isForeign(message: string): boolean {
+  return i18n.language.startsWith('ar') && LATIN.test(message) && !ARABIC.test(message)
 }
 
-function announce(state: SileoState, message: string, description: string | undefined): void {
-  const text = [`${stateLabel(state)}: ${message}`, description].filter(Boolean).join('. ')
+/** The pill title, and the body lines under it, for one message. */
+function compose(state: SileoState, message: string): { title: string; lead: ReactNode | undefined } {
+  // Sileo never opens a loading toast's body, so its message must stay in the pill.
+  if (state !== 'loading' && isForeign(message)) {
+    const title = state === 'error' ? i18n.t('common.toastServerError') : stateLabel(state)
+    return { title, lead: createElement(ToastForeignText, { text: message }) }
+  }
+  if (fitsPill(message)) return { title: message, lead: undefined }
+  const clause = splitClause(message)
+  if (clause && fitsPill(clause.head)) return { title: clause.head, lead: clause.rest }
+  return { title: stateLabel(state), lead: message }
+}
+
+/**
+ * The body: plain text stays a string (Sileo's `white-space: pre-line` keeps
+ * the line breaks); a chip or foreign text makes it a fragment of block rows.
+ */
+function bodyOf(lead: ReactNode | undefined, description: string | undefined, reference: string | undefined): ReactNode {
+  const text = [lead, description].filter((part) => part !== undefined && part !== '')
+  if (reference === undefined && text.every((part) => typeof part === 'string')) {
+    return text.length > 0 ? text.join('\n') : undefined
+  }
+  return createElement(
+    Fragment,
+    null,
+    ...text.map((part, index) =>
+      typeof part === 'string' ? createElement('span', { key: index, className: 'toast-text' }, part) : part,
+    ),
+    reference === undefined ? null : createElement(ToastReference, { key: 'ref', value: reference }),
+  )
+}
+
+function announce(state: SileoState, message: string, opts: ToastOptions): void {
+  const text = [`${stateLabel(state)}: ${message}`, opts.description, opts.reference].filter(Boolean).join('. ')
   publishAnnouncement(state === 'error' ? 'assertive' : 'polite', text)
 }
 
-function buildOptions(kind: ToastKind, id: string, message: string, opts: ToastOptions): SileoOptionsWithId {
+function buildOptions(
+  kind: ToastKind,
+  id: string,
+  message: string,
+  opts: ToastOptions,
+  count = 1,
+): SileoOptionsWithId {
   const state = stateOf(kind, opts.action !== undefined)
-  const { title, description } = compose(state, message, opts.description)
+  const composed = compose(state, message)
   const action = opts.action
+  // A reference rides in the pill (isolated, so its digits and dashes keep their
+  // order in Arabic) when that is the whole toast; opening a body just for it
+  // would balloon every "Saved"/"Copied" notice. With a body, it is a chip there.
+  const inline =
+    opts.reference !== undefined && composed.lead === undefined && !opts.description && !action
+      ? `${composed.title} · \u2068${opts.reference}\u2069`
+      : undefined
+  const refInPill = inline !== undefined && fitsPill(inline)
+  const title = refInPill ? inline : composed.title
+  const description = bodyOf(composed.lead, opts.description, refInPill ? undefined : opts.reference)
   const duration = resolveDuration(kind, opts.duration)
+  const glyph = opts.icon ?? createElement(ToastStateIcon, { state, size: action && duration !== null ? 11 : 15 })
   return {
     id,
     type: state,
-    title,
+    // A repeated notice counts up in place instead of stacking (see `repeatOf`).
+    title: count > 1 ? `${title} \u00d7${count}` : title,
     description,
-    icon: opts.icon,
+    icon: action && duration !== null ? createElement(ToastCountdown, { durationMs: duration, children: glyph }) : glyph,
     duration,
     // Sileo collapses the body 2s before closing by default; a long message or
     // an Undo needs the whole window, so the body stays open until the toast goes.
@@ -181,11 +245,33 @@ export function reconcileToastGenerations(rendered: ReadonlyArray<{ id: string; 
   }
 }
 
+/** Live id-less notices by content, so the same one raised again counts up in place. */
+const repeats = new Map<string, { callerId: string; count: number }>()
+
+/**
+ * The same id-less notice raised while it is still on screen (a dropped network
+ * fails every open query at once) updates that toast with a count instead of
+ * stacking copies. Toasts with an id or an action are never merged: an id is
+ * the caller's own identity, and two Undos undo different things.
+ */
+function repeatOf(kind: ToastKind, message: string, opts: ToastOptions): { callerId: string; count: number } | null {
+  if (opts.id !== undefined || opts.action !== undefined || kind === 'loading') return null
+  for (const [key, entry] of repeats) {
+    if (!generations.has(entry.callerId)) repeats.delete(key)
+  }
+  const key = [kind, message, opts.description ?? '', opts.reference ?? ''].join('\u0000')
+  const previous = repeats.get(key)
+  const entry = previous ? { callerId: previous.callerId, count: previous.count + 1 } : { callerId: nextId(), count: 1 }
+  repeats.set(key, entry)
+  return entry
+}
+
 function show(kind: ToastKind, message: string, opts: ToastOptions = {}): string {
-  const callerId = opts.id !== undefined ? String(opts.id) : nextId()
+  const repeat = repeatOf(kind, message, opts)
+  const callerId = repeat?.callerId ?? (opts.id !== undefined ? String(opts.id) : nextId())
   const internal = internalIdFor(callerId)
-  announce(stateOf(kind, opts.action !== undefined), message, opts.description)
-  sileo.show(buildOptions(kind, internal, message, opts))
+  announce(stateOf(kind, opts.action !== undefined), message, opts)
+  sileo.show(buildOptions(kind, internal, message, opts, repeat?.count))
   return callerId
 }
 
@@ -202,17 +288,17 @@ function promise<T>(source: Promise<T> | (() => Promise<T>), messages: ToastProm
   const id = internalIdFor(nextId())
   const resolveOf = <A>(message: string | ((arg: A) => string), arg: A): string =>
     typeof message === 'function' ? message(arg) : message
-  announce('loading', messages.loading, undefined)
+  announce('loading', messages.loading, {})
   return sileo.promise(source, {
     loading: buildOptions('loading', id, messages.loading, {}),
     success: (data) => {
       const message = resolveOf(messages.success, data)
-      announce('success', message, undefined)
+      announce('success', message, {})
       return buildOptions('success', id, message, {})
     },
     error: (error) => {
       const message = resolveOf(messages.error, error)
-      announce('error', message, undefined)
+      announce('error', message, {})
       return buildOptions('error', id, message, {})
     },
   })
@@ -225,7 +311,7 @@ export const toast = Object.assign(
     error: (message: string, opts?: ToastOptions): string => show('error', message, opts),
     warning: (message: string, opts?: ToastOptions): string => show('warning', message, opts),
     info: (message: string, opts?: ToastOptions): string => show('info', message, opts),
-    loading: (message: string, opts?: Pick<ToastOptions, 'id' | 'description'>): string =>
+    loading: (message: string, opts?: Pick<ToastOptions, 'id' | 'description' | 'reference'>): string =>
       show('loading', message, opts),
     promise,
     dismiss,

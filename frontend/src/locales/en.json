@@ -290,7 +290,8 @@
       "info": "Notice",
       "action": "Notice",
       "loading": "Working…"
-    }
+    },
+    "toastServerError": "The request could not be completed"
   },
   "a11y": {
     "skipToContent": "Skip to main content"
