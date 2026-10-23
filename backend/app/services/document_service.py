@@ -144,6 +144,11 @@ def record_category_for_template(template_id: str) -> str:
     return _FORM_CATEGORY.get(template_id, "HR")
 
 
+def effective_document_service(template_id: str) -> str:
+    resolved = SERVICE_ALIASES.get(template_id, template_id)
+    return resolved if resolved in SERVICE_IDS else OTHER_SERVICE_ID
+
+
 #: Inmate Conduct Violations — the fixed "إجراءات المشرف" bullets, in the order
 #: they print. Key = the _fields.json checkbox key. The Arabic copy lives here
 #: (not in the docx) so the template stays a layout and the wording has one home.
@@ -864,9 +869,8 @@ def require_document_record_access(
         raise AppError(
             "FORBIDDEN", "You don't have permission to access this document", http_status=403
         )
-    resolved = SERVICE_ALIASES.get(row.template_id, row.template_id)
     book_service.require_record_type_access(
-        db, user, service_id=resolved if resolved in SERVICE_IDS else OTHER_SERVICE_ID
+        db, user, service_id=effective_document_service(row.template_id)
     )
     return None
 

@@ -39,7 +39,6 @@ from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
-from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_ALIASES, SERVICE_IDS
 from app.core.pdf_merge import merge_pdfs_to_bytes
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import Book, Document, User
@@ -78,11 +77,6 @@ from app.services.job_registry import (
 )
 
 log = logging.getLogger(__name__)
-
-
-def _effective_document_service(template_id: str) -> str:
-    resolved = SERVICE_ALIASES.get(template_id, template_id)
-    return resolved if resolved in SERVICE_IDS else OTHER_SERVICE_ID
 
 
 def _should_autosend(
@@ -375,7 +369,7 @@ def generate_document(
     db: Annotated[Session, Depends(get_db)],
     _viewer: Annotated[User, Depends(require_capability("books.view"))],
 ) -> DocumentGenerateResponse:
-    effective_service = _effective_document_service(payload.template_id)
+    effective_service = document_service.effective_document_service(payload.template_id)
     category_id = document_service.record_category_for_template(payload.template_id)
     book_service.require_record_type_access(
         db,

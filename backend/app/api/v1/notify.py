@@ -15,7 +15,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_capability
-from app.api.v1.documents import _effective_document_service
 from app.config import get_settings
 from app.db.models import User
 from app.db.session import get_db
@@ -146,7 +145,7 @@ def preview(
             db,
             user,
             category_id=document_service.record_category_for_template(payload.template_id),
-            service_id=_effective_document_service(payload.template_id),
+            service_id=document_service.effective_document_service(payload.template_id),
         )
     if payload.revise_of_book_id is not None:
         from app.db.models import Book
