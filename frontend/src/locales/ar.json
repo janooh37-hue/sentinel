@@ -5820,7 +5820,8 @@
         "vehicles": "المركبات",
         "messages": "الرسائل",
         "workforce": "القوى العاملة",
-        "inmate_statistics": "تقارير مخالفات النزلاء الشهرية"
+        "inmate_statistics": "تقارير مخالفات النزلاء الشهرية",
+        "departments": "الأقسام"
       }
     }
   },

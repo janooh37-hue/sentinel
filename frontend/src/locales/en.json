@@ -5363,7 +5363,8 @@
         "vehicles": "Vehicles",
         "messages": "Messages",
         "workforce": "Workforce",
-        "inmate_statistics": "Inmate monthly reports"
+        "inmate_statistics": "Inmate monthly reports",
+        "departments": "Departments"
       }
     }
   },
