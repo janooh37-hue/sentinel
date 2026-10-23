@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createElement, type ReactNode } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 
 import { PermitDocumentVersions } from './PermitDocumentVersions'
 import { api } from '@/lib/api'
@@ -59,7 +60,7 @@ const versions = [
 function wrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return ({ children }: { children: ReactNode }) =>
-    createElement(QueryClientProvider, { client: qc }, children)
+    createElement(MemoryRouter, null, createElement(QueryClientProvider, { client: qc }, children))
 }
 
 beforeEach(async () => {
@@ -67,7 +68,11 @@ beforeEach(async () => {
   mobileState.value = false
   hasCapability.mockReturnValue(true)
   await i18n.changeLanguage('en')
-  vi.spyOn(api, 'getBook').mockResolvedValue({ id: 9, versions: [versions[1], versions[0], versions[2]] } as never)
+  vi.spyOn(api, 'getBook').mockResolvedValue({
+    id: 9,
+    can_write: true,
+    versions: [versions[1], versions[0], versions[2]],
+  } as never)
 })
 
 describe('PermitDocumentVersions', () => {

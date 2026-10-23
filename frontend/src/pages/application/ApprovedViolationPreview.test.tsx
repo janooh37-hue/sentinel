@@ -38,7 +38,7 @@ describe('ApprovedViolationPreview', () => {
       render: renderPage,
     })
     getDocumentMock.mockReturnValue({
-      promise: Promise.resolve({ getPage, destroy: vi.fn() }),
+      promise: Promise.resolve({ getPage }),
       destroy: vi.fn(),
     })
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
