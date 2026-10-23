@@ -268,6 +268,7 @@ function StandardApplicationPage(): React.JSX.Element {
   // localStorage-clear in JobStatus.onDone branch on this. Stored in a ref
   // (not state) so we don't re-render the form just to flip the flag.
   const pendingCommitRef = useRef<boolean>(false)
+  const pendingCommitToastRef = useRef<string | number | undefined>(undefined)
   const pendingNotificationRef = useRef<NotificationChoice | undefined>(undefined)
 
   // Last successfully committed document — used to populate the basket item.
@@ -461,12 +462,14 @@ function StandardApplicationPage(): React.JSX.Element {
   const reviseFields = reviseFieldsQuery.data ?? null
 
   // Generate mutation — drives both Preview (commit=false) and Save (commit=true).
-  // The immediate POST response only carries job_id, so the actual ref number
-  // (when commit=true) isn't known until JobStatus.onDone fires with the polled
-  // job result. The toast + draft-clear therefore live in handleJobDone below.
+  // The POST only carries job_id; the saved reference arrives via JobStatus.
+  // Start the save notice once queued and resolve it in handleJobDone.
   const generateMutation = useMutation({
     mutationFn: (body: DocumentGenerateRequest) => api.generateDocument(body),
     onSuccess: (resp) => {
+      if (pendingCommitRef.current) {
+        pendingCommitToastRef.current = toast.loading(t('application.toast.saving'))
+      }
       setActiveJobId(resp.job_id)
       // New job → preview tab is not yet "done"; the Save button on the
       // Preview tab stays disabled until JobStatus reports a successful
@@ -478,9 +481,10 @@ function StandardApplicationPage(): React.JSX.Element {
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'LEAVE_ALREADY_ISSUED') {
-        const message = t('application.leaveAlreadyIssued', { ref: String(err.details.ref_number ?? '') })
+        const ref = String(err.details.ref_number ?? '')
+        const message = t('application.leaveAlreadyIssuedNoRef')
         setSubmitError(message)
-        toast.error(message)
+        toast.error(message, { reference: ref })
         return
       }
       setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))
@@ -691,6 +695,18 @@ function StandardApplicationPage(): React.JSX.Element {
   const handleJobDone = useCallback(
     (job: JobStatusResponse) => {
       setPreviewJobStatus(job.status)
+      if (job.status === 'failed') {
+        if (pendingCommitRef.current) {
+          toast.error(t('application.toast.generateFailed'), {
+            id: pendingCommitToastRef.current,
+            description: job.error_message ?? undefined,
+          })
+          pendingCommitRef.current = false
+          pendingCommitToastRef.current = undefined
+          pendingNotificationRef.current = undefined
+        }
+        return
+      }
       const saved = savedGenerationFromJob(job)
       void qc.invalidateQueries({ queryKey: ['books'] })
       // A generated superseding leave removes the absence days it covers.
@@ -719,9 +735,12 @@ function StandardApplicationPage(): React.JSX.Element {
       if (pendingCommitRef.current && selectedTemplate) {
         if (saved) {
           setLastSaved({ ...saved, notification: pendingNotificationRef.current })
-          toast.success(t('application.toast.saved'), { reference: saved.ref })
+          toast.success(t('application.toast.saved'), { id: pendingCommitToastRef.current, reference: saved.ref })
         } else {
-          toast.success(t('application.toast.generated'))
+          toast.success(t('application.toast.generated'), {
+            id: pendingCommitToastRef.current,
+            reference: job.documents?.find((document) => document.role === 'primary')?.ref_number ?? undefined,
+          })
         }
         clearDraft(selectedTemplate)
         // The committed doc carries the merged attachments — clear the block
@@ -732,6 +751,7 @@ function StandardApplicationPage(): React.JSX.Element {
         // and button label reflect "this preview is the committed doc"
         // rather than "still saving".
         pendingCommitRef.current = false
+        pendingCommitToastRef.current = undefined
         pendingNotificationRef.current = undefined
         // Revise mode is one-shot: after a successful committed save the book
         // is back to approval_state="none", so threading revise_of_book_id on a
@@ -1661,7 +1681,7 @@ function StandardApplicationPage(): React.JSX.Element {
                     />
                   )}
 
-                  <JobStatus key={activeJobId} jobId={activeJobId} onDone={handleJobDone} />
+                  <JobStatus key={activeJobId} jobId={activeJobId} onDone={handleJobDone} onFailed={handleJobDone} />
 
                   {lastSaved && selectedTemplate && employeeQuery.data && (
                     <div className="mt-4 flex justify-end">

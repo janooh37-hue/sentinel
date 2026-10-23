@@ -99,18 +99,19 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pic
         make_directed: isPersonal,
         include_references: includeReferences,
       }),
-    onSuccess: (res) => {
+    onMutate: () => toast.loading(t('books.send.sending')),
+    onSuccess: (res, _vars, toastId) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
-      reportResult(res)
+      reportResult(res, toastId)
       close()
     },
-    onError: (err) => {
+    onError: (err, _vars, toastId) => {
       const key = err instanceof ApiError ? SEND_ERROR_KEYS[err.code] : undefined
-      toast.error(key ? t(key) : apiErrorMessage(err))
+      toast.error(key ? t(key) : apiErrorMessage(err), { id: toastId, reference: book.ref_number })
     },
   })
 
-  function reportResult(res: BookSendResult): void {
+  function reportResult(res: BookSendResult, toastId: string | number | undefined): void {
     const byId = new Map(candidates.map((c) => [c.id, nameOf(c)]))
     const skipped = res.skipped
       .map((s) =>
@@ -129,8 +130,8 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pic
       references.length ? t('books.thread.sendSummary', { sent: referenceSent, skipped: referenceSkipped.length }) : '',
       referenceSkipped.join(isAr ? '، ' : ', '),
     ].filter(Boolean).join(' · ') || undefined
-    if (res.sent.length > 0) toast.success(t('books.send.sent', { count: res.sent.length }), { description })
-    else toast.info(t('books.send.nothingSent'), { description })
+    if (res.sent.length > 0) toast.success(t('books.send.sent', { count: res.sent.length }), { id: toastId, description, reference: book.ref_number })
+    else toast.info(t('books.send.nothingSent'), { id: toastId, description, reference: book.ref_number })
   }
 
   const canSend = picked.length > 0 && !mutation.isPending

@@ -20,7 +20,7 @@ vi.mock('react-i18next', () => ({
     i18n: { language: 'en' },
   }),
 }))
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'loading-toast'), dismiss: vi.fn() } }))
 vi.mock('@/pages/application/DocPdfCanvas', () => ({
   default: ({ pdfBase64 }: { pdfBase64?: string }) => (
     <div data-testid="pdf-preview">{pdfBase64 ? 'preview PDF' : 'current PDF'}</div>

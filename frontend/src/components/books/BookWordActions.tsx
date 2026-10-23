@@ -52,13 +52,13 @@ export function WordSessionActions({
 
   const finishMutation = useMutation({
     mutationFn: () => api.finishWordSession(book.id),
-    onMutate: () => { toast.loading(t('books.word.finishing'), { id: `word-finish-${book.id}` }) },
-    onSuccess: (finishedBook) => {
+    onMutate: () => toast.loading(t('books.word.finishing')),
+    onSuccess: (finishedBook, _vars, toastId) => {
       invalidate()
-      toast.success(t('books.word.finished'), { id: `word-finish-${book.id}`, reference: book.ref_number })
+      toast.success(t('books.word.finished'), { id: toastId, reference: finishedBook.ref_number })
       onFinished?.(finishedBook)
     },
-    onError: (err) => toast.error(apiErrorMessage(err), { id: `word-finish-${book.id}` }),
+    onError: (err, _vars, toastId) => toast.error(apiErrorMessage(err), { id: toastId, reference: book.ref_number }),
   })
 
   const discardMutation = useMutation({
@@ -69,6 +69,7 @@ export function WordSessionActions({
       // re-opened session leaves the record intact.
       toast.success(
         t(discardedBook.voided_at ? 'books.toast.voided' : 'books.toast.wordSessionDiscarded'),
+        { reference: discardedBook.ref_number },
       )
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
@@ -153,14 +154,14 @@ export function WordReopenButton({
 
   const reopenMutation = useMutation({
     mutationFn: () => api.reopenWordSession(book.id),
-    onMutate: () => { toast.loading(t('books.word.opening'), { id: `word-reopen-${book.id}` }) },
-    onSuccess: (session) => {
+    onMutate: () => toast.loading(t('books.word.opening')),
+    onSuccess: (session, _vars, toastId) => {
       invalidate()
-      toast.dismiss(`word-reopen-${book.id}`)
+      toast.dismiss(toastId)
       if (onFinished) setReopenSession(session)
       else navigate(`/books/${session.book_id}/word`)
     },
-    onError: (err) => toast.error(apiErrorMessage(err), { id: `word-reopen-${book.id}` }),
+    onError: (err, _vars, toastId) => toast.error(apiErrorMessage(err), { id: toastId, reference: book.ref_number }),
   })
   const hasActiveSession = book.edit_session?.state === 'active'
   const isFinished = ((book.versions?.length ?? 0) > 0 || book.is_word_book) && !hasActiveSession

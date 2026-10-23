@@ -55,4 +55,22 @@ describe('JobStatus failed job messages', () => {
 
     expect(await screen.findByText('boom')).toBeInTheDocument()
   })
+
+  it('reports a failed job once without invoking the success callback', async () => {
+    const onDone = vi.fn()
+    const onFailed = vi.fn()
+    render(<JobStatus jobId="j1" onDone={onDone} onFailed={onFailed} />)
+    await screen.findByText(en.application.leaveAlreadyIssuedNoRef)
+    expect(onFailed).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ status: 'failed' }))
+    expect(onDone).not.toHaveBeenCalled()
+  })
+
+  it('keeps successful jobs on the success callback only', async () => {
+    vi.mocked(api.getJob).mockResolvedValue({ job_id: 'j1', status: 'done', documents: [] })
+    const onDone = vi.fn()
+    const onFailed = vi.fn()
+    render(<JobStatus jobId="j1" onDone={onDone} onFailed={onFailed} />)
+    await vi.waitFor(() => expect(onDone).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ status: 'done' })))
+    expect(onFailed).not.toHaveBeenCalled()
+  })
 })

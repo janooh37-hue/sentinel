@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { Archive, Check, FileText, Loader2, Paperclip, Plus, Upload, X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { AttachmentSlotRead } from '@/lib/api'
 import { formatBytes } from '@/lib/fileTypes'
 import { Button } from '@/components/ui/button'
@@ -118,6 +118,7 @@ export function AttachmentsBlock({
 
   const stageFile = async (rowKey: string, file: File): Promise<void> => {
     setBusyRows((prev) => new Set(prev).add(rowKey))
+    const toastId = toast.loading(t('application.attachments.uploading'))
     try {
       const res = await api.stageAttachment(file)
       applyValue(rowKey, {
@@ -126,12 +127,9 @@ export function AttachmentsBlock({
         filename: res.filename,
         size: res.size,
       })
+      toast.success(t('vault.toast.uploaded'), { id: toastId })
     } catch (err) {
-      toast.error(
-        err instanceof ApiError
-          ? err.message
-          : t('application.attachments.uploadFailed'),
-      )
+      toast.error(apiErrorMessage(err), { id: toastId })
     } finally {
       setBusyRows((prev) => {
         const next = new Set(prev)

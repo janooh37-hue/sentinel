@@ -9,7 +9,7 @@ import { toast } from '@/lib/toast'
 import { ExportWorkspace } from './ExportWorkspace'
 import { workflowMonth } from './workflowFixtures'
 
-vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'pending-export'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
 beforeEach(() => vi.clearAllMocks())
 afterEach(() => {
@@ -43,7 +43,7 @@ describe('ExportWorkspace', () => {
     await waitFor(() => expect(download).toHaveBeenCalled())
     const request = new URL(String(download.mock.calls[0][0]), 'http://localhost')
     expect(request.pathname).toBe('/api/v1/inmate-violations/statistics/2026/8/export')
-    expect(toast.loading).toHaveBeenCalledWith(i18n.t('inmateStats.export.downloading'), { id: 'inmate-register-download' })
+    expect(toast.loading).toHaveBeenCalledWith(i18n.t('inmateStats.export.downloading'))
     expect(toast.success).not.toHaveBeenCalled()
     expect(toast.error).not.toHaveBeenCalled()
   })
@@ -69,14 +69,14 @@ describe('ExportWorkspace', () => {
     await userEvent.click(screen.getByRole('button', { name: 'XLSX file' }))
 
     if (outcome === 'success') {
-      await waitFor(() => expect(toast.success).toHaveBeenCalledWith(i18n.t('inmateStats.export.downloaded'), { id: 'inmate-register-download' }))
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith(i18n.t('inmateStats.export.downloaded'), { id: 'pending-export' }))
       await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:register'))
       expect(toast.error).not.toHaveBeenCalled()
     } else {
-      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: Download failed', { id: 'inmate-register-download' }))
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: Download failed', { id: 'pending-export' }))
       expect(toast.success).not.toHaveBeenCalled()
     }
-    expect(toast.loading).toHaveBeenCalledWith(i18n.t('inmateStats.export.downloading'), { id: 'inmate-register-download' })
+    expect(toast.loading).toHaveBeenCalledWith(i18n.t('inmateStats.export.downloading'))
   })
 
   describe('save as pdf', () => {

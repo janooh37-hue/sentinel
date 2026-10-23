@@ -3,7 +3,7 @@
  *
  * Polling schedule: 500 ms for the first 5 s, then 2 s thereafter.
  * On done: renders DocPreview + download buttons.
- * On failed: renders the error message with code.
+ * On failed: renders the error message with code and notifies onFailed.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -19,9 +19,10 @@ import { DocPreview } from './DocPreview'
 interface JobStatusProps {
   jobId: string
   onDone?: (job: JobStatusResponse) => void
+  onFailed?: (job: JobStatusResponse) => void
 }
 
-export function JobStatus({ jobId, onDone }: JobStatusProps): React.JSX.Element {
+export function JobStatus({ jobId, onDone, onFailed }: JobStatusProps): React.JSX.Element {
   const { t } = useTranslation()
   const [job, setJob] = useState<JobStatusResponse | null>(null)
   const [pollError, setPollError] = useState<string | null>(null)
@@ -33,12 +34,15 @@ export function JobStatus({ jobId, onDone }: JobStatusProps): React.JSX.Element 
   const mountedRef = useRef(true)
   const errorCountRef = useRef(0)
 
-  // Keep the latest onDone in a ref so the (jobId-keyed) poll effect always
-  // calls the current callback, not the one captured when polling started.
+  // Keep the latest callbacks so the jobId-keyed poll effect always uses them.
   const onDoneRef = useRef(onDone)
   useEffect(() => {
     onDoneRef.current = onDone
   }, [onDone])
+  const onFailedRef = useRef(onFailed)
+  useEffect(() => {
+    onFailedRef.current = onFailed
+  }, [onFailed])
 
   // Stop retrying after this many consecutive poll failures so a downed
   // server doesn't keep the timer alive indefinitely.
@@ -64,7 +68,9 @@ export function JobStatus({ jobId, onDone }: JobStatusProps): React.JSX.Element 
         setJob(result)
         if (result.status === 'done') {
           onDoneRef.current?.(result)
-        } else if (result.status !== 'failed') {
+        } else if (result.status === 'failed') {
+          onFailedRef.current?.(result)
+        } else {
           scheduleNext()
         }
       } catch {

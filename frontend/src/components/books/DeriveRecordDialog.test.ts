@@ -25,7 +25,7 @@ vi.mock('react-router-dom', async () => ({ ...await vi.importActual('react-route
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { role: 'admin' } }) }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
-vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(), dismiss: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'loading-toast'), dismiss: vi.fn(), error: vi.fn() } }))
 vi.mock('@/components/application/fields/ClassificationField', () => ({ ClassificationField: () => null }))
 
 const book = { id: 42, ref_number: 'GS-0410', confidentiality: 'general', classification_code: '1/5', access_scope: 'full' } as BookRead
@@ -45,15 +45,15 @@ describe('derive Word opening toast', () => {
     renderDerive()
     fireEvent.click(screen.getByRole('button', { name: 'books.thread.reply' }))
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/books/43/word'))
-    expect(toast.loading).toHaveBeenCalledWith('books.word.opening', { id: 'word-derive-42-reply' })
-    expect(toast.dismiss).toHaveBeenCalledWith('word-derive-42-reply')
+    expect(toast.loading).toHaveBeenCalledWith('books.word.opening')
+    expect(toast.dismiss).toHaveBeenCalledWith('loading-toast')
   })
 
   it('morphs opening into the translated error on failure', async () => {
     vi.spyOn(api, 'deriveBook').mockRejectedValue(new ApiError(403, 'FORBIDDEN', 'Forbidden'))
     renderDerive()
     fireEvent.click(screen.getByRole('button', { name: 'books.thread.reply' }))
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('books.thread.errors.forbidden', { id: 'word-derive-42-reply' }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('books.thread.errors.forbidden', { id: 'loading-toast', reference: book.ref_number }))
     expect(toast.dismiss).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
   })

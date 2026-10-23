@@ -14,7 +14,7 @@ import { WordSessionPage } from './WordSessionPage'
 void i18n.use(initReactI18next).init({ lng: 'ar', resources: { ar: { translation: ar } }, interpolation: { escapeValue: false } })
 const capabilities = vi.hoisted(() => ({ templates: true }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => cap !== 'books.templates' || capabilities.templates }) }))
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'loading-toast'), dismiss: vi.fn() } }))
 vi.mock('@/pages/application/DocPdfCanvas', () => ({ default: ({ pdfUrl }: { pdfUrl: string }) => <div data-testid="paper" data-url={pdfUrl} /> }))
 vi.mock('@/components/books/SavedRecordActions', () => ({ SavedRecordActions: ({ bookId }: { bookId: number }) => <div>saved:{bookId}</div> }))
 
@@ -119,8 +119,8 @@ describe('WordSessionPage in Arabic', () => {
     expect(await screen.findByText('saved:42')).toBeVisible()
     await waitFor(() => expect(screen.getByTestId('paper')).toHaveAttribute('data-url', '/final.pdf'))
     expect(screen.getByRole('button', { name: 'حفظ كقالب' })).toBeVisible()
-    expect(toast.loading).toHaveBeenCalledWith(ar.books.word.finishing, { id: 'word-session-finish-42' })
-    expect(toast.success).toHaveBeenCalledWith(ar.books.word.finished, { id: 'word-session-finish-42', reference: session.ref_number })
+    expect(toast.loading).toHaveBeenCalledWith(ar.books.word.finishing)
+    expect(toast.success).toHaveBeenCalledWith(ar.books.word.finished, { id: 'loading-toast', reference: session.ref_number })
   })
 
   it('morphs finish loading into an error when saving fails', async () => {
@@ -130,8 +130,8 @@ describe('WordSessionPage in Arabic', () => {
     const finish = await screen.findByRole('button', { name: 'حفظ الكتاب' })
     await waitFor(() => expect(finish).toBeEnabled())
     await userEvent.click(finish)
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.any(String), { id: 'word-session-finish-42' }))
-    expect(toast.loading).toHaveBeenCalledWith(ar.books.word.finishing, { id: 'word-session-finish-42' })
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.any(String), { id: 'loading-toast', reference: session.ref_number }))
+    expect(toast.loading).toHaveBeenCalledWith(ar.books.word.finishing)
   })
 
   it('creates a new template Word session and navigates to it', async () => {

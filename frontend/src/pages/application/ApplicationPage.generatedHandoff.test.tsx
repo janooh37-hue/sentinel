@@ -14,13 +14,15 @@ import { api, ApiError } from '@/lib/api'
 import { ApplicationPage } from './ApplicationPage'
 import { messageTemplatesApi } from '@/lib/messageTemplates'
 import type * as MessageTemplatesModule from '@/lib/messageTemplates'
+import { clearDraft } from '@/lib/formDrafts'
 
 const jobStatusState = vi.hoisted(() => ({
   handlers: new Map<string, (job: JobStatusResponse) => void>(),
+  failures: new Map<string, (job: JobStatusResponse) => void>(),
 }))
 
 vi.mock('@/lib/toast', () => ({
-  toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn(), info: vi.fn() },
+  toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn(), info: vi.fn(), loading: vi.fn(() => 'loading-toast'), dismiss: vi.fn() },
 }))
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof ApiModule>()
@@ -61,8 +63,9 @@ vi.mock('@/lib/applicationFormSchema', () => ({
   buildZodSchema: () => z.object({}),
 }))
 vi.mock('./JobStatus', () => ({
-  JobStatus: ({ jobId, onDone }: { jobId: string; onDone: (job: JobStatusResponse) => void }) => {
+  JobStatus: ({ jobId, onDone, onFailed }: { jobId: string; onDone: (job: JobStatusResponse) => void; onFailed: (job: JobStatusResponse) => void }) => {
     jobStatusState.handlers.set(jobId, onDone)
+    jobStatusState.failures.set(jobId, onFailed)
     return <div data-testid={`job-status-${jobId}`} />
   },
 }))
@@ -130,6 +133,7 @@ beforeEach(async () => {
   await i18n.addResourceBundle('en', 'translation', en, true, true)
   await i18n.changeLanguage('en')
   jobStatusState.handlers.clear()
+  jobStatusState.failures.clear()
   mockedApi.listTemplates.mockResolvedValue({
     items: [
       {
@@ -266,9 +270,9 @@ describe('ApplicationPage generated handoff reset', () => {
       .pop()
     await user.click(previewButton!)
 
-    const message = en.application.leaveAlreadyIssued.replace('{{ref}}', 'HR-1')
+    const message = en.application.leaveAlreadyIssuedNoRef
     expect(await screen.findByRole('alert')).toHaveTextContent(message)
-    expect(toast.error).toHaveBeenCalledWith(message)
+    expect(toast.error).toHaveBeenCalledWith(message, { reference: 'HR-1' })
     expect(screen.queryByText(/This leave is already issued on record HR-1/)).not.toBeInTheDocument()
   })
 
@@ -304,9 +308,11 @@ describe('ApplicationPage generated handoff reset', () => {
     await user.click(await screen.findByRole('button', { name: /^Save to Records$/ }))
     await waitFor(() => expect(mockedApi.generateDocument).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(jobStatusState.handlers.has('job-2')).toBe(true))
+    expect(toast.loading).toHaveBeenCalledWith(en.application.toast.saving)
     await act(async () => jobStatusState.handlers.get('job-2')?.(completedSavedJob('job-2')))
 
     expect(await screen.findByTestId('saved-actions')).toHaveTextContent('saved:42')
+    expect(toast.success).toHaveBeenCalledWith(en.application.toast.saved, { id: 'loading-toast', reference: 'REF-42' })
     expect(await screen.findByRole('button', { name: /^Add to email$/ })).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: /^Edit fields$/ }))
@@ -323,5 +329,28 @@ describe('ApplicationPage generated handoff reset', () => {
     expect(await screen.findByText('Ready to save to Records')).toBeVisible()
     expect(screen.queryByTestId('saved-actions')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Add to email$/ })).not.toBeInTheDocument()
+  })
+
+  it('replaces the save loading toast on a failed job without clearing the draft', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /^Preview$/ })
+      .some((button) => !button.hasAttribute('disabled'))).toBe(true))
+    const preview = screen.getAllByRole('button', { name: /^Preview$/ })
+      .filter((button) => !button.hasAttribute('disabled')).pop()!
+    await user.click(preview)
+    await waitFor(() => expect(jobStatusState.handlers.has('job-1')).toBe(true))
+    await act(async () => jobStatusState.handlers.get('job-1')?.(completedPreviewJob('job-1')))
+    expect(toast.loading).not.toHaveBeenCalled()
+    await user.click(await screen.findByRole('button', { name: /^Save to Records$/ }))
+    await waitFor(() => expect(jobStatusState.failures.has('job-2')).toBe(true))
+    expect(toast.loading).toHaveBeenCalledWith(en.application.toast.saving)
+    await act(async () => jobStatusState.failures.get('job-2')?.({
+      job_id: 'job-2', status: 'failed', error_code: 'GENERATION_ERROR', error_message: 'boom',
+    }))
+    expect(toast.error).toHaveBeenCalledWith(en.application.toast.generateFailed, { id: 'loading-toast', description: 'boom' })
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(clearDraft).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('saved-actions')).not.toBeInTheDocument()
   })
 })

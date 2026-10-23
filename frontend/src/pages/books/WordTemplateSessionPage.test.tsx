@@ -11,7 +11,7 @@ import type { TemplateSessionRead } from '@/lib/api'
 import { WordTemplateSessionPage } from './WordTemplateSessionPage'
 
 void i18n.use(initReactI18next).init({ lng: 'ar', resources: { ar: { translation: ar } }, interpolation: { escapeValue: false } })
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'loading-toast'), dismiss: vi.fn() } }))
 vi.mock('@/pages/application/DocPdfCanvas', () => ({ default: ({ pdfUrl }: { pdfUrl: string }) => <div data-testid="paper" data-url={pdfUrl} /> }))
 const session: TemplateSessionRead = { id: 9, name: 'قالب.docx', token: 'tpl', filename: 'template.docx', word_url: 'ms-word:ofe|u|https://gssg.lan/dav/tpl/template.docx', dav_url: 'https://gssg.lan/dav/tpl/template.docx', created_at: '2026-10-12T10:00:00Z', last_put_at: null }
 function setup() {

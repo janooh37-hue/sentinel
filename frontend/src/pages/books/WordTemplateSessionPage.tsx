@@ -23,13 +23,14 @@ export function WordTemplateSessionPage(): React.JSX.Element {
   const goBack = () => { if (window.history.state?.idx > 0) navigate(-1); else navigate('/books') }
   const finishMutation = useMutation({
     mutationFn: () => api.finishTemplateSession(id),
-    onSuccess: (tpl) => {
+    onMutate: () => toast.loading(t('books.word.savingTemplate')),
+    onSuccess: (tpl, _vars, toastId) => {
       void qc.invalidateQueries({ queryKey: ['word-templates'] })
       qc.removeQueries({ queryKey: ['word-template-session', id] })
-      toast.success(t('books.word.savedAsTemplate', { name: tpl.name.replace(/\.docx$/i, '') }))
+      toast.success(t('books.word.savedAsTemplate'), { id: toastId, description: tpl.name.replace(/\.docx$/i, '') })
       goBack()
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err, _vars, toastId) => toast.error(apiErrorMessage(err), { id: toastId }),
   })
   const discardMutation = useMutation({
     mutationFn: () => api.discardTemplateSession(id),

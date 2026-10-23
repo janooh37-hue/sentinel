@@ -133,14 +133,16 @@ function IncludedPapersWorkspace({
   }
 
   const save = async (): Promise<void> => {
+    const toastId = toast.loading(t('books.includedPapers.saving'))
     try {
       await editor.savePackage()
       toast.success(
         t('books.includedPapers.saved', { defaultValue: 'Combined PDF saved' }),
+        { id: toastId, reference: book.ref_number },
       )
       onSaved()
     } catch (error) {
-      toast.error(apiErrorMessage(error))
+      toast.error(apiErrorMessage(error), { id: toastId, reference: book.ref_number })
     }
   }
   const close = (): void => {

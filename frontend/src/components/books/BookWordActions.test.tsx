@@ -49,7 +49,7 @@ void i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false },
 })
 
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'loading-toast'), dismiss: vi.fn() } }))
 const navigate = vi.fn()
 vi.mock('react-router-dom', async () => ({
   ...await vi.importActual('react-router-dom'),
@@ -211,8 +211,7 @@ describe('Word action components', () => {
   it('(d) finish button calls api.finishWordSession and invalidates [books]', async () => {
     const qc = makeQc()
     const spy = vi.spyOn(qc, 'invalidateQueries')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.spyOn(apiMod.api, 'finishWordSession').mockResolvedValue({} as any)
+    vi.spyOn(apiMod.api, 'finishWordSession').mockResolvedValue(BASE_BOOK)
 
     render(
       createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK }),
@@ -224,16 +223,16 @@ describe('Word action components', () => {
       const keys = spy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))
       expect(keys.some((k) => k.includes('books'))).toBe(true)
     })
-    expect(toast.loading).toHaveBeenCalledWith('جارٍ حفظ الإصدار في Word…', { id: 'word-finish-1' })
-    expect(toast.success).toHaveBeenCalledWith('تم حفظ الإصدار', { id: 'word-finish-1', reference: BASE_BOOK.ref_number })
+    expect(toast.loading).toHaveBeenCalledWith('جارٍ حفظ الإصدار في Word…')
+    expect(toast.success).toHaveBeenCalledWith('تم حفظ الإصدار', { id: 'loading-toast', reference: BASE_BOOK.ref_number })
   })
 
   it('morphs finish loading into an error when saving fails', async () => {
     vi.spyOn(apiMod.api, 'finishWordSession').mockRejectedValue(new Error('failed'))
     render(createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK }), { wrapper: wrapper(makeQc()) })
     await userEvent.click(screen.getByRole('button', { name: /إنهاء التحرير/ }))
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.any(String), { id: 'word-finish-1' }))
-    expect(toast.loading).toHaveBeenCalledWith('جارٍ حفظ الإصدار في Word…', { id: 'word-finish-1' })
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.any(String), { id: 'loading-toast', reference: BASE_BOOK.ref_number }))
+    expect(toast.loading).toHaveBeenCalledWith('جارٍ حفظ الإصدار في Word…')
   })
 
   it('(e) discard: click تجاهل → confirm → calls api.discardWordSession, toasts voided, invalidates [books]', async () => {
@@ -258,7 +257,7 @@ describe('Word action components', () => {
     expect(dialog).not.toHaveTextContent('…')
     await userEvent.click(within(dialog).getByRole('button', { name: 'تجاهل المسودة' }))
     await waitFor(() => expect(apiMod.api.discardWordSession).toHaveBeenCalledWith(1))
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('أُلغيت المسودة — السجل ملغى'))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('أُلغيت المسودة — السجل ملغى', { reference: BASE_BOOK.ref_number }))
     await waitFor(() => {
       const keys = spy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))
       expect(keys.some((k) => k.includes('books'))).toBe(true)
@@ -276,9 +275,9 @@ describe('Word action components', () => {
     const confirmBtns = await screen.findAllByRole('button', { name: /تجاهل المسودة/ })
     await userEvent.click(confirmBtns[confirmBtns.length - 1])
     await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith('أُلغيت جلسة التحرير في Word'),
+      expect(toast.success).toHaveBeenCalledWith('أُلغيت جلسة التحرير في Word', { reference: BASE_BOOK.ref_number }),
     )
-    expect(toast.success).not.toHaveBeenCalledWith('أُلغيت المسودة — السجل ملغى')
+    expect(toast.success).not.toHaveBeenCalledWith('أُلغيت المسودة — السجل ملغى', expect.anything())
   })
 
   it('(e2) cancelling the discard confirm sends nothing', async () => {
@@ -313,15 +312,15 @@ describe('Word action components', () => {
     await userEvent.click(screen.getByRole('button', { name: /تعديل في Word/ }))
     await waitFor(() => expect(apiMod.api.reopenWordSession).toHaveBeenCalledWith(1))
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/books/1/word'))
-    expect(toast.loading).toHaveBeenCalledWith('جارٍ الفتح في Word…', { id: 'word-reopen-1' })
-    expect(toast.dismiss).toHaveBeenCalledWith('word-reopen-1')
+    expect(toast.loading).toHaveBeenCalledWith('جارٍ الفتح في Word…')
+    expect(toast.dismiss).toHaveBeenCalledWith('loading-toast')
   })
 
   it('morphs reopen loading into an error without navigating when opening fails', async () => {
     vi.spyOn(apiMod.api, 'reopenWordSession').mockRejectedValue(new Error('failed'))
     render(createElement(WordReopenButton, { book: FINISHED_BOOK }), { wrapper: wrapper(makeQc()) })
     await userEvent.click(screen.getByRole('button', { name: /تعديل في Word/ }))
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.any(String), { id: 'word-reopen-1' }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.any(String), { id: 'loading-toast', reference: BASE_BOOK.ref_number }))
     expect(toast.dismiss).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
   })
