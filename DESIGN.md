@@ -1554,16 +1554,28 @@ Arabic the host shifts the header right by that room: the badge sits 8px from th
 pill's right edge and the room trails the title, mirroring English.
 
 **Scan-back dock.** `ScanBackDock` (`pages/scanBack/ScanBackDock.tsx` +
-`ScanBackDock.css`) is the toasts' twin in its own bottom inline-end corner.
-Its collapsed pill uses the toast pill's fill (navy `--rail` on the cream page, `#fafaf6` on the dark
-page), 40px height, a 24px round badge (Printer, warning tone at 20% behind it)
-and the toast title type (0.825rem, 500) in the warning tone (`#fbbf24` / `#9a4507`);
-the chevron and dismiss are `--rail-text`. The open panel stays a light app card
-(it holds thumbnails and dashed drop targets) with a 16px radius and the same
-badge in the page's `--warning`/`--warning-soft`. The dock rests 1.5rem from
-the bottom on desktop and 5.5rem plus the safe area on mobile (above the
-BottomTabBar), independently of the toast stack. The open panel is capped to
-`50dvh` and the available room above the dock; its rows scroll.
+`ScanBackDock.css`) is drawn as a toast, collapsed or open, in its own bottom
+inline-end corner. Its collapsed pill uses the toast pill's fill (navy `--rail`
+on the cream page, `#fafaf6` on the dark page), 40px height, a 24px round badge
+(Printer, warning tone at 20% behind it) and the toast title type (0.825rem,
+500) in the warning tone (`#fbbf24` / `#9a4507`); the chevron and dismiss are
+the toast description colour. Open, it is an expanded toast: the body grows up
+out of the pill in the same fill with Sileo's 16px radius, square at its
+inline-end bottom corner where the pill continues it; the pill's top corners go
+square and a 16px concave fillet fills the inside corner beside it (the join
+Sileo's gooey filter draws). The body re-points the app's colour tokens
+(`--text`, `--text-muted`, `--surface-tinted`, `--hairline`, `--border`,
+`--border-strong`, `--info`, `--info-soft`, `--primary`) to the toast palette,
+so rows, mono ref chips, dashed drop targets and focus rings follow the
+toasts: description colour for text, `--rail-faint` / 72% ink for muted text,
+the info tone for hover and drop, and "View all" as Sileo's action button
+(action tone on a 15% wash). Thumbnails keep their white paper. The body opens
+with the toasts' spring (none under reduced motion). `items-end` is logical, so
+the pill sits in the corner in both directions; never add an `rtl:` alignment
+override. The dock rests 1.5rem from the bottom on desktop and 5.5rem plus the
+safe area on mobile (above the BottomTabBar), independently of the toast stack.
+The open body is capped to `50dvh` and the available room above the dock; its
+rows scroll.
 
 **Hover.** Sileo 0.1.6 gave the hovered toast the single "open" slot, collapsing
 the newest under it; when their bodies differed in height the stack shifted, slid

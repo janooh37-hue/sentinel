@@ -2,10 +2,11 @@
  * The all-day ambient reminder: a pill anchored bottom-end that expands into
  * the six oldest stranded records, each a drop target.
  *
- * The collapsed pill is a twin of a toast pill (ScanBackDock.css): it shares
- * the toasts' corner, so the corner reads as one family. Positioned with
- * `inset-inline-end` so it flips in Arabic, and lifted clear of BottomTabBar
- * (mobile) and of the live toast stack — see the `--dock-band` comment below.
+ * Collapsed or open, it is drawn as a toast (ScanBackDock.css): the collapsed
+ * pill is a toast pill, and the open dock is an expanded toast — the body
+ * grows up out of the pill in the same fill, joined to it the way Sileo's
+ * gooey pill joins its body. Positioned with `inset-inline-end` so it flips in
+ * Arabic, and lifted clear of BottomTabBar (mobile) — see `--dock-rest` below.
  */
 import { useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -40,7 +41,7 @@ function DockRow({
       <ScanBackThumb book={book} className="w-28" />
       <div className="min-w-0 flex-1">
       <div className="mb-1.5 flex items-center gap-2">
-        <span className="shrink-0 rounded bg-surface-tinted px-1.5 py-0.5 font-mono text-[0.68em] font-semibold">
+        <span className="shrink-0 rounded-full bg-surface-tinted px-2 py-0.5 font-mono text-[0.68em] font-semibold tracking-[0.02em]">
           {ref}
         </span>
         <span dir="auto" className="min-w-0 flex-1 truncate text-[0.74em]">{book.subject}</span>
@@ -120,29 +121,32 @@ export function ScanBackDock(): React.JSX.Element | null {
       data-print-hide
       className={cn(
         // `end-4` is the logical utility (inset-inline-end) — it flips in RTL.
-        // Never `right-4`. Precedent: IdentityDocCard.tsx:97.
-        'fixed z-30 flex flex-col items-end gap-2 end-4',
+        // Never `right-4`. Precedent: IdentityDocCard.tsx:97. `items-end` is
+        // logical too (the column's cross axis is inline), so the pill sits in
+        // the corner in both directions; never add an `rtl:` override.
+        // No gap: the open body and the pill are one toast shape.
+        'scanback-dock fixed z-30 flex flex-col items-end end-4',
         // Toasts live at the top; this dock rests above the mobile BottomTabBar.
         '[--dock-rest:calc(5.5rem+var(--safe-bottom))] md:[--dock-rest:1.5rem]',
         'bottom-[var(--dock-rest)]',
-        'rtl:items-start',
       )}
     >
       {open && (
-        /* 26rem, not 20rem: each row now carries a page-1 thumbnail, and the
-           dock has to be wide enough for the thumb to still be a preview
-           (~7rem here) and leave the drop target room beside it. */
-        <div className="flex w-[min(26rem,calc(100vw-2rem))] max-h-[min(50dvh,max(6rem,calc(100dvh-var(--dock-rest)-4.5rem)))] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-lg">
-          <div className="flex shrink-0 items-center gap-2 border-b border-hairline py-2 ps-2 pe-3">
-            {/* The pill's badge, in the page's own warning tone. */}
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning" aria-hidden>
+        /* 26rem, not Sileo's 350px body: each row carries a page-1 thumbnail,
+           and the dock has to be wide enough for the thumb to still be a
+           preview (~7rem here) and leave the drop target room beside it.
+           Its inline-end bottom corner is square: the pill continues it. */
+        <div className="scanback-panel flex w-[min(26rem,calc(100vw-2rem))] max-h-[min(50dvh,max(6rem,calc(100dvh-var(--dock-rest)-4rem)))] flex-col overflow-hidden">
+          <div className="flex shrink-0 items-center gap-2 border-b border-hairline py-2 ps-2 pe-2">
+            {/* The pill's badge, in the pill's warning tone. */}
+            <span className="scanback-badge flex h-6 w-6 shrink-0 items-center justify-center rounded-full" aria-hidden>
               <Printer className="h-3.5 w-3.5" strokeWidth={2} />
             </span>
             <span className="flex-1 text-[0.76em] font-semibold">{t('scanBack.dock.header')}</span>
             <button
               type="button"
               onClick={() => navigate('/scan-back')}
-              className="rounded px-1.5 py-0.5 text-[0.72em] font-semibold text-info hover:bg-info-soft"
+              className="scanback-action flex h-7 items-center rounded-full px-3 text-[0.75rem] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {t('scanBack.viewAll', { count })}
             </button>
@@ -163,7 +167,7 @@ export function ScanBackDock(): React.JSX.Element | null {
 
       {/* Two buttons in one pill, not a button inside a button: the toggle and
           the dismiss are separate actions and nested buttons are invalid. */}
-      <div className="scanback-pill flex h-10 items-center rounded-full pe-1 shadow-lg">
+      <div data-open={open || undefined} className="scanback-pill relative flex h-10 items-center rounded-full pe-1">
         <button
           type="button"
           onClick={toggle}
