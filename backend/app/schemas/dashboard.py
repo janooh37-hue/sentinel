@@ -179,7 +179,7 @@ class DashboardUpcomingLeaveItem(DashboardLeaveItem):
     days_remaining: int
 
 
-class DashboardApprovedRecord(BaseModel):
+class DashboardApprovedRecord(ORMBase):
     book_id: int
     ref_number: str
     subject: str | None
