@@ -179,6 +179,11 @@ def _tags_contain(tag: str, *, negate: bool = False) -> Any:
     ).bindparams(**{param: tag})
 
 
+def email_owned_by(owner_user_id: int) -> ColumnElement[bool]:
+    """SQL: private email belongs to the caller; non-email correspondence stays shared."""
+    return or_(LedgerEntry.channel != "email", LedgerEntry.owner_user_id == owner_user_id)
+
+
 def related_book_visible(db: Session, user: User | None) -> ColumnElement[bool] | None:
     """SQL: the entry links no Record, or one ``user`` can open.
 
@@ -286,10 +291,7 @@ def list_entries(
         # which passes owner_user_id=None here). Non-email rows (the shared
         # correspondence log) stay visible to everyone. Drafts are a subset of
         # the email rule (always owned), so the email clause already covers them.
-        owner_clause = or_(
-            LedgerEntry.channel != "email",
-            LedgerEntry.owner_user_id == owner_user_id,
-        )
+        owner_clause = email_owned_by(owner_user_id)
         stmt = stmt.where(owner_clause)
         count_stmt = count_stmt.where(owner_clause)
         # Correspondence-Log removal (ledger smart-folders port): the old
