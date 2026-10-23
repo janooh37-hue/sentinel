@@ -1,5 +1,5 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -19,6 +19,7 @@ import { clearDraft } from '@/lib/formDrafts'
 const jobStatusState = vi.hoisted(() => ({
   handlers: new Map<string, (job: JobStatusResponse) => void>(),
   failures: new Map<string, (job: JobStatusResponse) => void>(),
+  stopped: new Map<string, () => void>(),
 }))
 
 vi.mock('@/lib/toast', () => ({
@@ -63,9 +64,10 @@ vi.mock('@/lib/applicationFormSchema', () => ({
   buildZodSchema: () => z.object({}),
 }))
 vi.mock('./JobStatus', () => ({
-  JobStatus: ({ jobId, onDone, onFailed }: { jobId: string; onDone: (job: JobStatusResponse) => void; onFailed: (job: JobStatusResponse) => void }) => {
+  JobStatus: ({ jobId, onDone, onFailed, onPollingStopped }: { jobId: string; onDone: (job: JobStatusResponse) => void; onFailed: (job: JobStatusResponse) => void; onPollingStopped: () => void }) => {
     jobStatusState.handlers.set(jobId, onDone)
     jobStatusState.failures.set(jobId, onFailed)
+    jobStatusState.stopped.set(jobId, onPollingStopped)
     return <div data-testid={`job-status-${jobId}`} />
   },
 }))
@@ -129,11 +131,25 @@ function renderPage(route = '/services/demo?employee_id=G1') {
   )
 }
 
+async function startPendingSave(user: UserEvent) {
+  await waitFor(() => expect(screen.getAllByRole('button', { name: /^Preview$/ })
+    .some((button) => !button.hasAttribute('disabled'))).toBe(true))
+  const preview = screen.getAllByRole('button', { name: /^Preview$/ })
+    .filter((button) => !button.hasAttribute('disabled')).pop()!
+  await user.click(preview)
+  await waitFor(() => expect(jobStatusState.handlers.has('job-1')).toBe(true))
+  await act(async () => jobStatusState.handlers.get('job-1')?.(completedPreviewJob('job-1')))
+  await user.click(await screen.findByRole('button', { name: /^Save to Records$/ }))
+  await waitFor(() => expect(jobStatusState.handlers.has('job-2')).toBe(true))
+  expect(toast.loading).toHaveBeenCalledWith(en.application.toast.saving)
+}
+
 beforeEach(async () => {
   await i18n.addResourceBundle('en', 'translation', en, true, true)
   await i18n.changeLanguage('en')
   jobStatusState.handlers.clear()
   jobStatusState.failures.clear()
+  jobStatusState.stopped.clear()
   mockedApi.listTemplates.mockResolvedValue({
     items: [
       {
@@ -352,5 +368,31 @@ describe('ApplicationPage generated handoff reset', () => {
     expect(toast.success).not.toHaveBeenCalled()
     expect(clearDraft).not.toHaveBeenCalled()
     expect(screen.queryByTestId('saved-actions')).not.toBeInTheDocument()
+  })
+
+  it('settles the same save toast with a network warning when polling gives up', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await startPendingSave(user)
+
+    await act(async () => jobStatusState.stopped.get('job-2')?.())
+
+    expect(toast.warning).toHaveBeenCalledWith(en.errors.network, { id: 'loading-toast' })
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(clearDraft).not.toHaveBeenCalled()
+  })
+
+  it.each(['edit fields', 'new form', 'unmount'])('dismisses the pending save toast on %s', async (action) => {
+    const user = userEvent.setup()
+    const view = renderPage()
+    await startPendingSave(user)
+
+    if (action === 'unmount') view.unmount()
+    else await user.click(screen.getByRole('button', { name: action === 'edit fields' ? /^Edit fields$/ : /^New form$/ }))
+
+    expect(toast.dismiss).toHaveBeenCalledExactlyOnceWith('loading-toast')
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.success).not.toHaveBeenCalled()
   })
 })

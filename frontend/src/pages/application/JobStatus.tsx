@@ -4,6 +4,7 @@
  * Polling schedule: 500 ms for the first 5 s, then 2 s thereafter.
  * On done: renders DocPreview + download buttons.
  * On failed: renders the error message with code and notifies onFailed.
+ * If monitoring is abandoned after network errors, notifies onPollingStopped.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -20,9 +21,10 @@ interface JobStatusProps {
   jobId: string
   onDone?: (job: JobStatusResponse) => void
   onFailed?: (job: JobStatusResponse) => void
+  onPollingStopped?: () => void
 }
 
-export function JobStatus({ jobId, onDone, onFailed }: JobStatusProps): React.JSX.Element {
+export function JobStatus({ jobId, onDone, onFailed, onPollingStopped }: JobStatusProps): React.JSX.Element {
   const { t } = useTranslation()
   const [job, setJob] = useState<JobStatusResponse | null>(null)
   const [pollError, setPollError] = useState<string | null>(null)
@@ -43,6 +45,10 @@ export function JobStatus({ jobId, onDone, onFailed }: JobStatusProps): React.JS
   useEffect(() => {
     onFailedRef.current = onFailed
   }, [onFailed])
+  const onPollingStoppedRef = useRef(onPollingStopped)
+  useEffect(() => {
+    onPollingStoppedRef.current = onPollingStopped
+  }, [onPollingStopped])
 
   // Stop retrying after this many consecutive poll failures so a downed
   // server doesn't keep the timer alive indefinitely.
@@ -83,6 +89,7 @@ export function JobStatus({ jobId, onDone, onFailed }: JobStatusProps): React.JS
           scheduleNext()
         } else {
           setGaveUp(true)
+          onPollingStoppedRef.current?.()
         }
       }
     }

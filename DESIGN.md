@@ -1525,6 +1525,12 @@ and dismissed scans are terminal: their success toasts carry no Undo action
 and use the default duration. Keep destination references/descriptions and
 per-call toast ids; the auto-file follow-up to open the record keeps its 8 s window.
 
+**Save monitoring.** The application preview owns its save loading toast. A
+terminal job result updates that same id; five consecutive polling errors
+replace it with the localized network warning, not a claim that saving failed.
+Leaving the preview or page, replacing the tracked job, or starting another
+generation dismisses any unresolved save notice.
+
 **Theme and colour.** The host passes the app theme (`<html data-theme>`) to
 Sileo, which draws the *inverse* pill. The pill is filled from the app, not
 Sileo's neutrals: the navy `--rail` on the cream page, the light theme's raised

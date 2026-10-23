@@ -354,6 +354,19 @@ function StandardApplicationPage(): React.JSX.Element {
     (requestedTab === 'preview' && activeJobId)
       ? requestedTab
       : 'fields'
+
+  // The loading notice belongs to the mounted preview's job monitoring.
+  // Leaving the preview, replacing its job, or leaving this page abandons it.
+  useEffect(() => {
+    if (activeTab !== 'preview' || !activeJobId || !pendingCommitRef.current) return
+    const id = toast.loading(t('application.toast.saving'))
+    pendingCommitToastRef.current = id
+    return () => {
+      if (pendingCommitToastRef.current !== id) return
+      toast.dismiss(id)
+      pendingCommitToastRef.current = undefined
+    }
+  }, [activeJobId, activeTab, t])
   const paperPair =
     PAPER_LANGUAGES.find((p) => p.en === selectedTemplate || p.ar === selectedTemplate) ?? null
   // The tab needs both papers allowed; a revision stays on its book's paper.
@@ -463,13 +476,10 @@ function StandardApplicationPage(): React.JSX.Element {
 
   // Generate mutation — drives both Preview (commit=false) and Save (commit=true).
   // The POST only carries job_id; the saved reference arrives via JobStatus.
-  // Start the save notice once queued and resolve it in handleJobDone.
+  // The mounted preview owns the save notice; handleJobDone resolves it.
   const generateMutation = useMutation({
     mutationFn: (body: DocumentGenerateRequest) => api.generateDocument(body),
     onSuccess: (resp) => {
-      if (pendingCommitRef.current) {
-        pendingCommitToastRef.current = toast.loading(t('application.toast.saving'))
-      }
       setActiveJobId(resp.job_id)
       // New job → preview tab is not yet "done"; the Save button on the
       // Preview tab stays disabled until JobStatus reports a successful
@@ -675,6 +685,10 @@ function StandardApplicationPage(): React.JSX.Element {
 
       const payload = buildPayload(values, commit)
       if (!payload) return
+      if (pendingCommitToastRef.current !== undefined) {
+        toast.dismiss(pendingCommitToastRef.current)
+        pendingCommitToastRef.current = undefined
+      }
       pendingCommitRef.current = commit
       if (commit) {
         pendingNotificationRef.current = showNotifyEmployee
@@ -1681,7 +1695,21 @@ function StandardApplicationPage(): React.JSX.Element {
                     />
                   )}
 
-                  <JobStatus key={activeJobId} jobId={activeJobId} onDone={handleJobDone} onFailed={handleJobDone} />
+                  <JobStatus
+                    key={activeJobId}
+                    jobId={activeJobId}
+                    onDone={handleJobDone}
+                    onFailed={handleJobDone}
+                    onPollingStopped={() => {
+                      setPreviewJobStatus('failed')
+                      if (pendingCommitToastRef.current !== undefined) {
+                        toast.warning(t('errors.network'), { id: pendingCommitToastRef.current })
+                        pendingCommitToastRef.current = undefined
+                      }
+                      pendingCommitRef.current = false
+                      pendingNotificationRef.current = undefined
+                    }}
+                  />
 
                   {lastSaved && selectedTemplate && employeeQuery.data && (
                     <div className="mt-4 flex justify-end">
