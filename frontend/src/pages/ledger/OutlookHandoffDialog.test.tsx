@@ -13,6 +13,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as ApiModule from '@/lib/api'
 import { api } from '@/lib/api'
+import i18n from '@/lib/i18n'
+import * as refPdfAttachments from '@/lib/refPdfAttachments'
+import { toast } from '@/lib/toast'
 import { OutlookHandoffDialog } from './OutlookHandoffDialog'
 import {
   browserNavigation,
@@ -44,7 +47,7 @@ vi.mock('@/components/ui/rich-editor', () => ({
   RichEditor: ({ name }: { name: string }) => <div data-testid={`rich-editor-${name}`} />,
 }))
 vi.mock('@/lib/toast', () => ({
-  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+  toast: Object.assign(vi.fn(), { loading: vi.fn(), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() }),
 }))
 
 const BOOK_REF = {
@@ -95,9 +98,10 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  await i18n.changeLanguage('en')
 })
 
 describe('OutlookHandoffDialog prefill', () => {
@@ -219,6 +223,36 @@ describe('OutlookHandoffDialog submit', () => {
     renderDialog({ prefill: { subject: 'Transfer', bodyHtml: '<p>short</p>' } })
     await userEvent.click(screen.getByRole('button', { name: /Hand off to Outlook/ }))
     expect(await screen.findByText('At least one recipient is required')).toBeInTheDocument()
+    expect(api.emailHandoff).not.toHaveBeenCalled()
+  })
+
+  it.each(['en', 'ar'])('keeps the combined attachment-size validation localized in %s', async (language) => {
+    await i18n.changeLanguage(language)
+    const reference = new File(['pdf'], 'GS-0048.pdf', { type: 'application/pdf' })
+    const manual = new File(['pdf'], 'manual.pdf', { type: 'application/pdf' })
+    Object.defineProperty(reference, 'size', { value: 11 * 1024 * 1024 })
+    Object.defineProperty(manual, 'size', { value: 11 * 1024 * 1024 })
+    vi.spyOn(refPdfAttachments, 'base64PdfToFile').mockReturnValue(reference)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => btoa('pdf') }))
+    renderDialog({
+      prefill: {
+        to: ['hr@gssg.ae'],
+        subject: 'Transfer',
+        references: [BOOK_REF],
+        attachRefPdf: true,
+      },
+    })
+    await screen.findByText(reference.name)
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]')!
+    await userEvent.upload(input, manual)
+    await screen.findByText(manual.name)
+    expect(toast.error).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: i18n.t('ledger.outlook.handoff.submit') }))
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+      i18n.t('compose.attachmentsTooLarge', { max: '20.0 MB' }),
+    ))
     expect(api.emailHandoff).not.toHaveBeenCalled()
   })
 })
