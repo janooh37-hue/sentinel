@@ -2,10 +2,10 @@
  * The all-day ambient reminder: a pill anchored bottom-end that expands into
  * the six oldest stranded records, each a drop target.
  *
- * Positioned with `inset-inline-end` so it flips in Arabic, and lifted clear
- * of both BottomTabBar (mobile, `fixed inset-x-0 bottom-0 z-40`) and the toast
- * host's viewport (bottom corner at the inline end, like this dock, z-index far above ours)
- * — see the `bottom-[...]` comment below for the clearance arithmetic.
+ * The collapsed pill is a twin of a toast pill (ScanBackDock.css): it shares
+ * the toasts' corner, so the corner reads as one family. Positioned with
+ * `inset-inline-end` so it flips in Arabic, and lifted clear of BottomTabBar
+ * (mobile) and of the live toast stack — see the `--dock-band` comment below.
  */
 import { useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -19,6 +19,8 @@ import { useIsMobile } from '@/lib/useIsMobile'
 import { ScanBackThumb } from './ScanBackThumb'
 import { ScanBackUploadZone } from './ScanBackRow'
 import { ageDays, dockDismissKeyFor, today, useFileSignedCopy, useScanBack, useScanBackUpload } from './useScanBack'
+
+import './ScanBackDock.css'
 
 const OPEN_KEY = 'scanback-dock-open'
 const MAX_ROWS = 6
@@ -120,22 +122,17 @@ export function ScanBackDock(): React.JSX.Element | null {
         // `end-4` is the logical utility (inset-inline-end) — it flips in RTL.
         // Never `right-4`. Precedent: IdentityDocCard.tsx:97.
         'fixed z-30 flex flex-col items-end gap-2 end-4',
-        // The toast viewport (AppToaster: bottom-right in LTR, bottom-left in RTL, 12px
-        // offset) shares this corner in both languages and paints over anything under it (z-index
-        // 999999999 — we clear it spatially, not by fighting z-index). A single
-        // Sileo toast opens its body for an Undo, a description or a message longer
-        // than the pill: ~136px tall, ~176px when it carries an action and a body
-        // (a collapsed pill is ~40px). The band is 12rem (192px), so the dock sits
-        // above any one toast at 1280px and at 390px, in LTR and RTL alike. 12rem
-        // also exceeds the 3.5rem BottomTabBar clearance App.tsx's <main> reserves
-        // on mobile, so one value covers both viewports. A stack of several toasts,
-        // or a multi-line message, can still reach higher — accepted residual.
-        // The band is rem-based and the app scales rem (up to 24px), so it is
-        // clamped to half the viewport, and the open panel below is capped to the
-        // room left above it: on a short laptop the header and "View all" must
-        // stay on screen, with the rows scrolling instead.
-        '[--dock-band:min(12rem,50dvh)]',
-        'bottom-[calc(var(--dock-band)+var(--safe-bottom))] md:bottom-[var(--dock-band)]',
+        // The toast viewport (AppToaster) shares this corner in both languages and
+        // paints over anything under it, so the dock clears it spatially. AppToaster
+        // publishes how far up the live stack reaches as `--toast-stack` (0px when
+        // empty); the dock rests where a toast pill sits (1.5rem, above the
+        // BottomTabBar on mobile) and rides 0.5rem above any stack, following it
+        // as bodies open and toasts close. It is clamped to half the viewport so a
+        // tall stack cannot push the header off screen, and the open panel below
+        // is capped to the room left above it (the rows scroll).
+        '[--dock-rest:calc(5.5rem+var(--safe-bottom))] md:[--dock-rest:1.5rem]',
+        '[--dock-band:min(50dvh,max(var(--dock-rest),var(--toast-stack,0px)_+_0.5rem))]',
+        'bottom-[var(--dock-band)] motion-safe:transition-[bottom] motion-safe:duration-200 motion-safe:ease-out',
         'rtl:items-start',
       )}
     >
@@ -143,9 +140,12 @@ export function ScanBackDock(): React.JSX.Element | null {
         /* 26rem, not 20rem: each row now carries a page-1 thumbnail, and the
            dock has to be wide enough for the thumb to still be a preview
            (~7rem here) and leave the drop target room beside it. */
-        <div className="flex w-[min(26rem,calc(100vw-2rem))] max-h-[max(6rem,calc(100dvh-var(--dock-band)-var(--safe-bottom)-4.5rem))] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
-          <div className="flex shrink-0 items-center gap-2 border-b border-hairline px-3 py-2">
-            <Printer className="h-3.5 w-3.5 text-warning" strokeWidth={2} aria-hidden />
+        <div className="flex w-[min(26rem,calc(100vw-2rem))] max-h-[max(6rem,calc(100dvh-var(--dock-band)-4.5rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-lg">
+          <div className="flex shrink-0 items-center gap-2 border-b border-hairline py-2 ps-2 pe-3">
+            {/* The pill's badge, in the page's own warning tone. */}
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning" aria-hidden>
+              <Printer className="h-3.5 w-3.5" strokeWidth={2} />
+            </span>
             <span className="flex-1 text-[0.76em] font-semibold">{t('scanBack.dock.header')}</span>
             <button
               type="button"
@@ -171,28 +171,30 @@ export function ScanBackDock(): React.JSX.Element | null {
 
       {/* Two buttons in one pill, not a button inside a button: the toggle and
           the dismiss are separate actions and nested buttons are invalid. */}
-      <div className="flex items-center rounded-full bg-primary pe-1 shadow-lg">
+      <div className="scanback-pill flex h-10 items-center rounded-full pe-1 shadow-lg">
         <button
           type="button"
           onClick={toggle}
           aria-expanded={open}
-          className="flex items-center gap-2 rounded-full py-2.5 ps-4 pe-2 text-[0.78em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-full items-center gap-2 rounded-full ps-2 pe-2.5 text-[0.825rem] font-medium leading-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary-foreground" aria-hidden />
+          <span className="scanback-badge flex h-6 w-6 shrink-0 items-center justify-center rounded-full" aria-hidden>
+            <Printer className="h-3.5 w-3.5" strokeWidth={2} />
+          </span>
           {t('scanBack.dock.pill', { count })}
           {/* The visible pill text is already a meaningful accessible name (and
               is what callers query by); expand/collapse is state, not identity,
               so it rides along as extra text for screen readers rather than
               overriding the name via aria-label. */}
           <span className="sr-only">{open ? t('scanBack.dock.collapse') : t('scanBack.dock.expand')}</span>
-          {open ? <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-                : <ChevronUp className="h-3.5 w-3.5" aria-hidden />}
+          {open ? <ChevronDown className="scanback-muted h-3.5 w-3.5" aria-hidden />
+                : <ChevronUp className="scanback-muted h-3.5 w-3.5" aria-hidden />}
         </button>
         <button
           type="button"
           onClick={() => { localStorage.setItem(dismissKey, today()); setDismissed(true) }}
           aria-label={t('scanBack.gate.close')}
-          className="rounded-full p-1.5 text-primary-foreground/70 transition-colors hover:bg-primary-hover hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="scanback-muted rounded-full p-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <X className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
         </button>

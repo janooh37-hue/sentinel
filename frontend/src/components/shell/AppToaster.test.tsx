@@ -615,4 +615,39 @@ describe('AppToaster + toast adapter', () => {
     // into its view in an effect, one render after the viewport's data-theme.
     await waitFor(() => expect(document.querySelector('[data-sileo-pill]')).toHaveAttribute('fill', '#f2f2f2'))
   })
+
+  it('publishes how far up the stack reaches, so the scan-back dock can ride above it', async () => {
+    const reach = (): string => document.documentElement.style.getPropertyValue('--toast-stack')
+    // jsdom has no layout: give each toast the box a browser would, unless it is
+    // hidden (the lock overlay hides the viewport), which has no box at all.
+    let hidden = false
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return this.matches('[data-sileo-toast]') && !hidden
+        ? DOMRect.fromRect({ x: 0, y: window.innerHeight - 64, width: 350, height: 40 })
+        : DOMRect.fromRect()
+    })
+    try {
+      expect(reach()).toBe('0px')
+      act(() => {
+        toast.success('Saved')
+      })
+      await waitFor(() => expect(reach()).toBe('64px'))
+
+      hidden = true
+      act(() => {
+        window.dispatchEvent(new Event('resize'))
+      })
+      expect(reach()).toBe('0px')
+
+      hidden = false
+      act(() => {
+        window.dispatchEvent(new Event('resize'))
+      })
+      expect(reach()).toBe('64px')
+      act(() => toast.dismiss())
+      await waitFor(() => expect(reach()).toBe('0px'), { timeout: 3000 })
+    } finally {
+      rect.mockRestore()
+    }
+  })
 })
