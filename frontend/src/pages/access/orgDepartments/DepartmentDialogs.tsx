@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DialogContent, DialogDescription, DialogHeader, DialogRoot, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, type AdminUserRead, type DepartmentRead, type OrgNodeRead } from '@/lib/api'
+import { api, type DepartmentRead, type OrgNodeRead } from '@/lib/api'
 import { departmentErrorMessage, departmentHeadName, departmentName, invalidateDepartmentData } from '@/lib/departments'
 import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
@@ -172,8 +172,10 @@ export function DepartmentFormDialog({ head, department, onClose }: {
 
 type Grant = 'deputy' | 'viewer'
 
-function userLabel(user: AdminUserRead): string {
-  return user.display_name || user.name_en || user.email
+interface PersonRow {
+  userId: number
+  label: string
+  email: string | null
 }
 
 export function DepartmentPeopleDialog({ department, onClose }: {
@@ -184,20 +186,34 @@ export function DepartmentPeopleDialog({ department, onClose }: {
   const id = useId()
   const qc = useQueryClient()
   const [query, setQuery] = useState('')
+  // Existing grants come from the department itself, so a deputy whose
+  // account went inactive stays visible (and removable) instead of riding
+  // along unseen in the save payload.
+  const existing = useMemo<PersonRow[]>(
+    () => [...department.deputies, ...department.viewers].map((person) => ({ userId: person.user_id, label: person.display_name, email: null })),
+    [department.deputies, department.viewers],
+  )
   const [grants, setGrants] = useState<Map<number, Grant>>(() => new Map([
     ...department.deputies.map((person) => [person.user_id, 'deputy'] as const),
     ...department.viewers.map((person) => [person.user_id, 'viewer'] as const),
   ]))
-  const users = useQuery({ queryKey: ['auth-users'], queryFn: () => api.listAuthUsers() })
-  const candidates = useMemo(
-    () => (users.data ?? []).filter((user) => user.status === 'active' && user.id !== department.head_user_id),
+  // The endpoint lists active accounts only: new grants never go to inactive users.
+  const users = useQuery({ queryKey: ['departments', 'candidate-users'], queryFn: api.departments.candidateUsers })
+  const candidates = useMemo<PersonRow[]>(
+    () => (users.data ?? [])
+      .filter((user) => user.user_id !== department.head_user_id)
+      .map((user) => ({ userId: user.user_id, label: user.display_name, email: user.email })),
     [department.head_user_id, users.data],
   )
   const needle = query.trim().toLowerCase()
-  const assigned = candidates.filter((user) => grants.has(user.id))
-  const matches = candidates
-    .filter((user) => !grants.has(user.id) && (!needle || [userLabel(user), user.email, user.employee_id ?? ''].some((value) => value.toLowerCase().includes(needle))))
+  const known = new Map([...existing, ...candidates].map((person) => [person.userId, person]))
+  const assignedIds = [...new Set([...existing.map((person) => person.userId), ...grants.keys()])]
+  const assigned = assignedIds.flatMap((userId) => known.get(userId) ?? [])
+  const matches = (users.data ?? [])
+    .filter((user) => user.user_id !== department.head_user_id && !assignedIds.includes(user.user_id)
+      && (!needle || [user.display_name, user.email, user.employee_id ?? ''].some((value) => value.toLowerCase().includes(needle))))
     .slice(0, needle ? 50 : 12)
+    .map((user) => known.get(user.user_id)!)
   const save = useMutation({
     mutationFn: () => api.departments.setPeople(department.id, {
       deputy_user_ids: [...grants].filter(([, grant]) => grant === 'deputy').map(([userId]) => userId),
@@ -220,17 +236,17 @@ export function DepartmentPeopleDialog({ department, onClose }: {
     })
   }
 
-  function row(user: AdminUserRead): React.JSX.Element {
-    const label = userLabel(user)
+  function row(person: PersonRow): React.JSX.Element {
+    const label = person.label
     return (
-      <li key={user.id} className="flex min-h-11 flex-wrap items-center gap-2 border-b border-hairline px-3 py-2 last:border-0">
+      <li key={person.userId} className="flex min-h-11 flex-wrap items-center gap-2 border-b border-hairline px-3 py-2 last:border-0">
         <span className="min-w-0 flex-1">
           <span className="block break-words text-[0.86em] font-medium text-foreground"><bdi>{label}</bdi></span>
-          <span className="block break-all text-[0.74em] text-muted-foreground"><bdi dir="ltr">{user.email}</bdi></span>
+          {person.email && <span className="block break-all text-[0.74em] text-muted-foreground"><bdi dir="ltr">{person.email}</bdi></span>}
         </span>
         <select
-          value={grants.get(user.id) ?? 'none'}
-          onChange={(event) => setGrant(user.id, event.target.value as Grant | 'none')}
+          value={grants.get(person.userId) ?? 'none'}
+          onChange={(event) => setGrant(person.userId, event.target.value as Grant | 'none')}
           aria-label={t('orgDepartments.people.roleFor', { name: label })}
           className="min-h-11 rounded-lg border border-border bg-surface px-2.5 text-[0.82em] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >

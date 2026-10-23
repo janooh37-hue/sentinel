@@ -18,6 +18,7 @@ import { Link } from 'react-router-dom'
 
 import { EmployeesSectionTabs } from '@/components/employees/EmployeesSectionTabs'
 import { useAttendanceAttention } from '@/components/employees/useAttendanceAttention'
+import { canOpenOrgEditor } from '@/lib/departments'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { OrgTreeWorkspace } from './OrgTreeWorkspace'
 
@@ -25,7 +26,7 @@ export function EmployeesOrgTreePage(): React.JSX.Element {
   const { t } = useTranslation()
   const { attention } = useAttendanceAttention()
   const { has } = useCapabilities()
-  const canOpenEditor = has('employees.edit') || has('departments.manage')
+  const canOpenEditor = canOpenOrgEditor(has)
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">

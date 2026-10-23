@@ -83,13 +83,18 @@ export function OrgTreeView({ unit, editable = false, renderCardAction, renderCa
   )
   const canEdit = editable && has('employees.edit')
 
-  // "Show in tree": open the whole unit at every level so the person is laid
-  // out, trace their line, then centre on them once the layout commits.
+  // "Show in tree": open every level so the person is laid out, trace their
+  // line, then centre on them once the layout commits. The unit view draws
+  // only the primary root's tree; anyone under another supervisor-less root
+  // (an orphan chip) is reached by drilling into that root instead.
   const [seenFocus, setSeenFocus] = useState<OrgTreeFocus | null>(null)
   if (focus !== seenFocus) {
     setSeenFocus(focus)
     if (focus) {
-      setScopeId(null)
+      const rootId = supervisorChain(people, focus.id).at(-1)?.id ?? focus.id
+      const primaryId = buildForest(people)[0]?.person.id
+      const hiddenRoot = people.find((person) => person.id === rootId)?.supervisor_id == null && rootId !== primaryId
+      setScopeId(hiddenRoot ? rootId : null)
       setDepth('all')
       setCollapsed(new Set())
       setTracedId(focus.id)
@@ -459,7 +464,14 @@ export function OrgTreeView({ unit, editable = false, renderCardAction, renderCa
             })}
           </div>
         </div>
-        {unlinked.length > 0 && <div className="org-orphan-banner"><b>▲ {t('employees.orgTree.orphanTitle', { count: unlinked.length })}</b><small>{t('employees.orgTree.orphanBody')}</small><span>{unlinked.map((person) => <button key={person.id} type="button" dir="auto" data-org-drag-handle className="org-orphan-chip" onPointerDown={(event) => startDrag(event, person)} onClick={() => { if (movedRef.current) { movedRef.current = false; return } if (editMode) setPicker({ employee: person, anchor: null, boundsEl: viewportRef.current }) }}>{nameOf(person)}</button>)}</span></div>}
+        {/* Supervisor-less people outside the primary tree. Outside edit mode a
+            chip drills into that person's own tree; the department action sits
+            beside it so they are as manageable as any card. */}
+        {unlinked.length > 0 && <div className="org-orphan-banner"><b>▲ {t('employees.orgTree.orphanTitle', { count: unlinked.length })}</b><small>{t('employees.orgTree.orphanBody')}</small><span>{unlinked.map((person) => {
+          const action = renderCardAction?.(person)
+          const chip = <button type="button" dir="auto" data-org-drag-handle className="org-orphan-chip" onPointerDown={(event) => startDrag(event, person)} onClick={() => { if (movedRef.current) { movedRef.current = false; return } if (editMode) setPicker({ employee: person, anchor: null, boundsEl: viewportRef.current }); else setScopeId(person.id) }}>{nameOf(person)}</button>
+          return <span key={person.id} className="org-orphan-entry">{chip}{action}</span>
+        })}</span></div>}
         <p className="org-hint">{t(`employees.orgTree.${editMode ? 'hintEdit' : 'hint'}`)}</p>
         <div className="org-zoom-bar"><button type="button" className="org-center-button" onClick={centerOnManager}><Crosshair size={15} />{t('employees.orgTree.centerManager')}</button><button type="button" onClick={() => applyTransform({ ...view, scale: Math.min(2.2, view.scale * 1.15) })} aria-label={t('employees.orgTree.zoomIn')}><ZoomIn size={16} /></button><button type="button" onClick={() => applyTransform({ ...view, scale: Math.max(0.25, view.scale / 1.15) })} aria-label={t('employees.orgTree.zoomOut')}><ZoomOut size={16} /></button><button type="button" onClick={fitView} aria-label={t('employees.orgTree.fitView')}><Shrink size={16} /></button><button type="button" onClick={toggleFullscreen} aria-label={t('employees.orgTree.fullscreen')}>{isFullscreen ? <Minimize2 size={16} /> : <Expand size={16} />}</button></div>
       </div>

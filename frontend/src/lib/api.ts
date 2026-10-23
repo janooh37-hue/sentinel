@@ -205,6 +205,7 @@ export type DepartmentCreate = components['schemas']['DepartmentCreate']
 export type DepartmentUpdate = components['schemas']['DepartmentUpdate']
 export type DepartmentPersonRead = components['schemas']['DepartmentPersonRead']
 export type DepartmentPeopleUpdate = components['schemas']['DepartmentPeopleUpdate']
+export type DepartmentCandidateUserRead = components['schemas']['DepartmentCandidateUserRead']
 export type DepartmentServiceOption = components['schemas']['DepartmentServiceOption']
 export type DepartmentServicesUpdate = components['schemas']['DepartmentServicesUpdate']
 export type DepartmentExceptionRead = components['schemas']['DepartmentExceptionRead']
@@ -1406,6 +1407,9 @@ export const api = {
     delete: (id: number) => request<void>('DELETE', `/departments/${id}`),
     setPeople: (id: number, body: DepartmentPeopleUpdate) =>
       request<DepartmentRead>('PUT', `/departments/${id}/people`, body),
+    /** Active accounts eligible as deputies or viewers (departments.manage). */
+    candidateUsers: () =>
+      request<DepartmentCandidateUserRead[]>('GET', '/departments/candidate-users'),
     serviceOptions: () =>
       request<DepartmentServiceOption[]>('GET', '/departments/service-options'),
     setServices: (id: number, body: DepartmentServicesUpdate) =>

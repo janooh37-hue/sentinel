@@ -2199,6 +2199,8 @@ body {
 .org-orphan-banner small { color: var(--text-muted); font-size: .75em; }
 .org-orphan-banner > span { display: flex; flex-wrap: wrap; gap: 6px; }
 .org-orphan-chip { border: 1px solid var(--hairline); border-radius: 6px; background: var(--surface); padding: 3px 6px; font-size: .72em; }
+.org-orphan-entry { display: inline-flex; align-items: center; gap: 3px; }
+.org-orphan-entry .org-edit-button { border-color: var(--hairline); background: var(--surface); color: var(--primary); }
 .org-hint { position: absolute; inset-block-end: 6px; inset-inline-start: 14px; z-index: 30; margin: 0; border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--surface) 86%, transparent); padding: 5px 10px; color: var(--text-muted); font-size: .72em; backdrop-filter: blur(4px); }
 @media (width <= 640px) { .org-hint { display: none; } }
 .org-zoom-bar { position: absolute; inset-block-end: 14px; inset-inline-end: 14px; z-index: 30; display: flex; gap: 6px; }

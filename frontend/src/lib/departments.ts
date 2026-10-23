@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
+import { AUTH_KEY } from './authContext'
 import type { TFunction } from 'i18next'
 import {
   ApiError,
@@ -32,9 +33,11 @@ export function departmentErrorMessage(error: unknown, t: TFunction): string {
 }
 
 /** Departments derive from the org tree, so any tree or department write can
- *  move people between departments and change every scoped view. */
+ *  move people between departments and change every scoped view, including
+ *  the session's own `department_scope_kind` and `departments`. */
 export function invalidateDepartmentData(qc: QueryClient): void {
   for (const queryKey of [
+    AUTH_KEY,
     ['departments'],
     ['department-scoping'],
     ['org-tree'],
@@ -47,6 +50,13 @@ export function invalidateDepartmentData(qc: QueryClient): void {
   ]) {
     void qc.invalidateQueries({ queryKey })
   }
+}
+
+/** Who may open the org-tree editor: it reads the tree and the employee list
+ *  (`employees.view`), then relinks (`employees.edit`) or runs departments
+ *  (`departments.manage`). Route and tab gates must agree, so both use this. */
+export function canOpenOrgEditor(has: (capability: string) => boolean): boolean {
+  return has('employees.view') && (has('employees.edit') || has('departments.manage'))
 }
 
 export function departmentName(

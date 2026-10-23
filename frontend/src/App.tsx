@@ -22,6 +22,7 @@ import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 import { AuthProvider } from '@/lib/AuthProvider'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { canOpenOrgEditor } from '@/lib/departments'
 import { AppLockContext } from '@/lib/appLockContext'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { DEFAULT_IDLE_LOCK_SECONDS, useLockState } from '@/lib/useLockState'
@@ -192,6 +193,15 @@ function ServicesRoute(): React.JSX.Element {
         <ApplicationPage />
       </RequireCapability>
     </RequireCapability>
+  )
+}
+
+function PermissionsRoute(): React.JSX.Element {
+  const { has } = useCapabilities()
+  return (
+    <RequireAnyCapability caps={canOpenOrgEditor(has) ? ['users.manage', 'employees.edit', 'departments.manage'] : ['users.manage']}>
+      <PermissionsPage />
+    </RequireAnyCapability>
   )
 }
 
@@ -587,16 +597,8 @@ function Shell(): React.JSX.Element {
                 }
               />
               {/* People & permissions needs users.manage; the Organization &
-                  departments tab is the org-tree editor (employees.edit relinks,
-                  departments.manage runs departments). */}
-              <Route
-                path="/permissions"
-                element={
-                  <RequireAnyCapability caps={['users.manage', 'employees.edit', 'departments.manage']}>
-                    <PermissionsPage />
-                  </RequireAnyCapability>
-                }
-              />
+                  departments tab is the org-tree editor (see canOpenOrgEditor). */}
+              <Route path="/permissions" element={<PermissionsRoute />} />
               {/* Role-gated (admin or manager), not capability-gated: the API
                   allows exactly these roles to grant/remove Secret clearance. */}
               <Route

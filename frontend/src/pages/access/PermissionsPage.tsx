@@ -35,6 +35,7 @@ import {
   useCapabilityCatalog,
 } from '@/lib/useCapabilityCatalog'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { canOpenOrgEditor } from '@/lib/departments'
 import { cn } from '@/lib/utils'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { OrgDepartmentsTab } from './orgDepartments/OrgDepartmentsTab'
@@ -1506,7 +1507,7 @@ export function PermissionsPage(): React.JSX.Element {
   const { has } = useCapabilities()
   const [searchParams, setSearchParams] = useSearchParams()
   const canPeople = has('users.manage')
-  const canOrg = has('employees.edit') || has('departments.manage')
+  const canOrg = canOpenOrgEditor(has)
   const requested = searchParams.get('tab')
   const tab: PermissionsTab = (requested === 'org' && canOrg) || !canPeople ? 'org' : 'people'
 

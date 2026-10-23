@@ -189,13 +189,24 @@ describe('App route capability gates', () => {
     expect(await screen.findByText(pageText)).toBeVisible()
   })
 
-  it.each(['users.manage', 'employees.edit', 'departments.manage'])(
-    'opens /permissions with only %s, since the org-tree editor lives there',
+  it.each([
+    [['users.manage']],
+    [['employees.view', 'employees.edit']],
+    [['employees.view', 'departments.manage']],
+  ])('opens /permissions with %j', async (capabilities) => {
+    capabilityState.allowed = new Set(capabilities)
+    window.history.pushState({}, '', '/permissions')
+    render(<App />)
+    expect(await screen.findByText('permissions-page')).toBeVisible()
+  })
+
+  it.each(['employees.edit', 'departments.manage'])(
+    'denies /permissions for %s without employees.view, since the editor reads the tree',
     async (capability) => {
       capabilityState.allowed = new Set([capability])
       window.history.pushState({}, '', '/permissions')
       render(<App />)
-      expect(await screen.findByText('permissions-page')).toBeVisible()
+      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
     },
   )
 
