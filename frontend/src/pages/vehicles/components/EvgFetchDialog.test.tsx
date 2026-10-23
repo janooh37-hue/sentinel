@@ -13,7 +13,7 @@ import i18n from '@/lib/i18n'
 import type * as VehicleDialogShellModule from './VehicleDialogShell'
 import { EvgFetchDialog } from './EvgFetchDialog'
 
-vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
 const shellBusyMock = vi.hoisted(() => vi.fn())
 
@@ -410,7 +410,7 @@ describe('EvgFetchDialog', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Fetch fines' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('connection dropped')
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('errors.generic'))
     const retryButton = await screen.findByRole('button', { name: 'Retry' })
     await user.click(retryButton)
 

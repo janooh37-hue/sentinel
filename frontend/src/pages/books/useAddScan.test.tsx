@@ -4,11 +4,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { toast } from '@/lib/toast'
 import { useAddScan } from './useAddScan'
+import type * as ApiModule from '@/lib/api'
 
 const api = vi.hoisted(() => ({ postIntake: vi.fn(), addBookAttachment: vi.fn() }))
 const navigate = vi.hoisted(() => vi.fn())
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }))
-vi.mock('@/lib/api', () => ({ api, apiErrorMessage: (error: Error) => error.message }))
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
+  api,
+}))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
 vi.mock('@/lib/toast', () => ({ toast: {
   loading: vi.fn(() => 'reading-scan'), success: vi.fn(), info: vi.fn(), error: vi.fn(), dismiss: vi.fn(),
@@ -65,7 +69,7 @@ describe('useAddScan toast lifecycle', () => {
     else api.addBookAttachment.mockRejectedValue(new Error('failed'))
     const { result } = setup()
     await act(() => result.current.submit(file))
-    expect(toast.error).toHaveBeenCalledWith('failed', {
+    expect(toast.error).toHaveBeenCalledWith('Something went wrong', {
       id: 'reading-scan', reference: step === 'attachment' ? 'GS-0410' : undefined,
     })
     expect(toast.dismiss).not.toHaveBeenCalled()
@@ -82,7 +86,7 @@ describe('useAddScan toast lifecycle', () => {
     )
     api.addBookAttachment.mockRejectedValue(new Error('failed'))
     await act(() => result.current[method](file, 'GS-0410'))
-    expect(toast.error).toHaveBeenLastCalledWith('failed', { id: 'reading-scan', reference: 'GS-0410' })
+    expect(toast.error).toHaveBeenLastCalledWith('Something went wrong', { id: 'reading-scan', reference: 'GS-0410' })
     expect(result.current.busy).toBe(false)
   })
 
@@ -95,7 +99,7 @@ describe('useAddScan toast lifecycle', () => {
     await act(() => result.current.fileToOther())
     expect(toast.loading).toHaveBeenLastCalledWith('common.saving')
     expect(success ? toast.success : toast.error).toHaveBeenLastCalledWith(
-      success ? 'books.pane.scanFiledHere' : 'failed',
+      success ? 'books.pane.scanFiledHere' : 'Something went wrong',
       { id: 'reading-scan', reference: 'GS-0410' },
     )
     expect(result.current.otherMatch).toBeNull()

@@ -9,14 +9,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { toast } from '@/lib/toast'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ApiModule from '@/lib/api'
 
 vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'pending-download'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }))
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: { fetchTimesheetExport: vi.fn(), fetchTimesheetEmployeeExport: vi.fn() },
-  apiErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }))
 
 import { api } from '@/lib/api'
@@ -87,7 +88,7 @@ describe('useTimesheetDownload', () => {
     await act(async () => {
       void result.current.download(ARGS)
     })
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('The month is closed.', { id: 'pending-download' }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Something went wrong', { id: 'pending-download' }))
     expect(toast.loading).toHaveBeenCalledWith('timesheet.release.downloadingWorkbook')
     expect(revokeObjectURL).not.toHaveBeenCalled()
 
@@ -103,7 +104,7 @@ describe('useTimesheetDownload', () => {
     await act(async () => { await result.current.download(ARGS) })
 
     expect(toast.loading).toHaveBeenCalledWith('timesheet.release.downloadingWorkbook')
-    expect(toast.error).toHaveBeenCalledWith('Download unavailable', { id: 'pending-download' })
+    expect(toast.error).toHaveBeenCalledWith('Something went wrong', { id: 'pending-download' })
     expect(toast.success).not.toHaveBeenCalled()
   })
 })
@@ -128,7 +129,7 @@ describe('useEmployeeSheetDownload', () => {
     await act(async () => { await expect(result.current.download(args)).resolves.toBeUndefined() })
 
     expect(toast.loading).toHaveBeenCalledWith('timesheet.employee.downloadingSheet')
-    expect(toast.error).toHaveBeenCalledWith('Sheet unavailable', { id: 'pending-download' })
+    expect(toast.error).toHaveBeenCalledWith('Something went wrong', { id: 'pending-download' })
     expect(toast.success).not.toHaveBeenCalled()
   })
 
@@ -139,7 +140,7 @@ describe('useEmployeeSheetDownload', () => {
 
     await act(async () => { await result.current.download(args) })
 
-    expect(toast.error).toHaveBeenCalledWith('Download unavailable', { id: 'pending-download' })
+    expect(toast.error).toHaveBeenCalledWith('Something went wrong', { id: 'pending-download' })
     expect(toast.success).not.toHaveBeenCalled()
   })
 })
