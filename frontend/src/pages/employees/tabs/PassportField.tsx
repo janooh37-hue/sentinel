@@ -25,7 +25,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from '@/lib/toast'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { PassportSuggestion } from '@/lib/api'
 
 export interface PassportFieldProps {
@@ -71,7 +71,7 @@ export function PassportField({
       const s = await api.extractPassport(employeeId)
       setSuggestion(s)
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : String(e))
+      toast.error(apiErrorMessage(e))
     } finally {
       setBusy(false)
     }
@@ -85,7 +85,7 @@ export function PassportField({
       toast.success(t('common.savedToast'))
       onSaved?.()
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : String(e))
+      toast.error(apiErrorMessage(e))
     }
   }
 

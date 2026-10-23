@@ -1129,17 +1129,23 @@ export class ApiError extends Error {
   }
 }
 
-/** Human-readable message for any thrown value — the ApiError message when it is
- * one, else the stringified error. Replaces the `x instanceof ApiError ?
- * x.message : String(x)` idiom that was copy-pasted across the app.
- *
- * A 403 is the one refusal every screen can explain the same way, so it reads as
- * the localized permission message instead of the server's English detail
- * ("Admin access required."). Call sites that need a code-specific 403 message
- * check `err.code` before calling this. */
+const ARABIC_LETTER = /(?=\p{L})\p{Script=Arabic}/u
+
+/** Localized user-facing error text. A 403 always uses the shared permission
+ * message; other server details pass through unless an Arabic UI receives text
+ * without Arabic letters. Network TypeErrors and unexpected thrown values use
+ * localized network and generic messages respectively. Callers with translated
+ * code-specific refusals check `err.code` before calling this. */
 export function apiErrorMessage(err: unknown): string {
-  if (!(err instanceof ApiError)) return String(err)
-  return err.status === 403 ? i18n.t('common.forbiddenError') : err.message
+  if (!(err instanceof ApiError)) {
+    return i18n.t(err instanceof TypeError ? 'errors.network' : 'errors.generic')
+  }
+  if (err.status === 403) return i18n.t('common.forbiddenError')
+  // ponytail: Arabic users lose specific server detail until err.code maps to locale keys.
+  if (i18n.language.startsWith('ar') && !ARABIC_LETTER.test(err.message)) {
+    return i18n.t('common.toastServerError')
+  }
+  return err.message
 }
 
 const BASE = '/api/v1'

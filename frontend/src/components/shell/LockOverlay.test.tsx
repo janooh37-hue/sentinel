@@ -426,7 +426,7 @@ describe('LockOverlay', () => {
     await user.clear(password)
     await user.type(password, 'retry')
     await user.click(screen.getByRole('button', { name: 'Unlock' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('TypeError: Connection lost')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not reach the server')
     expect(password).toBeEnabled()
     expect(onUnlocked).not.toHaveBeenCalled()
 

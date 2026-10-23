@@ -73,7 +73,7 @@ describe('ExportWorkspace', () => {
       await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:register'))
       expect(toast.error).not.toHaveBeenCalled()
     } else {
-      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: Download failed', { id: 'pending-export' }))
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Something went wrong', { id: 'pending-export' }))
       expect(toast.success).not.toHaveBeenCalled()
     }
     expect(toast.loading).toHaveBeenCalledWith(i18n.t('inmateStats.export.downloading'))

@@ -7,13 +7,14 @@ import { beforeEach, expect, test, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import type { DashboardSummary, EmailSyncResult } from '@/lib/api'
+import type * as ApiModule from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { EmailSyncStatusWidget } from './EmailSyncStatusWidget'
 
 vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'pending-sync'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: { syncEmail: vi.fn() },
-  apiErrorMessage: (error: unknown) => String(error),
 }))
 
 beforeEach(() => vi.clearAllMocks())
@@ -58,7 +59,7 @@ test.each([true, false])('resolves the pending email-sync toast (success: %s)', 
     ))
     expect(toast.error).not.toHaveBeenCalled()
   } else {
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: Sync failed', { id: 'pending-sync' }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Something went wrong', { id: 'pending-sync' }))
     expect(toast.success).not.toHaveBeenCalled()
   }
 })

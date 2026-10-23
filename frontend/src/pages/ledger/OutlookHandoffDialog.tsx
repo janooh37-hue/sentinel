@@ -39,7 +39,7 @@ import {
   X,
 } from 'lucide-react'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { EmployeeLookupItem, LedgerEntryRead } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { base64PdfToFile, desiredRefPdfDocIds, mergeFiles } from '@/lib/refPdfAttachments'
@@ -547,8 +547,7 @@ export function OutlookHandoffDialog({
       }
       onHandedOff(entryId)
     },
-    onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : (err as Error).message),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const hasContent = useCallback((): boolean => {

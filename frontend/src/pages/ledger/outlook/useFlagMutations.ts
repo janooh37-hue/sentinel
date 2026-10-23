@@ -11,7 +11,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { LedgerListItem } from '@/lib/api'
 
 type LedgerListData = { items: LedgerListItem[]; total: number; limit: number; offset: number }
@@ -55,7 +55,7 @@ export function useFlagMutations(): FlagMutations {
     },
     onError: (err) => {
       invalidateFlagQueries(qc)
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     },
     onSettled: () => invalidateFlagQueries(qc),
   })
@@ -67,7 +67,7 @@ export function useFlagMutations(): FlagMutations {
     },
     onError: (err) => {
       invalidateFlagQueries(qc)
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     },
     onSettled: () => invalidateFlagQueries(qc),
   })

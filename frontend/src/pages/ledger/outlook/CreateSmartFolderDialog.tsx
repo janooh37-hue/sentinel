@@ -19,7 +19,7 @@ import { toast } from '@/lib/toast'
 
 import {
   api,
-  ApiError,
+  apiErrorMessage,
   type SmartFolder,
   type SmartFolderSuggestion,
 } from '@/lib/api'
@@ -80,8 +80,7 @@ export function CreateSmartFolderDialog({
       onCreated(folder)
       toast(t('ledger.smart.created'))
     },
-    onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   if (!suggestion) return null

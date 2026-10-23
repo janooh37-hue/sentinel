@@ -280,7 +280,7 @@ function LoadTemplateDialog({ open, onOpenChange, onLoad }: LoadTemplateDialogPr
           )}
           {listQuery.isError && (
             <p className="py-8 text-center text-sm text-destructive">
-              {(listQuery.error as Error).message}
+              {apiErrorMessage(listQuery.error)}
             </p>
           )}
           {!listQuery.isLoading && items.length === 0 && (

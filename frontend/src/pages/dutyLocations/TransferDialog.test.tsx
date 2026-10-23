@@ -23,13 +23,14 @@ vi.mock('react-router-dom', async (importOriginal) => ({
 }))
 
 import { api } from '@/lib/api'
+import type * as ApiModule from '@/lib/api'
 import { TransferDialog } from './TransferDialog'
 
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: { transferDuty: vi.fn() },
-  apiErrorMessage: (e: unknown) => String(e),
 }))
-vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'loading-toast-id'), success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'loading-toast-id'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('./transferDefaults', () => ({
   loadTransferDefaults: () => ({ recipientId: null, managerId: null, cc: [] }),
   saveTransferDefaults: vi.fn(),
@@ -163,7 +164,7 @@ test('a rejected transfer resolves the loading toast with an error', async () =>
   await user.click(screen.getByRole('button', { name: 'Apply to all' }))
   await user.click(generateBtn())
 
-  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: Transfer failed', { id: 'loading-toast-id' }))
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Something went wrong', { id: 'loading-toast-id' }))
   expect(toast.loading).toHaveBeenCalledWith(i18n.t('dutyLocations.transfer.generating'))
   expect(toast.success).not.toHaveBeenCalled()
 })

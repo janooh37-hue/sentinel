@@ -8,6 +8,7 @@ import { MemoryRouter } from 'react-router-dom'
 import type * as ReactRouter from 'react-router-dom'
 import { vi, test, expect, beforeEach } from 'vitest'
 import { toast } from '@/lib/toast'
+import type * as ApiModule from '@/lib/api'
 
 const navigate = vi.hoisted(() => vi.fn())
 vi.mock('react-router-dom', async (importOriginal) => ({
@@ -18,14 +19,14 @@ vi.mock('react-router-dom', async (importOriginal) => ({
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
 }))
-vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'loading-toast-id'), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'loading-toast-id'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: {
     updateEmployee: vi.fn(),
     transferDuty: vi.fn(),
     lookupEmployees: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   },
-  apiErrorMessage: (e: unknown) => String(e),
 }))
 vi.mock('@/pages/dutyLocations/transferDefaults', () => ({
   loadTransferDefaults: () => ({ recipientId: null, managerId: null, cc: [] }),
@@ -121,7 +122,7 @@ test.each([true, false])('a rejected transfer resolves loading (issue letter: %s
   if (!issueLetter) fireEvent.click(screen.getByLabelText('dutyLocations.transfer.issueLetter'))
   fireEvent.click(screen.getByRole('button', { name: issueLetter ? 'dutyLocations.transfer.generate' : 'common.save' }))
 
-  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: Transfer failed', { id: 'loading-toast-id' }))
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Something went wrong', { id: 'loading-toast-id' }))
   expect(toast.loading).toHaveBeenCalledWith(issueLetter ? 'dutyLocations.transfer.generating' : 'common.saving')
   expect(toast.success).not.toHaveBeenCalled()
 })

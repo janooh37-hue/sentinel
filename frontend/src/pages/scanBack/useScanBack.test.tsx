@@ -116,7 +116,7 @@ describe('useFileSignedCopy', () => {
 
     expect(toast.error).toHaveBeenCalledTimes(1)
     expect(toast.loading).toHaveBeenCalledWith('scanBack.filing')
-    expect(toast.error).toHaveBeenCalledWith('Error: boom', { id: 'upload-toast', reference: 'GS-0410' })
+    expect(toast.error).toHaveBeenCalledWith('Something went wrong', { id: 'upload-toast', reference: 'GS-0410' })
     expect(toast.success).not.toHaveBeenCalled()
   })
 
@@ -130,12 +130,12 @@ describe('useFileSignedCopy', () => {
     expect(toast.error).toHaveBeenCalledWith('Reference barcode does not match', { id: 'upload-toast', reference: 'GS-0410' })
   })
 
-  it('surfaces an unstructured error with the record reference', async () => {
+  it('localizes an unstructured error with the record reference', async () => {
     const qc = new QueryClient()
     vi.spyOn(apiMod.api, 'addBookAttachment').mockRejectedValue(new Error('boom'))
     const { result } = renderHook(() => useFileSignedCopy(), { wrapper: wrapperFor(qc) })
     await result.current.file(1, 'GS-0410', new File([], 'x.pdf'))
-    expect(toast.error).toHaveBeenCalledWith('Error: boom', { id: 'upload-toast', reference: 'GS-0410' })
+    expect(toast.error).toHaveBeenCalledWith('Something went wrong', { id: 'upload-toast', reference: 'GS-0410' })
   })
 
   it('keeps concurrent filing jobs on their own returned toast ids', async () => {
@@ -160,7 +160,7 @@ describe('scan upload failures', () => {
     vi.spyOn(apiMod.api, 'scanBack').mockRejectedValue(new Error('failed'))
     const { result } = renderHook(() => useScanBackUpload(), { wrapper: wrapperFor(qc) })
     act(() => result.current.upload(new File([], 'x.pdf')))
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: failed', { id: 'upload-toast', description: 'x.pdf' }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Something went wrong', { id: 'upload-toast', description: 'x.pdf' }))
     expect(toast.loading).toHaveBeenCalledWith('scanBack.uploading')
   })
 })

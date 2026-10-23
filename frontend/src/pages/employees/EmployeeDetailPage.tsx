@@ -21,7 +21,7 @@ import { useUrlOverlay } from '@/lib/urlState'
 import {
   DocumentViewerDialog,
 } from '@/components/ui/document-viewer-dialog'
-import { ApiError, api } from '@/lib/api'
+import { ApiError, api, apiErrorMessage } from '@/lib/api'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import type { EmployeeFormOutput } from '@/components/employees/schema'
 import type { ExtractionResponse } from '@/lib/extraction'
@@ -169,7 +169,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
       toast.success(t('employees.toast.updated'))
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     },
   })
 

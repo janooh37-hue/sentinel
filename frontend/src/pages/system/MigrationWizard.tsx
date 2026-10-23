@@ -17,7 +17,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from '@/lib/toast'
 
-import { api, type MigrationResult, type MigrationStatus } from '@/lib/api'
+import { api, apiErrorMessage, type MigrationResult, type MigrationStatus } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -175,7 +175,7 @@ export function MigrationWizard({
       setPreviewResult(result)
       setStep('preview')
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = apiErrorMessage(err)
       setErrorMsg(msg)
       toast.error(t('migration.error.heading') + ': ' + msg)
     } finally {
@@ -192,7 +192,7 @@ export function MigrationWizard({
       setFinalResult(result)
       setStep('summary')
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = apiErrorMessage(err)
       setErrorMsg(msg)
       setStep('preview')
       toast.error(t('migration.error.heading') + ': ' + msg)

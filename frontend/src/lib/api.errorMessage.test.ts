@@ -20,11 +20,27 @@ describe('apiErrorMessage', () => {
     expect(apiErrorMessage(new ApiError(403, 'HTTP_403', 'Forbidden'))).toBe("You don't have permission for this")
   })
 
-  it('keeps the server detail of every other error', () => {
+  it('keeps server detail in English', () => {
     expect(apiErrorMessage(new ApiError(401, 'UNAUTHENTICATED', 'Sign in again.'))).toBe('Sign in again.')
     expect(apiErrorMessage(new ApiError(409, 'LEAVE_STATE_FORBIDDEN', 'Leave is already approved.'))).toBe(
       'Leave is already approved.',
     )
-    expect(apiErrorMessage(new Error('boom'))).toBe('Error: boom')
+  })
+
+  it('replaces non-Arabic server detail in Arabic but preserves Arabic detail', async () => {
+    await i18n.changeLanguage('ar')
+    expect(apiErrorMessage(new ApiError(409, 'RECORD_LOCKED', 'Record is locked.'))).toBe('تعذّر إكمال الطلب')
+    expect(apiErrorMessage(new ApiError(409, 'RECORD_LOCKED', 'السجل مقفل'))).toBe('السجل مقفل')
+  })
+
+  it.each([
+    ['en', 'Could not reach the server', 'Something went wrong'],
+    ['ar', 'تعذر الاتصال بالخادم', 'حدث خطأ ما'],
+  ])('localizes network and unexpected errors in %s', async (language, network, generic) => {
+    await i18n.changeLanguage(language)
+    expect(apiErrorMessage(new TypeError('Failed to fetch'))).toBe(network)
+    expect(apiErrorMessage(new Error('boom'))).toBe(generic)
+    expect(apiErrorMessage('Failed to fetch')).toBe(generic)
+    expect(apiErrorMessage(null)).toBe(generic)
   })
 })

@@ -497,7 +497,7 @@ function StandardApplicationPage(): React.JSX.Element {
         toast.error(message, { reference: ref })
         return
       }
-      setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))
+      setSubmitError(apiErrorMessage(err))
       toast.error(apiErrorMessage(err))
     },
   })
@@ -520,7 +520,7 @@ function StandardApplicationPage(): React.JSX.Element {
       navigate(`/books/${res.book_id}/word`)
     },
     onError: (err) => {
-      setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))
+      setSubmitError(apiErrorMessage(err))
       toast.error(apiErrorMessage(err))
     },
   })

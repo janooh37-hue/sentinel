@@ -1023,7 +1023,7 @@ test('incorrect password and a settled network error stay locked, allow editable
 
   await replacePassword(page, 'network-fixture-password')
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('alert')).toContainText('Failed to fetch')
+  await expect(page.getByRole('alert')).toHaveText('Could not reach the server')
   await expect(page.locator('#lock-pwd')).toBeEnabled()
   await expect(lockDialog(page, locale)).toBeVisible()
 
