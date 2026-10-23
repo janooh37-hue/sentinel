@@ -24,11 +24,15 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.v1 import notifications
 from app.db.models import Base, User
+from app.services import auth_service
 from tests.conftest import make_user
 
 
 class _NeverDisconnects:
-    """The one Request member the generator touches before its first frame."""
+    """A stream request carrying its originating session cookie."""
+
+    def __init__(self, token: str) -> None:
+        self.cookies = {"gssg_session": token}
 
     async def is_disconnected(self) -> bool:
         return False
@@ -57,12 +61,13 @@ def test_stream_releases_its_connection_before_the_endless_body(tmp_path: Path) 
     with factory() as setup:
         user = make_user(setup, role="admin", email="stream@test.ae")
         user_id = user.id
+        token = auth_service.start_session(setup, user)
 
     injected = factory()
     user_row = injected.get(User, user_id)
     assert user_row is not None
 
-    response = anyio.run(lambda: notifications.stream(_NeverDisconnects(), injected, user_row))
+    response = anyio.run(lambda: notifications.stream(_NeverDisconnects(token), injected, user_row))
 
     # Consume exactly the initial counts event, then stop: this is the moment a
     # real viewer reaches and then sits at for hours.
