@@ -4765,6 +4765,7 @@
     },
     "workspace": {
       "title": "بيئة عملي",
+      "unavailable": "غير متاح",
       "total": "الإجمالي",
       "ourStaff": "موظفونا",
       "onSite": "في الموقع",

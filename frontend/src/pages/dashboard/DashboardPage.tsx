@@ -363,20 +363,18 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         return <InboxWidget />
       case 'violations': {
         if (!has('violations.view')) return null
-        const openViolations = summary?.totals.open_violations_count ?? null
+        const openViolations = summary?.totals.open_violations_count ?? 0
         return (
           <WidgetCard
             header={t('dashboard.widgets.violations.header')}
-            big={openViolations ?? '—'}
+            big={openViolations}
             delta={
-              openViolations == null
-                ? undefined
-                : openViolations > 0
-                  ? { tone: 'warn', label: t('dashboard.widgets.violations.deltaWarn', { count: openViolations }) }
-                  : { tone: 'steady', label: t('dashboard.widgets.violations.deltaSteady') }
+              openViolations > 0
+                ? { tone: 'warn', label: t('dashboard.widgets.violations.deltaWarn', { count: openViolations }) }
+                : { tone: 'steady', label: t('dashboard.widgets.violations.deltaSteady') }
             }
             breakdown={[
-              { color: 'accent', label: t('dashboard.widgets.violations.active'), value: openViolations ?? '—' },
+              { color: 'accent', label: t('dashboard.widgets.violations.active'), value: openViolations },
               { color: 'warning', label: t('dashboard.widgets.violations.escalated'), value: 0 },
               { color: 'success', label: t('dashboard.widgets.violations.pendingClose'), value: 0 },
             ] satisfies BreakdownRow[]}
@@ -539,6 +537,20 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       </div>
     )
   }
+  const topCells = zones.top.map((w, i) => {
+    const node = renderWidget(w.id as WidgetId, 'top')
+    return node == null ? null : (
+      <div key={w.id} className="anim-fade-up" style={{ animationDelay: `${80 + i * 40}ms` }}>
+        {node}
+      </div>
+    )
+  }).filter((cell) => cell != null)
+  const underWorkspaceCells = zones.under_workspace
+    .map((w, i) => widgetCell(w.id as WidgetId, 'under_workspace', i))
+    .filter((cell) => cell != null)
+  const underQuickActionsCells = zones.under_quick_actions
+    .map((w, i) => widgetCell(w.id as WidgetId, 'under_quick_actions', i))
+    .filter((cell) => cell != null)
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
@@ -586,24 +598,16 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         </div>
 
         {/* ============ TOP ZONE (2 big cards) ============ */}
-        {zones.top.length > 0 && (
-          <div className="mb-6 grid grid-cols-1 gap-3.5 md:grid-cols-2">
-            {zones.top.map((w, i) => {
-              const node = renderWidget(w.id as WidgetId, 'top')
-              if (node == null) return null
-              return (
-                <div key={w.id} className="anim-fade-up" style={{ animationDelay: `${80 + i * 40}ms` }}>
-                  {node}
-                </div>
-              )
-            })}
+        {topCells.length > 0 && (
+          <div className={`mb-6 grid grid-cols-1 gap-3.5 ${topCells.length > 1 ? 'md:grid-cols-2' : ''}`}>
+            {topCells}
           </div>
         )}
 
         {/* ============ UNDER-WORKSPACE ZONE ============ */}
-        {zones.under_workspace.length > 0 && (
+        {underWorkspaceCells.length > 0 && (
           <div className="mb-6 grid auto-rows-fr grid-cols-1 gap-3.5 md:grid-cols-3">
-            {zones.under_workspace.map((w, i) => widgetCell(w.id as WidgetId, 'under_workspace', i))}
+            {underWorkspaceCells}
           </div>
         )}
 
@@ -661,9 +665,9 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         )}
 
         {/* ============ UNDER-QUICK-ACTIONS ZONE ============ */}
-        {zones.under_quick_actions.length > 0 && (
+        {underQuickActionsCells.length > 0 && (
           <div className="mb-6 grid auto-rows-fr grid-cols-1 gap-3.5 md:grid-cols-3">
-            {zones.under_quick_actions.map((w, i) => widgetCell(w.id as WidgetId, 'under_quick_actions', i))}
+            {underQuickActionsCells}
           </div>
         )}
       </div>
@@ -779,12 +783,12 @@ function DashboardHero({
   )
 
   let insight: React.ReactNode
-  if (onLeaveToday == null) {
+  if (onLeaveToday == null || staffOnSite == null) {
     insight = null
   } else if (returnersToday.length === 0) {
     insight = (
       <span>
-        {t('dashboard.hero.calm', { n: staffOnSite ?? '—' })}
+        {t('dashboard.hero.calm', { n: staffOnSite })}
         {upcomingThisWeek > 0 && ` ${t('dashboard.hero.calmUpcoming', { n: upcomingThisWeek })}`}
       </span>
     )
@@ -1093,7 +1097,7 @@ function WorkspaceCard({
         <span className="me-1.5 text-[0.32em] font-medium text-muted-foreground align-middle">
           {currency}
         </span>
-        {isLoading ? <Skeleton className="h-9 w-16" /> : staff ?? '—'}
+        {isLoading ? <Skeleton className="h-9 w-16" /> : staff ?? <UnavailableWorkspaceFigure />}
       </div>
 
       <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[0.78em] text-muted-foreground">
@@ -1137,6 +1141,11 @@ function WorkspaceCard({
   )
 }
 
+function UnavailableWorkspaceFigure(): React.JSX.Element {
+  const { t } = useTranslation()
+  return <><span aria-hidden>—</span><span className="sr-only">{t('dashboard.workspace.unavailable')}</span></>
+}
+
 function WorkspaceChip({
   dotClass,
   count,
@@ -1149,7 +1158,7 @@ function WorkspaceChip({
   return (
     <span className="flex items-center gap-1.5">
       <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} aria-hidden />
-      <span className="font-semibold tabular-nums text-foreground">{count ?? '—'}</span>
+      <span className="font-semibold tabular-nums text-foreground">{count ?? <UnavailableWorkspaceFigure />}</span>
       {label}
     </span>
   )
