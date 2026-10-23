@@ -324,7 +324,7 @@ export function ViolationsTab({
   const targetReady =
     !shouldLoadFull ||
     (!fullQuery.isError &&
-      (fullQuery.data !== undefined || (!fullQuery.isPending && !fullQuery.isError)))
+      (fullQuery.data !== undefined || !fullQuery.isPending))
   const targetPresent = openId != null && rows.some((row) => row.id === openId)
   const { highlightedId, targetNotFoundId } = useViolationTarget({
     openId,

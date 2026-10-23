@@ -58,7 +58,7 @@ export function AttentionQueue({
         <p className="px-4 py-4 text-[0.78em] text-muted-foreground">{t('attendance.attention.none')}</p>
       ) : reviewingExceptions ? (
         <ul>
-          {queue.map((row) => {
+          {exceptionRows.map((row) => {
             const name = pickEmployeeName({ name_en: row.name_en, name_ar: row.name_ar ?? null }, i18n.language)
             const state = row.missing_checkout
               ? t('attendance.review.reasons.missing_checkout')
@@ -97,7 +97,7 @@ export function AttentionQueue({
         </ul>
       ) : (
         <ul>
-          {queue.map((row) => {
+          {registerQueue.map((row) => {
             const state = rowState(row, input)
             const name = pickEmployeeName({ name_en: row.name_en, name_ar: row.name_ar ?? null }, i18n.language)
             return (

@@ -166,10 +166,12 @@ describe('EmployeeActivitySection', () => {
     ))
     const dutyRow = screen.getByRole('link', { name: /open employee activity/i })
     expect(dutyRow).toHaveAttribute('href', '/employees/G500?tab=activity')
-    expect(dutyRow.querySelector('span[aria-hidden="true"]')).toHaveStyle({
-      background: 'var(--primary-soft)',
-      color: 'var(--primary-on-soft)',
-    })
+    // Assert the authored inline style, not the computed one: jsdom 30 resolves the `background`
+    // shorthand in getComputedStyle, and `--primary-soft` is undefined in jsdom, so the computed
+    // value falls back to transparent even though the component sets the token correctly.
+    const icon = dutyRow.querySelector<HTMLElement>('span[aria-hidden="true"]')
+    expect(icon?.style.background).toBe('var(--primary-soft)')
+    expect(icon?.style.color).toBe('var(--primary-on-soft)')
   })
 
   it('filters and links status history to the employee profile', async () => {
@@ -219,7 +221,7 @@ describe('EmployeeActivitySection', () => {
   it('appends the next 25, keeps Load more full-width on phone, and hides it at total', async () => {
     const pageOne = Array.from({ length: 25 }, (_, index) => ({ ...items[0], source_id: index + 1, target_id: index + 1, title: `Document ${index + 1}` }))
     const finalItem = { ...items[0], source_id: 26, target_id: 26, title: 'Document 26' }
-    vi.mocked(api.listEmployeeActivity).mockImplementation(({ offset = 0 }) => Promise.resolve({ items: offset === 0 ? pageOne : [finalItem], total: 26, limit: 25, offset }))
+    vi.mocked(api.listEmployeeActivity).mockImplementation((params) => { const offset = params?.offset ?? 0; return Promise.resolve({ items: offset === 0 ? pageOne : [finalItem], total: 26, limit: 25, offset }) })
     wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
     await screen.findByText('Document 1')
     const loadMore = screen.getByRole('button', { name: /load more activity/i })
@@ -279,14 +281,15 @@ describe('EmployeeActivitySection', () => {
       title: `Document ${index + 1}`,
     }))
     const finalItem = { ...items[0], source_id: 26, target_id: 26, title: 'Document 26' }
-    vi.mocked(api.listEmployeeActivity).mockImplementation(({ offset = 0 }) =>
-      Promise.resolve({
+    vi.mocked(api.listEmployeeActivity).mockImplementation((params) => {
+      const offset = params?.offset ?? 0
+      return Promise.resolve({
         items: offset === 0 ? pageOne : [finalItem],
         total: 26,
         limit: 25,
         offset,
-      }),
-    )
+      })
+    })
     wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
     await screen.findByText('Document 1')
     await userEvent.click(screen.getByRole('button', { name: 'mock-select-G3190' }))

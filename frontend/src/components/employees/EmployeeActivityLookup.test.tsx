@@ -111,7 +111,7 @@ describe('EmployeeActivityLookup', () => {
     await waitFor(() => {
       expect(api.listEmployees).toHaveBeenLastCalledWith({ q: 'G3190', limit: 8 })
     })
-    expect(vi.mocked(api.listEmployees).mock.calls.map(([params]) => params.q)).toEqual(['G3190'])
+    expect(vi.mocked(api.listEmployees).mock.calls.map(([params]) => params?.q)).toEqual(['G3190'])
   })
 
 
