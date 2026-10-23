@@ -540,7 +540,7 @@ class BookDistributionMember(BaseModel):
     user_id: int
     name: str
     name_ar: str | None
-    role: Literal["head", "deputy", "member"]
+    role: Literal["head", "deputy", "viewer", "member"]
     already_recipient: bool
     cleared: bool
 

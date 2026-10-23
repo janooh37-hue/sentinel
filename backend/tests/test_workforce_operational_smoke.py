@@ -18,7 +18,7 @@ from datetime import UTC, date, datetime, time, timedelta
 import pytest
 from sqlalchemy import select
 
-from app.db.models import Department, Employee, Leave, User
+from app.db.models import Department, DepartmentException, Employee, Leave, User
 from app.db.workforce_models import (
     AttendanceCase,
     AttendanceEvaluation,
@@ -681,8 +681,16 @@ def test_office_to_company_move_replaces_future_attendance_only(db_session):
     actor = fixture.admin
     target, office_control = fixture.employees
     trusted_scope = organization_scope()
-    department = Department(name_en="Company Operations", name_ar="عمليات السرايا")
+    head = Employee(id="G-OPS-HEAD", name_en="Operations Head")
+    department = Department(
+        name_en="Company Operations", name_ar="عمليات السرايا", head_employee_id=head.id
+    )
+    db_session.add(head)
+    db_session.flush()  # No ORM relationship orders the head before its department.
     db_session.add(department)
+    db_session.flush()
+    # Departments follow the org tree; an exception moves the target in.
+    db_session.add(DepartmentException(employee_id=target.id, department_id=department.id))
     db_session.flush()
 
     crew_2 = db_session.scalar(select(WorkCrew).where(WorkCrew.code == "crew_2"))
@@ -823,7 +831,6 @@ def test_office_to_company_move_replaces_future_attendance_only(db_session):
             EmployeeUpdate(
                 duty_unit="السرية الثانية",
                 duty_post="البوابة الرئيسية",
-                department_id=department.id,
                 department="Ignored conflicting label",
             ),
         )

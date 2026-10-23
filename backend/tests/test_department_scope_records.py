@@ -19,9 +19,8 @@ from app.db.models import (
     BookRecipient,
     BookRevisionAccess,
     BookVersion,
-    Department,
-    DepartmentMember,
     Document,
+    Employee,
     UserPermission,
 )
 from app.db.session import get_db
@@ -29,29 +28,33 @@ from app.main import create_app
 from app.services import book_service, department_service, perm_service
 from app.services import department_scope_service as scopes
 from tests.conftest import make_user
+from tests.department_fixtures import department as make_department
+from tests.department_fixtures import employee, exception, grant, link, recompute
 
 
 @pytest.fixture()
 def records(api_db):
     db = api_db
-    root = Department(name_en="Root", name_ar="الجذر")
-    other = Department(name_en="Other", name_ar="آخر")
-    db.add_all([root, other, BookCategory(id="HR", prefix="HR")])
-    db.flush()
-    child = Department(name_en="Child", name_ar="فرع", parent_id=root.id)
-    db.add(child)
-    db.flush()
+    employee(db, "ROOT-HEAD")
+    employee(db, "OTHER-HEAD")
+    employee(db, "CHILD-HEAD", supervisor="ROOT-HEAD")
+    for name, supervisor in (
+        ("viewer", "ROOT-HEAD"),
+        ("peer", "ROOT-HEAD"),
+        ("other", "OTHER-HEAD"),
+        ("child", "CHILD-HEAD"),
+        ("unassigned", None),
+    ):
+        employee(db, name, supervisor=supervisor)
+    root = make_department(db, "Root", "ROOT-HEAD", name_ar="الجذر")
+    other = make_department(db, "Other", "OTHER-HEAD", name_ar="آخر")
+    child = make_department(db, "Child", "CHILD-HEAD", name_ar="فرع")
+    db.add(BookCategory(id="HR", prefix="HR"))
     users = {
-        name: make_user(db, role="operator", email=f"{name}@scope.ae")
+        name: link(db, make_user(db, role="operator", email=f"{name}@scope.ae"), name)
         for name in ("viewer", "peer", "other", "child", "unassigned")
     }
-    for name, department in (("viewer", root), ("peer", root), ("other", other), ("child", child)):
-        db.add(
-            DepartmentMember(
-                user_id=users[name].id, department_id=department.id, role="member", is_primary=True
-            )
-        )
-    db.commit()
+    grant(db, root.id, users["viewer"], "viewer")
     books = {}
     for name in ("peer", "other", "child", "unassigned", "viewer"):
         row = Book(
@@ -74,7 +77,7 @@ def visible(db, user):
     return set(db.scalars(stmt.where(clause) if clause is not None else stmt))
 
 
-def test_members_see_peers_but_not_other_departments_or_null_records(records):
+def test_viewers_see_department_but_not_subdepartments_or_null_records(records):
     db, users, books, *_ = records
     assert visible(db, users["viewer"]) == {books["peer"].id, books["viewer"].id}
     for name, book in books.items():
@@ -87,14 +90,47 @@ def test_members_see_peers_but_not_other_departments_or_null_records(records):
 
 @pytest.mark.parametrize("role", ["head", "deputy"])
 def test_heads_and_deputies_see_subtree(records, role):
-    db, users, books, _root, *_ = records
-    membership = db.scalar(
-        select(DepartmentMember).where(DepartmentMember.user_id == users["viewer"].id)
+    db, users, books, root, *_ = records
+    if role == "head":
+        link(db, users["viewer"], root.head_employee_id)
+    department_service.replace_people(
+        db,
+        root.id,
+        [users["viewer"].id] if role == "deputy" else [],
+        [],
+        actor="admin@scope.ae",
     )
-    membership.role = role
-    db.commit()
-    scopes.invalidate_department_scope(db, users["viewer"].id)
     assert visible(db, users["viewer"]) == {books[name].id for name in ("peer", "viewer", "child")}
+
+
+def test_plain_staff_see_only_their_own_records_not_department_peers(records):
+    db, users, books, *_ = records
+    assert visible(db, users["peer"]) == {books["peer"].id}
+    assert book_service.resolve_book_read_access(db, users["peer"], books["peer"]).full_access
+    with pytest.raises(NotFoundError):
+        book_service.resolve_book_read_access(db, users["peer"], books["viewer"])
+
+
+def test_supervisor_sees_records_created_by_users_in_their_branch(records):
+    db, users, books, root, _other, child = records
+    supervisor = users["unassigned"]
+    db.get(Employee, "peer").supervisor_id = supervisor.employee_id
+    db.get(Employee, "CHILD-HEAD").supervisor_id = supervisor.employee_id
+    recompute(db)
+    scope = scopes.resolve_department_scope(db, supervisor)
+    assert scope.kind == "branch"
+    assert scope.department_ids == frozenset()
+    assert books["peer"].department_id == root.id
+    assert books["child"].department_id == child.id
+    expected = {books[name].id for name in ("unassigned", "peer", "child")}
+    assert visible(db, supervisor) == expected
+    for book in books.values():
+        assert scopes.book_in_scope(db, supervisor, book) == (book.id in expected)
+        if book.id in expected:
+            assert book_service.resolve_book_read_access(db, supervisor, book).full_access
+        else:
+            with pytest.raises(NotFoundError):
+                book_service.resolve_book_read_access(db, supervisor, book)
 
 
 def test_personal_and_secret_still_narrow_department_access(records):
@@ -179,6 +215,7 @@ def test_assignee_and_retained_revision_keep_cross_department_access(records, ki
 
 def test_switch_off_restores_visibility_and_backfill_is_counted_and_idempotent(records):
     db, users, books, root, *_ = records
+    grant(db, books["other"].department_id, users["peer"], "deputy")
     department_service.set_scoping(db, False, actor="admin@scope.ae")
     assert visible(db, users["viewer"]) == {book.id for book in books.values()}
     db.execute(
@@ -201,14 +238,24 @@ def test_switch_off_restores_visibility_and_backfill_is_counted_and_idempotent(r
     assert department_service.set_scoping(db, False, actor="admin@scope.ae").records_backfilled == 0
 
 
-def test_services_are_member_union_not_subtree_and_record_caps_are_untouched(records):
+@pytest.mark.parametrize("extra_role", ["deputy", "viewer"])
+def test_services_use_user_department_union_not_subtree_and_preserve_record_caps(
+    records, extra_role
+):
     db, users, _books, root, other, child = records
-    user = users["viewer"]
+    user = users["peer"]
     before = perm_service.effective_caps(db, user)
     assert not any(cap.startswith("books.service.") for cap in before)
     assert any(cap.startswith("books.servicerecords.") for cap in before)
     department_service.replace_services(db, root.id, ["General Book"], actor="admin@scope.ae")
     department_service.replace_services(db, child.id, ["Report"], actor="admin@scope.ae")
+    department_service.replace_people(
+        db, root.id, [user.id], [users["viewer"].id], actor="admin@scope.ae"
+    )
+    assert scopes.resolve_department_scope(db, user).department_ids == frozenset(
+        {root.id, child.id}
+    )
+    assert scopes.user_department_ids(db, user) == frozenset({root.id})
     caps = perm_service.effective_caps(db, user)
     assert {cap for cap in caps if cap.startswith("books.service.")} == {
         "books.service.General Book"
@@ -217,17 +264,14 @@ def test_services_are_member_union_not_subtree_and_record_caps_are_untouched(rec
         cap for cap in before if cap.startswith("books.servicerecords.")
     }
     department_service.replace_services(db, other.id, ["Report"], actor="admin@scope.ae")
-    from app.schemas.department import DepartmentMembership
-
-    department_service.replace_memberships(
+    department_service.replace_people(
         db,
-        user.id,
-        [
-            DepartmentMembership(department_id=root.id, role="head", is_primary=True),
-            DepartmentMembership(department_id=other.id, role="member", is_primary=False),
-        ],
+        other.id,
+        [user.id] if extra_role == "deputy" else [],
+        [user.id] if extra_role == "viewer" else [],
         actor="admin@scope.ae",
     )
+    assert scopes.user_department_ids(db, user) == frozenset({root.id, other.id})
     assert {
         cap for cap in perm_service.effective_caps(db, user) if cap.startswith("books.service.")
     } == {"books.service.General Book", "books.service.Report"}
@@ -256,10 +300,16 @@ def test_organization_and_switch_off_keep_services_self_scope_has_none(records):
     assert perm_service.effective_caps(db, user) == all_caps | {"departments.all"}
 
 
-def test_mapper_stamps_primary_preserves_explicit_and_does_not_restamp(records):
+def test_mapper_stamps_creator_employee_preserves_explicit_and_does_not_restamp(records):
     db, users, books, root, other, _child = records
     assert books["peer"].department_id == root.id
     assert books["unassigned"].department_id is None
+    grant(db, other.id, users["peer"], "deputy")
+    grant(db, other.id, users["unassigned"], "viewer")
+    derived = Book(category_id="HR", ref_number="DERIVED", created_by_user_id=users["peer"].id)
+    outside = Book(
+        category_id="HR", ref_number="OUTSIDE", created_by_user_id=users["unassigned"].id
+    )
     explicit = Book(
         category_id="HR",
         ref_number="EXPLICIT",
@@ -267,17 +317,30 @@ def test_mapper_stamps_primary_preserves_explicit_and_does_not_restamp(records):
         department_id=other.id,
     )
     anonymous = Book(category_id="HR", ref_number="ANONYMOUS")
-    db.add_all([explicit, anonymous])
+    db.add_all([derived, outside, explicit, anonymous])
     db.commit()
+    assert derived.department_id == root.id
+    assert outside.department_id is None
     assert explicit.department_id == other.id
     assert anonymous.department_id is None
-    membership = db.scalar(
-        select(DepartmentMember).where(DepartmentMember.user_id == users["peer"].id)
-    )
-    membership.department_id = other.id
+    exception(db, users["peer"].employee_id, other.id)
+    assert db.get(Employee, users["peer"].employee_id).department_id == other.id
     books["peer"].subject = "Edited after transfer"
     db.commit()
     assert books["peer"].department_id == root.id
+    assert derived.department_id == root.id
+
+
+def test_records_after_employee_transfer_stamp_the_new_department(records):
+    db, users, books, root, other, _child = records
+    exception(db, users["peer"].employee_id, other.id)
+    new_book = Book(
+        category_id="HR", ref_number="AFTER-TRANSFER", created_by_user_id=users["peer"].id
+    )
+    db.add(new_book)
+    db.commit()
+    assert books["peer"].department_id == root.id
+    assert new_book.department_id == other.id
 
 
 def test_api_list_facets_detail_and_word_hide_out_of_scope(records):
@@ -369,9 +432,8 @@ def test_document_employee_dashboard_and_ledger_projections_hide_foreign_books(r
     assert [item.subject for item in dashboard_service._recent_ledger(db, user=user)] == ["peer"]
 
 
-def test_creation_paths_stamp_primary_department(api_db, tmp_path, monkeypatch):
+def test_creation_paths_stamp_creator_employee_department(api_db, tmp_path, monkeypatch):
     from app.config import Settings
-    from app.db.models import Employee
     from app.services import document_service
     from tests.test_books_created_by import _client, _generate_general_book, _generate_leave
     from tests.test_word_book_routes import _client as word_client
@@ -380,22 +442,13 @@ def test_creation_paths_stamp_primary_department(api_db, tmp_path, monkeypatch):
     settings = Settings(data_dir=tmp_path / "data")
     monkeypatch.setattr(document_service, "get_settings", lambda: settings)
     monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda path: None)
-    db.add_all(
-        [
-            BookCategory(id="GS", prefix="GS"),
-            BookCategory(id="HR", prefix="HR"),
-            Employee(id="G-1001", name_en="Employee"),
-        ]
-    )
-    department = Department(name_en="Creators", name_ar="المنشئون")
-    db.add(department)
+    employee(db, "CREATOR-HEAD")
+    employee(db, "CREATOR", supervisor="CREATOR-HEAD")
+    employee(db, "G-1001")
+    department = make_department(db, "Creators", "CREATOR-HEAD", name_ar="المنشئون")
+    db.add_all([BookCategory(id="GS", prefix="GS"), BookCategory(id="HR", prefix="HR")])
     db.commit()
-    creator = make_user(db, role="admin", email="stamping@scope.ae")
-    db.add(
-        DepartmentMember(
-            user_id=creator.id, department_id=department.id, role="member", is_primary=True
-        )
-    )
+    creator = link(db, make_user(db, role="admin", email="stamping@scope.ae"), "CREATOR")
     db.commit()
     book_ids = [_generate_general_book(db, creator), _generate_leave(db, creator)]
     with _client(db, creator) as client:

@@ -17,6 +17,7 @@ from app.db.models import (
     BookRecipient,
     Department,
     DepartmentMember,
+    Employee,
     User,
 )
 from app.schemas.book import (
@@ -32,13 +33,52 @@ from app.schemas.book import (
 from app.schemas.department import DepartmentRole
 from app.services import book_send_service, book_service, department_service, perm_service
 
+# Accounts that can receive a department delivery.
+_REACHABLE = (User.status == "active", User.role != INMATE_REPORTER_ROLE)
+
+
+def receivers(db: Session, department_ids: Sequence[int]) -> dict[int, list[User]]:
+    """Reachable head account first, then active deputies, per department."""
+    result: dict[int, list[User]] = defaultdict(list)
+    if not department_ids:
+        return result
+    for did, target in db.execute(
+        select(Department.id, User)
+        .join(User, User.employee_id == Department.head_employee_id)
+        .where(Department.id.in_(department_ids))
+        .where(*_REACHABLE)
+        .order_by(User.id)
+    ):
+        result[did].append(target)
+    for did, target in db.execute(
+        select(DepartmentMember.department_id, User)
+        .join(User, User.id == DepartmentMember.user_id)
+        .where(
+            DepartmentMember.department_id.in_(department_ids),
+            DepartmentMember.role == "deputy",
+        )
+        .where(*_REACHABLE)
+        .order_by(DepartmentMember.id)
+    ):
+        if all(existing.id != target.id for existing in result[did]):
+            result[did].append(target)
+    return result
+
 
 def head_departments(db: Session, user: User) -> set[int]:
-    return set(
+    """Departments this user receives for: the head's account or a deputy."""
+    headed = (
+        set(
+            db.scalars(select(Department.id).where(Department.head_employee_id == user.employee_id))
+        )
+        if user.employee_id
+        else set()
+    )
+    return headed | set(
         db.scalars(
             select(DepartmentMember.department_id).where(
                 DepartmentMember.user_id == user.id,
-                DepartmentMember.role.in_(("head", "deputy")),
+                DepartmentMember.role == "deputy",
             )
         )
     )
@@ -66,19 +106,7 @@ def prepare_sends(
     skipped = [
         BookSendSkipped(department_id=did, reason="already_sent") for did in wanted if did in active
     ]
-    heads: dict[int, list[User]] = defaultdict(list)
-    for did, target in db.execute(
-        select(DepartmentMember.department_id, User)
-        .join(User, User.id == DepartmentMember.user_id)
-        .where(
-            DepartmentMember.department_id.in_(wanted),
-            DepartmentMember.role.in_(("head", "deputy")),
-            User.status == "active",
-            User.role != INMATE_REPORTER_ROLE,
-        )
-        .order_by(DepartmentMember.id)
-    ):
-        heads[did].append(target)
+    heads = receivers(db, [did for did in wanted if did not in active])
     missing = [did for did in wanted if did not in active and not heads[did]]
     if missing:
         raise AppError(
@@ -202,19 +230,42 @@ def _require_head(db: Session, user: User, book: Book, send_id: int) -> BookDepa
     return row
 
 
-def _members(db: Session, department_id: int) -> list[tuple[DepartmentMember, User]]:
-    return list(
-        db.execute(
-            select(DepartmentMember, User)
-            .join(User, User.id == DepartmentMember.user_id)
-            .where(
-                DepartmentMember.department_id == department_id,
-                User.status == "active",
-                User.role != INMATE_REPORTER_ROLE,
-            )
-            .order_by(DepartmentMember.id)
-        ).tuples()
-    )
+def _members(db: Session, department_id: int) -> list[tuple[DepartmentRole, User]]:
+    """Head, deputies, viewers and derived members, each user once at their strongest role."""
+    found: dict[int, tuple[DepartmentRole, User]] = {}
+    for target in receivers(db, [department_id])[department_id]:
+        found[target.id] = ("deputy", target)
+    head_ids = {
+        target.id
+        for target in db.scalars(
+            select(User)
+            .join(Department, Department.head_employee_id == User.employee_id)
+            .where(Department.id == department_id)
+            .where(*_REACHABLE)
+        )
+    }
+    for user_id in head_ids:
+        found[user_id] = ("head", found[user_id][1])
+    for target in db.scalars(
+        select(User)
+        .join(DepartmentMember, DepartmentMember.user_id == User.id)
+        .where(
+            DepartmentMember.department_id == department_id,
+            DepartmentMember.role == "viewer",
+        )
+        .where(*_REACHABLE)
+        .order_by(DepartmentMember.id)
+    ):
+        found.setdefault(target.id, ("viewer", target))
+    for target in db.scalars(
+        select(User)
+        .join(Employee, Employee.id == User.employee_id)
+        .where(Employee.department_id == department_id)
+        .where(*_REACHABLE)
+        .order_by(User.id)
+    ):
+        found.setdefault(target.id, ("member", target))
+    return list(found.values())
 
 
 def distribution_options(
@@ -222,8 +273,8 @@ def distribution_options(
 ) -> BookDistributionOptions:
     delivery = _require_head(db, user, book, send_id)
     members = [
-        (membership, target)
-        for membership, target in _members(db, delivery.department_id)
+        (role, target)
+        for role, target in _members(db, delivery.department_id)
         if target.id != user.id
     ]
     ids = {target.id for _, target in members}
@@ -248,29 +299,18 @@ def distribution_options(
             .order_by(Department.id)
         )
     )
-    with_head = set(
-        db.scalars(
-            select(DepartmentMember.department_id)
-            .join(User, User.id == DepartmentMember.user_id)
-            .where(
-                DepartmentMember.department_id.in_([child.id for child in children]),
-                DepartmentMember.role.in_(("head", "deputy")),
-                User.status == "active",
-                User.role != INMATE_REPORTER_ROLE,
-            )
-        )
-    )
+    with_head = set(receivers(db, [child.id for child in children]))
     return BookDistributionOptions(
         members=[
             BookDistributionMember(
                 user_id=target.id,
                 name=names.get(target.id) or target.display_name or target.email,
                 name_ar=names_ar.get(target.id),
-                role=cast(DepartmentRole, membership.role),
+                role=role,
                 already_recipient=target.id in active,
                 cleared=perm_service.has_capability(db, target, "books.secret"),
             )
-            for membership, target in members
+            for role, target in members
         ],
         subdepartments=[
             BookDistributionDepartment(

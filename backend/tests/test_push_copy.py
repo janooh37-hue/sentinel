@@ -5,7 +5,14 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from app.db.models import Book, BookCategory, BookDepartmentSend, BookRecipient, Department
+from app.db.models import (
+    Book,
+    BookCategory,
+    BookDepartmentSend,
+    BookRecipient,
+    Department,
+    Employee,
+)
 from app.services import notification_service as ns
 from app.services import scheduler_service as ss
 from app.services.notification_service import ActionableItem
@@ -329,7 +336,10 @@ def test_periodic_inbox_department_copy_only_marks_initial_head_deliveries(api_d
     user = make_user(api_db, email="head@test.ae")
     sender = make_user(api_db, email="sender@test.ae")
     distributor = make_user(api_db, email="distributor@test.ae")
-    department = Department(name_en="Finance", name_ar="القسم المالي")
+    head = Employee(id="G-FIN-HEAD", name_en="Finance Head")
+    department = Department(name_en="Finance", name_ar="القسم المالي", head_employee_id=head.id)
+    api_db.add(head)
+    api_db.flush()  # No ORM relationship orders the head before its department.
     api_db.add_all([department, BookCategory(id="HR", name_en="HR", prefix="HR")])
     api_db.flush()
     now = datetime(2026, 10, 23, 10, 0)

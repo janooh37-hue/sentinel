@@ -8,10 +8,7 @@ from fastapi.testclient import TestClient
 from app.api.deps import get_current_user
 from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
 from app.db.models import (
-    AppSetting,
     BookCategory,
-    Department,
-    DepartmentMember,
     DepartmentService,
     Employee,
     Leave,
@@ -20,26 +17,29 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.main import create_app
+from tests.department_fixtures import (
+    department,
+    employee,
+    enable_scoping,
+    exception,
+    grant,
+    link,
+)
 
 
 @pytest.fixture()
 def scoped_dashboard(api_db):
-    root = Department(name_en="People", name_ar="الأفراد")
-    outside = Department(name_en="Outside", name_ar="خارج")
-    api_db.add_all([root, outside])
-    api_db.flush()
-    child = Department(name_en="Child", name_ar="فرع", parent_id=root.id)
-    api_db.add(child)
-    api_db.flush()
     employees = [
-        Employee(id="IN", name_en="Inside", department_id=root.id),
-        Employee(id="CHILD", name_en="Child", department_id=child.id, status="Loaned"),
-        Employee(id="OUT", name_en="Outside", department_id=outside.id),
-        Employee(id="OWN", name_en="Owner", department_id=outside.id),
-        Employee(id="NULL", name_en="Unassigned"),
+        employee(api_db, "IN", name_en="Inside"),
+        employee(api_db, "CHILD", supervisor="IN", name_en="Child", status="Loaned"),
+        employee(api_db, "OUT", name_en="Outside"),
+        employee(api_db, "OWN", supervisor="OUT", name_en="Owner"),
+        employee(api_db, "NULL", name_en="Unassigned"),
     ]
-    api_db.add_all(employees)
-    api_db.flush()
+    root = department(api_db, "People", "IN", name_ar="الأفراد")
+    child = department(api_db, "Child", "CHILD", name_ar="فرع")
+    outside = department(api_db, "Outside", "OUT", name_ar="خارج")
+    assert child.parent_id == root.id
     user = User(
         email="scope-dashboard@test.ae",
         password_hash="x",
@@ -49,17 +49,14 @@ def scoped_dashboard(api_db):
     )
     api_db.add(user)
     api_db.flush()
-    api_db.add_all(
-        [
-            DepartmentMember(user_id=user.id, department_id=root.id, role="head", is_primary=True),
-            AppSetting(key="settings.department_scoping_enabled", value="true"),
-        ]
-    )
+    link(api_db, user, "OWN")
+    grant(api_db, root.id, user, "deputy")
+    enable_scoping(api_db)
     today = date.today()
-    for employee in employees:
+    for person in employees:
         api_db.add(
             Leave(
-                employee_id=employee.id,
+                employee_id=person.id,
                 leave_type="Annual Leave",
                 start_date=today - timedelta(days=1),
                 end_date=today + timedelta(days=2),
@@ -67,7 +64,7 @@ def scoped_dashboard(api_db):
                 status="Approved",
             )
         )
-        api_db.add(Violation(employee_id=employee.id, violation_type="Warning", date=today))
+        api_db.add(Violation(employee_id=person.id, violation_type="Warning", date=today))
     api_db.commit()
     app = create_app()
     app.dependency_overrides[get_db] = lambda: api_db
@@ -109,15 +106,20 @@ def test_dashboard_people_scope_metadata_and_department_narrowing(scoped_dashboa
                 "department_id": root.id,
                 "name_en": root.name_en,
                 "name_ar": root.name_ar,
-                "role": "head",
-                "is_primary": True,
-            }
+                "role": "deputy",
+            },
+            {
+                "department_id": outside.id,
+                "name_en": outside.name_en,
+                "name_ar": outside.name_ar,
+                "role": "member",
+            },
         ],
     }
     for department_id, employee_ids in (
         (root.id, {"IN", "CHILD"}),
         (child.id, {"CHILD"}),
-        (outside.id, set()),
+        (outside.id, {"OWN"}),
     ):
         narrowed = client.get("/api/v1/dashboard/summary", params={"department_id": department_id})
         assert narrowed.status_code == 200
@@ -135,6 +137,36 @@ def test_dashboard_people_scope_metadata_and_department_narrowing(scoped_dashboa
     ).json()
     assert organization["totals"]["employees_active"] == 1
     assert organization["department_scope"]["kind"] == "organization"
+
+
+@pytest.mark.parametrize(
+    "has_reports,expected_kind,expected_ids",
+    [(False, "self", {"OWN"}), (True, "branch", {"OWN", "NULL"})],
+)
+def test_dashboard_scope_kind_tracks_supervisor_branch(
+    scoped_dashboard, has_reports, expected_kind, expected_ids
+):
+    from sqlalchemy import delete
+
+    from app.db.models import DepartmentMember
+
+    db, client, user, _, _, _ = scoped_dashboard
+    db.execute(delete(DepartmentMember).where(DepartmentMember.user_id == user.id))
+    if has_reports:
+        db.get(Employee, "NULL").supervisor_id = "OWN"
+        # A report outside all departments still belongs to the supervisor's
+        # visible branch.
+        exception(db, "NULL", None)
+    user._department_scope_cache = None
+    user._effective_caps_cache = None
+    db.commit()
+    response = client.get("/api/v1/dashboard/summary")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["department_scope"]["kind"] == expected_kind
+    assert body["totals"]["employees_active"] == len(expected_ids)
+    assert body["totals"]["open_violations_count"] == len(expected_ids)
+    assert {row["employee_id"] for row in body["on_leave_today"]} == expected_ids
 
 
 def test_notification_leave_counts_only_include_visible_people(scoped_dashboard):

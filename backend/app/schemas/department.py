@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.schemas._base import ORMBase
+
 # Heads come from ``departments.head_employee_id``; deputies and viewers are user
 # grants; members belong through the derived ``employees.department_id``.
 DepartmentRole = Literal["head", "deputy", "viewer", "member"]
@@ -92,7 +94,7 @@ class DepartmentServiceOption(BaseModel):
     label_ar: str | None
 
 
-class DepartmentExceptionRead(BaseModel):
+class DepartmentExceptionRead(ORMBase):
     employee_id: str
     name_en: str
     name_ar: str | None

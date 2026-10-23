@@ -10,11 +10,12 @@ from app.db.models import (
     BookFolder,
     BookFolderShare,
     BookRecipient,
-    Department,
     DepartmentMember,
+    Employee,
 )
 from app.services import department_service
 from tests.conftest import make_user
+from tests.department_fixtures import department, employee, grant, link
 from tests.test_book_confidentiality import API, ApiHarness, _error
 from tests.test_book_confidentiality import (
     confidentiality_api as confidentiality_api,
@@ -25,35 +26,14 @@ from tests.test_book_confidentiality import (
 def department_api(confidentiality_api: ApiHarness):
     api = confidentiality_api
     api.users["E"] = make_user(api.db, role="operator", email="second-member@test.ae")
-    root = Department(name_en="Operations", name_ar="العمليات")
-    api.db.add(root)
-    api.db.flush()
-    child = Department(name_en="Field", name_ar="الميدان", parent_id=root.id)
-    api.db.add(child)
-    api.db.flush()
-    api.db.add_all(
-        [
-            DepartmentMember(
-                department_id=root.id, user_id=api.users["B"].id, role="head", is_primary=True
-            ),
-            DepartmentMember(
-                department_id=root.id, user_id=api.users["C2"].id, role="deputy", is_primary=True
-            ),
-            DepartmentMember(
-                department_id=root.id, user_id=api.users["C"].id, role="member", is_primary=True
-            ),
-            DepartmentMember(
-                department_id=root.id, user_id=api.users["E"].id, role="member", is_primary=True
-            ),
-            DepartmentMember(
-                department_id=child.id, user_id=api.users["M"].id, role="head", is_primary=True
-            ),
-            DepartmentMember(
-                department_id=child.id, user_id=api.users["C"].id, role="member", is_primary=False
-            ),
-        ]
-    )
-    api.db.commit()
+    for actor, user in api.users.items():
+        supervisor = "SEND-B" if actor in {"C", "C2", "E", "M"} else None
+        row = employee(api.db, f"SEND-{actor}", supervisor)
+        link(api.db, user, row.id)
+    root = department(api.db, "Operations", "SEND-B", name_ar="العمليات")
+    child = department(api.db, "Field", "SEND-M", name_ar="الميدان")
+    grant(api.db, root.id, api.users["C2"], "deputy")
+    assert child.parent_id == root.id
     return api, root, child
 
 
@@ -170,17 +150,46 @@ def test_head_and_deputy_distribute_with_progress_and_member_privacy(department_
         _error(api.client.get(f"{API}/books/{api.records['directed'].id}"), 404, "BOOK_NOT_FOUND")
 
 
+@pytest.mark.parametrize("actor", ["B", "C2"])
+def test_distribution_options_include_derived_members_and_viewer_grants(department_api, actor):
+    api, root, child = department_api
+    viewer = make_user(api.db, role="operator", email="distribution-viewer@test.ae")
+    viewer_employee = employee(api.db, "SEND-VIEWER")
+    link(api.db, viewer, viewer_employee.id)
+    grant(api.db, root.id, viewer, "viewer")
+    send_department(api, root)
+    send_id = sends(api)[0]["id"]
+    api.as_user(actor)
+    response = api.client.get(endpoint(api, send_id, "/distribution-options"))
+    assert response.status_code == 200, response.text
+    expected = {
+        api.users["B"].id: "head",
+        api.users["C2"].id: "deputy",
+        api.users["C"].id: "member",
+        api.users["E"].id: "member",
+        viewer.id: "viewer",
+    }
+    expected.pop(api.users[actor].id)
+    members = response.json()["members"]
+    assert {row["user_id"]: row["role"] for row in members} == expected
+    assert len(members) == len(expected)
+    assert response.json()["subdepartments"] == [
+        {"id": child.id, "name_en": "Field", "name_ar": "الميدان", "has_head": True}
+    ]
+    distributed = api.client.post(
+        endpoint(api, send_id, "/distribute"),
+        json={"mode": "members", "user_ids": [viewer.id]},
+    )
+    assert distributed.status_code == 200, distributed.text
+    assert [row["user_id"] for row in distributed.json()["sent"]] == [viewer.id]
+
+
 def test_subdepartment_chain_and_root_recall_cascade(department_api):
     api, root, child = department_api
-    grandchild = Department(name_en="Patrol", name_ar="الدوريات", parent_id=child.id)
-    api.db.add(grandchild)
-    api.db.flush()
-    api.db.add(
-        DepartmentMember(
-            department_id=grandchild.id, user_id=api.users["E"].id, role="head", is_primary=False
-        )
-    )
-    api.db.commit()
+    employee_row = api.db.get(Employee, "SEND-E")
+    employee_row.supervisor_id = "SEND-M"
+    grandchild = department(api.db, "Patrol", employee_row.id, name_ar="الدوريات")
+    assert grandchild.parent_id == child.id
     send_department(api, root)
     root_send = sends(api)[0]["id"]
     api.as_user("B")
@@ -286,9 +295,8 @@ def test_personal_empty_targets_and_headless_department_are_refused_atomically(d
         422,
         "VALIDATION_ERROR",
     )
-    empty = Department(name_en="No head", name_ar="بلا رئيس")
-    api.db.add(empty)
-    api.db.commit()
+    head = employee(api.db, "SEND-UNLINKED")
+    empty = department(api.db, "No account", head.id, name_ar="بلا حساب")
     response = api.client.post(
         f"{API}/books/{api.records['directed'].id}/send",
         json={
@@ -303,24 +311,13 @@ def test_personal_empty_targets_and_headless_department_are_refused_atomically(d
     assert list(api.db.scalars(select(BookDepartmentSend))) == []
     assert list(api.db.scalars(select(BookRecipient))) == []
     api.as_user("D")
-    api.db.get(
-        DepartmentMember,
-        api.db.scalar(
-            select(DepartmentMember.id).where(
-                DepartmentMember.user_id == api.users["B"].id,
-                DepartmentMember.department_id == root.id,
-            )
-        ),
-    ).role = "member"
-    api.db.get(
-        DepartmentMember,
-        api.db.scalar(
-            select(DepartmentMember.id).where(
-                DepartmentMember.user_id == api.users["C2"].id,
-                DepartmentMember.department_id == root.id,
-            )
-        ),
-    ).user_id = api.users["A"].id
+    deputy = api.db.scalar(
+        select(DepartmentMember).where(
+            DepartmentMember.user_id == api.users["C2"].id,
+            DepartmentMember.department_id == root.id,
+        )
+    )
+    deputy.user_id = api.users["A"].id
     api.db.commit()
     _error(
         api.client.post(
@@ -393,9 +390,8 @@ def test_existing_recipient_is_not_relinked_and_single_recall_remains_independen
 def test_department_cannot_be_deleted_while_any_record_is_stamped(department_api):
     api, _root, _child = department_api
     api.as_user("D")
-    standalone = Department(name_en="Retired", name_ar="متقاعد")
-    api.db.add(standalone)
-    api.db.flush()
+    head = employee(api.db, "SEND-RETIRED")
+    standalone = department(api.db, "Retired", head.id, name_ar="متقاعد")
     api.records["directed"].department_id = standalone.id
     api.db.commit()
     url = f"{API}/departments/{standalone.id}"
@@ -411,9 +407,8 @@ def test_department_cannot_be_deleted_while_any_record_is_stamped(department_api
 def test_department_cannot_be_deleted_while_send_or_folder_references_it(department_api, reference):
     api, _root, _child = department_api
     api.as_user("D")
-    standalone = Department(name_en="Referenced", name_ar="مرجعي")
-    api.db.add(standalone)
-    api.db.flush()
+    head = employee(api.db, "SEND-REFERENCED")
+    standalone = department(api.db, "Referenced", head.id, name_ar="مرجعي")
     if reference == "send":
         api.db.add(
             BookDepartmentSend(

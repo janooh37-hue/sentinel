@@ -1,11 +1,16 @@
-"""People and Records visibility; capabilities still gate each action."""
+"""People and Records visibility; capabilities still gate each action.
+
+Departments follow the org tree (rework R). A user sees the departments they head
+or deputise (with derived sub-departments), departments they view, and always
+their own supervisor-tree branch.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import SQLColumnExpression, false, func, or_, select
+from sqlalchemy import Select, SQLColumnExpression, false, func, or_, select, union
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -13,13 +18,16 @@ from app.core.roles import ADMIN_ROLE
 from app.db.models import Book, Department, DepartmentMember, Employee, User
 from app.services import perm_service, settings_service
 
+ScopeKind = Literal["organization", "department", "branch", "self"]
+
 
 @dataclass(frozen=True)
 class DepartmentScope:
     organization: bool
     department_ids: frozenset[int]
-    own_employee_id: str | None
-    kind: Literal["organization", "department", "self"]
+    # The user's own employee plus every supervisor-tree descendant.
+    employee_ids: frozenset[str]
+    kind: ScopeKind
 
 
 def descendant_department_ids(db: Session, roots: frozenset[int]) -> frozenset[int]:
@@ -28,6 +36,41 @@ def descendant_department_ids(db: Session, roots: frozenset[int]) -> frozenset[i
     tree = select(Department.id).where(Department.id.in_(roots)).cte(recursive=True)
     tree = tree.union(select(Department.id).join(tree, Department.parent_id == tree.c.id))
     return frozenset(db.scalars(select(tree.c.id)))
+
+
+def branch_employee_ids(db: Session, employee_id: str | None) -> frozenset[str]:
+    """``employee_id`` plus everyone below them in the supervisor tree."""
+    if employee_id is None:
+        return frozenset()
+    tree = select(Employee.id).where(Employee.id == employee_id).cte(recursive=True)
+    # UNION (not UNION ALL) also terminates on a dirty supervisor cycle.
+    tree = tree.union(select(Employee.id).join(tree, Employee.supervisor_id == tree.c.id))
+    return frozenset(db.scalars(select(tree.c.id)))
+
+
+def user_department_pairs() -> Select[tuple[int, int]]:
+    """SQL form of ``user_department_ids``: (user_id, department_id) rows."""
+    return select(
+        union(
+            select(User.id.label("user_id"), Employee.department_id.label("department_id"))
+            .join(Employee, Employee.id == User.employee_id)
+            .where(Employee.department_id.is_not(None)),
+            select(User.id, Department.id)
+            .join(Department, Department.head_employee_id == User.employee_id)
+            .where(Department.active.is_(True)),
+            select(DepartmentMember.user_id, DepartmentMember.department_id),
+        ).subquery()
+    )
+
+
+def user_department_ids_select(user_id: int) -> Select[tuple[int]]:
+    pairs = user_department_pairs().subquery()
+    return select(pairs.c.department_id).where(pairs.c.user_id == user_id)
+
+
+def user_department_ids(db: Session, user: User) -> frozenset[int]:
+    """Departments a user belongs to: derived, headed, deputy and viewer."""
+    return frozenset(db.scalars(user_department_ids_select(user.id)))
 
 
 def resolve_department_scope(
@@ -45,26 +88,35 @@ def resolve_department_scope(
             else perm_service.has_capability(db, user, "departments.all")
         )
     )
-    ids: frozenset[int] = frozenset()
-    if not organization:
-        memberships = list(
+    if organization:
+        scope = DepartmentScope(True, frozenset(), frozenset(), "organization")
+    else:
+        grants = list(
             db.execute(
                 select(DepartmentMember.department_id, DepartmentMember.role).where(
                     DepartmentMember.user_id == user.id
                 )
             )
         )
-        ids = frozenset(department_id for department_id, _ in memberships)
-        heads = frozenset(
-            department_id for department_id, role in memberships if role in ("head", "deputy")
+        headed = (
+            frozenset(
+                db.scalars(
+                    select(Department.id).where(
+                        Department.head_employee_id == user.employee_id,
+                        Department.active.is_(True),
+                    )
+                )
+            )
+            if user.employee_id
+            else frozenset()
         )
-        ids |= descendant_department_ids(db, heads)
-    scope = DepartmentScope(
-        organization,
-        ids,
-        user.employee_id,
-        "organization" if organization else "department" if ids else "self",
-    )
+        leading = headed | {did for did, role in grants if role == "deputy"}
+        ids = descendant_department_ids(db, frozenset(leading)) | {
+            did for did, role in grants if role == "viewer"
+        }
+        employees = branch_employee_ids(db, user.employee_id)
+        kind: ScopeKind = "department" if ids else "branch" if len(employees) > 1 else "self"
+        scope = DepartmentScope(False, frozenset(ids), employees, kind)
     user._department_scope_cache = scope
     return scope
 
@@ -79,7 +131,8 @@ def invalidate_department_scope(db: Session, user_id: int) -> None:
 def invalidate_all_department_scopes(db: Session) -> None:
     for mapped in db.identity_map.values():
         if isinstance(mapped, User):
-            invalidate_department_scope(db, mapped.id)
+            mapped._department_scope_cache = None
+            mapped._effective_caps_cache = None
 
 
 def narrow_department_scope(
@@ -89,16 +142,26 @@ def narrow_department_scope(
         return scope
     requested = descendant_department_ids(db, frozenset({department_id}))
     ids = requested if scope.organization else requested & scope.department_ids
-    own = db.get(Employee, scope.own_employee_id) if scope.own_employee_id else None
-    own_id = own.id if own is not None and own.department_id in ids else None
-    return DepartmentScope(False, ids, own_id, scope.kind)
+    employees = (
+        frozenset(
+            db.scalars(
+                select(Employee.id).where(
+                    Employee.id.in_(scope.employee_ids), Employee.department_id.in_(requested)
+                )
+            )
+        )
+        if scope.employee_ids
+        else frozenset()
+    )
+    return DepartmentScope(False, ids, employees, scope.kind)
 
 
 def employee_visibility_clause(scope: DepartmentScope | None) -> ColumnElement[bool] | None:
     if scope is None or scope.organization:
         return None
-    clause = Employee.department_id.in_(scope.department_ids)
-    return or_(clause, Employee.id == scope.own_employee_id) if scope.own_employee_id else clause
+    return or_(
+        Employee.department_id.in_(scope.department_ids), Employee.id.in_(scope.employee_ids)
+    )
 
 
 def employee_fk_visible(
@@ -112,8 +175,12 @@ def employee_in_scope(scope: DepartmentScope, employee: Employee) -> bool:
     return (
         scope.organization
         or employee.department_id in scope.department_ids
-        or (scope.own_employee_id is not None and employee.id == scope.own_employee_id)
+        or employee.id in scope.employee_ids
     )
+
+
+def _branch_creators(scope: DepartmentScope) -> Select[int]:
+    return select(User.id).where(User.employee_id.in_(scope.employee_ids))
 
 
 def book_department_clause(scope: DepartmentScope, user: User) -> ColumnElement[bool] | None:
@@ -128,6 +195,7 @@ def book_department_clause(scope: DepartmentScope, user: User) -> ColumnElement[
             Book.created_by_user_id == user.id,
             Book.submitted_by_user_id == user.id,
             Book.department_id.in_(scope.department_ids),
+            Book.created_by_user_id.in_(_branch_creators(scope)),
             book_service.active_recipient_clause(user.id),
             book_service.assignment_access_clause(user.id),
         ),
@@ -145,6 +213,11 @@ def book_in_scope(db: Session, user: User, book: Book) -> bool:
         or book.created_by_user_id == user.id
         or book.submitted_by_user_id == user.id
         or book.department_id in scope.department_ids
+        or (
+            book.created_by_user_id is not None
+            and db.scalar(select(User.employee_id).where(User.id == book.created_by_user_id))
+            in scope.employee_ids
+        )
         or book_service.is_active_recipient(db, user.id, book.id)
         or db.scalar(
             select(Book.id).where(

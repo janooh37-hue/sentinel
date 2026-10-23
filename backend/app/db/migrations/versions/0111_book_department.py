@@ -32,7 +32,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Batch DROP COLUMN recreates the table and otherwise loses the FTS hooks.
-    triggers = list(
+    triggers: list[str] = list(
         op.get_bind()
         .execute(
             sa.text("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'books'")

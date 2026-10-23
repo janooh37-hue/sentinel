@@ -204,7 +204,7 @@ class DashboardSyncStatus(ORMBase):
 
 
 class DashboardDepartmentScope(BaseModel):
-    kind: Literal["organization", "department", "self"]
+    kind: Literal["organization", "department", "branch", "self"]
     departments: list[UserDepartmentRead] = Field(default_factory=list)
 
 

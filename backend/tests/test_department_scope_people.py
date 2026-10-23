@@ -9,77 +9,77 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.models import (
     Absence,
-    AppSetting,
-    Department,
-    DepartmentMember,
-    Employee,
     Leave,
     User,
     UserPermission,
 )
 from app.db.session import get_db
 from app.main import create_app
+from tests.department_fixtures import (
+    department,
+    employee,
+    enable_scoping,
+    exception,
+    grant,
+    link,
+)
 
 
 @pytest.fixture()
 def people(api_db: Session):
-    root = Department(name_en="Operations", name_ar="العمليات")
-    other = Department(name_en="Other", name_ar="أخرى")
-    api_db.add_all([root, other])
-    api_db.flush()
-    child = Department(name_en="Team", name_ar="الفريق", parent_id=root.id)
-    api_db.add(child)
-    api_db.flush()
     today = date.today()
     employees = [
-        Employee(
-            id=employee_id,
-            name_en=employee_id,
+        employee(
+            api_db,
+            employee_id,
+            supervisor,
             status="Active",
-            department_id=department_id,
             passport_expiry=today + timedelta(days=7),
         )
-        for employee_id, department_id in [
-            ("VISIBLE", root.id),
-            ("CHILD", child.id),
-            ("OWN", other.id),
-            ("HIDDEN", other.id),
+        for employee_id, supervisor in [
+            ("VISIBLE", None),
+            ("CHILD", "VISIBLE"),
+            ("HIDDEN", None),
+            ("OWN", "HIDDEN"),
+            ("REPORT", "OWN"),
+            ("GRANDREPORT", "REPORT"),
             ("UNASSIGNED", None),
         ]
     ]
-    api_db.add_all(employees)
-    api_db.flush()
+    root = department(api_db, "Operations", "VISIBLE", name_ar="العمليات")
+    child = department(api_db, "Team", "CHILD", name_ar="الفريق")
+    other = department(api_db, "Other", "HIDDEN", name_ar="أخرى")
+    # Branch visibility ignores department boundaries, including a NULL exception.
+    exception(api_db, "REPORT", None)
+    exception(api_db, "GRANDREPORT", child.id)
     user = User(
         email="scope-people@test.ae",
         password_hash="x",
         role="manager",
         status="active",
-        employee_id="OWN",
     )
     api_db.add(user)
-    api_db.flush()
+    link(api_db, user, "OWN")
+    grant(api_db, root.id, user, "deputy")
+    enable_scoping(api_db)
     api_db.add_all(
         [
-            DepartmentMember(user_id=user.id, department_id=root.id, role="head", is_primary=True),
-            AppSetting(key="settings.department_scoping_enabled", value="true"),
-            *[
-                UserPermission(user_id=user.id, capability=capability, effect="grant")
-                for capability in [
-                    "leaves.view",
-                    "leaves.create",
-                    "leaves.edit",
-                    "leaves.delete",
-                    "employees.view",
-                    "employees.edit",
-                    "expiry.view",
-                ]
-            ],
+            UserPermission(user_id=user.id, capability=capability, effect="grant")
+            for capability in [
+                "leaves.view",
+                "leaves.create",
+                "leaves.edit",
+                "leaves.delete",
+                "employees.view",
+                "employees.edit",
+                "expiry.view",
+            ]
         ]
     )
-    for employee in employees:
+    for person in employees:
         api_db.add(
             Leave(
-                employee_id=employee.id,
+                employee_id=person.id,
                 leave_type="Annual Leave",
                 status="Approved",
                 start_date=today - timedelta(days=5),
@@ -87,7 +87,7 @@ def people(api_db: Session):
                 days=4,
             )
         )
-        api_db.add(Absence(employee_id=employee.id, date=today - timedelta(days=10)))
+        api_db.add(Absence(employee_id=person.id, date=today - timedelta(days=10)))
     api_db.commit()
     hidden_leave = next(row for row in api_db.query(Leave).all() if row.employee_id == "HIDDEN")
     app = create_app()
@@ -108,10 +108,10 @@ def people(api_db: Session):
 def test_people_lists_scope_and_descendant_filters(people, path, collection, id_key):
     client, root, child, other, _ = people
     for department_id, expected in [
-        (None, {"VISIBLE", "CHILD", "OWN"}),
-        (root, {"VISIBLE", "CHILD"}),
-        (child, {"CHILD"}),
-        (other, set()),
+        (None, {"VISIBLE", "CHILD", "OWN", "REPORT", "GRANDREPORT"}),
+        (root, {"VISIBLE", "CHILD", "GRANDREPORT"}),
+        (child, {"CHILD", "GRANDREPORT"}),
+        (other, {"OWN"}),
         (999999, set()),
     ]:
         response = client.get(
@@ -139,7 +139,7 @@ def test_people_lists_scope_and_descendant_filters(people, path, collection, id_
 )
 def test_people_counts_scope_and_descendant_filters(people, path, key):
     client, root, child, other, _ = people
-    for department_id, expected in [(None, 3), (root, 2), (child, 1), (other, 0), (999999, 0)]:
+    for department_id, expected in [(None, 5), (root, 3), (child, 2), (other, 1), (999999, 0)]:
         response = client.get(
             f"/api/v1{path}",
             params={}
@@ -213,7 +213,7 @@ def test_org_tree_hides_outside_employee_and_supervisor(people, employee_id, sup
 
 def test_org_tree_allows_visible_supervisor_and_clearing(people):
     client, *_ = people
-    for supervisor_id in ["CHILD", None]:
+    for supervisor_id in ["OWN", None]:
         response = client.patch(
             "/api/v1/org-tree/VISIBLE/supervisor", json={"supervisor_id": supervisor_id}
         )

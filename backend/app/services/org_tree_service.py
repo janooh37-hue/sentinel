@@ -16,6 +16,7 @@ from app.db.models import (
     TimesheetRosterAssignment,
     User,
 )
+from app.services import department_tree_service
 from app.services.department_scope_service import (
     DepartmentScope,
     employee_in_scope,
@@ -123,6 +124,8 @@ def set_supervisor(
             payload=json.dumps({"before": previous, "after": supervisor_id}),
         )
     )
+    # Membership follows supervisor links.
+    department_tree_service.recompute(db)
     db.commit()
     db.refresh(employee)
     return employee

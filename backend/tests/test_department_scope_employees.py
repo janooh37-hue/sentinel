@@ -8,11 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.models import (
-    AppSetting,
     Book,
     BookCategory,
-    Department,
-    DepartmentMember,
     Document,
     Employee,
     EmployeeStatusEvent,
@@ -26,31 +23,31 @@ from app.db.models import (
 from app.db.session import get_db
 from app.db.workforce_models import DutyAssignmentEvent
 from app.main import create_app
+from tests.department_fixtures import (
+    department,
+    employee,
+    enable_scoping,
+    exception,
+    grant,
+    link,
+    recompute,
+)
 
 API = "/api/v1/employees"
 
 
 @pytest.fixture()
 def scoped(api_db: Session):
-    api_db.add_all(
-        [
-            Department(id=1, name_en="Operations", name_ar="العمليات"),
-            Department(id=3, name_en="Other", name_ar="آخر"),
-        ]
-    )
-    api_db.flush()
-    api_db.add(Department(id=2, name_en="Child", name_ar="فرع", parent_id=1))
-    api_db.flush()
-    api_db.add_all(
-        [
-            Employee(id="G1", name_en="Muhammad Al Farsi", department_id=1),
-            Employee(id="G2", name_en="Muhammad Al Farsi", department_id=2),
-            Employee(id="G3", name_en="Muhammad Al Farsi", department_id=3),
-            Employee(id="GOWN", name_en="Own employee", department_id=None),
-            Employee(id="GNULL", name_en="Unassigned employee", department_id=None),
-        ]
-    )
-    api_db.flush()
+    employee(api_db, "G1", name_en="Muhammad Al Farsi")
+    employee(api_db, "G2", supervisor="G1", name_en="Muhammad Al Farsi")
+    employee(api_db, "G3", name_en="Muhammad Al Farsi")
+    employee(api_db, "GOWN", supervisor="G3", name_en="Own employee")
+    employee(api_db, "GNULL", name_en="Unassigned employee")
+    root = department(api_db, "Operations", "G1", name_ar="العمليات")
+    child = department(api_db, "Child", "G2", name_ar="فرع")
+    outside = department(api_db, "Other", "G3", name_ar="آخر")
+    assert (root.id, child.id, outside.id) == (1, 2, 3)
+    assert child.parent_id == root.id
     user = User(
         email="scope-employees@test.ae",
         password_hash="x",
@@ -60,18 +57,15 @@ def scoped(api_db: Session):
     )
     api_db.add(user)
     api_db.flush()
-    api_db.add_all(
-        [
-            DepartmentMember(user_id=user.id, department_id=1, role="head", is_primary=True),
-            AppSetting(key="settings.department_scoping_enabled", value="true"),
-        ]
-    )
-    api_db.commit()
+    link(api_db, user, "GOWN")
+    grant(api_db, root.id, user, "deputy")
+    enable_scoping(api_db)
     app = create_app()
     app.dependency_overrides[get_db] = lambda: api_db
     app.dependency_overrides[get_current_user] = lambda: user
     with TestClient(app) as client:
         yield client, api_db, user
+    app.dependency_overrides.clear()
 
 
 @pytest.mark.parametrize("endpoint", ["", "/lookup"])
@@ -88,7 +82,7 @@ def test_employee_lists_scope_rows_totals_and_fuzzy_fallback(scoped, endpoint, q
 
 
 @pytest.mark.parametrize("endpoint", ["", "/lookup"])
-@pytest.mark.parametrize("department_id,expected", [(1, {"G1", "G2"}), (2, {"G2"}), (3, set())])
+@pytest.mark.parametrize("department_id,expected", [(1, {"G1", "G2"}), (2, {"G2"}), (3, {"GOWN"})])
 def test_department_filter_includes_descendants_without_widening(
     scoped, endpoint, department_id, expected
 ):
@@ -99,7 +93,7 @@ def test_department_filter_includes_descendants_without_widening(
     assert {item["id"] for item in response.json()["items"]} == expected
 
 
-@pytest.mark.parametrize("department_id,expected", [(None, 3), (1, 2), (2, 1), (3, 0)])
+@pytest.mark.parametrize("department_id,expected", [(None, 3), (1, 2), (2, 1), (3, 1)])
 def test_completeness_counts_only_visible_filtered_employees(scoped, department_id, expected):
     client, _, _ = scoped
     response = client.get(
@@ -114,9 +108,9 @@ def test_activity_scopes_all_six_sources_and_query_filters(scoped):
     client, db, user = scoped
     db.add(BookCategory(id="SC", name_en="Scope", prefix="SC"))
     db.flush()
-    # Records are visible through their owning department (P3), so stamp each
-    # one the way creation would: the subject's department, or the head's own.
-    owners = {"G1": 1, "G2": 2, "G3": 3, "GOWN": 1, "GNULL": None}
+    # Records retain their owning department; activity still intersects that
+    # access with the visible subject employees.
+    owners = {"G1": 1, "G2": 2, "G3": 3, "GOWN": 3, "GNULL": None}
     for index, employee_id in enumerate(("G1", "G2", "G3", "GOWN", "GNULL"), start=1):
         ref = f"SC-{index:04d}"
         db.add_all(
@@ -126,6 +120,7 @@ def test_activity_scopes_all_six_sources_and_query_filters(scoped):
                     ref_number=ref,
                     employee_id=employee_id,
                     department_id=owners[employee_id],
+                    created_by_user_id=user.id if employee_id == "GOWN" else None,
                 ),
                 Document(
                     employee_id=employee_id,
@@ -185,7 +180,7 @@ def test_activity_scopes_all_six_sources_and_query_filters(scoped):
     }
     for params, expected in [
         ({"employee_id": "G3"}, 0),
-        ({"department_id": 3}, 0),
+        ({"department_id": 3}, 6),
         ({"department_id": 1}, 12),
         ({"department_id": 2}, 6),
         ({"kind": "ledger", "department_id": 2}, 1),
@@ -195,21 +190,18 @@ def test_activity_scopes_all_six_sources_and_query_filters(scoped):
         assert filtered.json()["total"] == expected
 
 
-def test_employee_assignment_rejects_outside_and_null_but_allows_omitted(scoped):
+def test_employee_reads_return_derived_departments(scoped):
     client, _, _ = scoped
-    for department_id in (3, None, 99999):
-        created = client.post(
-            API, json={"id": "GNEW", "name_en": "New employee", "department_id": department_id}
-        )
-        assert created.status_code == 422, created.text
-        assert created.json()["error"]["code"] == "DEPARTMENT_OUT_OF_SCOPE"
-        updated = client.patch(API + "/G1", json={"department_id": department_id})
-        assert updated.status_code == 422, updated.text
-        assert updated.json()["error"]["code"] == "DEPARTMENT_OUT_OF_SCOPE"
-    created = client.post(API, json={"id": "GNEW", "name_en": "New employee", "department_id": 2})
-    assert created.status_code == 201, created.text
-    assert client.patch(API + "/G1", json={"department_id": 2}).status_code == 200
-    assert client.patch(API + "/G1", json={"name_en": "Updated name"}).status_code == 200
+    for employee_id, department_id in (("G1", 1), ("G2", 2), ("GOWN", 3)):
+        response = client.get(API + f"/{employee_id}")
+        assert response.status_code == 200, response.text
+        assert response.json()["department_id"] == department_id
+    rows = client.get(API).json()["items"]
+    assert {row["id"]: row["department_id"] for row in rows} == {
+        "G1": 1,
+        "G2": 2,
+        "GOWN": 3,
+    }
 
 
 @pytest.mark.parametrize("employee_id", ["G3", "GNULL", "MISSING"])
@@ -297,44 +289,45 @@ def test_own_photo_is_allowed_without_employee_view(scoped, tmp_path, monkeypatc
     assert response.content == b"own photo bytes"
 
 
-def test_outside_department_filter_does_not_restore_own_employee_override(scoped):
+def test_department_filter_keeps_own_branch_without_exposing_department_peers(scoped):
     client, db, _ = scoped
-    db.get(Employee, "GOWN").department_id = 3
-    db.commit()
-    assert client.get(API).json()["total"] == 3
+    employee(db, "GREPORT", supervisor="GOWN")
+    recompute(db)
+    assert client.get(API).json()["total"] == 4
     for endpoint in ("", "/lookup"):
         response = client.get(API + endpoint, params={"department_id": 3})
         assert response.status_code == 200, response.text
-        assert response.json()["items"] == []
-        assert response.json()["total"] == 0
+        assert {row["id"] for row in response.json()["items"]} == {"GOWN", "GREPORT"}
+        assert response.json()["total"] == 2
 
 
-def test_organization_assignment_and_direct_service_callers_remain_unrestricted(scoped):
-    from app.schemas.employee import EmployeeCreate, EmployeeUpdate
+def test_supervisor_branch_remains_visible_across_department_exceptions(scoped):
+    client, db, _ = scoped
+    employee(db, "GREPORT", supervisor="GOWN")
+    employee(db, "GINDIRECT", supervisor="GREPORT")
+    exception(db, "GREPORT", None)
+    response = client.get(API)
+    assert response.status_code == 200, response.text
+    assert {row["id"] for row in response.json()["items"]} == {
+        "G1",
+        "G2",
+        "GOWN",
+        "GREPORT",
+        "GINDIRECT",
+    }
+    assert db.get(Employee, "GREPORT").department_id is None
+    assert db.get(Employee, "GINDIRECT").department_id is None
+    narrowed = client.get(API, params={"department_id": 3})
+    assert narrowed.status_code == 200, narrowed.text
+    assert {row["id"] for row in narrowed.json()["items"]} == {"GOWN"}
+
+
+def test_direct_service_lists_remain_unrestricted_without_scope(scoped):
     from app.services import employee_service
 
-    client, db, user = scoped
+    _, db, _ = scoped
     rows, total = employee_service.list_employees(db)
     assert total == len(rows) == 5
     rows, total = employee_service.list_employees(db, department_id=1)
     assert total == 2
     assert {row.id for row in rows} == {"G1", "G2"}
-    created = employee_service.create_employee(
-        db, EmployeeCreate(id="GDIRECT", name_en="Direct", department_id=3)
-    )
-    assert created.department_id == 3
-    assert (
-        employee_service.update_employee(
-            db, "GDIRECT", EmployeeUpdate(department_id=None)
-        ).department_id
-        is None
-    )
-    user.role = "admin"
-    db.commit()
-    response = client.post(
-        API, json={"id": "GADMIN", "name_en": "Admin created", "department_id": 3}
-    )
-    assert response.status_code == 201, response.text
-    response = client.patch(API + "/GADMIN", json={"department_id": None})
-    assert response.status_code == 200, response.text
-    assert response.json()["department_id"] is None

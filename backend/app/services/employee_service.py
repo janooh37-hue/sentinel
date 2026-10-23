@@ -33,16 +33,12 @@ from app.schemas.employee import (
     validate_status_end_date,
     validate_transfer_fields,
 )
+from app.services import department_tree_service, workforce_schedule_service
 from app.services import employee_status_history as history
-from app.services import workforce_schedule_service
 from app.services.department_scope_service import (
     DepartmentScope,
     employee_visibility_clause,
     narrow_department_scope,
-)
-from app.services.department_service import (
-    require_active_department,
-    sync_employee_department_label,
 )
 from app.services.extraction_service import _MATCH_THRESHOLD, _name_scores
 
@@ -106,7 +102,9 @@ def list_employees(
         non_q_clauses.append(clause)
     if department_id is not None:
         scope = narrow_department_scope(
-            db, scope or DepartmentScope(True, frozenset(), None, "organization"), department_id
+            db,
+            scope or DepartmentScope(True, frozenset(), frozenset(), "organization"),
+            department_id,
         )
     visibility_clause = employee_visibility_clause(scope)
     if visibility_clause is not None:
@@ -189,22 +187,6 @@ def _validate_transfer(
         ) from exc
 
 
-def _validate_department_assignment(
-    payload: EmployeeCreate | EmployeeUpdate, scope: DepartmentScope | None
-) -> None:
-    if (
-        scope is not None
-        and not scope.organization
-        and "department_id" in payload.model_fields_set
-        and payload.department_id not in scope.department_ids
-    ):
-        raise ValidationFailedError(
-            "DEPARTMENT_OUT_OF_SCOPE",
-            "Employee department is outside your visible departments.",
-            department_id=payload.department_id,
-        )
-
-
 def create_employee(
     db: Session,
     payload: EmployeeCreate,
@@ -212,7 +194,6 @@ def create_employee(
     actor_user_id: int | None = None,
     scope: DepartmentScope | None = None,
 ) -> Employee:
-    _validate_department_assignment(payload, scope)
     existing = db.get(Employee, payload.id)
     if existing is not None:
         raise ConflictError(
@@ -220,8 +201,6 @@ def create_employee(
             f"Employee {payload.id!r} already exists",
             id=payload.id,
         )
-    if payload.department_id is not None:
-        require_active_department(db, payload.department_id)
     data = payload.model_dump()
     target: str = payload.status
     end = payload.end_date
@@ -239,7 +218,6 @@ def create_employee(
         data["pending_status"] = target
         data["status"] = EMPLOYEE_STATUS_ACTIVE
     row = Employee(**data)
-    sync_employee_department_label(db, row)
     db.add(row)
     if target not in WORKING_STATUSES:
         history.record_status_event(
@@ -254,6 +232,7 @@ def create_employee(
             site=site,
             return_date=return_date,
         )
+    department_tree_service.recompute(db)
     db.commit()
     db.refresh(row)
     return row
@@ -288,13 +267,7 @@ def update_employee(
     ``effective_date`` is write-only: it never reaches the row.
     """
     row = get_employee(db, employee_id)
-    _validate_department_assignment(payload, scope)
     data: dict[str, Any] = payload.model_dump(exclude_unset=True)
-    if payload.department_id is not None:
-        require_active_department(db, payload.department_id)
-    elif "department_id" in data:
-        # Clearing the assignment keeps its last label as the backfill hint.
-        data.pop("department", None)
     effective_date_in: date | None = data.pop("effective_date", None)
 
     # A human-entered/confirmed passport number is provenance 'manual'.
@@ -491,7 +464,8 @@ def update_employee(
 
     for k, v in data.items():
         setattr(row, k, v)
-    sync_employee_department_label(db, row)
+    # The department and its Arabic label come from the org tree.
+    department_tree_service.recompute(db)
     if "duty_unit" in data:
         # A raw duty-unit edit changes only this row; the crew that actually
         # generates shifts is `WorkCrewMembership`, which never moved on its

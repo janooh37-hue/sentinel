@@ -252,19 +252,25 @@ populations; request filters may only narrow it.
 _Avoid_: Capability, role, filter
 
 **Department**:
-An administrator-managed organizational unit with Arabic and English names and
-an optional parent department. Users belong through Department membership and
-employees through their own department; it is not the duty unit.
+A manager in the org tree (its head) plus everyone under them, with Arabic and
+English names. A department whose head sits inside another department's branch
+is its sub-department. Employees belong through supervisor links, overridden only
+by a Department exception; it is not the duty unit.
 _Avoid_: Duty unit, company (السرية), team
 
-**Department membership**:
-A user's place in a Department as head, deputy, or member. A user normally has
-one membership, and exactly one membership is primary.
-_Avoid_: Role (that is the account preset), scope
+**Department exception**:
+An administrator's manual placement of an employee, and their branch, in another
+department or outside all departments.
+_Avoid_: Assignment, membership
+
+**Department grant**:
+A user's deputy or viewer role in a Department, given by an administrator on top
+of the tree.
+_Avoid_: Membership, role (that is the account preset), scope
 
 **Department scope**:
-The rows a user may see in scoped areas: their member departments, plus every
-sub-department of a department they head or deputize, plus their own work.
+The rows a user may see in scoped areas: departments they head or deputize with
+every sub-department, departments they view, and their own supervisor-tree branch.
 Capabilities and Levels still apply inside it, and request filters may only
 narrow it.
 _Avoid_: Workforce scope, filter, capability
@@ -357,7 +363,8 @@ the domain language above.
 | Level | `Book.confidentiality` |
 | Direct send | `BookRecipient` |
 | Department | `Department` / `departments` |
-| Department membership | `DepartmentMember` / `department_members` |
+| Department grant | `DepartmentMember` / `department_members` |
+| Department exception | `DepartmentException` / `department_exceptions` |
 | Department scope | `department_scope_service.DepartmentScope` |
 | Organization-wide view | `departments.all` |
 | Department send | `BookDepartmentSend` |

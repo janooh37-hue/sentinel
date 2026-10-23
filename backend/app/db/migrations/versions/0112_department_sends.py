@@ -76,7 +76,7 @@ def upgrade() -> None:
             "GROUP BY shares.id, shares.folder_id HAVING COUNT(*) = 1 ORDER BY shares.id"
         )
     ).all()
-    mapped: set[tuple[int, int]] = set()
+    mapped: set[tuple[object, object]] = set()
     for share_id, folder_id, department_id in matches:
         audience = (folder_id, department_id)
         if audience in mapped:

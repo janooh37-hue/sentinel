@@ -38,7 +38,6 @@ from app.core.permissions import (
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import (
     BookCategory,
-    DepartmentMember,
     DepartmentService,
     RolePermission,
     User,
@@ -162,17 +161,17 @@ def effective_caps(db: Session, user: User) -> set[str]:
             # override still narrows it — it was already applied above.
             caps &= INMATE_REPORTER_CAPS
         # Pass the unfiltered caps to avoid scope -> caps -> scope recursion.
-        from app.services.department_scope_service import resolve_department_scope
+        from app.services.department_scope_service import (
+            resolve_department_scope,
+            user_department_ids_select,
+        )
 
         if not resolve_department_scope(db, user, capabilities=caps).organization:
             allowed = set(
                 db.scalars(
-                    select(DepartmentService.service_id)
-                    .join(
-                        DepartmentMember,
-                        DepartmentMember.department_id == DepartmentService.department_id,
+                    select(DepartmentService.service_id).where(
+                        DepartmentService.department_id.in_(user_department_ids_select(user.id))
                     )
-                    .where(DepartmentMember.user_id == user.id)
                 )
             )
             caps = {

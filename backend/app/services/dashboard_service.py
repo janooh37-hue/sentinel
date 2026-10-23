@@ -136,7 +136,7 @@ def get_summary(
     resolved_scope = scope or (
         resolve_department_scope(db, user)
         if user is not None
-        else DepartmentScope(True, frozenset(), None, "organization")
+        else DepartmentScope(True, frozenset(), frozenset(), "organization")
     )
     scope = narrow_department_scope(db, resolved_scope, department_id)
     departments = (

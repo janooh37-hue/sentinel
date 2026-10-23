@@ -13,7 +13,6 @@ from app.db.models import (
     BookFolderItem,
     BookFolderShare,
     Department,
-    DepartmentMember,
     Employee,
     User,
 )
@@ -25,7 +24,12 @@ from app.schemas.book import (
     BookFolderSharesUpdate,
     BookFolderShareUser,
 )
-from app.services import book_send_service, book_service, department_service
+from app.services import (
+    book_send_service,
+    book_service,
+    department_scope_service,
+    department_service,
+)
 
 
 def visibility_clause(user: User) -> ColumnElement[bool]:
@@ -53,9 +57,7 @@ def visibility_clause(user: User) -> ColumnElement[bool]:
                         BookFolderShare.user_id == user.id,
                         func.lower(func.trim(BookFolderShare.department)) == department,
                         BookFolderShare.department_id.in_(
-                            select(DepartmentMember.department_id).where(
-                                DepartmentMember.user_id == user.id
-                            )
+                            department_scope_service.user_department_ids_select(user.id)
                         ),
                     ),
                 )
@@ -241,20 +243,13 @@ def share_options(db: Session, user: User) -> BookFolderShareOptions:
             name_ar=employee.name_ar if employee is not None else None,
             title=employee.position if employee is not None else None,
             title_ar=employee.position_ar if employee is not None else None,
-            department_id=department_id,
+            department_id=employee.department_id if employee is not None else None,
         )
-        for account, employee, department_id in db.execute(
-            select(User, Employee, DepartmentMember.department_id)
+        for account, employee in db.execute(
+            select(User, Employee)
             .outerjoin(Employee, User.employee_id == Employee.id)
-            .outerjoin(
-                DepartmentMember,
-                and_(
-                    DepartmentMember.user_id == User.id,
-                    DepartmentMember.is_primary.is_(True),
-                ),
-            )
             .where(User.status == "active", User.role != INMATE_REPORTER_ROLE)
-        )
+        ).tuples()
     ]
     users.sort(key=lambda option: (option.name.casefold(), option.id))
     return BookFolderShareOptions(

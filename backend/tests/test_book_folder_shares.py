@@ -11,58 +11,47 @@ from app.db.models import (
     BookFolderItem,
     BookFolderShare,
     Department,
-    DepartmentMember,
-    Employee,
     UserPermission,
 )
 from app.services import department_service
 from tests.conftest import make_user
+from tests.department_fixtures import department, employee, grant, link
 from tests.test_book_confidentiality import API, ApiHarness, _error
 from tests.test_book_confidentiality import confidentiality_api as confidentiality_api
 from tests.test_books_desk_list import _create_folder, _folders, _rows
 
 
-def _employee(api: ApiHarness, actor: str, department: str | None) -> None:
-    employee = Employee(
-        id=f"G-SHARE-{actor}",
+def _employee(
+    api: ApiHarness,
+    actor: str,
+    legacy_department: str | None = None,
+    *,
+    supervisor: str | None = None,
+) -> None:
+    row = employee(
+        api.db,
+        f"G-SHARE-{actor}",
+        supervisor,
         name_en=f"Employee {actor}",
         name_ar=f"الموظف {actor}",
         position="Coordinator",
         position_ar="منسق",
-        department=department,
+        department=legacy_department,
     )
-    api.db.add(employee)
-    api.db.flush()
-    api.users[actor].employee_id = employee.id
+    link(api.db, api.users[actor], row.id)
     api.db.commit()
 
 
 def _department(
-    api: ApiHarness, name: str = "Finance", *, active: bool = True, parent_id: int | None = None
-) -> Department:
-    department = Department(name_en=name, name_ar=f"قسم {name}", active=active, parent_id=parent_id)
-    api.db.add(department)
-    api.db.commit()
-    return department
-
-
-def _membership(
     api: ApiHarness,
-    actor: str,
-    department: Department,
+    name: str = "Finance",
     *,
-    primary: bool = True,
-    role: str = "member",
-) -> None:
-    api.db.add(
-        DepartmentMember(
-            user_id=api.users[actor].id,
-            department_id=department.id,
-            role=role,
-            is_primary=primary,
-        )
-    )
-    api.db.commit()
+    active: bool = True,
+    head_employee_id: str | None = None,
+) -> Department:
+    if head_employee_id is None:
+        head_employee_id = employee(api.db, f"G-SHARE-HEAD-{name}").id
+    return department(api.db, name, head_employee_id, name_ar=f"قسم {name}", active=active)
 
 
 def _share(api: ApiHarness, folder_id: int, **body: object):
@@ -74,8 +63,7 @@ def test_restricted_team_visibility_filing_and_everyone(confidentiality_api: Api
     _employee(api, "M", "Management")
     _employee(api, "B", "Stores")
     _employee(api, "C", "Different legacy text")
-    finance = _department(api)
-    _membership(api, "C", finance)
+    finance = _department(api, head_employee_id=api.users["C"].employee_id)
     api.as_user("M")
     folder = _create_folder(api, "Restricted team", team=True)
     assert folder["everyone"] is True
@@ -206,14 +194,12 @@ def test_share_options_shape_and_active_directory(confidentiality_api: ApiHarnes
     _employee(api, "A", " Finance ")
     _employee(api, "B", "Finance")
     _employee(api, "C", "   ")
-    finance = _department(api)
-    unused = _department(api, "Unused")
+    finance = _department(api, head_employee_id=api.users["A"].employee_id)
+    unused = _department(api, "Unused", head_employee_id=api.users["B"].employee_id)
     vacant = _department(api, "Vacant")
     _department(api, "Disabled", active=False)
-    _membership(api, "A", finance)
-    _membership(api, "A", unused, primary=False)
-    _membership(api, "B", unused)
-    _membership(api, "C2", finance)
+    grant(api.db, unused.id, api.users["A"], "viewer")
+    grant(api.db, finance.id, api.users["C2"], "deputy")
     inactive = make_user(api.db, email="inactive-options@test.ae")
     inactive.status = "disabled"
     reporter = make_user(api.db, role="inmate_reporter", email="reporter-options@test.ae")
@@ -237,10 +223,8 @@ def test_share_options_shape_and_active_directory(confidentiality_api: ApiHarnes
         next(u for u in body["users"] if u["id"] == api.users["B"].id)["department_id"] == unused.id
     )
     assert next(u for u in body["users"] if u["id"] == api.users["C"].id)["department_id"] is None
-    assert (
-        next(u for u in body["users"] if u["id"] == api.users["C2"].id)["department_id"]
-        == finance.id
-    )
+    # User-level grants do not become the employee's derived directory department.
+    assert next(u for u in body["users"] if u["id"] == api.users["C2"].id)["department_id"] is None
     option = next(u for u in body["users"] if u["id"] == api.users["A"].id)
     assert option == {
         "id": api.users["A"].id,
@@ -274,19 +258,25 @@ def test_manager_always_sees_restricted_team_folder(
 
 @pytest.mark.parametrize("scoping", [False, True])
 @pytest.mark.parametrize("organization", [False, True])
-def test_department_shares_use_membership_not_employee_text_or_scope(
+def test_department_shares_use_belonging_not_employee_text_or_scope(
     confidentiality_api: ApiHarness, scoping: bool, organization: bool
 ) -> None:
     api = confidentiality_api
-    finance = _department(api)
-    parent = _department(api, "Parent")
-    finance.parent_id = parent.id
-    api.db.commit()
-    _employee(api, "B", "Not Finance")
+    for actor in ("H", "E", "V"):
+        api.users[actor] = make_user(
+            api.db, role="operator", email=f"share-audience-{actor}@test.ae"
+        )
+    _employee(api, "C2")
+    _employee(api, "H", supervisor=api.users["C2"].employee_id)
+    _employee(api, "E", supervisor=api.users["H"].employee_id)
+    _employee(api, "B", "Not Finance", supervisor=api.users["C2"].employee_id)
+    _employee(api, "V")
     _employee(api, "C", " Finance ")
-    _membership(api, "B", parent)
-    _membership(api, "B", finance, primary=False)
-    _membership(api, "C2", parent, role="head")
+    parent = _department(api, "Parent", head_employee_id=api.users["C2"].employee_id)
+    finance = _department(api, head_employee_id=api.users["H"].employee_id)
+    assert finance.parent_id == parent.id
+    grant(api.db, finance.id, api.users["B"], "deputy")
+    grant(api.db, finance.id, api.users["V"], "viewer")
     if organization:
         api.db.add(
             UserPermission(user_id=api.users["C"].id, capability="departments.all", effect="grant")
@@ -294,11 +284,12 @@ def test_department_shares_use_membership_not_employee_text_or_scope(
         api.db.commit()
     department_service.set_scoping(api.db, scoping, actor=api.users["D"].email)
     api.as_user("D")
-    folder_id = _create_folder(api, "Membership only", team=True)["id"]
+    folder_id = _create_folder(api, "Department audience", team=True)["id"]
     response = _share(api, folder_id, everyone=False, department_ids=[finance.id])
     assert response.status_code == 200, response.text
-    api.as_user("B")
-    assert [f["id"] for f in _folders(api)] == [folder_id]
+    for actor in ("H", "E", "B", "V"):
+        api.as_user(actor)
+        assert [f["id"] for f in _folders(api)] == [folder_id]
     for actor in ("A", "C", "C2"):
         api.as_user(actor)
         assert _folders(api) == []
@@ -317,8 +308,8 @@ def test_legacy_shares_can_only_be_retained_or_removed_without_widening(
     api = confidentiality_api
     _employee(api, "B", "  old FINANCE ")
     _employee(api, "C", "Old Stores")
-    finance = _department(api)
-    _membership(api, "A", finance)
+    _employee(api, "A")
+    finance = _department(api, head_employee_id=api.users["A"].employee_id)
     department_service.set_scoping(api.db, scoping, actor=api.users["D"].email)
     api.as_user("D")
     folder_id = _create_folder(api, "Legacy audience", team=True)["id"]

@@ -28,7 +28,7 @@ from app.api.errors import AppError, ValidationFailedError
 from app.config import get_settings
 from app.core import security
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE, MANAGER_ROLE, OPERATOR_ROLE
-from app.db.models import AuditLog, DepartmentMember, Employee, User
+from app.db.models import AuditLog, Employee, User
 from app.db.models import AuthSession as AuthSessionModel
 from app.schemas.auth import AdminUserRead, AuditEntryRead, SessionUser
 from app.schemas.department import UserDepartmentRead
@@ -157,7 +157,6 @@ def create_user(
     role: str,
     display_name: str | None = None,
     actor: str | None = None,
-    department_id: int | None = None,
 ) -> tuple[User, str]:
     """Admin-issued account. Active immediately, with a generated temporary
     password the owner must replace before signing in (``start_session``
@@ -174,12 +173,6 @@ def create_user(
     employee = db.get(Employee, g) if g else None
     if g is not None and employee is None:
         raise AppError("EMPLOYEE_NOT_FOUND", f"Employee {g} not found", http_status=404)
-    selected_department_id = (
-        department_id if department_id is not None else employee.department_id if employee else None
-    )
-    if selected_department_id is not None:
-        department_service.require_active_department(db, selected_department_id)
-
     temporary_password = secrets.token_urlsafe(12)
     user = User(
         email=normalized,
@@ -202,7 +195,6 @@ def create_user(
                 http_status=409,
             ) from None
         raise
-    department_service.default_membership(db, user, selected_department_id, actor=actor)
     _audit(db, actor, "create_user", user)
     db.commit()
     db.refresh(user)
@@ -216,7 +208,6 @@ def approve_user(
     role: str,
     employee_id: str | None,
     actor: str | None = None,
-    department_id: int | None = None,
 ) -> User:
     """Approve a pending request, setting role and the admin-confirmed link.
 
@@ -238,11 +229,6 @@ def approve_user(
     employee = db.get(Employee, g) if g else None
     if g is not None and employee is None:
         raise AppError("EMPLOYEE_NOT_FOUND", f"Employee {g} not found", http_status=404)
-    selected_department_id = (
-        department_id if department_id is not None else employee.department_id if employee else None
-    )
-    if selected_department_id is not None:
-        department_service.require_active_department(db, selected_department_id)
     result = cast(
         "CursorResult[Any]",
         db.execute(
@@ -259,7 +245,6 @@ def approve_user(
             http_status=409,
         )
     db.refresh(user)
-    department_service.default_membership(db, user, selected_department_id, actor=actor)
     _audit(db, actor, "approve", user)
     if g is not None:
         db.flush()
@@ -338,14 +323,6 @@ def set_user_employee_link(
     employee = db.get(Employee, target) if target else None
     if target is not None and employee is None:
         raise AppError("EMPLOYEE_NOT_FOUND", f"Employee {target} not found", http_status=404)
-    if (
-        employee is not None
-        and db.scalar(
-            select(DepartmentMember.id).where(DepartmentMember.user_id == user.id).limit(1)
-        )
-        is None
-    ):
-        department_service.default_membership(db, user, employee.department_id, actor=actor)
     old = user.employee_id
     user.employee_id = target
     department_scope_service.invalidate_department_scope(db, user.id)

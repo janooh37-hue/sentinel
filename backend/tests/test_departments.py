@@ -1,15 +1,50 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import Employee, User
+from app.db.models import (
+    AuditLog,
+    Book,
+    BookCategory,
+    BookDepartmentSend,
+    BookFolder,
+    BookFolderShare,
+    Department,
+    DepartmentException,
+    DepartmentMember,
+    DepartmentService,
+    Employee,
+    User,
+)
 from app.db.session import get_db
 from app.main import create_app
+from app.schemas.auth import AdminUserCreateRequest, ApproveRequest
+from app.schemas.department import DepartmentCreate, DepartmentUpdate
+from app.schemas.employee import EmployeeCreate, EmployeeUpdate
+from app.services.department_scope_service import resolve_department_scope
+from tests.department_fixtures import department, employee, grant
 
 API = "/api/v1/departments"
+
+
+def test_org_tree_inputs_and_removed_department_routes(client):
+    for schema in (EmployeeCreate, EmployeeUpdate, AdminUserCreateRequest, ApproveRequest):
+        assert "department_id" not in schema.model_fields
+    assert "head_employee_id" in DepartmentCreate.model_fields
+    assert DepartmentCreate.model_fields["head_employee_id"].is_required()
+    assert "parent_id" not in DepartmentCreate.model_fields
+    assert "parent_id" not in DepartmentUpdate.model_fields
+    paths = {route.path for route in client.app.routes}
+    assert f"{API}/{{department_id}}/people" in paths
+    assert f"{API}/memberships/{{user_id}}" not in paths
+    assert f"{API}/{{department_id}}/members" not in paths
+    assert f"{API}/assign-employees" not in paths
 
 
 @pytest.fixture()
@@ -24,384 +59,476 @@ def client(api_db: Session):
         yield result
 
 
-def department(client, name="Operations", parent_id=None):
+def account(db, name, employee_id=None, **fields):
+    user = User(
+        email=f"{name}@departments.test",
+        password_hash="x",
+        role="operator",
+        status=fields.pop("status", "active"),
+        employee_id=employee_id,
+        **fields,
+    )
+    db.add(user)
+    db.commit()
+    return user
+
+
+def create_department(client, head, name="Operations"):
     response = client.post(
-        API, json={"name_en": name, "name_ar": f"قسم {name}", "parent_id": parent_id}
+        API, json={"name_en": name, "name_ar": f"قسم {name}", "head_employee_id": head}
     )
     assert response.status_code == 201, response.text
     return response.json()
 
 
-def test_department_tree_rejects_cycles_and_duplicate_sibling_names(client):
-    root = department(client)
-    child = department(client, "Child", root["id"])
-    cycle = client.patch(f"{API}/{root['id']}", json={"parent_id": child["id"]})
-    assert cycle.status_code == 422
-    assert cycle.json()["error"]["code"] == "DEPARTMENT_CYCLE"
-    duplicate = client.post(API, json={"name_en": root["name_en"], "name_ar": "مختلف"})
-    assert duplicate.status_code == 409
-    assert duplicate.json()["error"]["code"] == "DEPARTMENT_NAME_TAKEN"
-    assert client.delete(f"{API}/{root['id']}").json()["error"]["code"] == "DEPARTMENT_IN_USE"
-    assert department(client, root["name_en"], child["id"])["parent_id"] == child["id"]
+def assert_error(response, status, code):
+    assert response.status_code == status, response.text
+    assert response.json()["error"]["code"] == code
 
 
-def test_memberships_require_one_primary_and_keep_head_roles(client, api_db):
-    first, second = department(client), department(client, "Other")
-    user = User(email="member@test.ae", password_hash="x", role="operator", status="active")
-    api_db.add(user)
-    api_db.commit()
-    url = f"{API}/memberships/{user.id}"
-    memberships = [
-        {"department_id": first["id"], "role": "head", "is_primary": True},
-        {"department_id": second["id"], "role": "deputy", "is_primary": False},
-    ]
-    response = client.put(url, json={"memberships": memberships})
-    assert response.status_code == 200, response.text
-    assert [row["role"] for row in response.json()] == ["head", "deputy"]
-    for primary in (True, False):
-        for row in memberships:
-            row["is_primary"] = primary
-        invalid = client.put(url, json={"memberships": memberships})
-        assert invalid.status_code == 422
-        assert invalid.json()["error"]["code"] == "DEPARTMENT_PRIMARY_REQUIRED"
-    assert client.get(f"{API}/{first['id']}/members").json()[0]["role"] == "head"
-    assert client.delete(f"{API}/{first['id']}").status_code == 409
-    assert client.put(url, json={"memberships": []}).json() == []
+def test_create_department_derives_tree_and_reads_head_and_counts(client, api_db):
+    employee(api_db, "ROOT", name_en="Root", name_ar="الرئيس")
+    employee(api_db, "CHILD", "ROOT")
+    employee(api_db, "STAFF", "CHILD")
+    head = account(api_db, "head", "ROOT")
+    root = create_department(client, "ROOT")
+    child = create_department(client, "CHILD", "Nested")
+    rows = {row["id"]: row for row in client.get(API).json()}
+    assert rows[root["id"]] == {
+        **root,
+        "employee_count": 1,
+    }
+    assert root["head_employee_id"] == "ROOT"
+    assert root["head_name_en"] == "Root"
+    assert root["head_name_ar"] == "الرئيس"
+    assert root["head_user_id"] == head.id
+    assert root["parent_id"] is None
+    assert root["deputies"] == root["viewers"] == root["service_ids"] == []
+    assert root["exception_count"] == 0
+    assert child["parent_id"] == root["id"]
+    assert child["employee_count"] == 2
+    assert child["head_user_id"] is None
+    assert api_db.get(Employee, "STAFF").department_id == child["id"]
 
 
-def test_plain_users_can_list_departments_but_not_manage(client, api_db):
-    department(client)
-    admin = api_db.query(User).filter_by(role="admin").one()
-    admin.role = "operator"
-    api_db.commit()
-    assert client.get(API).status_code == 200
-    assert client.post(API, json={"name_en": "Denied", "name_ar": "مرفوض"}).status_code == 403
-
-
-def test_employee_assignment_grouping_and_service_validation(client, api_db):
-    target = department(client)
-    api_db.add_all(
-        [
-            Employee(id="G1", name_en="One", duty_unit="Unit", department="Legacy"),
-            Employee(id="G2", name_en="Two", duty_unit="Unit", department="Legacy"),
-            Employee(id="G3", name_en="Departed", status="Resigned"),
-        ]
-    )
-    api_db.commit()
-    assert client.get(f"{API}/unassigned-employees").json() == [
-        {
-            "duty_unit": "Unit",
-            "legacy_department": "Legacy",
-            "employee_ids": ["G1", "G2"],
-            "count": 2,
-        }
-    ]
-    response = client.post(
-        f"{API}/assign-employees",
-        json={"employee_ids": ["G1", "G2"], "department_id": target["id"]},
-    )
-    assert response.json() == {"updated": 2}
-    for employee_id in ("G1", "G2"):
-        assert (
-            client.get(f"/api/v1/employees/{employee_id}").json()["department"] == target["name_ar"]
-        )
-    assert client.get(f"{API}/unassigned-employees").json() == []
-    assert client.delete(f"{API}/{target['id']}").status_code == 409
-    invalid = client.put(f"{API}/{target['id']}/services", json={"service_ids": ["invented"]})
-    assert invalid.status_code == 422
-    assert invalid.json()["error"]["code"] == "DEPARTMENT_SERVICE_UNKNOWN"
-    options = client.get(f"{API}/service-options").json()
-    assert any(row["id"] == "Employment Application Form" for row in options)
-    response = client.put(
-        f"{API}/{target['id']}/services",
-        json={"service_ids": ["General Book", "Employment Application Form"]},
-    )
-    assert response.status_code == 200
-    assert set(response.json()["service_ids"]) == {"General Book", "Employment Application Form"}
-    cleared = client.post(
-        f"{API}/assign-employees",
-        json={"employee_ids": ["G1", "G2"], "department_id": None},
-    )
-    assert cleared.json() == {"updated": 2}
-    for employee_id in ("G1", "G2"):
-        employee = client.get(f"/api/v1/employees/{employee_id}").json()
-        assert employee["department_id"] is None
-        assert employee["department"] == target["name_ar"]
-
-
-def test_department_arabic_rename_updates_assigned_labels_only(client, api_db):
-    target = department(client)
-    api_db.add_all(
-        [
-            Employee(
-                id="GRENAME",
-                name_en="Assigned",
-                department_id=target["id"],
-                department=target["name_ar"],
-            ),
-            Employee(id="GHINT", name_en="Unassigned", department=target["name_ar"]),
-        ]
-    )
-    api_db.commit()
-    renamed = client.patch(f"{API}/{target['id']}", json={"name_ar": "قسم العمليات"})
-    assert renamed.status_code == 200, renamed.text
-    assert client.get("/api/v1/employees/GRENAME").json()["department"] == "قسم العمليات"
-    assert client.get("/api/v1/employees/GHINT").json()["department"] == target["name_ar"]
+@pytest.mark.parametrize("field", ["name_en", "name_ar"])
+@pytest.mark.parametrize("operation", ["create", "patch"])
+def test_department_names_are_globally_unique(client, api_db, field, operation):
+    employee(api_db, "ROOT")
+    employee(api_db, "CHILD", "ROOT")
+    first = create_department(client, "ROOT")
+    body = {"name_en": "Other", "name_ar": "آخر", "head_employee_id": "CHILD"}
+    if operation == "create":
+        body[field] = first[field]
+        response = client.post(API, json=body)
+    else:
+        second = create_department(client, "CHILD", "Other")
+        response = client.patch(f"{API}/{second['id']}", json={field: first[field]})
+    assert_error(response, 409, "DEPARTMENT_NAME_TAKEN")
 
 
 @pytest.mark.parametrize("operation", ["create", "patch"])
-def test_employee_writes_derive_department_label_and_clearing_keeps_hint(client, operation):
-    target = department(client)
-    payload = {"department_id": target["id"], "department": "Conflicting free text"}
+@pytest.mark.parametrize("invalid", ["taken", "missing", "exception"])
+def test_department_head_validation(client, api_db, operation, invalid):
+    for employee_id in ("ROOT", "OTHER", "EXCEPTION"):
+        employee(api_db, employee_id)
+    root = create_department(client, "ROOT")
+    assert (
+        client.put(f"{API}/exceptions/EXCEPTION", json={"department_id": None}).status_code == 200
+    )
+    head, status, code = {
+        "taken": ("ROOT", 409, "DEPARTMENT_HEAD_TAKEN"),
+        "missing": ("MISSING", 404, "EMPLOYEE_NOT_FOUND"),
+        "exception": ("EXCEPTION", 422, "DEPARTMENT_HEAD_EXCEPTION"),
+    }[invalid]
     if operation == "create":
         response = client.post(
-            "/api/v1/employees", json={"id": "GLABEL", "name_en": "Label", **payload}
+            API, json={"name_en": "Other", "name_ar": "آخر", "head_employee_id": head}
         )
-        assert response.status_code == 201, response.text
     else:
-        original = department(client, "Original")
-        created = client.post(
-            "/api/v1/employees",
-            json={"id": "GLABEL", "name_en": "Label", "department_id": original["id"]},
-        )
-        assert created.status_code == 201, created.text
-        response = client.patch("/api/v1/employees/GLABEL", json=payload)
-        assert response.status_code == 200, response.text
+        other = create_department(client, "OTHER", "Other")
+        response = client.patch(f"{API}/{other['id']}", json={"head_employee_id": head})
+    assert_error(response, status, code)
+    rows = client.get(API).json()
+    assert len(rows) == (1 if operation == "create" else 2)
+    assert next(row for row in rows if row["id"] == root["id"])["head_employee_id"] == "ROOT"
+    if operation == "patch":
+        assert next(row for row in rows if row["id"] == other["id"])["head_employee_id"] == "OTHER"
+
+
+def test_patch_head_and_active_recompute_membership_and_parent(client, api_db):
+    employee(api_db, "ROOT")
+    employee(api_db, "OLD", "ROOT")
+    employee(api_db, "OLDREPORT", "OLD")
+    employee(api_db, "NEW")
+    employee(api_db, "NEWREPORT", "NEW")
+    root = create_department(client, "ROOT")
+    nested = create_department(client, "OLD", "Nested")
+    changed = client.patch(f"{API}/{nested['id']}", json={"head_employee_id": "NEW"})
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["parent_id"] is None
+    for employee_id in ("OLD", "OLDREPORT"):
+        assert api_db.get(Employee, employee_id).department_id == root["id"]
+    for employee_id in ("NEW", "NEWREPORT"):
+        assert api_db.get(Employee, employee_id).department_id == nested["id"]
+    restored = client.patch(f"{API}/{nested['id']}", json={"head_employee_id": "OLD"})
+    assert restored.json()["parent_id"] == root["id"]
+    inactive = client.patch(f"{API}/{nested['id']}", json={"active": False})
+    assert inactive.status_code == 200, inactive.text
+    assert inactive.json()["employee_count"] == 0
+    assert api_db.get(Employee, "OLDREPORT").department_id == root["id"]
+    active = client.patch(f"{API}/{nested['id']}", json={"active": True})
+    assert active.json()["employee_count"] == 2
+    assert api_db.get(Employee, "OLDREPORT").department_id == nested["id"]
+
+
+def test_department_arabic_rename_updates_derived_labels_only(client, api_db):
+    employee(api_db, "HEAD")
+    employee(api_db, "REPORT", "HEAD")
+    target = create_department(client, "HEAD")
+    employee(api_db, "HINT", department=target["name_ar"])
+    api_db.commit()
+    renamed = client.patch(f"{API}/{target['id']}", json={"name_ar": "قسم العمليات"})
+    assert renamed.status_code == 200, renamed.text
+    assert api_db.get(Employee, "REPORT").department == "قسم العمليات"
+    assert api_db.get(Employee, "HINT").department == target["name_ar"]
+
+
+def test_employee_writes_preserve_tree_derived_department_and_label(client, api_db):
+    employee(api_db, "HEAD")
+    target = create_department(client, "HEAD")
+    created = client.post(
+        "/api/v1/employees",
+        json={"id": "STAFF", "name_en": "Staff", "department": "Free text"},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["department_id"] is None
+    assigned = client.patch("/api/v1/org-tree/STAFF/supervisor", json={"supervisor_id": "HEAD"})
+    assert assigned.status_code == 200, assigned.text
+    response = client.get("/api/v1/employees/STAFF")
+    assert response.json()["department_id"] == target["id"]
     assert response.json()["department"] == target["name_ar"]
-    text_only = client.patch("/api/v1/employees/GLABEL", json={"department": "Still conflicting"})
+    text_only = client.patch("/api/v1/employees/STAFF", json={"department": "Still conflicting"})
     assert text_only.status_code == 200, text_only.text
     assert text_only.json()["department"] == target["name_ar"]
-    cleared = client.patch(
-        "/api/v1/employees/GLABEL",
-        json={"department_id": None, "department": "Do not replace the hint"},
-    )
+    cleared = client.patch("/api/v1/org-tree/STAFF/supervisor", json={"supervisor_id": None})
     assert cleared.status_code == 200, cleared.text
-    assert cleared.json()["department_id"] is None
-    assert cleared.json()["department"] == target["name_ar"]
+    unassigned = client.get("/api/v1/employees/STAFF").json()
+    assert unassigned["department_id"] is None
+    assert unassigned["department"] is None
 
 
-@pytest.mark.parametrize("explicit", [False, True])
-def test_create_and_approve_default_memberships(client, api_db, explicit):
-    source, chosen = department(client), department(client, "Chosen")
-    employee = Employee(id="GDEFAULT", name_en="Default", department_id=source["id"])
-    api_db.add(employee)
-    api_db.commit()
-    body = {"email": "created@test.ae", "employee_id": employee.id, "role": "operator"}
-    if explicit:
-        body["department_id"] = chosen["id"]
-    created = client.post("/api/v1/auth/users", json=body)
-    assert created.status_code == 201, created.text
-    expected = chosen["id"] if explicit else source["id"]
-    assert created.json()["user"]["departments"][0]["department_id"] == expected
-    pending = User(email="pending@test.ae", password_hash="x", role="operator", status="pending")
-    api_db.add(pending)
-    api_db.commit()
-    body.pop("email")
-    approved = client.post(f"/api/v1/auth/users/{pending.id}/approve", json=body)
-    assert approved.status_code == 200, approved.text
-    assert approved.json()["departments"][0]["department_id"] == expected
+def test_employee_list_department_filter_uses_derived_membership(client, api_db):
+    employee(api_db, "FIRST")
+    employee(api_db, "SECOND")
+    employee(api_db, "REPORT", "FIRST")
+    first = create_department(client, "FIRST")
+    create_department(client, "SECOND", "Second")
+    assert client.get("/api/v1/employees").json()["total"] == 3
+    filtered = client.get("/api/v1/employees", params={"department_id": first["id"]})
+    assert filtered.status_code == 200, filtered.text
+    assert filtered.json()["total"] == 2
+    assert {row["id"] for row in filtered.json()["items"]} == {"FIRST", "REPORT"}
+    assert all(row["department_name_en"] == first["name_en"] for row in filtered.json()["items"])
 
 
-def test_admin_link_defaults_membership_only_when_empty(client, api_db):
-    source, existing = department(client), department(client, "Existing")
-    employee = Employee(id="GLINK", name_en="Linked", department_id=source["id"])
-    user = User(email="linked@test.ae", password_hash="x", role="operator", status="active")
-    api_db.add_all([employee, user])
-    api_db.commit()
-    linked = client.patch(f"/api/v1/auth/users/{user.id}/link", json={"employee_id": employee.id})
-    assert linked.status_code == 200, linked.text
-    assert linked.json()["departments"][0]["department_id"] == source["id"]
-    client.put(
-        f"{API}/memberships/{user.id}",
-        json={
-            "memberships": [{"department_id": existing["id"], "role": "deputy", "is_primary": True}]
+def test_people_replaces_grants_and_rejects_overlap_and_unknown_users_atomically(client, api_db):
+    employee(api_db, "HEAD")
+    target = create_department(client, "HEAD")
+    deputy, viewer = account(api_db, "deputy"), account(api_db, "viewer")
+    url = f"{API}/{target['id']}/people"
+    response = client.put(
+        url, json={"deputy_user_ids": [deputy.id, deputy.id], "viewer_user_ids": [viewer.id]}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["deputies"] == [
+        {"user_id": deputy.id, "display_name": deputy.email, "role": "deputy"}
+    ]
+    assert response.json()["viewers"] == [
+        {"user_id": viewer.id, "display_name": viewer.email, "role": "viewer"}
+    ]
+    assert (
+        client.put(
+            url, json={"deputy_user_ids": [viewer.id], "viewer_user_ids": [viewer.id]}
+        ).status_code
+        == 422
+    )
+    assert_error(client.put(url, json={"deputy_user_ids": [99999]}), 404, "USER_NOT_FOUND")
+    assert {(row.user_id, row.role) for row in api_db.scalars(select(DepartmentMember))} == {
+        (deputy.id, "deputy"),
+        (viewer.id, "viewer"),
+    }
+    cleared = client.put(url, json={"deputy_user_ids": [], "viewer_user_ids": []})
+    assert cleared.json()["deputies"] == cleared.json()["viewers"] == []
+    assert api_db.get(Employee, "HEAD").department_id == target["id"]
+
+
+def test_service_catalog_validation_and_replacement(client, api_db):
+    employee(api_db, "HEAD")
+    target = create_department(client, "HEAD")
+    url = f"{API}/{target['id']}/services"
+    assert_error(
+        client.put(url, json={"service_ids": ["invented"]}), 422, "DEPARTMENT_SERVICE_UNKNOWN"
+    )
+    assert any(
+        row["id"] == "Employment Application Form"
+        for row in client.get(f"{API}/service-options").json()
+    )
+    configured = client.put(
+        url, json={"service_ids": ["General Book", "Employment Application Form", "General Book"]}
+    )
+    assert configured.status_code == 200, configured.text
+    assert set(configured.json()["service_ids"]) == {"General Book", "Employment Application Form"}
+    assert client.put(url, json={"service_ids": []}).json()["service_ids"] == []
+
+
+def test_exceptions_crud_recomputes_branch_and_reports_tree_department(client, api_db):
+    employee(api_db, "ROOT")
+    employee(api_db, "BRANCH", "ROOT")
+    employee(api_db, "REPORT", "BRANCH")
+    employee(api_db, "OTHER")
+    source = create_department(client, "ROOT")
+    target = create_department(client, "OTHER", "Other")
+    url = f"{API}/exceptions/BRANCH"
+    assert client.get(f"{API}/exceptions").json() == []
+    moved = client.put(url, json={"department_id": target["id"]})
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["tree_department_id"] == source["id"]
+    assert moved.json()["department_id"] == target["id"]
+    assert moved.json()["created_by"] == "admin@departments.test"
+    assert moved.json()["created_at"]
+    assert client.get(f"{API}/exceptions").json() == [moved.json()]
+    assert (
+        next(row for row in client.get(API).json() if row["id"] == target["id"])["exception_count"]
+        == 1
+    )
+    assert api_db.get(Employee, "REPORT").department_id == target["id"]
+    outside = client.put(url, json={"department_id": None})
+    assert outside.status_code == 200, outside.text
+    for employee_id in ("BRANCH", "REPORT"):
+        assert api_db.get(Employee, employee_id).department_id is None
+    assert client.delete(url).status_code == 204
+    assert client.get(f"{API}/exceptions").json() == []
+    assert api_db.get(Employee, "REPORT").department_id == source["id"]
+    assert_error(client.delete(url), 404, "DEPARTMENT_EXCEPTION_NOT_FOUND")
+
+
+def test_exception_validation(client, api_db):
+    employee(api_db, "HEAD")
+    employee(api_db, "STAFF", "HEAD")
+    target = create_department(client, "HEAD")
+    assert_error(
+        client.put(f"{API}/exceptions/MISSING", json={"department_id": None}),
+        404,
+        "EMPLOYEE_NOT_FOUND",
+    )
+    assert_error(
+        client.put(f"{API}/exceptions/HEAD", json={"department_id": None}),
+        422,
+        "DEPARTMENT_HEAD_EXCEPTION",
+    )
+    assert_error(
+        client.put(f"{API}/exceptions/STAFF", json={"department_id": 99999}),
+        422,
+        "DEPARTMENT_NOT_FOUND",
+    )
+    client.patch(f"{API}/{target['id']}", json={"active": False})
+    assert_error(
+        client.put(f"{API}/exceptions/STAFF", json={"department_id": target["id"]}),
+        422,
+        "DEPARTMENT_NOT_FOUND",
+    )
+    assert client.get(f"{API}/exceptions").json() == []
+
+
+def test_unassigned_groups_follow_tree_roots_not_legacy_labels(client, api_db):
+    employee(api_db, "ROOT", name_en="Root", name_ar="رئيس", duty_unit="Unit")
+    employee(api_db, "CHILD", "ROOT", duty_unit="Different", department="Legacy")
+    employee(api_db, "GONE", "ROOT", status="Resigned")
+    employee(api_db, "OTHER", name_en="Other", duty_unit="Unit", department="Legacy")
+    employee(api_db, "HEAD", "ROOT")
+    create_department(client, "HEAD")
+    assert client.get(f"{API}/unassigned-employees").json() == [
+        {
+            "top_employee_id": "ROOT",
+            "top_name_en": "Root",
+            "top_name_ar": "رئيس",
+            "duty_unit": "Unit",
+            "employee_ids": ["CHILD", "ROOT"],
+            "count": 2,
         },
-    )
-    linked = client.patch(f"/api/v1/auth/users/{user.id}/link", json={"employee_id": employee.id})
-    assert linked.json()["departments"][0]["department_id"] == existing["id"]
+        {
+            "top_employee_id": "OTHER",
+            "top_name_en": "Other",
+            "top_name_ar": None,
+            "duty_unit": "Unit",
+            "employee_ids": ["OTHER"],
+            "count": 1,
+        },
+    ]
 
 
-def test_employee_department_validation_and_plain_filter(client):
-    first, second = department(client), department(client, "Second")
-    invalid = client.post(
-        "/api/v1/employees", json={"id": "GINVALID", "name_en": "Invalid", "department_id": 99999}
-    )
-    assert invalid.status_code == 422
-    assert invalid.json()["error"]["code"] == "DEPARTMENT_NOT_FOUND"
-    for index, target in enumerate((first, second)):
-        created = client.post(
-            "/api/v1/employees",
-            json={
-                "id": f"GFILTER{index}",
-                "name_en": f"Employee {index}",
-                "department_id": target["id"],
-            },
+def test_delete_cascades_configuration_and_recomputes_descendants(client, api_db):
+    employee(api_db, "ROOT")
+    employee(api_db, "REPORT", "ROOT")
+    employee(api_db, "NESTED", "ROOT")
+    employee(api_db, "OUTSIDE")
+    root = create_department(client, "ROOT")
+    nested = create_department(client, "NESTED", "Nested")
+    user = account(api_db, "deputy")
+    grant(api_db, root["id"], user, "deputy")
+    client.put(f"{API}/{root['id']}/services", json={"service_ids": ["General Book"]})
+    client.put(f"{API}/exceptions/OUTSIDE", json={"department_id": root["id"]})
+    assert client.delete(f"{API}/{root['id']}").status_code == 204
+    assert api_db.get(Department, root["id"]) is None
+    for model in (DepartmentMember, DepartmentService, DepartmentException):
+        assert list(api_db.scalars(select(model))) == []
+    for employee_id in ("ROOT", "REPORT", "OUTSIDE"):
+        assert api_db.get(Employee, employee_id).department_id is None
+    assert client.get(API).json()[0]["parent_id"] is None
+    assert api_db.get(Employee, "NESTED").department_id == nested["id"]
+
+
+@pytest.mark.parametrize("reference", ["record", "send", "folder_share"])
+def test_delete_rejects_persisted_record_send_and_share_references(client, api_db, reference):
+    employee(api_db, "HEAD")
+    target = create_department(client, "HEAD")
+    admin = api_db.scalar(select(User).where(User.role == "admin"))
+    if reference == "folder_share":
+        folder = BookFolder(name="Restricted", created_by_user_id=admin.id)
+        api_db.add(folder)
+        api_db.flush()
+        row = BookFolderShare(folder_id=folder.id, department_id=target["id"])
+    else:
+        api_db.add(BookCategory(id="HR", prefix="HR"))
+        book = Book(
+            category_id="HR",
+            ref_number="HR-1",
+            department_id=target["id"] if reference == "record" else None,
         )
-        assert created.status_code == 201, created.text
-        assert created.json()["department_name_en"] == target["name_en"]
-    assert client.get("/api/v1/employees").json()["total"] == 2
-    filtered = client.get("/api/v1/employees", params={"department_id": first["id"]}).json()
-    assert filtered["total"] == 1
-    assert filtered["items"][0]["department_id"] == first["id"]
-    client.patch(f"{API}/{first['id']}", json={"active": False})
-    invalid = client.patch("/api/v1/employees/GFILTER1", json={"department_id": first["id"]})
-    assert invalid.status_code == 422
-    assert invalid.json()["error"]["code"] == "DEPARTMENT_NOT_FOUND"
-
-
-def test_department_migration_is_reversible_on_populated_database(tmp_path, monkeypatch):
-    from pathlib import Path
-
-    from alembic import command
-    from alembic.config import Config
-    from sqlalchemy import create_engine, inspect, text
-
-    root = Path(__file__).resolve().parents[2]
-    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
-    config = Config(str(root / "alembic.ini"))
-    config.set_main_option("script_location", str(root / "backend/app/db/migrations"))
-    config.set_main_option("sqlalchemy.url", f"sqlite:///{(tmp_path / 'migration.db').as_posix()}")
-    command.upgrade(config, "0109_book_folder_shares")
-    engine = create_engine(config.get_main_option("sqlalchemy.url"))
-    with engine.begin() as connection:
-        connection.execute(
-            text(
-                "INSERT INTO employees (id,name_en,department,created_at,updated_at) VALUES ('GKEEP','Keep','Legacy',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"
+        api_db.add(book)
+        api_db.flush()
+        row = (
+            book
+            if reference == "record"
+            else BookDepartmentSend(
+                book_id=book.id,
+                department_id=target["id"],
+                sent_by_user_id=admin.id,
+                purpose="info",
             )
         )
-    command.upgrade(config, "0110_departments")
-    with engine.begin() as connection:
-        connection.execute(
-            text("INSERT INTO departments (name_en,name_ar) VALUES ('Operations','العمليات')")
-        )
-        connection.execute(text("UPDATE employees SET department_id=1 WHERE id='GKEEP'"))
-        assert {"departments", "department_members", "department_services"} <= set(
-            inspect(connection).get_table_names()
-        )
-    command.downgrade(config, "0109_book_folder_shares")
-    with engine.connect() as connection:
-        assert "departments" not in inspect(connection).get_table_names()
-        assert "department_id" not in {
-            column["name"] for column in inspect(connection).get_columns("employees")
-        }
-        assert (
-            connection.execute(
-                text("SELECT department FROM employees WHERE id='GKEEP'")
-            ).scalar_one()
-            == "Legacy"
-        )
-    command.upgrade(config, "0110_departments")
-    engine.dispose()
-
-
-def test_invalid_membership_and_account_assignment_are_atomic(client, api_db):
-    target = department(client)
-    user = User(email="atomic@test.ae", password_hash="x", role="operator", status="active")
-    api_db.add(user)
+    api_db.add(row)
     api_db.commit()
-    url = f"{API}/memberships/{user.id}"
-    membership = {"department_id": target["id"], "role": "member", "is_primary": True}
-    assert client.put(url, json={"memberships": [membership]}).status_code == 200
-    duplicate = client.put(
-        url, json={"memberships": [membership, {**membership, "is_primary": False}]}
-    )
-    assert duplicate.status_code == 422
-    unknown = client.put(url, json={"memberships": [{**membership, "department_id": 99999}]})
-    assert unknown.status_code == 422
-    assert unknown.json()["error"]["code"] == "DEPARTMENT_NOT_FOUND"
-    invalid = client.post(
-        "/api/v1/auth/users",
-        json={"email": "bad-department@test.ae", "role": "operator", "department_id": 99999},
-    )
-    assert invalid.status_code == 422
-    assert not api_db.query(User).filter_by(email="bad-department@test.ae").count()
-    assert len(client.get(f"{API}/{target['id']}/members").json()) == 1
-
-
-def test_department_can_be_deleted_after_clearing_assignment(client):
-    target = department(client)
-    assert (
-        client.put(
-            f"{API}/{target['id']}/services", json={"service_ids": ["General Book"]}
-        ).status_code
-        == 200
-    )
+    assert_error(client.delete(f"{API}/{target['id']}"), 409, "DEPARTMENT_IN_USE")
+    assert api_db.get(Department, target["id"]) is not None
+    api_db.delete(row)
+    api_db.commit()
     assert client.delete(f"{API}/{target['id']}").status_code == 204
-    assert client.get(API).json() == []
 
 
-@pytest.mark.parametrize("same_department", [False, True])
-def test_approval_reconciles_existing_memberships(client, api_db, same_department):
-    existing = department(client)
-    chosen = existing if same_department else department(client, "Chosen")
-    user = User(email="preassigned@test.ae", password_hash="x", role="operator", status="pending")
-    api_db.add(user)
+@pytest.mark.parametrize("operation", ["create", "approve"])
+def test_account_inputs_omit_department_and_derive_membership(client, api_db, operation):
+    employee(api_db, "HEAD")
+    employee(api_db, "STAFF", "HEAD")
+    source = create_department(client, "HEAD")
+    schema = AdminUserCreateRequest if operation == "create" else ApproveRequest
+    assert "department_id" not in schema.model_fields
+    body = {"employee_id": "STAFF", "role": "operator"}
+    if operation == "create":
+        response = client.post("/api/v1/auth/users", json={**body, "email": "created@test.ae"})
+        assert response.status_code == 201, response.text
+        user = response.json()["user"]
+    else:
+        pending = account(api_db, "pending", status="pending")
+        response = client.post(f"/api/v1/auth/users/{pending.id}/approve", json=body)
+        assert response.status_code == 200, response.text
+        user = response.json()
+    assert user["departments"] == [
+        {
+            "department_id": source["id"],
+            "name_en": source["name_en"],
+            "name_ar": source["name_ar"],
+            "role": "member",
+        }
+    ]
+    assert list(api_db.scalars(select(DepartmentMember))) == []
+
+
+def test_account_link_and_reads_combine_derived_roles_without_primary_memberships(client, api_db):
+    for employee_id in ("HEAD", "DEPUTYHEAD", "VIEWHEAD", "MEMBERHEAD"):
+        employee(api_db, employee_id)
+    employee(api_db, "MEMBER", "MEMBERHEAD")
+    heads = [
+        create_department(client, employee_id, employee_id)
+        for employee_id in ("HEAD", "DEPUTYHEAD", "VIEWHEAD", "MEMBERHEAD")
+    ]
+    user = account(api_db, "roles", "HEAD")
+    grant(api_db, heads[0]["id"], user, "viewer")
+    grant(api_db, heads[1]["id"], user, "deputy")
+    grant(api_db, heads[2]["id"], user, "viewer")
+    rows = {row["id"]: row for row in client.get("/api/v1/auth/users").json()}
+    assert [(row["department_id"], row["role"]) for row in rows[user.id]["departments"]] == [
+        (heads[0]["id"], "head"),
+        (heads[1]["id"], "deputy"),
+        (heads[2]["id"], "viewer"),
+    ]
+    linked = client.patch(f"/api/v1/auth/users/{user.id}/link", json={"employee_id": "MEMBER"})
+    assert linked.status_code == 200, linked.text
+    assert {(row["department_id"], row["role"]) for row in linked.json()["departments"]} == {
+        (heads[0]["id"], "viewer"),
+        (heads[1]["id"], "deputy"),
+        (heads[2]["id"], "viewer"),
+        (heads[3]["id"], "member"),
+    }
+    assert all("is_primary" not in row for row in linked.json()["departments"])
+
+
+def test_plain_users_can_list_but_not_manage_departments_or_scoping(client, api_db):
+    employee(api_db, "HEAD")
+    create_department(client, "HEAD")
+    admin = api_db.scalar(select(User).where(User.role == "admin"))
+    admin.role = "operator"
     api_db.commit()
+    assert client.get(API).status_code == 200
     assert (
-        client.put(
-            f"{API}/memberships/{user.id}",
-            json={
-                "memberships": [
-                    {"department_id": existing["id"], "role": "head", "is_primary": True}
-                ]
-            },
+        client.post(
+            API, json={"name_en": "Denied", "name_ar": "مرفوض", "head_employee_id": "HEAD"}
         ).status_code
-        == 200
+        == 403
     )
-    approved = client.post(
-        f"/api/v1/auth/users/{user.id}/approve",
-        json={"role": "operator", "employee_id": None, "department_id": chosen["id"]},
-    )
-    assert approved.status_code == 200, approved.text
-    memberships = approved.json()["departments"]
-    assert len(memberships) == (1 if same_department else 2)
-    primary = [member for member in memberships if member["is_primary"]]
-    assert len(primary) == 1
-    assert primary[0]["department_id"] == chosen["id"]
-    assert primary[0]["role"] == "member"
+    assert client.get(f"{API}/scoping").status_code == 403
+    assert client.put(f"{API}/scoping", json={"enabled": True}).status_code == 403
 
 
-def test_scoping_switch_preflight_audit_and_cache_invalidation(client, api_db):
-    from sqlalchemy import select
-
-    from app.db.models import AuditLog, Department, DepartmentMember, DepartmentService
-    from app.services.department_scope_service import resolve_department_scope
-
-    empty, staffed = department(client), department(client, "Staffed")
-    user = User(
-        email="unassigned@test.ae",
-        display_name="Unassigned",
-        password_hash="x",
-        role="manager",
-        status="active",
-    )
-    head = User(email="head@test.ae", password_hash="x", role="manager", status="active")
-    inactive = User(email="inactive@test.ae", password_hash="x", role="operator", status="disabled")
-    api_db.add_all([user, head, inactive])
-    api_db.flush()
-    api_db.add(
-        DepartmentMember(
-            user_id=head.id, department_id=staffed["id"], role="deputy", is_primary=True
-        )
-    )
-    api_db.add(DepartmentService(department_id=staffed["id"], service_id="General Book"))
-    api_db.add(Department(name_en="Inactive", name_ar="غير نشط", active=False))
-    api_db.commit()
+def test_scoping_preflight_receivers_audit_and_cache_invalidation(client, api_db):
+    for employee_id in ("EMPTY", "HEAD", "DEPUTY", "INACTIVE"):
+        employee(api_db, employee_id)
+    empty = create_department(client, "EMPTY", "Empty")
+    staffed = create_department(client, "HEAD", "Staffed")
+    deputy = create_department(client, "DEPUTY", "Deputy staffed")
+    department(api_db, "Inactive", "INACTIVE", active=False)
+    user = account(api_db, "unassigned", display_name="Unassigned")
+    account(api_db, "head", "HEAD")
+    receiver = account(api_db, "deputy")
+    viewer = account(api_db, "viewer")
+    grant(api_db, deputy["id"], receiver, "deputy")
+    grant(api_db, empty["id"], viewer, "viewer")
+    account(api_db, "disabled", "EMPTY", status="disabled")
+    for target in (staffed, deputy):
+        client.put(f"{API}/{target['id']}/services", json={"service_ids": ["General Book"]})
     assert resolve_department_scope(api_db, user).organization
     preflight = client.get(f"{API}/scoping")
     assert preflight.status_code == 200, preflight.text
+    descriptor = {key: empty[key] for key in ("id", "name_en", "name_ar")}
     assert preflight.json() == {
         "enabled": False,
         "records_backfilled": 0,
         "users_without_department": [
             {"user_id": user.id, "display_name": "Unassigned", "email": user.email}
         ],
-        "departments_without_head": [
-            {"id": empty["id"], "name_en": empty["name_en"], "name_ar": empty["name_ar"]}
-        ],
-        "departments_without_services": [
-            {"id": empty["id"], "name_en": empty["name_en"], "name_ar": empty["name_ar"]}
-        ],
+        "departments_without_receiver": [descriptor],
+        "departments_without_services": [descriptor],
     }
     assert client.put(f"{API}/scoping", json={"enabled": True}).json()["enabled"] is True
     assert resolve_department_scope(api_db, user).kind == "self"
@@ -418,14 +545,4 @@ def test_scoping_switch_preflight_audit_and_cache_invalidation(client, api_db):
         "department_scoping.enabled",
         "department_scoping.disabled",
     ]
-    import json
-
     assert [json.loads(row.payload)["after"] for row in audits] == [True, False]
-
-
-def test_scoping_switch_requires_department_management(client, api_db):
-    admin = api_db.query(User).filter_by(role="admin").one()
-    admin.role = "operator"
-    api_db.commit()
-    assert client.get(f"{API}/scoping").status_code == 403
-    assert client.put(f"{API}/scoping", json={"enabled": True}).status_code == 403
