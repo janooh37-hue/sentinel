@@ -330,10 +330,26 @@ Smoke test on a copy of the dev data (port 8799, deleted afterwards). Every chec
 - **UI**: the editor works in English and Arabic at 1366px and 390px; the Employees tree
   is read-only with a department badge; a user with only `employees.view` is denied.
 
-Dev URL:
+Preview (2026-10-24):
 
-- The dev data was downgraded to 0109 with the old migration files, then upgraded with
-  the rewritten 0110–0112.
-- The one test department the user made under the old model was dropped.
-- The dev URL serves `a7636550`.
-- `.tmp/switch-back.ps1` still works for returning to the `dev` branch.
+- The shared dev URL (`https://gssglt.tail0c00ff.ts.net/`, port 8765) is used by another
+  session that publishes the `dev` branch. Its restarts replaced the swapped server
+  twice.
+- So the departments branch now has its own preview, which the user approved after a
+  safety check:
+  - `https://gssglt.tail0c00ff.ts.net:8443/`, tailnet only, no Funnel;
+  - port 8766;
+  - data copy `C:\Users\GSSG\gssg-dev-data-departments`, on migration 0112.
+- Safety check for the copy:
+  - the scheduler is off;
+  - there are no SMS, WhatsApp or BioTime settings and no `.email_key`;
+  - `.vapid_key` was not copied, so the copy generates its own key and pushes are
+    rejected;
+  - the permission-denied folders (30 MB) were skipped.
+- The shared dev data was downgraded back to `0109_book_folder_shares` with its data
+  kept, so the `dev` branch's next publish can migrate. The dev channel was then
+  restarted with its own `dev-channel.ps1 restart`.
+- `.tmp/switch-back.ps1` removes the preview: it turns off the `:8443` serve, stops 8766,
+  deletes the copy and the old `.bak`, and cleans `.env` and the static build.
+- The preview's sign-in cookie shares the host with the dev URL, so signing into one
+  signs you out of the other.
