@@ -22,7 +22,6 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { TransferEmployeeDialog } from '../TransferEmployeeDialog'
-import { DepartmentPicker } from '@/components/departments/DepartmentPicker'
 
 // ── Module-level constants ───────────────────────────────────────────────────
 
@@ -142,8 +141,6 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [value, setValue] = useState('')
-  const [departmentId, setDepartmentId] = useState<number | null>(null)
-  const isDepartment = field === 'department'
   const inputRef = useRef<HTMLInputElement>(null)
   const isDate = DATE_FIELDS.has(field)
   const isMono = MONO_FIELDS.has(field)
@@ -153,13 +150,7 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
   }, [])
 
   const save = useMutation({
-    mutationFn: () =>
-      api.updateEmployee(
-        employeeId,
-        isDepartment
-          ? { department_id: departmentId }
-          : ({ [field]: value.trim() } as EmployeeUpdate),
-      ),
+    mutationFn: () => api.updateEmployee(employeeId, { [field]: value.trim() } as EmployeeUpdate),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employee-detail', employeeId] })
       void qc.invalidateQueries({ queryKey: ['employees'] })
@@ -171,7 +162,7 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
     },
   })
 
-  const canSave = (isDepartment ? departmentId != null : value.trim().length > 0) && !save.isPending
+  const canSave = value.trim().length > 0 && !save.isPending
 
   return (
     <form
@@ -181,31 +172,18 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
         if (canSave) save.mutate()
       }}
     >
-      {isDepartment ? (
-        <div className="min-w-0 flex-1 basis-36">
-          <DepartmentPicker
-            id={`profile-department-${employeeId}`}
-            label={t('employee.field.department')}
-            value={departmentId}
-            onChange={setDepartmentId}
-            allowNone={false}
-            disabled={save.isPending}
-          />
-        </div>
-      ) : (
-        <input
-          ref={inputRef}
-          type={isDate ? 'date' : 'text'}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') onDone()
-          }}
-          dir={isDate || isMono ? 'ltr' : undefined}
-          className="h-8 min-w-0 flex-1 basis-36 rounded-md border border-amber-300 bg-surface px-2 text-start text-[0.9em] text-foreground outline-none focus:ring-2 focus:ring-amber-400"
-          aria-label={t(`employee.field.${field}`)}
-        />
-      )}
+      <input
+        ref={inputRef}
+        type={isDate ? 'date' : 'text'}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onDone()
+        }}
+        dir={isDate || isMono ? 'ltr' : undefined}
+        className="h-8 min-w-0 flex-1 basis-36 rounded-md border border-amber-300 bg-surface px-2 text-start text-[0.9em] text-foreground outline-none focus:ring-2 focus:ring-amber-400"
+        aria-label={t(`employee.field.${field}`)}
+      />
       <button
         type="submit"
         disabled={!canSave}
@@ -277,7 +255,7 @@ function FieldRow({
             <span className="text-[0.88em] font-semibold text-amber-600">
               {isFeminine ? t('employee.gaps.notSetF') : t('employee.gaps.notSet')}
             </span>
-            {canEdit && (
+            {canEdit && field !== 'department' && (
               <button
                 type="button"
                 className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[0.75em] font-semibold text-amber-700 transition-colors hover:bg-amber-500/20"
@@ -285,6 +263,9 @@ function FieldRow({
               >
                 {t('employee.gaps.addNow')}
               </button>
+            )}
+            {field === 'department' && (
+              <span className="text-[0.75em] text-muted-foreground">{t('departmentAccess.fromTree')}</span>
             )}
           </span>
         ) : (

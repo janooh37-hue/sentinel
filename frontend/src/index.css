@@ -2164,6 +2164,10 @@ body {
 .org-card-foot > span, .org-card-foot > button { border-radius: 5px; background: rgb(255 255 255 / 8%); padding: 1px 5px; }
 .org-card-foot > button { margin-inline-start: auto; border: 0; color: #cfe0f0; cursor: pointer; }
 .org-card-foot em { overflow: hidden; color: #7fd4ad; font-family: var(--font-sans); font-style: normal; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.org-dept-badge { display: inline-flex; min-width: 0; max-width: 58%; align-items: center; gap: 4px; border-radius: 5px; background: rgb(127 212 173 / 16%); padding: 1px 5px; color: #7fd4ad; font-family: var(--font-sans); font-weight: 700; }
+.org-dept-badge > span[aria-hidden] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.org-dept-badge > svg { flex: none; }
+.org-card-foot > .org-card-marker { background: rgb(255 199 64 / 18%); color: #ffd98a; font-family: var(--font-sans); font-weight: 700; }
 .org-card.is-traced { border-color: var(--accent); }
 .org-node-layer.is-tracing .org-card:not(.is-traced), .org-card.is-dimmed, .org-card.is-dragging { opacity: .28; }
 .org-card.is-drop { border-color: #7fd4ad; box-shadow: 0 0 0 3px rgb(4 120 87 / 35%); }
@@ -2171,8 +2175,13 @@ body {
 /* PHYSICAL left: the pip lives in the mirrored coordinate plane (see above),
    so logical inset-inline-start would shove it 100% off-centre under RTL. */
 .org-collapse-pip { position: absolute; left: 50%; bottom: -11px; z-index: 12; display: grid; width: 22px; height: 22px; place-items: center; transform: translateX(-50%); border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--primary); box-shadow: var(--shadow-sm); }
-.org-edit-button, .org-grip { position: absolute; inset-block-start: 6px; z-index: 13; }
-.org-edit-button { inset-inline-end: 6px; display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid rgb(255 255 255 / 28%); border-radius: 7px; background: rgb(255 255 255 / 14%); color: #fff; }
+.org-grip { position: absolute; inset-block-start: 6px; z-index: 13; }
+.org-card-tools { position: absolute; inset-block-start: 6px; inset-inline-end: 6px; z-index: 13; display: flex; gap: 4px; }
+/* Keep two-line names clear of the corner tools (logical: RTL names end on the left). */
+.org-card:has(.org-card-tools) .org-card-main { padding-inline-end: 26px; }
+.org-card:has(.org-card-tools > :nth-child(2)) .org-card-main { padding-inline-end: 52px; }
+.org-edit-button { display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid rgb(255 255 255 / 28%); border-radius: 7px; background: rgb(255 255 255 / 14%); color: #fff; }
+.org-edit-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .org-grip { inset-inline-start: 6px; color: rgb(255 255 255 / 50%); cursor: grab; }
 .org-toolbar-button, .org-readonly-chip, .org-depth-button, .org-zoom-bar button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); padding: 7px 11px; color: var(--text-muted); font-size: .8em; font-weight: 600; }
 .org-toolbar-button.is-active, .org-depth-button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }

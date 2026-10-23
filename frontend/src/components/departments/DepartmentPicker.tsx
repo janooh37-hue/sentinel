@@ -2,7 +2,7 @@ import { useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
-import { departmentDescendantIds, departmentErrorMessage, departmentName, orderDepartments } from '@/lib/departments'
+import { departmentErrorMessage, departmentName, orderDepartments } from '@/lib/departments'
 import {
   Select,
   SelectContent,
@@ -17,8 +17,6 @@ type DepartmentPickerProps = {
   allowNone?: boolean
   noneLabel?: string
   allowedDepartmentIds?: ReadonlySet<number>
-  excludeDepartmentId?: number
-  excludeDepartmentIds?: number[]
   label?: string
   disabled?: boolean
   id?: string
@@ -30,8 +28,6 @@ export function DepartmentPicker({
   allowNone = true,
   noneLabel,
   allowedDepartmentIds,
-  excludeDepartmentId,
-  excludeDepartmentIds = [],
   label,
   disabled = false,
   id,
@@ -41,12 +37,8 @@ export function DepartmentPicker({
   const pickerId = id ?? generatedId
   const query = useQuery({ queryKey: ['departments'], queryFn: api.departments.list })
   const departments = query.data ?? []
-  const excluded = excludeDepartmentId === undefined
-    ? new Set<number>()
-    : departmentDescendantIds(departments, excludeDepartmentId)
-  for (const id of excludeDepartmentIds) excluded.add(id)
   const options = orderDepartments(departments).filter(
-    ({ department }) => !excluded.has(department.id) && (department.active || department.id === value)
+    ({ department }) => (department.active || department.id === value)
       && (!allowedDepartmentIds || allowedDepartmentIds.has(department.id)),
   )
 

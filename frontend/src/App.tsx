@@ -170,14 +170,18 @@ function ServicesRoute(): React.JSX.Element {
   const scope = user?.department_scope_kind
   if (
     !isLoading &&
-    (scope === 'department' || scope === 'self') &&
+    scope !== undefined &&
+    scope !== 'organization' &&
     ![...capabilities].some((capability) => capability.startsWith('books.service.'))
   ) {
+    // Services follow department membership; a branch supervisor outside
+    // every department has none, like plain staff.
+    const inDepartment = scope === 'department' || (user?.departments?.length ?? 0) > 0
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-background p-8 text-center">
         <h2 className="text-xl font-bold text-foreground">{t('application.servicesTitle')}</h2>
         <p className="max-w-lg text-sm text-muted-foreground">
-          {t(scope === 'self' ? 'application.noDepartmentServices' : 'application.departmentHasNoServices')}
+          {t(inDepartment ? 'application.departmentHasNoServices' : 'application.noDepartmentServices')}
         </p>
       </div>
     )
@@ -582,12 +586,15 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
+              {/* People & permissions needs users.manage; the Organization &
+                  departments tab is the org-tree editor (employees.edit relinks,
+                  departments.manage runs departments). */}
               <Route
                 path="/permissions"
                 element={
-                  <RequireCapability cap="users.manage">
+                  <RequireAnyCapability caps={['users.manage', 'employees.edit', 'departments.manage']}>
                     <PermissionsPage />
-                  </RequireCapability>
+                  </RequireAnyCapability>
                 }
               />
               {/* Role-gated (admin or manager), not capability-gated: the API

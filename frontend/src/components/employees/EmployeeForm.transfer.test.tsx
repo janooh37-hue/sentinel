@@ -11,7 +11,6 @@ const BASE = { id: 'G3190', name_en: 'ABDULLA ALABRI', status: 'Active' } as Par
 
 function render(ui: ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
-  client.setQueryData(['departments'], [])
   return renderComponent(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
 }
 

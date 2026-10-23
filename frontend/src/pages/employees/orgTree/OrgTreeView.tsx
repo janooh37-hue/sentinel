@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Crosshair, Expand, GripVertical, Minimize2, Pencil, Search, Shrink, ZoomIn, ZoomOut } from 'lucide-react'
+import { Building2, Crosshair, Expand, GripVertical, Minimize2, Pencil, Search, Shrink, ZoomIn, ZoomOut } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, api, type OrgNodeRead } from '@/lib/api'
+import { departmentName, invalidateDepartmentData } from '@/lib/departments'
 import { pickEmployeeName } from '@/lib/employeeName'
 import {
   LINE_W,
@@ -24,8 +25,22 @@ import {
 import { useCapabilities } from '@/lib/useCapabilities'
 import { SupervisorPicker } from './SupervisorPicker'
 
+/** Ask the tree to bring one person into view; a new `nonce` repeats the request. */
+export interface OrgTreeFocus {
+  id: string
+  nonce: number
+}
+
 interface OrgTreeViewProps {
   unit: string
+  /** Offer supervisor relinking (drag and ✎) to holders of `employees.edit`.
+   *  Only the Permissions editor passes it; Employees → Organization is read-only. */
+  editable?: boolean
+  /** One extra control in the card's top corner, e.g. department actions. */
+  renderCardAction?: (person: OrgPerson) => React.ReactNode
+  /** A small marker in the card's footer, e.g. a department exception. */
+  renderCardMarker?: (person: OrgPerson) => React.ReactNode
+  focus?: OrgTreeFocus | null
 }
 
 interface DragState {
@@ -39,7 +54,7 @@ interface DragState {
 }
 
 
-export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
+export function OrgTreeView({ unit, editable = false, renderCardAction, renderCardMarker, focus = null }: OrgTreeViewProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const { has } = useCapabilities()
@@ -60,8 +75,26 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   const treeQuery = useQuery({ queryKey: ['org-tree'], queryFn: api.listOrgTree })
+  const departmentsQuery = useQuery({ queryKey: ['departments'], queryFn: api.departments.list })
   const people = useMemo(() => (treeQuery.data ?? []).filter((person) => person.duty_unit === unit), [treeQuery.data, unit])
-  const canEdit = has('employees.edit')
+  const departmentsById = useMemo(
+    () => new Map((departmentsQuery.data ?? []).map((department) => [department.id, department])),
+    [departmentsQuery.data],
+  )
+  const canEdit = editable && has('employees.edit')
+
+  // "Show in tree": open the whole unit at every level so the person is laid
+  // out, trace their line, then centre on them once the layout commits.
+  const [seenFocus, setSeenFocus] = useState<OrgTreeFocus | null>(null)
+  if (focus !== seenFocus) {
+    setSeenFocus(focus)
+    if (focus) {
+      setScopeId(null)
+      setDepth('all')
+      setCollapsed(new Set())
+      setTracedId(focus.id)
+    }
+  }
   const lang = i18n.language
   const nameOf = useCallback(
     (person: { name_en: string; name_ar?: string | null }): string => pickEmployeeName(person, lang),
@@ -107,8 +140,8 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
     mutationFn: ({ employeeId, supervisorId }: { employeeId: string; supervisorId: string | null }) =>
       api.setOrgSupervisor(employeeId, { supervisor_id: supervisorId }),
     onSuccess: (updated, variables) => {
-      void queryClient.invalidateQueries({ queryKey: ['org-tree'] })
-      void queryClient.invalidateQueries({ queryKey: ['employees'] })
+      // Moving someone in the tree moves their department (derived server-side).
+      invalidateDepartmentData(queryClient)
       const previousSupervisor = people.find((person) => person.id === variables.employeeId)?.supervisor_id ?? null
       const employee = people.find((person) => person.id === variables.employeeId)
       const supervisor = people.find((person) => person.id === variables.supervisorId)
@@ -172,6 +205,43 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
     const frame = requestAnimationFrame(() => fitViewRef.current())
     return () => cancelAnimationFrame(frame)
   }, [layout])
+
+  const centerOn = useCallback((targetId: string | undefined): void => {
+    const target = layout.nodes.find((node) => node.node.person.id === targetId) ?? layout.nodes[0]
+    const viewport = viewportRef.current
+    if (!target || !viewport) return
+    // Mirror the target's x the same way the node layer does, or centring
+    // scrolls to where the card would be in an LTR tree.
+    const scale = Math.max(viewRef.current.scale, 0.9)
+    const isRtl = document.documentElement.dir === 'rtl'
+    const width = Math.max(layout.width, 600)
+    const centreX = mirrorX(target.x, width, isRtl, target.w) + target.w / 2
+    applyTransform({
+      scale,
+      tx: viewport.clientWidth / 2 - centreX * scale,
+      ty: viewport.clientHeight * 0.26 - (target.y + target.h / 2) * scale,
+    })
+    document.querySelector<HTMLElement>(`.org-card[data-person-id="${CSS.escape(target.node.person.id)}"]`)?.animate(
+      [{ boxShadow: '0 0 0 0 rgba(200,16,46,.55)' }, { boxShadow: '0 0 0 12px rgba(200,16,46,0)' }],
+      { duration: 620, easing: 'cubic-bezier(.16,1,.3,1)' },
+    )
+  }, [applyTransform, layout])
+  const centerOnRef = useRef(centerOn)
+  useEffect(() => {
+    centerOnRef.current = centerOn
+  }, [centerOn])
+  // Declared after the fit effect so its frame runs last and wins. Each focus
+  // request centres once; later collapse toggles keep the user's view.
+  const centeredFocusRef = useRef<OrgTreeFocus | null>(null)
+  useEffect(() => {
+    if (!focus || centeredFocusRef.current === focus) return
+    if (!layout.nodes.some((node) => node.node.person.id === focus.id)) return
+    const frame = requestAnimationFrame(() => {
+      centeredFocusRef.current = focus
+      centerOnRef.current(focus.id)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [focus, layout])
 
   // Native non-passive listener: React attaches `onWheel` passively at the
   // root, so `preventDefault()` there is a console error and the page
@@ -262,26 +332,7 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
   }
 
   function centerOnManager(): void {
-    const targetId = tracedId ? people.find((person) => person.id === tracedId)?.supervisor_id ?? tracedId : layout.nodes[0]?.node.person.id
-    const target = layout.nodes.find((node) => node.node.person.id === targetId) ?? layout.nodes[0]
-    const viewport = viewportRef.current
-    if (!target || !viewport) return
-    // Mirror the target's x the same way the node layer does, or centring
-    // scrolls to where the card would be in an LTR tree.
-    const scale = Math.max(view.scale, 0.9)
-    const isRtl = document.documentElement.dir === 'rtl'
-    const width = Math.max(layout.width, 600)
-    const centreX = mirrorX(target.x, width, isRtl, target.w) + target.w / 2
-    const next = {
-      scale,
-      tx: viewport.clientWidth / 2 - centreX * scale,
-      ty: viewport.clientHeight * 0.26 - (target.y + target.h / 2) * scale,
-    }
-    applyTransform(next)
-    document.querySelector<HTMLElement>(`.org-card[data-person-id="${CSS.escape(target.node.person.id)}"]`)?.animate(
-      [{ boxShadow: '0 0 0 0 rgba(200,16,46,.55)' }, { boxShadow: '0 0 0 12px rgba(200,16,46,0)' }],
-      { duration: 620, easing: 'cubic-bezier(.16,1,.3,1)' },
-    )
+    centerOn(tracedId ? people.find((person) => person.id === tracedId)?.supervisor_id ?? tracedId : layout.nodes[0]?.node.person.id)
   }
 
   function toggleFullscreen(): void {
@@ -379,9 +430,31 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
               const traced = Boolean(lineage?.has(person.id))
               const invalidDrop = drag?.targetId === person.id && isBelow(people, person.id, drag.employee.id)
               const validDrop = drag?.targetId === person.id && !invalidDrop && person.id !== drag.employee.id
+              const headOf = person.head_of_department_id == null ? undefined : departmentsById.get(person.head_of_department_id)
+              const cardAction = renderCardAction?.(person)
               return <div key={person.id} className="org-item" style={{ width: entry.w, height: entry.h, transform: `translate(${mirrorX(entry.x, planeWidth, rtl, entry.w)}px, ${entry.y}px)` }}><article data-person-id={person.id} tabIndex={0} className={`org-card${traced ? ' is-traced' : ''}${!matching ? ' is-dimmed' : ''}${drag?.active && drag.employee.id === person.id ? ' is-dragging' : ''}${validDrop ? ' is-drop' : ''}${invalidDrop ? ' is-nodrop' : ''}`} onPointerDown={(event) => startDrag(event, person)} onClick={(event) => { event.stopPropagation(); if (movedRef.current) { movedRef.current = false; return } setTracedId((current) => current === person.id ? null : person.id) }} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setTracedId((current) => current === person.id ? null : person.id) } }}>
-                <div className="org-card-main"><span className="org-avatar">{initials(person, lang)}</span><div className="min-w-0"><p dir="auto" title={nameOf(person)}>{nameOf(person)}</p><small dir="auto" title={positionOf(person) ?? undefined}>{positionOf(person)}</small></div></div><div className="org-card-foot"><span>{person.id}</span><em dir="auto" title={person.duty_post ?? undefined}>{person.duty_post}</em>{directReports(people, person.id).length > 0 && <button type="button" data-org-no-drag onClick={(event) => { event.stopPropagation(); setScopeId(person.id) }}>{directReports(people, person.id).length} ▾</button>}</div>
-                {editMode && canEdit && <><GripVertical className="org-grip" size={14} /><button type="button" data-org-no-drag className="org-edit-button" aria-label={t('employees.orgTree.pickTitle')} onClick={(event) => { event.stopPropagation(); setPicker({ employee: person, anchor: event.currentTarget.closest<HTMLElement>('.org-card'), boundsEl: viewportRef.current }) }}><Pencil size={12} /></button></>}
+                <div className="org-card-main"><span className="org-avatar">{initials(person, lang)}</span><div className="min-w-0"><p dir="auto" title={nameOf(person)}>{nameOf(person)}</p><small dir="auto" title={positionOf(person) ?? undefined}>{positionOf(person)}</small></div></div>
+                <div className="org-card-foot">
+                  <span>{person.id}</span>
+                  {headOf ? (
+                    <b className="org-dept-badge" dir="auto" title={t('orgDepartments.badge.head', { name: departmentName(headOf, lang) })}>
+                      <Building2 size={11} aria-hidden />
+                      <span className="sr-only">{t('orgDepartments.badge.head', { name: departmentName(headOf, lang) })}</span>
+                      <span aria-hidden>{departmentName(headOf, lang)}</span>
+                    </b>
+                  ) : (
+                    <em dir="auto" title={person.duty_post ?? undefined}>{person.duty_post}</em>
+                  )}
+                  {renderCardMarker?.(person)}
+                  {directReports(people, person.id).length > 0 && <button type="button" data-org-no-drag onClick={(event) => { event.stopPropagation(); setScopeId(person.id) }}>{directReports(people, person.id).length} ▾</button>}
+                </div>
+                {editMode && canEdit && <GripVertical className="org-grip" size={14} />}
+                {(cardAction || (editMode && canEdit)) && (
+                  <div className="org-card-tools" data-org-no-drag>
+                    {cardAction}
+                    {editMode && canEdit && <button type="button" data-org-no-drag className="org-edit-button" aria-label={t('employees.orgTree.pickTitle')} onClick={(event) => { event.stopPropagation(); setPicker({ employee: person, anchor: event.currentTarget.closest<HTMLElement>('.org-card'), boundsEl: viewportRef.current }) }}><Pencil size={12} /></button>}
+                  </div>
+                )}
               </article>{entry.hasChildren && <button type="button" className="org-collapse-pip" aria-expanded={!collapsed.has(person.id)} aria-label={t(`employees.orgTree.${collapsed.has(person.id) ? 'expandReports' : 'collapseReports'}`)} onClick={(event) => { event.stopPropagation(); toggleCollapsed(person.id) }}>{collapsed.has(person.id) ? '+' : '−'}</button>}</div>
             })}
           </div>

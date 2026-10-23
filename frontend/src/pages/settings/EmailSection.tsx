@@ -24,7 +24,7 @@ import {
   EyeOff,
 } from 'lucide-react'
 
-import { api, apiErrorMessage } from '@/lib/api'
+import { ApiError, api, apiErrorMessage } from '@/lib/api'
 import type { EmailAccountRead, EmailAccountUpsert } from '@/lib/api'
 import { useIdentity } from '@/lib/useIdentity'
 import { useAuth } from '@/lib/authContext'
@@ -200,7 +200,13 @@ export function EmailSection(): React.JSX.Element {
       setLinkPickerId(null)
     },
     onError: (err) =>
-      toast.error(apiErrorMessage(err)),
+      // Under department scoping a link grants department/branch access, so
+      // only an administrator may set it.
+      toast.error(
+        err instanceof ApiError && err.code === 'LINK_REQUIRES_ADMIN'
+          ? t('settings.email.linkRequiresAdmin')
+          : apiErrorMessage(err),
+      ),
   })
 
   const update = <K extends keyof EmailAccountUpsert>(

@@ -71,6 +71,7 @@ function Body({ book, send, close }: Pick<Props, 'book' | 'send'> & { close: () 
               return <label key={member.user_id} className="flex min-h-11 items-center gap-2 border-b border-hairline px-3 py-2 last:border-0 has-[:disabled]:text-muted-foreground">
                 <input type="checkbox" className="h-4 w-4 accent-primary" checked={member.already_recipient || members.includes(member.user_id)} disabled={disabled} onChange={(event) => setMembers((prev) => event.target.checked ? [...prev, member.user_id] : prev.filter((value) => value !== member.user_id))} />
                 <bdi>{pickEmployeeName({ name_en: member.name, name_ar: member.name_ar }, i18n.language)}</bdi>
+                <span className="rounded-full bg-surface-tinted px-2 py-px text-xs text-muted-foreground">{t(`departmentAccess.roles.${member.role}`)}</span>
                 {disabled && <span className="ms-auto text-xs">{t(member.already_recipient ? 'books.distribute.alreadyRecipient' : 'books.distribute.notCleared')}</span>}
               </label>
             })}

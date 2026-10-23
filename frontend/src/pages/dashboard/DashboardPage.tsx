@@ -554,7 +554,8 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           name={welcomeName}
           scopeLabel={summary?.department_scope?.kind === 'department'
             ? summary.department_scope.departments?.map((department) => departmentName(department, i18n.language)).join(isAr ? '، ' : ', ')
-            : summary?.department_scope?.kind === 'self' ? t('departmentScope.ownWork') : undefined}
+            : user?.department_scope_kind === 'branch' ? t('departmentScope.ownBranch')
+              : summary?.department_scope?.kind === 'self' ? t('departmentScope.ownWork') : undefined}
           isAr={isAr}
           isLoading={summaryQuery.isPending}
           welcomeGuest={t('dashboard.welcomeBackGuest')}

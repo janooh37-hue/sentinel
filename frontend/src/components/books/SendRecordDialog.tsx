@@ -27,7 +27,7 @@ import {
 import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { cn } from '@/lib/utils'
-import { departmentErrorMessage, departmentName, orderDepartments } from '@/lib/departments'
+import { departmentErrorMessage, departmentHasReceiver, departmentName, orderDepartments } from '@/lib/departments'
 
 const MAX_RECIPIENTS = 50
 const MAX_NOTE = 500
@@ -284,12 +284,13 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery, depar
                   <div className="max-h-48 overflow-y-auto rounded-lg border border-hairline">
                     {departments.map(({ department, depth }) => {
                       const checked = pickedDepartments.includes(department.id)
-                      const disabled = department.heads.length === 0 || (!checked && pickedDepartments.length >= 20) || mutation.isPending
+                      const reachable = departmentHasReceiver(department)
+                      const disabled = !reachable || (!checked && pickedDepartments.length >= 20) || mutation.isPending
                       return (
                         <label key={department.id} className={cn('flex min-h-11 items-center gap-2 border-b border-hairline py-2 pe-3 text-[0.84em] last:border-0', disabled && 'opacity-50')} style={{ paddingInlineStart: `${12 + depth * 16}px` }}>
                           <input type="checkbox" className="h-4 w-4 accent-primary" checked={checked} disabled={disabled} onChange={() => setPickedDepartments((prev) => checked ? prev.filter((id) => id !== department.id) : [...prev, department.id])} />
                           <bdi>{departmentName(department, i18n.language)}</bdi>
-                          {department.heads.length === 0 && <span className="ms-auto text-xs text-muted-foreground">{t('books.send.noHead')}</span>}
+                          {!reachable && <span className="ms-auto text-xs text-muted-foreground">{t('books.send.noHead')}</span>}
                         </label>
                       )
                     })}

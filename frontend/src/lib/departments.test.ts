@@ -1,15 +1,31 @@
 import { createInstance } from 'i18next'
 import { describe, expect, it } from 'vitest'
-import { ApiError, type DepartmentRead } from './api'
-import { departmentDescendantIds, departmentErrorMessage, departmentName, orderDepartments, visibleDepartmentIds } from './departments'
+import { ApiError, type AdminUserRead, type DepartmentRead, type UserDepartmentRead } from './api'
+import {
+  departmentDescendantIds,
+  departmentErrorMessage,
+  departmentHasReceiver,
+  departmentName,
+  groupDepartmentUsers,
+  orderDepartments,
+  visibleDepartmentIds,
+} from './departments'
 import en from '@/locales/en.json'
 import ar from '@/locales/ar.json'
 
+function department(id: number, parent_id: number | null, over: Partial<DepartmentRead> = {}): DepartmentRead {
+  return {
+    id, parent_id, name_en: `Department ${id}`, name_ar: `قسم ${id}`, active: true,
+    head_employee_id: `G${id}`, head_name_en: `Head ${id}`, head_name_ar: null, head_user_id: null,
+    employee_count: 0, deputies: [], viewers: [], service_ids: [], exception_count: 0, ...over,
+  }
+}
+
 const departments: DepartmentRead[] = [
-  { id: 3, parent_id: 2, name_en: 'Child', name_ar: 'فرعي', active: true, member_count: 0, employee_count: 0, service_ids: [], heads: [] },
-  { id: 1, parent_id: null, name_en: 'First', name_ar: 'الأول', active: true, member_count: 0, employee_count: 0, service_ids: [], heads: [] },
-  { id: 2, parent_id: 1, name_en: 'Second', name_ar: 'الثاني', active: true, member_count: 0, employee_count: 0, service_ids: [], heads: [] },
-  { id: 4, parent_id: null, name_en: 'Other', name_ar: 'آخر', active: false, member_count: 0, employee_count: 0, service_ids: [], heads: [] },
+  department(3, 2, { name_en: 'Child', name_ar: 'فرعي' }),
+  department(1, null),
+  department(2, 1),
+  department(4, null, { active: false }),
 ]
 
 describe('department tree', () => {
@@ -20,7 +36,7 @@ describe('department tree', () => {
     expect(orderDepartments([])).toEqual([])
   })
 
-  it('excludes self and all descendants but not other branches from parent choices', () => {
+  it('collects a department and all of its nested departments', () => {
     expect([...departmentDescendantIds(departments, 2)]).toEqual([2, 3])
     expect(departmentDescendantIds(departments, 1)).toEqual(new Set([1, 2, 3]))
   })
@@ -39,13 +55,39 @@ describe('department tree', () => {
     expect(departmentName(departments[0]!, 'en')).toBe('Child')
   })
 
-  it('limits members to memberships and includes head and deputy descendants', () => {
-    const member = { department_id: 1, name_en: 'First', name_ar: 'الأول', role: 'member' as const, is_primary: true }
-    expect(visibleDepartmentIds(departments, [member])).toEqual(new Set([1]))
-    expect(visibleDepartmentIds(departments, [{ ...member, role: 'head' }])).toEqual(new Set([1, 2, 3]))
-    expect(visibleDepartmentIds(departments, [{ ...member, department_id: 2, role: 'deputy' }])).toEqual(new Set([2, 3]))
-    expect(visibleDepartmentIds(departments, [member, { ...member, department_id: 4 }])).toEqual(new Set([1, 4]))
+  it('gives heads and deputies nested departments, viewers only theirs, and members none', () => {
+    const grant = (department_id: number, role: UserDepartmentRead['role']): UserDepartmentRead =>
+      ({ department_id, name_en: '', name_ar: '', role })
+    expect(visibleDepartmentIds(departments, [grant(1, 'member')])).toEqual(new Set())
+    expect(visibleDepartmentIds(departments, [grant(1, 'head')])).toEqual(new Set([1, 2, 3]))
+    expect(visibleDepartmentIds(departments, [grant(2, 'deputy')])).toEqual(new Set([2, 3]))
+    expect(visibleDepartmentIds(departments, [grant(1, 'viewer'), grant(4, 'viewer')])).toEqual(new Set([1, 4]))
     expect(visibleDepartmentIds(departments, [])).toEqual(new Set())
+  })
+
+  it('needs a head account or a deputy to receive a department send', () => {
+    expect(departmentHasReceiver(department(1, null))).toBe(false)
+    expect(departmentHasReceiver(department(1, null, { head_user_id: 9 }))).toBe(true)
+    expect(departmentHasReceiver(department(1, null, { deputies: [{ user_id: 5, display_name: 'D', role: 'deputy' }] }))).toBe(true)
+  })
+})
+
+describe('department user grouping', () => {
+  function user(id: number, departments: UserDepartmentRead[]): AdminUserRead {
+    return {
+      id, email: `${id}@example.com`, employee_id: null, display_name: null, name_en: null,
+      role: 'operator', status: 'active', failed_attempts: 0, last_login_at: null, created_at: null,
+      is_default_manager: false, password_change_required: false, departments,
+    }
+  }
+  const grant = (department_id: number, role: UserDepartmentRead['role']): UserDepartmentRead =>
+    ({ department_id, name_en: `Department ${department_id}`, name_ar: 'قسم', role })
+
+  it('groups by the tree department, puts users without one first, and filters across grants', () => {
+    const users = [user(1, [grant(2, 'viewer'), grant(1, 'member')]), user(2, []), user(3, [grant(2, 'head')])]
+    expect(groupDepartmentUsers(users, 'all').map(([id, rows]) => [id, rows.map((u) => u.id)])).toEqual([[null, [2]], [1, [1]], [2, [3]]])
+    expect(groupDepartmentUsers(users, 'none').map(([, rows]) => rows.map((u) => u.id))).toEqual([[2]])
+    expect(groupDepartmentUsers(users, 2).map(([, rows]) => rows.map((u) => u.id))).toEqual([[1, 3]])
   })
 })
 
@@ -59,9 +101,8 @@ describe('department error messages', () => {
     const expected = {
       DEPARTMENT_IN_USE: messages.inUse,
       DEPARTMENT_NAME_TAKEN: messages.nameTaken,
-      DEPARTMENT_CYCLE: messages.cycle,
-      DEPARTMENT_PRIMARY_REQUIRED: messages.primaryRequired,
-      DEPARTMENT_MEMBERSHIP_DUPLICATE: messages.membershipDuplicate,
+      DEPARTMENT_HEAD_TAKEN: messages.headTaken,
+      DEPARTMENT_HEAD_EXCEPTION: messages.headException,
       DEPARTMENT_SERVICE_UNKNOWN: messages.serviceUnknown,
       DEPARTMENT_NOT_FOUND: messages.notFound,
       DEPARTMENT_OUT_OF_SCOPE: messages.outOfScope,
@@ -77,9 +118,6 @@ describe('department error messages', () => {
     for (const [code, message] of Object.entries(expected)) {
       expect(departmentErrorMessage(new ApiError(409, code, 'Raw English server message'), t)).toBe(message)
     }
-    expect(t('access.history.actions.department_memberships')).toBe(
-      language === 'ar' ? 'تم تعديل عضويات الأقسام' : 'Department memberships changed',
-    )
     expect(departmentErrorMessage(new ApiError(500, 'OTHER_ERROR', 'Other message'), t)).toBe('Other message')
     expect(departmentErrorMessage('Network failed', t)).toBe('Network failed')
   })

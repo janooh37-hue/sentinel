@@ -167,16 +167,12 @@ describe('App route capability gates', () => {
     window.history.pushState({}, '', path)
     render(<App />)
 
-    const denialCopy =
-      path === '/permissions'
-        ? 'Access to this area is managed by administrators and cannot be requested.'
-        : "You don't have access to this page"
-    expect(await screen.findByText(denialCopy)).toBeVisible()
+    expect(await screen.findByText("You don't have access to this page")).toBeVisible()
   })
 
   it.each([
     ['/employees', "You don't have access to this page"],
-    ['/permissions', 'Access to this area is managed by administrators and cannot be requested.'],
+    ['/permissions', "You don't have access to this page"],
   ] as const)('offers no request action for the %s route denial state', async (path, copy) => {
     window.history.pushState({}, '', path)
     render(<App />)
@@ -192,6 +188,16 @@ describe('App route capability gates', () => {
 
     expect(await screen.findByText(pageText)).toBeVisible()
   })
+
+  it.each(['users.manage', 'employees.edit', 'departments.manage'])(
+    'opens /permissions with only %s, since the org-tree editor lives there',
+    async (capability) => {
+      capabilityState.allowed = new Set([capability])
+      window.history.pushState({}, '', '/permissions')
+      render(<App />)
+      expect(await screen.findByText('permissions-page')).toBeVisible()
+    },
+  )
 
   it.each(['documents.generate', 'books.view'])(
     'denies /services when %s is the only granted capability',

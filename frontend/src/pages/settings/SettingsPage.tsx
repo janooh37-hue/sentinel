@@ -22,7 +22,6 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmailSection } from './EmailSection'
 import { ManagersSection } from './ManagersSection'
 import { DesignationCatalog } from './DesignationCatalog'
-import { DepartmentsSection } from './DepartmentsSection'
 import { SigningSignatureSection } from './SigningSignatureSection'
 import { MessageTemplatesSection } from './MessageTemplatesSection'
 import { MigrationWizard, MIGRATION_SKIPPED_KEY } from '@/pages/system/MigrationWizard'
@@ -755,7 +754,6 @@ type SettingsPanelId =
   | 'sms'
   | 'messageTemplates'
   | 'access'
-  | 'departments'
   | 'crashReporting'
   | 'system'
   | 'advanced'
@@ -850,11 +848,6 @@ export function SettingsPage(): React.JSX.Element {
       title: t('access.settingsCard.title'),
       description: t('access.settingsCard.desc'),
     },
-    departments: {
-      id: 'departments',
-      title: t('departmentSettings.title'),
-      description: t('departmentSettings.description'),
-    },
     crashReporting: {
       id: 'crashReporting',
       title: t('settings.appearance.title'),
@@ -906,10 +899,7 @@ export function SettingsPage(): React.JSX.Element {
       id: 'people',
       group: 'administration',
       label: t('settings.navigation.peopleAccess'),
-      panels: [
-        ...(has('users.manage') ? [panels.access] : []),
-        ...(has('departments.manage') ? [panels.departments] : []),
-      ],
+      panels: has('users.manage') ? [panels.access] : [],
     },
     {
       id: 'application',
@@ -978,8 +968,6 @@ export function SettingsPage(): React.JSX.Element {
         return <MessageTemplatesSection />
       case 'access':
         return <AccessRequestsSection />
-      case 'departments':
-        return <DepartmentsSection />
       case 'crashReporting':
         return settings ? (
           <CrashReportingSection settings={settings} onUpdate={handleUpdate} />

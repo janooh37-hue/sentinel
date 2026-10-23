@@ -34,7 +34,10 @@ import {
   type CapabilityCatalog,
   useCapabilityCatalog,
 } from '@/lib/useCapabilityCatalog'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { OrgDepartmentsTab } from './orgDepartments/OrgDepartmentsTab'
 import { artworkForTemplate, emojiForTemplate } from '@/pages/application/formEmoji'
 
 type BlueprintKind = 'page' | 'service' | 'category'
@@ -624,7 +627,7 @@ function RequestStrip({
   )
 }
 
-export function PermissionsPage(): React.JSX.Element {
+function PeoplePermissionsPanel(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -1033,32 +1036,23 @@ export function PermissionsPage(): React.JSX.Element {
 
   if (usersQuery.isLoading) {
     return (
-      <div className="flex flex-1 flex-col overflow-auto bg-background p-6">
-        <Skeleton className="mx-auto h-10 w-full max-w-[1680px]" />
-        <Skeleton className="mx-auto mt-5 h-[520px] w-full max-w-[1680px] rounded-2xl" />
-      </div>
+      <>
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="mt-5 h-[520px] w-full rounded-2xl" />
+      </>
     )
   }
 
   if (usersQuery.isError) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-background p-8">
+      <div className="flex items-center justify-center p-8">
         <EmptyState message={t('access.permissions.loadError')} />
       </div>
     )
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-auto bg-background">
-      <div className="mx-auto w-full max-w-[1680px] flex-1 px-4 pb-24 pt-5 sm:px-8 sm:pb-12">
-        <header className="mb-5">
-          <h1 className="text-[1.7em] font-bold tracking-tight text-foreground">
-            {t('access.permissions.mirror.title')}
-          </h1>
-          <p className="mt-1 max-w-[72ch] text-[0.86em] leading-relaxed text-muted-foreground">
-            {t('access.permissions.mirror.help')}
-          </p>
-        </header>
+    <>
         <div className="grid grid-cols-1 gap-4 min-[1100px]:gap-6 min-[1100px]:[grid-template-columns:280px_minmax(0,1fr)_360px]">
           <aside
             aria-label={t('access.permissions.mirror.people')}
@@ -1494,6 +1488,57 @@ export function PermissionsPage(): React.JSX.Element {
             </aside>
           ) : null}
         </div>
+    </>
+  )
+}
+
+type PermissionsTab = 'people' | 'org'
+
+/**
+ * Permissions — two areas behind one route:
+ *   - People & permissions (`users.manage`): per-user capability studio;
+ *   - Organization & departments (`employees.edit` relinks supervisors,
+ *     `departments.manage` runs departments): the org-tree editor.
+ * `?tab=org` deep-links the second.
+ */
+export function PermissionsPage(): React.JSX.Element {
+  const { t } = useTranslation()
+  const { has } = useCapabilities()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const canPeople = has('users.manage')
+  const canOrg = has('employees.edit') || has('departments.manage')
+  const requested = searchParams.get('tab')
+  const tab: PermissionsTab = (requested === 'org' && canOrg) || !canPeople ? 'org' : 'people'
+
+  function selectTab(next: string): void {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev)
+      if (next === 'org') params.set('tab', 'org')
+      else params.delete('tab')
+      return params
+    }, { replace: true })
+  }
+
+  return (
+    <div className="flex flex-1 flex-col overflow-auto bg-background">
+      <div className="mx-auto w-full max-w-[1680px] flex-1 px-4 pb-24 pt-5 sm:px-8 sm:pb-12">
+        <header className="mb-4">
+          <h1 className="text-[1.7em] font-bold tracking-tight text-foreground">
+            {t('access.permissions.mirror.title')}
+          </h1>
+          <p className="mt-1 max-w-[72ch] text-[0.86em] leading-relaxed text-muted-foreground">
+            {t(tab === 'org' ? 'orgDepartments.help' : 'access.permissions.mirror.help')}
+          </p>
+        </header>
+        <Tabs value={tab} onValueChange={selectTab}>
+          {canPeople && canOrg && (
+            <TabsList aria-label={t('access.permissions.mirror.title')} className="mb-5 overflow-x-auto [scrollbar-width:none]">
+              <TabsTrigger value="people">{t('access.permissions.tabs.people')}</TabsTrigger>
+              <TabsTrigger value="org">{t('access.permissions.tabs.org')}</TabsTrigger>
+            </TabsList>
+          )}
+          {tab === 'people' ? <PeoplePermissionsPanel /> : <OrgDepartmentsTab />}
+        </Tabs>
       </div>
     </div>
   )
