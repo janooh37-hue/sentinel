@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
+import { useFitCount } from '@/components/dashboard/useFitCount'
 import { api } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { BIG_NUMBER, INLINE_LINK, MoreRecords, RECORD_ROW, WidgetFeedback } from './recordWidgetParts'
@@ -30,7 +31,9 @@ export function UnreadMailWidget({ tier, rows }: WidgetProps): React.JSX.Element
   })
   const mail = query.data?.unread_mail
   const emailSync = query.data?.email_sync
-  const visible = mail?.latest.slice(0, rows) ?? []
+  const candidates = mail?.latest ?? []
+  const { listRef, visibleCount } = useFitCount(Math.min(candidates.length, rows))
+  const visible = candidates.slice(0, visibleCount)
   const list = tier === 'list' || tier === 'tall'
   return (
     <WidgetFrame title={t('dashboard.widgets.ledger.title')} viewAllTo={MAIL_URL}>
@@ -38,7 +41,7 @@ export function UnreadMailWidget({ tier, rows }: WidgetProps): React.JSX.Element
         <Link to={MAIL_URL} className={`${INLINE_LINK} flex shrink-0 items-baseline gap-2`}><bdi dir="ltr" className={BIG_NUMBER}>{mail.count}</bdi>{' '}<span className="text-[0.75em] text-muted-foreground">{t('dashboard.widgets.ledger.unread')}</span></Link>
         {tier === 'summary' && <p className="pt-1 text-[0.7em] text-muted-foreground">{t('dashboard.widgets.ledger.receivedToday', { count: emailSync.incoming_today })}</p>}
         {mail.count === 0 ? <p className="pt-1 text-[0.72em] text-muted-foreground">{t('dashboard.widgets.ledger.empty')}</p> : list && <>
-          <ul className="min-h-0 flex-1 overflow-hidden divide-y divide-hairline pt-1">
+          <ul ref={listRef} className="min-h-0 flex-1 overflow-hidden divide-y divide-hairline pt-1">
             {visible.map((item) => <li key={item.id}><Link to={`/ledger?mail=${item.id}`} className={RECORD_ROW}>
               <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-primary" />
               <span className="min-w-0 flex-1"><span className="block truncate" dir="auto">{item.subject || t('dashboard.widgets.ledger.noSubject')}</span><span className="block truncate text-[0.9em] text-muted-foreground" dir="auto">{item.counterparty}</span></span>

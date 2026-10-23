@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
+import { useFitCount } from '@/components/dashboard/useFitCount'
 import { siteToday } from '@/components/employees/useAttendanceAttention'
 import { computeEndDate } from '@/lib/leaveDateMath'
 import type { WidgetProps } from './types'
@@ -14,7 +15,8 @@ export function OnLeaveTodayWidget({ tier, rows }: WidgetProps): React.JSX.Eleme
   const to = `/leaves?status=Approved&on=${today}`
   const all = query.data?.on_leave_today ?? []
   const list = tier === 'list' || tier === 'tall'
-  const visible = all.slice(0, rows)
+  const { listRef, visibleCount } = useFitCount(Math.min(all.length, rows))
+  const visible = all.slice(0, visibleCount)
   const tomorrow = all.filter((item) => item.end_date === computeEndDate(today, 2)).length
   const more = all.length - visible.length
   return (
@@ -23,7 +25,7 @@ export function OnLeaveTodayWidget({ tier, rows }: WidgetProps): React.JSX.Eleme
         <p className="text-[0.75em] text-muted-foreground">{t('dashboard.widgets.on_leave_today.empty')}</p>
       ) : list ? (
         <>
-          <ul className="min-h-0 flex-1 overflow-hidden">{visible.map((item) => <LeaveWidgetRow key={item.leave_id} item={item} language={i18n.language} when={t('dashboard.widgets.on_leave_today.until', { date: item.end_date })} />)}</ul>
+          <ul ref={listRef} className="min-h-0 flex-1 overflow-hidden">{visible.map((item) => <LeaveWidgetRow key={item.leave_id} item={item} language={i18n.language} when={t('dashboard.widgets.on_leave_today.until', { date: item.end_date })} />)}</ul>
           <MorePeople count={more} to={to} label={t('dashboard.widgets.on_leave_today.more', { count: more })} />
         </>
       ) : (

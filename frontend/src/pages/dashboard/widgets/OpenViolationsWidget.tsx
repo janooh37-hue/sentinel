@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
+import { useFitCount } from '@/components/dashboard/useFitCount'
 import { useCapabilities } from '@/lib/useCapabilities'
 import type { WidgetProps } from './types'
 import { MorePeople, PEOPLE_BIG, PEOPLE_LINK, PEOPLE_ROW, PeopleFeedback } from './peopleWidgetParts'
@@ -15,7 +16,8 @@ export function OpenViolationsWidget({ tier, rows }: WidgetProps): React.JSX.Ele
   const query = usePeopleSummary()
   const data = query.data?.open_violations
   const list = tier === 'list' || tier === 'tall'
-  const visible = data?.latest.slice(0, rows) ?? []
+  const { listRef, visibleCount } = useFitCount(Math.min(data?.latest.length ?? 0, rows))
+  const visible = data?.latest.slice(0, visibleCount) ?? []
   const more = (data?.count ?? 0) - visible.length
   return (
     <WidgetFrame title={t('dashboard.widgets.violations.title')} count={list && data ? data.count : undefined} viewAllTo={canViewEmployees ? TO : undefined}>
@@ -23,7 +25,7 @@ export function OpenViolationsWidget({ tier, rows }: WidgetProps): React.JSX.Ele
         <p className="text-[0.75em] text-muted-foreground">{t('dashboard.widgets.violations.empty')}</p>
       ) : list ? (
         <>
-          <ul className="min-h-0 flex-1 overflow-hidden">{visible.map((item) => {
+          <ul ref={listRef} className="min-h-0 flex-1 overflow-hidden">{visible.map((item) => {
             const content = <><span aria-hidden className="shrink-0 text-[1em]">🚨</span><span className="min-w-0 flex-1"><bdi className="block truncate text-[0.78em] font-medium">{item.title}</bdi><bdi className="block truncate text-[0.65em] text-muted-foreground">{summaryEmployeeName(item, i18n.language)}</bdi></span><bdi className="shrink-0 font-mono text-[0.65em] text-muted-foreground">{item.date}</bdi></>
             return <li key={item.id}>{canViewEmployees ? <Link to={`/employees/${encodeURIComponent(item.employee_id)}?tab=violations&open=${item.id}`} className={PEOPLE_ROW}>{content}</Link> : <div className="flex min-w-0 items-center gap-2 py-2 text-start">{content}</div>}</li>
           })}</ul>

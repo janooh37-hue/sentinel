@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
+import { useFitCount } from '@/components/dashboard/useFitCount'
 import { api } from '@/lib/api'
 import { useInboxSummary } from '@/pages/books/useInboxCount'
 import { useRecordDelete } from '@/pages/books/RecordDeleteProvider'
@@ -25,7 +26,9 @@ export function InboxWidget({ tier, rows }: WidgetProps): React.JSX.Element {
     queryFn: () => api.listBooks({ inbox: 'received', sort: '-date', limit: rows }),
     enabled: list && !!summary && summary.received > 0,
   })
-  const visible = preview.data?.items.filter((item) => !pendingIds.has(item.id)).slice(0, rows) ?? []
+  const candidates = preview.data?.items.filter((item) => !pendingIds.has(item.id)) ?? []
+  const { listRef, visibleCount } = useFitCount(Math.min(candidates.length, rows))
+  const visible = candidates.slice(0, visibleCount)
   return (
     <WidgetFrame title={t('dashboard.widgets.inbox.title')} viewAllTo={RECEIVED_URL}>
       {query.isPending || query.isError || !summary ? <WidgetFeedback pending={query.isPending} retry={query.refetch} /> : <>
@@ -40,7 +43,7 @@ export function InboxWidget({ tier, rows }: WidgetProps): React.JSX.Element {
           </ul>}
         </>}
         {summary.received === 0 ? <p className="pt-1 text-[0.72em] text-muted-foreground">{t('dashboard.widgets.inbox.empty')}</p> : list && (preview.isPending || preview.isError ? <WidgetFeedback pending={preview.isPending} retry={preview.refetch} /> : <>
-          <ul className="min-h-0 flex-1 overflow-hidden divide-y divide-hairline">
+          <ul ref={listRef} className="min-h-0 flex-1 overflow-hidden divide-y divide-hairline">
             {visible.map((item) => <li key={item.id}><Link to={`${RECEIVED_URL}&book=${item.id}`} className={RECORD_ROW}>
               <span className="min-w-0 flex-1"><span className="block truncate" dir="auto">{item.subject || item.ref_number}</span><span className="block truncate text-[0.9em] text-muted-foreground">{t('dashboard.widgets.inbox.from', { name: (isAr ? item.my_inbox?.sent_by_name_ar || item.my_inbox?.sent_by_name : item.my_inbox?.sent_by_name) || t('dashboard.widgets.inbox.unknownSender') })}</span></span>
               <span className="max-w-24 shrink-0 text-[0.85em] text-muted-foreground">{recordAge(item.my_inbox?.sent_at || item.created_at, isAr)}</span>

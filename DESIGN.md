@@ -1550,6 +1550,11 @@ load-error/retry feedback remain inside the same frame. Empty states explain
 where to continue. Colors, focus rings and surfaces use the existing tokens;
 references and numeric metrics use isolated Western digits.
 
+Preview lists share `components/dashboard/useFitCount.ts`: viewport and row
+measurements reserve whole rows after each resize or font-scale change.
+`WidgetProps.rows` limits preview fetching/candidates, not measured capacity;
+remainder links subtract only rows actually displayed.
+
 - **My documents:** title includes the localized month from `my_records.month`.
   The large completed count is `my_records.approved`, not generated-document
   activity. Nonzero approval states form the segmented bar and linked legend.

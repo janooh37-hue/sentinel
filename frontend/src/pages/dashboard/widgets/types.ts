@@ -15,6 +15,6 @@ export type WidgetTier = 'glance' | 'summary' | 'tall' | 'list'
 
 export interface WidgetProps {
   tier: WidgetTier
-  /** List rows that fit the box at this tier (0 for glance/summary). */
+  /** Upper bound for preview fetching/candidates; measured viewport decides visibility. */
   rows: number
 }

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
+import { useFitCount } from '@/components/dashboard/useFitCount'
 import { api } from '@/lib/api'
 import { useRecordDelete } from '@/pages/books/RecordDeleteProvider'
 import { BIG_NUMBER, INLINE_LINK, MoreRecords, RECORD_ROW, WidgetFeedback } from './recordWidgetParts'
@@ -24,7 +25,9 @@ export function MyDocumentsWidget({ tier, rows }: WidgetProps): React.JSX.Elemen
   const to = records ? stateUrl('approved') : undefined
   const parts = records ? STATES.filter(([state]) => records[state] > 0) : []
   const total = records ? parts.reduce((sum, [state]) => sum + records[state], 0) : 0
-  const visible = records?.latest_approved.filter((row) => !pendingIds.has(row.book_id)).slice(0, rows) ?? []
+  const candidates = records?.latest_approved.filter((row) => !pendingIds.has(row.book_id)) ?? []
+  const { listRef, visibleCount } = useFitCount(Math.min(candidates.length, rows))
+  const visible = candidates.slice(0, visibleCount)
   const list = tier === 'list' || tier === 'tall'
   return (
     <WidgetFrame title={title} viewAllTo={to}>
@@ -50,7 +53,7 @@ export function MyDocumentsWidget({ tier, rows }: WidgetProps): React.JSX.Elemen
             </>
           )}
           {list && records.approved > 0 && <>
-            <ul className="min-h-0 flex-1 overflow-hidden divide-y divide-hairline">
+            <ul ref={listRef} className="min-h-0 flex-1 overflow-hidden divide-y divide-hairline">
               {visible.map((row) => <li key={row.book_id}><Link to={`/books?open=${row.book_id}`} className={RECORD_ROW}>
                 <span className="min-w-0 flex-1"><span className="block truncate" dir="auto"><bdi dir="ltr" className="font-mono text-primary">{row.ref_number}</bdi> · {row.subject}</span><span className="block truncate text-[0.9em] text-muted-foreground" dir="auto">{(isAr ? row.employee_name_ar || row.employee_name_en : row.employee_name_en) || t('dashboard.widgets.pending.general')}</span></span>
                 <span className="flex shrink-0 flex-col items-end gap-0.5 text-[0.85em]"><span className="text-success">{t('dashboard.widgets.pending.approved')}</span><bdi dir="ltr" className="font-mono text-muted-foreground">{row.created_at.slice(0, 10)}</bdi></span>

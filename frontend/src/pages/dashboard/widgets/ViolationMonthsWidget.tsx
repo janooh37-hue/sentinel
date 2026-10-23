@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
 import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
+import { useFitCount } from '@/components/dashboard/useFitCount'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   formatRegisterMonth,
@@ -21,7 +22,8 @@ export function ViolationMonthsWidget({ tier, rows }: WidgetProps): React.JSX.El
   const total = query.data?.count ?? 0
   const newestMonth = newestAwaitingMonth(months)
   const readyMonth = months.find((item) => item.closable)
-  const preview = months.slice(0, rows)
+  const { listRef, visibleCount } = useFitCount(Math.min(months.length, rows))
+  const preview = months.slice(0, visibleCount)
   const moreCount = Math.max(0, total - preview.length)
   const list = tier === 'tall' || tier === 'list'
   const viewAllTo = newestMonth
@@ -57,27 +59,28 @@ export function ViolationMonthsWidget({ tier, rows }: WidgetProps): React.JSX.El
         </div>
       ) : (
         <>
-          <div className="min-h-0 flex-1 overflow-hidden">
+          <ul ref={listRef} className="min-h-0 flex-1 overflow-hidden">
             {preview.map((item) => {
               const monthLabel = formatRegisterMonth(item.year, item.month, locale)
               return (
-                <Link
-                  key={`${item.year}-${item.month}`}
-                  to={inmateRegisterHref(item.year, item.month)}
-                  aria-label={`${monthLabel}, ${t(`inmateStats.workflow.${item.stage}`)}`}
-                  className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-0.5 rounded-lg py-1.5 text-start hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <div className="min-w-0">
-                    <span className="block truncate text-[0.8em] font-medium text-foreground">{monthLabel}</span>
-                    <span className="block text-[0.65em] text-muted-foreground">{t(`inmateStats.workflow.${item.stage}`)} · {t('inmateStats.awaiting.rows', { count: item.row_count })}</span>
-                  </div>
-                  <span className={`rounded-md px-1.5 py-0.5 text-[0.65em] font-semibold ${item.closable ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}>
-                    {item.closable ? t('inmateStats.awaiting.closable') : t('inmateStats.awaiting.blocked', { count: item.pending_count })}
-                  </span>
-                </Link>
+                <li key={`${item.year}-${item.month}`}>
+                  <Link
+                    to={inmateRegisterHref(item.year, item.month)}
+                    aria-label={`${monthLabel}, ${t(`inmateStats.workflow.${item.stage}`)}`}
+                    className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-0.5 rounded-lg py-1.5 text-start hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <div className="min-w-0">
+                      <span className="block truncate text-[0.8em] font-medium text-foreground">{monthLabel}</span>
+                      <span className="block text-[0.65em] text-muted-foreground">{t(`inmateStats.workflow.${item.stage}`)} · {t('inmateStats.awaiting.rows', { count: item.row_count })}</span>
+                    </div>
+                    <span className={`rounded-md px-1.5 py-0.5 text-[0.65em] font-semibold ${item.closable ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}>
+                      {item.closable ? t('inmateStats.awaiting.closable') : t('inmateStats.awaiting.blocked', { count: item.pending_count })}
+                    </span>
+                  </Link>
+                </li>
               )
             })}
-          </div>
+          </ul>
           {moreCount > 0 && <Link to={viewAllTo} className={`${linkClass} shrink-0 pt-1`}>{t('dashboard.widgets.violation_months.more', { count: moreCount })}</Link>}
         </>
       )}

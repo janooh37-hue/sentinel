@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
+import { useFitCount } from '@/components/dashboard/useFitCount'
 import { siteToday } from '@/components/employees/useAttendanceAttention'
 import { api, apiErrorMessage, ApiError } from '@/lib/api'
 import { computeDaysBetween } from '@/lib/leaveDateMath'
@@ -46,7 +47,8 @@ export function PendingDeparturesWidget({ tier, rows }: WidgetProps): React.JSX.
   const all = query.data?.items ?? []
   const total = query.data?.total ?? 0
   const list = tier === 'list' || tier === 'tall'
-  const visible = all.slice(0, rows)
+  const { listRef, visibleCount } = useFitCount(Math.min(all.length, rows))
+  const visible = all.slice(0, visibleCount)
   const more = total - visible.length
   const today = siteToday()
   const due = all.filter((item) => {
@@ -59,7 +61,7 @@ export function PendingDeparturesWidget({ tier, rows }: WidgetProps): React.JSX.
         <p className="text-[0.75em] text-muted-foreground">{t('dashboard.widgets.pending_departures.empty')}</p>
       ) : list ? (
         <>
-          <ul className="min-h-0 flex-1 overflow-hidden">{visible.map((item) => {
+          <ul ref={listRef} className="min-h-0 flex-1 overflow-hidden">{visible.map((item) => {
             const name = pickEmployeeName(item, i18n.language)
             const days = item.end_date ? computeDaysBetween(today, item.end_date) - 1 : null
             const when = days === null ? '' : days < 0 ? t('pendingDepartures.overdue') : days === 0 ? t('pendingDepartures.dueToday') : t('pendingDepartures.daysLeft', { count: days })

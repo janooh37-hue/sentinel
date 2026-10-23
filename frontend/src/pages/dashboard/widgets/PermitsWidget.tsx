@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { api, type ItemPermitSummary, type PermitDerivedStatus, type PermitZone } from '@/lib/api'
 import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
+import { useFitCount } from '@/components/dashboard/useFitCount'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useLocalStorage } from '@/lib/useLocalStorage'
@@ -83,9 +84,11 @@ export function PermitsWidget({ tier, rows }: WidgetProps): React.JSX.Element {
         : t(`permits.approval.${row.approval_state ?? 'none'}`),
       kind: 'items',
     })),
-  ].sort((a, b) => b.created.localeCompare(a.created)).slice(0, Math.max(0, rows))
-  const securityRemaining = Math.max(0, (latestQuery.data?.total ?? 0) - latest.filter((row) => row.kind === 'security').length)
-  const itemsRemaining = Math.max(0, (latestItemsQuery.data?.total ?? 0) - latest.filter((row) => row.kind === 'items').length)
+  ].sort((a, b) => b.created.localeCompare(a.created))
+  const { listRef, visibleCount } = useFitCount(Math.min(latest.length, rows))
+  const visible = latest.slice(0, visibleCount)
+  const securityRemaining = Math.max(0, (latestQuery.data?.total ?? 0) - visible.filter((row) => row.kind === 'security').length)
+  const itemsRemaining = Math.max(0, (latestItemsQuery.data?.total ?? 0) - visible.filter((row) => row.kind === 'items').length)
 
   return (
     <WidgetFrame title={t('dashboard.widgets.permits.title')} viewAllTo={to()}>
@@ -153,8 +156,8 @@ export function PermitsWidget({ tier, rows }: WidgetProps): React.JSX.Element {
           {showList && (
             <div className="mt-2 flex min-h-0 flex-1 flex-col border-t border-hairline pt-1">
               <h4 className="shrink-0 text-[0.65em] text-muted-foreground">{t('dashboard.widgets.permits.latestEntries')}</h4>
-              <ul className="min-h-0 flex-1 overflow-hidden">
-                {latest.map((row) => (
+              <ul ref={listRef} className="min-h-0 flex-1 overflow-hidden">
+                {visible.map((row) => (
                   <li key={row.key}>
                     <Link to={row.to} className="flex min-w-0 items-center gap-2 rounded-sm py-1 text-[0.7em] hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <bdi className="shrink-0 font-mono text-[0.85em]">{row.ref}</bdi>
