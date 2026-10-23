@@ -18,7 +18,18 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api.deps import get_current_user
 from app.config import get_settings
 from app.core import crypto
-from app.db.models import AppSetting, EmailAccount, LedgerEntry, User, UserPermission
+from app.db.models import (
+    AppSetting,
+    Book,
+    BookApprovalStep,
+    BookCategory,
+    BookVersion,
+    EmailAccount,
+    LedgerEntry,
+    ScanInbox,
+    User,
+    UserPermission,
+)
 from app.db.session import get_db
 from app.main import create_app
 from app.services import email_service, ledger_service, scheduler_service, smart_folder_service
@@ -723,6 +734,138 @@ def test_sync_distinct_long_message_ids_remain_independent_and_idempotent(
     assert repeat.json()["imported"] == 0
     assert repeat.json()["skipped_duplicate"] == 2
     assert not (isolated_data_dir / "ledger_attachments").exists()
+
+
+@pytest.mark.parametrize("parent_state", ["foreign", "deleted", "null-owner", "non-email"])
+@pytest.mark.parametrize("thread_header", ["In-Reply-To", "References"])
+def test_sync_reply_requires_a_same_owner_live_email_parent_before_signing(
+    api_db: Session,
+    isolated_data_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    parent_state: str,
+    thread_header: str,
+) -> None:
+    owner_a = _user(api_db, email="reply-a@test.ae")
+    owner_b = _user(api_db, email="reply-b@test.ae")
+    account_a = _account(api_db, owner_a)
+    _account(api_db, owner_b)
+    api_db.add(BookCategory(id="GS", name_en="General", prefix="GS"))
+    book = Book(
+        category_id="GS",
+        ref_number="GS-0042",
+        subject="Awaiting signed reply",
+        approval_state="awaiting_scan",
+        send_state="sent",
+        attachment_paths=[],
+    )
+    api_db.add(book)
+    api_db.flush()
+    version = BookVersion(
+        book_id=book.id, version_no=1, trigger="initial", status="awaiting_scan"
+    )
+    api_db.add(version)
+    api_db.flush()
+    step = BookApprovalStep(
+        book_id=book.id,
+        version_id=version.id,
+        step_order=1,
+        stage_label="Signer",
+        assignee_user_id=owner_b.id,
+        state="pending",
+    )
+    api_db.add(step)
+    parent = _ledger_email(
+        api_db,
+        owner_user_id=owner_b.id if parent_state == "foreign" else owner_a.id,
+        subject="Record handoff",
+        counterparty="vendor@example.com",
+    )
+    parent.direction = "outgoing"
+    parent.message_id = "<handoff@example.com>"
+    parent.related_book_id = book.id
+    if parent_state == "deleted":
+        parent.deleted_at = datetime.now(UTC).replace(tzinfo=None)
+    elif parent_state == "null-owner":
+        parent.owner_user_id = None
+    elif parent_state == "non-email":
+        parent.channel = "letter"
+    api_db.commit()
+
+    pdf = (Path(__file__).parent / "fixtures/scan_triage/returned-form-text.pdf").read_bytes()
+
+    def reply(message_id: str, attachment: bytes) -> bytes:
+        message = EmailMessage()
+        message["From"] = "unrelated@example.com"
+        message["To"] = account_a.email
+        message["Subject"] = "Returned signed record"
+        message["Message-ID"] = message_id
+        message[thread_header] = "<root@example.com> <handoff@example.com>"
+        message.set_content("Returned attachment")
+        message.add_attachment(
+            attachment, maintype="application", subtype="pdf", filename="signed.pdf"
+        )
+        return message.as_bytes()
+
+    server = FakeImapServer()
+    server.add_folder(account_a.sent_folder)
+    server.add_message(account_a.inbox_folder, reply("<foreign-reply@example.com>", pdf))
+    monkeypatch.setattr(email_service, "connect_imap", server.connector)
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: api_db
+    app.dependency_overrides[get_current_user] = lambda: owner_a
+    with TestClient(app, raise_server_exceptions=True) as client:
+        response = client.post("/api/v1/email/sync")
+    assert response.status_code == 200, response.text
+    assert response.json()["errors"] == []
+    assert response.json()["imported"] == 1
+    api_db.refresh(book)
+    api_db.refresh(version)
+    api_db.refresh(step)
+    assert book.send_state == "sent"
+    assert book.approval_state == "awaiting_scan"
+    assert book.attachment_paths == []
+    assert version.status == "awaiting_scan"
+    assert version.signed_base_pdf_path is None
+    assert version.signed_pdf_path is None
+    assert version.signed_at is None
+    assert step.state == "pending"
+    assert step.decided_at is None
+    assert not (isolated_data_dir / "book_attachments" / str(book.id)).exists()
+    rejected_item = api_db.query(ScanInbox).one()
+    assert rejected_item.owner_user_id == owner_a.id
+    assert rejected_item.state == "pending_ocr"
+    assert rejected_item.proposed_book_id is None
+    assert rejected_item.resolved_at is None
+    assert (isolated_data_dir / rejected_item.file_path).read_bytes() == pdf
+
+    # The same live handoff is authoritative in its actual owner's mailbox.
+    parent.owner_user_id = owner_b.id
+    parent.deleted_at = None
+    parent.channel = "email"
+    api_db.commit()
+    server.folders[account_a.inbox_folder].messages.clear()
+    signed_pdf = pdf + b"\n% authorized same-owner control\n"
+    server.add_message(account_a.inbox_folder, reply("<own-reply@example.com>", signed_pdf))
+    app.dependency_overrides[get_current_user] = lambda: owner_b
+    with TestClient(app, raise_server_exceptions=True) as client:
+        authorized = client.post("/api/v1/email/sync")
+    assert authorized.status_code == 200, authorized.text
+    assert authorized.json()["errors"] == []
+    assert authorized.json()["imported"] == 1
+    api_db.refresh(book)
+    api_db.refresh(version)
+    api_db.refresh(step)
+    assert book.send_state == "confirmed"
+    assert book.approval_state == "approved"
+    assert version.status == "approved"
+    assert version.signed_pdf_path is not None
+    assert (isolated_data_dir / version.signed_pdf_path).read_bytes() == signed_pdf
+    assert step.state == "approved"
+    filed = api_db.query(ScanInbox).filter_by(owner_user_id=owner_b.id).one()
+    assert filed.state == "auto_filed"
+    assert filed.proposed_book_id == book.id
+    api_db.refresh(rejected_item)
+    assert rejected_item.state == "pending_ocr"
 
 
 def test_sync_route_returns_409_while_a_real_mailbox_sync_holds_the_lock(
