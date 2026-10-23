@@ -171,6 +171,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   const { peopleCount, entry: openEntry } = useContextSource(
     selectedId,
     selectedId == null ? null : 'mail',
+    scope,
   )
   const contextEmployeeId = openEntry?.related_employee_id ?? null
 
@@ -184,8 +185,8 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
     contextEmployeeId,
   )
   const requestedEntryQuery = useQuery({
-    queryKey: ['ledger-entry', requestedOpenId],
-    queryFn: () => api.getLedgerEntry(requestedOpenId!),
+    queryKey: ['ledger-entry', requestedOpenId, scope],
+    queryFn: () => api.getLedgerEntry(requestedOpenId!, scope),
     enabled: requestedOpenId != null && !isSearching,
   })
   const ledgerQuery = useQuery({
@@ -483,6 +484,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   const readingPaneSlot = (
     <ReadingPaneSlot
       selectedId={selectedId}
+      scope={scope}
       selectedKind={selectedKind}
       onReply={handleReply}
       onReplyAll={handleReplyAll}
@@ -603,6 +605,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
                   <div className="flex h-full min-h-0">
                     <ContextPanel
                       selectedId={selectedId}
+                      scope={scope}
                       selectedKind={selectedKind}
                       onNavigate={handleContextNavigate}
                       onEmail={handleContextEmail}
@@ -667,6 +670,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
           (312px expanded / 42px collapsed) at the inline end. */}
       <ContextPanel
         selectedId={selectedId}
+        scope={scope}
         selectedKind={selectedKind}
         onNavigate={handleContextNavigate}
         onEmail={handleContextEmail}

@@ -3,8 +3,8 @@
  * email" (Phase 7, Task 3).
  *
  * Given the open mail/record (`selectedId` + `selectedKind`), it runs the same
- * `['ledger-entry', id]` / `['ledger-log-record', id]` query the reading pane
- * uses (TanStack de-dupes — no double fetch), resolves the employees the
+ * scope-keyed `['ledger-entry', id, scope]` query the reading pane uses
+ * (TanStack de-dupes — no double fetch), resolves the employees the
  * correspondence is ABOUT via `resolvePeople` (`related_employee_id` first, then
  * body G-numbers), and renders:
  *   · header "People in this email · N" + a collapse toggle (⟩)
@@ -52,6 +52,7 @@ const COLLAPSE_KEY = 'ledger.cx.collapsed'
 interface ContextPanelProps {
   /** The open row's id, or null when nothing is selected (→ idle). */
   selectedId: number | null
+  scope?: 'mine' | 'all'
   /** Which kind of row is open — drives the entry-vs-log-record query. */
   selectedKind: 'mail' | null
   /** Coarse navigation (Open record → employees; Generate → application). */
@@ -77,6 +78,7 @@ function readCollapsed(): boolean {
 
 export function ContextPanel({
   selectedId,
+  scope,
   selectedKind,
   onNavigate,
   onEmail,
@@ -94,7 +96,7 @@ export function ContextPanel({
   }, [collapsed])
 
   const { entry, people, peopleCount, bookRefs, attachments, isLoading } =
-    useContextSource(selectedId, selectedKind)
+    useContextSource(selectedId, selectedKind, scope)
 
   // The flat, order-preserving people list — every resolved G-number gets the
   // same full (collapsed-by-default) card; no person is privileged. `people`

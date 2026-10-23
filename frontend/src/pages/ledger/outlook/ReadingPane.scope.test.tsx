@@ -1,14 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, cleanup } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, type LedgerEntryRead } from '@/lib/api'
+import { api } from '@/lib/api'
+import type { LedgerEntryRead } from '@/lib/api'
 import { ReadingPane } from './ReadingPane'
 import { useContextSource } from './useContextSource'
 import { rewriteCidReferences } from '@/lib/cidRewrite'
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }))
-vi.mock('@/lib/useIdentity', () => ({ useIdentity: () => ({ identity: { user_id: 1 }, isAdmin: true }) }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1 } }) }))
 vi.mock('@/lib/api', async (original) => {
   const real = await original<typeof import('@/lib/api')>()
   return { ...real, api: { ...real.api, getLedgerEntry: vi.fn(), listLedgerThread: vi.fn().mockResolvedValue([]), markLedgerEntryRead: vi.fn().mockResolvedValue({}) } }
