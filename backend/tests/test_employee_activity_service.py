@@ -2,21 +2,32 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
+import pytest
 from sqlalchemy.orm import Session
 
 from app.db.models import (
     Book,
     BookCategory,
+    BookVersion,
     Document,
     Employee,
     Leave,
     LedgerEntry,
+    User,
     Violation,
 )
 from app.db.workforce_models import DutyAssignmentEvent
 from app.services import employee_activity_service
 
 BASE = datetime(2026, 8, 10, 9, 0)
+
+
+@pytest.fixture(autouse=True)
+def _activity_reader(db_session: Session) -> None:
+    db_session.add(
+        User(id=7, email="activity-reader@test.ae", password_hash="x", role="operator", status="active")
+    )
+    db_session.commit()
 
 
 def _employee(db: Session, employee_id: str = "G100", name_en: str = "ALPHA EMPLOYEE") -> Employee:
@@ -39,6 +50,14 @@ def _category_and_book(
     )
     db.add_all([category, book])
     return book
+
+
+def _link_document(db: Session, book_id: int, document_id: int) -> None:
+    db.flush()
+    db.add(BookVersion(
+        book_id=book_id, version_no=1, document_id=document_id,
+        template_id="Employment Certificate", status="approved",
+    ))
 
 
 def _ledger(
@@ -126,6 +145,7 @@ def test_activity_merges_all_sources_by_creation_time(db_session: Session):
     )
     ledger = _ledger(entry_id=44, created_at=BASE + timedelta(minutes=1))
     db_session.add_all([emp, category, book, document, leave, violation, ledger])
+    _link_document(db_session, book.id, document.id)
     db_session.commit()
 
     result = employee_activity_service.list_employee_activity(
@@ -184,6 +204,8 @@ def test_equal_timestamps_use_kind_then_source_id_tiebreak(db_session: Session):
         description="Late", status="Open", created_at=BASE,
     )
     db_session.add_all([*documents, leave, violation, _ledger(entry_id=44, created_at=BASE)])
+    _link_document(db_session, 71, 11)
+    _link_document(db_session, 72, 12)
     db_session.commit()
 
     result = employee_activity_service.list_employee_activity(db_session, owner_user_id=7)
@@ -215,6 +237,8 @@ def test_employee_and_kind_filters_apply_to_rows_and_total(db_session: Session):
         ),
         _ledger(entry_id=44, created_at=BASE + timedelta(minutes=3), employee_id="G200"),
     ])
+    _link_document(db_session, 71, 11)
+    _link_document(db_session, 72, 12)
     db_session.commit()
 
     by_employee = employee_activity_service.list_employee_activity(
@@ -242,6 +266,7 @@ def test_global_offset_is_correct_when_one_source_dominates(db_session: Session)
             submission_id=f"00000000-0000-0000-0000-{index:012d}",
             created_at=BASE + timedelta(minutes=minute),
         ))
+        _link_document(db_session, 70 + index, 100 + index)
     db_session.add_all([
         Leave(
             id=200, employee_id="G100", leave_type="Annual", start_date=date(2026, 8, 11),
@@ -397,6 +422,7 @@ def test_activity_merges_recorded_duty_location_events_and_paginates(
             reason="Other employee transfer",
         ),
     ])
+    _link_document(db_session, 72, 72)
     db_session.commit()
 
     duty_locations = employee_activity_service.list_employee_activity(

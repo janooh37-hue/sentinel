@@ -93,8 +93,10 @@ def test_violation_deny_hides_detail_counts_and_both_activity_queries(records):
                 params={"employee_id": records.employee.id, **extra},
             )
             assert response.status_code == 200, response.text
-            assert response.json()["items"] == []
-            assert response.json()["total"] == 0
+            items = response.json()["items"]
+            assert all(row["kind"] != "violation" for row in items)
+            assert response.json()["total"] == (0 if extra else 1)
+            assert [row["source_id"] for row in items] == ([] if extra else [records.leave.id])
         records.actor["user"] = records.admin
         detail = records.client.get(f"/api/v1/employees/{records.employee.id}/detail").json()
         assert detail["stats"]["violations"] == 1

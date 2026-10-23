@@ -6,6 +6,10 @@ docs/leaves/violations/ledger entries, and a merged activity timeline.
 Filter rules:
 - Approved leaves count toward ``leaves_taken_days``; other statuses don't.
 - ``LedgerEntry.deleted_at`` rows are excluded from counts and the recent list.
+- Document counts, links and timeline entries use the canonical exact-revision
+  read policy, including confidentiality, retained access and deleted Records.
+- An explicit ``violations.view`` deny omits violation rows and timeline events;
+  the employee detail's integer violation count is zero.
 - Tenure is derived from ``Employee.doj`` (the column v3 used; ``doj_company``
   is the start at this specific company, but historical data keeps it equal to
   ``doj`` for most rows — sticking with ``doj`` matches the dashboard service).
@@ -15,7 +19,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import ColumnElement, and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.employee_completeness import completeness as _completeness
@@ -24,7 +28,7 @@ from app.db import models
 from app.schemas import employee_detail as sx
 from app.schemas.employee import EmployeeRead
 from app.schemas.employee_completeness import CompletenessRead
-from app.services import book_service, document_service, ledger_service, photo_service
+from app.services import document_service, ledger_service, perm_service, photo_service
 
 # Cap each recent-* array. The Employee Detail page paginates the per-tab
 # views via dedicated endpoints; this aggregate is for the at-a-glance hero.
@@ -40,21 +44,6 @@ DEFAULT_LEAVE_ALLOWANCE_DAYS = 30
 _APPROVED_STATUS = "Approved"
 
 
-def document_book_visible(db: Session, user: models.User | None) -> ColumnElement[bool] | None:
-    """SQL: the Document's live Record (matched by ref) is one ``user`` can open.
-
-    Documents with no live Record stay visible. ``None`` = nothing hidden.
-    """
-    clause = book_service.user_visibility_clause(db, user) if user is not None else None
-    if clause is None:
-        return None
-    hidden_refs = select(models.Book.ref_number).where(
-        models.Book.deleted_at.is_(None),
-        models.Book.id.not_in(select(models.Book.id).where(clause)),
-    )
-    return models.Document.ref_number.not_in(hidden_refs)
-
-
 def get_employee_detail(
     db: Session, employee_id: str, *, user: models.User | None = None
 ) -> sx.EmployeeDetailRead | None:
@@ -65,11 +54,9 @@ def get_employee_detail(
         return None
 
     tenure_years = _tenure_years(emp.doj)
-    doc_visible = document_book_visible(db, user)
+    can_view_violations = user is None or perm_service.has_capability(db, user, "violations.view")
     ledger_visible = ledger_service.related_book_visible(db, user)
     doc_filters = [models.Document.employee_id == emp.id, models.Document.ref_number != "DRAFT"]
-    if doc_visible is not None:
-        doc_filters.append(doc_visible)
     ledger_filters = [
         models.LedgerEntry.related_employee_id == emp.id,
         models.LedgerEntry.deleted_at.is_(None),
@@ -77,9 +64,16 @@ def get_employee_detail(
     if ledger_visible is not None:
         ledger_filters.append(ledger_visible)
 
-    doc_count = int(
-        db.execute(select(func.count(models.Document.id)).where(*doc_filters)).scalar_one()
+    doc_rows = document_service.readable_documents(
+        db,
+        db.scalars(
+            select(models.Document)
+            .where(*doc_filters)
+            .order_by(models.Document.created_at.desc(), models.Document.id.desc())
+        ),
+        user=user,
     )
+    doc_count = len(doc_rows)
 
     # Scoped to the current calendar year so the value is comparable to
     # ``leaves_allowed_days`` (a 30-day annual allowance). Summing the
@@ -95,10 +89,14 @@ def get_employee_detail(
         ).scalar_one()
     )
 
-    violation_count = int(
-        db.execute(
-            select(func.count(models.Violation.id)).where(models.Violation.employee_id == emp.id)
-        ).scalar_one()
+    violation_count = (
+        int(
+            db.execute(
+                select(func.count(models.Violation.id)).where(models.Violation.employee_id == emp.id)
+            ).scalar_one()
+        )
+        if can_view_violations
+        else 0
     )
     # Absence rows are day-level facts; the stat is the current calendar year,
     # same scoping as ``leaves_taken_days``.
@@ -124,33 +122,16 @@ def get_employee_detail(
         tenure_years=tenure_years,
     )
 
-    doc_rows = db.execute(
-        select(
-            models.Document,
-            models.Book.id.label("book_id"),
-            models.Book.approval_state.label("approval_state"),
-        )
-        .outerjoin(
-            models.Book,
-            and_(
-                models.Book.ref_number == models.Document.ref_number,
-                models.Book.deleted_at.is_(None),
-            ),
-        )
-        .where(*doc_filters)
-        .order_by(models.Document.created_at.desc())
-        .limit(RECENT_LIMIT)
-    ).all()
     recent_docs = [
         sx.RecentDocumentRead(
-            id=r.Document.id,
-            template_id=r.Document.template_id,
-            ref_number=r.Document.ref_number,
-            created_at=r.Document.created_at,
-            book_id=r.book_id,
-            approval_state=r.approval_state,
+            id=document.id,
+            template_id=document.template_id,
+            ref_number=document.ref_number,
+            created_at=document.created_at,
+            book_id=version.book_id if version is not None else None,
+            approval_state=version.book.approval_state if version is not None else None,
         )
-        for r in doc_rows
+        for document, version in doc_rows[:RECENT_LIMIT]
     ]
 
     recent_leaves = [
@@ -164,38 +145,25 @@ def get_employee_detail(
         )
     ]
 
-    recent_violations = [
-        sx.RecentViolationRead.model_validate(v)
-        for v in db.scalars(
-            select(models.Violation)
-            .where(models.Violation.employee_id == emp.id)
-            .order_by(models.Violation.date.desc())
-            .limit(RECENT_LIMIT)
-        )
-    ]
+    recent_violations = (
+        [
+            sx.RecentViolationRead.model_validate(v)
+            for v in db.scalars(
+                select(models.Violation)
+                .where(models.Violation.employee_id == emp.id)
+                .order_by(models.Violation.date.desc())
+                .limit(RECENT_LIMIT)
+            )
+        ]
+        if can_view_violations
+        else []
+    )
     leave_documents = document_service.documents_for_leaves(
-        db, [leave.id for leave in recent_leaves]
+        db, [leave.id for leave in recent_leaves], user=user
     )
     violation_documents = document_service.documents_for_violations(
-        db, [violation.id for violation in recent_violations]
+        db, [violation.id for violation in recent_violations], user=user
     )
-    if doc_visible is not None:
-        linked_ids = [
-            doc.id
-            for linked in (*leave_documents.values(), *violation_documents.values())
-            for doc in linked
-        ]
-        shown = set(
-            db.scalars(
-                select(models.Document.id).where(models.Document.id.in_(linked_ids), doc_visible)
-            )
-        )
-        leave_documents = {
-            k: [d for d in docs if d.id in shown] for k, docs in leave_documents.items()
-        }
-        violation_documents = {
-            k: [d for d in docs if d.id in shown] for k, docs in violation_documents.items()
-        }
     recent_leaves = [
         leave.model_copy(update={"linked_documents": leave_documents.get(leave.id, [])})
         for leave in recent_leaves

@@ -25,7 +25,7 @@ import json
 import logging
 import shutil
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -50,6 +50,7 @@ from app.core.constants import (
 from app.core.dateutils import excel_date_to_datetime
 from app.core.docx_engine import aztec_corner_for, syncs_general_book_footer
 from app.core.docx_render import _arabic_clock, _arabic_weekday
+from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_ALIASES, SERVICE_IDS
 from app.core.html_text import html_to_text
 from app.core.inmate_wings import normalize_wing
 from app.core.nationalities import resolve_nationality
@@ -834,10 +835,87 @@ def _unlink_document_files(doc: Document, data_dir: Path) -> None:
             p.unlink(missing_ok=True)
 
 
+def require_document_record_access(
+    db: Session,
+    user: User,
+    row: Document,
+    *,
+    expected_version_id: int | None = None,
+) -> BookVersion | None:
+    """Authorize stored metadata and bytes against their exact owning revision.
+
+    Companions inherit their submission's primary ownership. Standalone
+    documents retain the interactive generation and record-type read gates.
+    A stale expected revision must never silently resolve to different bytes.
+    """
+    from app.services import book_service, perm_service
+
+    owning_version = document_owning_version(db, row)
+    if owning_version is not None:
+        if expected_version_id is not None and expected_version_id != owning_version.id:
+            raise NotFoundError(
+                "DOCUMENT_NOT_FOUND", f"Document {row.id} not found", id=row.id
+            )
+        book_service.resolve_book_read_access(
+            db, user, owning_version.book, version_id=owning_version.id
+        )
+        return owning_version
+    if user.role == INMATE_REPORTER_ROLE or not perm_service.has_capability(
+        db, user, "documents.generate"
+    ):
+        raise AppError(
+            "FORBIDDEN", "You don't have permission to access this document", http_status=403
+        )
+    resolved = SERVICE_ALIASES.get(row.template_id, row.template_id)
+    book_service.require_record_type_access(
+        db, user, service_id=resolved if resolved in SERVICE_IDS else OTHER_SERVICE_ID
+    )
+    return None
+
+
+def document_owning_version(db: Session, row: Document) -> BookVersion | None:
+    """Resolve actual ownership, including deleted records and companions."""
+    owning = db.scalar(select(BookVersion).where(BookVersion.document_id == row.id))
+    if owning is None and row.role == "companion":
+        primary_document_ids = select(Document.id).where(
+            Document.submission_id == row.submission_id, Document.role == "primary"
+        )
+        owning = db.scalar(
+            select(BookVersion).where(BookVersion.document_id.in_(primary_document_ids))
+        )
+    return owning
+
+
+def readable_documents(
+    db: Session, rows: Iterable[Document], *, user: User | None
+) -> list[tuple[Document, BookVersion | None]]:
+    """Filter projections with the canonical read gate, before counting/paging.
+
+    ``None`` is reserved for internal callers that deliberately bypass policy.
+    Unexpected failures propagate rather than being mistaken for a denial.
+    """
+    readable: list[tuple[Document, BookVersion | None]] = []
+    for row in rows:
+        try:
+            version = (
+                require_document_record_access(db, user, row)
+                if user is not None
+                else document_owning_version(db, row)
+            )
+        except AppError as exc:
+            if exc.http_status not in (403, 404):
+                raise
+            continue
+        readable.append((row, version))
+    return readable
+
+
 def _linked_documents(
     db: Session,
     fk_column: InstrumentedAttribute[int | None],
     ids: Sequence[int],
+    *,
+    user: User | None,
 ) -> dict[int, list[LinkedDocumentRead]]:
     if not ids:
         return {}
@@ -851,7 +929,7 @@ def _linked_documents(
         .order_by(Document.created_at.asc(), Document.id.asc())
     )
     linked_by_record_id: dict[int, list[LinkedDocumentRead]] = {}
-    for document in rows:
+    for document, _ in readable_documents(db, rows, user=user):
         record_id = getattr(document, fk_column.key)
         if record_id is None:
             continue
@@ -862,15 +940,15 @@ def _linked_documents(
 
 
 def documents_for_leaves(
-    db: Session, leave_ids: Sequence[int]
+    db: Session, leave_ids: Sequence[int], *, user: User | None = None
 ) -> dict[int, list[LinkedDocumentRead]]:
-    return _linked_documents(db, Document.leave_id, leave_ids)
+    return _linked_documents(db, Document.leave_id, leave_ids, user=user)
 
 
 def documents_for_violations(
-    db: Session, violation_ids: Sequence[int]
+    db: Session, violation_ids: Sequence[int], *, user: User | None = None
 ) -> dict[int, list[LinkedDocumentRead]]:
-    return _linked_documents(db, Document.violation_id, violation_ids)
+    return _linked_documents(db, Document.violation_id, violation_ids, user=user)
 
 
 def _purge_superseded_drafts(
