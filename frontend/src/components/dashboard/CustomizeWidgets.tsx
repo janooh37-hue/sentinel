@@ -168,7 +168,7 @@ export function WidgetControls({
 
   return (
     <div
-      className="flex min-h-11 shrink-0 items-center gap-1 border-b border-hairline bg-surface-raised px-2 sm:min-h-10"
+      className="flex min-h-11 shrink-0 items-center gap-1 border-b border-hairline bg-surface-raised px-2 py-1 sm:min-h-10"
       role="group"
       aria-label={t('dashboard.customize.controls', { name: title })}
     >
@@ -179,12 +179,12 @@ export function WidgetControls({
         disabled={isSaving}
         aria-label={t('dashboard.customize.drag', { name: title })}
         title={t('dashboard.customize.drag', { name: title })}
-        className={`${CONTROL} hidden cursor-grab active:cursor-grabbing sm:inline-flex`}
+        className={`${CONTROL} cursor-grab active:cursor-grabbing max-sm:hidden`}
         onDragStart={startDrag}
       >
         <GripVertical aria-hidden className="size-3.5" />
       </button>
-      <h4 title={title} className="min-w-0 flex-1 truncate text-start text-[0.8125em] font-semibold text-foreground">
+      <h4 title={title} className="line-clamp-2 min-w-0 flex-1 break-words text-start text-[0.8125em] font-semibold leading-tight text-foreground">
         {title}
       </h4>
       <DropdownMenu dir={i18n.dir()} modal={false}>
@@ -273,7 +273,7 @@ export function WidgetControls({
               type="button"
               disabled={isSaving}
               aria-label={t('dashboard.customize.remove', { name: title })}
-              className={`${CONTROL} hidden sm:inline-flex`}
+              className={`${CONTROL} max-sm:hidden`}
               onClick={onRemove}
             >
               <X aria-hidden className="size-3.5" />
@@ -334,7 +334,7 @@ export function AddWidgetsPanel({ entries, widgets, onAdd, isSaving }: {
                     disabled={isSaving}
                     onClick={() => onAdd(entry.id)}
                     aria-label={t('dashboard.customize.addAria', { name: entry.title })}
-                    className={`${BUTTON} !px-2`}
+                    className={`${BUTTON} min-w-11 !px-2`}
                   >
                     {t('dashboard.customize.add')}
                   </button>

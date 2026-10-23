@@ -42,7 +42,7 @@ export function QuickActionsWidget({ tier }: WidgetProps): React.JSX.Element {
                 ) : (
                   <span aria-hidden className="inline-flex size-8 shrink-0 items-center justify-center text-[1.75em]">{meta.emoji}</span>
                 )}
-                <span className="min-w-0">{t(`dashboard.quickActionLabels.${meta.slug}`)}</span>
+                <span className="min-w-0 hyphens-auto [overflow-wrap:anywhere]">{t(`dashboard.quickActionLabels.${meta.slug}`)}</span>
               </Link>
             )
           })}
