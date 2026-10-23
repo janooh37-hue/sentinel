@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nextProvider } from 'react-i18next'
 import userEvent from '@testing-library/user-event'
@@ -8,6 +8,8 @@ import i18n from '@/lib/i18n'
 import type { WorkforceAccess, WorkforceSnapshot } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { WorkforcePulseWidget } from './WorkforcePulseWidget'
+import { useDashboardRuntime } from './dashboardWidgetContext'
+import type { WidgetProps } from './types'
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
@@ -22,6 +24,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 })
 
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: vi.fn() }))
+vi.mock('./dashboardWidgetContext', () => ({ useDashboardRuntime: vi.fn() }))
 
 const { api } = await import('@/lib/api')
 const mockUseCapabilities = vi.mocked(useCapabilities)
@@ -78,7 +81,7 @@ function selfSnapshot(): WorkforceSnapshot {
     self: {
       employee_id: 'G100',
       presence_state: 'on_duty',
-      reason_code: 'verified_punch',
+      reason_code: 'PUNCH_IN_ACTIVE',
       scheduled_start_at: '2026-08-24T08:00:00',
       scheduled_end_at: '2026-08-24T16:00:00',
     },
@@ -87,14 +90,21 @@ function selfSnapshot(): WorkforceSnapshot {
 }
 
 
-function renderWidget(onOpenCoverage = vi.fn()) {
+function renderWidget(onOpenCoverage = vi.fn(), props: WidgetProps = { tier: 'summary', rows: 0 }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  vi.mocked(useDashboardRuntime).mockReturnValue({
+    onOpenCoverage,
+    onNavigate: vi.fn(),
+    has: () => true,
+    layout: { widgets: [], quick_actions: [], canvas_width: 'compact' },
+    box: { w: 2, h: 1, cols: 4 },
+  })
   return {
     onOpenCoverage,
     ...render(
       <QueryClientProvider client={queryClient}>
         <I18nextProvider i18n={i18n}>
-          <WorkforcePulseWidget onOpenCoverage={onOpenCoverage} />
+          <WorkforcePulseWidget {...props} />
         </I18nextProvider>
       </QueryClientProvider>,
     ),
@@ -115,7 +125,7 @@ beforeEach(() => {
 describe('WorkforcePulseWidget', () => {
   it.each([
     ['self', SELF_ACCESS, selfSnapshot(), /My shift/],
-    ['aggregate', AGGREGATE_ACCESS, snapshot({ aggregate: { scheduled: 8, working: 7 } }), /Current shift/],
+    ['aggregate', AGGREGATE_ACCESS, snapshot({ aggregate: { scheduled: 8, working: 7 } }), /100%/],
     [
       'schedules missing',
       AGGREGATE_ACCESS,
@@ -140,7 +150,7 @@ describe('WorkforcePulseWidget', () => {
     renderWidget()
 
     expect(await screen.findByText('On duty')).toBeInTheDocument()
-    expect(screen.getByText('verified_punch')).toBeInTheDocument()
+    expect(screen.getByText('On-duty punch')).toBeInTheDocument()
     expect(screen.getByText('8:00 AM')).toBeInTheDocument()
     expect(screen.getByText('4:00 PM')).toBeInTheDocument()
     expect(screen.queryByText('Scheduled')).not.toBeInTheDocument()
@@ -155,12 +165,12 @@ describe('WorkforcePulseWidget', () => {
     expect(api.getWorkforceSnapshot).not.toHaveBeenCalled()
   })
 
-  it('does not request or render without either workforce capability', async () => {
+  it('keeps an instructive frame without requesting data when workforce capability is absent', async () => {
     mockUseCapabilities.mockReturnValue({ capabilities: new Set(), isLoading: false, has: () => false })
 
-    const { container } = renderWidget()
+    renderWidget()
 
-    await waitFor(() => expect(container).toBeEmptyDOMElement())
+    expect(await screen.findByText('No Workforce scope assigned')).toBeInTheDocument()
     expect(api.getWorkforceAccess).not.toHaveBeenCalled()
     expect(api.getWorkforceSnapshot).not.toHaveBeenCalled()
   })
@@ -182,8 +192,9 @@ describe('WorkforcePulseWidget', () => {
 
     renderWidget()
 
-    expect(await screen.findByText('Current shift')).toBeInTheDocument()
-    expect(screen.queryByText('On duty')).not.toBeInTheDocument()
+    expect(await screen.findByText('Scheduled')).toBeInTheDocument()
+    expect(screen.getByText('On duty')).toBeInTheDocument()
+    expect(screen.getAllByText('Not yet verified')).toHaveLength(2)
   })
 
   it('shows an access error instead of a disabled snapshot skeleton', async () => {
@@ -193,6 +204,87 @@ describe('WorkforcePulseWidget', () => {
 
     expect(await screen.findByText("Couldn't load this. Check your connection and try again.")).toBeInTheDocument()
     expect(api.getWorkforceSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('renders glance coverage and on-duty-of-scheduled with a percent suffix', async () => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(AGGREGATE_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(
+      snapshot({ aggregate: { scheduled: 8, working: 7 }, current_shift: {
+        scheduled: 8, excused: 0, evaluated_count: 8,
+        pending_or_error_excluded_count: 0, working: 7, verified_coverage_percent: 87.5,
+      } }),
+    )
+
+    renderWidget(vi.fn(), { tier: 'glance', rows: 0 })
+
+    expect(await screen.findByText('87.5%')).toBeInTheDocument()
+    expect(screen.getByText('7 of 8 on duty')).toBeInTheDocument()
+  })
+
+  it('retries a failed access request inside the frame', async () => {
+    vi.mocked(api.getWorkforceAccess)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshot())
+    renderWidget()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Retry' }))
+
+    expect(await screen.findByText('On-duty punch')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['PUNCH_OUT_RECORDED', 'Exit recorded'],
+    ['NO_IN_AFTER_THRESHOLD', 'No arrival after threshold'],
+    ['SCHEDULED_BEFORE_ABSENCE_BOUNDARY', 'Awaiting absence threshold'],
+    ['PUNCH_RECORDED_DIRECTIONLESS', 'Punch recorded'],
+    ['PUNCH_IN_ACTIVE', 'On-duty punch'],
+    ['SHIFT_ENDED', 'Shift ended'],
+    ['SYNC_STALE', 'Sync data is stale'],
+    ['POLICY_MISSING', 'Policy is missing'],
+    ['PUNCH_SEQUENCE_INVALID', 'Punch sequence is invalid'],
+    ['IDENTITY_CONFLICT', 'Identity conflict'],
+    ['IDENTITY_UNVERIFIED', 'Identity is unverified'],
+    ['EMPLOYMENT_STATUS_UNKNOWN', 'Employment status is unknown'],
+    ['PUNCH_OUT_ONLY_INFERRED', 'Exit-only punch inferred'],
+    ['PUNCH_ORDER_INFERRED', 'Punch order inferred'],
+    ['LEAVE_NATIONAL_SERVICE', 'National service leave'],
+    ['LEAVE_SICK', 'Sick leave'],
+    ['LEAVE_ANNUAL', 'Annual leave'],
+    ['SHIFT_OVERRIDE_OFF', 'Off duty by shift override'],
+    ['SHIFT_OVERRIDE_WORK', 'Scheduled by shift override'],
+    ['NO_CREW_MEMBERSHIP', 'No crew assignment'],
+    ['NO_CREW_SCHEDULE', 'No crew schedule'],
+    ['CREW_SCHEDULE_OFF', 'Off duty on the crew schedule'],
+    ['NO_SCHEDULED_OCCURRENCE', 'Scheduled shift is not available'],
+    ['verified_punch', 'Verified attendance punch'],
+    ['ATTENDANCE_ADJUSTMENT_CHANGED', 'Attendance adjustment changed'],
+    ['UNRECOGNIZED_REASON', 'Attendance reason is not yet available.'],
+  ])('translates self reason %s without leaking raw codes', async (reason, label) => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(
+      snapshot({ ...selfSnapshot(), self: { employee_id: 'G100', presence_state: 'on_duty', reason_code: reason } }),
+    )
+    renderWidget(vi.fn(), { tier: 'glance', rows: 0 })
+
+    expect(await screen.findByText(label)).toBeInTheDocument()
+    expect(screen.queryByText(reason)).not.toBeInTheDocument()
+  })
+
+  it('translates self reasons in Arabic', async () => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshot())
+    await i18n.changeLanguage('ar')
+    renderWidget(vi.fn(), { tier: 'glance', rows: 0 })
+
+    expect(await screen.findByText('بصمة أثناء الدوام')).toBeInTheDocument()
+  })
+
+  it('shows an in-frame skeleton while capabilities are loading', () => {
+    mockUseCapabilities.mockReturnValue({ capabilities: new Set(), isLoading: true, has: () => false })
+    renderWidget()
+    expect(screen.getByRole('region', { name: 'Workforce pulse' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Loading…')).toBeInTheDocument()
   })
 
   it('exposes Coverage only for aggregate access', async () => {

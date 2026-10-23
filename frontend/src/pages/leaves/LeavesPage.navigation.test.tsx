@@ -74,6 +74,20 @@ describe('Leaves URL state', () => {
     await waitFor(() => expect(api.listLeaves).toHaveBeenCalledWith(expect.objectContaining({ status: 'Approved', q: 'care' })))
   })
 
+  it.each([
+    ['on=2026-10-23', { on_date: '2026-10-23' }],
+    ['end_from=2026-10-23&end_to=2026-10-30', { end_from: '2026-10-23', end_to: '2026-10-30' }],
+  ])('passes the dashboard %s filter to the mobile list API', async (search, expected) => {
+    renderLeaves(`/leaves?status=Approved&${search}`)
+    await waitFor(() => expect(api.listLeaves).toHaveBeenCalledWith(expect.objectContaining({ status: 'Approved', ...expected })))
+  })
+
+  it('keeps the exact overlap scope on subsequent mobile result pages', async () => {
+    vi.mocked(api.listLeaves).mockResolvedValueOnce({ items: [{ id: 1, employee_id: 'G1', start_date: '2026-10-01', end_date: '2026-10-23', leave_type: 'Annual Leave', status: 'Approved', days: 23 }], total: 2 } as never)
+    renderLeaves('/leaves?status=Approved&on=2026-10-23')
+    await waitFor(() => expect(api.listLeaves).toHaveBeenCalledWith(expect.objectContaining({ status: 'Approved', on_date: '2026-10-23', offset: 1 })))
+  })
+
   it('keeps the requested tab when loaded from a URL', () => {
     renderLeaves('/leaves?tab=balance')
     expect(screen.getByRole('tab', { name: /balance/i })).toHaveAttribute('aria-selected', 'true')

@@ -1,8 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { CalendarClock } from 'lucide-react'
 
-import { EmptyState } from '@/components/ui/empty-state'
+import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   formatRegisterMonth,
@@ -10,110 +9,78 @@ import {
   newestAwaitingMonth,
 } from '@/pages/application/statistics/registerModel'
 import { useInmateAwaitingClose } from '@/pages/application/statistics/useInmateRegister'
+import type { WidgetProps } from './types'
 
-/** Reminder for ended inmate-violation months the current user can act on. */
-export function ViolationMonthsWidget(): React.JSX.Element | null {
+const linkClass = 'rounded-sm text-[0.72em] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+/** Ended inmate-violation months the current caller can act on. */
+export function ViolationMonthsWidget({ tier, rows }: WidgetProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const query = useInmateAwaitingClose()
-
   const months = query.data?.months ?? []
   const total = query.data?.count ?? 0
-  const rows = months.slice(0, 5)
   const newestMonth = newestAwaitingMonth(months)
-  const moreCount = Math.max(0, total - rows.length)
-  const isEmpty = query.isSuccess && total === 0
+  const readyMonth = months.find((item) => item.closable)
+  const preview = months.slice(0, rows)
+  const moreCount = Math.max(0, total - preview.length)
+  const list = tier === 'tall' || tier === 'list'
+  const viewAllTo = newestMonth
+    ? inmateRegisterHref(newestMonth.year, newestMonth.month)
+    : '/services/inmate_conduct_violations?mode=stats'
+  // Force Western digits in the shared month formatter for both languages.
+  const locale = `${i18n.language.split('-u-')[0]}-u-nu-latn`
 
   return (
-    <section className="mb-6 rounded-2xl border border-hairline bg-surface">
-      <div className="flex items-center justify-between border-b border-hairline px-5 py-3.5">
-        <h3 className="text-[0.86em] font-semibold text-foreground">
-          {t('dashboard.widgetLabels.violation_months')}
-        </h3>
-        {(query.isLoading || total > 0) && (
-          <span
-            dir="ltr"
-            className="rounded-full bg-warning/15 px-2 py-0.5 font-mono text-[0.7em] font-semibold text-warning"
-          >
-            {query.isLoading ? '…' : total}
-          </span>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-0.5 px-3 py-2">
-        {query.isLoading ? (
-          Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="flex items-center gap-3 rounded-lg px-2 py-2">
-              <div className="flex flex-1 flex-col gap-1.5">
-                <Skeleton className="h-3 w-1/3" />
-                <Skeleton className="h-2.5 w-1/4" />
-              </div>
-              <Skeleton className="h-4 w-24" />
-            </div>
-          ))
-        ) : query.isError ? (
-          <EmptyState
-            icon={CalendarClock}
-            message={t('common.loadError')}
-            actionLabel={t('common.retry')}
-            onAction={() => void query.refetch()}
-            className="py-8"
-          />
-        ) : isEmpty ? (
-          <EmptyState
-            icon={CalendarClock}
-            message={t('inmateStats.awaiting.empty')}
-            className="py-8"
-          />
-        ) : (
-          rows.map((item) => {
-            const monthLabel = formatRegisterMonth(item.year, item.month, i18n.language)
-            return (
-              <Link
-                key={`${item.year}-${item.month}`}
-                to={inmateRegisterHref(item.year, item.month)}
-                aria-label={`${monthLabel} — ${t(`inmateStats.workflow.${item.stage}`)}`}
-                className="flex items-center gap-3 rounded-lg px-2 py-2 text-start transition-colors hover:bg-surface-tinted focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <div className="min-w-0 flex-1">
-                  <span
-                    dir="ltr"
-                    className="block truncate text-[0.86em] font-medium text-foreground"
-                  >
-                    {monthLabel}
-                  </span>
-                  <span className="block text-[0.72em] text-muted-foreground">
-                    {t(`inmateStats.workflow.${item.stage}`)} · {t('inmateStats.awaiting.rows', { count: item.row_count })}
-                  </span>
-                </div>
-                <span
-                  className={`shrink-0 rounded-md px-1.5 py-0.5 text-[0.68em] font-semibold ${
-                    item.closable
-                      ? 'bg-success-soft text-success'
-                      : 'bg-warning-soft text-warning'
-                  }`}
-                >
-                  {item.closable
-                    ? t('inmateStats.awaiting.closable')
-                    : t('inmateStats.awaiting.blocked', { count: item.pending_count })}
-                </span>
-              </Link>
-            )
-          })
-        )}
-      </div>
-
-      {newestMonth && !query.isLoading && !query.isError && (
-        <div className="border-t border-hairline px-5 py-2.5">
-          <Link
-            to={inmateRegisterHref(newestMonth.year, newestMonth.month)}
-            className="text-[0.82em] font-medium text-primary transition-colors hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {moreCount > 0
-              ? t('inmateStats.awaiting.more', { count: moreCount })
-              : t('inmateStats.awaiting.open')}
-          </Link>
+    <WidgetFrame title={t('dashboard.widgets.violation_months.title')} count={query.isSuccess && list ? total : undefined} viewAllTo={viewAllTo}>
+      {query.isLoading ? (
+        <div className="space-y-2" aria-label={t('common.loading')}>
+          <Skeleton className="h-7 w-1/3" />
+          <Skeleton className="h-3 w-3/4" />
         </div>
+      ) : query.isError ? (
+        <div className="flex flex-col gap-2" role="alert">
+          <p className="text-[0.75em] text-muted-foreground">{t('common.loadError')}</p>
+          <button type="button" className={`${linkClass} self-start`} onClick={() => void query.refetch()}>{t('common.retry')}</button>
+        </div>
+      ) : total === 0 ? (
+        <p className="text-[0.75em] text-muted-foreground">{t('dashboard.widgets.violation_months.empty')}</p>
+      ) : !list ? (
+        <div className="flex min-h-0 flex-col gap-2">
+          <p className="text-3xl font-semibold tabular-nums text-foreground">{total}<span className="ms-2 text-xs font-normal text-muted-foreground">{t('dashboard.widgets.violation_months.monthsOpen')}</span></p>
+          {readyMonth ? (
+            <Link className={`${linkClass} self-start text-success`} to={inmateRegisterHref(readyMonth.year, readyMonth.month)}>
+              {t('dashboard.widgets.violation_months.readyMonth', { month: formatRegisterMonth(readyMonth.year, readyMonth.month, locale) })}
+            </Link>
+          ) : (
+            <p className="text-[0.7em] text-muted-foreground">{t('dashboard.widgets.violation_months.pending')}</p>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {preview.map((item) => {
+              const monthLabel = formatRegisterMonth(item.year, item.month, locale)
+              return (
+                <Link
+                  key={`${item.year}-${item.month}`}
+                  to={inmateRegisterHref(item.year, item.month)}
+                  aria-label={`${monthLabel}, ${t(`inmateStats.workflow.${item.stage}`)}`}
+                  className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-0.5 rounded-lg py-1.5 text-start hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <div className="min-w-0">
+                    <span className="block truncate text-[0.8em] font-medium text-foreground">{monthLabel}</span>
+                    <span className="block text-[0.65em] text-muted-foreground">{t(`inmateStats.workflow.${item.stage}`)} · {t('inmateStats.awaiting.rows', { count: item.row_count })}</span>
+                  </div>
+                  <span className={`rounded-md px-1.5 py-0.5 text-[0.65em] font-semibold ${item.closable ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}>
+                    {item.closable ? t('inmateStats.awaiting.closable') : t('inmateStats.awaiting.blocked', { count: item.pending_count })}
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+          {moreCount > 0 && <Link to={viewAllTo} className={`${linkClass} shrink-0 pt-1`}>{t('dashboard.widgets.violation_months.more', { count: moreCount })}</Link>}
+        </>
       )}
-    </section>
+    </WidgetFrame>
   )
 }

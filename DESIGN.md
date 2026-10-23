@@ -56,7 +56,7 @@ Other pages will be appended under §4 as they're documented.
    4.1  Page shell
    4.2  Hero
    4.3  PendingDocumentsCard
-   4.4  WorkspaceCard
+   4.4  Workforce and operational widget content
    4.5  WidgetCard (base) + 7 variants
    4.6  ServiceTile (Quick Action)
    4.7  SectionCard
@@ -1745,100 +1745,48 @@ preselect its "Recent" filter.
 
 ---
 
-### 4.4 WorkspaceCard
+### 4.4 Workforce and operational widget content
 
-**Source:** `<WorkspaceCard>` inside DashboardPage.tsx (line 875).
+**Sources:** `pages/dashboard/widgets/WorkforceWidget.tsx`,
+`OnLeaveTodayWidget.tsx`, `ReturningWidget.tsx`, `OpenViolationsWidget.tsx`,
+`ExpiringSoonWidget.tsx`, `PendingDeparturesWidget.tsx`,
+`ViolationMonthsWidget.tsx`, `PermitsWidget.tsx`, `WorkforcePulseWidget.tsx`.
 
-**Surface:**
+Every widget uses `WidgetFrame` and its packed-box tier. Glance and summary
+show compact metrics; tall/list show at most the supplied `rows` with a
+separate `+N more` footer. Loading skeletons, errors with Retry, and instructive
+empty states stay inside the same clipped frame.
 
-```
-button.group.relative.w-full.overflow-hidden
-.rounded-2xl.p-5.text-start
-.transition-all.duration-200
-.hover:-translate-y-1.hover:shadow-lg
-.focus-visible:* (same as §2.2)
-style={{ background:
-  'linear-gradient(140deg, var(--surface) 0%,
-                            var(--surface) 55%,
-                            var(--surface-tinted) 100%)' }}
-```
-
-- Same shape as PendingDocumentsCard, but the background is a **diagonal
-  linear-gradient**, not flat `bg-surface`. The bottom-end corner fades
-  toward the tinted shade — emphasizes the MountainAccent that sits there.
-
-**Content stack:**
-
-```
-1. Header              "My workspace"
-2. Big number          "STAFF  47"
-3. Status row          🟢 Active 41   🟡 On leave 6
-4. MountainAccent      absolute bottom-end (decorative SVG)
-5. ChevronRight        absolute top-end
-```
-
-#### Header / Big number
-
-Identical to PendingDocumentsCard (see §4.3). The "currency" prefix span
-is the `"STAFF"` label instead of `"AED"`.
-
-#### Status row
-
-```
-mt-3.5 flex gap-4 text-[0.78em] text-muted-foreground
-  ├ "Active N"   — dash-active-dot bg-success
-  └ "On leave N" — bg-warning
-```
-
-Each entry:
-
-```
-flex items-center gap-1.5
-<span h-1.5 w-1.5 rounded-full bg-{success|warning}/>
-[label with count from i18n]
-```
-
-#### Active dot animation
-
-Only the **success** dot animates ("Active"). The on-leave dot is static.
-
-```
-.dash-active-dot {
-  animation:
-    dash-active-glow 2.8s ease-out infinite,
-    dash-active-blink 2.8s ease-in-out infinite;
-}
-@keyframes dash-active-glow {
-  0%   { box-shadow: 0 0 0 0 currentColor; }
-  100% { box-shadow: 0 0 0 6px transparent; }
-}
-@keyframes dash-active-blink {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.6; }
-}
-```
-
-- Two layered animations running at the same period (2.8s).
-- `dash-active-glow` creates a 6px halo that fades out (note the `0 0 0 0
-  currentColor → 0 0 0 6px transparent` transition — `currentColor` is
-  green here because the dot also has `text-success`).
-- `dash-active-blink` dims the dot to 60% opacity at the halfway point.
-- Reduced motion: both suppressed.
-
-#### MountainAccent
-
-`absolute bottom-0 end-0 h-[80px] w-[160px]` — 160×80px SVG anchored to
-the bottom-end corner. The SVG itself is a stylised 7-vertex mountain
-silhouette filled with `var(--mountain)` and outlined with `var(--primary)`
-at 40% opacity. In RTL, the whole SVG flips horizontally
-(`rtl:-scale-x-100`) so the rising slope still faces "outward" relative
-to the reading direction.
-
-#### Click
-
-`onNavigate('employees')`.
+- **Workforce:** working headcount links to `working=true`; our staff to
+  `status=Active`, on site to `present=true`, loaned to `status=Loaned`, and
+  on leave to `on_leave=true`. The last three boolean filters use the same
+  Active/Loaned and approved-leave predicates as the summary. The filtered
+  Employees section displays the total, paginates and scopes roster search.
+- **Leave:** the Dubai operational day drives links. `status=Approved&on=…`
+  means date overlap, not a leave starting that day. Returning uses inclusive
+  `end_from`/`end_to` covering today through today+7. Both the mobile list and
+  desktop report read these filters. Counts represent leave records (one
+  employee can have more than one record); rows open `/leaves?open=<id>`.
+- **Expiring documents:** all working-employee documents within 90 days,
+  including expired ones. Rows open the employee Documents tab only with
+  `employees.view`; otherwise they remain informational.
+- **Pending departures:** all scheduled departures, with a true next-seven-day
+  count. View all keeps `pending=1`. Cancel is offered only with
+  `employees.edit` and clears only `end_date`, never reactivating an employee.
+- **Open violations:** use `open_violations.count/latest`, not fabricated
+  breakdown states. Rows open the exact employee violation; View all selects
+  employees with an open violation.
+- **Monthly inmate reports:** real awaiting-close months, workflow stage,
+  row/pending counts and closability, linked to that month's statistics.
+- **Permits:** zone-scoped security and item summaries; no 500-row item count
+  proxy. Every count/preview/register link retains zone. List previews share
+  the row budget; security and item remainders link to their own register.
+- **Workforce pulse:** glance shows coverage as a percentage; other aggregate
+  tiers show scheduled/on-duty/coverage. Missing values remain unknown, reason
+  codes are translated, and Open coverage opens the existing coverage sheet.
 
 ---
+
 
 ### 4.5 WidgetCard (base) + 7 variants
 
@@ -2129,31 +2077,20 @@ cursor-pointer
 
 They differ in the **leading visual** and the **trailing metadata**.
 
-#### 4.8a OnLeaveRow
+#### 4.8a LeaveWidgetRow
 
-```
-[Avatar h-8 w-8 bg-primary-soft text-primary, initials fallback]
-  Name (font-medium text-foreground)
-  G-id (font-mono text-xs text-muted-foreground)
-[trailing column, items-end gap-1]
-  <Badge shape="square" tone="info">{leave_type}</Badge>
-  "until 2026-06-04" (font-mono text-xs text-muted-foreground)
-```
+`peopleWidgetParts.tsx` supplies both leave lists with a compact semantic
+link: token-colored initials avatar, locale-selected name, G-number, translated
+leave type and a trailing end-date/relative-end label. Names and metadata
+truncate inside the available inline size; focus rings are inset so clipping
+does not hide them. Each row opens `/leaves?open=<leave_id>`.
 
-Badge tone `info` → `bg-blue-50 text-blue-700` (hard-coded Tailwind palette
-per §1.1.8 — doesn't theme).
+#### 4.8b Returning rows
 
-#### 4.8b UpcomingRow
+Returning uses the same row shape with translated Ends today / Ends tomorrow /
+Ends in N days labels. Lists clip to the packed box's supplied row allowance
+and expose the remainder as a separate matching filtered-list link.
 
-Same shape as OnLeaveRow, but:
-
-- The badge tone is `warning` when `days_remaining <= 1`, else `neutral`.
-- The trailing line is the localized "Ends today" / "Ends tomorrow" /
-  "Ends in N days" string.
-
-`warning` tone: `bg-amber-50 text-amber-700` — hard-coded, doesn't theme.
-`neutral` tone: `bg-muted text-muted-foreground` (also a token-gap per
-§1.1.8).
 
 #### 4.8c DocumentRow
 

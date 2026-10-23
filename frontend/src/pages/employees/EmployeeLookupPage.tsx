@@ -12,7 +12,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { AttendanceHeroCard } from '@/components/employees/AttendanceHeroCard'
@@ -23,17 +23,42 @@ import { EmployeeSearchHero } from '@/components/employees/EmployeeSearchHero'
 import { EmployeesSectionTabs } from '@/components/employees/EmployeesSectionTabs'
 import { LookupHeroCards } from '@/components/employees/LookupHeroCards'
 import type { EmployeeFormOutput } from '@/components/employees/schema'
+import { EMPLOYEE_STATUSES } from '@/components/employees/schema'
+import { Button } from '@/components/ui/button'
+import { pickEmployeeName } from '@/lib/employeeName'
 import { ApiError, api, apiErrorMessage } from '@/lib/api'
-import type { EmployeeCreate } from '@/lib/api'
+import type { EmployeeCreate, ListEmployeesParams } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { useUrlOverlay } from '@/lib/urlState'
 
 export function EmployeeLookupPage(): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const qc = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filters: ListEmployeesParams = {
+    status: EMPLOYEE_STATUSES.find((status) => status === searchParams.get('status')),
+    pending: ['1', 'true'].includes(searchParams.get('pending') ?? '') || undefined,
+    open_violations: searchParams.get('violations') === 'open' || undefined,
+    working: searchParams.get('working') === 'true' || undefined,
+    present: searchParams.get('present') === 'true' || undefined,
+    on_leave: searchParams.get('on_leave') === 'true' || undefined,
+  }
+  const filtered = Object.values(filters).some(Boolean)
+  const rawPage = Number(searchParams.get('page') ?? 1)
+  const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1
+  const filteredQuery = useQuery({
+    queryKey: ['employees', 'dashboard-filter', filters, page],
+    queryFn: () => api.listEmployees({ ...filters, limit: 30, offset: (page - 1) * 30 }),
+    enabled: filtered,
+  })
+  const changePage = (nextPage: number) => setSearchParams((previous) => {
+    const next = new URLSearchParams(previous)
+    next.set('page', String(nextPage))
+    return next
+  })
 
   // Intake keeps its large extraction payload in history state, not the URL.
   const intakeState = location.state as {
@@ -121,6 +146,7 @@ export function EmployeeLookupPage(): React.JSX.Element {
         onSelect={handleSelect}
         onCreate={handleCreate}
         onLeaveIds={onLeaveIds}
+        filters={filters}
       >
         <LookupHeroCards
           onOpen={handleSelect}
@@ -132,11 +158,31 @@ export function EmployeeLookupPage(): React.JSX.Element {
         </div>
       </EmployeeSearchHero>
 
-      <EmployeeActivitySection
-        onOpenProfile={(employeeId) =>
-          navigate(`/employees/${encodeURIComponent(employeeId)}`)
-        }
-      />
+      {filtered ? (
+        <section className="mx-auto w-full max-w-[1180px] px-4 py-6 md:px-8" aria-label={t('dashboard.widgets.workspace.results')}>
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
+            <h2 className="text-[0.9em] font-semibold">{t('dashboard.widgets.workspace.results')}{filteredQuery.data ? ` · ${filteredQuery.data.total}` : ''}</h2>
+            <Link to="/employees" className="text-[0.78em] text-primary underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t('dashboard.widgets.workspace.clearFilters')}</Link>
+          </div>
+          <p className="pb-3 text-[0.78em] text-muted-foreground">
+            {[filters.status && t(`employees.status.${filters.status}`), filters.pending && t('dashboard.widgets.pending_departures.title'), filters.open_violations && t('dashboard.widgets.violations.title'), filters.working && t('dashboard.widgets.workspace.working'), filters.present && t('dashboard.widgets.workspace.onSite'), filters.on_leave && t('dashboard.widgets.workspace.onLeave')].filter(Boolean).join(' · ')}
+          </p>
+          {filteredQuery.isPending ? <div role="status" aria-label={t('common.loading')} className="h-20 rounded-lg bg-surface-tinted motion-safe:animate-pulse" /> : filteredQuery.isError ? (
+            <p role="alert">{t('common.loadError')} <Button variant="ghost" onClick={() => void filteredQuery.refetch()}>{t('common.retry')}</Button></p>
+          ) : filteredQuery.data.items.length === 0 ? <p className="text-muted-foreground">{t('dashboard.widgets.workspace.noMatches')}</p> : (
+            <ul className="divide-y divide-hairline rounded-xl border border-hairline bg-surface">
+              {filteredQuery.data.items.map((employee) => <li key={employee.id}><Link to={`/employees/${encodeURIComponent(employee.id)}${filters.open_violations ? '?tab=violations' : ''}`} className="flex items-center justify-between gap-3 px-4 py-3 text-start hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+                <span className="min-w-0"><bdi className="block truncate font-medium">{pickEmployeeName(employee, i18n.language)}</bdi><bdi className="font-mono text-[0.75em] text-muted-foreground">{employee.id}</bdi></span><span className="text-[0.75em] text-muted-foreground">{t(`employees.status.${employee.status}`)}</span>
+              </Link></li>)}
+            </ul>
+          )}
+          {filteredQuery.data && filteredQuery.data.total > 30 && <nav className="flex items-center justify-between gap-2 pt-3" aria-label={t('dashboard.widgets.workspace.pages')}>
+            <Button variant="ghost" disabled={page === 1} onClick={() => changePage(page - 1)}>{t('dashboard.widgets.workspace.previous')}</Button>
+            <span className="font-mono text-[0.78em]">{page} / {Math.ceil(filteredQuery.data.total / 30)}</span>
+            <Button variant="ghost" disabled={page * 30 >= filteredQuery.data.total} onClick={() => changePage(page + 1)}>{t('dashboard.widgets.workspace.next')}</Button>
+          </nav>}
+        </section>
+      ) : <EmployeeActivitySection onOpenProfile={(employeeId) => navigate(`/employees/${encodeURIComponent(employeeId)}`)} />}
 
       {creating && (
         <div ref={createFormRef} className="mx-auto w-full max-w-[1180px] flex-1 px-4 pb-10 pt-6 md:px-8">

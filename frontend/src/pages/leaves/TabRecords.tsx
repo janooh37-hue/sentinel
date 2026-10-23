@@ -624,6 +624,9 @@ export function TabRecords(): React.JSX.Element {
   const setFilters = useCallback((next: Filters) => {
     setSearchParams((prev) => {
       const params = new URLSearchParams(prev)
+      if (next === DEFAULT_FILTERS) {
+        for (const key of ['on', 'end_from', 'end_to']) params.delete(key)
+      }
       const values: Record<string, string> = {
         employee: next.employeeId ?? '',
         status: next.statuses.join(','),
@@ -657,30 +660,34 @@ export function TabRecords(): React.JSX.Element {
     }
   }, [actionValue, capabilitiesLoading, closeAction, has])
 
-  // Build query params. Text search (`q`) is resolved server-side now — see
-  // leave_service.list_leaves. The `q` key isn't yet in the generated
-  // api.listLeaves param type (see report), so it's attached via a widened
-  // object; `qs()` spreads it into the querystring regardless.
-  //
-  // NOTE: both leaves-list queries — this mobile one (limit: 200) and the
-  // report's (limit: 500, in useLeaveReport) — deliberately run on ALL
-  // viewports: the panes are only CSS-hidden (`max-md:hidden` / `md:hidden`),
-  // so both stay mounted. If this duplicate fetch ever matters, gate each
-  // query's `enabled` on a media query (or lazy-mount the hidden pane).
+  // Date overlap and ending windows are independent of the start-date filters.
   const params = {
     employee_id: filters.employeeId ?? undefined,
     status: filters.statuses.length === 1 ? filters.statuses[0] : undefined,
     leave_type: filters.leaveType || undefined,
     from_date: filters.fromDate || undefined,
     to_date: filters.toDate || undefined,
+    on_date: searchParams.get('on') || undefined,
+    end_from: searchParams.get('end_from') || undefined,
+    end_to: searchParams.get('end_to') || undefined,
     q: filters.q.trim() || undefined,
     limit: 200,
   }
 
   const listQuery = useQuery({
     queryKey: ['leaves-list', params],
-    queryFn: () =>
-      api.listLeaves(params as Parameters<typeof api.listLeaves>[0]),
+    queryFn: async () => {
+      const first = await api.listLeaves(params)
+      const items = [...first.items]
+      let total = first.total
+      while (items.length < total) {
+        const next = await api.listLeaves({ ...params, offset: items.length })
+        if (next.items.length === 0) break
+        items.push(...next.items)
+        total = next.total
+      }
+      return { ...first, items, total }
+    },
   })
 
   // Multi-status selection still narrows client-side: the backend takes a
@@ -697,7 +704,8 @@ export function TabRecords(): React.JSX.Element {
     !!filters.leaveType ||
     !!filters.fromDate ||
     !!filters.toDate ||
-    !!filters.q.trim()
+    !!filters.q.trim() ||
+    !!params.on_date || !!params.end_from || !!params.end_to
 
   // Count of active filter controls behind the mobile Filters sheet (text
   // search lives in the always-visible sticky field and is counted separately).
@@ -706,6 +714,7 @@ export function TabRecords(): React.JSX.Element {
     filters.statuses.length > 0,
     !!filters.leaveType,
     !!filters.fromDate || !!filters.toDate,
+    !!params.on_date || !!params.end_from || !!params.end_to,
   ].filter(Boolean).length
 
   return (
@@ -741,6 +750,7 @@ export function TabRecords(): React.JSX.Element {
             ? t('common.loading')
             : `${rows.length} / ${listQuery.data?.total ?? 0}`}
         </span>
+        {(params.on_date || params.end_from || params.end_to) && <button type="button" className="ms-2 text-[0.72em] text-primary underline" onClick={() => setFilters(DEFAULT_FILTERS)}>{t('dashboard.widgets.workspace.clearFilters')}</button>}
       </div>
 
       {/* Mobile list pane — desktop loading/empty states live in LeavesReport */}

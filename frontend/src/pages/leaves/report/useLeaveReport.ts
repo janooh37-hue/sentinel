@@ -15,6 +15,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import type { LeaveListItem } from '@/lib/api'
 import { todayIso } from '@/lib/leaveDateMath'
@@ -31,12 +32,12 @@ import type { KindId } from './kinds'
 const EMPTY_ROWS: LeaveListItem[] = []
 const PAGE_SIZE = 500 // backend LIST_MAX_LIMIT
 
-async function fetchAllLeaves(): Promise<LeaveListItem[]> {
-  const first = await api.listLeaves({ limit: PAGE_SIZE })
+async function fetchAllLeaves(params: Parameters<typeof api.listLeaves>[0]): Promise<LeaveListItem[]> {
+  const first = await api.listLeaves({ ...params, limit: PAGE_SIZE })
   const items = [...first.items]
   let total = first.total
   while (items.length < total) {
-    const next = await api.listLeaves({ limit: PAGE_SIZE, offset: items.length })
+    const next = await api.listLeaves({ ...params, limit: PAGE_SIZE, offset: items.length })
     if (next.items.length === 0) break // total drifted mid-pagination; stop rather than spin
     items.push(...next.items)
     total = next.total
@@ -48,9 +49,19 @@ export function useLeaveReport() {
   const { i18n } = useTranslation()
   const today = todayIso()
   const year = Number(today.slice(0, 4))
+  const [searchParams] = useSearchParams()
+  const requestedStatus = searchParams.get('status')
+  const urlFilters: Parameters<typeof api.listLeaves>[0] = {
+    status: requestedStatus === 'Approved' ? requestedStatus : undefined,
+    on_date: searchParams.get('on') || undefined,
+    end_from: searchParams.get('end_from') || undefined,
+    end_to: searchParams.get('end_to') || undefined,
+    from_date: searchParams.get('from') || undefined,
+    to_date: searchParams.get('to') || undefined,
+  }
   const listQuery = useQuery({
-    queryKey: ['leaves-list', 'report-all'],
-    queryFn: fetchAllLeaves,
+    queryKey: ['leaves-list', 'report-all', urlFilters],
+    queryFn: () => fetchAllLeaves(urlFilters),
   })
   const all: LeaveListItem[] = listQuery.data ?? EMPTY_ROWS
 

@@ -1,65 +1,32 @@
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, CalendarClock, CircleAlert, Clock3, ShieldAlert, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/button'
-import { EmptyState } from '@/components/ui/empty-state'
+import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, type WorkforceSnapshot } from '@/lib/api'
+import { api } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useDashboardRuntime } from './dashboardWidgetContext'
 import { derivePulseState, type PulseState } from './workforcePulseState'
-
-export interface WorkforcePulseWidgetProps {
-  onOpenCoverage: () => void
-}
-
-function Metric({ label, value }: { label: string; value: number }): React.JSX.Element {
-  return (
-    <div className="rounded-lg bg-surface-tinted px-3 py-2">
-      <dt className="font-mono text-[0.68em] uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{value}</dd>
-    </div>
-  )
-}
-
-function Detail({ label, value }: { label: string; value: string }): React.JSX.Element {
-  return (
-    <div className="rounded-lg bg-surface-tinted px-3 py-2">
-      <dt className="font-mono text-[0.68em] uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 text-sm font-semibold text-foreground">{value}</dd>
-    </div>
-  )
-}
+import type { WidgetProps } from './types'
 
 function formatShiftTime(value: string | null | undefined, locale: string, timezone: string): string {
-  if (!value) return '—'
+  if (!value) return '…'
   const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value)
   return new Intl.DateTimeFormat(locale, {
     hour: 'numeric',
     minute: '2-digit',
+    numberingSystem: 'latn',
     timeZone: hasOffset ? timezone : 'UTC',
   }).format(new Date(hasOffset ? value : `${value}Z`))
 }
 
-function StateMessage({ icon: Icon, title, detail }: { icon: typeof AlertTriangle; title: string; detail: string }): React.JSX.Element {
-  return (
-    <div className="flex items-start gap-3 px-5 py-5" role="status" aria-live="polite">
-      <Icon className="mt-0.5 h-5 w-5 shrink-0 text-warning" strokeWidth={1.8} aria-hidden />
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
-      </div>
-    </div>
-  )
-}
+const actionClass = 'self-start rounded-sm text-[0.72em] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
-export function WorkforcePulseWidget({ onOpenCoverage }: WorkforcePulseWidgetProps): React.JSX.Element | null {
+export function WorkforcePulseWidget({ tier }: WidgetProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const { onOpenCoverage } = useDashboardRuntime()
   const { has, isLoading: capabilitiesLoading } = useCapabilities()
-  const canViewSelf = has('workforce.self.view')
-  const canViewAggregate = has('workforce.dashboard.view')
-  const canView = canViewSelf || canViewAggregate
-
+  const canView = has('workforce.self.view') || has('workforce.dashboard.view')
   const accessQuery = useQuery({
     queryKey: ['workforce', 'access'],
     queryFn: api.getWorkforceAccess,
@@ -73,129 +40,87 @@ export function WorkforcePulseWidget({ onOpenCoverage }: WorkforcePulseWidgetPro
     enabled: canRequestSnapshot,
     staleTime: 60_000,
   })
-
-  if (capabilitiesLoading || !canView) return null
-
-  const state: PulseState | null =
-    accessQuery.data?.workforce_access_tier === 'none'
-      ? { kind: 'no_scope' }
-      : accessQuery.data && snapshotQuery.data
-        ? derivePulseState(accessQuery.data, snapshotQuery.data)
-        : null
+  const state: PulseState | null = !capabilitiesLoading && (!canView || accessQuery.data?.workforce_access_tier === 'none')
+    ? { kind: 'no_scope' }
+    : accessQuery.data && snapshotQuery.data
+      ? derivePulseState(accessQuery.data, snapshotQuery.data)
+      : null
+  const loading = capabilitiesLoading || (!state && !accessQuery.isError && !snapshotQuery.isError)
+  const unknown = t('dashboard.workforcePulse.self.presence.unknown')
+  let message: { title: string; detail: string } | undefined
+  if (state?.kind === 'no_scope') {
+    message = { title: t('dashboard.workforcePulse.noScope.title'), detail: t('dashboard.workforcePulse.noScope.detail') }
+  } else if (state?.kind === 'setup') {
+    message = {
+      title: t('dashboard.workforcePulse.setup.title', { missing: t(`dashboard.workforcePulse.setup.missing.${state.missing[0]}`) }),
+      detail: t('dashboard.workforcePulse.setup.detail', { missing: state.missing.map((item) => t(`dashboard.workforcePulse.setup.missing.${item}`)).join(', ') }),
+    }
+  } else if (state?.kind === 'stale' || state?.kind === 'withheld') {
+    message = { title: t(`dashboard.workforcePulse.${state.kind}.title`), detail: t(`dashboard.workforcePulse.${state.kind}.detail`) }
+  }
 
   return (
-    <section className="mb-6 rounded-2xl border border-hairline bg-surface" aria-label={t('dashboard.workforcePulse.title')}>
-      <div className="flex items-center justify-between border-b border-hairline px-5 py-3.5">
-        <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-primary" strokeWidth={1.8} aria-hidden />
-          <h3 className="text-[0.86em] font-semibold text-foreground">{t('dashboard.workforcePulse.title')}</h3>
-        </div>
-        {state?.kind === 'aggregate' ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onOpenCoverage}>
-            {t('dashboard.workforcePulse.openCoverage')}
-          </Button>
-        ) : null}
-      </div>
-
+    <WidgetFrame title={t('dashboard.widgets.workforce_pulse.title')}>
       {accessQuery.isError || snapshotQuery.isError ? (
-        <EmptyState icon={CircleAlert} message={t('common.loadError')} className="py-8" />
-      ) : !state && (accessQuery.isPending || snapshotQuery.isPending) ? (
-        <div className="space-y-3 px-5 py-5" aria-label={t('common.loading')}>
-          <Skeleton className="h-4 w-1/3" />
-          <Skeleton className="h-14 w-full" />
+        <div className="flex min-h-0 flex-col gap-2" role="alert">
+          <p className="text-[0.75em] text-muted-foreground">{t('common.loadError')}</p>
+          <button type="button" className={actionClass} onClick={() => void (accessQuery.isError ? accessQuery.refetch() : snapshotQuery.refetch())}>{t('common.retry')}</button>
         </div>
-      ) : state?.kind === 'no_scope' ? (
-        <StateMessage icon={ShieldAlert} title={t('dashboard.workforcePulse.noScope.title')} detail={t('dashboard.workforcePulse.noScope.detail')} />
-      ) : state?.kind === 'setup' ? (
-        <StateMessage
-          icon={CalendarClock}
-          title={t('dashboard.workforcePulse.setup.title', { missing: t(`dashboard.workforcePulse.setup.missing.${state.missing[0]}`) })}
-          detail={t('dashboard.workforcePulse.setup.detail', { missing: state.missing.map((item) => t(`dashboard.workforcePulse.setup.missing.${item}`)).join(', ') })}
-        />
-      ) : state?.kind === 'stale' ? (
-        <StateMessage icon={AlertTriangle} title={t('dashboard.workforcePulse.stale.title')} detail={t('dashboard.workforcePulse.stale.detail')} />
-      ) : state?.kind === 'withheld' ? (
-        <StateMessage icon={Clock3} title={t('dashboard.workforcePulse.withheld.title')} detail={t('dashboard.workforcePulse.withheld.detail')} />
+      ) : loading ? (
+        <div className="space-y-2" aria-label={t('common.loading')}>
+          <Skeleton className="h-7 w-1/2" />
+          <Skeleton className="h-3 w-3/4" />
+        </div>
+      ) : message ? (
+        <div role="status" className="space-y-1">
+          <p className="text-[0.8em] font-semibold text-foreground">{message.title}</p>
+          <p className="text-[0.72em] text-muted-foreground">{message.detail}</p>
+        </div>
       ) : state?.kind === 'aggregate' ? (
-        <PulseMetrics
-          heading={t('dashboard.workforcePulse.aggregate.heading')}
-          snapshot={state.snapshot}
-          scheduledLabel={t('dashboard.workforcePulse.metrics.scheduled')}
-          workingLabel={t('dashboard.workforcePulse.metrics.working')}
-          coverageLabel={t('dashboard.workforcePulse.metrics.coverage')}
-        />
+        <div className="flex min-h-0 flex-1 flex-col gap-1.5" role="status">
+          {tier === 'glance' ? (
+            <>
+              <p className="text-3xl font-semibold tabular-nums text-foreground">{state.snapshot.current_shift.verified_coverage_percent == null ? unknown : `${state.snapshot.current_shift.verified_coverage_percent}%`}<span className="ms-2 text-xs font-normal text-muted-foreground">{t('dashboard.workforcePulse.metrics.coverage')}</span></p>
+              <p className="text-[0.7em] text-muted-foreground">{state.snapshot.current_shift.working == null ? unknown : t('dashboard.widgets.workforce_pulse.onDutyOf', { working: state.snapshot.current_shift.working, scheduled: state.snapshot.current_shift.scheduled })}</p>
+            </>
+          ) : (
+            <>
+              <dl className="grid grid-cols-3 gap-2">
+                {[
+                  [t('dashboard.workforcePulse.metrics.scheduled'), state.snapshot.current_shift.scheduled],
+                  [t('dashboard.workforcePulse.metrics.working'), state.snapshot.current_shift.working ?? unknown],
+                  [t('dashboard.workforcePulse.metrics.coverage'), state.snapshot.current_shift.verified_coverage_percent == null ? unknown : `${state.snapshot.current_shift.verified_coverage_percent}%`],
+                ].map(([label, value]) => (
+                  <div key={label} className="min-w-0">
+                    <dd className="text-xl font-semibold tabular-nums text-foreground">{value}</dd>
+                    <dt className="text-[0.65em] text-muted-foreground">{label}</dt>
+                  </div>
+                ))}
+              </dl>
+              <p className="text-[0.65em] text-muted-foreground">{t('dashboard.widgets.workforce_pulse.updated', { time: formatShiftTime(state.snapshot.as_of, i18n.language, state.snapshot.timezone) })}</p>
+            </>
+          )}
+          <button type="button" className={`${actionClass} mt-auto`} onClick={onOpenCoverage}>{t('dashboard.workforcePulse.openCoverage')}</button>
+        </div>
       ) : state?.kind === 'self' ? (
-        <SelfPulse
-          heading={t('dashboard.workforcePulse.self.heading')}
-          snapshot={state.snapshot}
-          locale={i18n.language}
-          statusLabel={t('dashboard.workforcePulse.self.status')}
-          presenceLabel={t(`dashboard.workforcePulse.self.presence.${state.snapshot.self?.presence_state ?? 'unknown'}`)}
-          reasonLabel={t('dashboard.workforcePulse.self.reason')}
-          startLabel={t('dashboard.workforcePulse.self.start')}
-          endLabel={t('dashboard.workforcePulse.self.end')}
-        />
-      ) : null}
-    </section>
-  )
-}
-
-function PulseMetrics({
-  heading,
-  snapshot,
-  scheduledLabel,
-  workingLabel,
-  coverageLabel,
-}: {
-  heading: string
-  snapshot: WorkforceSnapshot
-  scheduledLabel: string
-  workingLabel: string
-  coverageLabel: string
-}): React.JSX.Element {
-  const coverage = snapshot.current_shift.verified_coverage_percent
-  const working = snapshot.current_shift.working
-  return (
-    <div className="px-5 py-5" role="status" aria-live="polite">
-      <p className="mb-3 text-sm font-semibold text-foreground">{heading}</p>
-      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <Metric label={scheduledLabel} value={snapshot.current_shift.scheduled} />
-        {working != null ? <Metric label={workingLabel} value={working} /> : null}
-        {coverage != null ? <Metric label={coverageLabel} value={coverage} /> : null}
-      </dl>
-    </div>
-  )
-}
-
-function SelfPulse({
-  heading,
-  snapshot,
-  locale,
-  statusLabel,
-  presenceLabel,
-  reasonLabel,
-  startLabel,
-  endLabel,
-}: {
-  heading: string
-  snapshot: WorkforceSnapshot
-  locale: string
-  statusLabel: string
-  presenceLabel: string
-  reasonLabel: string
-  startLabel: string
-  endLabel: string
-}): React.JSX.Element {
-  const self = snapshot.self
-  return (
-    <div className="px-5 py-5" role="status" aria-live="polite">
-      <p className="mb-3 text-sm font-semibold text-foreground">{heading}</p>
-      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Detail label={statusLabel} value={presenceLabel} />
-        <Detail label={reasonLabel} value={self?.reason_code ?? '—'} />
-        <Detail label={startLabel} value={formatShiftTime(self?.scheduled_start_at, locale, snapshot.timezone)} />
-        <Detail label={endLabel} value={formatShiftTime(self?.scheduled_end_at, locale, snapshot.timezone)} />
-      </dl>
-    </div>
+        <div className="flex min-h-0 flex-col gap-1" role="status">
+          <p className="sr-only">{t('dashboard.workforcePulse.self.heading')}</p>
+          <p className="text-[0.9em] font-semibold text-foreground">{t(`dashboard.workforcePulse.self.presence.${state.snapshot.self?.presence_state ?? 'unknown'}`)}</p>
+          <p className="text-[0.72em] text-muted-foreground">{t([
+            `dashboard.widgets.workforce_pulse.reasons.${state.snapshot.self?.reason_code?.toLowerCase()}`,
+            `attendance.review.reasons.${state.snapshot.self?.reason_code?.toLowerCase()}`,
+            'dashboard.widgets.workforce_pulse.reasonUnknown',
+          ])}</p>
+          {tier !== 'glance' && (
+            <dl className="flex flex-wrap gap-x-4 gap-y-1 text-[0.7em]">
+              <div><dt className="text-muted-foreground">{t('dashboard.workforcePulse.self.start')}</dt><dd>{formatShiftTime(state.snapshot.self?.scheduled_start_at, i18n.language, state.snapshot.timezone)}</dd></div>
+              <div><dt className="text-muted-foreground">{t('dashboard.workforcePulse.self.end')}</dt><dd>{formatShiftTime(state.snapshot.self?.scheduled_end_at, i18n.language, state.snapshot.timezone)}</dd></div>
+            </dl>
+          )}
+        </div>
+      ) : (
+        <p className="text-[0.75em] text-muted-foreground">{unknown}</p>
+      )}
+    </WidgetFrame>
   )
 }

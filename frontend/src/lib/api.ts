@@ -292,6 +292,7 @@ export type ItemPermitItem = components['schemas']['ItemPermitItem']
 export type ItemPermitCreate = components['schemas']['ItemPermitCreate']
 export type ItemPermitUpdate = components['schemas']['ItemPermitUpdate']
 export type ItemPermitListResponse = components['schemas']['ItemPermitListResponse']
+export type ItemPermitSummary = components['schemas']['ItemPermitSummary']
 export type ItemPermitZone = ItemPermitRead['zones'][number]
 
 // ─── Fleet vehicles ──────────────────────────────────────────────────────────
@@ -1273,6 +1274,10 @@ export interface ListEmployeesParams {
   department?: string
   /** Only scheduled departures — Active or Loaned employees with a pending_status. */
   pending?: boolean
+  open_violations?: boolean
+  working?: boolean
+  present?: boolean
+  on_leave?: boolean
   limit?: number
   offset?: number
 }
@@ -1414,6 +1419,9 @@ export const api = {
     leave_type?: string
     from_date?: string
     to_date?: string
+    on_date?: string
+    end_from?: string
+    end_to?: string
     include_deleted?: boolean
     limit?: number
     offset?: number
@@ -1494,8 +1502,10 @@ export const api = {
     fetchPermitBlob(`/permits/${id}/document`),
 
   // --- item permits (إدخال مواد) ---
-  listItemPermits: (params: { q?: string; limit?: number; offset?: number } = {}) =>
+  listItemPermits: (params: { q?: string; zone?: ItemPermitZone; limit?: number; offset?: number } = {}) =>
     request<ItemPermitListResponse>('GET', `/item-permits${qs({ ...params })}`),
+  itemPermitsSummary: (zone?: ItemPermitZone) =>
+    request<ItemPermitSummary>('GET', `/item-permits/summary${qs({ zone })}`),
   getItemPermit: (id: number) => request<ItemPermitRead>('GET', `/item-permits/${id}`),
   createItemPermit: (body: ItemPermitCreate) =>
     request<ItemPermitRead>('POST', '/item-permits', body),

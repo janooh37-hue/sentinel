@@ -3915,20 +3915,10 @@
     },
     "expiryDate": "الانتهاء",
     "empty": "لا توجد وثائق منتهية تطابق مرشحاتك.",
-    "dashboardTitle": "تنتهي قريباً",
     "bellTitle": "وثائق منتهية",
-    "bellCount": "{{count}} عاجل",
-    "viewAll": "عرض الكل",
-    "awaitingReturnDash": "بانتظار نموذج المباشرة",
-    "awaitingReturnDashCount_zero": "لا موظفين",
-    "awaitingReturnDashCount_one": "موظف واحد بانتظار",
-    "awaitingReturnDashCount_two": "موظفان بانتظار",
-    "awaitingReturnDashCount_few": "{{count}} موظفين بانتظار",
-    "awaitingReturnDashCount_many": "{{count}} موظفًا بانتظار",
-    "awaitingReturnDashCount_other": "{{count}} بانتظار"
+    "bellCount": "{{count}} عاجل"
   },
   "pendingDepartures": {
-    "empty": "لا توجد مغادرات مجدولة",
     "daysLeft_zero": "لم يبقَ أي يوم",
     "daysLeft_one": "بقي يوم واحد",
     "daysLeft_two": "بقي يومان",
@@ -3939,8 +3929,7 @@
     "overdue": "تجاوز الموعد",
     "cancel": "إلغاء",
     "cancelled": "تم إلغاء المغادرة المجدولة",
-    "alreadyApplied": "تم تطبيق هذه المغادرة بالفعل",
-    "viewAll": "عرض جميع الموظفين"
+    "alreadyApplied": "تم تطبيق هذه المغادرة بالفعل"
   },
   "viewer": {
     "title": "معاينة",
@@ -4605,8 +4594,6 @@
       "openCoverage": "فتح التغطية",
       "self": {
         "heading": "ورديتي",
-        "status": "الحالة",
-        "reason": "السبب",
         "start": "تبدأ",
         "end": "تنتهي",
         "presence": {
@@ -4618,9 +4605,6 @@
           "off": "خارج الوردية",
           "unknown": "لم يتم التحقق بعد"
         }
-      },
-      "aggregate": {
-        "heading": "الوردية الحالية"
       },
       "metrics": {
         "scheduled": "المجدول",
@@ -4678,12 +4662,8 @@
     "widgetLabels": {
       "inbox": "المرسلة إليّ",
       "pending": "المستندات المنجزة",
-      "workspace": "بيئة عملي",
-      "violations": "المخالفات المفتوحة",
       "drafts": "المسودات",
       "ledger": "غير المقروء في السجل",
-      "on_leave_today": "في إجازة اليوم",
-      "upcoming_leave": "العائدون قريبًا",
       "waiting_approvals": "بانتظار الاعتماد",
       "waiting_approvals_cta": "مراجعة",
       "waiting_approvals_oldest": "الأقدم: {{subject}}",
@@ -4699,12 +4679,7 @@
       "waiting_reviews_aria_few": "للمراجعة: {{count}}. فتح.",
       "waiting_reviews_aria_many": "للمراجعة: {{count}}. فتح.",
       "waiting_reviews_aria_other": "للمراجعة: {{count}}. فتح.",
-      "sent_approvals": "الطلبات المرسلة",
-      "expiring_soon": "قرب الانتهاء",
-      "pending_departures": "المغادرات المجدولة",
-      "workforce_pulse": "نبض القوى العاملة",
-      "violation_months": "اعتماد التقارير الشهرية",
-      "permits": "التصاريح"
+      "sent_approvals": "الطلبات المرسلة"
     },
     "quickActionLabels": {
       "general_book": "السجل العام",
@@ -4757,14 +4732,6 @@
       "footnote_many": "{{count}} مستندًا هذا الشهر",
       "footnote_other": "{{count}} مستند هذا الشهر"
     },
-    "workspace": {
-      "title": "بيئة عملي",
-      "total": "الإجمالي",
-      "ourStaff": "موظفونا",
-      "onSite": "في الموقع",
-      "loaned": "ملحق",
-      "onLeave": "في إجازة"
-    },
     "widgets": {
       "quickActions": {
         "title": "إجراءات سريعة",
@@ -4777,17 +4744,109 @@
         "byPurpose": "الواردة حسب الغرض",
         "open": "فتح المعاملات المرسلة إليّ"
       },
+      "workspace": {
+        "title": "القوى العاملة",
+        "working": "على رأس العمل",
+        "ourStaff": "موظفونا",
+        "onSite": "في الموقع",
+        "loaned": "معارون",
+        "onLeave": "في إجازة",
+        "empty": "لا يوجد موظفون على رأس العمل. افتح الموظفين لمراجعة القائمة.",
+        "results": "الموظفون حسب التصفية",
+        "clearFilters": "مسح التصفية",
+        "noMatches": "لا يوجد موظفون مطابقون. امسح التصفية لمراجعة قائمة الموظفين.",
+        "pages": "صفحات نتائج الموظفين",
+        "previous": "السابق",
+        "next": "التالي",
+        "filteredSearch": "البحث ضمن التصفية المحددة فقط"
+      },
+      "on_leave_today": {
+        "title": "في إجازة اليوم",
+        "records": "سجلات إجازة",
+        "tomorrow": "المنتهية غدًا: {{count}}",
+        "until": "حتى {{date}}",
+        "empty": "لا توجد إجازة معتمدة تشمل اليوم. افتح الإجازات للمراجعة أو التسجيل.",
+        "more": "+{{count}} أخرى",
+        "filter": "إجازات معتمدة تشمل {{date}}"
+      },
+      "upcoming_leave": {
+        "title": "العائدون هذا الأسبوع",
+        "today": "تنتهي اليوم",
+        "tomorrow": "تنتهي غدًا",
+        "inDays": "الأيام حتى الانتهاء: {{count}}",
+        "tomorrowCount": "غدًا: {{count}}",
+        "empty": "لا تنتهي إجازات معتمدة خلال الأيام السبعة المقبلة. افتح الإجازات لمراجعة مواعيد العودة.",
+        "more": "+{{count}} أخرى",
+        "filter": "إجازات معتمدة تنتهي من {{from}} إلى {{to}}"
+      },
+      "expiring_soon": {
+        "title": "وثائق قاربت على الانتهاء",
+        "within90": "خلال 90 يومًا",
+        "expired": "منتهية: {{count}}",
+        "critical": "خلال 30 يومًا: {{count}}",
+        "empty": "لا تنتهي وثائق خلال 90 يومًا. افتح الانتهاء لمراجعة تواريخ الوثائق.",
+        "more": "+{{count}} أخرى"
+      },
+      "pending_departures": {
+        "title": "مغادرات معلّقة",
+        "due": "خلال الأيام السبعة المقبلة: {{count}}",
+        "cancelFor": "إلغاء مغادرة {{name}}",
+        "empty": "لا توجد مغادرات مجدولة. افتح ملف الموظف لجدولة المغادرة.",
+        "more": "+{{count}} أخرى"
+      },
       "permits": {
-        "latest": "الأحدث"
+        "title": "التصاريح",
+        "awaitingScan": "بانتظار النسخة الموقعة",
+        "latestEntries": "أحدث التصاريح",
+        "empty": "لا توجد تصاريح في هذه المنطقة. افتح السجل لإصدار تصريح أو اختر منطقة أخرى.",
+        "noAccess": "صلاحية عرض التصاريح غير متاحة. اطلب الصلاحية من مسؤول النظام.",
+        "itemCount_zero": "{{count}} تصريح مواد",
+        "itemCount_one": "{{count}} تصريح مواد",
+        "itemCount_two": "{{count}} تصريحا مواد",
+        "itemCount_few": "{{count}} تصاريح مواد",
+        "itemCount_many": "{{count}} تصريح مواد",
+        "itemCount_other": "{{count}} تصريح مواد",
+        "moreSecurity_zero": "+{{count}} تصريح أمني آخر",
+        "moreSecurity_one": "+{{count}} تصريح أمني آخر",
+        "moreSecurity_two": "+{{count}} تصريحان أمنيان آخران",
+        "moreSecurity_few": "+{{count}} تصاريح أمنية أخرى",
+        "moreSecurity_many": "+{{count}} تصريحًا أمنيًا آخر",
+        "moreSecurity_other": "+{{count}} تصريح أمني آخر",
+        "moreItems_zero": "+{{count}} تصريح مواد آخر",
+        "moreItems_one": "+{{count}} تصريح مواد آخر",
+        "moreItems_two": "+{{count}} تصريحا مواد آخران",
+        "moreItems_few": "+{{count}} تصاريح مواد أخرى",
+        "moreItems_many": "+{{count}} تصريح مواد آخر",
+        "moreItems_other": "+{{count}} تصريح مواد آخر"
+      },
+      "workforce_pulse": {
+        "title": "نبض القوى العاملة",
+        "onDutyOf": "{{working}} من {{scheduled}} على رأس العمل",
+        "updated": "آخر تحديث {{time}}",
+        "reasonUnknown": "سبب حالة الحضور غير متاح بعد.",
+        "reasons": {
+          "verified_punch": "بصمة حضور موثقة",
+          "shift_override_off": "خارج الوردية بتعديل المناوبة",
+          "shift_override_work": "مجدول بتعديل المناوبة",
+          "no_crew_membership": "لم يُعيّن فريق عمل",
+          "no_crew_schedule": "لا يوجد جدول للفريق",
+          "crew_schedule_off": "خارج الوردية وفق جدول الفريق",
+          "no_scheduled_occurrence": "المناوبة المجدولة غير متاحة"
+        }
+      },
+      "violation_months": {
+        "title": "اعتماد التقارير الشهرية",
+        "monthsOpen": "أشهر مفتوحة",
+        "readyMonth": "{{month}} جاهز للإغلاق",
+        "pending": "أكمل السجلات المعلقة أو تابع المراجعة المسندة إليك.",
+        "empty": "لا يوجد شهر منتهٍ بانتظار الإغلاق. افتح السجل لمراجعة الشهر الحالي.",
+        "more": "+{{count}} أخرى"
       },
       "violations": {
-        "header": "المخالفات المفتوحة",
-        "action": "مراجعة",
-        "active": "نشطة",
-        "escalated": "مصعدة",
-        "pendingClose": "بانتظار الإغلاق",
-        "deltaWarn": "{{count}} مفتوحة",
-        "deltaSteady": "— ثابت"
+        "title": "مخالفات مفتوحة",
+        "newest": "الأحدث: {{title}} · {{date}}",
+        "empty": "لا توجد مخالفات مفتوحة. افتح الموظفين لمراجعة سجلات المخالفات.",
+        "more": "+{{count}} أخرى"
       },
       "drafts": {
         "header": "المسودات",
@@ -4817,20 +4876,6 @@
         "metaRecent_few": "{{count}} خلال آخر 24 ساعة",
         "metaRecent_many": "{{count}} خلال آخر 24 ساعة",
         "metaRecent_other": "{{count}} خلال آخر 24 ساعة"
-      },
-      "onLeaveToday": {
-        "header": "في إجازة اليوم",
-        "action": "عرض التفاصيل",
-        "deltaHigh": "مرتفع",
-        "deltaNormal": "طبيعي"
-      },
-      "upcomingLeave": {
-        "header": "العائدون قريباً",
-        "action": "عرض",
-        "returningTomorrow": "يعودون غداً",
-        "thisWeek": "هذا الأسبوع",
-        "deltaSoon": "قريباً",
-        "deltaSteady": "هادئ"
       },
       "recentDocs": {
         "header": "المستندات الأخيرة",
@@ -4914,18 +4959,6 @@
       "leaves": "سجل الإجازات",
       "books": "دفتر المراجع",
       "ledger": "سجل المراسلات"
-    },
-    "onLeave": {
-      "title": "في إجازة اليوم",
-      "empty": "لا أحد في إجازة اليوم",
-      "until": "حتى {{date}}"
-    },
-    "upcoming": {
-      "title": "العائدون خلال 7 أيام",
-      "empty": "لا عودة متوقعة هذا الأسبوع",
-      "endsIn": "تنتهي خلال {{days}} يوم",
-      "endsToday": "تنتهي اليوم",
-      "endsTomorrow": "تنتهي غدًا"
     },
     "recent": {
       "title": "النشاط الأخير",
@@ -6670,12 +6703,9 @@
       }
     },
     "awaiting": {
-      "empty": "لا يوجد شهر منتهٍ بانتظار الإغلاق.",
       "rows": "{{count}} سطر",
       "closable": "جاهز للإغلاق",
-      "blocked": "{{count}} قيد الإكمال",
-      "more": "أشهر أخرى بانتظار الإغلاق: {{count}}",
-      "open": "فتح السجل الشهري"
+      "blocked": "{{count}} قيد الإكمال"
     },
     "toasts": {
       "created": "أُضيف السطر اليدوي.",
