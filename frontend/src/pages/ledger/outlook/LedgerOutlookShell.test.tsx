@@ -48,12 +48,12 @@ vi.mock('@/lib/useDeferredDelete', () => ({ useDeferredDelete: () => ({ pendingI
 // The stub reproduces the real rail's accessible name (`aria-label` →
 // `ledger.outlook.newEmail`) so the click target is the same one users hit.
 vi.mock('./FolderRail', () => ({
-  FolderRail: ({ onNewEmail }: { onNewEmail?: () => void }) => (
-    <button type="button" onClick={() => onNewEmail?.()}>ledger.outlook.newEmail</button>
+  FolderRail: ({ onNewEmail, onToggleAllMail }: { onNewEmail?: () => void; onToggleAllMail: (all: boolean) => void }) => (
+    <><button type="button" onClick={() => onNewEmail?.()}>ledger.outlook.newEmail</button><button type="button" onClick={() => onToggleAllMail(true)}>All mail</button></>
   ),
 }))
 vi.mock('./ContextPanel', () => ({ ContextPanel: () => null }))
-vi.mock('./ReadingPaneSlot', () => ({ ReadingPaneSlot: ({ selectedId }: { selectedId: number | null }) => <div data-testid="reading-pane">{selectedId ?? 'none'}</div> }))
+vi.mock('./ReadingPaneSlot', () => ({ ReadingPaneSlot: ({ selectedId, scope }: { selectedId: number | null; scope?: string }) => <div data-testid="reading-pane" data-scope={scope}>{selectedId ?? 'none'}</div> }))
 vi.mock('./MessageList', () => ({ MessageList: ({ items, onSelect }: { items: LedgerListItem[]; onSelect: (id: number) => void }) => (
   <div data-testid="message-list">
     {items.map((item) => <button type="button" key={item.id} onClick={() => onSelect(item.id)}>{item.id}</button>)}
@@ -131,6 +131,23 @@ describe('LedgerOutlookShell mail URLs', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('?mail=42')
   })
 
+  it.each([false, true])('threads All-mail scope through the shared pane and hydration (mobile=%s)', async (mobile) => {
+    isMobile.value = mobile
+    try {
+      renderShell(mobile ? '/ledger' : '/ledger?mail=42')
+      if (mobile) await userEvent.click(screen.getByRole('button', { name: 'ledger.outlook.foldersTrigger' }))
+      await userEvent.click(screen.getAllByRole('button', { name: 'All mail' })[0])
+      if (mobile) {
+        await userEvent.keyboard('{Escape}')
+        await userEvent.click(await screen.findByRole('button', { name: '42' }))
+      }
+      await waitFor(() => expect(screen.getByTestId('reading-pane')).toHaveAttribute('data-scope', 'all'))
+      await waitFor(() => expect(api.getLedgerEntry).toHaveBeenCalledWith(42, 'all'))
+    } finally {
+      isMobile.value = false
+    }
+  })
+
   it('mobile mail Back returns to the mailbox list URL', async () => {
     isMobile.value = true
     try {
@@ -166,7 +183,7 @@ describe('LedgerOutlookShell activity deep links', () => {
     vi.mocked(api.getLedgerEntry).mockResolvedValue(entry(42) as unknown as LedgerEntryRead)
     renderShell('/ledger?mail=42&keep=1')
     await waitFor(() => expect(screen.getByTestId('reading-pane')).toHaveTextContent('42'))
-    expect(api.getLedgerEntry).toHaveBeenCalledWith(42)
+    expect(api.getLedgerEntry).toHaveBeenCalledWith(42, undefined)
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?mail=42&keep=1'))
   })
 

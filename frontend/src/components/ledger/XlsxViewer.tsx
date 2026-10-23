@@ -39,10 +39,12 @@ function normalizeSheets(raw: unknown): Sheet[] {
 
 export default function XlsxViewer({
   entryId,
+  scope,
   index,
   name,
 }: {
   entryId: number
+  scope?: 'mine' | 'all'
   index: number
   name: string
 }): React.JSX.Element {
@@ -54,7 +56,7 @@ export default function XlsxViewer({
     let cancelled = false
     void (async () => {
       try {
-        const url = api.ledgerAttachmentUrl(entryId, index)
+        const url = api.ledgerAttachmentUrl(entryId, index, { scope })
         const parsed = await new Promise<unknown>((resolve, reject) => {
           transformExcelToLuckyByUrl(url, name, (exportJson) => {
             const sheetsOut = exportJson?.sheets
@@ -73,7 +75,7 @@ export default function XlsxViewer({
     return () => {
       cancelled = true
     }
-  }, [entryId, index, name])
+  }, [entryId, index, name, scope])
 
   if (status === 'error') {
     return (

@@ -51,6 +51,7 @@ type NavPage = 'employees' | 'books'
 
 interface ReadingPaneProps {
   entryId: number
+  scope?: 'mine' | 'all'
   /** Reply / Reply All / Forward → open the existing compose (Task 8). */
   onReply?: (entry: LedgerEntryRead) => void
   onReplyAll?: (entry: LedgerEntryRead) => void
@@ -77,6 +78,7 @@ function senderInitial(name: string): string {
 
 export function ReadingPane({
   entryId,
+  scope,
   onReply,
   onReplyAll,
   onForward,
@@ -88,8 +90,8 @@ export function ReadingPane({
   const isAr = i18n.language.startsWith('ar')
 
   const entryQuery = useQuery({
-    queryKey: ['ledger-entry', entryId],
-    queryFn: () => api.getLedgerEntry(entryId),
+    queryKey: ['ledger-entry', entryId, scope],
+    queryFn: () => api.getLedgerEntry(entryId, scope),
   })
   const entry = entryQuery.data
 
@@ -211,7 +213,7 @@ export function ReadingPane({
         {/* ── attachments band — ABOVE the body ── */}
         {attachments.length > 0 && (
           <div className="border-t border-hairline bg-surface-raised px-2 py-2">
-            <LedgerAttachments entryId={entry.id} attachments={attachments} />
+            <LedgerAttachments entryId={entry.id} attachments={attachments} scope={scope} />
           </div>
         )}
 
@@ -222,6 +224,7 @@ export function ReadingPane({
               html={entry.notes_html}
               inlineImages={entry.inline_images}
               entryId={entry.id}
+              scope={scope}
               attachmentPaths={entry.attachment_paths}
               onSmartLinkClick={(kind, value) =>
                 onNavigate?.(kind === 'employee' ? 'employees' : 'books', value)
@@ -232,7 +235,7 @@ export function ReadingPane({
 
         {/* ── thread — collapsed cards expand inline ── */}
         <div className="border-t border-hairline bg-surface-raised px-2 py-2">
-          <LedgerThread entryId={entry.id} entry={entry} onOpenEntry={onOpenEntry} />
+          <LedgerThread entryId={entry.id} entry={entry} onOpenEntry={onOpenEntry} scope={scope} />
         </div>
       </div>
     </PaneShell>

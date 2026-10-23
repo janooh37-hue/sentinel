@@ -32,6 +32,7 @@ function ViewerSpinner(): React.JSX.Element {
 
 interface AttachmentPreviewDialogProps {
   entryId: number
+  scope?: 'mine' | 'all'
   attachments: LedgerAttachmentMeta[]
   startIndex: number
   onClose: () => void
@@ -39,6 +40,7 @@ interface AttachmentPreviewDialogProps {
 
 export function AttachmentPreviewDialog({
   entryId,
+  scope,
   attachments,
   startIndex,
   onClose,
@@ -72,8 +74,8 @@ export function AttachmentPreviewDialog({
   const imgError = errorIndex === index
 
   const kind = fileKindFromName(current.name)
-  const viewUrl = api.ledgerAttachmentUrl(entryId, current.index, { inline: true })
-  const downloadUrl = api.ledgerAttachmentUrl(entryId, current.index)
+  const viewUrl = api.ledgerAttachmentUrl(entryId, current.index, { inline: true, scope })
+  const downloadUrl = api.ledgerAttachmentUrl(entryId, current.index, { scope })
   const sizeLabel = formatBytes(current.size)
 
   // Portal to <body> so the full-screen lightbox escapes the drawer's stacking
@@ -178,13 +180,13 @@ export function AttachmentPreviewDialog({
         ) : kind === 'pdf' ? (
           <div className="h-full w-full max-w-5xl">
             <Suspense fallback={<ViewerSpinner />}>
-              <PdfViewer base64Url={api.ledgerAttachmentUrl(entryId, current.index, { base64: true })} />
+              <PdfViewer base64Url={api.ledgerAttachmentUrl(entryId, current.index, { base64: true, scope })} />
             </Suspense>
           </div>
         ) : kind === 'xlsx' ? (
           <div className="h-full w-full">
             <Suspense fallback={<ViewerSpinner />}>
-              <XlsxViewer entryId={entryId} index={current.index} name={current.name} />
+              <XlsxViewer entryId={entryId} index={current.index} name={current.name} scope={scope} />
             </Suspense>
           </div>
         ) : (
