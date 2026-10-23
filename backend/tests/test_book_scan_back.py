@@ -15,7 +15,15 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.api.errors import ValidationFailedError
 from app.config import get_settings
-from app.db.models import Book, BookCategory, BookVersion, ScanInbox, User
+from app.db.models import (
+    Book,
+    BookApprovalStep,
+    BookCategory,
+    BookRecipient,
+    BookVersion,
+    ScanInbox,
+    User,
+)
 from app.db.session import get_db
 from app.main import create_app
 from app.services import book_service
@@ -182,6 +190,84 @@ def test_scan_back_route_files_exact_awaiting_scan_match(
     }
     assert api_db.get(Book, book.id).approval_state == "approved"
     get_settings.cache_clear()
+
+
+def test_scan_back_directed_recipient_cannot_write_but_creator_can(
+    api_db: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    try:
+        creator = User(email="creator@test.ae", password_hash="x", role="manager", status="active")
+        recipient = User(
+            email="recipient@test.ae", password_hash="x", role="manager", status="active"
+        )
+        api_db.add_all([creator, recipient])
+        api_db.commit()
+        book = _book(api_db)
+        book.confidentiality = "directed"
+        book.created_by_user_id = creator.id
+        version = book.versions[0]
+        version.created_by_user_id = creator.id
+        api_db.add(
+            BookRecipient(
+                book_id=book.id,
+                user_id=recipient.id,
+                sent_by_user_id=creator.id,
+                purpose="info",
+            )
+        )
+        step = BookApprovalStep(
+            book_id=book.id,
+            version_id=version.id,
+            assignee_user_id=creator.id,
+            step_order=1,
+            stage_label="Manager",
+            state="pending",
+        )
+        api_db.add(step)
+        api_db.commit()
+
+        def snapshot():
+            api_db.expire_all()
+            return (
+                list(book.attachment_paths or []),
+                book.approval_state,
+                book.send_state,
+                version.status,
+                version.signed_pdf_path,
+                version.signed_base_pdf_path,
+                version.signed_by_user_id,
+                version.signed_at,
+                step.state,
+                step.decided_at,
+            )
+
+        before = snapshot()
+        raw = _barcode_pdf(book.ref_number)
+        client = _client(api_db, recipient)
+        for url in (f"/api/v1/books/{book.id}/attachments", "/api/v1/books/scan-back"):
+            response = client.post(
+                url,
+                files={"file": ("signed.pdf", raw, "application/pdf")},
+                data={"as_signed": "true"},
+            )
+            assert response.status_code == 404, response.text
+            assert snapshot() == before
+            assert not (tmp_path / "book_attachments").exists()
+        response = _client(api_db, creator).post(
+            "/api/v1/books/scan-back",
+            files={"file": ("signed.pdf", raw, "application/pdf")},
+        )
+        assert response.status_code == 200, response.text
+        api_db.expire_all()
+        assert book.approval_state == "approved"
+        assert book.send_state == "confirmed"
+        assert version.signed_pdf_path
+        assert (tmp_path / version.signed_pdf_path).is_file()
+        assert step.state == "approved"
+    finally:
+        get_settings.cache_clear()
 
 
 def test_scan_back_route_parks_unknown_reference_for_confirmation(
