@@ -140,9 +140,7 @@ def _submit_book(db: Session, row: ItemPermit, *, user: User) -> None:
     _audit(db, "item_permit.book_submitted", row.id, actor, {"book_id": row.book_id})
 
 
-def _regenerate_book(
-    db: Session, row: ItemPermit, *, user: User, submit: bool = False
-) -> None:
+def _regenerate_book(db: Session, row: ItemPermit, *, user: User, submit: bool = False) -> None:
     actor = user.email
     emp = row.employee
     body = build_item_permit_letter_html(
@@ -176,9 +174,7 @@ def _regenerate_book(
 # ─── mutations ─────────────────────────────────────────────────────────────────
 
 
-def create_item_permit(
-    db: Session, payload: ItemPermitCreate, *, user: User
-) -> ItemPermit:
+def create_item_permit(db: Session, payload: ItemPermitCreate, *, user: User) -> ItemPermit:
     actor = user.email
     _require_employee(db, payload.employee_id)
     row = ItemPermit(

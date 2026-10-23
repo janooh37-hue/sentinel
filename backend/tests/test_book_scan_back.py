@@ -32,9 +32,9 @@ from app.services import book_service
 def _barcode_pdf(ref: str, paper_date: str = "20260921") -> bytes:
     date_text = datetime.strptime(paper_date, "%Y%m%d").strftime("%d/%m/%Y")
     barcode = Image.fromarray(
-        zxingcpp.create_barcode(
-            f"GSSG+{date_text}+{ref}", zxingcpp.BarcodeFormat.Code39
-        ).to_image(scale=4)
+        zxingcpp.create_barcode(f"GSSG+{date_text}+{ref}", zxingcpp.BarcodeFormat.Code39).to_image(
+            scale=4
+        )
     )
     image = io.BytesIO()
     barcode.save(image, format="PNG")
@@ -167,7 +167,6 @@ def test_plain_upload_without_barcode_keeps_existing_attachment_behavior(
     assert len(result.attachment_paths) == 1
     assert (tmp_path / result.attachment_paths[0]).exists()
     get_settings.cache_clear()
-
 
 
 def test_scan_back_route_files_exact_awaiting_scan_match(

@@ -365,6 +365,7 @@ def submit_letter_book(
     the submitter can't be resolved or the chain refuses (e.g. the manager has
     no login account); the auto paths catch it, the manual path surfaces it."""
     from app.services import book_service
+
     if record_access_user is not None:
         book_service.require_full_book_access(
             db, record_access_user, book_service.get_book(db, book_id), write=True

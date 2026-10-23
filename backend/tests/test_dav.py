@@ -344,9 +344,7 @@ def test_dav_rechecks_current_mutation_capability(
     path.write_bytes(b"PK-original")
     owner = _make_owner(api_db)
     if kind == "book":
-        session = _make_session(
-            api_db, working_path=str(path), token="revoked", owner=owner
-        )
+        session = _make_session(api_db, working_path=str(path), token="revoked", owner=owner)
         capability = "books.edit"
     else:
         session = BookEditSession(
@@ -367,9 +365,7 @@ def test_dav_rechecks_current_mutation_capability(
     api_db.refresh(session)
     saved_at = session.last_put_at
     assert saved_at is not None
-    perm_service.set_user_override(
-        api_db, user_id=owner.id, capability=capability, effect="deny"
-    )
+    perm_service.set_user_override(api_db, user_id=owner.id, capability=capability, effect="deny")
 
     response = client.request(method, url, content=b"PK-denied")
 
@@ -377,15 +373,11 @@ def test_dav_rechecks_current_mutation_capability(
     assert path.read_bytes() == b"PK-before-revocation"
     api_db.refresh(session)
     assert session.last_put_at == saved_at
-    perm_service.set_user_override(
-        api_db, user_id=owner.id, capability=capability, effect="grant"
-    )
+    perm_service.set_user_override(api_db, user_id=owner.id, capability=capability, effect="grant")
     assert client.request(method, url, content=b"PK-authorized").status_code == (
         204 if method == "PUT" else 200
     )
-    assert path.read_bytes() == (
-        b"PK-authorized" if method == "PUT" else b"PK-before-revocation"
-    )
+    assert path.read_bytes() == (b"PK-authorized" if method == "PUT" else b"PK-before-revocation")
 
 
 @pytest.mark.parametrize("state", ["none", "returned"])
