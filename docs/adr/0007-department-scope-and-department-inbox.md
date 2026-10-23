@@ -23,7 +23,13 @@ Capabilities still gate every action; the scope only narrows rows.
   outside all departments. Supervisor cycles resolve to no department.
 - Users relate through their linked employee. Admins also grant deputies and
   department viewers per department (`department_members`, roles `deputy` and
-  `viewer`).
+  `viewer`). Because the employee link confers head/branch scope and department
+  sends, only an administrator may set it while scoping is on: self-linking by a
+  non-admin answers `403 LINK_REQUIRES_ADMIN`. With scoping off it is unchanged.
+  Grant pickers list active, non-inmate-reporter accounts from
+  `GET /departments/candidate-users` (`departments.manage`).
+- The editor lives on `/permissions?tab=org`; the Employees org tree is
+  read-only. Supervisor links stay on `employees.edit`.
 - Heads and deputies see their department and every derived sub-department.
   Viewers see that department only. Every user also sees their own
   supervisor-tree branch: themselves and everyone below them.

@@ -134,29 +134,49 @@ the resolved scope and never widen it. Object guards answer 404 for out-of-scope
 objects, just as for missing ones; possessing an edit/view capability is not a
 department-scope bypass.
 
+- Departments follow the org tree (rework R). A Department is a head employee
+  plus everyone below them through `supervisor_id`; a head inside another
+  department's branch makes a sub-department, and `parent_id` is derived.
+  `department_tree_service.recompute` is the only writer of
+  `employees.department_id` and `departments.parent_id`, run after supervisor,
+  employee, department and exception writes. Exceptions place an employee (and
+  their branch) in another department or outside all departments.
 - `department_scoping_enabled` defaults to false: while off, everyone resolves to
-  organization scope and existing action/Level gates still apply. The Departments
-  settings page offers a preflight for users without departments, departments
-  without heads and departments without services. Switching is reversible and
-  audited, and enabling backfills unstamped Records from creators' primary
-  departments.
+  organization scope and existing action/Level gates still apply. The preflight
+  lists users without a department, departments without a receiver (no active
+  head account and no deputies) and departments without services. Switching is
+  reversible and audited, and enabling backfills unstamped Records from their
+  creators' derived departments.
 - When on, admins and holders of `departments.all` retain organization scope.
-  Managers do not automatically receive it. Members see their member departments;
-  heads/deputies also see descendants; everyone retains their own work. An
-  unassigned user has only self scope and no services.
-- `departments.manage` gates department, membership and service administration,
-  bulk employee assignment, preflight and the switch. It is admin-only by default,
-  delegable and not requestable. The department list itself needs only a session.
+  Managers do not automatically receive it. Heads and deputies see their
+  department and every derived sub-department; viewers see that department only.
+  Everyone also sees their own supervisor-tree branch (scope kind `branch` when
+  they have reports), including Records created by users in it. A user outside
+  every department with no reports has only self scope and no services.
+- Because the employee link now confers head/branch scope and department-send
+  delivery, `POST /auth/me/link` (`link_self`) by a non-admin answers
+  `403 LINK_REQUIRES_ADMIN` while scoping is on. Admins may still self-link and
+  set any account's link; with scoping off, self-linking is unchanged.
+- `departments.manage` gates department create/edit/delete, deputy and viewer
+  grants (`PUT /departments/{id}/people`), services, exceptions, unassigned
+  groups, the picker list `GET /departments/candidate-users` (active,
+  non-inmate-reporter accounts), preflight and the switch. It is admin-only by
+  default, delegable and not requestable. Supervisor links stay on
+  `employees.edit`. The department list itself needs only a session.
   `departments.all` is the separately grantable, non-sensitive Organization-wide
   view capability, also not requestable; setup permission does not imply it.
+- The editor (supervisor links plus department controls) lives on
+  `/permissions?tab=org`; the Employees org tree is read-only for everyone.
 - Active direct sends and assigned/revision-retained approval access keep their
   cross-department Record access, without bypassing Record Levels or capabilities.
-  The service list intersects department configuration with existing per-service
-  denials; an unconfigured department supplies no services.
+  A user's services come from every department they belong to (derived, headed,
+  deputy or viewer), intersected with per-service denials; an unconfigured
+  department supplies no services.
 - Workforce retains its independent text-based scopes. `employees.department`
-  is synchronized from the Department's Arabic name on assignment and rename;
-  clearing `department_id` retains the text as a backfill hint. Historical
-  attendance snapshots and duty events are not rewritten.
+  is synchronized from the derived Department's Arabic name; leaving a department
+  (including rename-and-deactivate or delete) clears the label only when it still
+  equals that department's name. Historical attendance snapshots and duty events
+  are not rewritten.
 
 ## 4. Fixed: `books.view` was not enforced on the register listing
 

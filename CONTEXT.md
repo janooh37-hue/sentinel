@@ -272,7 +272,8 @@ _Avoid_: Membership, role (that is the account preset), scope
 The rows a user may see in scoped areas: departments they head or deputize with
 every sub-department, departments they view, and their own supervisor-tree branch.
 Capabilities and Levels still apply inside it, and request filters may only
-narrow it.
+narrow it. Because it follows the employee link, only an administrator may set
+that link while scoping is on (`LINK_REQUIRES_ADMIN`).
 _Avoid_: Workforce scope, filter, capability
 
 **Organization-wide view**:
