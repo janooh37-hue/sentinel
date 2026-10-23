@@ -46,7 +46,7 @@ export function ViolationMonthsWidget({ tier, rows }: WidgetProps): React.JSX.El
         <p className="text-[0.75em] text-muted-foreground">{t('dashboard.widgets.violation_months.empty')}</p>
       ) : !list ? (
         <div className="flex min-h-0 flex-col gap-2">
-          <p className="text-3xl font-semibold tabular-nums text-foreground">{total}<span className="ms-2 text-xs font-normal text-muted-foreground">{t('dashboard.widgets.violation_months.monthsOpen')}</span></p>
+          <p className="text-3xl font-semibold tabular-nums text-foreground">{total}<span className="ms-2 text-xs font-normal text-muted-foreground">{t('dashboard.widgets.violation_months.monthsOpen', { count: total })}</span></p>
           {readyMonth ? (
             <Link className={`${linkClass} self-start text-success`} to={inmateRegisterHref(readyMonth.year, readyMonth.month)}>
               {t('dashboard.widgets.violation_months.readyMonth', { month: formatRegisterMonth(readyMonth.year, readyMonth.month, locale) })}

@@ -4345,26 +4345,6 @@
       "report": "Report",
       "inmate_conduct_violations": "Inmate Conduct"
     },
-    "quickActionDesc": {
-      "general_book": "Open the general records book.",
-      "acknowledgment": "Record an employee acknowledgment.",
-      "salary_transfer_request": "Request a salary account transfer.",
-      "leave_permit": "Issue a short leave permit.",
-      "violation": "File a new disciplinary violation.",
-      "leave_application": "Apply for an employee leave.",
-      "duty_resumption": "Mark return to duty after leave.",
-      "hr_request": "Submit an HR request.",
-      "salary_deduction": "Issue a salary deduction notice.",
-      "employee_clearance": "Issue a clearance / exit form.",
-      "passport_release": "Request custody of a passport.",
-      "material_request": "Request stores or material.",
-      "resignation_letter": "Compose a resignation letter.",
-      "administrative_leave": "File an administrative leave.",
-      "warning": "Issue a formal warning notice.",
-      "passport_release_list": "Release passports to a list of employees.",
-      "report": "File an incident or duty report.",
-      "inmate_conduct_violations": "Record inmate conduct violations."
-    },
     "widgets": {
       "quickActions": {
         "title": "Quick actions",
@@ -4397,7 +4377,8 @@
       "sent_approvals": {
         "title": "Sent for approval",
         "pending": "pending",
-        "needsChanges": "{{count}} need changes",
+        "needsChanges_one": "{{count}} needs changes",
+        "needsChanges_other": "{{count}} need changes",
         "waitingOn": "Waiting on {{name}}",
         "unassigned": "no assigned signer",
         "oldest": "Oldest: {{subject}}",
@@ -4434,7 +4415,8 @@
       },
       "on_leave_today": {
         "title": "On leave today",
-        "records": "leave records",
+        "records_one": "leave record",
+        "records_other": "leave records",
         "tomorrow": "{{count}} ending tomorrow",
         "until": "Until {{date}}",
         "empty": "No approved leave overlaps today. Open Leaves to review or record leave.",
@@ -4496,7 +4478,8 @@
       },
       "violation_months": {
         "title": "Monthly inmate reports",
-        "monthsOpen": "months open",
+        "monthsOpen_one": "month open",
+        "monthsOpen_other": "months open",
         "readyMonth": "{{month}} ready to close",
         "pending": "Complete pending entries or continue the assigned review.",
         "empty": "No ended month is awaiting close. Open the register to review this month.",

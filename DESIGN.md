@@ -1420,12 +1420,12 @@ replaces the former zones and separate quick-actions band.
   packing. The final box determines glance, summary, tall, or list content.
 - `components/dashboard/WidgetFrame.tsx` is the shared card frame: header
   title, optional count and View all link, then a filling, clipped body.
-  Current widget content remains in `widgets/legacyAdapters.tsx` until its
-  individual content migration; those adapters are clipped to the same boxes.
 - Quick actions are a regular `quick_actions` widget. Tile count follows its
   final box and every tile retains its service-specific capability gate.
 - Private layouts use `{ id, visible, order, size }`; legacy zones are read
   only for migration and never written.
+  Empty legacy layouts (including those pruned to no surviving ids) restore
+  visible W quick actions; explicit v2 visibility, including hidden, wins.
 
 ---
 
@@ -1557,6 +1557,9 @@ references and numeric metrics use isolated Western digits.
   exact bounds (`not_submitted` maps to `none`). The tall/list preview shows
   `latest_approved`, links to `/books?open=<book_id>`, and uses a general-record
   label when there is no employee.
+  Dashboard-linked mine/status/date/draft filters run server-side before the
+  500-row page window; Records loads every matching page. Other entry paths
+  retain their existing client filtering.
 - **Needs your signature / To review:** received signing work takes priority,
   then received review work. Idle reviewers retain their received queue.
   Glance shows oldest age; summary adds its subject; tall/list preview the
@@ -1597,9 +1600,12 @@ empty states stay inside the same clipped frame.
 
 - **Workforce:** working headcount links to `working=true`; our staff to
   `status=Active`, on site to `present=true`, loaned to `status=Loaned`, and
-  on leave to `on_leave=true`. The last three boolean filters use the same
-  Active/Loaned and approved-leave predicates as the summary. The filtered
-  Employees section displays the total, paginates and scopes roster search.
+  on leave to `status=Approved&on=…` in Leaves. Employee-derived destinations
+  need `employees.view`; on-site filtering additionally needs `leaves.view`,
+  and the leave chip needs `leaves.view`. Denied links remain count/label text.
+  The API likewise denies leave-derived filters without `leaves.view` and
+  open-violation filters without `violations.view`. The filtered Employees
+  section displays the total, paginates and scopes roster search.
 - **Leave:** the Dubai operational day drives links. `status=Approved&on=…`
   means date overlap, not a leave starting that day. Returning uses inclusive
   `end_from`/`end_to` covering today through today+7. Both the mobile list and
@@ -1614,14 +1620,21 @@ empty states stay inside the same clipped frame.
 - **Open violations:** use `open_violations.count/latest`, not fabricated
   breakdown states. Rows open the exact employee violation; View all selects
   employees with an open violation.
+  Employee destinations require `employees.view`; otherwise counts, labels,
+  and violation previews remain informational.
 - **Monthly inmate reports:** real awaiting-close months, workflow stage,
   row/pending counts and closability, linked to that month's statistics.
 - **Permits:** zone-scoped security and item summaries; no 500-row item count
   proxy. Every count/preview/register link retains zone. List previews share
   the row budget; security and item remainders link to their own register.
+  Item-permit create, edit, submit and delete invalidate the summary prefix,
+  refreshing every cached zone alongside the register.
 - **Workforce pulse:** glance shows coverage as a percentage; other aggregate
   tiers show scheduled/on-duty/coverage. Missing values remain unknown, reason
   codes are translated, and Open coverage opens the existing coverage sheet.
+
+Count-dependent month, leave-record and needs-changes labels use English
+one/other and all six Arabic plural categories.
 
 ---
 
@@ -1757,6 +1770,8 @@ Customize edits the dashboard in place, not in a modal. The banner offers
 Compact/Wide, Reset, Cancel and Save layout. Gap filling is always on.
 Each box overlays a native drag handle, native S/M/L/W radios, keyboard
 move-earlier/move-later controls, and Remove. A moved control keeps focus.
+Removing a widget moves focus after rendering to its enabled Add button,
+falling back to the banner Save layout button.
 The Add widgets side panel groups only available widgets by source page;
 visible entries read “On board”. It sits below the grid on smaller screens.
 Cancel discards the complete draft, including edits to quick-action tiles.

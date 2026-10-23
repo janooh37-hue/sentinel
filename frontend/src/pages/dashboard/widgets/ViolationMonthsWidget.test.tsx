@@ -160,6 +160,7 @@ describe('ViolationMonthsWidget', () => {
       count: 1,
     })
     renderWidget('en', { tier: 'summary', rows: 0 })
+    expect(await screen.findByText('month open')).toBeInTheDocument()
     expect(await screen.findByText('Complete pending entries or continue the assigned review.')).toBeInTheDocument()
     expect(screen.queryByText(/ready to close/)).not.toBeInTheDocument()
   })

@@ -28,7 +28,7 @@ export function OnLeaveTodayWidget({ tier, rows }: WidgetProps): React.JSX.Eleme
         </>
       ) : (
         <>
-          <Link to={to} className={`${PEOPLE_LINK} flex items-baseline gap-2`}><span className={PEOPLE_BIG}>{all.length}</span><span className="text-[0.7em] text-muted-foreground">{t('dashboard.widgets.on_leave_today.records')}</span></Link>
+          <Link to={to} className={`${PEOPLE_LINK} flex items-baseline gap-2`}><span className={PEOPLE_BIG}>{all.length}</span><span className="text-[0.7em] text-muted-foreground">{t('dashboard.widgets.on_leave_today.records', { count: all.length })}</span></Link>
           <div className="flex min-w-0 items-center gap-1 pt-2 text-[0.7em] text-muted-foreground">
             {tier === 'summary' && <><span className="flex shrink-0 -space-x-1 rtl:space-x-reverse">{all.slice(0, 5).map((item) => <PeopleAvatar key={item.leave_id} name={summaryEmployeeName(item, i18n.language)} />)}</span>{all.length > 5 && <Link to={to} className={PEOPLE_LINK}>+{all.length - 5}</Link>}</>}
             <span>{t('dashboard.widgets.on_leave_today.tomorrow', { count: tomorrow })}</span>
