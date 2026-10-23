@@ -9988,22 +9988,22 @@ export interface components {
         /** DashboardTotals */
         DashboardTotals: {
             /** Employees Active */
-            employees_active: number;
+            employees_active: number | null;
             /** Our Staff */
-            our_staff: number;
+            our_staff: number | null;
             /** Loaned */
-            loaned: number;
+            loaned: number | null;
             /** On Leave Today */
-            on_leave_today: number;
+            on_leave_today: number | null;
             /** Present Today */
-            present_today: number;
+            present_today: number | null;
             /** Forms This Month */
             forms_this_month: number;
             /**
              * Open Violations Count
              * @default 0
              */
-            open_violations_count: number;
+            open_violations_count: number | null;
             /**
              * Draft Count
              * @default 0
