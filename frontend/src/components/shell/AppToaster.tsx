@@ -20,7 +20,7 @@ type ThemeName = 'light' | 'dark'
 
 function subscribeRootAttributes(onChange: () => void): () => void {
   const observer = new MutationObserver(onChange)
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'dir'] })
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
   return () => observer.disconnect()
 }
 
@@ -30,19 +30,6 @@ function useDocumentTheme(): ThemeName {
     subscribeRootAttributes,
     () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'),
     () => 'light',
-  )
-}
-
-/**
- * Toasts sit in the bottom corner at the inline end: bottom-right in English,
- * bottom-left in Arabic (`<html dir>`, set by lib/i18n.ts). A toast keeps the
- * corner it was raised in if the language changes while it is up.
- */
-function useToastCorner(): 'bottom-right' | 'bottom-left' {
-  return useSyncExternalStore(
-    subscribeRootAttributes,
-    () => (document.documentElement.dir === 'rtl' ? 'bottom-left' : 'bottom-right'),
-    () => 'bottom-right',
   )
 }
 
@@ -167,63 +154,16 @@ function tidyAccessibility(root: HTMLElement): void {
 }
 
 /**
- * ScanBackDock shares the toasts' corner. Publish how far up from the bottom
- * edge the stack reaches (`--toast-stack` on <html>, `0px` when empty) so the
- * dock rides just above it instead of reserving a fixed band. A closing toast
- * counts until it is removed, so the dock never drops through it. A hidden
- * viewport (lock overlay) has no box and counts as empty.
- */
-function publishToastReach(root: HTMLElement): void {
-  let top = window.innerHeight
-  root.querySelectorAll<HTMLElement>('[data-sileo-toast]').forEach((el) => {
-    const rect = el.getBoundingClientRect()
-    if (rect.height > 0) top = Math.min(top, rect.top)
-  })
-  const reach = `${Math.max(0, Math.ceil(window.innerHeight - top))}px`
-  const style = document.documentElement.style
-  if (style.getPropertyValue('--toast-stack') !== reach) style.setProperty('--toast-stack', reach)
-}
-
-/** Keeps `--toast-stack` current as toasts arrive, open, close and the window resizes. */
-function useToastReach(rootRef: React.RefObject<HTMLDivElement | null>): void {
-  useEffect(() => {
-    const root = rootRef.current
-    if (!root) return undefined
-    const publish = (): void => publishToastReach(root)
-    // A toast's box animates its height as its body opens, and the viewport
-    // grows as a new toast's entry margin settles, so resize observers on both
-    // follow the stack frame by frame.
-    const sizes = new ResizeObserver(publish)
-    const track = (): void => {
-      root.querySelectorAll('[data-sileo-viewport], [data-sileo-toast]').forEach((el) => sizes.observe(el))
-      publish()
-    }
-    const mutations = new MutationObserver(track)
-    mutations.observe(root, { childList: true, subtree: true })
-    window.addEventListener('resize', publish)
-    track()
-    return () => {
-      mutations.disconnect()
-      sizes.disconnect()
-      window.removeEventListener('resize', publish)
-      document.documentElement.style.removeProperty('--toast-stack')
-    }
-  }, [rootRef])
-}
-
-/**
  * Mounts the one Sileo host for the shell. Notices are raised through
  * `@/lib/toast`, never through `sileo` directly.
  */
 export function AppToaster(): React.JSX.Element {
   const theme = useDocumentTheme()
-  const corner = useToastCorner()
   const rootRef = useRef<HTMLDivElement>(null)
   // The toast currently holding Sileo's hover flag, by pointer or by focus.
   const engaged = useRef<HTMLElement | null>(null)
   const announcements = useAnnouncements()
   useReducedMotionSync()
-  useToastReach(rootRef)
 
   useEffect(() => {
     const root = rootRef.current
@@ -291,7 +231,7 @@ export function AppToaster(): React.JSX.Element {
         if (id) toast.dismiss(id)
       }}
     >
-      <Toaster position={corner} offset={12} theme={theme} />
+      <Toaster position="top-center" offset={{ top: 'calc(12px + env(safe-area-inset-top))' }} theme={theme} />
       <AnnouncementRegion priority="polite" items={announcements} />
       <AnnouncementRegion priority="assertive" items={announcements} />
     </div>

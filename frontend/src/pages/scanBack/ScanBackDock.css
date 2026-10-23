@@ -1,9 +1,9 @@
 /* The collapsed dock is a twin of a toast pill (components/shell/AppToaster.css):
-   the same fill, 40px height, 24px round badge and title type, so the corner
-   the two share reads as one family. Like the toasts it is the inverse of the
-   page: the navy rail on the cream page, the light theme's raised cream on the
-   near-black page. Its tone is the warning tone those toasts use, picked there
-   for >=4.5:1 against the pill. */
+   the same fill, 40px height, 24px round badge and title type make them one
+   family, even though the dock rests in its own bottom corner. Like the
+   toasts it is the inverse of the page: the navy rail on the cream page, the
+   light theme's raised cream on the near-black page. Its tone is the warning
+   tone those toasts use, picked there for >=4.5:1 against the pill. */
 .scanback-pill {
   --_fill: var(--rail);
   --_tone: #fbbf24;

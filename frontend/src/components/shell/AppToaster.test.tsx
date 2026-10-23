@@ -220,20 +220,14 @@ describe('AppToaster + toast adapter', () => {
     expect(newer.dataset.expanded).toBe('true')
   })
 
-  it('sits at the inline end: bottom-right in English, bottom-left in Arabic', async () => {
-    act(() => {
-      toast.success('Saved')
-    })
-    expect(document.querySelector('[data-sileo-viewport]')).toHaveAttribute('data-position', 'bottom-right')
-    // The MutationObserver on <html dir> reports in a microtask; an async act flushes it.
-    await act(async () => {
-      document.documentElement.dir = 'rtl'
-    })
+  it.each(['ltr', 'rtl'])('sits at top-center and opens downward in %s', (dir) => {
+    document.documentElement.dir = dir
     try {
       act(() => {
-        toast.success('محفوظ')
+        toast.success(dir === 'rtl' ? 'محفوظ' : 'Saved', { description: 'Details' })
       })
-      expect(document.querySelector('[data-sileo-viewport][data-position="bottom-left"]')).not.toBeNull()
+      expect(document.querySelector('[data-sileo-viewport]')).toHaveAttribute('data-position', 'top-center')
+      expect(toastEls()[0]).toHaveAttribute('data-edge', 'bottom')
     } finally {
       document.documentElement.dir = 'ltr'
     }
@@ -614,40 +608,5 @@ describe('AppToaster + toast adapter', () => {
     // Fill is derived from the theme, so the live toast flips too. Sileo copies it
     // into its view in an effect, one render after the viewport's data-theme.
     await waitFor(() => expect(document.querySelector('[data-sileo-pill]')).toHaveAttribute('fill', '#f2f2f2'))
-  })
-
-  it('publishes how far up the stack reaches, so the scan-back dock can ride above it', async () => {
-    const reach = (): string => document.documentElement.style.getPropertyValue('--toast-stack')
-    // jsdom has no layout: give each toast the box a browser would, unless it is
-    // hidden (the lock overlay hides the viewport), which has no box at all.
-    let hidden = false
-    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      return this.matches('[data-sileo-toast]') && !hidden
-        ? DOMRect.fromRect({ x: 0, y: window.innerHeight - 64, width: 350, height: 40 })
-        : DOMRect.fromRect()
-    })
-    try {
-      expect(reach()).toBe('0px')
-      act(() => {
-        toast.success('Saved')
-      })
-      await waitFor(() => expect(reach()).toBe('64px'))
-
-      hidden = true
-      act(() => {
-        window.dispatchEvent(new Event('resize'))
-      })
-      expect(reach()).toBe('0px')
-
-      hidden = false
-      act(() => {
-        window.dispatchEvent(new Event('resize'))
-      })
-      expect(reach()).toBe('64px')
-      act(() => toast.dismiss())
-      await waitFor(() => expect(reach()).toBe('0px'), { timeout: 3000 })
-    } finally {
-      rect.mockRestore()
-    }
   })
 })

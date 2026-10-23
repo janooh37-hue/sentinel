@@ -1540,10 +1540,13 @@ theme's `--success`/`--accent`/`--warning`/`--info` values, tuned for ≥ 4.5:1
 against the pill (warning on the light pill is `#9a4507`, a shade darker than
 `--warning`). A theme change flips live toasts.
 
-**RTL.** Toasts sit in the bottom corner at the inline end: `bottom-right` in
-English, `bottom-left` in Arabic (the host follows `<html dir>`; a toast stays in
-the corner it was raised in). `ScanBackDock` is also at the inline end, so the two
-share the corner in both languages (see Scan-back dock). Text, the badge and the
+**Position.** All toasts sit at `top-center` in both languages. The viewport
+starts 12px plus `env(safe-area-inset-top)` below the top edge; Sileo's 12px
+inner padding places the first pill 24px plus the safe area below it. Bodies
+expand downward and the stack grows down from the top. Toasts may briefly
+overlay the header.
+
+**RTL.** Position does not change with language. Text, the badge and the
 action follow `<html dir>`; the body uses `text-align: start` and Arabic body
 text a 1.6 line height. Titles are not title-cased. Sileo positions the pill
 header by physical `left` and leaves its 10px of spare room on the right, so in
@@ -1551,19 +1554,16 @@ Arabic the host shifts the header right by that room: the badge sits 8px from th
 pill's right edge and the room trails the title, mirroring English.
 
 **Scan-back dock.** `ScanBackDock` (`pages/scanBack/ScanBackDock.tsx` +
-`ScanBackDock.css`) is the toasts' twin in their corner. Its collapsed pill uses
-the toast pill's fill (navy `--rail` on the cream page, `#fafaf6` on the dark
+`ScanBackDock.css`) is the toasts' twin in its own bottom inline-end corner.
+Its collapsed pill uses the toast pill's fill (navy `--rail` on the cream page, `#fafaf6` on the dark
 page), 40px height, a 24px round badge (Printer, warning tone at 20% behind it)
 and the toast title type (0.825rem, 500) in the warning tone (`#fbbf24` / `#9a4507`);
 the chevron and dismiss are `--rail-text`. The open panel stays a light app card
 (it holds thumbnails and dashed drop targets) with a 16px radius and the same
-badge in the page's `--warning`/`--warning-soft`. Clearance is live, not a fixed
-band: `AppToaster` publishes how far up from the bottom edge the stack reaches
-(`--toast-stack` on `<html>`, `0px` when empty, a closing toast counted until it
-is removed, a hidden viewport counted as empty), and the dock sits at
-`min(50dvh, max(--dock-rest, --toast-stack + 0.5rem))`, where `--dock-rest` is
-1.5rem on desktop (where a toast pill sits) and 5.5rem + safe area on mobile
-(above the BottomTabBar). The open panel is capped to the room above that.
+badge in the page's `--warning`/`--warning-soft`. The dock rests 1.5rem from
+the bottom on desktop and 5.5rem plus the safe area on mobile (above the
+BottomTabBar), independently of the toast stack. The open panel is capped to
+`50dvh` and the available room above the dock; its rows scroll.
 
 **Hover.** Sileo 0.1.6 gave the hovered toast the single "open" slot, collapsing
 the newest under it; when their bodies differed in height the stack shifted, slid
@@ -1592,8 +1592,7 @@ viewer). The lock overlay hides the viewport and the announcers
 
 **Known limits (Sileo 0.1.6).** Only the newest toast shows its body without
 hover, so in a stack older toasts read as their title until hovered (the
-announcers still carry their full text). A stack taller than half the viewport
-can still reach the dock, which stops at `50dvh` so its header stays on screen.
+announcers still carry their full text).
 `Infinity`-duration toasts with a description open on hover/focus only. Sileo's
 body is always its full 350px wide, which is why a lone reference goes in the pill.
 

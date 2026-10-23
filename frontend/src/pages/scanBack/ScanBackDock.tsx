@@ -122,17 +122,9 @@ export function ScanBackDock(): React.JSX.Element | null {
         // `end-4` is the logical utility (inset-inline-end) — it flips in RTL.
         // Never `right-4`. Precedent: IdentityDocCard.tsx:97.
         'fixed z-30 flex flex-col items-end gap-2 end-4',
-        // The toast viewport (AppToaster) shares this corner in both languages and
-        // paints over anything under it, so the dock clears it spatially. AppToaster
-        // publishes how far up the live stack reaches as `--toast-stack` (0px when
-        // empty); the dock rests where a toast pill sits (1.5rem, above the
-        // BottomTabBar on mobile) and rides 0.5rem above any stack, following it
-        // as bodies open and toasts close. It is clamped to half the viewport so a
-        // tall stack cannot push the header off screen, and the open panel below
-        // is capped to the room left above it (the rows scroll).
+        // Toasts live at the top; this dock rests above the mobile BottomTabBar.
         '[--dock-rest:calc(5.5rem+var(--safe-bottom))] md:[--dock-rest:1.5rem]',
-        '[--dock-band:min(50dvh,max(var(--dock-rest),var(--toast-stack,0px)_+_0.5rem))]',
-        'bottom-[var(--dock-band)] motion-safe:transition-[bottom] motion-safe:duration-200 motion-safe:ease-out',
+        'bottom-[var(--dock-rest)]',
         'rtl:items-start',
       )}
     >
@@ -140,7 +132,7 @@ export function ScanBackDock(): React.JSX.Element | null {
         /* 26rem, not 20rem: each row now carries a page-1 thumbnail, and the
            dock has to be wide enough for the thumb to still be a preview
            (~7rem here) and leave the drop target room beside it. */
-        <div className="flex w-[min(26rem,calc(100vw-2rem))] max-h-[max(6rem,calc(100dvh-var(--dock-band)-4.5rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-lg">
+        <div className="flex w-[min(26rem,calc(100vw-2rem))] max-h-[min(50dvh,max(6rem,calc(100dvh-var(--dock-rest)-4.5rem)))] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-lg">
           <div className="flex shrink-0 items-center gap-2 border-b border-hairline py-2 ps-2 pe-3">
             {/* The pill's badge, in the page's own warning tone. */}
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning" aria-hidden>
