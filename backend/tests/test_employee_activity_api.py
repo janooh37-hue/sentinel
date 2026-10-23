@@ -9,7 +9,16 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_current_user
 from app.db import session as session_mod
-from app.db.models import Base, Book, BookCategory, Document, Employee, User, UserPermission
+from app.db.models import (
+    Base,
+    Book,
+    BookCategory,
+    BookVersion,
+    Document,
+    Employee,
+    User,
+    UserPermission,
+)
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.db.workforce_models import DutyAssignmentEvent
 from app.main import create_app
@@ -43,6 +52,16 @@ def api_db(monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory) ->
                 submission_id="00000000-0000-0000-0000-000000000011",
             ),
         ]
+    )
+    db.commit()
+    db.add(
+        BookVersion(
+            book_id=71,
+            version_no=1,
+            document_id=11,
+            template_id="Employment Certificate",
+            status="approved",
+        )
     )
     db.commit()
     try:
