@@ -55,9 +55,9 @@ Other pages will be appended under §4 as they're documented.
 4. Dashboard page
    4.1  Page shell
    4.2  Hero
-   4.3  PendingDocumentsCard
+   4.3 Records, approvals and unread mail widgets
    4.4  WorkspaceCard
-   4.5  WidgetCard (base) + 7 variants
+   4.5 WidgetFrame
    4.6  ServiceTile (Quick Action)
    4.7  SectionCard
    4.8  Row variants (OnLeave / Upcoming / Document / Ledger)
@@ -1628,120 +1628,50 @@ corner in both modes.
 
 ---
 
-### 4.3 PendingDocumentsCard
+### 4.3 Records, approvals and unread mail widgets
 
-**Source:** `<PendingDocumentsCard>` inside DashboardPage.tsx (line 776).
+**Sources:** `pages/dashboard/widgets/MyDocumentsWidget.tsx`,
+`WaitingApprovalsWidget.tsx`, `SentApprovalsWidget.tsx`, `InboxWidget.tsx`,
+`MyDraftsWidget.tsx`, `UnreadMailWidget.tsx`.
 
-**Surface:**
+Every size uses `WidgetFrame`, never a nested card or a self-hidden body.
+Glance and summary show linked metrics; tall and list use compact two-line
+rows, capped by the packed box's `rows`. The remainder stays in a separate
+`shrink-0` “+N more” link outside the clipped list. Loading skeletons and
+load-error/retry feedback remain inside the same frame. Empty states explain
+where to continue. Colors, focus rings and surfaces use the existing tokens;
+references and numeric metrics use isolated Western digits.
 
-```
-button.group.relative.w-full.overflow-hidden
-.rounded-2xl.bg-surface.p-5.text-start
-.transition-all.duration-200
-.hover:-translate-y-1.hover:shadow-lg
-.focus-visible:outline-none.focus-visible:ring-2
-.focus-visible:ring-ring.focus-visible:ring-offset-2
-```
-
-Standard card-as-button (§2.2).
-
-**Content stack:**
-
-```
-1. Header                "Pending documents"
-2. Big number            "AED  12"  ← currency prefix + count
-3. Progress bar          accent fill, 5px tall
-4. Footer row            • bullet + footnote  ◯ pill ("Review")
-5. ChevronRight          absolute top-end corner
-```
-
-#### Header
-
-```
-text-[0.86em] font-medium text-muted-foreground
-```
-
-i18n key: `dashboard.pending.title`.
-
-#### Big number
-
-```
-mt-2.5 text-[2.4em] font-bold leading-none tracking-tight
-text-foreground tabular-nums
-```
-
-- Currency span inside: `me-1.5 text-[0.32em] font-medium
-  text-muted-foreground align-middle`. That's `0.32 × 2.4em = 0.768em`
-  worth of inherited size — feels like a tiny superscript prefix.
-- When `isLoading`: shows literal `—` instead of the count.
-
-#### Progress bar
-
-```
-<div aria-hidden
-     class="my-3.5 h-[5px] overflow-hidden rounded-full bg-surface-tinted">
-  <div class="h-full rounded-full bg-accent"
-       style="width: {pct}%;
-              animation: dash-pending-grow 1.4s ease-out,
-                         dash-pending-pulse 3s ease-in-out infinite 1.4s;"/>
-</div>
-```
-
-- Track: `bg-surface-tinted`, 5px tall.
-- Fill: `bg-accent` (red), width = % of month elapsed
-  (`(now.getDate() - 1) / daysInMonth * 100`).
-- Animation chain:
-  - `dash-pending-grow` — width `0% → {pct}%` over 1.4s ease-out (one-shot).
-  - `dash-pending-pulse` — opacity `0.85 ↔ 1` over 3s ease-in-out, loops
-    forever, delayed 1.4s so it starts after the grow finishes.
-- The bar is a **decorative proxy for "month is N% elapsed"**, not a true
-  completion percentage. Hidden from AT.
-- Reduced motion: a (slightly hacky) selector `.dash-anim
-  [style*="dash-pending-grow"] { animation: none !important; }` cancels
-  both animations under `prefers-reduced-motion`.
-
-#### Footer
-
-```
-flex items-center justify-between text-[0.78em] text-muted-foreground
-  ├ flex items-center gap-1.5
-  │   ├ <span h-1.5 w-1.5 rounded-full bg-accent aria-hidden/>
-  │   └ footnote text (e.g. "12 documents this month")
-  └ "Review" pill (decorative, see §2.5a)
-```
-
-#### ChevronRight
-
-```
-absolute end-5 top-5
-h-3.5 w-3.5 text-faint
-strokeWidth={1.8}
-aria-hidden
-```
-
-- Sits 20px from the inline-end and top edges.
-- `text-faint` (gray-blue) — quietly indicates "this card is clickable".
-
-#### Hover composite
-
-When the user hovers the card:
-- Card lifts 4px + gains `shadow-lg`.
-- Review pill scales 1.05× + brightens to `bg-primary-hover` + upgrades
-  shadow to `shadow-md`.
-
-#### Dark theme
-
-- Surface flips to `#131826`.
-- Header label, footnote, chevron all theme via tokens — no per-component
-  overrides.
-- Accent fill stays red but uses the dark `--accent` (`#ef4858`, slightly
-  brighter to read on the dark surface).
-
-#### Click
-
-`onClick` writes `localStorage.setItem('gssg.books.filter', 'recent')` then
-calls `onNavigate('books')`. The Books page reads the storage key to
-preselect its "Recent" filter.
+- **My documents:** title includes the localized month from `my_records.month`.
+  The large completed count is `my_records.approved`, not generated-document
+  activity. Nonzero approval states form the segmented bar and linked legend.
+  Each state opens `/books?mine=1&status=…&from=…&to=…` using the summary's
+  exact bounds (`not_submitted` maps to `none`). The tall/list preview shows
+  `latest_approved`, links to `/books?open=<book_id>`, and uses a general-record
+  label when there is no employee.
+- **Needs your signature / To review:** received signing work takes priority,
+  then received review work. Idle reviewers retain their received queue.
+  Glance shows oldest age; summary adds its subject; tall/list preview the
+  existing approval log. Queue and assigned-revision row links use
+  `approvalQueueUrl` and `approvalRecordUrl`, preserving kind, version and
+  pending status. Additional review work has its own filtered link.
+- **Sent for approval:** number, View all and remainder use the pending sent
+  queue. The needs-changes chip is a separate returned queue. Summary shows
+  the oldest submission and signer; tall/list show real approval-log rows.
+- **Sent to me:** keeps unread, incoming/outgoing and purpose summaries.
+  Tall/list use the existing received-books query; rows open the supported
+  `/ledger?tab=books&scope=incoming&book=<id>` overlay. Purpose counts describe
+  the received set, not the unread count.
+- **My drafts:** `my_records.drafts`, all months, links to
+  `/books?mine=1&drafts=1`. All sizes intentionally remain summary-only: the
+  existing Books list API has no exact drafts filter, so an arbitrary page
+  must not be presented as a complete drafts preview.
+- **Unread mail:** count and rows come from owner-scoped `unread_mail`.
+  View all opens `/ledger?tab=email`; rows open `/ledger?mail=<id>`.
+  Email sync is the footer, not a separate widget. Its received-today value
+  is explicitly separate from unread. Sync now requires `ledger.view` and
+  refreshes dashboard, email-account and ledger caches; Configure requires
+  `settings.view`. Sync failure offers an inline retry.
 
 ---
 
@@ -1840,156 +1770,22 @@ to the reading direction.
 
 ---
 
-### 4.5 WidgetCard (base) + 7 variants
+### 4.5 WidgetFrame
 
-**Source:** `components/ui/widget-card.tsx`.
+**Source:** `components/dashboard/WidgetFrame.tsx`.
 
-Shared widget surface used by the 3-up "bottom row" on the Dashboard.
-Three of the variants (Violations / Drafts / Ledger) construct the
-WidgetCard inline inside `DashboardPage`. The other four wrap it in their
-own components under `components/dashboard/widgets/`.
+One `section` fills every packed widget box using `h-full min-h-0 min-w-0`,
+`overflow-hidden`, `rounded-2xl border border-hairline bg-surface p-4`.
+Its accessible name is the translated title. The non-shrinking header holds
+the `h3` (`text-[0.78em] font-medium text-muted-foreground`), optional count
+pill (`bg-surface-tinted font-mono tabular-nums`) and a separate View all
+link (`text-[0.7em] text-primary`). The link's chevron mirrors in RTL.
 
-#### Base surface
-
-```
-button.group.relative.flex.h-full.min-h-[280px].w-full.flex-col
-.rounded-2xl.bg-surface.p-5.text-start
-.transition-all.duration-200
-.hover:-translate-y-1.hover:shadow-lg
-.focus-visible:outline-none.focus-visible:ring-2.focus-visible:ring-ring
-.focus-visible:ring-offset-2
-```
-
-- Same card-as-button base as §2.2.
-- `min-h-[280px]` guarantees a consistent 3-up row height even when one
-  widget has empty breakdown rows.
-
-#### Anatomy
-
-```
-┌─────────────────────────────────────────────┐
-│ Header label                  [Delta pill]   │  min-h-[28px] items-center justify-between
-│                                              │
-│ 42                                           │  text-[2.4em] font-bold tabular-nums
-│                                              │
-│ ─────────────────────────────────────        │  border-t border-hairline (only when breakdown.length > 0)
-│ ● Active           5                          │  text-[0.78em] muted-foreground
-│ ● Escalated        3                          │
-│ ● Pending close    2                          │
-│                                              │
-│ Updated · 12 latest          Go to view  →   │  mt-auto pt-3.5 text-[0.78em]
-└─────────────────────────────────────────────┘
-```
-
-#### Header row
-
-```
-flex min-h-[28px] items-center justify-between gap-3
-  ├ <span text-[0.86em] font-medium leading-tight text-muted-foreground>
-  │   {header}
-  │ </span>
-  └ Delta pill (optional)
-```
-
-- `min-h-[28px]` keeps the row's vertical center stable across cards even
-  when the delta pill changes height between variants.
-
-#### Delta pill
-
-```
-inline-flex items-center rounded-full
-px-2.5 py-1 text-[0.72em] font-semibold leading-none
-+ DELTA_CLS[tone]
-```
-
-Three tones (`DeltaTone`):
-
-| Tone     | Classes                                       | Light                         | Dark                           |
-| -------- | --------------------------------------------- | ----------------------------- | ------------------------------ |
-| `good`   | `bg-success-soft text-success`                | pale green / forest green     | deep green / emerald           |
-| `warn`   | `bg-accent-soft text-accent`                  | pale red / GSSG red           | deep red / bright red          |
-| `steady` | `bg-surface-tinted text-muted-foreground`     | cream tint / dark gray        | navy tint / cool gray          |
-
-#### Big number
-
-```
-mt-1.5 text-[2.4em] font-bold leading-none tracking-tight
-text-foreground tabular-nums
-```
-
-Same scale as §4.3/§4.4 big numbers — the 280px-min-height widget row
-keeps the trio visually aligned.
-
-#### Breakdown rows
-
-```
-mt-3 flex flex-col gap-1 border-t border-hairline pt-3
-text-[0.78em] text-muted-foreground
-  └ for each row:
-     flex items-center gap-1.5
-     ├ <span h-1.5 w-1.5 rounded-full bg-{color}/>
-     ├ <span>{label}</span>
-     └ <span ms-auto font-mono font-semibold text-foreground>{value}</span>
-```
-
-Four `BreakdownColor` choices — `primary` / `accent` / `success` /
-`warning` — applied to the leading 6×6px dot. Theme follows token system.
-
-#### Footer / action row
-
-```
-mt-auto flex items-center justify-between gap-2 pt-3.5 text-[0.78em]
-  ├ meta line (optional): text-[0.72em] text-muted-foreground
-  └ Action: ms-auto inline-flex items-center gap-1
-            font-semibold text-primary
-            transition-colors duration-200
-            group-hover:text-primary-hover
-            <span aria-hidden
-                  ltr:group-hover:translate-x-0.5
-                  rtl:group-hover:-translate-x-0.5
-                  motion-reduce:!transform-none>→</span>
-```
-
-- Arrow is a literal `→` glyph (Unicode `U+2192`). Doesn't rotate in RTL —
-  the `rtl:group-hover:-translate-x-0.5` flips the horizontal nudge
-  direction so the arrow still moves "toward the end" of the reading line.
-  The glyph itself is bidi-neutral.
-- `motion-reduce:!transform-none` pins it.
-
-#### Variant matrix
-
-| Variant            | Source                                        | Big number                          | Delta logic                                                              | Breakdown                                            | Meta line                            | Action                                                |
-| ------------------ | --------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------ | ----------------------------------------------------- |
-| `violations`       | inline in DashboardPage                       | `0` (placeholder until backend)     | always `steady` "Steady"                                                 | Active (accent), Escalated (warning), Pending close (success), all 0 | —                                    | "Go to employees" → `employees`                       |
-| `drafts`           | inline in DashboardPage                       | `0` (placeholder until backend)     | always `steady` "No drafts"                                              | Promotion (primary), Leave (success), Violation (accent), all 0 | —                                    | "Go to ledger" → `ledger`                             |
-| `ledger`           | inline in DashboardPage                       | sum of incoming+outgoing+internal from `recent_ledger` | `warn` when incoming>0 (parameterized count), else `steady` | Incoming (success), Outgoing (accent), Internal (primary)            | "{count} latest"                     | "Go to ledger" → `ledger`                             |
-| `on_leave_today`   | `OnLeaveTodayWidget.tsx`                      | `summary.totals.on_leave_today`     | `warn` when > 5 ("High coverage gap"), else `steady` ("Normal")          | Top 3 leave types (rotating dot colors: primary, accent, success) | —                                    | "Go to leaves" → `leaves`                             |
-| `upcoming_leave`   | `UpcomingLeaveWidget.tsx`                     | total upcoming leaves               | `warn` when returningTomorrow > 0 ("Returning soon"), else `steady`      | Returning tomorrow (accent), This week (primary)     | —                                    | "Go to leaves" → `leaves`                             |
-| `recent_docs`      | `RecentDocsWidget.tsx`                        | `summary.totals.forms_this_month`   | `steady` (label changes: "Active this month" if total>0 else "Idle")     | Top 3 template_ids prettified (rotating colors)      | "{count} recent"                     | "Go to books" → `books`                               |
-| `email_sync_status` | `EmailSyncStatusWidget.tsx`                  | `email_sync.incoming_today`         | `warn` "Off" if disabled, `steady` "Live" if last sync <5min, else `steady` "Synced" | Last sync (primary), Interval (accent), Status (success when enabled / warning when off) | —                                    | "Sync now" (when enabled) → fires mutation, or "Configure" → `ledger` |
-
-#### States
-
-| State        | Look                                                                          |
-| ------------ | ----------------------------------------------------------------------------- |
-| Default      | flat, no shadow                                                               |
-| Hover        | `-translate-y-1` + `shadow-lg`; action arrow nudges 0.125rem toward end       |
-| Focus        | navy ring (ring-2 ring-primary ring-offset-2 vs `--bg`)                       |
-| Loading      | variants render `0` or `—`; no spinner. Cards are still clickable.            |
-| Empty data   | breakdown rows render with `0` values; the separator line still appears       |
-
-#### a11y
-
-- The whole card is one `<button>` → one tab stop.
-- Header + action label are read sequentially by AT.
-- Delta pill is plain text — no role, no aria.
-- Dot SVGs are `aria-hidden`.
-
-#### RTL
-
-- All `me-/ms-` and `start-/end-` logical utilities handle direction.
-- Arrow glyph nudge inverts via the `rtl:` variant.
-- Breakdown value (`ms-auto`) sits at the inline-end.
+The filling body is `flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden`.
+There is no fixed minimum content height and no card-wide button containing
+other links. Widgets own their explicit metric, row, state and footer
+contents. Every actual action has a visible focus ring; dots are decorative
+and always accompanied by a textual status.
 
 ---
 
@@ -2155,53 +1951,29 @@ Same shape as OnLeaveRow, but:
 `neutral` tone: `bg-muted text-muted-foreground` (also a token-gap per
 §1.1.8).
 
-#### 4.8c DocumentRow
+#### 4.8c Approved-record rows
 
-```
-[Icon block h-8 w-8 rounded-md bg-primary-soft text-primary,
-   contains FileText h-3.5 w-3.5 strokeWidth=1.8]
-  Title line (truncate, font-medium text-foreground):
-    [if ref_number] <span font-mono text-primary>{ref_number}</span>
-                   <span mx-1.5 text-muted-foreground>·</span>
-                   {template_id}
-    [else]         {template_id}
-  Employee name (truncate text-xs text-muted-foreground)
-[trailing column]
-  Timestamp (font-mono text-xs text-muted-foreground)
-  Format: "dd MMM HH:mm" via date-fns + arabic locale when AR
-```
+`MyDocumentsWidget` renders compact links, not the retired Recent Documents
+card. Each row shows the record reference in a left-to-right `bdi`, subject,
+employee name (or general-record label), completed state and creation date.
+The record reference and date use `font-mono`; metadata uses
+`text-muted-foreground`. The supported destination is `/books?open=<book_id>`,
+never an employee URL with a nullable employee id.
 
-- Leading element is a *square* tinted block holding the file icon — not
-  a round avatar. Same color scheme (`bg-primary-soft text-primary`)
-  signals "internal artifact" rather than "person".
+#### 4.8d Unread-mail rows
 
-#### 4.8d LedgerRow
+`UnreadMailWidget` shows only the caller's unread-mail summary rows. Subject
+and counterparty truncate inside `min-w-0 flex-1`; the entry-date label
+uses an isolated Western-digit date. A small primary dot indicates unread
+mail, not a fabricated incoming/outgoing breakdown. Rows link to
+`/ledger?mail=<id>`, which selects the Email tab and opens the mail overlay.
 
-```
-[Square block h-8 w-8 rounded-md bg-surface-tinted,
-   contains a 10×10px colored dot:
-     incoming → bg-success
-     outgoing → bg-accent
-     internal → bg-primary]
-  Subject (truncate font-medium text-foreground)
-  Counterparty (truncate text-xs text-muted-foreground)
-[trailing]
-  Entry date (font-mono text-xs text-muted-foreground)
-  Format: "dd MMM yyyy"
-```
+#### Row navigation
 
-- Leading element is a *tinted square* with a small colored dot inside —
-  the dot color encodes the direction (matches the WidgetCard ledger
-  breakdown colors exactly).
-
-#### Click handling (all rows)
-
-Every row calls `openItem(target, id)` which `navigate`s to
-`/{target}?open={id}`. The destination page reads `?open=` on mount and
-auto-opens the detail drawer (or scrolls to the row). When a destination
-doesn't support per-item opening the query param is silently ignored.
-
----
+Use the destination's supported overlay parameter: leaves and Records read
+`open`, the Books routing desk reads `book`, Email reads `mail`, and
+approvals carry the canonical assigned-version context. Do not use a
+generic `?open=` link for unrelated pages.
 
 ### 4.9 In-place Customize and quick-action tile editor
 

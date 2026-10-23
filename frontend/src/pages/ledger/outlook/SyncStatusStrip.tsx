@@ -29,10 +29,8 @@ interface SyncStatusStripProps {
 }
 
 /**
- * Humanize minutes-since like the Dashboard widget: <60 → min, <1440 → h,
- * else d. A plain (non-hook) helper, mirroring `minutesSince` in
- * EmailSyncStatusWidget — the React Compiler purity rule rejects `Date.now()`
- * inside hooks/components.
+ * Humanize minutes-since: <60 → min, <1440 → h, else d. Keep this a plain
+ * helper because the React Compiler purity rule rejects Date.now() in hooks.
  */
 function agoLabel(t: TFunction, iso: string | null | undefined): string {
   if (!iso) return t('ledger.outlook.sync.never')

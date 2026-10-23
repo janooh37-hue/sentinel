@@ -4676,30 +4676,10 @@
       }
     },
     "widgetLabels": {
-      "inbox": "المرسلة إليّ",
-      "pending": "المستندات المنجزة",
       "workspace": "بيئة عملي",
       "violations": "المخالفات المفتوحة",
-      "drafts": "المسودات",
-      "ledger": "غير المقروء في السجل",
       "on_leave_today": "في إجازة اليوم",
       "upcoming_leave": "العائدون قريبًا",
-      "waiting_approvals": "بانتظار الاعتماد",
-      "waiting_approvals_cta": "مراجعة",
-      "waiting_approvals_oldest": "الأقدم: {{subject}}",
-      "waiting_approvals_aria_zero": "لا اعتمادات معلقة. مراجعة.",
-      "waiting_approvals_aria_one": "بانتظار اعتماد واحد. مراجعة.",
-      "waiting_approvals_aria_two": "بانتظار اعتمادين. مراجعة.",
-      "waiting_approvals_aria_few": "بانتظار الاعتماد: {{count}}. مراجعة.",
-      "waiting_approvals_aria_many": "بانتظار الاعتماد: {{count}}. مراجعة.",
-      "waiting_approvals_aria_other": "بانتظار الاعتماد: {{count}}. مراجعة.",
-      "waiting_reviews_aria_zero": "لا مراجعات معلقة. فتح.",
-      "waiting_reviews_aria_one": "بانتظار مراجعة واحدة. فتح.",
-      "waiting_reviews_aria_two": "بانتظار مراجعتين. فتح.",
-      "waiting_reviews_aria_few": "للمراجعة: {{count}}. فتح.",
-      "waiting_reviews_aria_many": "للمراجعة: {{count}}. فتح.",
-      "waiting_reviews_aria_other": "للمراجعة: {{count}}. فتح.",
-      "sent_approvals": "الطلبات المرسلة",
       "expiring_soon": "قرب الانتهاء",
       "pending_departures": "المغادرات المجدولة",
       "workforce_pulse": "نبض القوى العاملة",
@@ -4746,17 +4726,6 @@
       "report": "تحرير تقرير حادثة أو مهمة.",
       "inmate_conduct_violations": "تسجيل مخالفات سلوك النزلاء."
     },
-    "pending": {
-      "title": "المستندات المنجزة",
-      "review": "عرض",
-      "currency": "مستند",
-      "footnote_zero": "لا مستندات هذا الشهر",
-      "footnote_one": "مستند واحد هذا الشهر",
-      "footnote_two": "مستندان هذا الشهر",
-      "footnote_few": "{{count}} مستندات هذا الشهر",
-      "footnote_many": "{{count}} مستندًا هذا الشهر",
-      "footnote_other": "{{count}} مستند هذا الشهر"
-    },
     "workspace": {
       "title": "بيئة عملي",
       "total": "الإجمالي",
@@ -4770,12 +4739,51 @@
         "title": "إجراءات سريعة",
         "empty": "لم تُحدّد إجراءات سريعة. اختر تخصيص ثم تعديل الإجراءات لإضافتها."
       },
+      "pending": {
+        "title": "مستنداتي",
+        "monthTitle": "مستنداتي · {{month}}",
+        "approved": "مكتملة",
+        "pending": "قيد الاعتماد",
+        "awaiting_scan": "بانتظار النسخة الموقّعة",
+        "returned": "معادة للتعديل",
+        "rejected": "مرفوضة",
+        "not_submitted": "لم تُرسل",
+        "general": "سجل عام",
+        "empty": "لا توجد سجلات هذا الشهر. أنشئ سجلًا من الخدمات.",
+        "more": "+{{count}} أخرى"
+      },
+      "waiting_approvals": {
+        "title": "بانتظار توقيعك",
+        "reviewTitle": "للمراجعة",
+        "toSign": "للتوقيع",
+        "toReview": "للمراجعة",
+        "reviewMore": "+{{count}} للمراجعة",
+        "oldest": "الأقدم: {{detail}}",
+        "unknownSender": "المرسل غير مسجّل",
+        "empty": "لا توجد مهام معلّقة. افتح سجل الاعتماد لعرض المهام السابقة.",
+        "more": "+{{count}} أخرى"
+      },
+      "sent_approvals": {
+        "title": "مرسلة للاعتماد",
+        "pending": "قيد الانتظار",
+        "needsChanges": "للتعديل: {{count}}",
+        "waitingOn": "بانتظار {{name}}",
+        "unassigned": "تعيين صاحب التوقيع",
+        "oldest": "الأقدم: {{subject}}",
+        "empty": "لا توجد طلبات معلّقة. أرسل سجلًا للاعتماد من السجلات.",
+        "more": "+{{count}} أخرى"
+      },
       "inbox": {
+        "title": "المرسلة إليّ",
         "unread": "غير مقروءة",
         "received": "الواردة",
         "sent": "المرسلة",
         "byPurpose": "الواردة حسب الغرض",
-        "open": "فتح المعاملات المرسلة إليّ"
+        "needAction": "للإجراء: {{count}}",
+        "from": "من {{name}}",
+        "unknownSender": "المرسل غير مسجّل",
+        "empty": "لا توجد سجلات واردة. افتح سجل المراسلات لعرض المراسلات السابقة.",
+        "more": "+{{count}} أخرى"
       },
       "permits": {
         "latest": "الأحدث"
@@ -4790,33 +4798,26 @@
         "deltaSteady": "— ثابت"
       },
       "drafts": {
-        "header": "المسودات",
-        "action": "مراجعة المسودات",
-        "promotion": "ترقية",
-        "leave": "إجازة",
-        "violation": "مخالفة",
-        "deltaWarn": "{{count}} غير مُرسَلة",
-        "deltaSteady": "تم إرسال الكل"
+        "title": "مسوداتي",
+        "action": "المتابعة من السجلات",
+        "continue": "سجلاتك غير المكتملة من جميع الأشهر.",
+        "empty": "لا توجد سجلات غير مكتملة. ابدأ سجلًا من الخدمات."
       },
       "ledger": {
-        "header": "غير المقروء في السجل",
-        "action": "فتح الوارد",
-        "incoming": "وارد",
-        "outgoing": "صادر",
-        "internal": "داخلي",
-        "deltaWarn_zero": "↑ {{count}} اليوم",
-        "deltaWarn_one": "↑ {{count}} اليوم",
-        "deltaWarn_two": "↑ {{count}} اليوم",
-        "deltaWarn_few": "↑ {{count}} اليوم",
-        "deltaWarn_many": "↑ {{count}} اليوم",
-        "deltaWarn_other": "↑ {{count}} اليوم",
-        "deltaSteady": "— ثابت",
-        "metaRecent_zero": "لا شيء خلال آخر 24 ساعة",
-        "metaRecent_one": "واحد خلال آخر 24 ساعة",
-        "metaRecent_two": "اثنان خلال آخر 24 ساعة",
-        "metaRecent_few": "{{count}} خلال آخر 24 ساعة",
-        "metaRecent_many": "{{count}} خلال آخر 24 ساعة",
-        "metaRecent_other": "{{count}} خلال آخر 24 ساعة"
+        "title": "البريد غير المقروء",
+        "unread": "غير مقروءة",
+        "receivedToday": "الوارد اليوم: {{count}}",
+        "empty": "لا يوجد بريد غير مقروء. افتح الوارد لعرض البريد السابق.",
+        "noSubject": "بلا موضوع",
+        "more": "+{{count}} أخرى",
+        "syncOff": "مزامنة البريد متوقفة",
+        "synced": "آخر مزامنة {{age}}",
+        "neverSynced": "لم تتم المزامنة بعد",
+        "syncNow": "مزامنة الآن",
+        "syncing": "جارٍ المزامنة…",
+        "configure": "إعداد",
+        "syncSuccess": "تم الاستيراد: {{imported}}. تم تجاوز المكرر: {{skipped}}.",
+        "syncError": "تعذّرت مزامنة البريد."
       },
       "onLeaveToday": {
         "header": "في إجازة اليوم",
@@ -4831,56 +4832,6 @@
         "thisWeek": "هذا الأسبوع",
         "deltaSoon": "قريباً",
         "deltaSteady": "هادئ"
-      },
-      "recentDocs": {
-        "header": "المستندات الأخيرة",
-        "action": "تصفح",
-        "deltaActive": "نشط",
-        "deltaIdle": "خامل",
-        "metaRecent_zero": "لا شيء في الشريحة الأخيرة",
-        "metaRecent_one": "واحد في الشريحة الأخيرة",
-        "metaRecent_two": "اثنان في الشريحة الأخيرة",
-        "metaRecent_few": "{{count}} في الشريحة الأخيرة",
-        "metaRecent_many": "{{count}} في الشريحة الأخيرة",
-        "metaRecent_other": "{{count}} في الشريحة الأخيرة"
-      },
-      "emailSync": {
-        "header": "مزامنة البريد",
-        "lastSync": "آخر مزامنة",
-        "interval": "الفاصل",
-        "status": "الحالة",
-        "never": "مطلقاً",
-        "minutesAgo_zero": "قبل أقل من دقيقة",
-        "minutesAgo_one": "قبل دقيقة",
-        "minutesAgo_two": "قبل دقيقتين",
-        "minutesAgo_few": "قبل {{count}} دقائق",
-        "minutesAgo_many": "قبل {{count}} دقيقة",
-        "minutesAgo_other": "قبل {{count}} دقيقة",
-        "hoursAgo_zero": "قبل أقل من ساعة",
-        "hoursAgo_one": "قبل ساعة",
-        "hoursAgo_two": "قبل ساعتين",
-        "hoursAgo_few": "قبل {{count}} ساعات",
-        "hoursAgo_many": "قبل {{count}} ساعة",
-        "hoursAgo_other": "قبل {{count}} ساعة",
-        "daysAgo_one": "قبل يوم",
-        "daysAgo_two": "قبل يومين",
-        "daysAgo_few": "قبل {{count}} أيام",
-        "daysAgo_many": "قبل {{count}} يوماً",
-        "daysAgo_other": "قبل {{count}} يوم",
-        "minutesUnit_zero": "0 دقيقة",
-        "minutesUnit_one": "دقيقة",
-        "minutesUnit_two": "دقيقتان",
-        "minutesUnit_few": "{{count}} دقائق",
-        "minutesUnit_many": "{{count}} دقيقة",
-        "minutesUnit_other": "{{count}} دقيقة",
-        "intervalOff": "متوقف",
-        "statusActive": "فعّال",
-        "statusOff": "متوقف",
-        "deltaOff": "متوقف",
-        "deltaLive": "مباشر",
-        "deltaSynced": "متزامن",
-        "actionSync": "زامن الآن",
-        "actionConfigure": "إعداد"
       }
     },
     "services": {
@@ -4926,12 +4877,6 @@
       "endsIn": "تنتهي خلال {{days}} يوم",
       "endsToday": "تنتهي اليوم",
       "endsTomorrow": "تنتهي غدًا"
-    },
-    "recent": {
-      "title": "النشاط الأخير",
-      "documents": "أحدث المستندات",
-      "ledger": "أحدث المراسلات",
-      "empty": "لا يوجد بعد"
     }
   },
   "extraction": {
