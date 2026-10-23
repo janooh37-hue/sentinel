@@ -266,3 +266,74 @@ contains D. Unmapped legacy text shares keep the old employee-text matching, as 
   - backend: `~/.venvs/sentinel/bin/python -m pytest -n 6 <paths>`;
   - frontend: `pnpm -C frontend test <file>`, `pnpm -C frontend exec tsc -b --noEmit`,
     `pnpm -C frontend run lint`.
+
+## Later user decisions (2026-10-23)
+
+- The Employees org tree is read-only. The editor lives on `/permissions?tab=org`. The tab
+  needs `employees.view` plus `employees.edit` or `departments.manage`.
+- The deputies & viewers picker reads
+  `GET /departments/candidate-users` (`departments.manage`), because `GET /auth/users`
+  is admin-only.
+- While scoping is on, the employee link is an authority, so `POST /auth/me/link` by a
+  non-admin returns 403 `LINK_REQUIRES_ADMIN`; only admins set links.
+
+## Evidence (rework R)
+
+Commits:
+
+- `34a26f65`: contract.
+- `29cc82f3`, `e52cafe6`: api types.
+- `330e012b`: services and tests.
+- `f2f66b01`: review fixes. These cover the admin-only link, the 0112 downgrade skipping
+  inactive heads, and clearing labels on rename and delete.
+- `5d8a8d14`: candidate users.
+- `7fc949b3`: frontend.
+- `d23ab837`: frontend review fixes. These cover the editor gating on `employees.view`,
+  actions on orphan roots, keeping inactive grants removable, and refreshing the session.
+- `a7636550`: docs.
+
+Checks, run on dtop at `d23ab837`:
+
+- **Backend full suite**: 3888 passed, 4 failed, 20 skipped, 1 error. The 4 failures are
+  the known `main` failures: `test_inmate_reporter` worklist, `test_0099`,
+  `test_schema_utc_serialization` (book schemas only), and `test_vehicle_reminders`. The
+  error is the flaky unraisable-warning teardown in `test_vehicle_import`.
+- **Frontend full Vitest**: 3438 passed, 2 failed (the known `PermitDocumentVersions`
+  failures). `tsc` is clean, `build` passes, and lint shows only the known
+  `e2e/signature-placement.spec.ts` error.
+
+Reviews:
+
+- **Alembic**: one must-fix, applied.
+- **Scope/security**: one must-fix (self-link escalation) and one should-fix, both applied.
+- **Frontend**: two must-fix and two should-fix, all applied.
+- **i18n-rtl**: run by dept-fe, fixes applied.
+
+Smoke test on a copy of the dev data (port 8799, deleted afterwards). Every check passed:
+
+- **Visible employees per role**, matching ID sets:
+  - admin: 304;
+  - head of A: 74;
+  - deputy of A: 73;
+  - head of nested B: 5;
+  - non-head manager: 16 (branch);
+  - viewer of B: 5;
+  - plain operator: 1.
+- **Exceptions**: placing someone and excluding someone both took effect.
+- **Supervisor move**: moving a person under a supervisor in another department changed
+  their department.
+- **Department send**: reached the head and the deputy; distributing to the
+  sub-department reached its head; the cascading recall worked.
+- **Errors**: 422 `DEPARTMENT_HAS_NO_HEAD` and 403 `LINK_REQUIRES_ADMIN` returned as
+  expected.
+- **Services**: department services follow D10.
+- **UI**: the editor works in English and Arabic at 1366px and 390px; the Employees tree
+  is read-only with a department badge; a user with only `employees.view` is denied.
+
+Dev URL:
+
+- The dev data was downgraded to 0109 with the old migration files, then upgraded with
+  the rewritten 0110–0112.
+- The one test department the user made under the old model was dropped.
+- The dev URL serves `a7636550`.
+- `.tmp/switch-back.ps1` still works for returning to the `dev` branch.
