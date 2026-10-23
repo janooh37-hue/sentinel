@@ -6,11 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user
+from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
 from app.db.models import (
     AppSetting,
     BookCategory,
     Department,
     DepartmentMember,
+    DepartmentService,
     Employee,
     Leave,
     User,
@@ -206,8 +208,13 @@ def test_document_generation_hides_outside_and_missing_employees(scoped_dashboar
 
     from app.api.v1 import documents
 
-    db, client, _, _, _, _ = scoped_dashboard
+    db, client, _, root, _, _ = scoped_dashboard
     db.add(BookCategory(id="HR", name_en="People", name_ar="الأفراد", prefix="HR"))
+    # Department scoping offers no services until the department has a list (D10).
+    db.add_all(
+        DepartmentService(department_id=root.id, service_id=service_id)
+        for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
+    )
     db.commit()
     monkeypatch.setattr(documents, "SessionLocal", sessionmaker(bind=db.get_bind()))
     for employee_id in ("OUT", "MISSING"):

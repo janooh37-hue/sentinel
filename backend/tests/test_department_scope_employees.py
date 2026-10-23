@@ -114,11 +114,19 @@ def test_activity_scopes_all_six_sources_and_query_filters(scoped):
     client, db, user = scoped
     db.add(BookCategory(id="SC", name_en="Scope", prefix="SC"))
     db.flush()
+    # Records are visible through their owning department (P3), so stamp each
+    # one the way creation would: the subject's department, or the head's own.
+    owners = {"G1": 1, "G2": 2, "G3": 3, "GOWN": 1, "GNULL": None}
     for index, employee_id in enumerate(("G1", "G2", "G3", "GOWN", "GNULL"), start=1):
         ref = f"SC-{index:04d}"
         db.add_all(
             [
-                Book(category_id="SC", ref_number=ref, employee_id=employee_id),
+                Book(
+                    category_id="SC",
+                    ref_number=ref,
+                    employee_id=employee_id,
+                    department_id=owners[employee_id],
+                ),
                 Document(
                     employee_id=employee_id,
                     template_id="Certificate",

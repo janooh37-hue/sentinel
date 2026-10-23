@@ -19,9 +19,10 @@ def test_effective_caps_memoized_per_user_instance(db_session, count_queries):
         perm_service.has_capability(db_session, user, "books.view")
         perm_service.has_capability(db_session, user, "leaves.view")
         perm_service.has_capability(db_session, user, "ledger.view")
-    # first resolution = role-caps + user-overrides (2 queries); the next two
-    # checks hit the cached set (0 queries). Not 2 per call.
-    assert q.count <= 2, f"expected memoized caps, got {q.count} queries"
+    # first resolution = role-caps + user-overrides + the department-scoping
+    # switch (3 queries); the next two checks hit the cached set (0 queries).
+    # Not 3 per call.
+    assert q.count <= 3, f"expected memoized caps, got {q.count} queries"
 
 
 def test_effective_caps_still_correct(db_session):

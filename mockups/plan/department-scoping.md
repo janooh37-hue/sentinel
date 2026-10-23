@@ -298,3 +298,68 @@ verification in AR and EN, on desktop and mobile.
   - Out-of-scope `GET /employees/{id}` answers 404. Search for a Finance
     G-number as an Operations member returns 0. The `department_id` filter
     only narrows. Dashboard totals are scoped (67 for the Operations member).
+
+### P2 UI, P3, P4 and P5 (commit feca4968)
+- **P2 UI**:
+  - The switch has a preflight confirm dialog listing the 10 users without a
+    department and the 2 departments without a head on the smoke data. Both
+    on and off show dedicated toasts.
+  - The dashboard names the department in the hero («العمليات» in Arabic).
+  - The org-wide department filter works: Finance gives 1 employee and 0
+    violations.
+  - Coordinator fix: `keepPreviousData`, and the picker is gated on the
+    session scope, so the dashboard no longer blanks while the filter
+    refetches.
+- **P3**:
+  - `0111_book_department` adds the column; a `before_insert` event stamps
+    new Records.
+  - Switch-on backfilled 258 Records, and running it again backfilled 0.
+  - Records: admin 1129. The Operations head and member see 241 (the
+    department's). The Finance member and the user with no department see 0,
+    and an Operations Record answers 404 for them.
+  - Services: Operations offers only its 2 configured services. Unconfigured
+    Finance and the no-department user get none (D10), and the Services page
+    explains why.
+  - Records show the owning department on desktop and mobile.
+- **P4**:
+  - `0112_department_sends`: a send to Operations reaches only its head.
+  - A repeat send is skipped as `already_sent`. A send to Finance, which has
+    no head, gets `422 DEPARTMENT_HAS_NO_HEAD`.
+  - Before distribution the member's inbox is empty, and a non-head asking
+    for options gets 404.
+  - The head distributes to chosen members (only member1 receives it) and to
+    the Field Unit sub-department, whose head receives it. Choosing a
+    non-member gives `422 DISTRIBUTE_NOT_MEMBER`.
+  - The sender's progress nests the child send. A recall cascades and empties
+    every inbox.
+  - UI: the "For Operations" badge, the Distribute dialog (everyone, chosen
+    members, sub-department, keep), toast "Sent: 1 · Skipped: 0", and progress
+    "Head read 1/1 · Members reached 1".
+  - Folder shares move to `department_id`. Unmapped text stays legacy and is
+    never widened. The `0112` downgrade snapshots current members as user
+    shares (creator-only if a share would otherwise empty) after the
+    migration review.
+  - The department delete guard also covers Records, department sends and
+    folder shares, because `departments.id` can be reused.
+- **P5**:
+  - `employees.department` is kept as a label synced from the Department's
+    Arabic name on assign, create, PATCH and rename, ahead of duty-crew
+    reconciliation.
+  - ADR 0007, CONTEXT.md, `docs/permissions-enforcement.md` and README are
+    updated.
+- **Reviews**:
+  - i18n-rtl, every phase: all must-fix items fixed. That covered department
+    error codes, the history label, scoping toasts, Arabic counts, and the
+    distribution error codes.
+  - alembic: 0110 clean. 0111 found the delete guard, now fixed. 0112 found
+    the downgrade fidelity issue, now fixed with visibility round-trip tests.
+  - notification-template: clean. Non-General sends never carry the subject
+    or names.
+- **Checks**:
+  - `ruff check .` clean, format check clean on 59 changed Python files, and
+    a single Alembic head `0112`.
+  - mypy: 35 errors on the branch against 36 on unchanged `origin/main`, all
+    in book, send, Word and link modules.
+  - `tsc -b` clean.
+  - `eslint .` has 1 error, in `e2e/signature-placement.spec.ts`, which this
+    branch does not touch.
