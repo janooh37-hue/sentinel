@@ -336,6 +336,7 @@ describe('reference picker and thread', () => {
 
 describe('send with references', () => {
   it('initializes reply defaults on opening, defaults references on, sends opt-out and reports skip reasons', async () => {
+    vi.mocked(toast.loading).mockReturnValueOnce('send-toast')
     vi.mocked(api.getBookThread).mockResolvedValue([REFERENCE])
     vi.spyOn(api, 'listRecipientCandidates').mockResolvedValue([
       { id: 12, name: 'Recipient', name_ar: 'المستلم', role: 'operator', has_secret_clearance: false },
@@ -355,7 +356,10 @@ describe('send with references', () => {
     await waitFor(() => expect(send).toHaveBeenCalledWith(7, {
       user_ids: [12], purpose: 'reply', note: null, make_directed: false, include_references: false,
     }))
+    expect(toast.loading).toHaveBeenCalledWith('Sending record…')
     await waitFor(() => expect(toast.info).toHaveBeenCalledWith('Nothing new was sent', {
+      id: 'send-toast',
+      reference: BOOK.ref_number,
       description: expect.stringContaining('Reference deliveries: 1 sent, 2 skipped.'),
     }))
     const description = vi.mocked(toast.info).mock.calls[0]?.[1]?.description
