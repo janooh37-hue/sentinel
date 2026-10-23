@@ -38,6 +38,7 @@ import {
   type DebugMachine,
 } from '@/lib/api'
 import { copyToClipboard } from '@/lib/clipboard'
+import i18n from '@/lib/i18n'
 
 const STATUS_STYLE: Record<DebugCheck['status'], { Icon: typeof CheckCircle2; cls: string }> = {
   ok: { Icon: CheckCircle2, cls: 'text-success bg-success-soft' },
@@ -76,7 +77,7 @@ function fmtDuration(s: number): string {
 
 async function copy(text: string, ok: string): Promise<void> {
   if (await copyToClipboard(text)) toast.success(ok)
-  else toast.error('Clipboard unavailable')
+  else toast.error(i18n.t('common.copyFailed'))
 }
 
 // ── AI helpers ───────────────────────────────────────────────────────────────

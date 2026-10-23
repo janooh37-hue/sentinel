@@ -57,7 +57,7 @@ export function PermissionRequestDialog({
     },
     onError: () => {
       // Non-2xx failure — surface a generic error but keep dialog open
-      toast.error(t('common.error', { defaultValue: 'Something went wrong. Try again.' }))
+      toast.error(t('common.error'))
     },
   })
 

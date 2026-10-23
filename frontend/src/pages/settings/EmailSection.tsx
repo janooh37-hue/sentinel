@@ -134,7 +134,7 @@ export function EmailSection(): React.JSX.Element {
     onSuccess: (account, { submittedEdits }) => {
       qc.setQueryData(['email-account'], account)
       setFormEdits((current) => discardSavedEdits(current, submittedEdits))
-      toast.success(t('settings.email.saved', { defaultValue: 'Email settings saved' }))
+      toast.success(t('settings.email.saved'))
       void qc.invalidateQueries({ queryKey: ['email-account'] })
     },
     onError: (err) =>
@@ -146,7 +146,7 @@ export function EmailSection(): React.JSX.Element {
     mutationFn: () => api.testEmailConnection(),
     onSuccess: (_data, _vars, toastId) =>
       toast.success(
-        t('settings.email.testOk', { defaultValue: 'Connection successful' }),
+        t('settings.email.testOk'),
         { id: toastId },
       ),
     onError: (err, _vars, toastId) =>
@@ -175,7 +175,7 @@ export function EmailSection(): React.JSX.Element {
   const deleteMutation = useMutation({
     mutationFn: () => api.deleteEmailAccount(),
     onSuccess: () => {
-      toast.success(t('settings.email.deleted', { defaultValue: 'Email account removed' }))
+      toast.success(t('settings.email.deleted'))
       qc.setQueryData(['email-account'], null)
       setFormEdits({})
       void qc.invalidateQueries({ queryKey: ['email-account'] })

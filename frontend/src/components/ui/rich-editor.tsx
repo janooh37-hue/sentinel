@@ -212,7 +212,7 @@ function LoadTemplateDialog({ open, onOpenChange, onLoad }: LoadTemplateDialogPr
     mutationFn: ({ id, name }: { id: number; name: string }) =>
       api.updateEditorTemplate(id, { name }),
     onSuccess: () => {
-      toast.success(t('editor.template.renamedToast', { defaultValue: 'Template renamed' }))
+      toast.success(t('editor.template.renamedToast'))
       void qc.invalidateQueries({ queryKey: ['editor-templates'] })
       setRenamingId(null)
       setRenameValue('')

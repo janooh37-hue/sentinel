@@ -279,6 +279,7 @@
     "updatedToast": "Updated",
     "deletedToast": "Deleted",
     "errorToast": "Something went wrong",
+    "error": "Something went wrong. Try again.",
     "loadError": "Couldn't load this. Check your connection and try again.",
     "copyFailed": "Could not copy to clipboard. Try again.",
     "retry": "Retry",
@@ -316,6 +317,7 @@
       "empty": "No saved templates yet. Save your first one from the editor.",
       "savedToast": "Template saved: {{name}}",
       "deletedToast": "Template deleted",
+      "renamedToast": "Template renamed",
       "confirmDelete": "Delete template \"{{name}}\"?"
     },
     "table": {
@@ -3496,6 +3498,9 @@
     "email": {
       "heading": "Email integration",
       "testing": "Testing connection…",
+      "saved": "Email settings saved",
+      "testOk": "Connection successful",
+      "deleted": "Email account removed",
       "syncOk": "Imported {{imported}}, skipped {{skipped}}",
       "description": "Connect an IMAP mailbox so incoming and outgoing messages are auto-imported into the General Ledger. Password is encrypted locally on this machine.",
       "syncIntervalSuffix": "minutes (0 to disable)",

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createInstance } from 'i18next'
 
 import ar from '@/locales/ar.json'
 import en from '@/locales/en.json'
@@ -77,6 +78,42 @@ describe('callsite toast copy', () => {
     for (const bundle of [en, ar]) {
       expect(bundle.settings.email.syncOk).toContain('{{imported}}')
       expect(bundle.settings.email.syncOk).toContain('{{skipped}}')
+    }
+  })
+})
+
+const FALLBACK_MESSAGES = [
+  'common.error', 'common.copyFailed', 'editor.template.renamedToast',
+  'settings.email.saved', 'settings.email.testOk', 'settings.email.deleted',
+]
+
+describe('toast fallback and plural coverage', () => {
+  for (const key of FALLBACK_MESSAGES) {
+    it(`${key} has translated copy with a short first clause`, () => {
+      const english = message(en, key)
+      const arabic = message(ar, key)
+      expect(english).toBeTruthy()
+      expect(arabic).toMatch(/\p{Script=Arabic}/u)
+      expect(arabic).not.toBe(english)
+      for (const text of [english, arabic]) {
+        expect(text.split(/[.!؟…]/u)[0].trim().length).toBeLessThanOrEqual(32)
+      }
+    })
+  }
+
+  it('resolves every Arabic employee-transfer plural without falling back to English', async () => {
+    const instance = createInstance()
+    await instance.init({ lng: 'ar', fallbackLng: 'en', resources: { en: { translation: en }, ar: { translation: ar } } })
+    const rules = new Intl.PluralRules('ar')
+    for (const count of [0, 1, 2, 3, 11, 100]) {
+      const key = `dutyLocations.transfer.movedNoBook_${rules.select(count)}`
+      const translated = message(ar, key)
+      expect(translated).toMatch(/\p{Script=Arabic}/u)
+      const rendered = instance.t('dutyLocations.transfer.movedNoBook', { count })
+      expect(rendered).toBe(translated.replaceAll('{{count}}', String(count)))
+      expect(rendered).not.toMatch(/[A-Za-z]/)
+      expect(rendered.length).toBeLessThanOrEqual(32)
+      expect(instance.t('dutyLocations.transfer.movedNoBook', { count, lng: 'en' })).toBeTruthy()
     }
   })
 })
