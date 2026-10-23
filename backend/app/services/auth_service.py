@@ -664,10 +664,13 @@ def resolve_session(db: Session, raw_token: str) -> User | None:
     """Return the active user for a cookie token, or ``None``."""
     if not raw_token:
         return None
+    return resolve_session_hash(db, security.hash_token(raw_token))
+
+
+def resolve_session_hash(db: Session, token_hash: str) -> User | None:
+    """Resolve a stored token hash using the canonical session eligibility checks."""
     row = db.execute(
-        select(AuthSessionModel).where(
-            AuthSessionModel.token_hash == security.hash_token(raw_token)
-        )
+        select(AuthSessionModel).where(AuthSessionModel.token_hash == token_hash)
     ).scalar_one_or_none()
     if row is None or row.revoked or row.expires_at < _utcnow():
         return None
@@ -956,6 +959,7 @@ __all__ = [
     "require_user",
     "reset_password",
     "resolve_session",
+    "resolve_session_hash",
     "revoke_session",
     "revoke_user_sessions",
     "set_role",
