@@ -84,3 +84,14 @@ class ItemPermitListResponse(BaseModel):
     items: list[ItemPermitRead]
     total: int
     limit: int
+
+
+class ItemPermitSummary(BaseModel):
+    """Approval-state counts in the same zone scope as the item register."""
+
+    none: int = 0
+    pending: int = 0
+    awaiting_scan: int = 0
+    approved: int = 0
+    returned: int = 0
+    rejected: int = 0

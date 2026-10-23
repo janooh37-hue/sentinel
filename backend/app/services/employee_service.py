@@ -21,7 +21,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
-from app.db.models import Employee
+from app.db.models import Employee, Violation
 from app.schemas.employee import (
     EMPLOYEE_STATUS_ACTIVE,
     EMPLOYEE_STATUS_RESIGNED,
@@ -49,6 +49,7 @@ def list_employees(
     department: str | None = None,
     duty_unit: str | None = None,
     pending: bool = False,
+    open_violations: bool = False,
     limit: int = LIST_DEFAULT_LIMIT,
     offset: int = 0,
 ) -> tuple[list[Employee], int]:
@@ -105,6 +106,11 @@ def list_employees(
             Employee.pending_status.is_not(None),
             Employee.end_date.is_not(None),
         )
+        stmt = stmt.where(clause)
+        count_stmt = count_stmt.where(clause)
+        non_q_clauses.append(clause)
+    if open_violations:
+        clause = Employee.violations.any(Violation.status == "Open")
         stmt = stmt.where(clause)
         count_stmt = count_stmt.where(clause)
         non_q_clauses.append(clause)

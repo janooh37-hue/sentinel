@@ -119,6 +119,7 @@ def list_employees(
     department: str | None = None,
     duty_unit: str | None = None,
     pending: bool = False,
+    open_violations: bool = False,
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
     offset: int = Query(0, ge=0),
 ) -> EmployeeListResponse:
@@ -129,6 +130,7 @@ def list_employees(
         department=department,
         duty_unit=duty_unit,
         pending=pending,
+        open_violations=open_violations,
         limit=limit,
         offset=offset,
     )

@@ -16,7 +16,9 @@ from app.schemas.item_permit import (
     ItemPermitCreate,
     ItemPermitListResponse,
     ItemPermitRead,
+    ItemPermitSummary,
     ItemPermitUpdate,
+    ItemPermitZone,
 )
 from app.services import item_permit_service
 
@@ -28,15 +30,27 @@ def list_item_permits(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("permits.view"))],
     q: str | None = None,
+    zone: ItemPermitZone | None = None,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> ItemPermitListResponse:
-    rows, total = item_permit_service.list_item_permits(db, q=q, limit=limit, offset=offset)
+    rows, total = item_permit_service.list_item_permits(
+        db, q=q, zone=zone, limit=limit, offset=offset
+    )
     return ItemPermitListResponse(
         items=[item_permit_service.to_read(r, db=db, user=user) for r in rows],
         total=total,
         limit=limit,
     )
+
+
+@router.get("/summary", response_model=ItemPermitSummary)
+def item_permit_summary(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("permits.view"))],
+    zone: ItemPermitZone | None = None,
+) -> ItemPermitSummary:
+    return item_permit_service.summary(db, user=user, zone=zone)
 
 
 @router.post("", response_model=ItemPermitRead, status_code=status.HTTP_201_CREATED)
