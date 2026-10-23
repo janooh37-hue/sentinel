@@ -50,12 +50,16 @@ description: "Fix bugs and add features on the laptop dev channel (branch dev, r
 - `.docx`: edit XML; never resave in Word.
 - Other sessions' hunks: leave alone.
 
-## Work 
+## Work
 
-- Always Auto-plan 
-- Use Herdr skill and send work to another agent
-- Give Agent instruction to use subagents to keep context window clean
-- if task is large you can delegate to multiple agent in parallel 
-- keep your context window clean by delegating 
-- close the tab or pane of the agent work after he report back to you and he is done working 
-- after done working create a PR in github 
+- Always auto-plan.
+- Writers run on the desktop (`dtop`, Linux, 32 GB) via `herdr --machine dtop`; the laptop keeps merge, publish, dev URL/data, Word/document checks, and the PR. Never copy dev data or `.env` to the desktop; leave its other worktrees and agents alone.
+- Setup per writer: from the dev worktree `git push desk dev`; then `ssh dtop git -C ~/Projects/sentinel worktree add .worktrees/<name> -b <branch> dev`; `herdr --machine dtop tab create --workspace <id> --cwd <worktree> --label <name> --no-focus`; `herdr --machine dtop agent start <name> --kind omp --pane <returned-pane> -- --model <model>`. Cheap model to explore, strong model to review. Tell each agent to use subagents.
+- Long jobs: pass `-- --goal "Read .tmp/brief-<name>.md in this worktree and complete it exactly, including the report step."` with the brief placed there first. Goal mode starts working at once, so `agent start` may report the name lost; fix it with `herdr --machine dtop agent rename <pane> <name>`, then `agent wait`.
+- Large task: parallel writers, one worktree and branch each, no shared files.
+- Brief: goal, owned files, edits allowed or not, check to run (`~/.venvs/sentinel/bin/python -m pytest <narrowest>`), commit on the branch, and "write your report to `<worktree>/.tmp/handoff-<name>.md` and reply with the path only".
+- Reports are claims: `ssh dtop cat` the handoff, `git fetch desk <branch>`, read the diff before merging into `dev`.
+- Small fixes go back to the same agent; bigger follow-ups go to a fresh agent briefed with the handoff file. After merging: `herdr --machine dtop tab close <tab>` and remove the desktop worktree and branch.
+- Tests: writers run the narrowest pytest; after merging, `git push desk dev` and run the full suite once on the desktop with `-n 6` in a detached worktree of `dev`. Requirements changed → `uv pip install -p ~/.venvs/sentinel/bin/python -r requirements.txt pytest-xdist` there first.
+- Before heavy runs check `ssh dtop free -g`; if a stray heavy process (ComfyUI, old `omp ps` services) leaves under ~8 GB available, ask the user to kill it, then stop it (`omp ps stop <name> --dir <project>` for omp-supervised ones).
+- When done, create a PR on GitHub.
