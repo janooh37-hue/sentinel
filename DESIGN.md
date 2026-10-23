@@ -1555,6 +1555,11 @@ measurements reserve whole rows after each resize or font-scale change.
 `WidgetProps.rows` limits preview fetching/candidates, not measured capacity;
 remainder links subtract only rows actually displayed.
 
+Glance and summary secondary text stays on one truncated line with complete
+tooltip text. My documents shows at most one secondary state in glance and
+two legend states in summary; +N opens that month's complete Records breakdown.
+Frame titles also stay on one line while preserving the full accessible name.
+
 - **My documents:** title includes the localized month from `my_records.month`.
   The large completed count is `my_records.approved`, not generated-document
   activity. Nonzero approval states form the segmented bar and linked legend.

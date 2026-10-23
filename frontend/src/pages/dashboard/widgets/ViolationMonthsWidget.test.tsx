@@ -151,6 +151,7 @@ describe('ViolationMonthsWidget', () => {
     expect(await screen.findByText('2')).toBeInTheDocument()
     const ready = screen.getByRole('link', { name: 'July 2026 ready to close' })
     expect(ready).toHaveAttribute('href', '/services/inmate_conduct_violations?mode=stats&stats_month=2026-07')
+    expect(ready).toHaveAttribute('title', 'July 2026 ready to close')
     expect(screen.queryByText(/7 rows/)).not.toBeInTheDocument()
   })
 

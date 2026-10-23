@@ -128,6 +128,21 @@ it('omits zero segments and keeps its empty state instructional', async () => {
   expect(screen.queryByText('in approval')).not.toBeInTheDocument()
 })
 
+it.each(['glance', 'summary'] as const)('keeps the %s legend bounded with a full-breakdown destination', async (tier) => {
+  mount(<MyDocumentsWidget tier={tier} rows={0} />)
+  const remainder = await screen.findByRole('link', { name: '+4 more' })
+  expect(remainder).toHaveTextContent('+4')
+  expect(remainder).toHaveAttribute('href', '/books?mine=1&from=2026-10-01&to=2026-10-31')
+  expect(screen.getByTitle('3 in approval')).toHaveAttribute('href', '/books?mine=1&status=pending&from=2026-10-01&to=2026-10-31')
+  expect(screen.queryByText('not submitted')).not.toBeInTheDocument()
+})
+
+it('retains the complete compact draft description as a tooltip', async () => {
+  mount(<MyDraftsWidget tier="glance" rows={0} />)
+  const description = await screen.findByText(i18n.t('dashboard.widgets.drafts.continue'))
+  expect(description).toHaveAttribute('title', description.textContent)
+})
+
 it('uses pending sent scope for the metric, View all and remainder, with a distinct returned chip', async () => {
   const { unmount } = mount(<SentApprovalsWidget tier="summary" rows={2} />)
   const to = approvalQueueUrl({ tab: 'sent', status: 'pending', sort: 'newest', page: 1 })

@@ -45,16 +45,16 @@ export function ViolationMonthsWidget({ tier, rows }: WidgetProps): React.JSX.El
           <button type="button" className={`${linkClass} self-start`} onClick={() => void query.refetch()}>{t('common.retry')}</button>
         </div>
       ) : total === 0 ? (
-        <p className="text-[0.75em] text-muted-foreground">{t('dashboard.widgets.violation_months.empty')}</p>
+        <p className="truncate text-[0.75em] text-muted-foreground" title={t('dashboard.widgets.violation_months.empty')}>{t('dashboard.widgets.violation_months.empty')}</p>
       ) : !list ? (
-        <div className="flex min-h-0 flex-col gap-2">
-          <p className="text-3xl font-semibold tabular-nums text-foreground">{total}<span className="ms-2 text-xs font-normal text-muted-foreground">{t('dashboard.widgets.violation_months.monthsOpen', { count: total })}</span></p>
+        <div className="flex min-h-0 min-w-0 flex-col gap-2">
+          <p className="flex min-w-0 shrink-0 items-baseline gap-2 text-3xl font-semibold tabular-nums text-foreground">{total}<span className="min-w-0 truncate text-xs font-normal text-muted-foreground" title={t('dashboard.widgets.violation_months.monthsOpen', { count: total })}>{t('dashboard.widgets.violation_months.monthsOpen', { count: total })}</span></p>
           {readyMonth ? (
-            <Link className={`${linkClass} self-start text-success`} to={inmateRegisterHref(readyMonth.year, readyMonth.month)}>
+            <Link className={`${linkClass} block w-full min-w-0 shrink-0 truncate text-success`} title={t('dashboard.widgets.violation_months.readyMonth', { month: formatRegisterMonth(readyMonth.year, readyMonth.month, locale) })} to={inmateRegisterHref(readyMonth.year, readyMonth.month)}>
               {t('dashboard.widgets.violation_months.readyMonth', { month: formatRegisterMonth(readyMonth.year, readyMonth.month, locale) })}
             </Link>
           ) : (
-            <p className="text-[0.7em] text-muted-foreground">{t('dashboard.widgets.violation_months.pending')}</p>
+            <p className="shrink-0 truncate text-[0.7em] text-muted-foreground" title={t('dashboard.widgets.violation_months.pending')}>{t('dashboard.widgets.violation_months.pending')}</p>
           )}
         </div>
       ) : (

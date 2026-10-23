@@ -68,6 +68,10 @@ describe('PermitsWidget', () => {
     if (tier === 'glance') {
       expect(screen.getByRole('link', { name: /2\s*Expiring/ })).toHaveAttribute('href', '/permits?state=expiring')
       expect(screen.getByRole('link', { name: /610/ })).toHaveAttribute('href', '/permits?tab=items')
+      const itemLink = screen.getByRole('link', { name: /610/ })
+      expect(itemLink).toHaveAttribute('title', itemLink.textContent)
+      const expiring = screen.getByRole('link', { name: /2\s*Expiring/ })
+      expect(expiring).toHaveAttribute('title', '2 Expiring soon')
     } else {
       expect(screen.getByRole('link', { name: /601\s*Pending approval/ })).toHaveAttribute('href', '/permits?tab=items&istatus=pending')
       expect(screen.getByRole('link', { name: /3\s*Awaiting signed copy/ })).toHaveAttribute('href', '/permits?tab=items&istatus=awaiting_scan')

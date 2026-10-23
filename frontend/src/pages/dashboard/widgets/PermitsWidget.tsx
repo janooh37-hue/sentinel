@@ -121,24 +121,24 @@ export function PermitsWidget({ tier, rows }: WidgetProps): React.JSX.Element {
       ) : securityTotal + itemTotal === 0 ? (
         <Link className={cn(linkCls, 'text-[0.75em]')} to={to()}>{t('dashboard.widgets.permits.empty')}</Link>
       ) : tier === 'glance' ? (
-        <div className="flex min-h-0 flex-1 flex-col justify-between gap-1">
-          <Link to={to({ state: 'active' })} className={cn(linkCls, 'text-foreground')}>
-            <b className="font-mono text-[1.65em] leading-none tabular-nums">{summary?.active}</b>{' '}
-            <span className="text-[0.7em]">{t('permits.summary.active')}</span>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-between gap-1">
+          <Link to={to({ state: 'active' })} className={cn(linkCls, 'flex min-w-0 items-baseline gap-1 text-foreground')} title={`${summary?.active} ${t('permits.summary.active')}`}>
+            <b className="shrink-0 font-mono text-[1.65em] leading-none tabular-nums">{summary?.active}</b>
+            <span className="truncate text-[0.7em]">{t('permits.summary.active')}</span>
           </Link>
-          <div className="flex flex-wrap justify-between gap-x-2 text-[0.65em]">
-            <Link to={to({ state: 'expiring' })} className={cn(linkCls, 'text-warning')}>
+          <div className="flex min-w-0 justify-between gap-x-2 text-[0.65em]">
+            <Link to={to({ state: 'expiring' })} className={cn(linkCls, 'min-w-0 flex-1 truncate text-warning')} title={`${summary?.expiring} ${t('permits.summary.expiring')}`}>
               {summary?.expiring} {t('permits.summary.expiring')}
             </Link>
-            <Link to={to({ tab: 'items' })} className={linkCls}>{t('dashboard.widgets.permits.itemCount', { count: itemTotal })}</Link>
+            <Link to={to({ tab: 'items' })} className={cn(linkCls, 'min-w-0 flex-1 truncate')} title={t('dashboard.widgets.permits.itemCount', { count: itemTotal })}>{t('dashboard.widgets.permits.itemCount', { count: itemTotal })}</Link>
           </div>
         </div>
       ) : (
         <>
-          <div className={cn('grid shrink-0 gap-1', tier === 'tall' ? 'grid-cols-1' : 'grid-cols-2 gap-x-3')}>
+          <div className={cn('grid shrink-0 gap-1 leading-tight', tier === 'tall' ? 'grid-cols-1' : 'grid-cols-2 gap-x-3')}>
             <div role="group" aria-label={t('permits.tabs.security')} className="grid grid-cols-2 gap-x-2 gap-y-0.5">
               {STATUSES.map((state) => (
-                <Link key={state} to={to({ state })} className={cn(linkCls, 'flex min-w-0 items-baseline gap-1 text-[0.65em]')}>
+                <Link key={state} to={to({ state })} title={`${summary?.[state]} ${t(`permits.summary.${state}`)}`} className={cn(linkCls, 'flex min-w-0 items-baseline gap-1 text-[0.65em]')}>
                   <b className="font-mono text-[1.25em] tabular-nums">{summary?.[state]}</b>
                   <span className="truncate">{t(`permits.summary.${state}`)}</span>
                 </Link>
@@ -146,7 +146,7 @@ export function PermitsWidget({ tier, rows }: WidgetProps): React.JSX.Element {
             </div>
             <div role="group" aria-label={t('permits.tabs.items')} className="grid grid-cols-2 gap-x-2 gap-y-0.5 border-s border-hairline ps-2">
               {APPROVALS.map((state) => (
-                <Link key={state} to={to({ tab: 'items', istatus: state })} className={cn(linkCls, 'flex min-w-0 items-baseline gap-1 text-[0.6em]')}>
+                <Link key={state} to={to({ tab: 'items', istatus: state })} title={`${itemSummary?.[state]} ${state === 'awaiting_scan' ? t('dashboard.widgets.permits.awaitingScan') : t(`permits.approval.${state}`)}`} className={cn(linkCls, 'flex min-w-0 items-baseline gap-1 text-[0.6em]')}>
                   <b className="font-mono text-[1.25em] tabular-nums">{itemSummary?.[state]}</b>
                   <span className="truncate">{state === 'awaiting_scan' ? t('dashboard.widgets.permits.awaitingScan') : t(`permits.approval.${state}`)}</span>
                 </Link>
