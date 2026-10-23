@@ -386,5 +386,17 @@ verification in AR and EN, on desktop and mobile.
   a disabled department with no head, and department-only sends.
 - **Cleanup**: the smoke servers and the dev database copy in `.tmp`, the
   baseline worktree, and the dtop worktrees and branches were removed.
-- **Not done, waiting for the user**: merging into `dev` and publishing to
-  the dev URL, pushing to `origin`, and opening the PR.
+- PR #258 is open (CI `backend-static` passes).
+
+### Dev URL (2026-10-23, user-approved temporary swap)
+- The `dev` branch could not be synced: it is 124 commits behind `main`, and
+  rebasing its 114 unpromoted commits conflicts on the first commit. The user
+  chose a temporary swap instead.
+- Port 8765 (the dev URL) now runs this branch from
+  `.worktrees/department-scoping` with the dev `.env`. The dev data was
+  migrated `0109_book_folder_shares` → `0112_department_sends`.
+- A backup taken first is at
+  `C:\Users\GSSG\gssg-dev-data\gssg.db.pre-departments.bak`.
+- Switch back with `.tmp/switch-back.ps1` in this worktree. It stops the
+  server, downgrades to `0109`, removes the borrowed `.env` and build output,
+  and restarts the `dev` channel. The `dev` branch was not modified.
