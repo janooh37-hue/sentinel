@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import type { ApprovalSummaryResponse } from '@/lib/api'
@@ -41,11 +43,30 @@ describe('available widget catalog', () => {
     expect(widgetRegistry.workforce_pulse.available({ has: () => true, capabilitiesLoading: true })).toBe(false)
     expect(widgetRegistry.workforce_pulse.available({ has: () => false })).toBe(false)
   })
-  it('groups only the supplied available entries, marking visible widgets on board', () => {
-    render(<AddWidgetsPanel entries={[{ id: 'pending', title: 'My documents', source: 'records' }, { id: 'ledger', title: 'Unread mail', source: 'ledger' }]} widgets={DEFAULT_LAYOUT.widgets} onAdd={vi.fn()} isSaving={false} />)
-    expect(screen.getAllByRole('listitem')).toHaveLength(2)
-    expect(within(screen.getByRole('region', { name: 'Records' })).getByRole('button', { name: 'My documents is on the board' })).toBeDisabled()
-    expect(within(screen.getByRole('region', { name: 'Mail' })).getByRole('button', { name: 'Unread mail is on the board' })).toBeDisabled()
+  it('lists available widgets first and moves an added widget to the collapsed dashboard list', async () => {
+    const user = userEvent.setup()
+    function Catalog() {
+      const [widgets, setWidgets] = useState(DEFAULT_LAYOUT.widgets)
+      return <AddWidgetsPanel
+        entries={[{ id: 'pending', title: 'My documents', source: 'records' }, { id: 'violations', title: 'Open violations', source: 'records' }]}
+        widgets={widgets}
+        onAdd={(id) => setWidgets((current) => current.map((item) => item.id === id ? { ...item, visible: true } : item))}
+        isSaving={false}
+      />
+    }
+    render(<Catalog />)
+    const available = screen.getByRole('region', { name: 'Available to add (1)' })
+    expect(within(available).getByRole('button', { name: 'Add Open violations' })).toBeEnabled()
+    expect(within(available).queryByText('My documents')).not.toBeInTheDocument()
+    const onDashboard = screen.getByText('On your dashboard (1)')
+    expect(available.compareDocumentPosition(onDashboard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByText('My documents')).not.toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Add Open violations' }))
+    expect(screen.queryByRole('button', { name: 'Add Open violations' })).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Available to add (0)' })).toHaveTextContent('All available widgets are on your dashboard.')
+    await user.click(screen.getByText('On your dashboard (2)'))
+    expect(screen.getByText('Open violations')).toBeVisible()
+    expect(screen.getByText('My documents')).toBeVisible()
   })
 })
 
@@ -54,7 +75,7 @@ describe('widget frame', () => {
     render(<MemoryRouter><WidgetFrame title="Test widget" count={0} viewAllTo="/books"><p>Body</p></WidgetFrame></MemoryRouter>)
     const frame = screen.getByRole('region', { name: 'Test widget' })
     expect(within(frame).getByText('0')).toBeInTheDocument()
-    expect(within(frame).getByRole('link', { name: 'View All' })).toHaveAttribute('href', '/books')
+    expect(within(frame).getByRole('link', { name: 'View all: Test widget' })).toHaveAttribute('href', '/books')
     expect(within(frame).getByText('Body')).toBeInTheDocument()
   })
 })
@@ -62,7 +83,7 @@ describe('widget frame', () => {
 describe('quick actions at every final box tier', () => {
   function actions(tier: WidgetTier, w: number, h: number, cols: number, has = () => true) {
     const layout = { ...DEFAULT_LAYOUT, quick_actions: DEFAULT_LAYOUT.quick_actions.map((item, index) => ({ ...item, visible: index < 8 })) }
-    return render(<MemoryRouter><DashboardRuntimeContext.Provider value={{ layout, box: { w, h, cols }, has, onNavigate: vi.fn(), onOpenCoverage: vi.fn() }}><QuickActionsWidget tier={tier} rows={h >= 2 ? 4 : 0} /></DashboardRuntimeContext.Provider></MemoryRouter>)
+    return render(<MemoryRouter><DashboardRuntimeContext.Provider value={{ layout, editing: false, box: { w, h, cols }, has, onNavigate: vi.fn(), onOpenCoverage: vi.fn() }}><QuickActionsWidget tier={tier} rows={h >= 2 ? 4 : 0} /></DashboardRuntimeContext.Provider></MemoryRouter>)
   }
   it.each<[WidgetTier, number, number, number, number]>([
     ['glance', 1, 1, 4, 2], ['summary', 2, 1, 4, 4], ['list', 2, 2, 4, 8],

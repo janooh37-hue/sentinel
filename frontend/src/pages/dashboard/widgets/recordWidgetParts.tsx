@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { WIDGET_SUPPORT } from '@/components/dashboard/WidgetFrame'
 
 export const INLINE_LINK = 'rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-export const RECORD_ROW = 'flex min-w-0 items-center gap-2 rounded-md py-1 text-[0.72em] leading-tight hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
+export const RECORD_ROW = `flex min-w-0 items-center gap-2 rounded-md py-1 ${WIDGET_SUPPORT} hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring`
 export const BIG_NUMBER = 'font-mono text-[2em] font-bold leading-none tracking-tight text-foreground tabular-nums'
 
 export function WidgetFeedback({ pending, retry }: { pending?: boolean; retry: () => unknown }): React.JSX.Element {
@@ -22,6 +23,6 @@ export function WidgetFeedback({ pending, retry }: { pending?: boolean; retry: (
 
 export function MoreRecords({ count, to, labelKey }: { count: number; to: string; labelKey: string }): React.JSX.Element | null {
   const { t } = useTranslation()
-  return count > 0 ? <Link to={to} className={`${INLINE_LINK} shrink-0 pt-1 text-[0.7em] font-medium text-primary`}>{t(labelKey, { count })}</Link> : null
+  return count > 0 ? <Link to={to} className={`${INLINE_LINK} ${WIDGET_SUPPORT} shrink-0 pt-1 font-medium text-primary`}>{t(labelKey, { count })}</Link> : null
 }
 

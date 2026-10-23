@@ -121,10 +121,10 @@ it('links every nonzero monthly state and approved row to matching Records filte
   expect(screen.queryByText('99')).not.toBeInTheDocument()
 })
 
-it('omits zero segments and keeps its empty state instructional', async () => {
+it('omits zero segments and offers a record-creation action', async () => {
   vi.mocked(api.getDashboardSummary).mockResolvedValue({ ...SUMMARY, my_records: { ...SUMMARY.my_records!, approved: 0, pending: 0, awaiting_scan: 0, returned: 0, rejected: 0, not_submitted: 0, latest_approved: [] } })
   mount(<MyDocumentsWidget tier="summary" rows={3} />)
-  expect(await screen.findByText(/Create a record from Services/)).toBeInTheDocument()
+  expect(await screen.findByRole('link', { name: 'Start a record' })).toHaveAttribute('href', '/services')
   expect(screen.queryByText('in approval')).not.toBeInTheDocument()
 })
 
@@ -179,7 +179,7 @@ it.each(TIERS)('uses the review bucket for review-only staff at %s tier', async 
 it('keeps idle review-only staff in an empty received queue instead of sent', async () => {
   vi.mocked(api.getApprovalSummary).mockResolvedValue({ ...APPROVALS, available_received_kinds: ['reviewer'], signature: { count: 0 }, review: { count: 0 } })
   mount(<WaitingApprovalsWidget tier="list" rows={3} />)
-  expect(await screen.findByText(/No pending assignments/)).toBeInTheDocument()
+  expect(await screen.findByRole('link', { name: 'Open approvals' })).toHaveAttribute('href', approvalQueueUrl({ tab: 'received', kind: 'review', status: 'pending', sort: 'newest', page: 1 }))
   expect(screen.getByRole('link', { name: /view all/i })).toHaveAttribute('href', approvalQueueUrl({ tab: 'received', kind: 'review', status: 'pending', sort: 'newest', page: 1 }))
   expect(api.listApprovalLog).not.toHaveBeenCalled()
 })
@@ -204,6 +204,37 @@ it('uses the own-drafts count and same filtered destination at every tier', asyn
   expect(await screen.findByRole('link', { name: '8' })).toHaveAttribute('href', '/books?mine=1&drafts=1')
   expect(screen.getByRole('link', { name: /view all/i })).toHaveAttribute('href', '/books?mine=1&drafts=1')
   expect(api.listBooks).not.toHaveBeenCalled()
+})
+
+it.each(['en', 'ar'])('links empty record widgets directly to their destinations in %s', async (language) => {
+  await i18n.changeLanguage(language)
+  vi.mocked(api.getDashboardSummary).mockResolvedValue({
+    ...SUMMARY, my_records: { ...SUMMARY.my_records!, drafts: 0 }, unread_mail: { count: 0, latest: [] },
+  })
+  vi.mocked(api.getInboxSummary).mockResolvedValue({ ...INBOX, unread: 0, received: 0 })
+  vi.mocked(api.getApprovalSummary).mockResolvedValue({ ...APPROVALS, sent: { count: 0 }, returned_count: 0 })
+  for (const [Component, key, to] of [
+    [MyDraftsWidget, 'drafts', '/services'],
+    [InboxWidget, 'inbox', '/ledger?tab=books&scope=incoming'],
+    [SentApprovalsWidget, 'sent_approvals', approvalQueueUrl({ tab: 'sent', status: 'pending', sort: 'newest', page: 1 })],
+    [UnreadMailWidget, 'ledger', '/ledger?tab=email'],
+  ] as const) {
+    const { unmount } = mount(<Component tier="glance" rows={0} />)
+    expect(await screen.findByRole('link', { name: i18n.t(`dashboard.widgets.${key}.emptyAction`) })).toHaveAttribute('href', to)
+    unmount()
+  }
+})
+
+it('keeps empty-state actions in accessible Records scopes without document-generation permission', async () => {
+  state.denied.add('documents.generate')
+  vi.mocked(api.getDashboardSummary).mockResolvedValue({
+    ...SUMMARY, my_records: { ...SUMMARY.my_records!, approved: 0, pending: 0, awaiting_scan: 0, returned: 0, rejected: 0, not_submitted: 0, drafts: 0, latest_approved: [] },
+  })
+  for (const [Component, to] of [[MyDocumentsWidget, '/books?mine=1'], [MyDraftsWidget, '/books?mine=1&drafts=1']] as const) {
+    const { unmount } = mount(<Component tier="glance" rows={0} />)
+    expect(await screen.findByRole('link', { name: 'Open records' })).toHaveAttribute('href', to)
+    unmount()
+  }
 })
 
 it('uses unread summary count, email list and supported mail overlay, not incoming-today count', async () => {

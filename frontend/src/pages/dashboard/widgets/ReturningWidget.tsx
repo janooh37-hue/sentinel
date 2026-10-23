@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
+import { WidgetEmpty, WidgetFrame } from '@/components/dashboard/WidgetFrame'
 import { useFitCount } from '@/components/dashboard/useFitCount'
 import { siteToday } from '@/components/employees/useAttendanceAttention'
 import { computeEndDate } from '@/lib/leaveDateMath'
@@ -20,9 +20,9 @@ export function ReturningWidget({ tier, rows }: WidgetProps): React.JSX.Element 
   const tomorrow = all.filter((item) => item.days_remaining === 1)
   const more = all.length - visible.length
   return (
-    <WidgetFrame title={t('dashboard.widgets.upcoming_leave.title')} count={list && query.isSuccess ? all.length : undefined} viewAllTo={to}>
+    <WidgetFrame title={t('dashboard.widgets.upcoming_leave.title')} count={list && query.isSuccess ? all.length : undefined} viewAllTo={to} compact={tier === 'glance'}>
       {query.isPending || query.isError ? <PeopleFeedback pending={query.isPending} retry={query.refetch} /> : all.length === 0 ? (
-        <p className="text-[0.75em] text-muted-foreground">{t('dashboard.widgets.upcoming_leave.empty')}</p>
+        <WidgetEmpty message={t('dashboard.widgets.upcoming_leave.empty')} to={to} action={t('dashboard.widgets.upcoming_leave.emptyAction')} />
       ) : list ? (
         <>
           <ul ref={listRef} className="min-h-0 flex-1 overflow-hidden">{visible.map((item) => <LeaveWidgetRow key={item.leave_id} item={item} language={i18n.language} when={item.days_remaining <= 0 ? t('dashboard.widgets.upcoming_leave.today') : item.days_remaining === 1 ? t('dashboard.widgets.upcoming_leave.tomorrow') : t('dashboard.widgets.upcoming_leave.inDays', { count: item.days_remaining })} />)}</ul>
@@ -31,7 +31,7 @@ export function ReturningWidget({ tier, rows }: WidgetProps): React.JSX.Element 
       ) : (
         <>
           <Link to={to} className={`${PEOPLE_LINK} ${PEOPLE_BIG}`}>{all.length}</Link>
-          <p className="truncate pt-2 text-[0.7em] text-warning">{t('dashboard.widgets.upcoming_leave.tomorrowCount', { count: tomorrow.length })}{tier === 'summary' && tomorrow.length > 0 ? ` · ${tomorrow.map((item) => summaryEmployeeName(item, i18n.language)).join(i18n.language.startsWith('ar') ? '، ' : ', ')}` : ''}</p>
+          <p className="truncate pt-2 text-[0.75em] text-warning" title={tier === 'summary' ? tomorrow.map((item) => summaryEmployeeName(item, i18n.language)).join(i18n.language.startsWith('ar') ? '، ' : ', ') : undefined}>{t('dashboard.widgets.upcoming_leave.tomorrowCount', { count: tomorrow.length })}{tier === 'summary' && tomorrow.length > 0 ? ` · ${tomorrow.map((item) => summaryEmployeeName(item, i18n.language)).join(i18n.language.startsWith('ar') ? '، ' : ', ')}` : ''}</p>
         </>
       )}
     </WidgetFrame>

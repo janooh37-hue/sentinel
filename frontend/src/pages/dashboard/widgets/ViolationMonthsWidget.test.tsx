@@ -149,9 +149,8 @@ describe('ViolationMonthsWidget', () => {
     renderWidget('en', { tier, rows: 0 })
 
     expect(await screen.findByText('2')).toBeInTheDocument()
-    const ready = screen.getByRole('link', { name: 'July 2026 ready to close' })
+    const ready = screen.getByRole('link', { name: /July 2026.*ready to close/ })
     expect(ready).toHaveAttribute('href', '/services/inmate_conduct_violations?mode=stats&stats_month=2026-07')
-    expect(ready).toHaveAttribute('title', 'July 2026 ready to close')
     expect(screen.queryByText(/7 rows/)).not.toBeInTheDocument()
   })
 
@@ -174,7 +173,7 @@ describe('ViolationMonthsWidget', () => {
     expect(screen.getByRole('region', { name: 'Monthly inmate reports' })).toBeInTheDocument()
     expect(screen.getByLabelText('Loading…')).toBeInTheDocument()
     fireEvent.click(await screen.findByRole('button', { name: 'Retry' }))
-    expect(await screen.findByText('No ended month is awaiting close. Open the register to review this month.')).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Open register' })).toHaveAttribute('href', '/services/inmate_conduct_violations?mode=stats')
   })
 
   it('shares one awaiting-close query and adds its month count to the bell', async () => {
@@ -209,6 +208,6 @@ describe('ViolationMonthsWidget', () => {
 
     renderWidget()
 
-    expect(await screen.findByText('No ended month is awaiting close. Open the register to review this month.')).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Open register' })).toHaveAttribute('href', '/services/inmate_conduct_violations?mode=stats')
   })
 })

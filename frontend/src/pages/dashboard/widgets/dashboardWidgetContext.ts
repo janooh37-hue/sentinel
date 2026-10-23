@@ -3,6 +3,7 @@ import type { ResolvedDashboardLayout } from '@/lib/dashboardLayout'
 
 interface DashboardRuntime {
   layout: ResolvedDashboardLayout
+  editing: boolean
   has: (capability: string) => boolean
   onNavigate: (page: 'books' | 'employees' | 'ledger') => void
   onOpenCoverage: () => void

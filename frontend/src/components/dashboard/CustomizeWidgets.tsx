@@ -1,6 +1,7 @@
-import type { DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowDown, ArrowUp, GripVertical, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronDown, GripVertical, MoreHorizontal, X } from 'lucide-react'
 import type { DashboardWidgetConfig } from '@/lib/api'
 import {
   CANVAS_WIDTHS,
@@ -10,9 +11,19 @@ import {
   type WidgetSize,
   type WidgetSource,
 } from '@/lib/dashboardLayout'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { SheetTrigger } from '@/components/ui/sheet'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
-const CONTROL = 'inline-flex shrink-0 items-center justify-center rounded-md p-1 text-muted-foreground hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:opacity-40 disabled:opacity-40'
-const BUTTON = 'rounded-full border border-hairline bg-surface px-3 py-1.5 text-[0.78em] font-medium text-primary hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
+const CONTROL = 'inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-7 sm:min-w-7 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 disabled:opacity-40'
+const BUTTON = 'inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-hairline bg-surface px-3 text-[0.78em] font-medium text-foreground hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8 [@media(pointer:coarse)]:min-h-11 disabled:opacity-50'
+const MENU_ITEM = 'min-h-11 sm:min-h-8 [@media(pointer:coarse)]:min-h-11'
 
 export function CustomizeBanner({
   width,
@@ -30,44 +41,20 @@ export function CustomizeBanner({
   isSaving: boolean
 }): React.JSX.Element {
   const { t } = useTranslation()
-  return (
-    <section
-      aria-label={t('dashboard.customize.title')}
-      className="mb-3.5 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface p-3"
-    >
-      <p className="min-w-0 flex-1 text-[0.78em] text-muted-foreground">
-        <strong className="font-semibold text-foreground">
-          {t('dashboard.customize.title')}
-        </strong>{' '}
-        {t('dashboard.customize.hint')}
-      </p>
-      <fieldset
-        className="flex shrink-0 gap-1 rounded-full border border-hairline p-1"
-        disabled={isSaving}
-      >
-        <legend className="sr-only">{t('dashboard.customize.width')}</legend>
-        {CANVAS_WIDTHS.map((option) => (
-          <label
-            key={option}
-            className={`relative cursor-pointer rounded-full px-3 py-1 text-[0.72em] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${
-              width === option ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
-            }`}
-          >
-            <input
-              type="radio"
-              name="dashboard-canvas"
-              value={option}
-              checked={width === option}
-              onChange={() => onWidth(option)}
-              className="sr-only"
-            />
-            {t(`dashboard.customize.${option}`)}
-          </label>
-        ))}
-      </fieldset>
-      <button type="button" onClick={onReset} disabled={isSaving} className={BUTTON}>
-        {t('dashboard.customize.reset')}
-      </button>
+  const [phone, setPhone] = useState(() => window.matchMedia('(max-width: 639px)').matches)
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 639px)')
+    const onChange = () => setPhone(query.matches)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+  const actions = (
+    <div className="fixed inset-x-3 bottom-[calc(5.5rem+var(--safe-bottom))] z-40 flex items-center justify-end gap-2 rounded-xl border border-border bg-surface p-2 shadow-sm sm:static sm:border-0 sm:p-0 sm:shadow-none">
+      <SheetTrigger asChild>
+        <button type="button" data-control="add" disabled={isSaving} className={`${BUTTON} me-auto sm:hidden`}>
+          {t('dashboard.customize.addWidget')}
+        </button>
+      </SheetTrigger>
       <button type="button" onClick={onCancel} disabled={isSaving} className={BUTTON}>
         {t('dashboard.customize.cancel')}
       </button>
@@ -80,7 +67,60 @@ export function CustomizeBanner({
       >
         {t('dashboard.customize.save')}
       </button>
+    </div>
+  )
+  return (
+    <section
+      aria-label={t('dashboard.customize.title')}
+      className="mb-3.5 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface p-3"
+    >
+      <p className="min-w-0 basis-full text-[0.78em] text-muted-foreground sm:flex-1">
+        <strong className="font-semibold text-foreground">
+          {t('dashboard.customize.title')}
+        </strong>{' '}
+        {t('dashboard.customize.hint')}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <fieldset
+          className="flex shrink-0 gap-1 rounded-full border border-hairline p-1"
+          disabled={isSaving}
+        >
+          <legend className="sr-only">{t('dashboard.customize.width')}</legend>
+          {CANVAS_WIDTHS.map((option) => (
+            <label
+              key={option}
+              className={`relative inline-flex min-h-11 cursor-pointer items-center rounded-full px-3 text-[0.72em] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring sm:min-h-7 [@media(pointer:coarse)]:min-h-11 ${
+                width === option ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
+              }`}
+            >
+              <input
+                type="radio"
+                name="dashboard-canvas"
+                value={option}
+                checked={width === option}
+                onChange={() => onWidth(option)}
+                className="sr-only"
+              />
+              {t(`dashboard.customize.${option}`)}
+            </label>
+          ))}
+        </fieldset>
+        <button type="button" onClick={onReset} disabled={isSaving} className={BUTTON}>
+          {t('dashboard.customize.reset')}
+        </button>
+      </div>
+      {phone ? createPortal(actions, document.body) : actions}
     </section>
+  )
+}
+
+function SizeFootprint({ size }: { size: WidgetSize }): React.JSX.Element {
+  const width = size === 'S' ? 6 : size === 'W' || size === 'XL' ? 24 : 12
+  const height = size === 'L' || size === 'XL' ? 12 : 6
+  return (
+    <svg aria-hidden="true" width="16" height="12" viewBox="0 0 24 12" className="shrink-0">
+      <rect x="0.5" y="0.5" width={width - 1} height={height - 1} rx="1" fill="currentColor" fillOpacity="0.15" stroke="currentColor" />
+    </svg>
   )
 }
 
@@ -105,21 +145,20 @@ export function WidgetControls({
   onEditTiles?: () => void
   isSaving: boolean
 }): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const preserveFocus = useRef(false)
   const startDrag = (event: DragEvent<HTMLButtonElement>) => {
     event.dataTransfer.setData('text/plain', item.id)
     event.dataTransfer.effectAllowed = 'move'
   }
-  const moveEarlier = () => {
-    if (!atStart && !isSaving) onMove(-1)
-  }
-  const moveLater = () => {
-    if (!atEnd && !isSaving) onMove(1)
+  const remove = () => {
+    preserveFocus.current = true
+    onRemove()
   }
 
   return (
     <div
-      className="absolute inset-x-0 top-0 z-10 flex flex-wrap items-center justify-center gap-0.5 border-b border-hairline bg-surface-raised px-1 py-1.5"
+      className="flex min-h-11 shrink-0 items-center gap-1 border-b border-hairline bg-surface-raised px-2 sm:min-h-10"
       role="group"
       aria-label={t('dashboard.customize.controls', { name: title })}
     >
@@ -130,74 +169,108 @@ export function WidgetControls({
         disabled={isSaving}
         aria-label={t('dashboard.customize.drag', { name: title })}
         title={t('dashboard.customize.drag', { name: title })}
-        className={`${CONTROL} cursor-grab active:cursor-grabbing`}
+        className={`${CONTROL} hidden cursor-grab active:cursor-grabbing sm:inline-flex`}
         onDragStart={startDrag}
       >
         <GripVertical aria-hidden className="size-3.5" />
       </button>
-      <fieldset disabled={isSaving} className="flex rounded-full border border-border">
-        <legend className="sr-only">
-          {t('dashboard.customize.size', { name: title })}
-        </legend>
-        {WIDGET_SIZES.map((size) => (
-          <label
-            key={size}
-            className={`cursor-pointer rounded-full px-1.5 py-0.5 font-mono text-[0.65em] font-semibold has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${
-              item.size === size ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
-            }`}
+      <h4 title={title} className="min-w-0 flex-1 truncate text-start text-[0.8125em] font-semibold text-foreground">
+        {title}
+      </h4>
+      <DropdownMenu dir={i18n.dir()} modal={false}>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            data-control="menu"
+            disabled={isSaving}
+            aria-label={t('dashboard.customize.editWidget', { name: title })}
+            title={t(`dashboard.customize.sizes.${item.size}`)}
+            className={CONTROL}
           >
-            <input
-              type="radio"
-              name={`widget-size-${item.id}`}
-              value={size}
-              checked={item.size === size}
-              onChange={() => onSize(size)}
-              aria-label={t(`dashboard.customize.sizes.${size}`)}
-              className="sr-only"
-            />
-            {size}
-          </label>
-        ))}
-      </fieldset>
-      <button
-        type="button"
-        data-control="earlier"
-        aria-disabled={atStart || isSaving}
-        aria-label={t('dashboard.customize.earlier', { name: title })}
-        className={CONTROL}
-        onClick={moveEarlier}
-      >
-        <ArrowUp aria-hidden className="size-3.5" />
-      </button>
-      <button
-        type="button"
-        data-control="later"
-        aria-disabled={atEnd || isSaving}
-        aria-label={t('dashboard.customize.later', { name: title })}
-        className={CONTROL}
-        onClick={moveLater}
-      >
-        <ArrowDown aria-hidden className="size-3.5" />
-      </button>
-      <button
-        type="button"
-        disabled={isSaving}
-        aria-label={t('dashboard.customize.remove', { name: title })}
-        className={CONTROL}
-        onClick={onRemove}
-      >
-        <X aria-hidden className="size-3.5" />
-      </button>
-      {onEditTiles && (
-        <button
-          type="button"
-          onClick={onEditTiles}
-          disabled={isSaving}
-          className="rounded px-1 text-[0.65em] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <MoreHorizontal aria-hidden className="size-4 sm:hidden" />
+            <span aria-hidden className="hidden items-center gap-0.5 sm:inline-flex">
+              <SizeFootprint size={item.size} />
+              <ChevronDown className="size-3" />
+            </span>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          onCloseAutoFocus={(event) => {
+            if (preserveFocus.current) event.preventDefault()
+            preserveFocus.current = false
+          }}
         >
-          {t('dashboard.customize.editTiles')}
-        </button>
-      )}
+          <div role="group" aria-label={t('dashboard.customize.size', { name: title })}>
+            {WIDGET_SIZES.map((size) => (
+              <DropdownMenuItem
+                key={size}
+                role="menuitemradio"
+                aria-checked={item.size === size}
+                disabled={isSaving}
+                className={MENU_ITEM}
+                onSelect={() => onSize(size)}
+              >
+                <SizeFootprint size={size} />
+                {t(`dashboard.customize.sizes.${size}`)}
+                {item.size === size && <Check aria-hidden className="ms-auto size-3.5" />}
+              </DropdownMenuItem>
+            ))}
+          </div>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            data-control="earlier"
+            disabled={atStart || isSaving}
+            aria-label={t('dashboard.customize.earlier', { name: title })}
+            className={MENU_ITEM}
+            onSelect={() => { preserveFocus.current = true; onMove(-1) }}
+          >
+            <ArrowUp aria-hidden className="size-3.5" />
+            {t('dashboard.customize.earlierLabel')}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            data-control="later"
+            disabled={atEnd || isSaving}
+            aria-label={t('dashboard.customize.later', { name: title })}
+            className={MENU_ITEM}
+            onSelect={() => { preserveFocus.current = true; onMove(1) }}
+          >
+            <ArrowDown aria-hidden className="size-3.5" />
+            {t('dashboard.customize.laterLabel')}
+          </DropdownMenuItem>
+          {onEditTiles && (
+            <DropdownMenuItem onSelect={onEditTiles} disabled={isSaving} className={MENU_ITEM}>
+              {t('dashboard.customize.editTiles')}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            aria-label={t('dashboard.customize.remove', { name: title })}
+            disabled={isSaving}
+            onSelect={remove}
+            className={MENU_ITEM}
+            variant="danger"
+          >
+            <X aria-hidden className="size-3.5" />
+            {t('dashboard.customize.removeLabel')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              disabled={isSaving}
+              aria-label={t('dashboard.customize.remove', { name: title })}
+              className={`${CONTROL} hidden sm:inline-flex`}
+              onClick={onRemove}
+            >
+              <X aria-hidden className="size-3.5" />
+            </button>
+          </TooltipTrigger>
+          {createPortal(<TooltipContent>{t('dashboard.customize.remove', { name: title })}</TooltipContent>, document.body)}
+        </Tooltip>
+      </TooltipProvider>
     </div>
   )
 }
@@ -215,55 +288,65 @@ export function AddWidgetsPanel({ entries, widgets, onAdd, isSaving }: {
   isSaving: boolean
 }): React.JSX.Element {
   const { t } = useTranslation()
-  const sources = [...new Set(entries.map((entry) => entry.source))]
+  const onBoard = new Set(widgets.filter((widget) => widget.visible).map((widget) => widget.id))
+  const available = entries.filter((entry) => !onBoard.has(entry.id))
+  const added = entries.filter((entry) => onBoard.has(entry.id))
+  const sources = [...new Set(available.map((entry) => entry.source))]
   return (
     <aside
       aria-label={t('dashboard.customize.addTitle')}
       className="w-full shrink-0 rounded-2xl border border-border bg-surface p-4 lg:sticky lg:top-4 lg:max-h-[75vh] lg:w-64 lg:overflow-y-auto"
     >
       <h3 className="font-semibold text-foreground">{t('dashboard.customize.addTitle')}</h3>
-      <p className="mt-1 text-[0.72em] text-muted-foreground">
+      <p className="mt-1 text-[0.75em] text-muted-foreground">
         {t('dashboard.customize.addHint')}
       </p>
-      {sources.map((source) => (
-        <section
-          key={source}
-          aria-label={t(`dashboard.customize.sources.${source}`)}
-          className="mt-4"
-        >
-          <h4 className="mb-2 text-[0.7em] font-semibold uppercase tracking-wide text-muted-foreground">
-            {t(`dashboard.customize.sources.${source}`)}
-          </h4>
-          <ul className="space-y-2">
-            {entries.filter((entry) => entry.source === source).map((entry) => {
-              const visible = widgets.some((widget) => widget.id === entry.id && widget.visible)
-              return (
-                <li
-                  key={entry.id}
-                  className="flex items-center gap-2 rounded-lg border border-hairline bg-surface-raised p-2"
-                >
-                  <span className="min-w-0 flex-1 text-[0.75em] font-medium text-foreground">
-                    {entry.title}
-                  </span>
+      <section aria-label={t('dashboard.customize.available', { count: available.length })}>
+        <h4 className="mt-4 text-[0.8125em] font-semibold text-foreground">
+          {t('dashboard.customize.available', { count: available.length })}
+        </h4>
+        {available.length === 0 && (
+          <p className="mt-2 text-[0.75em] text-muted-foreground">{t('dashboard.customize.noneAvailable')}</p>
+        )}
+        {sources.map((source) => (
+          <section key={source} aria-label={t(`dashboard.customize.sources.${source}`)} className="mt-3">
+            <h5 className="mb-1 text-[0.75em] font-medium text-muted-foreground">
+              {t(`dashboard.customize.sources.${source}`)}
+            </h5>
+            <ul className="divide-y divide-hairline">
+              {available.filter((entry) => entry.source === source).map((entry) => (
+                <li key={entry.id} className="flex items-center gap-2 py-2">
+                  <span className="min-w-0 flex-1 text-[0.8125em] font-medium text-foreground">{entry.title}</span>
                   <button
                     type="button"
                     data-add-widget-id={entry.id}
-                    disabled={visible || isSaving}
+                    disabled={isSaving}
                     onClick={() => onAdd(entry.id)}
-                    aria-label={t(
-                      visible ? 'dashboard.customize.onBoardAria' : 'dashboard.customize.addAria',
-                      { name: entry.title },
-                    )}
-                    className={`${BUTTON} !px-2 !text-[0.7em]`}
+                    aria-label={t('dashboard.customize.addAria', { name: entry.title })}
+                    className={`${BUTTON} !px-2`}
                   >
-                    {t(visible ? 'dashboard.customize.onBoard' : 'dashboard.customize.add')}
+                    {t('dashboard.customize.add')}
                   </button>
                 </li>
-              )
-            })}
-          </ul>
-        </section>
-      ))}
+              ))}
+            </ul>
+          </section>
+        ))}
+      </section>
+      <details className="group mt-4 border-t border-hairline pt-2">
+        <summary className="flex min-h-11 cursor-pointer items-center text-[0.8125em] font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8 [@media(pointer:coarse)]:min-h-11">
+          <ChevronDown aria-hidden className="me-2 size-3.5 shrink-0 -rotate-90 rtl:rotate-90 group-open:rotate-0" />
+          {t('dashboard.customize.onDashboard', { count: added.length })}
+        </summary>
+        <ul className="mt-2 space-y-3">
+          {added.map((entry) => (
+            <li key={entry.id} className="flex items-center gap-2 text-[0.8125em] text-muted-foreground">
+              <Check aria-hidden className="size-3.5 shrink-0" />
+              {entry.title}
+            </li>
+          ))}
+        </ul>
+      </details>
     </aside>
   )
 }

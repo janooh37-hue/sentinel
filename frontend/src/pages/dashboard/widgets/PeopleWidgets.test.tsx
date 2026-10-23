@@ -128,3 +128,18 @@ it('keeps Arabic names and dates isolated while preserving filtered links', () =
   expect(screen.getByRole('region', { name: 'في إجازة اليوم' })).toBeInTheDocument()
   expect(screen.getByText('عائشة نور').closest('a')).toHaveAttribute('href', '/leaves?open=10')
 })
+
+it.each(['en', 'ar'])('offers exact empty-state destinations in %s', async (language) => {
+  await i18n.changeLanguage(language)
+  const empty = { ...summary, totals: { ...summary.totals, employees_active: 0 }, on_leave_today: [], upcoming_leave_ends: [], open_violations: { count: 0, latest: [] } }
+  for (const [Component, key, to] of [
+    [WorkforceWidget, 'workspace', '/employees?working=true'],
+    [OnLeaveTodayWidget, 'on_leave_today', `/leaves?status=Approved&on=${today}`],
+    [ReturningWidget, 'upcoming_leave', `/leaves?status=Approved&end_from=${today}&end_to=${computeEndDate(today, 8)}`],
+    [OpenViolationsWidget, 'violations', '/employees?violations=open'],
+  ] as const) {
+    const { unmount } = setup(<Component tier="glance" rows={0} />, empty)
+    expect(screen.getByRole('link', { name: i18n.t(`dashboard.widgets.${key}.emptyAction`) })).toHaveAttribute('href', to)
+    unmount()
+  }
+})

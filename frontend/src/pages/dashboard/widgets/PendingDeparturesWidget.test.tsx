@@ -67,3 +67,11 @@ it('does not truncate the due-count source at the first API page', async () => {
   expect(await screen.findByText('2 due in the next seven days')).toBeInTheDocument()
   expect(api.listEmployees).toHaveBeenLastCalledWith({ pending: true, limit: 100, offset: 1 })
 })
+
+it('links the empty state to the pending employee roster', async () => {
+  await i18n.changeLanguage('en')
+  vi.mocked(api.listEmployees).mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(<QueryClientProvider client={client}><MemoryRouter><PendingDeparturesWidget tier="glance" rows={0} /></MemoryRouter></QueryClientProvider>)
+  expect(await screen.findByRole('link', { name: 'Review departures' })).toHaveAttribute('href', '/employees?pending=1')
+})

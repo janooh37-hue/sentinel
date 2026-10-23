@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
-import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
+import { WidgetFrame, WIDGET_SUPPORT } from '@/components/dashboard/WidgetFrame'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
+import { bidi } from '@/lib/bidi'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useDashboardRuntime } from './dashboardWidgetContext'
 import { derivePulseState, type PulseState } from './workforcePulseState'
@@ -20,7 +21,7 @@ function formatShiftTime(value: string | null | undefined, locale: string, timez
   }).format(new Date(hasOffset ? value : `${value}Z`))
 }
 
-const actionClass = 'self-start rounded-sm text-[0.72em] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+const actionClass = `self-start rounded-sm ${WIDGET_SUPPORT} font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`
 
 export function WorkforcePulseWidget({ tier }: WidgetProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -74,14 +75,14 @@ export function WorkforcePulseWidget({ tier }: WidgetProps): React.JSX.Element {
       ) : message ? (
         <div role="status" className="space-y-1">
           <p className="text-[0.8em] font-semibold text-foreground">{message.title}</p>
-          <p className="text-[0.72em] text-muted-foreground">{message.detail}</p>
+          <p className={`${WIDGET_SUPPORT} text-muted-foreground`}>{message.detail}</p>
         </div>
       ) : state?.kind === 'aggregate' ? (
         <div className="flex min-h-0 flex-1 flex-col gap-1.5" role="status">
           {tier === 'glance' ? (
             <>
               <p className="text-3xl font-semibold tabular-nums text-foreground">{state.snapshot.current_shift.verified_coverage_percent == null ? unknown : `${state.snapshot.current_shift.verified_coverage_percent}%`}<span className="ms-2 text-xs font-normal text-muted-foreground">{t('dashboard.workforcePulse.metrics.coverage')}</span></p>
-              <p className="text-[0.7em] text-muted-foreground">{state.snapshot.current_shift.working == null ? unknown : t('dashboard.widgets.workforce_pulse.onDutyOf', { working: state.snapshot.current_shift.working, scheduled: state.snapshot.current_shift.scheduled })}</p>
+              <p className={`${WIDGET_SUPPORT} text-muted-foreground`}>{state.snapshot.current_shift.working == null ? unknown : t('dashboard.widgets.workforce_pulse.onDutyOf', { working: state.snapshot.current_shift.working, scheduled: state.snapshot.current_shift.scheduled })}</p>
             </>
           ) : (
             <>
@@ -93,11 +94,11 @@ export function WorkforcePulseWidget({ tier }: WidgetProps): React.JSX.Element {
                 ].map(([label, value]) => (
                   <div key={label} className="min-w-0">
                     <dd className="text-xl font-semibold tabular-nums text-foreground">{value}</dd>
-                    <dt className="text-[0.65em] text-muted-foreground">{label}</dt>
+                    <dt className={`${WIDGET_SUPPORT} text-muted-foreground`}>{label}</dt>
                   </div>
                 ))}
               </dl>
-              <p className="text-[0.65em] text-muted-foreground">{t('dashboard.widgets.workforce_pulse.updated', { time: formatShiftTime(state.snapshot.as_of, i18n.language, state.snapshot.timezone) })}</p>
+              <p className={`${WIDGET_SUPPORT} text-muted-foreground`}>{t('dashboard.widgets.workforce_pulse.updated', { time: bidi(formatShiftTime(state.snapshot.as_of, i18n.language, state.snapshot.timezone)) })}</p>
             </>
           )}
           <button type="button" className={`${actionClass} mt-auto`} onClick={onOpenCoverage}>{t('dashboard.workforcePulse.openCoverage')}</button>
@@ -106,15 +107,15 @@ export function WorkforcePulseWidget({ tier }: WidgetProps): React.JSX.Element {
         <div className="flex min-h-0 flex-col gap-1" role="status">
           <p className="sr-only">{t('dashboard.workforcePulse.self.heading')}</p>
           <p className="text-[0.9em] font-semibold text-foreground">{t(`dashboard.workforcePulse.self.presence.${state.snapshot.self?.presence_state ?? 'unknown'}`)}</p>
-          <p className="text-[0.72em] text-muted-foreground">{t([
+          <p className={`${WIDGET_SUPPORT} text-muted-foreground`}>{t([
             `dashboard.widgets.workforce_pulse.reasons.${state.snapshot.self?.reason_code?.toLowerCase()}`,
             `attendance.review.reasons.${state.snapshot.self?.reason_code?.toLowerCase()}`,
             'dashboard.widgets.workforce_pulse.reasonUnknown',
           ])}</p>
           {tier !== 'glance' && (
-            <dl className="flex flex-wrap gap-x-4 gap-y-1 text-[0.7em]">
-              <div><dt className="text-muted-foreground">{t('dashboard.workforcePulse.self.start')}</dt><dd>{formatShiftTime(state.snapshot.self?.scheduled_start_at, i18n.language, state.snapshot.timezone)}</dd></div>
-              <div><dt className="text-muted-foreground">{t('dashboard.workforcePulse.self.end')}</dt><dd>{formatShiftTime(state.snapshot.self?.scheduled_end_at, i18n.language, state.snapshot.timezone)}</dd></div>
+            <dl className={`${WIDGET_SUPPORT} flex flex-wrap gap-x-4 gap-y-1`}>
+              <div><dt className="text-muted-foreground">{t('dashboard.workforcePulse.self.start')}</dt><dd><bdi>{formatShiftTime(state.snapshot.self?.scheduled_start_at, i18n.language, state.snapshot.timezone)}</bdi></dd></div>
+              <div><dt className="text-muted-foreground">{t('dashboard.workforcePulse.self.end')}</dt><dd><bdi>{formatShiftTime(state.snapshot.self?.scheduled_end_at, i18n.language, state.snapshot.timezone)}</bdi></dd></div>
             </dl>
           )}
         </div>

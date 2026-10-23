@@ -19,7 +19,7 @@ import {
   type PermitListItem,
   type PermitZone,
 } from '@/lib/api'
-import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
+import { WidgetEmpty, WidgetFrame, WIDGET_SUPPORT } from '@/components/dashboard/WidgetFrame'
 import { useFitCount } from '@/components/dashboard/useFitCount'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -217,7 +217,7 @@ export function PermitsWidget({ tier, rows }: WidgetProps): React.JSX.Element {
   const itemsRemaining = Math.max(0, (latestItemsQuery.data?.total ?? 0) - visible.filter((row) => row.kind === 'items').length)
 
   return (
-    <WidgetFrame title={t('dashboard.widgets.permits.title')} viewAllTo={to()}>
+    <WidgetFrame title={t('dashboard.widgets.permits.title')} viewAllTo={to()} compact={tier === 'glance'}>
       {panel ? (
         <div
           role="group"
@@ -248,7 +248,7 @@ export function PermitsWidget({ tier, rows }: WidgetProps): React.JSX.Element {
           aria-label={t('permits.filters.zone')}
           value={selected}
           onChange={(event) => setZone(event.target.value as ZoneFilter)}
-          className="mb-1 h-6 w-full shrink-0 rounded-sm border border-border bg-surface text-[0.65em] text-foreground"
+          className="mb-1 h-6 w-full shrink-0 rounded-sm border border-border bg-surface text-[0.75em] text-foreground"
         >
           {ZONES.map((option) => (
             <option key={option} value={option}>
@@ -272,7 +272,7 @@ export function PermitsWidget({ tier, rows }: WidgetProps): React.JSX.Element {
           <Skeleton className="h-4 w-full" />
         </div>
       ) : securityTotal + itemTotal === 0 ? (
-        <Link className={cn(linkCls, 'text-[0.75em]')} to={to()}>{t('dashboard.widgets.permits.empty')}</Link>
+        <WidgetEmpty message={t('dashboard.widgets.permits.empty')} to={to()} action={t('dashboard.widgets.permits.emptyAction')} />
       ) : panel ? (
         <div className="grid min-h-0 flex-1 grid-cols-2 gap-4">
           <section aria-labelledby={`${paneId}-security`} className="flex min-h-0 min-w-0 flex-col">
@@ -316,9 +316,9 @@ export function PermitsWidget({ tier, rows }: WidgetProps): React.JSX.Element {
         <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-between gap-1">
           <Link to={to({ state: 'active' })} className={cn(linkCls, 'flex min-w-0 items-baseline gap-1 text-foreground')} title={`${summary?.active} ${t('permits.summary.active')}`}>
             <b className="shrink-0 font-mono text-[1.65em] leading-none tabular-nums">{summary?.active}</b>
-            <span className="truncate text-[0.7em]">{t('permits.summary.active')}</span>
+            <span className="truncate text-[0.75em]">{t('permits.summary.active')}</span>
           </Link>
-          <div className="flex min-w-0 justify-between gap-x-2 text-[0.65em]">
+          <div className={`flex min-w-0 justify-between gap-x-2 ${WIDGET_SUPPORT}`}>
             <Link to={to({ state: 'expiring' })} className={cn(linkCls, 'min-w-0 flex-1 truncate text-warning')} title={`${summary?.expiring} ${t('permits.summary.expiring')}`}>
               {summary?.expiring} {t('permits.summary.expiring')}
             </Link>
@@ -330,16 +330,16 @@ export function PermitsWidget({ tier, rows }: WidgetProps): React.JSX.Element {
           <div className={cn('grid shrink-0 gap-1 leading-tight', tier === 'tall' ? 'grid-cols-1' : 'grid-cols-2 gap-x-3')}>
             <div role="group" aria-label={t('permits.tabs.security')} className="grid grid-cols-2 gap-x-2 gap-y-0.5">
               {STATUSES.map((state) => (
-                <Link key={state} to={to({ state })} title={`${summary?.[state]} ${t(`permits.summary.${state}`)}`} className={cn(linkCls, 'flex min-w-0 items-baseline gap-1 text-[0.65em]')}>
-                  <b className="font-mono text-[1.25em] tabular-nums">{summary?.[state]}</b>
+                <Link key={state} to={to({ state })} title={`${summary?.[state]} ${t(`permits.summary.${state}`)}`} className={cn(linkCls, WIDGET_SUPPORT, 'flex min-w-0 items-baseline gap-1')}>
+                  <b className="font-mono text-[1.08em] tabular-nums">{summary?.[state]}</b>
                   <span className="truncate">{t(`permits.summary.${state}`)}</span>
                 </Link>
               ))}
             </div>
             <div role="group" aria-label={t('permits.tabs.items')} className="grid grid-cols-2 gap-x-2 gap-y-0.5 border-s border-hairline ps-2">
               {APPROVALS.map((state) => (
-                <Link key={state} to={to({ tab: 'items', istatus: state })} title={`${itemSummary?.[state]} ${state === 'awaiting_scan' ? t('dashboard.widgets.permits.awaitingScan') : t(`permits.approval.${state}`)}`} className={cn(linkCls, 'flex min-w-0 items-baseline gap-1 text-[0.6em]')}>
-                  <b className="font-mono text-[1.25em] tabular-nums">{itemSummary?.[state]}</b>
+                <Link key={state} to={to({ tab: 'items', istatus: state })} title={`${itemSummary?.[state]} ${state === 'awaiting_scan' ? t('dashboard.widgets.permits.awaitingScan') : t(`permits.approval.${state}`)}`} className={cn(linkCls, WIDGET_SUPPORT, 'flex min-w-0 items-baseline gap-1')}>
+                  <b className="font-mono tabular-nums">{itemSummary?.[state]}</b>
                   <span className="truncate">{state === 'awaiting_scan' ? t('dashboard.widgets.permits.awaitingScan') : t(`permits.approval.${state}`)}</span>
                 </Link>
               ))}
@@ -347,19 +347,19 @@ export function PermitsWidget({ tier, rows }: WidgetProps): React.JSX.Element {
           </div>
           {showList && (
             <div className="mt-2 flex min-h-0 flex-1 flex-col border-t border-hairline pt-1">
-              <h4 className="shrink-0 text-[0.65em] text-muted-foreground">{t('dashboard.widgets.permits.latestEntries')}</h4>
+              <h4 className={`${WIDGET_SUPPORT} shrink-0 text-muted-foreground`}>{t('dashboard.widgets.permits.latestEntries')}</h4>
               <ul ref={listRef} className="min-h-0 flex-1 overflow-hidden">
                 {visible.map((row) => (
                   <li key={row.key}>
-                    <Link to={row.to} className="flex min-w-0 items-center gap-2 rounded-sm py-1 text-[0.7em] hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                      <bdi className="shrink-0 font-mono text-[0.85em]">{row.ref}</bdi>
+                    <Link to={row.to} className={`${WIDGET_SUPPORT} flex min-w-0 items-center gap-2 rounded-sm py-1 hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}>
+                      <bdi className="shrink-0 font-mono">{row.ref}</bdi>
                       <bdi className="min-w-0 flex-1 truncate">{row.name}</bdi>
-                      <span className="shrink-0 text-[0.85em] text-muted-foreground">{row.status}</span>
+                      <span className="shrink-0 text-muted-foreground">{row.status}</span>
                     </Link>
                   </li>
                 ))}
               </ul>
-              <div className="flex shrink-0 flex-wrap justify-between gap-x-2 text-[0.65em]">
+              <div className={`${WIDGET_SUPPORT} flex shrink-0 flex-wrap justify-between gap-x-2`}>
                 {securityRemaining > 0 && <Link to={to()} className={linkCls}>{t('dashboard.widgets.permits.moreSecurity', { count: securityRemaining })}</Link>}
                 {itemsRemaining > 0 && <Link to={to({ tab: 'items' })} className={linkCls}>{t('dashboard.widgets.permits.moreItems', { count: itemsRemaining })}</Link>}
               </div>

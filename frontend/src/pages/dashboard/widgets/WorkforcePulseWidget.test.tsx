@@ -9,6 +9,7 @@ import type { WorkforceAccess, WorkforceSnapshot } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { WorkforcePulseWidget } from './WorkforcePulseWidget'
 import { useDashboardRuntime } from './dashboardWidgetContext'
+import type * as DashboardWidgetContext from './dashboardWidgetContext'
 import type { WidgetProps } from './types'
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -24,7 +25,10 @@ vi.mock('@/lib/api', async (importOriginal) => {
 })
 
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: vi.fn() }))
-vi.mock('./dashboardWidgetContext', () => ({ useDashboardRuntime: vi.fn() }))
+vi.mock('./dashboardWidgetContext', async (importOriginal) => ({
+  ...await importOriginal<typeof DashboardWidgetContext>(),
+  useDashboardRuntime: vi.fn(),
+}))
 
 const { api } = await import('@/lib/api')
 const mockUseCapabilities = vi.mocked(useCapabilities)
@@ -98,6 +102,7 @@ function renderWidget(onOpenCoverage = vi.fn(), props: WidgetProps = { tier: 'su
     has: () => true,
     layout: { widgets: [], quick_actions: [], canvas_width: 'compact' },
     box: { w: 2, h: 1, cols: 4 },
+    editing: false,
   })
   return {
     onOpenCoverage,

@@ -53,3 +53,9 @@ it('renders boxed loading and retry states rather than disappearing', async () =
   expect(screen.getByRole('status', { name: 'Loading…' })).toBeInTheDocument()
   expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument()
 })
+
+it('links the empty state to expiry without requiring employee access', async () => {
+  vi.mocked(api.getExpiry).mockResolvedValue([])
+  setup('glance', false)
+  expect(await screen.findByRole('link', { name: 'Review expiry' })).toHaveAttribute('href', '/expiry')
+})

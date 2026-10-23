@@ -27,7 +27,7 @@ const itemSummary = { none: 2, pending: 601, awaiting_scan: 3, approved: 4, retu
 
 function renderWidget(tier: WidgetTier = 'list', rows = 2, box = { w: 2, h: 2, cols: 4 }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const runtime = { layout: DEFAULT_LAYOUT, has: () => true, onNavigate: vi.fn(), onOpenCoverage: vi.fn(), box }
+  const runtime = { layout: DEFAULT_LAYOUT, editing: false, has: () => true, onNavigate: vi.fn(), onOpenCoverage: vi.fn(), box }
   return render(
     <QueryClientProvider client={client}>
       <I18nextProvider i18n={i18n}>
@@ -149,7 +149,7 @@ describe('PermitsWidget', () => {
     vi.mocked(api.permitsSummary).mockResolvedValue({ ...summary(0), expiring: 0, expired: 0 })
     vi.mocked(api.itemPermitsSummary).mockResolvedValue({ none: 0, pending: 0, awaiting_scan: 0, approved: 0, returned: 0, rejected: 0 })
     renderWidget('glance', 0)
-    expect(await screen.findByRole('link', { name: /Open the register/ })).toHaveAttribute('href', '/permits')
+    expect(await screen.findByRole('link', { name: 'Open register' })).toHaveAttribute('href', '/permits')
   })
 
   it('never returns null if capability availability changes after layout', async () => {

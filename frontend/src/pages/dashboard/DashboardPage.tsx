@@ -14,6 +14,7 @@ import {
 } from '@/lib/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { WidgetEditDialog } from '@/components/dashboard/WidgetEditDialog'
+import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import {
   AddWidgetsPanel,
   CustomizeBanner,
@@ -142,6 +143,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   const editing = draft !== null
   const activeLayout = draft ?? layout
   const [quickActionsDialogOpen, setQuickActionsDialogOpen] = useState(false)
+  const [addWidgetsOpen, setAddWidgetsOpen] = useState(false)
   const [coverageOpen, setCoverageOpen] = useState(false)
   const boardRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -157,9 +159,12 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
     }
     if (focusAfterRemove.current) {
       const canvas = canvasRef.current
-      const add = canvas?.querySelector<HTMLButtonElement>(
-        `[data-add-widget-id="${focusAfterRemove.current}"]:not(:disabled)`,
-      )
+      const phone = window.matchMedia('(max-width: 639px)').matches
+      const add = phone
+        ? document.querySelector<HTMLButtonElement>('[data-control="add"]:not(:disabled)')
+        : canvas?.querySelector<HTMLButtonElement>(
+          `[data-add-widget-id="${focusAfterRemove.current}"]:not(:disabled)`,
+        )
       const target = add ?? canvas?.querySelector<HTMLButtonElement>('[data-control="save"]:not(:disabled)')
       target?.focus()
       focusAfterRemove.current = null
@@ -252,7 +257,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   }
   const moveRelative = (id: WidgetId, index: number, direction: -1 | 1) => {
     const target = visibleWidgets[index + direction]
-    if (target) moveWidget(id, target.id, direction < 0 ? 'earlier' : 'later')
+    if (target) moveWidget(id, target.id, 'menu')
   }
   const allowDrop = (event: DragEvent<HTMLElement>) => {
     if (editing && !updateLayout.isPending && event.dataTransfer.types.includes('text/plain')) {
@@ -286,6 +291,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   }
   const closeCustomize = () => {
     focusCustomize.current = true
+    setAddWidgetsOpen(false)
     setDraft(null)
   }
   const saveLayout = () => {
@@ -309,7 +315,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           <div
             ref={canvasRef}
             data-canvas-width={activeLayout.canvas_width}
-            className={`w-full px-4 pb-12 pt-6 md:px-7 ${
+            className={`w-full px-4 pb-12 pt-6 md:px-7 ${editing ? 'max-sm:pb-24' : ''} ${
               activeLayout.canvas_width === 'wide' ? '' : 'mx-auto max-w-[1180px]'
             }`}
           >
@@ -344,14 +350,34 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
               </div>
             </div>
             {editing && (
-              <CustomizeBanner
-                width={activeLayout.canvas_width ?? 'compact'}
-                onWidth={(width) => setDraft({ ...activeLayout, canvas_width: width })}
-                onReset={() => setDraft(structuredClone(DEFAULT_LAYOUT))}
-                onCancel={closeCustomize}
-                isSaving={updateLayout.isPending}
-                onSave={saveLayout}
-              />
+              <Sheet open={addWidgetsOpen} onOpenChange={setAddWidgetsOpen}>
+                <CustomizeBanner
+                  width={activeLayout.canvas_width ?? 'compact'}
+                  onWidth={(width) => setDraft({ ...activeLayout, canvas_width: width })}
+                  onReset={() => setDraft(structuredClone(DEFAULT_LAYOUT))}
+                  onCancel={closeCustomize}
+                  isSaving={updateLayout.isPending}
+                  onSave={saveLayout}
+                />
+                <SheetContent
+                  aria-describedby={undefined}
+                  className="w-[min(100%,24rem)] overflow-y-auto pb-[var(--safe-bottom)] pt-[var(--safe-top)]"
+                >
+                  <div className="flex items-center justify-between gap-2 px-4 py-2">
+                    <SheetTitle className="font-semibold">{t('dashboard.customize.addTitle')}</SheetTitle>
+                    <SheetClose asChild>
+                      <button
+                        type="button"
+                        aria-label={t('dashboard.customize.closeCatalog')}
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <span aria-hidden>×</span>
+                      </button>
+                    </SheetClose>
+                  </div>
+                  <AddWidgetsPanel entries={catalog} widgets={activeLayout.widgets} isSaving={updateLayout.isPending} onAdd={addWidget} />
+                </SheetContent>
+              </Sheet>
             )}
             <div className="flex flex-col items-start gap-4 lg:flex-row">
               <div
@@ -374,7 +400,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
                       key={id}
                       data-widget-id={id}
                       aria-label={title}
-                      className={`relative min-h-0 min-w-0 overflow-hidden rounded-2xl ${
+                      className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl ${
                         editing ? 'ring-1 ring-border-strong' : ''
                       }`}
                       style={{
@@ -402,14 +428,15 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
                         />
                       )}
                       <div
-                        className={`h-full min-h-0 overflow-hidden ${
-                          editing ? 'pointer-events-none opacity-50' : ''
+                        className={`min-h-0 flex-1 overflow-hidden ${
+                          editing ? 'pointer-events-none' : ''
                         }`}
                         inert={editing}
                       >
                         <DashboardRuntimeContext.Provider
                           value={{
                             layout: activeLayout,
+                            editing,
                             has,
                             onNavigate,
                             onOpenCoverage: () => setCoverageOpen(true),
@@ -424,12 +451,14 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
                 })}
               </div>
               {editing && (
-                <AddWidgetsPanel
-                  entries={catalog}
-                  widgets={activeLayout.widgets}
-                  isSaving={updateLayout.isPending}
-                  onAdd={addWidget}
-                />
+                <div className="hidden w-full sm:block lg:sticky lg:top-4 lg:w-64 lg:shrink-0">
+                  <AddWidgetsPanel
+                    entries={catalog}
+                    widgets={activeLayout.widgets}
+                    isSaving={updateLayout.isPending}
+                    onAdd={addWidget}
+                  />
+                </div>
               )}
             </div>
           </div>

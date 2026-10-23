@@ -4248,7 +4248,7 @@
     "customize": {
       "action": "Customize",
       "title": "Customizing.",
-      "hint": "Drag a widget to move it, choose a size, or remove it. Add more from the panel.",
+      "hint": "Move, resize, remove or add widgets. Reset changes only this draft until you save.",
       "width": "Canvas width",
       "compact": "Compact",
       "wide": "Wide",
@@ -4258,18 +4258,25 @@
       "saved": "Dashboard layout saved",
       "controls": "Customize {{name}}",
       "size": "Size of {{name}}",
-      "sizes": { "S": "Small", "M": "Medium", "L": "Large", "W": "Full width", "XL": "Extra large" },
+      "sizes": { "S": "Small · 1×1", "M": "Summary · 2×1", "L": "Large · 2×2", "W": "Full width", "XL": "Extra large · full width" },
       "drag": "Drag {{name}} to move it",
       "earlier": "Move {{name}} earlier",
       "later": "Move {{name}} later",
+      "earlierLabel": "Earlier",
+      "laterLabel": "Later",
+      "editWidget": "Edit widget: {{name}}",
+      "removeLabel": "Remove",
       "remove": "Remove {{name}}",
       "editTiles": "Edit tiles",
       "addTitle": "Add widgets",
       "addHint": "Only widgets you have access to are listed. Each one fits any size.",
       "add": "Add",
-      "onBoard": "On board",
+      "onDashboard": "On your dashboard ({{count}})",
+      "available": "Available to add ({{count}})",
+      "noneAvailable": "All available widgets are on your dashboard.",
+      "addWidget": "Add widget",
+      "closeCatalog": "Close widget catalogue",
       "addAria": "Add {{name}}",
-      "onBoardAria": "{{name}} is on the board",
       "sources": {
         "records": "Records",
         "approvals": "Approvals",
@@ -4420,6 +4427,8 @@
       "onLeave": "on leave"
     },
     "widgets": {
+      "viewAll": "View all: {{title}}",
+      "recordsAction": "Open records",
       "quickActions": {
         "title": "Quick actions",
         "empty": "No quick actions selected. Use Customize, then Edit tiles to add some."
@@ -4434,7 +4443,8 @@
         "rejected": "rejected",
         "not_submitted": "not submitted",
         "general": "General record",
-        "empty": "No records this month. Create a record from Services.",
+        "empty": "No records.",
+        "emptyAction": "Start a record",
         "more": "+{{count}} more"
       },
       "waiting_approvals": {
@@ -4445,7 +4455,8 @@
         "reviewMore": "+{{count}} to review",
         "oldest": "Oldest: {{detail}}",
         "unknownSender": "Sender not recorded",
-        "empty": "No pending assignments. Open the approval log to view earlier work.",
+        "empty": "No assignments.",
+        "emptyAction": "Open approvals",
         "more": "+{{count}} more"
       },
       "sent_approvals": {
@@ -4456,7 +4467,8 @@
         "waitingOn": "Waiting on {{name}}",
         "unassigned": "no assigned signer",
         "oldest": "Oldest: {{subject}}",
-        "empty": "No pending submissions. Submit a record from Records.",
+        "empty": "Nothing pending.",
+        "emptyAction": "Open sent queue",
         "more": "+{{count}} more"
       },
       "inbox": {
@@ -4468,7 +4480,8 @@
         "needAction": "For action: {{count}}",
         "from": "From {{name}}",
         "unknownSender": "Sender not recorded",
-        "empty": "No received records. Open the routing desk to view earlier correspondence.",
+        "empty": "Nothing received.",
+        "emptyAction": "Open routing desk",
         "more": "+{{count}} more"
       },
       "workspace": {
@@ -4478,7 +4491,8 @@
         "onSite": "on site",
         "loaned": "loaned",
         "onLeave": "on leave",
-        "empty": "No working employees. Open Employees to review the roster.",
+        "empty": "No working staff.",
+        "emptyAction": "Review roster",
         "results": "Filtered employees",
         "clearFilters": "Clear filters",
         "noMatches": "No employees match these filters. Clear the filters to review the roster.",
@@ -4493,7 +4507,8 @@
         "records_other": "leave records",
         "tomorrow": "{{count}} ending tomorrow",
         "until": "Until {{date}}",
-        "empty": "No approved leave overlaps today. Open Leaves to review or record leave.",
+        "empty": "No leave today.",
+        "emptyAction": "Review leave",
         "more": "+{{count}} more",
         "filter": "Approved leave on {{date}}"
       },
@@ -4503,7 +4518,8 @@
         "tomorrow": "Ends tomorrow",
         "inDays": "Ends in {{count}} days",
         "tomorrowCount": "{{count}} tomorrow",
-        "empty": "No approved leave ends in the next seven days. Open Leaves to review return dates.",
+        "empty": "No returns due.",
+        "emptyAction": "Review leave dates",
         "more": "+{{count}} more",
         "filter": "Approved leave ending {{from}} to {{to}}"
       },
@@ -4512,21 +4528,24 @@
         "within90": "within 90 days",
         "expired": "{{count}} expired",
         "critical": "{{count}} within 30 days",
-        "empty": "No documents expire within 90 days. Open Expiry to review document dates.",
+        "empty": "None expiring.",
+        "emptyAction": "Review expiry",
         "more": "+{{count}} more"
       },
       "pending_departures": {
         "title": "Pending departures",
         "due": "{{count}} due in the next seven days",
         "cancelFor": "Cancel departure for {{name}}",
-        "empty": "No scheduled departures. Open an employee record to schedule a departure.",
+        "empty": "None scheduled.",
+        "emptyAction": "Review departures",
         "more": "+{{count}} more"
       },
       "permits": {
         "title": "Permits",
         "awaitingScan": "Awaiting signed copy",
         "latestEntries": "Latest permits",
-        "empty": "No permits in this zone. Open the register to issue a permit or choose another zone.",
+        "empty": "No permits.",
+        "emptyAction": "Open register",
         "noAccess": "Permit access is unavailable. Ask an administrator for access.",
         "itemCount_one": "{{count}} item permit",
         "itemCount_other": "{{count}} item permits",
@@ -4556,20 +4575,23 @@
         "monthsOpen_other": "months open",
         "readyMonth": "{{month}} ready to close",
         "pending": "Complete pending entries or continue the assigned review.",
-        "empty": "No ended month is awaiting close. Open the register to review this month.",
+        "empty": "No months due.",
+        "emptyAction": "Open register",
         "more": "+{{count}} more"
       },
       "violations": {
         "title": "Open violations",
         "newest": "Newest: {{title}} · {{date}}",
-        "empty": "No open violations. Open Employees to review employee violation records.",
+        "empty": "No open violations.",
+        "emptyAction": "Review violations",
         "more": "+{{count}} more"
       },
       "drafts": {
         "title": "My drafts",
         "action": "Continue in Records",
         "continue": "Your unfinished records, from any month.",
-        "empty": "No unfinished records. Start a record from Services."
+        "empty": "No drafts.",
+        "emptyAction": "Start a record"
       },
       "ledger": {
         "header": "Ledger unread",
@@ -4585,7 +4607,8 @@
         "title": "Unread mail",
         "unread": "unread",
         "receivedToday": "Received today: {{count}}",
-        "empty": "No unread mail. Open the inbox to view earlier mail.",
+        "empty": "No unread mail.",
+        "emptyAction": "Open inbox",
         "noSubject": "No subject",
         "more": "+{{count}} more",
         "syncOff": "Email sync is off",

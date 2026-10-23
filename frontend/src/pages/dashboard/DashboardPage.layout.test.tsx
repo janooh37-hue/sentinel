@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import i18n from 'i18next'
 import { api } from '@/lib/api'
 import type { DashboardSummary, WorkforceAccess } from '@/lib/api'
 import type * as ApiModule from '@/lib/api'
@@ -72,6 +73,11 @@ function widget(id: string): HTMLElement {
 }
 function boardIds(): string[] {
   return Array.from(screen.getByTestId('widget-grid').querySelectorAll('[data-widget-id]')).map((node) => node.getAttribute('data-widget-id')!)
+}
+async function openWidgetMenu(id: string): Promise<HTMLElement> {
+  const title = widget(id).getAttribute('aria-label')
+  await userEvent.click(within(widget(id)).getByRole('button', { name: `Edit widget: ${title}` }))
+  return screen.getByRole('menu')
 }
 
 describe('packed per-user dashboard', () => {
@@ -150,17 +156,25 @@ describe('packed per-user dashboard', () => {
     expect(within(panel).getByText('Open violations')).toBeInTheDocument()
     expect(screen.getByTestId('widget-grid').querySelectorAll('article')).toHaveLength(3)
   })
+  it('shows the localised name visibly in every edited widget header', async () => {
+    renderPage()
+    await customize()
+    for (const id of boardIds()) {
+      expect(within(widget(id)).getByRole('heading', { name: i18n.t(widgetRegistry[id as keyof typeof widgetRegistry].titleKey) })).toBeVisible()
+    }
+  })
   it('edits width, size, order and visibility in place, retaining focus after moves', async () => {
     renderPage()
     await customize()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    const move = within(widget('pending')).getByRole('button', { name: 'Move My documents earlier' })
-    move.focus()
-    fireEvent.click(move)
+    const trigger = within(widget('pending')).getByRole('button', { name: 'Edit widget: My documents' })
+    await openWidgetMenu('pending')
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Move My documents earlier' }))
     expect(boardIds()[0]).toBe('pending')
-    expect(move).toHaveFocus()
-    expect(move).toHaveAttribute('aria-disabled', 'true')
-    fireEvent.click(within(widget('pending')).getByRole('radio', { name: 'Large' }))
+    expect(trigger).toHaveFocus()
+    await openWidgetMenu('pending')
+    expect(screen.getByRole('menuitem', { name: 'Move My documents earlier' })).toHaveAttribute('aria-disabled', 'true')
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Large · 2×2' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Wide' }))
     expect(screen.getByTestId('widget-grid')).toHaveAttribute('data-columns', '6')
     fireEvent.click(within(widget('drafts')).getByRole('button', { name: 'Remove My drafts' }))
@@ -204,14 +218,15 @@ describe('packed per-user dashboard', () => {
     expect(save).toBeEnabled()
     expect(save).toHaveFocus()
   })
-  it('supports native radio keyboard selection and native drag-handle moves', async () => {
+  it('supports menu keyboard selection and native drag-handle moves', async () => {
     const user = userEvent.setup()
     renderPage()
     await customize()
-    const small = within(widget('pending')).getByRole('radio', { name: 'Small' })
-    small.focus()
-    await user.keyboard(' ')
-    expect(small).toBeChecked()
+    within(widget('pending')).getByRole('button', { name: 'Edit widget: My documents' }).focus()
+    await user.keyboard('{Enter}{Home}{Enter}')
+    await openWidgetMenu('pending')
+    expect(screen.getByRole('menuitemradio', { name: 'Small · 1×1' })).toHaveAttribute('aria-checked', 'true')
+    await user.keyboard('{Escape}')
     const dataTransfer = { getData: () => 'drafts', setData: vi.fn(), types: ['text/plain'], effectAllowed: '' }
     fireEvent.dragStart(within(widget('drafts')).getByRole('button', { name: 'Drag My drafts to move it' }), { dataTransfer })
     expect(dataTransfer.setData).toHaveBeenCalledWith('text/plain', 'drafts')
@@ -224,7 +239,8 @@ describe('packed per-user dashboard', () => {
     renderPage()
     await customize()
     fireEvent.click(screen.getByRole('radio', { name: 'Wide' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Edit tiles' }))
+    await openWidgetMenu('quick_actions')
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Edit tiles' }))
     const dialog = screen.getByRole('dialog')
     fireEvent.click(within(dialog).getByRole('switch', { name: 'Hide General Book' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))

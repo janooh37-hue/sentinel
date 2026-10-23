@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
-import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
+import { WidgetEmpty, WidgetFrame, WIDGET_SUPPORT } from '@/components/dashboard/WidgetFrame'
 import { useFitCount } from '@/components/dashboard/useFitCount'
 import { Skeleton } from '@/components/ui/skeleton'
+import { bidi } from '@/lib/bidi'
 import {
   formatRegisterMonth,
   inmateRegisterHref,
@@ -12,7 +13,7 @@ import {
 import { useInmateAwaitingClose } from '@/pages/application/statistics/useInmateRegister'
 import type { WidgetProps } from './types'
 
-const linkClass = 'rounded-sm text-[0.72em] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+const linkClass = `rounded-sm ${WIDGET_SUPPORT} font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`
 
 /** Ended inmate-violation months the current caller can act on. */
 export function ViolationMonthsWidget({ tier, rows }: WidgetProps): React.JSX.Element {
@@ -33,7 +34,7 @@ export function ViolationMonthsWidget({ tier, rows }: WidgetProps): React.JSX.El
   const locale = `${i18n.language.split('-u-')[0]}-u-nu-latn`
 
   return (
-    <WidgetFrame title={t('dashboard.widgets.violation_months.title')} count={query.isSuccess && list ? total : undefined} viewAllTo={viewAllTo}>
+    <WidgetFrame title={t('dashboard.widgets.violation_months.title')} count={query.isSuccess && list ? total : undefined} viewAllTo={viewAllTo} compact={tier === 'glance'}>
       {query.isLoading ? (
         <div className="space-y-2" aria-label={t('common.loading')}>
           <Skeleton className="h-7 w-1/3" />
@@ -45,16 +46,16 @@ export function ViolationMonthsWidget({ tier, rows }: WidgetProps): React.JSX.El
           <button type="button" className={`${linkClass} self-start`} onClick={() => void query.refetch()}>{t('common.retry')}</button>
         </div>
       ) : total === 0 ? (
-        <p className="truncate text-[0.75em] text-muted-foreground" title={t('dashboard.widgets.violation_months.empty')}>{t('dashboard.widgets.violation_months.empty')}</p>
+        <WidgetEmpty message={t('dashboard.widgets.violation_months.empty')} to={viewAllTo} action={t('dashboard.widgets.violation_months.emptyAction')} />
       ) : !list ? (
         <div className="flex min-h-0 min-w-0 flex-col gap-2">
           <p className="flex min-w-0 shrink-0 items-baseline gap-2 text-3xl font-semibold text-foreground"><span className="tabular-nums">{total}</span><span className="min-w-0 truncate text-xs font-normal text-muted-foreground" title={t('dashboard.widgets.violation_months.monthsOpen', { count: total })}>{t('dashboard.widgets.violation_months.monthsOpen', { count: total })}</span></p>
           {readyMonth ? (
-            <Link className={`${linkClass} block w-full min-w-0 shrink-0 truncate text-success`} title={t('dashboard.widgets.violation_months.readyMonth', { month: formatRegisterMonth(readyMonth.year, readyMonth.month, locale) })} to={inmateRegisterHref(readyMonth.year, readyMonth.month)}>
-              {t('dashboard.widgets.violation_months.readyMonth', { month: formatRegisterMonth(readyMonth.year, readyMonth.month, locale) })}
+            <Link className={`${linkClass} block w-full min-w-0 shrink-0 truncate text-success`} title={t('dashboard.widgets.violation_months.readyMonth', { month: bidi(formatRegisterMonth(readyMonth.year, readyMonth.month, locale)) })} to={inmateRegisterHref(readyMonth.year, readyMonth.month)}>
+              {t('dashboard.widgets.violation_months.readyMonth', { month: bidi(formatRegisterMonth(readyMonth.year, readyMonth.month, locale)) })}
             </Link>
           ) : (
-            <p className="shrink-0 truncate text-[0.7em] text-muted-foreground" title={t('dashboard.widgets.violation_months.pending')}>{t('dashboard.widgets.violation_months.pending')}</p>
+            <p className="shrink-0 truncate text-[0.75em] text-muted-foreground" title={t('dashboard.widgets.violation_months.pending')}>{t('dashboard.widgets.violation_months.pending')}</p>
           )}
         </div>
       ) : (
@@ -70,10 +71,10 @@ export function ViolationMonthsWidget({ tier, rows }: WidgetProps): React.JSX.El
                     className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-0.5 rounded-lg py-1.5 text-start hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <div className="min-w-0">
-                      <span className="block truncate text-[0.8em] font-medium text-foreground">{monthLabel}</span>
-                      <span className="block text-[0.65em] text-muted-foreground">{t(`inmateStats.workflow.${item.stage}`)} · {t('inmateStats.awaiting.rows', { count: item.row_count })}</span>
+                      <bdi className="block truncate text-[0.85em] font-medium text-foreground">{monthLabel}</bdi>
+                      <span className={`${WIDGET_SUPPORT} block text-muted-foreground`}>{t(`inmateStats.workflow.${item.stage}`)} · {t('inmateStats.awaiting.rows', { count: item.row_count })}</span>
                     </div>
-                    <span className={`rounded-md px-1.5 py-0.5 text-[0.65em] font-semibold ${item.closable ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}>
+                    <span className={`${WIDGET_SUPPORT} rounded-md px-1.5 py-0.5 font-semibold ${item.closable ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}>
                       {item.closable ? t('inmateStats.awaiting.closable') : t('inmateStats.awaiting.blocked', { count: item.pending_count })}
                     </span>
                   </Link>
