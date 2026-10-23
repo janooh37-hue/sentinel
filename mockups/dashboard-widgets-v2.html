@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GSSG · Dashboard widgets v2 (proposal for approval)</title>
+<!--
+  Proposal mockup. Single self-contained file, tokens copied from DESIGN.md §1.1.
+  Every region carries data-od-id so review comments can point at it
+  ("change w-my_documents", "move catalog-records").
+  Tabs: Dashboard (view + Customize mode) · Widget catalog · Findings · Critique.
+-->
+<style>
+:root{
+  --bg:#f5f4f1;--surface:#fff;--surface-raised:#fafaf6;--surface-tinted:#f0eee8;
+  --primary:#0d2845;--primary-hover:#1d3a5e;--primary-soft:#e8edf3;--on-primary:#fff;
+  --accent:#c8102e;--accent-soft:#fbe5e8;
+  --success:#047857;--success-soft:#d6f0e4;--warning:#b45309;--warning-soft:#fbedd8;
+  --info:#1d4ed8;--info-soft:#e0e8f8;
+  --text:#1c1f24;--text-muted:#5a6068;--text-faint:#8b9098;
+  --border:#e6e4dd;--border-strong:#d4d1c8;--hairline:#efece5;
+  --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+  --row:9.25rem;--gap:.875rem;
+}
+[data-theme=dark]{
+  --bg:#0a0e18;--surface:#131826;--surface-raised:#1a2034;--surface-tinted:#1f263b;
+  --primary:#5778cf;--primary-hover:#7491db;--primary-soft:#1c2849;--on-primary:#0a0e18;
+  --accent:#ef4858;--accent-soft:#3a1820;--success:#34d399;--success-soft:#142d23;
+  --warning:#fbbf24;--warning-soft:#3a2a10;--info:#60a5fa;--info-soft:#1c2940;
+  --text:#e6e9f2;--text-muted:#8a93a7;--text-faint:#5f6678;
+  --border:#2a3148;--border-strong:#3a4360;--hairline:#1f263b;
+  --hero-grad:linear-gradient(135deg,#050816 0%,#0d1428 50%,#1a2540 100%);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px}
+body{font-family:"Inter","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.4}
+[dir=rtl] body,[dir=rtl] button{font-family:"Noto Sans Arabic","Segoe UI",system-ui,sans-serif}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+.mono{font-family:"IBM Plex Mono",Consolas,monospace;font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+
+/* ---------- review chrome (not part of the design) ---------- */
+.review{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:center;padding:.55rem 1rem;background:#1c1f24;color:#e6e9f2;font-size:.8rem}
+.review b{font-weight:600;letter-spacing:.02em}
+.review .grp{display:inline-flex;border:1px solid #3a4360;border-radius:99px;overflow:hidden}
+.review .grp button{padding:.3rem .75rem;color:#cfd5e2}
+.review .grp button[aria-pressed=true]{background:#e6e9f2;color:#1c1f24;font-weight:600}
+.review .sp{flex:1}
+
+/* ---------- app frame ---------- */
+.frame{margin-inline:auto;transition:max-width .2s}
+.frame.mobile{max-width:390px;border-inline:1px solid var(--border);min-height:100vh}
+.topnav{display:flex;align-items:center;gap:1.5rem;padding:.8rem 1.75rem;background:var(--surface);border-bottom:1px solid var(--hairline)}
+.topnav .logo{display:flex;align-items:center;gap:.55rem;font-weight:700;color:var(--primary)}
+.topnav .logo i{width:1.6rem;height:1.6rem;border-radius:50%;background:var(--primary);display:inline-block}
+.topnav nav{display:flex;gap:1.1rem;font-size:.88rem;color:var(--text-muted)}
+.topnav nav span:first-child{color:var(--text);font-weight:600}
+.mobile .topnav nav{display:none}
+.page{padding:1.5rem 1.75rem 3rem;margin-inline:auto}
+.page.compact{max-width:1180px}
+.mobile .page{padding:1rem}
+
+.hero{position:relative;overflow:hidden;border-radius:1rem;background:var(--hero-grad);color:#fff;padding:1.4rem 2rem;margin-bottom:1.5rem;display:flex;justify-content:space-between;gap:1rem}
+.hero small{font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;opacity:.6}
+.hero h1{font-size:1.45rem;font-weight:600;margin:.25rem 0 .5rem;letter-spacing:-.01em}
+.hero .strip{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;font-size:.75rem;opacity:.9}
+.hero .chip{background:rgba(255,255,255,.1);border-radius:99px;padding:.2rem .65rem}
+.hero .crest{width:4.5rem;height:4.5rem;border-radius:50%;background:rgba(255,255,255,.12);box-shadow:0 0 0 1px rgba(255,255,255,.2);flex-shrink:0;align-self:center}
+.mobile .hero{padding:1rem}.mobile .hero .crest{width:2.75rem;height:2.75rem;align-self:flex-start}
+
+.strap{display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem;gap:1rem}
+.strap h2{font-size:1.1rem;font-weight:600;letter-spacing:-.01em}
+.linkbtn{display:inline-flex;align-items:center;gap:.4rem;font-size:.85rem;font-weight:500;color:var(--primary);border-radius:6px;padding:.2rem .3rem}
+.linkbtn:hover{text-decoration:underline}
+
+/* ---------- edit banner ---------- */
+.editbar{display:none;align-items:center;gap:.75rem 1rem;flex-wrap:wrap;margin-bottom:.875rem;padding:.7rem 1rem;border:1px solid var(--border);border-radius:.85rem;background:var(--surface)}
+.editing .editbar{display:flex}
+.editbar p{font-size:.82rem;color:var(--text-muted);flex:1;min-width:14rem}
+.editbar p b{color:var(--text);font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:99px;overflow:hidden;font-size:.78rem}
+.seg button{padding:.32rem .8rem;color:var(--text-muted)}
+.seg button[aria-pressed=true]{background:var(--primary);color:var(--on-primary);font-weight:600}
+.seg button:disabled{opacity:.35;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:.35rem;border-radius:99px;padding:.42rem 1rem;font-size:.82rem;font-weight:500}
+.pill.primary{background:var(--primary);color:var(--on-primary)}
+.pill.primary:hover{background:var(--primary-hover)}
+.pill.outline{border:1px solid var(--border);background:var(--surface)}
+.toggle{display:inline-flex;align-items:center;gap:.45rem;font-size:.8rem;color:var(--text-muted)}
+.toggle input{accent-color:var(--primary);width:1rem;height:1rem}
+
+/* ---------- the grid ---------- */
+.layout{display:flex;gap:1rem;align-items:flex-start}
+.board{flex:1;min-width:0;display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));grid-auto-rows:var(--row);gap:var(--gap);position:relative}
+.hole{border:1.5px dashed var(--border-strong);border-radius:1rem;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:.78rem;gap:.35rem}
+.hole.warn{border-color:var(--accent);color:var(--accent);background:color-mix(in oklab,var(--accent) 5%,transparent)}
+.board:not(.editing-board) .hole.warn{background:repeating-linear-gradient(45deg,transparent 0 8px,color-mix(in oklab,var(--accent) 7%,transparent) 8px 16px)}
+
+.w{position:relative;background:var(--surface);border:1px solid var(--hairline);border-radius:1rem;padding:1rem 1.15rem;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;transition:box-shadow .2s,transform .2s}
+.w:hover{box-shadow:0 6px 18px rgba(13,40,69,.08)}
+.w.grown{outline:1.5px dashed color-mix(in oklab,var(--success) 70%,transparent);outline-offset:-1.5px}
+.wh{display:flex;align-items:center;justify-content:space-between;gap:.5rem;min-height:1.4rem}
+.wl{font-size:.82rem;font-weight:500;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wa{font-size:.75rem;font-weight:500;color:var(--primary);white-space:nowrap;display:inline-flex;gap:.2rem;align-items:center;border-radius:4px}
+.wa:hover{text-decoration:underline}
+.wa .chev{display:inline-block}
+[dir=rtl] .wa .chev{transform:scaleX(-1)}
+.big{font-size:2.15rem;font-weight:700;letter-spacing:-.02em;line-height:1;margin-top:.55rem;font-variant-numeric:tabular-nums}
+.big small{font-size:.8rem;font-weight:500;color:var(--text-muted);letter-spacing:0;margin-inline-start:.35rem}
+.sub{font-size:.76rem;color:var(--text-muted);margin-top:auto;display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+.dot{width:.42rem;height:.42rem;border-radius:50%;display:inline-block;flex-shrink:0}
+.ok{color:var(--success)}.warnc{color:var(--warning)}.bad{color:var(--accent)}
+.tag{display:inline-flex;align-items:center;gap:.25rem;border-radius:99px;padding:.1rem .5rem;font-size:.7rem;font-weight:600;white-space:nowrap}
+.tag.warn{background:var(--warning-soft);color:var(--warning)}
+.tag.bad{background:var(--accent-soft);color:var(--accent)}
+.tag.ok{background:var(--success-soft);color:var(--success)}
+.tag.info{background:var(--info-soft);color:var(--info)}
+.tag.neutral{background:var(--surface-tinted);color:var(--text-muted)}
+.cnt{font-size:.72rem;font-weight:600;background:var(--surface-tinted);color:var(--text-muted);border-radius:99px;padding:.05rem .5rem;margin-inline-start:.35rem}
+
+.segbar{display:flex;height:.42rem;border-radius:99px;overflow:hidden;background:var(--surface-tinted);margin-top:.75rem;gap:2px}
+.segbar span{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:.35rem .9rem;margin-top:.6rem;font-size:.74rem;color:var(--text-muted)}
+.legend a{display:inline-flex;align-items:center;gap:.35rem;border-radius:4px}
+.legend a:hover{color:var(--text)}
+.legend b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+
+.split{display:flex;gap:1.25rem;align-items:flex-end;margin-top:.4rem}
+.split > div{display:flex;flex-direction:column}
+.split .k{font-size:.72rem;color:var(--text-muted)}
+
+.rows{list-style:none;margin-top:.5rem;display:flex;flex-direction:column;min-height:0;flex:1;overflow:hidden}
+.rows li a{display:flex;align-items:center;gap:.6rem;padding:.38rem .35rem;border-radius:.5rem;font-size:.8rem;min-width:0}
+.rows li a:hover{background:var(--surface-tinted)}
+.rows .av{width:1.75rem;height:1.75rem;border-radius:50%;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:600;flex-shrink:0;font-family:"IBM Plex Mono",monospace}
+.rows .ic{width:1.75rem;height:1.75rem;border-radius:.45rem;background:var(--surface-tinted);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.8rem}
+.rows .t{flex:1;min-width:0;display:flex;flex-direction:column}
+.rows .t span:first-child{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rows .t span:last-child{font-size:.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rows .m{font-size:.7rem;color:var(--text-muted);white-space:nowrap;display:flex;flex-direction:column;align-items:flex-end;gap:.15rem}
+.more{font-size:.74rem;color:var(--primary);font-weight:500;padding-top:.35rem;border-top:1px solid var(--hairline);display:flex;justify-content:space-between}
+.more:hover{text-decoration:underline}
+
+.qa{display:grid;gap:.6rem;flex:1;margin-top:.55rem;min-height:0}
+.qa a{display:flex;flex-direction:column;justify-content:space-between;border-radius:.8rem;background:var(--surface-raised);border:1px solid var(--hairline);padding:.6rem .7rem;font-size:.8rem;font-weight:500;min-height:0}
+.qa a:hover{border-color:var(--border-strong);background:var(--surface-tinted)}
+.qa a em{font-style:normal;font-size:1.3rem;line-height:1}
+.pulse{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-top:.5rem}
+.pulse div{background:var(--surface-raised);border-radius:.6rem;padding:.45rem .6rem}
+.pulse b{display:block;font-size:1.2rem;font-variant-numeric:tabular-nums}
+.pulse span{font-size:.7rem;color:var(--text-muted)}
+.chips{display:flex;flex-wrap:wrap;gap:.35rem .9rem;margin-top:.55rem;font-size:.76rem;color:var(--text-muted)}
+.chips a{display:inline-flex;align-items:center;gap:.35rem;border-radius:4px}
+.chips a:hover{color:var(--text);text-decoration:underline}
+.chips b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:.45rem;margin-top:.55rem}
+.tiles a{background:var(--surface-raised);border-radius:.6rem;padding:.4rem .55rem;font-size:.7rem;color:var(--text-muted)}
+.tiles a b{display:block;font-size:1.05rem;color:var(--text)}
+.tiles a:hover{background:var(--surface-tinted)}
+
+/* edit affordances */
+.wtools{display:none}
+.editing .w{cursor:grab;border-color:var(--border-strong)}
+.w{container-type:inline-size}
+.editing .w .wtools{display:flex;position:absolute;inset-inline:0;top:0;height:2.6rem;padding:0 .45rem;gap:.3rem;align-items:center;justify-content:space-between;background:var(--surface-raised);border-bottom:1px solid var(--hairline);z-index:2}
+.editing .w .wbody{opacity:.55;pointer-events:none}
+.wtools .grip{font-size:.85rem;color:var(--text-faint);padding:0 .2rem;letter-spacing:-.15em}
+@container (max-width: 17rem){.wtools .nm,.wtools .grip{display:none}.wtools{justify-content:flex-end}}
+[dir=rtl] .wtools [data-move]{transform:scaleX(-1)}
+.wtools .sz{display:inline-flex;border:1px solid var(--border);border-radius:99px;overflow:hidden}
+.wtools .sz button{font-size:.66rem;font-weight:600;padding:.12rem .42rem;color:var(--text-muted)}
+.wtools .sz button[aria-pressed=true]{background:var(--primary);color:var(--on-primary)}
+.wtools .sz button:disabled{opacity:.3;cursor:not-allowed}
+.wtools .ib{width:1.4rem;height:1.4rem;border-radius:.4rem;display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.8rem}
+.wtools .ib:hover{background:var(--surface-tinted);color:var(--text)}
+.wtools .nm{font-size:.7rem;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-inline:.2rem}
+.w.dragover{box-shadow:0 0 0 2px var(--primary)}
+.w.dragging{opacity:.4}
+.wbody{display:flex;flex-direction:column;flex:1;min-height:0}
+
+/* add-widgets drawer */
+.drawer{display:none;width:19rem;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:1rem;position:sticky;top:3.4rem;max-height:calc(100vh - 4.5rem);overflow:auto}
+.editing .drawer{display:block}
+.drawer h3{font-size:.95rem;font-weight:600}
+.drawer > p{font-size:.74rem;color:var(--text-muted);margin:.25rem 0 .75rem}
+.drawer h4{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin:.9rem 0 .4rem;font-weight:600}
+.cat{display:flex;align-items:center;gap:.6rem;padding:.5rem .55rem;border:1px solid var(--hairline);border-radius:.7rem;margin-bottom:.4rem;background:var(--surface-raised)}
+.cat .ci{flex:1;min-width:0}
+.cat .ci b{display:block;font-size:.8rem;font-weight:600}
+.cat .ci span{font-size:.7rem;color:var(--text-muted)}
+.cat button{font-size:.72rem;font-weight:600;color:var(--primary);padding:.25rem .55rem;border-radius:99px;border:1px solid var(--border)}
+.cat button:hover{background:var(--primary-soft)}
+.cat.on{opacity:.55}
+.cat.on button{color:var(--text-muted)}
+.mobile .layout{flex-direction:column}.mobile .drawer{width:100%;position:static;max-height:none}
+
+/* ---------- other tabs ---------- */
+.tabpage{display:none}.tabpage.on{display:block}
+.doc{max-width:1180px;margin:0 auto;padding:1.5rem 1.75rem 4rem}
+.doc h2{font-size:1.25rem;font-weight:600;margin-bottom:.35rem}
+.doc .lede{color:var(--text-muted);font-size:.88rem;margin-bottom:1.25rem;max-width:75ch}
+table{width:100%;border-collapse:collapse;font-size:.8rem;background:var(--surface);border:1px solid var(--hairline);border-radius:.8rem;overflow:hidden}
+th,td{text-align:start;padding:.55rem .7rem;border-bottom:1px solid var(--hairline);vertical-align:top}
+th{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-faint);font-weight:600;background:var(--surface-raised)}
+td code{font-family:"IBM Plex Mono",monospace;font-size:.72rem;background:var(--surface-tinted);padding:.05rem .3rem;border-radius:4px;word-break:break-all}
+.catalog{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:var(--row);gap:var(--gap);margin-bottom:.6rem}
+.cathead{display:flex;align-items:baseline;gap:.75rem;margin:1.6rem 0 .6rem;flex-wrap:wrap}
+.cathead h3{font-size:1rem;font-weight:600}
+.cathead .to{font-size:.74rem;color:var(--text-muted)}
+.critique{display:grid;grid-template-columns:22rem 1fr;gap:1.5rem;align-items:start}
+.dims{display:grid;gap:.6rem}
+.dim{background:var(--surface);border:1px solid var(--hairline);border-radius:.8rem;padding:.75rem .9rem;font-size:.8rem}
+.dim header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.3rem}
+.dim header b{font-size:.88rem}
+.dim header span{font-size:.78rem;color:var(--text-muted)}
+.dim p{color:var(--text-muted)}
+.lists{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:1.25rem}
+.lists section{background:var(--surface);border:1px solid var(--hairline);border-radius:.8rem;padding:.8rem 1rem;font-size:.8rem}
+.lists h4{font-size:.85rem;margin-bottom:.4rem}
+.lists li{margin-inline-start:1rem;margin-bottom:.3rem;color:var(--text-muted)}
+.toast{position:fixed;bottom:1rem;inset-inline-start:50%;transform:translateX(-50%);background:#1c1f24;color:#fff;font-size:.78rem;padding:.55rem .9rem;border-radius:.6rem;opacity:0;transition:opacity .2s;pointer-events:none;z-index:99;max-width:90vw}
+[dir=rtl] .toast{transform:translateX(50%)}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="review" data-od-id="review-bar">
+  <b>Dashboard widgets v2 · proposal</b>
+  <span class="grp" role="group" aria-label="Tab">
+    <button data-tab="dash" aria-pressed="true">Dashboard</button>
+    <button data-tab="catalog" aria-pressed="false">Widget catalog</button>
+    <button data-tab="findings" aria-pressed="false">Findings</button>
+    <button data-tab="critique" aria-pressed="false">Critique</button>
+  </span>
+  <span class="sp"></span>
+  <span class="grp" role="group" aria-label="Language"><button data-lang="en" aria-pressed="true">EN</button><button data-lang="ar" aria-pressed="false">ع</button></span>
+  <span class="grp" role="group" aria-label="Theme"><button data-theme-btn="light" aria-pressed="true">Light</button><button data-theme-btn="dark" aria-pressed="false">Dark</button></span>
+  <span class="grp" role="group" aria-label="Viewport"><button data-vp="desk" aria-pressed="true">Desktop</button><button data-vp="mobile" aria-pressed="false">Phone</button></span>
+  <span class="grp" role="group" aria-label="Preset"><button data-preset="admin" aria-pressed="true">HR admin</button><button data-preset="clerk" aria-pressed="false">Clerk (fewer rights)</button></span>
+</div>
+
+<!-- ======================= DASHBOARD ======================= -->
+<div class="tabpage on" id="tab-dash">
+<div class="frame" id="frame">
+  <div class="topnav" data-od-id="topnav"><span class="logo"><i></i>GSSG</span><nav><span data-t="navHome"></span><span data-t="navEmployees"></span><span data-t="navRecords"></span><span data-t="navLeaves"></span><span data-t="navLedger"></span></nav></div>
+  <div class="page compact" id="page">
+    <section class="hero" data-od-id="hero">
+      <div><small data-t="greeting"></small><h1 data-t="welcome"></h1>
+        <div class="strip"><span class="mono">Fri, 23 Oct · ١ جمادى الأولى ١٤٤٨</span><span class="chip">● <b class="num">9</b> <span data-t="onLeaveChip"></span></span></div></div>
+      <span class="crest" aria-hidden="true"></span>
+    </section>
+
+    <div class="strap" data-od-id="strap">
+      <h2 data-t="myWidgets"></h2>
+      <button class="linkbtn" id="customize" data-t="customize"></button>
+    </div>
+
+    <div class="editbar" data-od-id="editbar">
+      <p id="editHint"></p>
+      <span class="seg" role="group" aria-label="Canvas"><button data-canvas="compact" aria-pressed="true" data-t="compact"></button><button data-canvas="wide" aria-pressed="false" data-t="wide"></button></span>
+      <label class="toggle"><input type="checkbox" id="autofit" checked><span data-t="autofit"></span></label>
+      <button class="pill outline" id="reset" data-t="reset"></button>
+      <button class="pill outline" id="cancel" data-t="cancel"></button>
+      <button class="pill primary" id="done" data-t="done"></button>
+    </div>
+
+    <div class="layout">
+      <div class="board" id="board" data-od-id="board"></div>
+      <aside class="drawer" id="drawer" data-od-id="drawer" aria-label="Add widgets"></aside>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ======================= CATALOG ======================= -->
+<div class="tabpage" id="tab-catalog"><div class="doc" id="catalogDoc"></div></div>
+
+<!-- ======================= FINDINGS ======================= -->
+<div class="tabpage" id="tab-findings"><div class="doc" id="findingsDoc"></div></div>
+
+<!-- ======================= CRITIQUE ======================= -->
+<div class="tabpage" id="tab-critique"><div class="doc" id="critiqueDoc"></div></div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---------------- i18n ---------------- */
+const I = {
+en:{navHome:'Home',navEmployees:'Employees',navRecords:'Records',navLeaves:'Leaves',navLedger:'Ledger',
+greeting:'Good morning',welcome:'Welcome back, Ahmed Saeed Al Ali',onLeaveChip:'on leave today',
+myWidgets:'My widgets',customize:'Customize ✎',compact:'Compact',wide:'Wide',autofit:'Fill gaps automatically',
+reset:'Reset',cancel:'Cancel',done:'Save layout',
+editHint:'<b>Customizing.</b> Drag a widget to move it, pick a size, or remove it. Add more from the panel.',
+addTitle:'Add widgets',addHint:'Only widgets you have access to are listed. Each one fits any size.',
+add:'Add',added:'On board',remove:'Remove',earlier:'Move earlier',later:'Move later',
+hole:'Empty space',holeAdd:'+ Add widget',viewAll:'View all',more:'more',
+src_records:'Records',src_approvals:'Approvals',src_mail:'Mail',src_employees:'Employees',src_leaves:'Leaves',src_ops:'Operations',src_services:'Services',
+},
+ar:{navHome:'الرئيسية',navEmployees:'الموظفون',navRecords:'السجلات',navLeaves:'الإجازات',navLedger:'دفتر الصادر والوارد',
+greeting:'صباح الخير',welcome:'مرحبًا بعودتك، أحمد سعيد آل علي',onLeaveChip:'في إجازة اليوم',
+myWidgets:'أدواتي',customize:'تخصيص ✎',compact:'مضغوط',wide:'عريض',autofit:'ملء الفراغات تلقائيًا',
+reset:'استعادة الافتراضي',cancel:'إلغاء',done:'حفظ التخطيط',
+editHint:'<b>وضع التخصيص.</b> اسحب الأداة لنقلها، أو اختر حجمها، أو أزلها. أضف أدوات أخرى من اللوحة.',
+addTitle:'إضافة أدوات',addHint:'تظهر هنا الأدوات المتاحة لصلاحياتك فقط، وكل أداة تناسب أي حجم.',
+add:'إضافة',added:'معروضة',remove:'إزالة',earlier:'نقل للأمام',later:'نقل للخلف',
+hole:'مساحة فارغة',holeAdd:'+ إضافة أداة',viewAll:'عرض الكل',more:'أخرى',
+src_records:'السجلات',src_approvals:'الاعتمادات',src_mail:'البريد',src_employees:'الموظفون',src_leaves:'الإجازات',src_ops:'العمليات',src_services:'الخدمات',
+}};
+let lang='en';
+const t=k=>I[lang][k]??k;
+const L=(en,ar)=>lang==='ar'?ar:en;
+
+/* ---------------- sample data ---------------- */
+const P=[
+ ['MOHAMMED AL HARBI','محمد الحربي','G-1042'],['YOUSEF AL DOSSARI','يوسف الدوسري','G-0877'],['RAKESH KUMAR','راكيش كومار','G-1203'],
+ ['FATIMA AL MANSOORI','فاطمة المنصوري','G-0451'],['OMAR SAEED','عمر سعيد','G-0990'],['JOHN MATHEW','جون ماثيو','G-1311'],
+ ['KHALID AL SHAMSI','خالد الشامسي','G-0512'],['SALEM AL KETBI','سالم الكتبي','G-0733'],['ANIL RAO','أنيل راو','G-1288']];
+const nm=p=>L(p[0].replace(/\b(\w)(\w*)/g,(m,a,b)=>a+b.toLowerCase()),p[1]);
+const ini=p=>p[0].split(' ').filter(Boolean).map(s=>s[0]).slice(0,2).join('');
+const REC=[
+ ['GSSG-HR-300-114','Salary certificate','شهادة راتب',0,'22 Oct'],['GSSG-HR-300-109','Leave undertaking','تعهد إجازة',1,'21 Oct'],
+ ['GSSG-HR-300-101','Employee clearance','إخلاء طرف موظف',2,'20 Oct'],['GSSG-HR-300-097','Duty resumption','مباشرة عمل',3,'19 Oct'],
+ ['GSSG-HR-300-090','Passport release','تسليم جواز سفر',4,'16 Oct']];
+const QA=[['📅','Leave application','طلب إجازة'],['✅','Employee clearance','إخلاء طرف موظف'],['🚨','Violation form','نموذج مخالفة'],['💰','Salary transfer','تحويل راتب'],
+ ['🔁','Duty resumption','مباشرة عمل'],['📤','Passport release','تسليم جواز سفر'],['⚠️','Warning form','نموذج إنذار'],['📓','General book','كتاب عام']];
+
+/* link helper: links are real routes the target pages read today (see Findings) */
+const A=(to,label,cls='wa')=>`<a href="#" class="${cls}" data-to="${to}">${label}</a>`;
+const go=label=>`${label} <span class="chev" aria-hidden="true">›</span>`;
+const head=(label,to,count)=>`<div class="wh"><span class="wl">${label}${count!=null?`<span class="cnt">${count}</span>`:''}</span>${to?A(to,go(t('viewAll'))):''}</div>`;
+const rowsFit=(h)=>h>=2?(h>=3?7:4):0;
+function list(items,h,moreTo,total){
+  const n=rowsFit(h);const shown=items.slice(0,n);const rest=(total??items.length)-shown.length;
+  return `<ul class="rows">${shown.join('')}</ul>${rest>0?`<a href="#" class="more" data-to="${moreTo}"><span>+${rest} ${t('more')}</span><span class="chev">›</span></a>`:''}`;
+}
+const row=(to,lead,title,meta,right)=>`<li><a href="#" data-to="${to}">${lead}<span class="t"><span>${title}</span><span>${meta}</span></span>${right?`<span class="m">${right}</span>`:''}</a></li>`;
+
+/* ---------------- widget catalog ----------------
+   tier: glance (1×1) · summary (≥2 wide, 1 tall) · tall (1 wide, ≥2 tall) · list (≥2 wide, ≥2 tall)
+   Every widget renders all four tiers, so any size works anywhere. */
+const MONTH='from=2026-10-01&to=2026-10-31';
+const W={
+my_documents:{src:'records',cap:'books.view',status:'rework',
+ label:()=>L('My documents · October','مستنداتي · أكتوبر'),
+ render(w,h,tier){
+  const parts=[[14,'var(--success)',L('Completed','مكتملة'),'/books?mine=1&status=approved&'+MONTH],
+               [3,'var(--info)',L('In approval','قيد الاعتماد'),'/books?mine=1&status=pending&'+MONTH],
+               [1,'var(--accent)',L('Returned','معادة للتعديل'),'/books?mine=1&status=returned&'+MONTH],
+               [2,'var(--text-faint)',L('Not submitted','لم تُرسل'),'/books?mine=1&status=none&'+MONTH]];
+  const tot=parts.reduce((a,p)=>a+p[0],0);
+  const bar=`<div class="segbar" aria-hidden="true">${parts.map(p=>`<span style="width:${p[0]/tot*100}%;background:${p[1]}"></span>`).join('')}</div>`;
+  const leg=`<div class="legend">${parts.map(p=>`<a href="#" data-to="${p[3]}"><span class="dot" style="background:${p[1]}"></span><b>${p[0]}</b> ${p[2]}</a>`).join('')}</div>`;
+  const top=head(this.label(),'/books?mine=1&status=approved&'+MONTH)+`<div class="big">14<small>${L('completed','مكتملة')}</small></div>`;
+  if(tier==='glance') return top+`<div class="sub"><span class="dot" style="background:var(--info)"></span>${L('3 in approval · 1 returned','3 قيد الاعتماد · 1 معادة')}</div>`;
+  if(tier==='summary') return top+bar+leg;
+  return top+bar+leg+list(REC.map((r,i)=>row('/books?open='+(1114-i),`<span class="ic">📄</span>`,`<span class="mono" style="color:var(--primary)">${r[0]}</span> · ${L(r[1],r[2])}`,nm(P[r[3]]),`<span class="tag ok">${L('Completed','مكتملة')}</span><span class="mono">${r[4]}</span>`)),h-1,'/books?mine=1&status=approved&'+MONTH,14);
+ }},
+approvals:{src:'approvals',cap:'approver or reviewer',status:'fix',
+ label:()=>L('Needs your signature','بانتظار توقيعك'),
+ render(w,h,tier){
+  const to='/books/approvals?tab=received&kind=sign&status=pending';
+  const top=head(this.label(),to)+`<div class="big">4<small>${L('to sign','للتوقيع')}</small></div>`;
+  const rv=A('/books/approvals?tab=received&kind=review&status=pending',L('+ 2 to review','+ 2 للمراجعة'),'wa');
+  if(tier==='glance') return top+`<div class="sub"><span class="dot" style="background:var(--warning)"></span>${L('Oldest 3 days','الأقدم منذ 3 أيام')} · ${rv}</div>`;
+  if(tier==='summary') return top+`<div class="sub">${L('Oldest: Transfer letter, G-0877 · 3 days','الأقدم: خطاب نقل، G-0877 · منذ 3 أيام')}</div><div class="sub" style="margin-top:.3rem">${rv}</div>`;
+  const items=[['GSSG-HR-300-121','Transfer letter','خطاب نقل',1,'3d','High'],['GSSG-HR-300-119','Warning form','نموذج إنذار',2,'2d'],['GSSG-HR-300-118','Salary transfer','تحويل راتب',3,'1d'],['GSSG-HR-300-117','Leave application','طلب إجازة',4,'5h']];
+  return head(this.label(),to,4)+`<div class="sub" style="margin-top:.3rem">${rv}</div>`+list(items.map(r=>row('/books/'+r[0]+'?tab=received',`<span class="ic">✍️</span>`,`${L(r[1],r[2])}${r[5]?` <span class="tag bad">${L('High','عاجل')}</span>`:''}`,`<span class="mono">${r[0]}</span> · ${nm(P[r[3]])}`,`<span class="mono">${r[4]}</span>`)),h,to,4);
+ }},
+sent_approvals:{src:'approvals',cap:'books.view',status:'fix',
+ label:()=>L('Sent for approval','مرسلة للاعتماد'),
+ render(w,h,tier){
+  const to='/books/approvals?tab=sent&status=pending';
+  const top=head(this.label(),to)+`<div class="big">5<small>${L('pending','قيد الانتظار')}</small></div>`;
+  const ret=`<a href="#" class="tag bad" data-to="/books/approvals?tab=sent&status=returned">${L('1 needs changes','1 تحتاج تعديلًا')}</a>`;
+  if(tier!=='list'&&tier!=='tall') return top+`<div class="sub">${ret}${tier==='summary'?` ${L('Oldest: Clearance, waiting on Khalid · 2 days','الأقدم: إخلاء طرف، بانتظار خالد · منذ يومين')}`:''}</div>`;
+  const items=[['Employee clearance','إخلاء طرف موظف',6,'2d'],['Duty resumption','مباشرة عمل',7,'1d'],['Leave undertaking','تعهد إجازة',6,'6h']];
+  return head(this.label(),to,5)+`<div class="sub" style="margin-top:.35rem">${ret}</div>`+list(items.map(r=>row(to,`<span class="av">${ini(P[r[2]])}</span>`,L(r[0],r[1]),L('Waiting on ','بانتظار ')+nm(P[r[2]]),`<span class="mono">${r[3]}</span>`)),h,to,5);
+ }},
+inbox:{src:'records',cap:'books.view',status:'keep',
+ label:()=>L('Sent to me','المرسلة إليّ'),
+ render(w,h,tier){
+  const to='/ledger?tab=books&scope=incoming';
+  const top=head(this.label(),to)+`<div class="big">7<small>${L('unread','غير مقروءة')}</small></div>`;
+  if(tier==='glance') return top+`<div class="sub">${L('2 need action','2 تتطلب إجراءً')}</div>`;
+  const purp=`<div class="chips">${[[2,L('For action','للإجراء')],[3,L('For information','للعلم')],[1,L('Reply needed','للرد')],[1,L('Circulate','للتعميم')]].map(p=>`<a href="#" data-to="${to}"><b>${p[0]}</b>${p[1]}</a>`).join('')}</div>`;
+  if(tier==='summary') return top+purp;
+  return top+purp+list([0,1,2,3].map(i=>row(to,`<span class="ic">📨</span>`,L(REC[i][1],REC[i][2]),L('From ','من ')+nm(P[i+3]),`<span class="mono">${REC[i][4]}</span>`)),h-1,to,7);
+ }},
+mail:{src:'mail',cap:'ledger.view',status:'rework',
+ label:()=>L('Unread mail','البريد غير المقروء'),
+ render(w,h,tier){
+  const to='/ledger?tab=email';
+  const sync=`<span class="dot" style="background:var(--success)"></span>${L('Synced 3 min ago','آخر مزامنة قبل 3 دقائق')} · <a href="#" class="wa" data-to="POST /email/sync">${L('Sync now','مزامنة الآن')}</a>`;
+  const top=head(this.label(),to)+`<div class="big">12<small>${L('unread','غير مقروءة')}</small></div>`;
+  if(tier==='glance') return top+`<div class="sub">${sync}</div>`;
+  if(tier==='summary') return top+`<div class="sub">${L('4 arrived today','4 وصلت اليوم')} · ${sync}</div>`;
+  const items=[['Iqama renewal follow-up','متابعة تجديد الإقامة','MOHRE','09:12'],['Site roster, November','جدول المناوبات لشهر نوفمبر','Al Wathba site','08:40'],['Medical fitness results','نتائج اللياقة الطبية','SEHA','Yesterday'],['Uniform delivery note','إشعار تسليم الزي','Supplies','Yesterday']];
+  return top+list(items.map((r,i)=>row('/ledger?mail='+(840+i),`<span class="ic"><span class="dot" style="background:var(--success)"></span></span>`,L(r[0],r[1]),r[2],`<span class="mono">${r[3]}</span>`)),h-1,to,12)+`<div class="sub" style="margin-top:.35rem">${sync}</div>`;
+ }},
+workforce:{src:'employees',cap:'employees.view',status:'fix',
+ label:()=>L('Workforce','القوى العاملة'),
+ render(w,h,tier){
+  const to='/employees';
+  const top=head(this.label(),to)+`<div class="big">412<small>${L('working','على رأس العمل')}</small></div>`;
+  const chips=`<div class="chips">${[[388,L('our staff','موظفونا'),'var(--primary)','/employees?status=Active'],[379,L('on site','في الموقع'),'var(--success)','/employees?status=Active'],[24,L('loaned','معارون'),'var(--info)','/employees?status=Loaned'],[9,L('on leave','في إجازة'),'var(--warning)','/leaves?status=Approved&from=2026-10-23&to=2026-10-23']].map(c=>`<a href="#" data-to="${c[3]}"><span class="dot" style="background:${c[2]}"></span><b>${c[0]}</b>${c[1]}</a>`).join('')}</div>`;
+  if(tier==='glance') return top+`<div class="sub"><span class="dot" style="background:var(--success)"></span>${L('379 on site','379 في الموقع')}</div>`;
+  return top+chips;
+ }},
+on_leave:{src:'leaves',cap:'leaves.view',status:'fix',
+ label:()=>L('On leave today','في إجازة اليوم'),
+ render(w,h,tier){
+  const to='/leaves?status=Approved&from=2026-10-23&to=2026-10-23';
+  const top=head(this.label(),to)+`<div class="big">9<small>${L('people','أشخاص')}</small></div>`;
+  if(tier==='glance') return top+`<div class="sub">${L('2 return tomorrow','2 يعودون غدًا')}</div>`;
+  if(tier==='summary') return top+`<div class="sub" style="gap:0">${[0,1,2,3,4].map(i=>`<span class="av" style="width:1.6rem;height:1.6rem;border-radius:50%;background:var(--primary-soft);color:var(--primary);display:inline-flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:600;margin-inline-end:-.35rem;border:2px solid var(--surface)">${ini(P[i])}</span>`).join('')}<span style="margin-inline-start:.7rem">+4 · ${L('2 return tomorrow','2 يعودون غدًا')}</span></div>`;
+  const types=[L('Annual','سنوية'),L('Sick','مرضية'),L('Annual','سنوية'),L('Emergency','طارئة'),L('Annual','سنوية'),L('Annual','سنوية'),L('Sick','مرضية'),L('Annual','سنوية'),L('Annual','سنوية')];
+  return head(this.label(),to,9)+list(P.map((p,i)=>row('/leaves?open='+(300+i),`<span class="av">${ini(p)}</span>`,nm(p),`<span class="mono">${p[2]}</span>`,`<span class="tag info">${types[i]}</span><span class="mono">${L('until','حتى')} ${24+i} Oct</span>`)),h,to,9);
+ }},
+returning:{src:'leaves',cap:'leaves.view',status:'fix',
+ label:()=>L('Returning this week','العائدون هذا الأسبوع'),
+ render(w,h,tier){
+  const to='/leaves';
+  const top=head(this.label(),to)+`<div class="big">4</div>`;
+  if(tier==='glance'||tier==='summary') return top+`<div class="sub"><span class="tag warn">${L('2 tomorrow','2 غدًا')}</span>${tier==='summary'?L(' Mohammed Al Harbi, Yousef Al Dossari',' محمد الحربي، يوسف الدوسري'):''}</div>`;
+  const d=[1,1,3,6];
+  return head(this.label(),to,4)+list([0,1,5,6].map((pi,i)=>row('/leaves?open='+(310+i),`<span class="av">${ini(P[pi])}</span>`,nm(P[pi]),`<span class="mono">${P[pi][2]}</span>`,`<span class="tag ${d[i]<=1?'warn':'neutral'}">${d[i]===1?L('Tomorrow','غدًا'):L(`In ${d[i]} days`,`بعد ${d[i]} أيام`)}</span>`)),h,to,4);
+ }},
+expiring:{src:'employees',cap:'expiry.view',status:'keep',
+ label:()=>L('Expiring documents','وثائق قاربت على الانتهاء'),
+ render(w,h,tier){
+  const to='/expiry';
+  const top=head(this.label(),to)+`<div class="big">8<small>${L('within 90 days','خلال 90 يومًا')}</small></div>`;
+  if(tier!=='list'&&tier!=='tall') return top+`<div class="sub"><span class="tag bad">${L('1 expired','1 منتهية')}</span><span class="tag warn">${L('2 within 30 days','2 خلال 30 يومًا')}</span></div>`;
+  const it=[[2,L('Emirates ID','الهوية'),'bad',L('Expired','منتهية')],[5,L('Passport','الجواز'),'warn','12d'],[8,L('Emirates ID','الهوية'),'warn','27d'],[3,L('Passport','الجواز'),'neutral','64d']];
+  return head(this.label(),to,8)+list(it.map(r=>row('/employees/'+P[r[0]][2]+'?tab=documents',`<span class="av">${ini(P[r[0]])}</span>`,nm(P[r[0]]),`<span class="mono">${P[r[0]][2]}</span> · ${r[1]}`,`<span class="tag ${r[2]}">${r[3]}</span>`)),h,to,8);
+ }},
+departures:{src:'employees',cap:'employees.view',status:'fix',
+ label:()=>L('Pending departures','مغادرات معلّقة'),
+ render(w,h,tier){
+  const to='/employees?pending=1';
+  const top=head(this.label(),to)+`<div class="big">3</div>`;
+  if(tier!=='list'&&tier!=='tall') return top+`<div class="sub"><span class="tag warn">${L('1 due this week','1 هذا الأسبوع')}</span></div>`;
+  const it=[[4,L('Resigned','استقالة'),L('5 days left','بقي 5 أيام')],[7,L('Transferred · Al Ain','نقل · العين'),L('12 days left','بقي 12 يومًا')],[8,L('Terminated','إنهاء خدمة'),L('21 days left','بقي 21 يومًا')]];
+  return head(this.label(),to,3)+list(it.map(r=>row('/employees/'+P[r[0]][2],`<span class="av">${ini(P[r[0]])}</span>`,nm(P[r[0]]),r[1],`<span class="mono">${r[2]}</span>`)),h,to,3);
+ }},
+drafts:{src:'records',cap:'books.view',status:'fix',
+ label:()=>L('My drafts','مسوداتي'),
+ render(w,h,tier){
+  const to='/books?mine=1&drafts=1';
+  const top=head(this.label(),to)+`<div class="big">2</div>`;
+  if(tier!=='list'&&tier!=='tall') return top+`<div class="sub">${L('Oldest started 4 days ago','أقدمها بدأت قبل 4 أيام')}</div>`;
+  return head(this.label(),to,2)+list([3,4].map(i=>row('/books?open='+(1114-i),`<span class="ic">📝</span>`,L(REC[i][1],REC[i][2]),nm(P[REC[i][3]]),`<span class="mono">${REC[i][4]}</span>`)),h,to,2);
+ }},
+violations:{src:'employees',cap:'violations.view',status:'rework',
+ label:()=>L('Open violations','مخالفات مفتوحة'),
+ render(w,h,tier){
+  const to='/employees?violations=open';
+  const top=head(this.label(),to)+`<div class="big">6</div>`;
+  if(tier!=='list'&&tier!=='tall') return top+`<div class="sub">${L('Newest: Late arrival, Gate 4 · today','الأحدث: تأخر عن الدوام، البوابة 4 · اليوم')}</div>`;
+  const it=[[2,L('Late arrival, Gate 4','تأخر عن الدوام، البوابة 4'),L('Today','اليوم')],[2,L('Uniform non-compliance','مخالفة الزي'),'18 Oct'],[6,L('Absent without notice','غياب دون إشعار'),'15 Oct'],[1,L('Late arrival','تأخر عن الدوام'),'11 Oct']];
+  return head(this.label(),to,6)+list(it.map((r,i)=>row('/employees/'+P[r[0]][2]+'?tab=violations&open='+(50+i),`<span class="ic">🚨</span>`,r[1],nm(P[r[0]]),`<span class="mono">${r[2]}</span>`)),h,to,6);
+ }},
+report_months:{src:'records',cap:'books.servicerecords.inmate_conduct_violations',status:'fix',clerkHidden:true,
+ label:()=>L('Monthly inmate reports','اعتماد التقارير الشهرية'),
+ render(w,h,tier){
+  const to='/services/inmate_conduct_violations?mode=stats&stats_month=2026-09';
+  const top=head(this.label(),to)+`<div class="big">2<small>${L('months open','أشهر مفتوحة')}</small></div>`;
+  if(tier!=='list'&&tier!=='tall') return top+`<div class="sub"><span class="tag ok">${L('September ready to close','سبتمبر جاهز للإغلاق')}</span></div>`;
+  const it=[['2026-09',L('September · in review · 41 rows','سبتمبر · قيد المراجعة · 41 سجلًا'),'ok',L('Ready to close','جاهز للإغلاق')],['2026-10',L('October · preparing · 17 rows','أكتوبر · قيد الإعداد · 17 سجلًا'),'warn',L('3 pending','3 معلقة')]];
+  return head(this.label(),to,2)+list(it.map(r=>row('/services/inmate_conduct_violations?mode=stats&stats_month='+r[0],`<span class="ic">⛓️</span>`,r[1],'',`<span class="tag ${r[2]}">${r[3]}</span>`)),h,to,2);
+ }},
+permits:{src:'ops',cap:'permits.view',status:'fix',clerkHidden:true,
+ label:()=>L('Permits','التصاريح'),
+ render(w,h,tier){
+  const to='/permits';
+  const top=head(this.label(),to)+`<div class="big">126<small>${L('active','سارية')}</small></div>`;
+  if(tier==='glance') return top+`<div class="sub"><span class="tag warn">${L('7 expiring','7 قاربت على الانتهاء')}</span></div>`;
+  const tiles=`<div class="tiles">${[[126,L('Active','سارية'),'active'],[7,L('Expiring','تنتهي قريبًا'),'expiring'],[3,L('Expired','منتهية'),'expired'],[1,L('Revoked','ملغاة'),'revoked']].map(x=>`<a href="#" data-to="/permits?state=${x[2]}"><b>${x[0]}</b>${x[1]}</a>`).join('')}</div>`;
+  if(tier==='summary'||tier==='tall') return top.replace(/<div class="big">.*?<\/div>/,'')+tiles;
+  const it=[['SP-2026-0412',L('Red zone · Contractor access','المنطقة الحمراء · دخول مقاول'),'active'],['SP-2026-0409',L('Green zone · Visitor','المنطقة الخضراء · زائر'),'expiring'],['IP-2026-0151',L('Item · Laptop out','مادة · إخراج حاسوب'),'pending'],['SP-2026-0398',L('Work residence','سكن العمال'),'active']];
+  return head(this.label(),to)+tiles+list(it.map(r=>row('/permits?preview='+r[0],`<span class="ic">🪪</span>`,`<span class="mono">${r[0]}</span>`,r[1],`<span class="tag ${r[2]==='expiring'?'warn':r[2]==='pending'?'info':'ok'}">${r[2]}</span>`)),h-1,to,9);
+ }},
+pulse:{src:'ops',cap:'workforce.dashboard.view',status:'fix',clerkHidden:true,
+ label:()=>L('Workforce pulse','نبض القوى العاملة'),
+ render(w,h,tier){
+  const g=`<div class="pulse"><div><b>214</b><span>${L('Scheduled','مجدولون')}</span></div><div><b>201</b><span>${L('On duty','في المناوبة')}</span></div><div><b class="ok">94%</b><span>${L('Coverage','التغطية')}</span></div></div>`;
+  if(tier==='glance') return head(this.label(),'sheet:coverage')+`<div class="big">94%<small>${L('coverage','تغطية')}</small></div><div class="sub">${L('201 of 214 on duty','201 من 214 في المناوبة')}</div>`;
+  return head(this.label(),'sheet:coverage')+g+`<div class="sub">${L('Updated 06:00 · BioTime','آخر تحديث 06:00 · BioTime')}</div>`;
+ }},
+quick_actions:{src:'services',cap:'documents.generate',status:'new',
+ label:()=>L('Quick actions','إجراءات سريعة'),
+ render(w,h,tier){
+  const cols=vp==='mobile'?2:Math.min(w*2,8);const n=Math.min(QA.length,cols*Math.max(h,1));
+  const tiles=QA.slice(0,tier==='glance'?2:n).map(q=>`<a href="#" data-to="/services/${q[1].toLowerCase().replace(/ /g,'-')}"><em aria-hidden="true">${q[0]}</em><span>${L(q[1],q[2])}</span></a>`).join('');
+  return head(this.label(),'/services')+`<div class="qa" style="grid-template-columns:repeat(${tier==='glance'?1:Math.min(cols,n)},1fr)">${tiles}</div>`;
+ }},
+};
+
+/* ---------------- size presets ---------------- */
+const SIZES={S:[1,1],M:[2,1],W:['full',1],L:[2,2],T:[1,2],XL:['full',2]};
+const SIZE_LABEL={S:'S',M:'M',W:'W',L:'L',T:'T',XL:'XL'};
+const DEFAULTS={
+admin:[['approvals','L'],['my_documents','M'],['sent_approvals','S'],['inbox','S'],['mail','M'],['workforce','M'],['quick_actions','W'],['on_leave','L'],['returning','S'],['drafts','S'],['expiring','S'],['report_months','S']],
+clerk:[['my_documents','L'],['inbox','M'],['sent_approvals','S'],['drafts','S'],['quick_actions','W'],['on_leave','M'],['returning','M'],['report_months','S'],['permits','L']],
+};
+let preset='admin', items=[], saved=[], editing=false, canvas='compact', autofit=true, vp='desk';
+const allowed=id=>!(preset==='clerk'&&W[id].clerkHidden);
+
+/* ---------------- packer ----------------
+   1. Drop anything the user cannot see BEFORE layout (no empty wrappers).
+   2. First-fit dense placement on a fixed row height (no auto-rows-fr).
+   3. Auto-fit: absorb leftover holes by growing a neighbour sideways, then down.
+   Content adapts to the final box (tier), so growth never looks stretched. */
+function cols(){return vp==='mobile'?2:(canvas==='wide'?6:4)}
+function pack(list){
+  const C=cols(), grid=[]; const free=(r,c,w,h)=>{for(let y=r;y<r+h;y++)for(let x=c;x<c+w;x++){if(x>=C||(grid[y]&&grid[y][x]))return false}return true};
+  const mark=(it)=>{for(let y=it.r;y<it.r+it.h;y++){grid[y]=grid[y]||[];for(let x=it.c;x<it.c+it.w;x++)grid[y][x]=it}};
+  const placed=[];
+  for(const [id,size] of list){
+    if(!allowed(id))continue;
+    let [w,h]=SIZES[size]; w=w==='full'?C:Math.min(w,C);
+    // Phone: anything wider than one column takes the full width, and a full-width strip gets a second row so its content still fits.
+    if(vp==='mobile'&&w>1){w=C;if(size==='W')h=2}
+    let done=false;
+    for(let r=0;!done;r++)for(let c=0;c<=C-w&&!done;c++)if(free(r,c,w,h)){const it={id,size,r,c,w,h,grown:false};mark(it);placed.push(it);done=true}
+  }
+  const rowsUsed=Math.max(0,...placed.map(p=>p.r+p.h));
+  const holes=()=>{const out=[];for(let r=0;r<rowsUsed;r++)for(let c=0;c<C;c++)if(!(grid[r]&&grid[r][c]))out.push([r,c]);return out};
+  if(autofit){
+    let changed=true,guard=0;
+    while(changed&&guard++<50){changed=false;
+      for(const [r,c] of holes()){
+        if(grid[r]&&grid[r][c])continue;
+        // inline-start neighbour grows toward the hole
+        const left=grid[r]&&grid[r][c-1];
+        if(left&&left.c+left.w===c&&left.r===r&&Array.from({length:left.h},(_,k)=>!(grid[r+k]&&grid[r+k][c])).every(Boolean)){
+          for(let k=0;k<left.h;k++){grid[r+k]=grid[r+k]||[];grid[r+k][c]=left}left.w++;left.grown=true;changed=true;continue}
+        // inline-end neighbour grows back toward the hole
+        const right=grid[r]&&grid[r][c+1];
+        if(right&&right.c===c+1&&right.r===r&&Array.from({length:right.h},(_,k)=>!(grid[r+k]&&grid[r+k][c])).every(Boolean)){
+          for(let k=0;k<right.h;k++){grid[r+k]=grid[r+k]||[];grid[r+k][c]=right}right.c--;right.w++;right.grown=true;changed=true;continue}
+        // widget above grows down when the full row strip under it is empty
+        const up=grid[r-1]&&grid[r-1][c];
+        if(up&&up.r+up.h===r&&Array.from({length:up.w},(_,k)=>!(grid[r]&&grid[r][up.c+k])).every(Boolean)){
+          grid[r]=grid[r]||[];for(let k=0;k<up.w;k++)grid[r][up.c+k]=up;up.h++;up.grown=true;changed=true}
+      }
+    }
+  }
+  return {placed,holes:holes(),C};
+}
+function tierOf(w,h){return h>=2?(w>=2?'list':'tall'):(w>=2?'summary':'glance')}
+
+/* ---------------- render dashboard ---------------- */
+const $=s=>document.querySelector(s);
+function renderBoard(){
+  const {placed,holes,C}=pack(items);
+  const b=$('#board'); b.style.setProperty('--cols',C); b.classList.toggle('editing-board',editing);
+  let html='';
+  for(const p of placed){
+    const def=W[p.id]; const tier=tierOf(p.w,p.h);
+    // User-facing presets. Tall (1×2) only appears when auto-fit grows a Small widget downward.
+    const sz=['S','M','L','W'].map(k=>`<button type="button" data-size="${k}" aria-pressed="${p.size===k}" aria-label="Size ${k}">${SIZE_LABEL[k]}</button>`).join('');
+    html+=`<article class="w${p.grown&&editing?' grown':''}" data-id="${p.id}" data-od-id="w-${p.id}" draggable="${editing}" style="grid-column:${p.c+1} / span ${p.w};grid-row:${p.r+1} / span ${p.h}" aria-label="${def.label()}">
+      <div class="wtools"><span class="grip" aria-hidden="true">⋮⋮</span><span class="nm">${def.label()}</span><span class="sz" role="group" aria-label="Size">${sz}</span>
+      <button class="ib" data-move="-1" aria-label="${t('earlier')}">‹</button><button class="ib" data-move="1" aria-label="${t('later')}">›</button><button class="ib" data-remove aria-label="${t('remove')}">✕</button></div>
+      <div class="wbody">${def.render(p.w,p.h,tier)}</div></article>`;
+  }
+  for(const [r,c] of holes) html+=`<div class="hole warn" style="grid-column:${c+1};grid-row:${r+1}">${editing?t('holeAdd'):t('hole')}</div>`;
+  b.innerHTML=html;
+  renderDrawer();
+}
+function renderDrawer(){
+  const on=new Set(items.map(i=>i[0]));
+  const groups={};for(const id of Object.keys(W)){if(!allowed(id))continue;(groups[W[id].src]=groups[W[id].src]||[]).push(id)}
+  $('#drawer').innerHTML=`<h3>${t('addTitle')}</h3><p>${t('addHint')}</p>`+Object.entries(groups).map(([src,ids])=>`<h4 data-od-id="catalog-${src}">${t('src_'+src)}</h4>`+ids.map(id=>`<div class="cat${on.has(id)?' on':''}"><div class="ci"><b>${W[id].label()}</b><span>${statusLabel(W[id].status)}</span></div><button type="button" data-add="${id}" ${on.has(id)?'disabled':''}>${on.has(id)?t('added'):t('add')}</button></div>`).join('')).join('');
+}
+function statusLabel(s){return {keep:L('Unchanged','دون تغيير'),fix:L('Fixed data or link','تصحيح البيانات أو الرابط'),rework:L('Reworked content','محتوى معاد تصميمه'),new:L('Now a widget','أصبحت أداة')}[s]}
+
+/* ---------------- interactions ---------------- */
+const toast=(m)=>{const el=$('#toast');el.textContent=m;el.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('on'),2600)};
+/* Destinations the target page does NOT read yet; everything else is a route + params the page already honours. */
+const NEEDS_FILTER=[/^\/employees\?/];
+document.addEventListener('click',e=>{
+  const a=e.target.closest('[data-to]'); if(a&&!editing){e.preventDefault();const to=a.dataset.to;const needs=NEEDS_FILTER.some(r=>r.test(to));toast((lang==='ar'?'يفتح: ':'Opens: ')+to+(needs?(lang==='ar'?' · يتطلب فلترًا جديدًا في الصفحة':' · needs a new filter on that page'):''));return}
+  if(a)e.preventDefault();
+  const w=e.target.closest('.w'); const id=w&&w.dataset.id; const idx=id?items.findIndex(i=>i[0]===id):-1;
+  const sz=e.target.closest('[data-size]'); if(sz&&idx>-1){items[idx][1]=sz.dataset.size;renderBoard();return}
+  const mv=e.target.closest('[data-move]'); if(mv&&idx>-1){const j=idx+Number(mv.dataset.move);if(j>=0&&j<items.length){[items[idx],items[j]]=[items[j],items[idx]];renderBoard();document.querySelector(`[data-id="${id}"] [data-move="${mv.dataset.move}"]`)?.focus()}return}
+  if(e.target.closest('[data-remove]')&&idx>-1){items.splice(idx,1);renderBoard();return}
+  const add=e.target.closest('[data-add]'); if(add){items.push([add.dataset.add,'S']);renderBoard();return}
+  if(e.target.closest('.hole')&&editing){$('#drawer').scrollIntoView({block:'nearest'});toast(L('Pick a widget from the panel','اختر أداة من اللوحة'));}
+});
+let dragId=null;
+document.addEventListener('dragstart',e=>{const w=e.target.closest('.w');if(!w||!editing)return;dragId=w.dataset.id;w.classList.add('dragging');e.dataTransfer.effectAllowed='move'});
+document.addEventListener('dragend',e=>{document.querySelectorAll('.dragging,.dragover').forEach(x=>x.classList.remove('dragging','dragover'))});
+document.addEventListener('dragover',e=>{const w=e.target.closest('.w');if(!w||!dragId)return;e.preventDefault();document.querySelectorAll('.dragover').forEach(x=>x.classList.remove('dragover'));w.classList.add('dragover')});
+document.addEventListener('drop',e=>{const w=e.target.closest('.w');if(!w||!dragId)return;e.preventDefault();const from=items.findIndex(i=>i[0]===dragId);const it=items.splice(from,1)[0];const to=items.findIndex(i=>i[0]===w.dataset.id);items.splice(to,0,it);dragId=null;renderBoard()});
+
+$('#customize').onclick=()=>{editing=true;saved=items.map(i=>[...i]);$('#frame').classList.add('editing');renderBoard()};
+$('#cancel').onclick=()=>{editing=false;items=saved;$('#frame').classList.remove('editing');renderBoard()};
+$('#done').onclick=()=>{editing=false;$('#frame').classList.remove('editing');renderBoard();toast(L('Dashboard layout saved','تم حفظ تخطيط لوحة التحكم'))};
+$('#reset').onclick=()=>{items=DEFAULTS[preset].map(i=>[...i]);renderBoard()};
+$('#autofit').onchange=e=>{autofit=e.target.checked;renderBoard()};
+document.querySelectorAll('[data-canvas]').forEach(bn=>bn.onclick=()=>{canvas=bn.dataset.canvas;document.querySelectorAll('[data-canvas]').forEach(x=>x.setAttribute('aria-pressed',x===bn));$('#page').classList.toggle('compact',canvas==='compact');renderBoard()});
+function setGroup(attr,val){document.querySelectorAll(`[${attr}]`).forEach(x=>x.setAttribute('aria-pressed',x.getAttribute(attr)===val))}
+document.querySelectorAll('[data-lang]').forEach(bn=>bn.onclick=()=>{lang=bn.dataset.lang;setGroup('data-lang',lang);document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';renderAll()});
+document.querySelectorAll('[data-theme-btn]').forEach(bn=>bn.onclick=()=>{setGroup('data-theme-btn',bn.dataset.themeBtn);document.documentElement.dataset.theme=bn.dataset.themeBtn});
+document.querySelectorAll('[data-vp]').forEach(bn=>bn.onclick=()=>{vp=bn.dataset.vp;setGroup('data-vp',vp);$('#frame').classList.toggle('mobile',vp==='mobile');renderBoard()});
+document.querySelectorAll('[data-preset]').forEach(bn=>bn.onclick=()=>{preset=bn.dataset.preset;setGroup('data-preset',preset);items=DEFAULTS[preset].map(i=>[...i]);renderAll()});
+document.querySelectorAll('[data-tab]').forEach(bn=>bn.onclick=()=>{setGroup('data-tab',bn.dataset.tab);document.querySelectorAll('.tabpage').forEach(p=>p.classList.toggle('on',p.id==='tab-'+bn.dataset.tab));window.scrollTo(0,0)});
+
+/* ---------------- catalog tab: every widget at every size ---------------- */
+function renderCatalog(){
+  // Specimen sheet: Large (2×2) · Medium (2×1) · Small (1×1) on the same 4-column measure as the compact dashboard.
+  const spots=[['L',1,1],['M',3,1],['S',3,2]];
+  let html=`<h2>${L('Widget catalog','دليل الأدوات')}</h2><p class="lede">${L('Every widget at Small, Medium and Large on the real compact measure. Small shows the one number that matters, Medium adds its breakdown, Large adds the list. Wide and Extra-wide are Medium and Large stretched to full width; Tall is the list in one column. Click any number or row to see where it opens; links that need a new filter on the target page say so.','كل أداة بالأحجام الصغير والمتوسط والكبير على عرض لوحة التحكم الفعلي. الصغير يعرض الرقم الأهم، والمتوسط يضيف التفاصيل، والكبير يضيف القائمة. انقر أي رقم أو صف لمعرفة وجهته.')}</p>`;
+  for(const id of Object.keys(W)){
+    const d=W[id];
+    html+=`<div class="cathead" data-od-id="cat-${id}"><h3>${d.label()}</h3><span class="tag ${d.status==='keep'?'neutral':d.status==='new'?'info':d.status==='rework'?'warn':'ok'}">${statusLabel(d.status)}</span></div><div class="catalog">`;
+    for(const [s,c,r] of spots){const [w,h]=SIZES[s];html+=`<article class="w" style="grid-column:${c} / span ${w};grid-row:${r} / span ${h}"><div class="wbody">${d.render(w,h,tierOf(w,h))}</div></article>`}
+    html+=`<div style="grid-column:4;grid-row:2;font-size:.74rem;color:var(--text-muted);padding:.5rem .25rem;display:flex;flex-direction:column;gap:.35rem"><span>${L('Shown to','يظهر لمن لديه')} <code>${d.cap}</code></span><span>${L('Source','المصدر')}: ${t('src_'+d.src)}</span></div></div>`;
+  }
+  $('#catalogDoc').innerHTML=html;
+}
+
+/* ---------------- findings tab ---------------- */
+const FIND=[
+['Documents Completed → My documents','Counts every document generated this month by anyone (incl. companions, any approval state). Opens the unfiltered Records list.','Your own records this month, split Completed / In approval / Returned / Not submitted. Each part opens <code>/books?mine=1&status=…&from=…&to=…</code>.','Backend: per-user month counts (creator + approval state).'],
+['Ledger unread → Unread mail','Big number is just the 5 newest ledger rows by direction (always 0 to 5). “Today” and “24h” labels are false. Feed is not owner-scoped, so other users’ mail subjects show. Opens the Books tab.','Real unread count from <code>/ledger/unread-count</code>, your mail only, opens <code>/ledger?tab=email</code>; rows open <code>?mail=id</code>. Email sync status folds in as its footer.','Merge Email sync + Recent ledger into it.'],
+['Recent ledger','Rows link <code>/ledger?open=id</code>, which nothing reads.','Retire; covered by Unread mail (Large).','Privacy fix lands with it.'],
+['Email sync','Separate card; fires sync even without <code>ledger.view</code>.','Footer of Unread mail, shown only with <code>ledger.view</code>.','Retire as a separate widget.'],
+['Open violations','“Escalated” and “Pending close” are hard-coded 0. Opens the plain employee list.','Count plus newest open violations; rows open the employee’s violations tab. No fake rows.','Backend: small open-violations list.'],
+['Drafts → My drafts','All users’ unsubmitted records, voided ones included.','Mine only, not voided; opens <code>/books?mine=1&drafts=1</code>.','Backend: count matching the drafts filter.'],
+['My workspace → Workforce','Org-wide headcount labelled “My”. Chips look clickable but are not.','Honest title; each chip opens its filtered list.','Employees page needs status param check.'],
+['Sent approvals','Big number is “pending” but the footer opens “all”.','Number and link agree (pending); “needs changes” chip opens returned.','Frontend only.'],
+['Waiting approvals','Two different cards depending on zone; empty wrapper when user has no approval rights.','One widget, four sizes; hidden from users with no approval work instead of leaving a hole.','Frontend only.'],
+['On leave today / Upcoming returns','Unbounded lists stretch every row in the zone. “Ends today” branch can never fire, so the hero never names returners.','Lists clip to the box with “+N more”. Returns query includes today.','Small backend fix.'],
+['Recent documents','General Book rows link to <code>/employees/null</code>; shows everyone’s documents.','Folded into My documents (Large shows your latest records, each opens the record).','Retire as separate widget.'],
+['Pending departures','Cancel shown to view-only users (403). “View all” loses the filter.','Cancel only with <code>employees.edit</code>; View all keeps <code>pending=1</code>.','Employees page needs <code>pending</code> param.'],
+['Monthly report workflow','Visible by default; users without the service right see a load error.','Hidden unless the user has the service right.','Frontend only.'],
+['Permits','Item tiles drop the zone filter; loads 500 item permits on every visit.','Zone kept on every link; Small/Medium show counts only.','Item-permit counts endpoint.'],
+['Workforce pulse','Full-row panel for three numbers; empty wrapper while loading.','Fits Small (coverage %) or Medium (three numbers).','Frontend only.'],
+['Quick actions','Fixed band between zones; widgets can only sit above or below it.','A widget like any other: place and size it anywhere.','Frontend only.'],
+['Layout engine','Zones with fixed caps, 2-col top vs 3-col below, <code>auto-rows-fr</code> equalises rows to the tallest, null widgets leave empty cells.','One grid, fixed row height, per-widget size, dense placement, auto-fit absorbs holes, unavailable widgets removed before layout.','Layout schema adds <code>size</code>; zones migrate once.'],
+];
+function renderFindings(){
+  $('#findingsDoc').innerHTML=`<h2>${L('What changes, widget by widget','ما الذي يتغير في كل أداة')}</h2><p class="lede">From a code audit of all 18 widgets plus real renders of the current dashboard. “Needs” is the extra work beyond the widget itself.</p>
+  <table><thead><tr><th>Widget</th><th>Today</th><th>Proposed</th><th>Needs</th></tr></thead><tbody>${FIND.map(r=>`<tr>${r.map((c,i)=>i===0?`<td><b>${c}</b></td>`:`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+
+/* ---------------- critique tab (open-design 5-dimension gate) ---------------- */
+const DIMS=[
+['Philosophy consistency',5,8,'Today: three card dialects (Pending/Workspace big cards, WidgetCard, SectionCard) plus bespoke panels with their own margins. Proposed: one card frame, four content tiers.'],
+['Visual hierarchy',5,7,'Today: metric cards stretched to list height bury the number in blank space. Proposed: fixed rows keep number, breakdown, list in a predictable order.'],
+['Detail execution',4,7,'Today: mb-6 inside grid cells, empty wrappers, hard-coded zeros, lone metric in a 3-col row. Proposed: no inner margins, holes absorbed, no fake rows.'],
+['Functionality',4,8,'Today: 5 wrong or lossy links, 2 widgets whose numbers do not mean their label, privacy leak in the ledger feed. Proposed: every link a route the target page reads; labels match data.'],
+['Innovation',5,6,'Auto-fit packing and size-adaptive content are the one new move; everything else stays deliberately familiar for an official tool.'],
+];
+function radar(vals,color,fill){const cx=110,cy=110,R=85;return `<polygon points="${vals.map((v,i)=>{const a=-Math.PI/2+i*2*Math.PI/5;return `${cx+Math.cos(a)*R*v/10},${cy+Math.sin(a)*R*v/10}`}).join(' ')}" fill="${fill}" stroke="${color}" stroke-width="2"/>`}
+function renderCritique(){
+  const axes=DIMS.map((d,i)=>{const a=-Math.PI/2+i*2*Math.PI/5;return `<line x1="110" y1="110" x2="${110+Math.cos(a)*85}" y2="${110+Math.sin(a)*85}" stroke="var(--border)"/><text x="${110+Math.cos(a)*100}" y="${110+Math.sin(a)*100}" font-size="9" fill="var(--text-muted)" text-anchor="middle" dominant-baseline="middle">${d[0].split(' ')[0]}</text>`}).join('');
+  const rings=[2,4,6,8,10].map(v=>`<polygon points="${[0,1,2,3,4].map(i=>{const a=-Math.PI/2+i*2*Math.PI/5;return `${110+Math.cos(a)*8.5*v},${110+Math.sin(a)*8.5*v}`}).join(' ')}" fill="none" stroke="var(--hairline)"/>`).join('');
+  $('#critiqueDoc').innerHTML=`<h2>Critique · current vs proposed</h2><p class="lede">open-design’s five-dimension review, scored on evidence from the audit and renders. Grey is today, navy is the proposal. Scores are the worst sustained band, not an average.</p>
+  <div class="critique"><svg viewBox="-40 -5 300 230" width="100%" role="img" aria-label="Radar chart">${rings}${axes}${radar(DIMS.map(d=>d[1]),'var(--text-faint)','color-mix(in oklab,var(--text-faint) 15%,transparent)')}${radar(DIMS.map(d=>d[2]),'var(--primary)','color-mix(in oklab,var(--primary) 18%,transparent)')}</svg>
+  <div class="dims">${DIMS.map(d=>`<div class="dim"><header><b>${d[0]}</b><span>${d[1]} → ${d[2]} / 10</span></header><p>${d[3]}</p></div>`).join('')}</div></div>
+  <div class="lists"><section><h4>Keep</h4><ul><li>Hero, greeting and date strip</li><li>Approvals deep links (already exact)</li><li>Sent-to-me purpose chips</li><li>Token palette, red only for genuine warning</li></ul></section>
+  <section><h4>Fix</h4><ul><li>Replace zones + auto-rows-fr with one fixed-row grid</li><li>Make “Documents Completed” mean your completed records</li><li>Real unread mail, owner-scoped</li><li>Drop widgets the user cannot see before layout</li><li>Remove hard-coded zeros</li></ul></section>
+  <section><h4>Quick wins</h4><ul><li><code>/ledger?open=</code> → <code>?mail=</code></li><li>General Book docs: no <code>/employees/null</code></li><li>Gate Cancel on <code>employees.edit</code></li><li>Hide Monthly reports without the service right</li></ul></section></div>`;
+}
+
+/* ---------------- boot ---------------- */
+function renderAll(){
+  document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));
+  $('#editHint').innerHTML=t('editHint');
+  renderBoard();renderCatalog();renderFindings();renderCritique();
+}
+items=DEFAULTS.admin.map(i=>[...i]);
+renderAll();
+</script>
+</body>
+</html>
