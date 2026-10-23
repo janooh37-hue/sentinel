@@ -1530,73 +1530,89 @@ Command band.
 ### 4.2 Hero
 
 **Source:** `pages/dashboard/DashboardHero.tsx`; CSS in `index.css`
-("Dashboard hero: staff-file folder").
+("Dashboard hero: staff file as a telemetry sheet").
 
-The signed-in person's staff-file folder. Flat navy, no gradient, no
-decorative circles, no crest.
+The signed-in person's staff file, set as a telemetry sheet (industrial
+brutalist: ruled compartments, square corners, mono uppercase micro labels,
+one red accent). Flat navy, no gradient, no crest. Every figure is real data.
 
 **Anatomy:**
 
 ```
  ┌[GSSG] STAFF FILE ╲
- │                   ╲─────────────────────────────────────────────┐
- │ ┌────┐  Good evening,                                            │
- │ │ HA │  Hamdan Saeed Ali                                         │
- │ └────┘  HR Officer · Human Resources  [ID G-10482]               │
- │ ───────────────────────────────────────────────────────────────  │
- │ ● 3 on leave today                 Friday 23 October 2026  hijri │
- └──────────────────────────────────────────────────────────────────┘
+ │+                  ╲───────────────────┬────────────────┬───────────────┐
+ │ ┌────┐  GOOD EVENING ///                │ ON SITE        │ ON LEAVE    ■ │
+ │ │ HA │  Hamdan Saeed Ali                │ 134            │ 8           ↗ │
+ │ └────┘  HR Officer · Human Resources    ├────────────────┼───────────────┤
+ │         [ID G-10482]                    │ BACK WITHIN 7… │ TOTAL STAFF   │
+ │                                         │ 8              │ 142           │
+ ├─────────────────────────────────────────┴────────────────┴───────────────┤
+ │ SAT 24 OCT 2026  /  hijri                                          01:15 +│
+ └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Folder tab:** `.hero-folder-tab`, `absolute start-0 top-0 h-[34px]
-w-[160px] md:w-[236px] rounded-ss-[14px]`. Its inline-end edge is cut at
-the swoosh angle (`clip-path`, flipped under `[dir="rtl"]`). It carries
-`.gssg-mark` (92px) and, from `md`, the label `dashboard.hero.staffFile`.
+**Folder tab:** `.hero-folder-tab`, `absolute start-0 top-0 h-[30px]
+w-[150px] md:w-[224px]`, square corners. Its inline-end edge is cut at the
+swoosh angle (`clip-path`, flipped under `[dir="rtl"]`). It carries
+`.gssg-mark` (80px) and, from `md`, the `.hero-label`
+`dashboard.hero.staffFile`.
 
 **GSSG mark:** `.gssg-mark` draws the official wordmark from two masks
 (`/brand/gssg-wordmark-swoosh.png`, `/brand/gssg-wordmark-letters.png`,
 cut from `gssg-wordmark.png`) so the letters are white on navy and the
 swoosh is `--accent`. `direction: ltr`; the mark is never mirrored.
 
-**Folder body:** `<header class="hero-slab">`,
-`rounded-[18px] rounded-ss-none px-4 pb-3.5 pt-5 md:px-[34px] md:pb-5
-md:pt-[30px] text-white`.
+**Sheet:** `<header class="hero-slab">`, square corners, `text-white`.
+`.hero-slab::after` lays faint 1-in-4px scan lines over it; two
+`.hero-cross` registration marks pin the top-start and bottom-end corners.
+Below `md` the identity block stacks over the readouts.
 
-- Portrait (linked users only): 4:5, `w-[58px] md:w-[104px] rounded-xl
-  bg-[var(--hero-slab-raised)]`, 3px 16%-white ring. Shows `photo_url`
-  (falls back on load error) or initials.
-- `<h2>`: greeting (`dashboard.greeting.*`, light, 65% white, 0.6em) over
-  the name (`font-[750]`, `text-[1.45em] md:text-[2.5em]`). The name is
+- Identity (inline start): portrait (linked users only), 4:5, `w-[52px]
+  md:w-[68px]`, square, `bg-[var(--hero-slab-raised)]`, 1px 25%-white
+  outline offset 2px; shows `photo_url` (falls back on load error) or mono
+  initials. `<h2>`: `.hero-label` greeting (`dashboard.greeting.*`) with a
+  red `///`, over the name (`font-[750]`, `text-[1.25em] md:text-[1.6em]`,
   `firstSecondFamilyName()` of the language's name; unlinked users see
-  `dashboard.welcomeBackGuest`.
-- Meta: position · department, then an ID field (`dashboard.hero.idLabel` +
-  mono G-number, `dir="ltr"`).
-- Foot: a 1px 20%-white rule, then the on-leave status at the inline start
-  and the dates at the inline end. Status: `<button>` to Leaves (amber dot,
-  mono count, `dashboard.hero.onLeaveChip`) when `on_leave_today > 0`;
-  otherwise a check + `dashboard.hero.allPresent`; a skeleton while the
-  summary loads. Dates: Gregorian `EEEE d MMMM yyyy` (mono in English) and
-  the Umm al-Qura Hijri date (hidden below `md`).
+  `dashboard.welcomeBackGuest`). Meta: position · department, then a
+  square 1px-ruled ID field (`dashboard.hero.idLabel` + mono G-number,
+  `dir="ltr"`).
+- Readouts (inline end): a `gap-px` ruled grid, 2×2 from `md` (each cell
+  188px), 4 across at `sm`, 2×2 on phones. Cells: `.hero-label`
+  `dashboard.hero.readout.*` over a mono count: on site (`present_today`),
+  on leave (`on_leave_today`), back within 7 days
+  (`upcoming_leave_ends.length`), total staff (`employees_active`). `--`
+  (with a screen-reader `common.loading`) while the summary loads. When anyone is on leave, the on-leave cell is a
+  `<button>` to Leaves with a red square and an ↗.
+- Foot: a 1px rule, then the Gregorian date (`EEE d MMM yyyy`, mono
+  uppercase in English; `EEEE d MMMM yyyy` in Arabic, which has no short
+  weekday), the Umm al-Qura Hijri date (from `md`) and the
+  local time (`<time>`, `HH:mm`, re-read each minute) at the inline end.
 
-**Motion:** on the first dashboard visit of the local day
-(`localStorage['gssg.dashboardHero.introDate']`), the wrapper gets
-`.hero-intro` and the parts arrive in reading order (tab, portrait,
-greeting, name, meta, rule, status, dates), each sliding 14px in the writing
-direction. See §5. Later visits render settled.
+**`.hero-label`:** mono, `0.66em`, `500`, uppercase, `0.1em` tracking. In
+Arabic it switches to `--font-arabic` at `max(0.76em, 0.6875rem)` with no
+case or tracking.
+
+**Motion:** every time the dashboard opens, the parts arrive in reading
+order (tab, portrait, greeting, name, meta, readout contents, rule, foot),
+each sliding 14px in the writing direction; one scan line sweeps the sheet
+top to bottom; the counts run up from 0 over 700ms once the summary arrives.
+The readout cell frames stand from the start so the ruled grid never
+flashes. See §5.
 
 **Dark theme:** `--hero-slab` deepens to `#131f3a` with a 1px `#24304f`
 inset edge. Text stays white.
 
-**RTL:** the tab, portrait and status sit at the inline start (right). The
-tab cut flips, and the intro travels right to left.
+**RTL:** the tab and identity block sit at the inline start (right), the
+readouts at the inline end (left). The tab cut and the ↗ flip, and the intro
+travels right to left.
 
 **a11y:**
 
 - The name is a real `<h2>`; the mark is `role="img" aria-label="GSSG"`;
-  the portrait is `aria-hidden`.
-- The on-leave button's accessible name includes the count and "Review leave
-  records".
-- Reduced motion cancels the intro.
+  the portrait, `///`, crosses and scan lines are decorative.
+- Counts render in `<data value>`; the on-leave button's accessible name
+  includes the count and "Review leave records".
+- Reduced motion cancels the intro, the scan and the count-up.
 
 ---
 
@@ -2354,8 +2370,9 @@ Every named animation on the Dashboard and chrome.
 | Keyframe                  | Where (selector)                                                  | Property animated            | Duration | Easing                   | Iterations | Reduced-motion handling                                          |
 | ------------------------- | ----------------------------------------------------------------- | ---------------------------- | -------- | ------------------------ | ---------- | ---------------------------------------------------------------- |
 | `dash-fade-up`            | `.dash-anim` (every direct child of dashboard shell + hero)       | opacity 0→1 + translateY 8→0 | `0.42s`  | `cubic-bezier(.16,1,.3,1)` | once (`both`) | `.dash-anim { animation: none }` under `prefers-reduced-motion` |
-| `hero-seq-in`             | `.hero-intro .hero-seq` (Dashboard hero parts)                    | opacity 0→1 + translateX ∓14px→0 in the writing direction | `360ms` + `--seq × 70ms` | `var(--ease-out-expo)` | once, first dashboard visit of the day | cancelled |
-| `hero-rule-in`            | `.hero-intro .hero-rule` (Dashboard hero foot line)               | scaleX 0→1 from the inline start | `520ms` | `var(--ease-out-expo)` | once, as above | cancelled                                                        |
+| `hero-seq-in`             | `.hero-intro .hero-seq` (Dashboard hero parts)                    | opacity 0→1 + translateX ∓14px→0 in the writing direction | `360ms` + `--seq × 55ms` | `var(--ease-out-expo)` | once per dashboard mount | cancelled |
+| `hero-rule-in`            | `.hero-intro .hero-rule` (Dashboard hero foot line)               | scaleX 0→1 from the inline start | `520ms` | `var(--ease-out-expo)` | once per dashboard mount | cancelled                                                        |
+| `hero-scan`               | `.hero-intro .hero-slab::before` (Dashboard hero scan line)       | a 1px line translateY −100%→0, fading out at the end | `900ms`, 150ms delay | `cubic-bezier(0.4, 0, 0.6, 1)` | once per dashboard mount | hidden |
 | `dash-pending-grow`       | inline style on PendingDocumentsCard progress fill                | width 0%→{pct}%              | `1.4s`   | `ease-out`               | once       | both animations cancelled via attribute-selector override        |
 | `dash-pending-pulse`      | same (delayed `1.4s` so it follows the grow)                      | opacity 0.85↔1               | `3s`     | `ease-in-out`            | infinite   | as above                                                         |
 | `dash-active-glow`        | `.dash-active-dot` (WorkspaceCard "Active" dot)                   | box-shadow ring 0px→6px transparent | `2.8s`   | `ease-out`               | infinite   | both animations cancelled                                        |

@@ -1113,15 +1113,56 @@ body {
 .anim-pop-in-end { --pop-origin: top right; }
 [dir="rtl"] .anim-pop-in-end { --pop-origin: top left; }
 
-/* ─── Dashboard hero: staff-file folder ──────────────────────────────────────
-   A flat navy folder with a tab cut at the GSSG swoosh angle. The tab carries
-   the official wordmark, drawn from two masks of /brand/gssg-wordmark.png so
-   the letters can be white on navy while the swoosh stays GSSG red. The mark
-   is never mirrored; only the tab's cut flips with the writing direction. */
+/* ─── Dashboard hero: staff file as a telemetry sheet ───────────────────────
+   A square-cornered navy folder with a tab cut at the GSSG swoosh angle. The
+   tab carries the official wordmark, drawn from two masks of
+   /brand/gssg-wordmark.png so the letters can be white on navy while the
+   swoosh stays GSSG red. The mark is never mirrored; only the tab's cut flips
+   with the writing direction. Faint scan lines sit over the sheet; crosshair
+   registration marks pin two corners. */
 .hero-slab {
   background: var(--hero-slab);
   box-shadow: inset 0 0 0 1px var(--hero-slab-ring);
 }
+.hero-slab::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, rgb(255 255 255 / 0.025) 3px 4px);
+}
+/* Micro labels: mono, uppercase, typewriter tracking. Arabic has no case and
+   breaks under letter-spacing, so it keeps its own face at a readable size. */
+.hero-label {
+  font-family: var(--font-mono);
+  font-size: 0.66em;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+[dir="rtl"] .hero-label {
+  font-family: var(--font-arabic);
+  font-size: max(0.76em, 0.6875rem);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.hero-cross {
+  position: absolute;
+  z-index: 2;
+  width: 9px;
+  height: 9px;
+  pointer-events: none;
+}
+.hero-cross::before,
+.hero-cross::after {
+  content: "";
+  position: absolute;
+  background: rgb(255 255 255 / 0.4);
+}
+.hero-cross::before { inset-inline-start: 4px; top: 0; width: 1px; height: 100%; }
+.hero-cross::after { top: 4px; inset-inline-start: 0; width: 100%; height: 1px; }
 .hero-folder-tab {
   background: var(--hero-slab);
   box-shadow: inset 1px 1px 0 var(--hero-slab-ring);
@@ -1161,9 +1202,10 @@ body {
   mask-image: url('/brand/gssg-wordmark-letters.png');
 }
 
-/* First dashboard visit of the day: the folder fills in reading order, one
-   part after another, travelling in the writing direction (left to right in
-   English, right to left in Arabic). Later visits render it settled. */
+/* Each time the dashboard opens, the sheet fills in reading order, one part
+   after another, travelling in the writing direction (left to right in
+   English, right to left in Arabic), while one scan line sweeps it top to
+   bottom. The readouts count up in DashboardHero.tsx. */
 @keyframes hero-seq-in {
   from { opacity: 0; transform: translateX(var(--hero-seq-from)); }
   to   { opacity: 1; transform: none; }
@@ -1172,16 +1214,30 @@ body {
   from { transform: scaleX(0); }
   to   { transform: scaleX(1); }
 }
+@keyframes hero-scan {
+  0%   { opacity: 1; transform: translateY(-100%); }
+  80%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(0); }
+}
 .hero-intro { --hero-seq-from: -14px; }
 [dir="rtl"] .hero-intro { --hero-seq-from: 14px; }
 .hero-intro .hero-seq {
-  animation: hero-seq-in 360ms var(--ease-out-expo) calc(var(--seq, 0) * 70ms) both;
+  animation: hero-seq-in 360ms var(--ease-out-expo) calc(var(--seq, 0) * 55ms) both;
 }
 .hero-intro .hero-rule {
   transform-origin: left;
-  animation: hero-rule-in 520ms var(--ease-out-expo) calc(var(--seq, 0) * 70ms) both;
+  animation: hero-rule-in 520ms var(--ease-out-expo) calc(var(--seq, 0) * 55ms) both;
 }
 [dir="rtl"] .hero-intro .hero-rule { transform-origin: right; }
+.hero-intro .hero-slab::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-bottom: 1px solid rgb(255 255 255 / 0.5);
+  animation: hero-scan 900ms cubic-bezier(0.4, 0, 0.6, 1) 150ms both;
+}
 
 /* Gentle scrim fade for full-screen overlays (lock screen, shortcuts) so they
    don't hard-cut over the whole app. Opacity-only — no vestibular zoom. */
@@ -1832,6 +1888,9 @@ body {
   .anim-check-settle,
   .skeleton-shimmer {
     animation: none;
+  }
+  .hero-intro .hero-slab::before {
+    display: none;
   }
   .service-artwork img,
   .service-artwork-accent {

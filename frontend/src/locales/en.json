@@ -4195,7 +4195,6 @@
       "pageRange": "{{from}}–{{to}} of {{total}}"
     },
     "welcomeBackGuest": "Welcome back",
-    "greetingLine": "{{greeting}},",
     "greeting": {
       "morning": "Good morning",
       "afternoon": "Good afternoon",
@@ -4204,10 +4203,14 @@
     "hero": {
       "staffFile": "Staff file",
       "idLabel": "ID",
-      "onLeaveChip": "on leave today",
-      "allPresent": "All present today",
       "onLeaveAria_one": "{{count}} on leave today. Review leave records",
-      "onLeaveAria_other": "{{count}} on leave today. Review leave records"
+      "onLeaveAria_other": "{{count}} on leave today. Review leave records",
+      "readout": {
+        "onSite": "On site",
+        "onLeave": "On leave",
+        "returning": "Back within 7 days",
+        "activeStaff": "Total staff"
+      }
     },
     "heroSubtitle_one": "{{count}} document needs your attention",
     "heroSubtitle_other": "{{count}} documents need your attention",

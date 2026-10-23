@@ -4521,7 +4521,6 @@
       "pageRange": "{{from}}–{{to}} من {{total}}"
     },
     "welcomeBackGuest": "مرحبًا بعودتك",
-    "greetingLine": "{{greeting}}،",
     "greeting": {
       "morning": "صباح الخير",
       "afternoon": "مساء الخير",
@@ -4530,14 +4529,18 @@
     "hero": {
       "staffFile": "ملف الموظف",
       "idLabel": "الرقم الوظيفي",
-      "onLeaveChip": "في إجازة اليوم",
-      "allPresent": "الجميع حاضر اليوم",
       "onLeaveAria_zero": "{{count}} في إجازة اليوم. مراجعة سجلات الإجازات",
       "onLeaveAria_one": "{{count}} في إجازة اليوم. مراجعة سجلات الإجازات",
       "onLeaveAria_two": "{{count}} في إجازة اليوم. مراجعة سجلات الإجازات",
       "onLeaveAria_few": "{{count}} في إجازة اليوم. مراجعة سجلات الإجازات",
       "onLeaveAria_many": "{{count}} في إجازة اليوم. مراجعة سجلات الإجازات",
-      "onLeaveAria_other": "{{count}} في إجازة اليوم. مراجعة سجلات الإجازات"
+      "onLeaveAria_other": "{{count}} في إجازة اليوم. مراجعة سجلات الإجازات",
+      "readout": {
+        "onSite": "في الموقع",
+        "onLeave": "في إجازة",
+        "returning": "العائدون خلال 7 أيام",
+        "activeStaff": "إجمالي الموظفين"
+      }
     },
     "heroSubtitle_zero": "لا توجد مستندات بانتظار اهتمامك",
     "heroSubtitle_one": "مستند واحد بانتظار اهتمامك",
