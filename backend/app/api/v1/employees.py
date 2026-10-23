@@ -297,7 +297,9 @@ def list_employee_leaves(
     _user: Annotated[User, Depends(require_capability("employees.view"))],
 ) -> list[LeaveRead]:
     rows = leave_service.list_for_employee(db, employee_id)
-    linked_documents = document_service.documents_for_leaves(db, [row.id for row in rows])
+    linked_documents = document_service.documents_for_leaves(
+        db, [row.id for row in rows], user=_user
+    )
     return [
         LeaveRead.model_validate(row).model_copy(
             update={"linked_documents": linked_documents.get(row.id, [])}
@@ -327,7 +329,9 @@ def list_employee_violations(
     _user: Annotated[User, Depends(require_capability("violations.view"))],
 ) -> list[ViolationRead]:
     rows = violation_service.list_for_employee(db, employee_id)
-    linked_documents = document_service.documents_for_violations(db, [row.id for row in rows])
+    linked_documents = document_service.documents_for_violations(
+        db, [row.id for row in rows], user=_user
+    )
     return [
         ViolationRead.model_validate(row).model_copy(
             update={"linked_documents": linked_documents.get(row.id, [])}

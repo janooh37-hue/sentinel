@@ -6,7 +6,7 @@ from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.models import (
-    Book,
+    BookVersion,
     Document,
     Employee,
     EmployeeStatusEvent,
@@ -21,8 +21,7 @@ from app.schemas.employee_activity import (
     EmployeeActivityKind,
     EmployeeActivityListRead,
 )
-from app.services import ledger_service
-from app.services.employee_detail_service import document_book_visible
+from app.services import document_service, ledger_service, perm_service
 
 DEFAULT_LIMIT = 25
 MAX_LIMIT = 100
@@ -37,57 +36,35 @@ def _documents(
     *,
     employee_id: str | None,
     requested: int,
-    visible: ColumnElement[bool] | None = None,
+    user: User | None,
 ) -> tuple[list[EmployeeActivityItemRead], int]:
-    book_id = (
-        select(Book.id)
-        .where(Book.ref_number == Document.ref_number, Book.deleted_at.is_(None))
-        .order_by(Book.id.desc())
-        .limit(1)
-        .correlate(Document)
-        .scalar_subquery()
-    )
     stmt = (
-        select(
-            Document.id.label("source_id"),
-            book_id.label("target_id"),
-            Document.created_at.label("occurred_at"),
-            Document.template_id.label("title"),
-            Document.ref_number.label("reference"),
-            Employee.id.label("employee_id"),
-            Employee.name_en.label("employee_name_en"),
-            Employee.name_ar.label("employee_name_ar"),
-            func.count().over().label("source_total"),
-        )
+        select(Document)
         .join(Employee, Document.employee_id == Employee.id)
-        .where(
-            Document.employee_id.is_not(None),
-            Document.ref_number != "DRAFT",
-            book_id.is_not(None),
-        )
+        .where(Document.ref_number != "DRAFT")
+        .order_by(Document.created_at.desc(), Document.id.desc())
     )
     if employee_id is not None:
         stmt = stmt.where(Document.employee_id == employee_id)
-    if visible is not None:
-        stmt = stmt.where(visible)
-    rows = db.execute(
-        stmt.order_by(Document.created_at.desc(), Document.id.desc()).limit(requested)
-    ).all()
-    total = int(rows[0].source_total) if rows else 0
+    readable = document_service.readable_documents(db, db.scalars(stmt), user=user)
+    # Activity links open Records, so standalone documents have no target.
+    owned: list[tuple[Document, BookVersion]] = [
+        (document, version) for document, version in readable if version is not None
+    ]
     return [
         EmployeeActivityItemRead(
             kind="document",
-            source_id=row.source_id,
-            target_id=row.target_id,
-            occurred_at=row.occurred_at,
-            employee_id=row.employee_id,
-            employee_name_en=row.employee_name_en,
-            employee_name_ar=row.employee_name_ar,
-            title=row.title,
-            reference=row.reference,
+            source_id=document.id,
+            target_id=version.book_id,
+            occurred_at=document.created_at,
+            employee_id=document.employee_id,
+            employee_name_en=document.employee.name_en if document.employee is not None else None,
+            employee_name_ar=document.employee.name_ar if document.employee is not None else None,
+            title=document.template_id,
+            reference=document.ref_number,
         )
-        for row in rows
-    ], total
+        for document, version in owned[:requested]
+    ], len(owned)
 
 
 def _leaves(
@@ -359,12 +336,16 @@ def list_employee_activity(
                 db,
                 employee_id=employee_id,
                 requested=requested,
-                visible=document_book_visible(db, caller),
+                user=caller,
             )
         )
     if kind in (None, "leave"):
         sources.append(_leaves(db, employee_id=employee_id, requested=requested))
-    if kind in (None, "violation"):
+    if (
+        kind in (None, "violation")
+        and caller is not None
+        and perm_service.has_capability(db, caller, "violations.view")
+    ):
         sources.append(_violations(db, employee_id=employee_id, requested=requested))
     if kind in (None, "ledger"):
         sources.append(

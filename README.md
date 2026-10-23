@@ -67,6 +67,14 @@ and HR pages keep their existing permission gates. Announcement recipient and
 WhatsApp-mention searches still require `employees.view` because they use
 contact numbers rather than only employee identities.
 
+Dashboard sections respect the corresponding employee, leave, violation, and
+ledger read capabilities independently: the summary still returns successfully
+when a section is denied, with `null` protected counts and empty protected lists.
+Dashboard correspondence includes only the caller's email and shared non-email
+entries, even for admins; draft counts are owner-scoped. Employee detail and
+activity also honor `violations.view`, and linked document metadata inherits the
+owning record's exact-revision read policy, including deleted-record restrictions.
+
 ## Record category permissions
 
 The Permissions page lists the 15 General Book classifications, then the legacy
