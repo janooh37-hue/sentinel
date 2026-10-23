@@ -1,107 +1,31 @@
-/**
- * Dashboard landing page — Task 5 (TAMM redesign).
- *
- * Sections (top-to-bottom):
- *   1. Hero card with rotating GSSG crest + welcome message
- *   2. "My Widgets" header + edit affordance
- *   3. 2-up grid: Pending Documents (red progress bar) + Workspace (mountain SVG)
- *   4. 3-up grid: Open Violations · Drafts · Ledger unread (WidgetCard)
- *   5. "Quick Actions" header + View All
- *   6. 4-up grid: navy-accented ServiceTile rail
- *   7. Recent activity (preserved from Phase 12, restyled)
- *
- * Data source: GET /api/v1/dashboard/summary (Phase 12 endpoint, unchanged).
- * Where the summary doesn't carry a metric needed by a widget (e.g. violations
- * by status, drafts by template), we render the structure with 0 / hidden
- * rows rather than inventing API fields. See task spec §"In Over Your Head".
- */
-
-import { useCallback, useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
-import { format, parseISO, type Locale } from 'date-fns'
+import { format } from 'date-fns'
 import { ar as arLocale } from 'date-fns/locale'
-import {
-  CalendarCheck,
-  CalendarClock,
-  ChevronRight,
-  FileText,
-  Pencil,
-  ScrollText,
-  type LucideIcon,
-} from 'lucide-react'
-
-import { api } from '@/lib/api'
-import { APPROVALS_LOG_PATH, approvalQueueUrl, defaultApprovalContext } from '@/lib/approvals'
-import type {
-  DashboardLayout,
-  DashboardOnLeaveItem,
-  DashboardRecentDocument,
-  DashboardRecentLedger,
-  DashboardSummary,
-  DashboardUpcomingItem,
-  WorkforceSnapshot,
-} from '@/lib/api'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
-import { EmptyState } from '@/components/ui/empty-state'
-import { ServiceTile } from '@/components/ui/service-tile'
+import { Pencil } from 'lucide-react'
+import { api, type DashboardLayout, type WorkforceAccess, type WorkforceSnapshot } from '@/lib/api'
 import { Skeleton } from '@/components/ui/skeleton'
-import { WidgetCard, type BreakdownRow } from '@/components/ui/widget-card'
 import { WidgetEditDialog } from '@/components/dashboard/WidgetEditDialog'
-import { CustomizeWidgetsDialog } from '@/components/dashboard/CustomizeWidgetsDialog'
-import { EmailSyncStatusWidget } from '@/components/dashboard/widgets/EmailSyncStatusWidget'
-import { BooksAwaitingWidget } from '@/pages/dashboard/widgets/BooksAwaitingWidget'
-import { ExpiringSoonWidget } from '@/pages/dashboard/widgets/ExpiringSoonWidget'
-import { PendingDeparturesWidget } from '@/pages/dashboard/widgets/PendingDeparturesWidget'
-import { ViolationMonthsWidget } from '@/pages/dashboard/widgets/ViolationMonthsWidget'
-import { PermitsWidget } from '@/pages/dashboard/widgets/PermitsWidget'
-import { WaitingApprovalsCard } from '@/pages/dashboard/widgets/WaitingApprovalsCard'
-import { SentApprovalsWidget } from '@/pages/dashboard/widgets/SentApprovalsWidget'
-import { InboxWidget } from '@/pages/dashboard/widgets/InboxWidget'
-import { WorkforceCoverageSheet } from '@/pages/dashboard/widgets/WorkforceCoverageSheet'
-import { WorkforcePulseWidget } from '@/pages/dashboard/widgets/WorkforcePulseWidget'
-import {
-  DEFAULT_CANVAS_WIDTH,
-  DEFAULT_LAYOUT,
-  MAX_VISIBLE_QUICK_ACTIONS,
-  QUICK_ACTION_IDS,
-  WIDGET_IDS,
-  WIDGET_SIZE,
-  isQuickActionAllowed,
-  mergeQuickActionsPreservingDenied,
-  resolveLayout,
-  visibleByZone,
-  widgetsForApi,
-  type QuickActionId,
-  type WidgetId,
-  type WidgetZone,
-} from '@/lib/dashboardLayout'
+import { AddWidgetsPanel, CustomizeBanner, WidgetControls } from '@/components/dashboard/CustomizeWidgets'
+import { DEFAULT_LAYOUT, MAX_VISIBLE_QUICK_ACTIONS, QUICK_ACTION_IDS, WIDGET_IDS, isQuickActionAllowed, mergeQuickActionsPreservingDenied, packLayout, resolveLayout, rowsPerHeight, tierOf, widgetsForApi, type QuickActionId, type WidgetId, type WidgetSize } from '@/lib/dashboardLayout'
 import { hijriToday } from '@/lib/hijri'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useIsMobile } from '@/lib/useIsMobile'
 import { QUICK_ACTION_META } from '@/lib/quickActions'
 import { useIdentity } from '@/lib/useIdentity'
-import { cn } from '@/lib/utils'
 import { PullToRefresh } from '@/components/refresh/PullToRefresh'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
+import { WorkforceCoverageSheet } from './widgets/WorkforceCoverageSheet'
+import { DashboardRuntimeContext } from './widgets/dashboardWidgetContext'
+import { widgetRegistry } from './widgetRegistry'
 import { InmateReporterDashboard } from './InmateReporterDashboard'
 
-export type DashboardPage =
-  | 'employees'
-  | 'services'
-  | 'books'
-  | 'leaves'
-  | 'ledger'
-  | 'settings'
-  | 'dashboard'
-
-export interface DashboardPageProps {
-  onNavigate: (page: DashboardPage) => void
-}
+export type DashboardPage = 'employees' | 'services' | 'books' | 'leaves' | 'ledger' | 'settings' | 'dashboard'
+export interface DashboardPageProps { onNavigate: (page: DashboardPage) => void }
 
 interface NameLike {
   employee_name_en: string
@@ -158,562 +82,135 @@ function joinNames(names: string[], isAr: boolean): string {
 export function DashboardPage(props: DashboardPageProps): React.JSX.Element {
   const { user } = useAuth()
   if (user?.role === 'inmate_reporter') return <InmateReporterDashboard />
-  return <GenericDashboardPage {...props} />
+  return <GenericDashboardPage key={user?.id ?? 'anonymous'} {...props} />
 }
 
 function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
-  const { has } = useCapabilities()
-  const dfLocale = isAr ? arLocale : undefined
+  const { has, isLoading: capabilitiesLoading } = useCapabilities()
   const { identity } = useIdentity()
   const { user } = useAuth()
   const qc = useQueryClient()
-  const navigate = useNavigate()
-
-  // Row-level deep-link helper for recent-activity sections. The destination
-  // page reads `?open=<id>` and auto-opens that entry's detail surface (drawer
-  // or scrolled row). When a destination doesn't support per-item opening,
-  // the query param is silently ignored.
-  const openItem = useCallback(
-    (target: 'leaves' | 'books' | 'ledger', id: number | string) => {
-      navigate(`/${target}?open=${id}`)
-    },
-    [navigate],
-  )
-
-  const summaryQuery = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: api.getDashboardSummary,
-    staleTime: 60_000,
-  })
-
-  const summary: DashboardSummary | undefined = summaryQuery.data
-
-  // #31 — shared with WaitingApprovalsCard/BooksAwaitingWidget/SentApprovalsWidget
-  // (same cache entry); used here only to build the top-card's click target
-  // via the generic Approvals landing rule.
+  const isMobile = useIsMobile()
+  const summaryQuery = useQuery({ queryKey: ['dashboard'], queryFn: api.getDashboardSummary, staleTime: 60_000 })
+  const summary = summaryQuery.data
   const approvalSummary = useApprovalSummary().data
-
-  // Layout: read this user's private dashboard layout; fall back to
-  // `DEFAULT_LAYOUT` until they customise it.
-  const layoutQuery = useQuery<DashboardLayout | null>({
-    queryKey: ['dashboard-layout', user?.id],
-    queryFn: api.getDashboardLayout,
-    enabled: Boolean(user),
-  })
-  const layout = useMemo(
-    () => resolveLayout(layoutQuery.data ?? null),
-    [layoutQuery.data],
-  )
-
-  const allowedQuickActions = useMemo(
-    () => layout.quick_actions.filter((item) => isQuickActionAllowed(item.id, has)),
-    [has, layout.quick_actions],
-  )
-  const allowedQuickActionDefaults = useMemo(
-    () => DEFAULT_LAYOUT.quick_actions.filter((item) => isQuickActionAllowed(item.id, has)),
-    [has],
-  )
+  const layoutQuery = useQuery<DashboardLayout | null>({ queryKey: ['dashboard-layout', user?.id], queryFn: api.getDashboardLayout, enabled: Boolean(user) })
+  const layout = useMemo(() => resolveLayout(layoutQuery.data), [layoutQuery.data])
+  const [draft, setDraft] = useState<DashboardLayout | null>(null)
+  const editing = draft !== null
+  const activeLayout = draft ?? layout
+  const [quickActionsDialogOpen, setQuickActionsDialogOpen] = useState(false)
+  const [coverageOpen, setCoverageOpen] = useState(false)
+  const boardRef = useRef<HTMLDivElement>(null)
+  const customizeRef = useRef<HTMLButtonElement>(null)
+  const focusAfterMove = useRef<{ id: string; control: string } | null>(null)
+  const focusCustomize = useRef(false)
+  useLayoutEffect(() => {
+    if (focusCustomize.current && !draft) {
+      customizeRef.current?.focus()
+      focusCustomize.current = false
+    }
+    const target = focusAfterMove.current
+    if (!target) return
+    boardRef.current?.querySelector<HTMLElement>(`[data-widget-id="${target.id}"] [data-control="${target.control}"]`)?.focus()
+    focusAfterMove.current = null
+  }, [draft])
   const updateLayout = useMutation({
-    mutationFn: (nextLayout: DashboardLayout) => {
+    mutationFn: (next: DashboardLayout) => {
       if (!user) throw new Error('Cannot save a dashboard layout without an authenticated user')
-      return api.updateDashboardLayout(nextLayout)
+      return api.updateDashboardLayout(next)
     },
-    onSuccess: () => {
-      if (user) {
-        void qc.invalidateQueries({ queryKey: ['dashboard-layout', user.id] })
-      }
-      toast.success(isAr ? 'تم حفظ تخطيط لوحة التحكم' : 'Dashboard layout saved')
+    onSuccess: (saved) => {
+      qc.setQueryData(['dashboard-layout', user?.id], saved)
+      toast.success(t('dashboard.customize.saved'))
     },
     onError: (err: Error) => toast.error(err.message),
   })
-
-  const [widgetDialogOpen, setWidgetDialogOpen] = useState(false)
-  const [quickActionsDialogOpen, setQuickActionsDialogOpen] = useState(false)
-  const [coverageOpen, setCoverageOpen] = useState(false)
+  const availableIds = WIDGET_IDS.filter((id) => widgetRegistry[id].available({ has, approvalSummary, capabilitiesLoading, workforceAccess: qc.getQueryData<WorkforceAccess>(['workforce', 'access']) }))
+  const visibleWidgets = [...activeLayout.widgets].sort((a, b) => a.order - b.order).filter((widget) => widget.visible && availableIds.includes(widget.id))
+  const cols = isMobile ? 2 : activeLayout.canvas_width === 'wide' ? 6 : 4
+  const packed = packLayout(visibleWidgets, cols)
+  const catalog = availableIds.map((id) => ({ id, title: t(widgetRegistry[id].titleKey), source: widgetRegistry[id].source }))
+  const quickActionLabels = Object.fromEntries(QUICK_ACTION_IDS.map((id) => [id, t(`dashboard.quickActionLabels.${QUICK_ACTION_META[id].slug}`)])) as Record<QuickActionId, string>
+  const allowedQuickActions = activeLayout.quick_actions.filter((item) => isQuickActionAllowed(item.id, has))
+  const allowedQuickActionDefaults = DEFAULT_LAYOUT.quick_actions.filter((item) => isQuickActionAllowed(item.id, has))
   const coverageOperationalDate = qc.getQueryData<WorkforceSnapshot>(['workforce', 'snapshot'])?.operational_date ?? ''
-
-  // Labels for every widget id — fed into the Customize dialog.
-  const widgetLabels = useMemo<Record<WidgetId, string>>(() => {
-    const out = {} as Record<WidgetId, string>
-    for (const id of WIDGET_IDS) {
-      out[id] = t(`dashboard.widgetLabels.${id}`)
-    }
-    return out
-  }, [t])
-  // Build all 20 labels from QUICK_ACTION_IDS using each ID's slug. Slugs are
-  // declared on QUICK_ACTION_META — see lib/quickActions.ts. This way adding
-  // a new quick action only requires touching the layout + meta files plus
-  // the i18n JSON; no per-ID branch lives here.
-  const quickActionLabels = useMemo<Record<QuickActionId, string>>(() => {
-    const out = {} as Record<QuickActionId, string>
-    for (const id of QUICK_ACTION_IDS) {
-      const slug = QUICK_ACTION_META[id].slug
-      out[id] = t(`dashboard.quickActionLabels.${slug}`)
-    }
-    return out
-  }, [t])
-  // Optional per-ID description (rendered below the tile title). Falls back
-  // to an empty string when the key isn't defined (i18next's defaultValue
-  // suppresses the "missing key" warning + lets the tile render with no
-  // description line).
-  const quickActionDescriptions = useMemo<Record<QuickActionId, string>>(() => {
-    const out = {} as Record<QuickActionId, string>
-    for (const id of QUICK_ACTION_IDS) {
-      const slug = QUICK_ACTION_META[id].slug
-      out[id] = t(`dashboard.quickActionDesc.${slug}`, { defaultValue: '' })
-    }
-    return out
-  }, [t])
-
-  // Welcome name from useIdentity, falling back to a generic greeting.
   const welcomeName = useMemo(() => {
     if (!identity?.linked) return null
     const full = isAr && identity.name_ar ? identity.name_ar : identity.name_en
     return full ? firstSecondFamilyName(full) : null
   }, [identity, isAr])
+  const heroReturners = useMemo<HeroReturner[]>(() => (summary?.upcoming_leave_ends ?? []).filter((row) => row.days_remaining <= 0).map((row) => ({ name: pickName(row, isAr), employee_id: row.employee_id })), [summary, isAr])
 
-  // Returners-from-leave whose leave ends today (days_remaining <= 0) — the
-  // honest signal behind the hero insight line. Names are language-aware.
-  const heroReturners = useMemo<HeroReturner[]>(() => {
-    const rows = summary?.upcoming_leave_ends ?? []
-    return rows
-      .filter((r) => r.days_remaining <= 0)
-      .map((r) => ({ name: pickName(r, isAr), employee_id: r.employee_id }))
-  }, [summary, isAr])
-
-  // Ledger unread counts — derived from the `recent_ledger` snapshot (latest
-  // entries in the summary payload). The summary doesn't carry a strict
-  // "unread" flag, so we use latest-activity by direction as the closest
-  // honest proxy. The big number is the total; breakdown is by direction.
-  const ledgerByDirection = useMemo(() => {
-    const rows = summary?.recent_ledger ?? []
-    const counts = { incoming: 0, outgoing: 0, internal: 0 }
-    for (const r of rows) {
-      if (r.direction === 'incoming') counts.incoming += 1
-      else if (r.direction === 'outgoing') counts.outgoing += 1
-      else counts.internal += 1
-    }
-    return counts
-  }, [summary])
-
-  const zones = useMemo(() => visibleByZone(layout.widgets), [layout.widgets])
-
-  // Quick-action grid: render whatever's marked `visible` in the saved
-  // layout, sorted by `order`, capped at MAX_VISIBLE_QUICK_ACTIONS. The
-  // grid is 4-col, so values >4 wrap onto a second row. The full pool
-  // (visible + hidden) is fed to the edit dialog so the operator can
-  // promote a hidden tile back into view.
-  const visibleQuickActions = useMemo(
-    () => allowedQuickActions.filter((q) => q.visible).slice(0, MAX_VISIBLE_QUICK_ACTIONS),
-    [allowedQuickActions],
-  )
-
-  // Render a single widget by id, parameterised by the zone it sits in so
-  // `waiting_approvals` can show a glance card up top and the full queue
-  // below. Capability-gated widgets self-hide (return null) internally.
-  const renderWidget = (id: WidgetId, zone: WidgetZone): React.JSX.Element | null => {
-    switch (id) {
-      case 'pending':
-        return (
-          <PendingDocumentsCard
-            docsCount={summary?.totals.forms_this_month ?? 0}
-            currency={t('dashboard.pending.currency')}
-            header={t('dashboard.pending.title')}
-            reviewLabel={t('dashboard.pending.review')}
-            footnote={t('dashboard.pending.footnote', {
-              count: summary?.totals.forms_this_month ?? 0,
-            })}
-            onClick={() => onNavigate('books')}
-            isLoading={summaryQuery.isPending}
-          />
-        )
-      case 'workspace':
-        return (
-          <WorkspaceCard
-            staff={summary?.totals.employees_active ?? 0}
-            header={t('dashboard.workspace.title')}
-            currency={t('dashboard.workspace.total')}
-            ourStaff={summary?.totals.our_staff ?? 0}
-            onSite={summary?.totals.present_today ?? 0}
-            loaned={summary?.totals.loaned ?? 0}
-            onLeave={summary?.totals.on_leave_today ?? 0}
-            onClick={() => onNavigate('employees')}
-            isLoading={summaryQuery.isPending}
-          />
-        )
-      case 'waiting_approvals':
-        return zone === 'top' ? (
-          <WaitingApprovalsCard
-            onReview={() =>
-              navigate(
-                approvalSummary ? approvalQueueUrl(defaultApprovalContext(approvalSummary) ?? { tab: 'received', kind: 'sign', status: 'all', sort: 'newest', page: 1 }) : APPROVALS_LOG_PATH,
-              )
-            }
-          />
-        ) : (
-          <BooksAwaitingWidget />
-        )
-      case 'sent_approvals':
-        return <SentApprovalsWidget />
-      case 'inbox':
-        return <InboxWidget />
-      case 'violations': {
-        const openViolations = summary?.totals.open_violations_count ?? 0
-        return (
-          <WidgetCard
-            header={t('dashboard.widgets.violations.header')}
-            big={openViolations}
-            delta={
-              openViolations > 0
-                ? { tone: 'warn', label: t('dashboard.widgets.violations.deltaWarn', { count: openViolations }) }
-                : { tone: 'steady', label: t('dashboard.widgets.violations.deltaSteady') }
-            }
-            breakdown={[
-              { color: 'accent', label: t('dashboard.widgets.violations.active'), value: openViolations },
-              { color: 'warning', label: t('dashboard.widgets.violations.escalated'), value: 0 },
-              { color: 'success', label: t('dashboard.widgets.violations.pendingClose'), value: 0 },
-            ] satisfies BreakdownRow[]}
-            actionLabel={t('dashboard.widgets.violations.action')}
-            onAction={() => onNavigate('employees')}
-          />
-        )
-      }
-      case 'drafts': {
-        const draftCount = summary?.totals.book_draft_count ?? 0
-        return (
-          <WidgetCard
-            header={t('dashboard.widgets.drafts.header')}
-            big={draftCount}
-            delta={
-              draftCount > 0
-                ? { tone: 'warn', label: t('dashboard.widgets.drafts.deltaWarn', { count: draftCount }) }
-                : { tone: 'steady', label: t('dashboard.widgets.drafts.deltaSteady') }
-            }
-            actionLabel={t('dashboard.widgets.drafts.action')}
-            onAction={() => navigate('/books?status=none')}
-          />
-        )
-      }
-      case 'ledger':
-        return (
-          <WidgetCard
-            header={t('dashboard.widgets.ledger.header')}
-            big={ledgerByDirection.incoming + ledgerByDirection.outgoing + ledgerByDirection.internal}
-            delta={
-              ledgerByDirection.incoming > 0
-                ? { tone: 'warn', label: t('dashboard.widgets.ledger.deltaWarn', { count: ledgerByDirection.incoming }) }
-                : { tone: 'steady', label: t('dashboard.widgets.ledger.deltaSteady') }
-            }
-            breakdown={[
-              { color: 'success', label: t('dashboard.widgets.ledger.incoming'), value: ledgerByDirection.incoming },
-              { color: 'accent', label: t('dashboard.widgets.ledger.outgoing'), value: ledgerByDirection.outgoing },
-              { color: 'primary', label: t('dashboard.widgets.ledger.internal'), value: ledgerByDirection.internal },
-            ] satisfies BreakdownRow[]}
-            meta={t('dashboard.widgets.ledger.metaRecent', { count: summary?.recent_ledger.length ?? 0 })}
-            actionLabel={t('dashboard.widgets.ledger.action')}
-            onAction={() => onNavigate('ledger')}
-          />
-        )
-      case 'email_sync_status':
-        return <EmailSyncStatusWidget summary={summary} />
-      case 'expiring_soon':
-        return <ExpiringSoonWidget />
-      case 'pending_departures':
-        return <PendingDeparturesWidget />
-      case 'violation_months':
-        return <ViolationMonthsWidget />
-      case 'permits':
-        return <PermitsWidget />
-      case 'workforce_pulse':
-        return <WorkforcePulseWidget onOpenCoverage={() => setCoverageOpen(true)} />
-      case 'on_leave_today':
-        return (
-          <SectionCard icon={CalendarCheck} title={t('dashboard.onLeave.title')} count={summary?.on_leave_today.length}>
-            {summaryQuery.isPending ? (
-              <PanelSkeleton />
-            ) : !summary || summary.on_leave_today.length === 0 ? (
-              <EmptyState icon={CalendarCheck} message={t('dashboard.onLeave.empty')} />
-            ) : (
-              <ul className="flex flex-col">
-                {summary.on_leave_today.map((item) => (
-                  <OnLeaveRow
-                    key={item.leave_id}
-                    item={item}
-                    isAr={isAr}
-                    untilLabel={t('dashboard.onLeave.until', { date: item.end_date })}
-                    onOpen={() => openItem('leaves', item.leave_id)}
-                  />
-                ))}
-              </ul>
-            )}
-          </SectionCard>
-        )
-      case 'upcoming_leave':
-        return (
-          <SectionCard icon={CalendarClock} title={t('dashboard.upcoming.title')} count={summary?.upcoming_leave_ends.length}>
-            {summaryQuery.isPending ? (
-              <PanelSkeleton />
-            ) : !summary || summary.upcoming_leave_ends.length === 0 ? (
-              <EmptyState icon={CalendarClock} message={t('dashboard.upcoming.empty')} />
-            ) : (
-              <ul className="flex flex-col">
-                {summary.upcoming_leave_ends.map((item) => (
-                  <UpcomingRow
-                    key={item.leave_id}
-                    item={item}
-                    isAr={isAr}
-                    label={
-                      item.days_remaining <= 0
-                        ? t('dashboard.upcoming.endsToday')
-                        : item.days_remaining === 1
-                          ? t('dashboard.upcoming.endsTomorrow')
-                          : t('dashboard.upcoming.endsIn', { days: item.days_remaining })
-                    }
-                    onOpen={() => openItem('leaves', item.leave_id)}
-                  />
-                ))}
-              </ul>
-            )}
-          </SectionCard>
-        )
-      case 'recent_docs':
-        return (
-          <SectionCard icon={FileText} title={t('dashboard.recent.documents')} count={summary?.recent_documents.length}>
-            {summaryQuery.isPending ? (
-              <PanelSkeleton />
-            ) : !summary || summary.recent_documents.length === 0 ? (
-              <EmptyState icon={FileText} message={t('dashboard.recent.empty')} />
-            ) : (
-              <ul className="flex flex-col">
-                {summary.recent_documents.slice(0, 5).map((doc) => (
-                  <DocumentRow
-                    key={doc.id}
-                    doc={doc}
-                    isAr={isAr}
-                    dfLocale={dfLocale}
-                    onOpen={() => navigate(`/employees/${encodeURIComponent(doc.employee_id)}`)}
-                  />
-                ))}
-              </ul>
-            )}
-          </SectionCard>
-        )
-      case 'recent_ledger':
-        return (
-          <SectionCard icon={ScrollText} title={t('dashboard.recent.ledger')} count={summary?.recent_ledger.length}>
-            {summaryQuery.isPending ? (
-              <PanelSkeleton />
-            ) : !summary || summary.recent_ledger.length === 0 ? (
-              <EmptyState icon={ScrollText} message={t('dashboard.recent.empty')} />
-            ) : (
-              <ul className="flex flex-col">
-                {summary.recent_ledger.slice(0, 5).map((entry) => (
-                  <LedgerRow key={entry.id} entry={entry} dfLocale={dfLocale} onOpen={() => openItem('ledger', entry.id)} />
-                ))}
-              </ul>
-            )}
-          </SectionCard>
-        )
-    }
+  const changeSize = (id: WidgetId, size: WidgetSize) => setDraft((current) => current && ({ ...current, widgets: current.widgets.map((widget) => widget.id === id ? { ...widget, size } : widget) }))
+  const moveWidget = (id: WidgetId, targetId: WidgetId, control: string) => {
+    if (!draft || id === targetId) return
+    const next = [...draft.widgets]
+    const from = next.findIndex((widget) => widget.id === id)
+    const target = next.findIndex((widget) => widget.id === targetId)
+    if (from < 0 || target < 0) return
+    next.splice(target, 0, next.splice(from, 1)[0]!)
+    focusAfterMove.current = { id, control }
+    setDraft({ ...draft, widgets: widgetsForApi(next) })
   }
-
-  // Wrap a widget cell with the right grid span for its size.
-  const widgetCell = (id: WidgetId, zone: WidgetZone, index: number): React.JSX.Element | null => {
-    const node = renderWidget(id, zone)
-    if (node == null) return null
-    const span = WIDGET_SIZE[id] === 'panel' ? 'md:col-span-3' : ''
-    return (
-      <div key={id} className={`anim-fade-up ${span}`} style={{ animationDelay: `${120 + index * 40}ms` }}>
-        {node}
-      </div>
-    )
+  const closeCustomize = () => {
+    focusCustomize.current = true
+    setDraft(null)
   }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
-      <div className="flex-1 min-h-0">
-      <PullToRefresh>
-      <div
-        data-canvas-width={layout.canvas_width}
-        className={`w-full px-4 pb-12 pt-6 md:px-7 ${
-          layout.canvas_width === 'wide' ? '' : 'mx-auto max-w-[1180px]'
-        }`}
-      >
-        {/* ============ HERO ============ */}
-        <DashboardHero
-          name={welcomeName}
-          isAr={isAr}
-          isLoading={summaryQuery.isPending}
-          welcomeGuest={t('dashboard.welcomeBackGuest')}
-          staffOnSite={summary?.totals.present_today ?? 0}
-          onLeaveToday={summary?.totals.on_leave_today ?? 0}
-          returnersToday={heroReturners}
-          upcomingThisWeek={summary?.upcoming_leave_ends.length ?? 0}
-          onReviewLeaves={() => onNavigate('leaves')}
-        />
-
-        {/* ============ MY WIDGETS HEADER ============ */}
-        <div
-          className="anim-fade-up mb-3.5 flex items-center justify-between"
-          style={{ animationDelay: '60ms' }}
-        >
-          <h3 className="text-lg font-semibold tracking-tight text-foreground">
-            {t('dashboard.myWidgets')}
-          </h3>
-          <div className="flex items-center gap-2">
-            <RefreshButton />
-            <button
-              type="button"
-              onClick={() => setWidgetDialogOpen(true)}
-              aria-label={t('dashboard.editMyWidgets')}
-              className="inline-flex items-center gap-1.5 text-[0.85em] font-medium text-primary transition-colors hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              {t('dashboard.editMyWidgets')}
-              <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-            </button>
+      <div className="min-h-0 flex-1"><PullToRefresh>
+        <div data-canvas-width={activeLayout.canvas_width} className={`w-full px-4 pb-12 pt-6 md:px-7 ${activeLayout.canvas_width === 'wide' ? '' : 'mx-auto max-w-[1180px]'}`}>
+          <DashboardHero name={welcomeName} isAr={isAr} isLoading={summaryQuery.isPending} welcomeGuest={t('dashboard.welcomeBackGuest')} staffOnSite={summary?.totals.present_today ?? 0} onLeaveToday={summary?.totals.on_leave_today ?? 0} returnersToday={heroReturners} upcomingThisWeek={summary?.upcoming_leave_ends.length ?? 0} onReviewLeaves={() => onNavigate('leaves')} />
+          <div className="mb-3.5 flex items-center justify-between gap-2">
+            <h3 className="text-lg font-semibold tracking-tight text-foreground">{t('dashboard.myWidgets')}</h3>
+            <div className="flex items-center gap-2">
+              <RefreshButton />
+              <button ref={customizeRef} type="button" aria-expanded={editing} disabled={editing || !user || layoutQuery.isPending} onClick={() => setDraft(structuredClone(layout))} className="inline-flex items-center gap-1.5 rounded-sm text-[0.85em] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
+                {t('dashboard.customize.action')}<Pencil className="size-3.5" aria-hidden />
+              </button>
+            </div>
+          </div>
+          {editing && <CustomizeBanner width={activeLayout.canvas_width ?? 'compact'} onWidth={(width) => setDraft({ ...activeLayout, canvas_width: width })} onReset={() => setDraft(structuredClone(DEFAULT_LAYOUT))} onCancel={closeCustomize} isSaving={updateLayout.isPending} onSave={() => updateLayout.mutate({ ...activeLayout, widgets: widgetsForApi(activeLayout.widgets) }, { onSuccess: closeCustomize })} />}
+          <div className="flex flex-col items-start gap-4 lg:flex-row">
+            <div ref={boardRef} data-testid="widget-grid" data-columns={cols} className="grid w-full min-w-0 flex-1 gap-3.5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: '9.25rem' }}>
+              {packed.placed.map((box, index) => {
+                const id = box.id as WidgetId
+                const { Component, titleKey } = widgetRegistry[id]
+                const title = t(titleKey)
+                const widget = visibleWidgets.find((item) => item.id === id)!
+                return (
+                  <article key={id} data-widget-id={id} aria-label={title} className={`relative min-h-0 min-w-0 overflow-hidden rounded-2xl ${editing ? 'ring-1 ring-border-strong' : ''}`} style={{ gridColumn: `${box.c + 1} / span ${box.w}`, gridRow: `${box.r + 1} / span ${box.h}` }}
+                    onDragOver={(event) => { if (editing && !updateLayout.isPending && event.dataTransfer.types.includes('text/plain')) event.preventDefault() }}
+                    onDrop={(event) => { if (!editing || updateLayout.isPending) return; event.preventDefault(); const from = event.dataTransfer.getData('text/plain') as WidgetId; if (visibleWidgets.some((item) => item.id === from)) moveWidget(from, id, 'drag') }}>
+                    {editing && <WidgetControls item={widget} title={title} atStart={index === 0} atEnd={index === visibleWidgets.length - 1} isSaving={updateLayout.isPending} onSize={(size) => changeSize(id, size)} onMove={(direction) => { const target = visibleWidgets[index + direction]; if (target) moveWidget(id, target.id, direction < 0 ? 'earlier' : 'later') }} onRemove={() => { setDraft({ ...activeLayout, widgets: activeLayout.widgets.map((item) => item.id === id ? { ...item, visible: false } : item) }); customizeRef.current?.focus() }} onEditTiles={id === 'quick_actions' ? () => setQuickActionsDialogOpen(true) : undefined} />}
+                    <div className={`h-full min-h-0 overflow-hidden ${editing ? 'pointer-events-none opacity-50' : ''}`} inert={editing}>
+                      <DashboardRuntimeContext.Provider value={{ layout: activeLayout, has, onNavigate, onOpenCoverage: () => setCoverageOpen(true), box: { w: box.w, h: box.h, cols } }}>
+                        <Component tier={tierOf(box.w, box.h)} rows={rowsPerHeight(box.h)} />
+                      </DashboardRuntimeContext.Provider>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+            {editing && <AddWidgetsPanel entries={catalog} widgets={activeLayout.widgets} isSaving={updateLayout.isPending} onAdd={(id) => {
+              const item = activeLayout.widgets.find((widget) => widget.id === id)!
+              setDraft({ ...activeLayout, widgets: widgetsForApi([...activeLayout.widgets.filter((widget) => widget.id !== id), { ...item, visible: true, size: 'S' }]) })
+            }} />}
           </div>
         </div>
-
-        {/* ============ TOP ZONE (2 big cards) ============ */}
-        {zones.top.length > 0 && (
-          <div className="mb-6 grid grid-cols-1 gap-3.5 md:grid-cols-2">
-            {zones.top.map((w, i) => {
-              const node = renderWidget(w.id as WidgetId, 'top')
-              if (node == null) return null
-              return (
-                <div key={w.id} className="anim-fade-up" style={{ animationDelay: `${80 + i * 40}ms` }}>
-                  {node}
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* ============ UNDER-WORKSPACE ZONE ============ */}
-        {zones.under_workspace.length > 0 && (
-          <div className="mb-6 grid auto-rows-fr grid-cols-1 gap-3.5 md:grid-cols-3">
-            {zones.under_workspace.map((w, i) => widgetCell(w.id as WidgetId, 'under_workspace', i))}
-          </div>
-        )}
-
-        {/* ============ QUICK ACTIONS HEADER ============ */}
-        <div
-          className="anim-fade-up mb-3.5 mt-1.5 flex items-center justify-between"
-          style={{ animationDelay: '320ms' }}
-        >
-          <h3 className="text-xl font-bold tracking-tight text-foreground">
-            {t('dashboard.quickActions')}
-          </h3>
-          <button
-            type="button"
-            onClick={() => setQuickActionsDialogOpen(true)}
-            aria-label={t('dashboard.editQuickActions')}
-            className="inline-flex items-center gap-1.5 text-[0.85em] font-medium text-primary transition-colors hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            {t('dashboard.editQuickActions')}
-            <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-          </button>
-        </div>
-
-        {/* ============ QUICK-ACTION TILES ============
-            Drives order + visibility from `layout.quick_actions`. Capped at
-            MAX_VISIBLE_QUICK_ACTIONS (8) — fills up to two 4-col rows.
-            Each tile's emoji + href + slug come from QUICK_ACTION_META; every
-            one deep-links via `navigate('/services/<slug>')` which
-            ApplicationPage hydrates into a pre-selected template. Empty state
-            surfaces a hint pointing operators at the edit dialog. */}
-        {visibleQuickActions.length === 0 ? (
-          <div
-            className="anim-fade-up mb-8 rounded-2xl border border-dashed border-hairline bg-surface py-2"
-            style={{ animationDelay: '340ms' }}
-          >
-            <EmptyState icon={FileText} message={t('dashboard.quickActionsEmpty')} />
-          </div>
-        ) : (
-          <div className="mb-8 grid auto-rows-fr grid-cols-2 gap-3.5 md:grid-cols-4">
-            {visibleQuickActions.map((qa, index) => {
-              const meta = QUICK_ACTION_META[qa.id as QuickActionId]
-              const delay = `${340 + index * 20}ms`
-              return (
-                <div key={qa.id} className="anim-fade-up h-full" style={{ animationDelay: delay }}>
-                  <ServiceTile
-                    emoji={meta.emoji}
-                    artwork={meta.artwork}
-                    title={quickActionLabels[qa.id as QuickActionId]}
-                    description={quickActionDescriptions[qa.id as QuickActionId]}
-                    onClick={() => navigate(meta.href)}
-                  />
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* ============ UNDER-QUICK-ACTIONS ZONE ============ */}
-        {zones.under_quick_actions.length > 0 && (
-          <div className="mb-6 grid auto-rows-fr grid-cols-1 gap-3.5 md:grid-cols-3">
-            {zones.under_quick_actions.map((w, i) => widgetCell(w.id as WidgetId, 'under_quick_actions', i))}
-          </div>
-        )}
-      </div>
-      </PullToRefresh>
-      </div>
-
-      {/* ============ EDIT DIALOGS ============ */}
-      <CustomizeWidgetsDialog
-        open={widgetDialogOpen}
-        onOpenChange={setWidgetDialogOpen}
-        items={layout.widgets}
-        labels={widgetLabels}
-        canvasWidth={layout.canvas_width ?? DEFAULT_CANVAS_WIDTH}
-        isSaving={updateLayout.isPending}
-        onSave={(items, canvasWidth) => {
-          updateLayout.mutate(
-            {
-              ...layout,
-              widgets: widgetsForApi(items),
-              canvas_width: canvasWidth,
-            },
-            { onSuccess: () => setWidgetDialogOpen(false) },
-          )
-        }}
-      />
-      <WidgetEditDialog<QuickActionId>
-        open={quickActionsDialogOpen}
-        onOpenChange={setQuickActionsDialogOpen}
-        title={t('dashboard.editWidgets.quickActionsTitle')}
-        description={t('dashboard.editWidgets.quickActionsDescription')}
-        items={allowedQuickActions}
-        labels={quickActionLabels}
-        defaults={allowedQuickActionDefaults}
-        isSaving={updateLayout.isPending}
-        maxVisible={MAX_VISIBLE_QUICK_ACTIONS}
-        maxVisibleHint={t('dashboard.editWidgets.quickActionsMaxVisibleHint', {
-          count: MAX_VISIBLE_QUICK_ACTIONS,
-        })}
-        onSave={(items) => {
-          const quickActions = mergeQuickActionsPreservingDenied(layout.quick_actions, items)
-          updateLayout.mutate(
-            { ...layout, quick_actions: quickActions },
-            { onSuccess: () => setQuickActionsDialogOpen(false) },
-          )
-        }}
-      />
-      <WorkforceCoverageSheet
-        open={coverageOpen}
-        onOpenChange={setCoverageOpen}
-        operationalDate={coverageOperationalDate}
-      />
-
+      </PullToRefresh></div>
+      <WidgetEditDialog<QuickActionId> open={quickActionsDialogOpen} onOpenChange={setQuickActionsDialogOpen} title={t('dashboard.editWidgets.quickActionsTitle')} description={t('dashboard.editWidgets.quickActionsDescription')} items={allowedQuickActions} labels={quickActionLabels} defaults={allowedQuickActionDefaults} maxVisible={MAX_VISIBLE_QUICK_ACTIONS} maxVisibleHint={t('dashboard.editWidgets.quickActionsMaxVisibleHint', { count: MAX_VISIBLE_QUICK_ACTIONS })} onSave={(items) => {
+        setDraft({ ...activeLayout, quick_actions: mergeQuickActionsPreservingDenied(activeLayout.quick_actions, items) })
+        setQuickActionsDialogOpen(false)
+      }} />
+      <WorkforceCoverageSheet open={coverageOpen} onOpenChange={setCoverageOpen} operationalDate={coverageOperationalDate} />
     </div>
   )
 }
-
-/* =========================================================================
- * HERO
- * ========================================================================= */
 
 interface HeroReturner {
   name: string
@@ -924,441 +421,3 @@ function HeroAvatars({ returners }: { returners: HeroReturner[] }): React.JSX.El
   )
 }
 
-/* =========================================================================
- * 2-UP CARDS
- * ========================================================================= */
-
-interface PendingDocumentsCardProps {
-  docsCount: number
-  currency: string
-  header: string
-  reviewLabel: string
-  footnote: string
-  onClick: () => void
-  isLoading: boolean
-}
-
-function PendingDocumentsCard({
-  docsCount,
-  currency,
-  header,
-  reviewLabel,
-  footnote,
-  onClick,
-  isLoading,
-}: PendingDocumentsCardProps): React.JSX.Element {
-  // Progress bar = share of the calendar month elapsed. Day 1 → 0%,
-  // last day of the month → 100%. Honest, always-moving anchor that
-  // pairs naturally with the "N documents this month" footnote.
-  const now = new Date()
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-  const pct = Math.round(((now.getDate() - 1) / daysInMonth) * 100)
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="cursor-pointer group relative h-full w-full overflow-hidden rounded-2xl bg-surface p-5 text-start transition-all duration-200 hover:-translate-y-1 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-    >
-      <div className="text-[0.86em] font-medium text-muted-foreground">{header}</div>
-
-      <div className="mt-2.5 text-[2.4em] font-bold leading-none tracking-tight text-foreground tabular-nums">
-        <span className="me-1.5 text-[0.32em] font-medium text-muted-foreground align-middle">
-          {currency}
-        </span>
-        {isLoading ? <Skeleton className="h-9 w-16" /> : docsCount}
-      </div>
-
-      {/* Progress bar — decorative proxy (not a true completion %), hidden
-          from AT. After the one-shot width grow finishes, a slow opacity
-          pulse keeps the bar feeling "alive" without being distracting (the
-          `infinite` animation kicks in only after the grow completes via
-          the chained delay). */}
-      <div
-        aria-hidden="true"
-        className="my-3.5 h-[5px] overflow-hidden rounded-full bg-surface-tinted"
-      >
-        <div
-          className="dash-pending-bar h-full rounded-full bg-accent"
-          style={{
-            width: `${pct}%`,
-            animation:
-              'dash-pending-grow 1.4s ease-out, dash-pending-pulse 3s ease-in-out infinite 1.4s',
-          }}
-        />
-      </div>
-      <style>{`
-        @keyframes dash-pending-grow {
-          from { width: 0%; }
-        }
-        @keyframes dash-pending-pulse {
-          0%, 100% { opacity: 0.85; }
-          50%      { opacity: 1; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          /* Reset both animations under reduced-motion — bar still renders
-             at its final width but doesn't grow or pulse. */
-          .dash-pending-bar { animation: none !important; }
-        }
-      `}</style>
-
-      <div className="flex items-center justify-between text-[0.78em] text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
-          {footnote}
-        </span>
-        <span
-          className="dash-view-pill rounded-full bg-primary px-4 py-1.5 text-[0.78em] font-medium text-primary-foreground shadow-sm transition-all duration-200 group-hover:scale-105 group-hover:bg-primary-hover group-hover:shadow-md motion-reduce:!transform-none motion-reduce:!shadow-sm"
-          aria-hidden
-        >
-          {reviewLabel}
-        </span>
-      </div>
-
-      <ChevronRight
-        aria-hidden
-        className="absolute end-5 top-5 h-3.5 w-3.5 text-faint transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-muted-foreground rtl:group-hover:-translate-x-0.5 motion-reduce:!transform-none"
-        strokeWidth={1.8}
-      />
-      {/* Direct-hover pop on the View pill — a tighter spring on top of the
-          calm card-hover swell. Animation (not a static transform) so it wins
-          over the group-hover scale while playing, then settles back. */}
-      <style>{`
-        .dash-view-pill:hover { animation: dash-view-pop 320ms cubic-bezier(0.34, 1.35, 0.64, 1); }
-        @keyframes dash-view-pop {
-          0%   { transform: scale(1.05); }
-          55%  { transform: scale(1.10); }
-          100% { transform: scale(1.08); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .dash-view-pill:hover { animation: none; }
-        }
-      `}</style>
-    </button>
-  )
-}
-
-interface WorkspaceCardProps {
-  staff: number
-  header: string
-  currency: string
-  ourStaff: number
-  onSite: number
-  loaned: number
-  onLeave: number
-  onClick: () => void
-  isLoading: boolean
-}
-
-function WorkspaceCard({
-  staff,
-  header,
-  currency,
-  ourStaff,
-  onSite,
-  loaned,
-  onLeave,
-  onClick,
-  isLoading,
-}: WorkspaceCardProps): React.JSX.Element {
-  const { t } = useTranslation()
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="cursor-pointer group relative h-full w-full overflow-hidden rounded-2xl p-5 text-start transition-all duration-200 hover:-translate-y-1 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      style={{
-        background:
-          'linear-gradient(140deg, var(--surface) 0%, var(--surface) 55%, var(--surface-tinted) 100%)',
-      }}
-    >
-      <div className="text-[0.86em] font-medium text-muted-foreground">{header}</div>
-
-      <div className="mt-2.5 text-[2.4em] font-bold leading-none tracking-tight text-foreground tabular-nums">
-        <span className="me-1.5 text-[0.32em] font-medium text-muted-foreground align-middle">
-          {currency}
-        </span>
-        {isLoading ? <Skeleton className="h-9 w-16" /> : staff}
-      </div>
-
-      <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[0.78em] text-muted-foreground">
-        <WorkspaceChip dotClass="bg-primary" count={ourStaff} label={t('dashboard.workspace.ourStaff')} />
-        {/* Static status dot. It remounts (via key) only when the on-site
-            count changes, replaying a one-shot settle — no ambient pulse
-            (Emil: reserve motion for the moment the value changes). */}
-        <WorkspaceChip
-          key={onSite}
-          dotClass="dash-active-dot bg-success"
-          count={onSite}
-          label={t('dashboard.workspace.onSite')}
-        />
-        <WorkspaceChip dotClass="bg-info" count={loaned} label={t('dashboard.workspace.loaned')} />
-        <WorkspaceChip dotClass="bg-warning" count={onLeave} label={t('dashboard.workspace.onLeave')} />
-      </div>
-
-      <ChevronRight
-        aria-hidden
-        className="absolute end-5 top-5 h-3.5 w-3.5 text-faint transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-muted-foreground rtl:group-hover:-translate-x-0.5 motion-reduce:!transform-none"
-        strokeWidth={1.8}
-      />
-      <style>{`
-        /* One-shot settle: plays once when the dot mounts (i.e. when the
-           on-site count changes and React remounts it via key). No infinite
-           loop — the dot is otherwise static. */
-        @keyframes dash-active-settle {
-          0%   { transform: scale(0.4); opacity: 0; }
-          45%  { transform: scale(1.15); opacity: 1; }
-          70%  { transform: scale(1); }
-          100% { transform: scale(1); opacity: 1; }
-        }
-        .dash-active-dot {
-          animation: dash-active-settle 420ms cubic-bezier(0.34, 1.35, 0.64, 1) both;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .dash-active-dot { animation: none !important; }
-        }
-      `}</style>
-    </button>
-  )
-}
-
-function WorkspaceChip({
-  dotClass,
-  count,
-  label,
-}: {
-  dotClass: string
-  count: number
-  label: string
-}): React.JSX.Element {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} aria-hidden />
-      <span className="font-semibold tabular-nums text-foreground">{count}</span>
-      {label}
-    </span>
-  )
-}
-
-/* =========================================================================
- * SECTION CARD + ROWS (preserved from P12, restyled to rounded-2xl)
- * ========================================================================= */
-
-function SectionCard({
-  icon: Icon,
-  title,
-  count,
-  children,
-}: {
-  icon: LucideIcon
-  title: string
-  count: number | undefined
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <section className="h-full rounded-2xl border border-hairline bg-surface" aria-label={title}>
-      <div className="flex min-h-[52px] items-center justify-between border-b border-hairline px-5 py-3.5">
-        <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-muted-foreground" strokeWidth={1.6} aria-hidden />
-          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        </div>
-        {typeof count === 'number' && count > 0 && (
-          <Badge shape="pill" tone="neutral">
-            {count}
-          </Badge>
-        )}
-      </div>
-      <div className="px-3 py-2">{children}</div>
-    </section>
-  )
-}
-
-function PanelSkeleton(): React.JSX.Element {
-  return (
-    <div className="flex flex-col gap-2 p-2">
-      {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 px-2 py-2">
-          <Skeleton className="h-8 w-8 rounded-full" />
-          <div className="flex flex-1 flex-col gap-1.5">
-            <Skeleton className="h-3 w-1/2" />
-            <Skeleton className="h-2.5 w-1/3" />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function OnLeaveRow({
-  item,
-  isAr,
-  untilLabel,
-  onOpen,
-}: {
-  item: DashboardOnLeaveItem
-  isAr: boolean
-  untilLabel: string
-  onOpen: () => void
-}): React.JSX.Element {
-  const { t } = useTranslation()
-  const name = pickName(item, isAr)
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 cursor-pointer"
-      >
-        <Avatar className="h-8 w-8 bg-primary-soft text-primary">
-          <AvatarFallback>{initialsFor(name)}</AvatarFallback>
-        </Avatar>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="line-clamp-2 font-medium text-foreground" title={name}>{name}</span>
-          <span className="font-mono text-xs text-muted-foreground">{item.employee_id}</span>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <Badge shape="square" tone="info" className="normal-case tracking-normal">
-            {t(`leaves.type.${item.leave_type}`, { defaultValue: item.leave_type })}
-          </Badge>
-          <span className="font-mono text-xs text-muted-foreground">{untilLabel}</span>
-        </div>
-      </button>
-    </li>
-  )
-}
-
-function UpcomingRow({
-  item,
-  isAr,
-  label,
-  onOpen,
-}: {
-  item: DashboardUpcomingItem
-  isAr: boolean
-  label: string
-  onOpen: () => void
-}): React.JSX.Element {
-  const { t } = useTranslation()
-  const name = pickName(item, isAr)
-  const urgent = item.days_remaining <= 1
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 cursor-pointer"
-      >
-        <Avatar className="h-8 w-8 bg-primary-soft text-primary">
-          <AvatarFallback>{initialsFor(name)}</AvatarFallback>
-        </Avatar>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="line-clamp-2 font-medium text-foreground" title={name}>{name}</span>
-          <span className="font-mono text-xs text-muted-foreground">{item.employee_id}</span>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <Badge shape="square" tone={urgent ? 'warning' : 'neutral'} className="normal-case tracking-normal">
-            {t(`leaves.type.${item.leave_type}`, { defaultValue: item.leave_type })}
-          </Badge>
-          <span className="font-mono text-xs text-muted-foreground">{label}</span>
-        </div>
-      </button>
-    </li>
-  )
-}
-
-function formatStamp(iso: string, dfLocale: Locale | undefined): string {
-  try {
-    return format(parseISO(iso), 'dd MMM HH:mm', { locale: dfLocale })
-  } catch {
-    return iso.slice(0, 10)
-  }
-}
-
-function formatDate(iso: string, dfLocale: Locale | undefined): string {
-  try {
-    return format(parseISO(iso), 'dd MMM yyyy', { locale: dfLocale })
-  } catch {
-    return iso.slice(0, 10)
-  }
-}
-
-function DocumentRow({
-  doc,
-  isAr,
-  dfLocale,
-  onOpen,
-}: {
-  doc: DashboardRecentDocument
-  isAr: boolean
-  dfLocale: Locale | undefined
-  onOpen: () => void
-}): React.JSX.Element {
-  const name = pickName(doc, isAr)
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 cursor-pointer"
-      >
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-soft text-primary">
-          <FileText className="h-3.5 w-3.5" strokeWidth={1.8} />
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate font-medium text-foreground">
-            {doc.ref_number ? (
-              <>
-                <span className="font-mono text-primary">{doc.ref_number}</span>
-                <span className="mx-1.5 text-muted-foreground">·</span>
-                {doc.template_id}
-              </>
-            ) : (
-              doc.template_id
-            )}
-          </span>
-          <span className="truncate text-xs text-muted-foreground">{name}</span>
-        </div>
-        <span className="font-mono text-xs text-muted-foreground">
-          {formatStamp(doc.created_at, dfLocale)}
-        </span>
-      </button>
-    </li>
-  )
-}
-
-function LedgerRow({
-  entry,
-  dfLocale,
-  onOpen,
-}: {
-  entry: DashboardRecentLedger
-  dfLocale: Locale | undefined
-  onOpen: () => void
-}): React.JSX.Element {
-  const dotClass =
-    entry.direction === 'incoming'
-      ? 'bg-success'
-      : entry.direction === 'outgoing'
-        ? 'bg-accent'
-        : 'bg-primary'
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 cursor-pointer"
-      >
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-tinted">
-          <span className={cn('h-2.5 w-2.5 rounded-full', dotClass)} />
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate font-medium text-foreground">{entry.subject}</span>
-          <span className="truncate text-xs text-muted-foreground">{entry.counterparty}</span>
-        </div>
-        <span className="font-mono text-xs text-muted-foreground">
-          {formatDate(entry.entry_date, dfLocale)}
-        </span>
-      </button>
-    </li>
-  )
-}

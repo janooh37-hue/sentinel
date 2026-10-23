@@ -4217,46 +4217,44 @@
     "heroLeavesReturning_one": "{{count}} leave returning this week",
     "heroLeavesReturning_other": "{{count}} leaves returning this week",
     "myWidgets": "My Widgets",
-    "editMyWidgets": "Edit My Widgets",
-    "editQuickActions": "Edit Quick Actions",
-    "quickActions": "Quick Actions",
-    "quickActionsEmpty": "No quick actions configured. Click Edit Quick Actions to add some.",
     "viewAll": "View All",
-    "editWidgets": {
-      "customizeTitle": "Customize Dashboard",
-      "customizeDescription": "Group by placement to move and reorder widgets, or by source page to find one fast.",
-      "zones": {
-        "top": "Top (big cards)",
-        "under_workspace": "Under Workspace",
-        "under_quick_actions": "Under Quick Actions",
-        "hidden": "Hidden"
-      },
-      "zonePicker": "Move to zone",
-      "width": {
-        "label": "Width",
-        "compact": "Compact",
-        "wide": "Wide",
-        "compactHint": "A 1180px column, like the rest of the app.",
-        "wideHint": "The grid spans the whole window."
-      },
-      "groupBy": {
-        "label": "Group by",
-        "placement": "Placement",
-        "source": "Source page"
-      },
+    "customize": {
+      "action": "Customize",
+      "title": "Customizing.",
+      "hint": "Drag a widget to move it, choose a size, or remove it. Add more from the panel.",
+      "width": "Canvas width",
+      "compact": "Compact",
+      "wide": "Wide",
+      "reset": "Reset",
+      "cancel": "Cancel",
+      "save": "Save layout",
+      "saved": "Dashboard layout saved",
+      "controls": "Customize {{name}}",
+      "size": "Size of {{name}}",
+      "sizes": { "S": "Small", "M": "Medium", "L": "Large", "W": "Full width" },
+      "drag": "Drag {{name}} to move it",
+      "earlier": "Move {{name}} earlier",
+      "later": "Move {{name}} later",
+      "remove": "Remove {{name}}",
+      "editTiles": "Edit tiles",
+      "addTitle": "Add widgets",
+      "addHint": "Only widgets you have access to are listed. Each one fits any size.",
+      "add": "Add",
+      "onBoard": "On board",
+      "addAria": "Add {{name}}",
+      "onBoardAria": "{{name}} is on the board",
       "sources": {
-        "employees": "From Employees",
-        "leaves": "From Leaves",
-        "records": "From Records",
-        "ledger": "From Ledger",
-        "workforce": "From Workforce",
-        "permits": "From Permits"
-      },
-      "topFull": "Top zone is full (max {{count}})",
-      "topOnlyBigCards": "Only big cards can go in the Top zone",
-      "zoneFull": "This zone is full (max {{count}})",
-      "title": "Edit My Widgets",
-      "description": "Reorder or hide the widgets on your dashboard.",
+        "records": "Records",
+        "approvals": "Approvals",
+        "ledger": "Mail",
+        "employees": "Employees",
+        "leaves": "Leaves",
+        "workforce": "Workforce",
+        "permits": "Permits",
+        "services": "Services"
+      }
+    },
+    "editWidgets": {
       "quickActionsTitle": "Edit Quick Actions",
       "quickActionsDescription": "Reorder or hide the quick-action tiles on your dashboard.",
       "reset": "Reset to defaults",
@@ -4266,7 +4264,6 @@
       "moveDown": "Move down",
       "showAria": "Show {{name}}",
       "hideAria": "Hide {{name}}",
-      "maxVisibleHint": "Max {{count}} widgets visible at a time",
       "quickActionsMaxVisibleHint": "Max {{count}} quick actions visible at a time"
     },
     "workforcePulse": {
@@ -4353,8 +4350,6 @@
       "ledger": "Ledger unread",
       "on_leave_today": "On Leave Today",
       "upcoming_leave": "Upcoming Returns",
-      "recent_docs": "Recent Documents",
-      "email_sync_status": "Email Sync",
       "waiting_approvals": "Waiting Approvals",
       "waiting_approvals_cta": "Review",
       "waiting_approvals_oldest": "Oldest: {{subject}}",
@@ -4364,7 +4359,6 @@
       "waiting_reviews_aria_other": "To review: {{count}}. Open.",
       "sent_approvals": "Sent Approvals",
       "expiring_soon": "Expiring Soon",
-      "recent_ledger": "Recent Ledger",
       "pending_departures": "Pending Departures",
       "workforce_pulse": "Workforce Pulse",
       "violation_months": "Monthly report workflow",
@@ -4426,6 +4420,10 @@
       "onLeave": "on leave"
     },
     "widgets": {
+      "quickActions": {
+        "title": "Quick actions",
+        "empty": "No quick actions selected. Use Customize, then Edit tiles to add some."
+      },
       "inbox": {
         "unread": "unread",
         "received": "Received",

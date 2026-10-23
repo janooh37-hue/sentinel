@@ -1496,31 +1496,26 @@ Command band.
 
 **Source:** `pages/dashboard/DashboardPage.tsx`.
 
-```
-<div class="flex flex-1 flex-col overflow-auto bg-background">
-  <div class="mx-auto w-full max-w-[1180px] px-7 pb-12 pt-6">
-    [Hero]
-    [MyWidgets strap]   ← dash-anim, animationDelay 60ms
-    [Top widget pair]   ← 2 dash-anims at 80ms / 120ms
-    [Bottom widget row] ← N dash-anims at 160 + 40·i ms
-    [QuickActions strap] ← dash-anim, 320ms
-    [Quick-action tiles] ← N dash-anims at 340 + 20·i ms
-    [On-leave + Upcoming pair] ← dash-anims at 460ms / 500ms
-    [Recent docs + Recent ledger pair] ← dash-anims at 540ms / 580ms
-  </div>
-  [WidgetEditDialog × 2 (portal)]
-  [Inline <style> with @keyframes]
-</div>
-```
+The hero is unchanged. Below the “My widgets” strap, one packed CSS grid
+replaces the former zones and separate quick-actions band.
 
-- Max content width: 1180px.
-- Background: `--bg`.
-- Entrance animation: every direct child carries `.dash-anim` and a
-  staggered `style={{ animationDelay: 'Nms' }}`. The animation itself is
-  `dash-fade-up` (`opacity 0→1` + `translateY(8px → 0)`), 420ms,
-  `cubic-bezier(0.16, 1, 0.3, 1)`.
-- Reduced motion: `.dash-anim { animation: none }` under
-  `prefers-reduced-motion: reduce` — surfaces appear without movement.
+- Compact canvas: centered `max-w-[1180px]`, 4 logical columns.
+- Wide canvas: full available width, 6 logical columns.
+- Below `md`: 2 logical columns. Grid rows are fixed at `9.25rem`, with
+  `gap-3.5` (`0.875rem`), not fractional-height rows.
+- Sizes: S = 1×1, M = 2×1, L = 2×2, W = full-width×1. On phones W is
+  full-width×2. `lib/dashboardLayout.ts` places each box explicitly, then
+  grows neighbours to absorb gaps. CSS grid mirrors logical columns in RTL.
+- `pages/dashboard/widgetRegistry.tsx` removes unavailable widgets before
+  packing. The final box determines glance, summary, tall, or list content.
+- `components/dashboard/WidgetFrame.tsx` is the shared card frame: header
+  title, optional count and View all link, then a filling, clipped body.
+  Current widget content remains in `widgets/legacyAdapters.tsx` until its
+  individual content migration; those adapters are clipped to the same boxes.
+- Quick actions are a regular `quick_actions` widget. Tile count follows its
+  final box and every tile retains its service-specific capability gate.
+- Private layouts use `{ id, visible, order, size }`; legacy zones are read
+  only for migration and never written.
 
 ---
 
@@ -2208,13 +2203,22 @@ doesn't support per-item opening the query param is silently ignored.
 
 ---
 
-### 4.9 Edit dialogs (WidgetEditDialog)
+### 4.9 In-place Customize and quick-action tile editor
 
-**Source:** `components/dashboard/WidgetEditDialog.tsx`.
+**Sources:** `components/dashboard/CustomizeWidgets.tsx`,
+`components/dashboard/WidgetEditDialog.tsx`.
 
-One generic dialog drives both "Edit My Widgets" and "Edit Quick Actions"
-flows. Built on Radix `<Dialog>` so it gets focus trapping, Escape close,
-and overlay click-to-dismiss for free.
+Customize edits the dashboard in place, not in a modal. The banner offers
+Compact/Wide, Reset, Cancel and Save layout. Gap filling is always on.
+Each box overlays a native drag handle, native S/M/L/W radios, keyboard
+move-earlier/move-later controls, and Remove. A moved control keeps focus.
+The Add widgets side panel groups only available widgets by source page;
+visible entries read “On board”. It sits below the grid on smaller screens.
+Cancel discards the complete draft, including edits to quick-action tiles.
+
+The quick-actions box adds Edit tiles, opening the existing Radix
+`WidgetEditDialog`. That dialog changes the in-place draft; only Save layout
+persists the full private layout. Its retained visual treatment follows.
 
 #### Overlay
 

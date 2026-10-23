@@ -4551,46 +4551,44 @@
     "heroLeavesReturning_many": "{{count}} إجازة تنتهي هذا الأسبوع",
     "heroLeavesReturning_other": "{{count}} إجازة تنتهي هذا الأسبوع",
     "myWidgets": "أدواتي",
-    "editMyWidgets": "تعديل أدواتي",
-    "editQuickActions": "تعديل الإجراءات السريعة",
-    "quickActions": "إجراءات سريعة",
-    "quickActionsEmpty": "لم يتم إعداد إجراءات سريعة. انقر على \"تعديل الإجراءات السريعة\" لإضافة بعضها.",
     "viewAll": "عرض الكل",
-    "editWidgets": {
-      "customizeTitle": "تخصيص لوحة التحكم",
-      "customizeDescription": "جمّع حسب الموضع لنقل الأدوات وترتيبها، أو حسب الصفحة المصدر للوصول السريع.",
-      "zones": {
-        "top": "الأعلى (بطاقات كبيرة)",
-        "under_workspace": "أسفل مساحة العمل",
-        "under_quick_actions": "أسفل الإجراءات السريعة",
-        "hidden": "مخفية"
-      },
-      "zonePicker": "النقل إلى منطقة",
-      "width": {
-        "label": "العرض",
-        "compact": "مضغوط",
-        "wide": "عريض",
-        "compactHint": "عمود بعرض 1180 بكسل، مثل بقية الصفحات.",
-        "wideHint": "تمتد الشبكة على كامل عرض النافذة."
-      },
-      "groupBy": {
-        "label": "التجميع حسب",
-        "placement": "الموضع",
-        "source": "الصفحة المصدر"
-      },
+    "customize": {
+      "action": "تخصيص",
+      "title": "وضع التخصيص.",
+      "hint": "اسحب الأداة لنقلها، أو اختر حجمها، أو أزلها. أضف أدوات أخرى من اللوحة.",
+      "width": "عرض اللوحة",
+      "compact": "مضغوط",
+      "wide": "عريض",
+      "reset": "استعادة الافتراضي",
+      "cancel": "إلغاء",
+      "save": "حفظ التخطيط",
+      "saved": "تم حفظ تخطيط لوحة التحكم",
+      "controls": "تخصيص {{name}}",
+      "size": "حجم {{name}}",
+      "sizes": { "S": "صغير", "M": "متوسط", "L": "كبير", "W": "بعرض اللوحة" },
+      "drag": "اسحب {{name}} لنقلها",
+      "earlier": "نقل {{name}} للأمام",
+      "later": "نقل {{name}} للخلف",
+      "remove": "إزالة {{name}}",
+      "editTiles": "تعديل الإجراءات",
+      "addTitle": "إضافة أدوات",
+      "addHint": "تظهر هنا الأدوات المتاحة لصلاحياتك فقط، وكل أداة تناسب أي حجم.",
+      "add": "إضافة",
+      "onBoard": "معروضة",
+      "addAria": "إضافة {{name}}",
+      "onBoardAria": "{{name}} معروضة على اللوحة",
       "sources": {
-        "employees": "من الموظفين",
-        "leaves": "من الإجازات",
-        "records": "من المستندات",
-        "ledger": "من المراسلات",
-        "workforce": "من القوى العاملة",
-        "permits": "من التصاريح"
-      },
-      "topFull": "منطقة الأعلى ممتلئة (الحد الأقصى {{count}})",
-      "topOnlyBigCards": "البطاقات الكبيرة فقط يمكن وضعها في الأعلى",
-      "zoneFull": "هذه المنطقة ممتلئة (الحد الأقصى {{count}})",
-      "title": "تعديل أدواتي",
-      "description": "أعد ترتيب أو أخفِ الأدوات في لوحتك.",
+        "records": "السجلات",
+        "approvals": "الاعتمادات",
+        "ledger": "البريد",
+        "employees": "الموظفون",
+        "leaves": "الإجازات",
+        "workforce": "القوى العاملة",
+        "permits": "التصاريح",
+        "services": "الخدمات"
+      }
+    },
+    "editWidgets": {
       "quickActionsTitle": "تعديل الإجراءات السريعة",
       "quickActionsDescription": "أعد ترتيب أو أخفِ بطاقات الإجراءات السريعة في لوحتك.",
       "reset": "إعادة إلى الافتراضي",
@@ -4600,7 +4598,6 @@
       "moveDown": "تحريك لأسفل",
       "showAria": "إظهار {{name}}",
       "hideAria": "إخفاء {{name}}",
-      "maxVisibleHint": "الحد الأقصى {{count}} أدوات معروضة في وقت واحد",
       "quickActionsMaxVisibleHint": "الحد الأقصى {{count}} إجراءات سريعة معروضة في وقت واحد"
     },
     "workforcePulse": {
@@ -4687,8 +4684,6 @@
       "ledger": "غير المقروء في السجل",
       "on_leave_today": "في إجازة اليوم",
       "upcoming_leave": "العائدون قريبًا",
-      "recent_docs": "أحدث المستندات",
-      "email_sync_status": "مزامنة البريد",
       "waiting_approvals": "بانتظار الاعتماد",
       "waiting_approvals_cta": "مراجعة",
       "waiting_approvals_oldest": "الأقدم: {{subject}}",
@@ -4706,7 +4701,6 @@
       "waiting_reviews_aria_other": "للمراجعة: {{count}}. فتح.",
       "sent_approvals": "الطلبات المرسلة",
       "expiring_soon": "قرب الانتهاء",
-      "recent_ledger": "أحدث المراسلات",
       "pending_departures": "المغادرات المجدولة",
       "workforce_pulse": "نبض القوى العاملة",
       "violation_months": "اعتماد التقارير الشهرية",
@@ -4772,6 +4766,10 @@
       "onLeave": "في إجازة"
     },
     "widgets": {
+      "quickActions": {
+        "title": "إجراءات سريعة",
+        "empty": "لم تُحدّد إجراءات سريعة. اختر تخصيص ثم تعديل الإجراءات لإضافتها."
+      },
       "inbox": {
         "unread": "غير مقروءة",
         "received": "الواردة",

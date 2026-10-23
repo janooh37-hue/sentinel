@@ -1,243 +1,180 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
 import { api } from '@/lib/api'
-import { DEFAULT_LAYOUT } from '@/lib/dashboardLayout'
+import { DEFAULT_LAYOUT, packLayout } from '@/lib/dashboardLayout'
 import { DashboardPage } from './DashboardPage'
 
-const authState = vi.hoisted(() => ({
+const state = vi.hoisted(() => ({
   user: { id: 1 } as { id: number } | null,
+  denied: new Set<string>(),
+  received: ['approver'],
+  mobile: false,
 }))
-
-vi.mock('@/lib/api', () => ({
-  api: {
-    getDashboardSummary: vi.fn().mockResolvedValue({
-      totals: {
-        employees_active: 0,
-        our_staff: 0,
-        loaned: 0,
-        on_leave_today: 0,
-        present_today: 0,
-        forms_this_month: 0,
-        open_violations_count: 0,
-        draft_count: 0,
-        book_draft_count: 0,
-      },
-      on_leave_today: [],
-      upcoming_leave_ends: [],
-      recent_documents: [],
-      recent_ledger: [],
-      email_sync: {
-        last_synced_at: null,
-        enabled: false,
-        interval_minutes: 0,
-        incoming_today: 0,
-      },
-    }),
-    getDashboardLayout: vi.fn(),
-    updateDashboardLayout: vi.fn(),
-    getSettings: vi.fn(),
-    updateSettings: vi.fn(),
-  },
-}))
-
-vi.mock('@/lib/authContext', () => ({
-  useAuth: () => ({
-    status: authState.user ? 'authed' : 'anonymous',
-    user: authState.user,
-  }),
-}))
-
-vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({ has: () => true }),
-}))
-
-vi.mock('@/lib/useIdentity', () => ({
-  useIdentity: () => ({ identity: null }),
-}))
-
-vi.mock('@/components/dashboard/CustomizeWidgetsDialog', () => ({
-  CustomizeWidgetsDialog: (props: {
-    items: typeof DEFAULT_LAYOUT.widgets
-    onSave: (items: typeof DEFAULT_LAYOUT.widgets, width: 'compact' | 'wide') => void
-  }) => (
-    <>
-      <span data-testid="first-widget">{props.items[0]?.id}</span>
-      <button type="button" onClick={() => props.onSave(props.items, 'wide')}>
-        save-widget-layout-{props.items.length}
-      </button>
-    </>
+vi.mock('@/lib/api', () => ({ api: {
+  getDashboardSummary: vi.fn().mockResolvedValue({ totals: { present_today: 0, on_leave_today: 0 }, on_leave_today: [], upcoming_leave_ends: [] }),
+  getDashboardLayout: vi.fn(),
+  updateDashboardLayout: vi.fn(),
+} }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ status: state.user ? 'authed' : 'anonymous', user: state.user }) }))
+vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => !state.denied.has(cap), isLoading: false }) }))
+vi.mock('@/lib/useIdentity', () => ({ useIdentity: () => ({ identity: null }) }))
+vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => state.mobile }))
+vi.mock('@/lib/useApprovalSummary', () => ({ useApprovalSummary: () => ({ data: { available_received_kinds: state.received } }) }))
+vi.mock('./widgets/legacyAdapters', () => ({
+  LegacyWidget: ({ id, tier, rows }: { id: string; tier: string; rows: number }) => (
+    <div data-testid={`body-${id}`} data-tier={tier} data-rows={rows}>{id}</div>
   ),
 }))
-
-vi.mock('@/components/dashboard/WidgetEditDialog', () => ({
-  WidgetEditDialog: (props: {
-    items: typeof DEFAULT_LAYOUT.quick_actions
-    onSave: (items: typeof DEFAULT_LAYOUT.quick_actions) => void
-  }) => (
-    <button type="button" onClick={() => props.onSave(props.items)}>
-      save-quick-layout-{props.items.length}
-    </button>
-  ),
-}))
-
-vi.mock('@/components/dashboard/widgets/EmailSyncStatusWidget', () => ({
-  EmailSyncStatusWidget: () => null,
-}))
-vi.mock('@/pages/dashboard/widgets/BooksAwaitingWidget', () => ({ BooksAwaitingWidget: () => null }))
-vi.mock('@/pages/dashboard/widgets/ExpiringSoonWidget', () => ({ ExpiringSoonWidget: () => null }))
-vi.mock('@/pages/dashboard/widgets/PendingDeparturesWidget', () => ({ PendingDeparturesWidget: () => null }))
-vi.mock('@/pages/dashboard/widgets/WaitingApprovalsCard', () => ({ WaitingApprovalsCard: () => null }))
-vi.mock('@/pages/dashboard/widgets/WorkforceCoverageSheet', () => ({ WorkforceCoverageSheet: () => null }))
-vi.mock('@/pages/dashboard/widgets/WorkforcePulseWidget', () => ({ WorkforcePulseWidget: () => null }))
+vi.mock('./widgets/WorkforceCoverageSheet', () => ({ WorkforceCoverageSheet: () => null }))
 vi.mock('@/components/refresh/PullToRefresh', () => ({ PullToRefresh: ({ children }: { children: React.ReactNode }) => children }))
 vi.mock('@/components/refresh/RefreshButton', () => ({ RefreshButton: () => null }))
 
 const mockedApi = vi.mocked(api)
-
-function createQueryClient(): QueryClient {
-  return new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  })
+function renderPage() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  return { queryClient, ...render(<QueryClientProvider client={queryClient}><MemoryRouter><DashboardPage onNavigate={vi.fn()} /></MemoryRouter></QueryClientProvider>) }
+}
+async function customize() {
+  const button = await screen.findByRole('button', { name: 'Customize' })
+  await waitFor(() => expect(button).toBeEnabled())
+  fireEvent.click(button)
+}
+function widget(id: string): HTMLElement {
+  return screen.getByTestId('widget-grid').querySelector<HTMLElement>(`[data-widget-id="${id}"]`)!
+}
+function boardIds(): string[] {
+  return Array.from(screen.getByTestId('widget-grid').querySelectorAll('[data-widget-id]')).map((node) => node.getAttribute('data-widget-id')!)
 }
 
-function renderPage(queryClient = createQueryClient()) {
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
-        <DashboardPage onNavigate={vi.fn()} />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
-}
-
-describe('DashboardPage per-user layout', () => {
+describe('packed per-user dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    authState.user = { id: 1 }
+    state.user = { id: 1 }
+    state.denied.clear()
+    state.received = ['approver']
+    state.mobile = false
     mockedApi.getDashboardLayout.mockResolvedValue(null)
     mockedApi.updateDashboardLayout.mockImplementation(async (layout) => layout)
-    mockedApi.getSettings.mockResolvedValue({} as never)
-    mockedApi.updateSettings.mockResolvedValue({} as never)
   })
-
-  it('loads the per-user route, falls back to defaults, and saves the full layout', async () => {
+  it.each([false, true])('renders one packed grid with explicit boxes on mobile=%s', async (mobile) => {
+    state.mobile = mobile
     renderPage()
-
-    const save = await screen.findByRole('button', {
-      name: `save-widget-layout-${DEFAULT_LAYOUT.widgets.length}`,
-    })
-    expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(1)
-
-    fireEvent.click(save)
-
-    await waitFor(() => expect(mockedApi.updateDashboardLayout).toHaveBeenCalledTimes(1))
-    expect(mockedApi.updateDashboardLayout.mock.calls[0]?.[0]).toEqual(
-      expect.objectContaining({
-        canvas_width: 'wide',
-        widgets: expect.any(Array),
-        quick_actions: expect.any(Array),
-      }),
-    )
-    expect(mockedApi.getSettings).not.toHaveBeenCalled()
-    expect(mockedApi.updateSettings).not.toHaveBeenCalled()
-  })
-
-  it('saves quick actions through the same full-layout API', async () => {
-    renderPage()
-
-    const save = await screen.findByRole('button', {
-      name: `save-quick-layout-${DEFAULT_LAYOUT.quick_actions.length}`,
-    })
-    fireEvent.click(save)
-
-    await waitFor(() => expect(mockedApi.updateDashboardLayout).toHaveBeenCalledTimes(1))
-    expect(mockedApi.updateDashboardLayout.mock.calls[0]?.[0]).toEqual(
-      expect.objectContaining({
-        canvas_width: DEFAULT_LAYOUT.canvas_width,
-        widgets: expect.any(Array),
-        quick_actions: expect.any(Array),
-      }),
-    )
-  })
-
-  it('isolates cached layouts across logout and a different authenticated user', async () => {
-    const firstDefaultWidget = DEFAULT_LAYOUT.widgets[0]
-    const firstPrivateWidget = DEFAULT_LAYOUT.widgets.at(-1)
-    expect(firstDefaultWidget).toBeDefined()
-    expect(firstPrivateWidget).toBeDefined()
-    expect(firstPrivateWidget?.id).not.toBe(firstDefaultWidget?.id)
-    const privateLayout = {
-      ...DEFAULT_LAYOUT,
-      widgets: [
-        { ...firstPrivateWidget!, order: 0 },
-        ...DEFAULT_LAYOUT.widgets
-          .slice(0, -1)
-          .map((widget, index) => ({ ...widget, order: index + 1 })),
-      ],
+    await waitFor(() => expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(1))
+    const cols = mobile ? 2 : 4
+    expect(screen.getByTestId('widget-grid')).toHaveAttribute('data-columns', String(cols))
+    const visible = DEFAULT_LAYOUT.widgets.filter((item) => item.visible)
+    expect(boardIds()).toEqual(visible.map((item) => item.id))
+    for (const box of packLayout(visible, cols).placed) {
+      expect(widget(box.id).style.gridColumn).toBe(`${box.c + 1} / span ${box.w}`)
+      expect(widget(box.id).style.gridRow).toBe(`${box.r + 1} / span ${box.h}`)
     }
-    mockedApi.getDashboardLayout.mockImplementation(async () => {
-      if (authState.user?.id === 1) return privateLayout
-      if (authState.user?.id === 2) return null
-      throw new Error('anonymous dashboard layout request')
-    })
-    const queryClient = createQueryClient()
-    const view = renderPage(queryClient)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('first-widget')).toHaveTextContent(firstPrivateWidget!.id)
-    })
-    expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(1)
-
-    authState.user = null
-    view.rerender(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <DashboardPage onNavigate={vi.fn()} />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    )
-    await waitFor(() => {
-      expect(screen.getByTestId('first-widget')).toHaveTextContent(firstDefaultWidget!.id)
-    })
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: `save-widget-layout-${DEFAULT_LAYOUT.widgets.length}`,
-      }),
-    )
-    let finishMutationTick!: () => void
-    const mutationTick = new Promise<void>((resolve) => {
-      finishMutationTick = resolve
-    })
-    setTimeout(finishMutationTick, 25)
-    await mutationTick
-    expect(mockedApi.updateDashboardLayout).not.toHaveBeenCalled()
-    expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(1)
-
-    authState.user = { id: 2 }
-    view.rerender(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <DashboardPage onNavigate={vi.fn()} />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    )
-    await waitFor(() => {
-      expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(2)
-      expect(screen.getByTestId('first-widget')).toHaveTextContent(firstDefaultWidget!.id)
-    })
-    expect(screen.getByTestId('first-widget')).not.toHaveTextContent(firstPrivateWidget!.id)
-
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: `save-widget-layout-${DEFAULT_LAYOUT.widgets.length}`,
-      }),
-    )
+    expect(screen.getByTestId('body-waiting_approvals')).toHaveAttribute('data-tier', 'list')
+    expect(screen.getByTestId('body-waiting_approvals')).toHaveAttribute('data-rows', '4')
+  })
+  it('removes unavailable entries before packing and from the add catalog', async () => {
+    state.denied.add('books.view')
+    state.denied.add('leaves.view')
+    state.received = []
+    renderPage()
+    await customize()
+    expect(boardIds()).toEqual(['ledger', 'workspace', 'expiring_soon'])
+    const panel = screen.getByRole('complementary', { name: 'Add widgets' })
+    expect(within(panel).queryByText('Documents Completed')).not.toBeInTheDocument()
+    expect(within(panel).queryByText('Waiting Approvals')).not.toBeInTheDocument()
+    expect(within(panel).queryByText('On Leave Today')).not.toBeInTheDocument()
+    expect(within(panel).getByText('Open Violations')).toBeInTheDocument()
+    expect(screen.getByTestId('widget-grid').querySelectorAll('article')).toHaveLength(3)
+  })
+  it('edits width, size, order and visibility in place, retaining focus after moves', async () => {
+    renderPage()
+    await customize()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    const move = within(widget('pending')).getByRole('button', { name: 'Move Documents Completed earlier' })
+    move.focus()
+    fireEvent.click(move)
+    expect(boardIds()[0]).toBe('pending')
+    expect(move).toHaveFocus()
+    expect(move).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(within(widget('pending')).getByRole('radio', { name: 'Large' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Wide' }))
+    expect(screen.getByTestId('widget-grid')).toHaveAttribute('data-columns', '6')
+    fireEvent.click(within(widget('drafts')).getByRole('button', { name: 'Remove Drafts' }))
+    expect(boardIds()).not.toContain('drafts')
+    fireEvent.click(screen.getByRole('button', { name: 'Add Open Violations' }))
+    expect(boardIds().at(-1)).toBe('violations')
+    fireEvent.click(screen.getByRole('button', { name: 'Save layout' }))
     await waitFor(() => expect(mockedApi.updateDashboardLayout).toHaveBeenCalledTimes(1))
-    expect(mockedApi.updateDashboardLayout.mock.calls[0]?.[0].widgets[0]?.id).toBe(
-      firstDefaultWidget!.id,
-    )
+    const saved = mockedApi.updateDashboardLayout.mock.calls[0]![0]
+    expect(saved.canvas_width).toBe('wide')
+    expect(saved.widgets[0]).toMatchObject({ id: 'pending', size: 'L' })
+    expect(saved.widgets.find((item) => item.id === 'drafts')?.visible).toBe(false)
+    expect(saved.widgets.at(-1)).toMatchObject({ id: 'violations', visible: true, size: 'S' })
+    expect(saved.widgets.every((item) => !('zone' in item))).toBe(true)
+    await waitFor(() => expect(screen.queryByRole('complementary')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Customize' })).toHaveFocus()
+  })
+  it('supports native radio keyboard selection and native drag-handle moves', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await customize()
+    const small = within(widget('pending')).getByRole('radio', { name: 'Small' })
+    small.focus()
+    await user.keyboard(' ')
+    expect(small).toBeChecked()
+    const dataTransfer = { getData: () => 'drafts', setData: vi.fn(), types: ['text/plain'], effectAllowed: '' }
+    fireEvent.dragStart(within(widget('drafts')).getByRole('button', { name: 'Drag Drafts to move it' }), { dataTransfer })
+    expect(dataTransfer.setData).toHaveBeenCalledWith('text/plain', 'drafts')
+    fireEvent.dragOver(widget('pending'), { dataTransfer })
+    fireEvent.drop(widget('pending'), { dataTransfer })
+    expect(boardIds().indexOf('drafts')).toBeLessThan(boardIds().indexOf('pending'))
+    expect(within(widget('drafts')).getByRole('button', { name: 'Drag Drafts to move it' })).toHaveFocus()
+  })
+  it('cancels all draft changes, including tile edits, without writing', async () => {
+    renderPage()
+    await customize()
+    fireEvent.click(screen.getByRole('radio', { name: 'Wide' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit tiles' }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('switch', { name: 'Hide General Book' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(mockedApi.updateDashboardLayout).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByTestId('widget-grid')).toHaveAttribute('data-columns', '4')
+    expect(mockedApi.updateDashboardLayout).not.toHaveBeenCalled()
+    await customize()
+    fireEvent.click(screen.getByRole('button', { name: 'Save layout' }))
+    await waitFor(() => expect(mockedApi.updateDashboardLayout).toHaveBeenCalledTimes(1))
+    expect(mockedApi.updateDashboardLayout.mock.calls[0]![0].quick_actions).toEqual(DEFAULT_LAYOUT.quick_actions)
+  })
+  it('resets both the board and width, and leaves failures editable', async () => {
+    mockedApi.getDashboardLayout.mockResolvedValue({ ...DEFAULT_LAYOUT, canvas_width: 'wide', widgets: DEFAULT_LAYOUT.widgets.map((item) => ({ ...item, visible: false })) })
+    mockedApi.updateDashboardLayout.mockRejectedValue(new Error('Save failed'))
+    renderPage()
+    await customize()
+    expect(boardIds()).toEqual([])
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
+    expect(boardIds()).toEqual(DEFAULT_LAYOUT.widgets.filter((item) => item.visible).map((item) => item.id))
+    expect(screen.getByTestId('widget-grid')).toHaveAttribute('data-columns', '4')
+    fireEvent.click(screen.getByRole('button', { name: 'Save layout' }))
+    await waitFor(() => expect(mockedApi.updateDashboardLayout).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save layout' })).toBeEnabled())
+    expect(screen.getByRole('complementary')).toBeInTheDocument()
+  })
+  it('does not carry a private draft or cached layout across user changes', async () => {
+    const privateLayout = { ...DEFAULT_LAYOUT, canvas_width: 'wide' as const }
+    mockedApi.getDashboardLayout.mockImplementation(async () => state.user?.id === 1 ? privateLayout : null)
+    const { queryClient, rerender } = renderPage()
+    await customize()
+    fireEvent.click(within(widget('pending')).getByRole('button', { name: 'Remove Documents Completed' }))
+    state.user = { id: 2 }
+    rerender(<QueryClientProvider client={queryClient}><MemoryRouter><DashboardPage onNavigate={vi.fn()} /></MemoryRouter></QueryClientProvider>)
+    await waitFor(() => expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(2))
+    expect(boardIds()).toContain('pending')
+    expect(screen.getByTestId('widget-grid')).toHaveAttribute('data-columns', '4')
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    expect(mockedApi.updateDashboardLayout).not.toHaveBeenCalled()
   })
 })
