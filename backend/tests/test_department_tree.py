@@ -122,3 +122,63 @@ def test_records_keep_the_department_they_were_created_in(tree):
     recompute(db)
     db.refresh(book)
     assert book.department_id == section.id
+
+
+def test_rename_and_deactivate_clears_the_old_synchronized_label(tree):
+    from app.schemas.department import DepartmentUpdate
+
+    db, _admin, section = tree
+    assert db.get(Employee, "S1").department == "القسم"
+    department_service.update_department(
+        db, section.id, DepartmentUpdate(name_ar="قسم جديد", active=False), actor="t"
+    )
+    # S1 falls through to Admin and takes its label; a detached head clears.
+    assert db.get(Employee, "S1").department == "الدوام الرسمي"
+    exception(db, "X", section.id)
+    department_service.update_department(db, section.id, DepartmentUpdate(active=True), actor="t")
+    assert db.get(Employee, "X1").department == "قسم جديد"
+    department_service.update_department(
+        db, section.id, DepartmentUpdate(name_ar="اسم آخر", active=False), actor="t"
+    )
+    assert db.get(Employee, "X1").department_id is None
+    assert db.get(Employee, "X1").department is None
+
+
+def test_delete_clears_the_deleted_department_label(tree):
+    db, _admin, section = tree
+    exception(db, "X", section.id)
+    assert db.get(Employee, "X1").department == "القسم"
+    department_service.delete_exception(db, "X", actor="t")
+    exception(db, "X", section.id)
+    department_service.delete_department(db, section.id, actor="t")
+    assert db.get(Employee, "X1").department_id is None
+    assert db.get(Employee, "X1").department is None
+
+
+def test_self_link_needs_an_administrator_while_scoping_is_on(tree):
+    from app.api.errors import AppError
+    from app.services import auth_service
+    from tests.department_fixtures import enable_scoping
+
+    db, *_ = tree
+    operator = User(email="claim@test.ae", password_hash="x", role="operator", status="active")
+    admin = User(email="self-admin@test.ae", password_hash="x", role="admin", status="active")
+    db.add_all([operator, admin])
+    db.commit()
+    enable_scoping(db)
+    with pytest.raises(AppError) as raised:
+        auth_service.link_self(db, operator, employee_id="A")
+    assert (raised.value.code, raised.value.http_status) == ("LINK_REQUIRES_ADMIN", 403)
+    assert db.get(User, operator.id).employee_id is None
+    assert auth_service.link_self(db, admin, employee_id="BOSS").employee_id == "BOSS"
+    assert department_service.read_scoping(db).enabled
+
+
+def test_self_link_is_unchanged_while_scoping_is_off(tree):
+    from app.services import auth_service
+
+    db, *_ = tree
+    operator = User(email="claim-off@test.ae", password_hash="x", role="operator", status="active")
+    db.add(operator)
+    db.commit()
+    assert auth_service.link_self(db, operator, employee_id="X1").employee_id == "X1"

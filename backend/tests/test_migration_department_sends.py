@@ -372,7 +372,7 @@ def test_downgrade_snapshots_active_derived_head_deputy_and_viewer_audience(tmp_
     try:
         with engine.begin() as connection:
             seed_employees(connection, ["HEAD", "MEMBER", "DISABLED", "EMPTY", "OUTSIDER"])
-            seed_users(connection, range(701, 709))
+            seed_users(connection, range(701, 710))
             connection.execute(
                 text(
                     "INSERT INTO departments (id, name_en, name_ar, head_employee_id) VALUES (1, 'Finance', 'المالية', 'HEAD'), (2, 'Empty', 'فارغ', 'EMPTY')"
@@ -391,6 +391,9 @@ def test_downgrade_snapshots_active_derived_head_deputy_and_viewer_audience(tmp_
             )
             connection.execute(text("UPDATE users SET status = 'pending' WHERE id = 707"))
             connection.execute(text("UPDATE users SET employee_id = 'OUTSIDER' WHERE id = 708"))
+            # An inactive department's head is not part of the live audience.
+            connection.execute(text("UPDATE users SET employee_id = 'EMPTY' WHERE id = 709"))
+            connection.execute(text("UPDATE departments SET active = 0 WHERE id = 2"))
             connection.execute(
                 text("UPDATE employees SET department = 'Finance' WHERE id = 'OUTSIDER'")
             )
@@ -438,7 +441,7 @@ def test_downgrade_snapshots_active_derived_head_deputy_and_viewer_audience(tmp_
                 (4, 704, None),
                 (4, 705, None),
             ]
-            assert not any(uid in {706, 707, 708} for _, uid, _ in rows)
+            assert not any(uid in {706, 707, 708, 709} for _, uid, _ in rows)
         command.upgrade(config, HEAD)
         with engine.connect() as connection:
             assert (

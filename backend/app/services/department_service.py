@@ -296,12 +296,13 @@ def update_department(
     )
     if "head_employee_id" in data:
         _validate_head(db, data["head_employee_id"], exclude_id=row.id)
+    previous_name = row.name_ar
     for key, value in data.items():
         setattr(row, key, value)
     _flush(db)
     department_tree_service.reject_head_exception(db, row.head_employee_id)
-    # Also re-labels members when name_ar changed.
-    department_tree_service.recompute(db)
+    # Re-labels members on rename; a rename+deactivate still clears the old label.
+    department_tree_service.recompute(db, previous_names={row.id: previous_name})
     _audit(db, actor, "update_department", row)
     db.commit()
     return read_department(db, row.id)
@@ -321,6 +322,7 @@ def delete_department(db: Session, department_id: int, *, actor: str | None) -> 
                 "deactivate it instead.",
             )
     _audit(db, actor, "delete_department", row)
+    previous_name = row.name_ar
     # Explicit cascade: SQLite FK enforcement may be off on this connection.
     for grant_model, grant_column in (
         (DepartmentMember, DepartmentMember.department_id),
@@ -333,7 +335,7 @@ def delete_department(db: Session, department_id: int, *, actor: str | None) -> 
     )
     db.delete(row)
     db.flush()
-    department_tree_service.recompute(db)
+    department_tree_service.recompute(db, previous_names={department_id: previous_name})
     db.commit()
 
 

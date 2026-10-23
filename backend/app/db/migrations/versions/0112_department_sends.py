@@ -108,7 +108,7 @@ def downgrade() -> None:
             "WHERE users.status = 'active' AND employees.department_id IS NOT NULL "
             "UNION SELECT departments.id, users.id FROM departments "
             "JOIN users ON users.employee_id = departments.head_employee_id "
-            "WHERE users.status = 'active' "
+            "WHERE users.status = 'active' AND departments.active = 1 "
             "UNION SELECT members.department_id, members.user_id "
             "FROM department_members AS members JOIN users ON users.id = members.user_id "
             "WHERE users.status = 'active') "

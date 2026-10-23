@@ -37,6 +37,7 @@ from app.services import (
     department_service,
     identity_service,
     perm_service,
+    settings_service,
     user_signature_service,
 )
 
@@ -274,6 +275,15 @@ def link_self(db: Session, user: User, *, employee_id: str | None) -> User:
         )
     is_admin = user.role == ADMIN_ROLE
     target = (employee_id or "").strip().upper() or None
+
+    # The employee link grants department head/branch scope and send delivery,
+    # so under department scoping only an administrator may set it.
+    if not is_admin and settings_service.get_department_scoping_enabled(db):
+        raise AppError(
+            "LINK_REQUIRES_ADMIN",
+            "Ask an administrator to link your employee record.",
+            http_status=403,
+        )
 
     if user.employee_id is not None and target != user.employee_id and not is_admin:
         raise AppError(

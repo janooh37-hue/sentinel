@@ -107,8 +107,12 @@ def tree_only_membership(db: Session) -> dict[str, int | None]:
     return _resolver(supervisors, heads, {})
 
 
-def recompute(db: Session) -> int:
-    """Materialize derived departments and parents; return the changed row count."""
+def recompute(db: Session, *, previous_names: dict[int, str] | None = None) -> int:
+    """Materialize derived departments and parents; return the changed row count.
+
+    ``previous_names`` carries Arabic names of departments renamed or deleted in
+    this transaction, so labels synchronized from the old name are still cleared.
+    """
     from app.services import department_scope_service
 
     db.flush()  # Sessions run with autoflush=False; derive from pending edits too.
@@ -125,8 +129,10 @@ def recompute(db: Session) -> int:
         if target is not None:
             if label != names[target]:
                 values["department"] = names[target]
-        elif current is not None and label is not None and label == names.get(current):
-            values["department"] = None
+        elif current is not None and label is not None:
+            old_names = {names.get(current), (previous_names or {}).get(current)}
+            if label in old_names:
+                values["department"] = None
         if values:
             # Through the ORM so callers' loaded Employee objects stay current.
             row = db.get(Employee, employee_id)
