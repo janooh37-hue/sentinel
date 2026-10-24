@@ -182,3 +182,12 @@ def test_self_link_is_unchanged_while_scoping_is_off(tree):
     db.add(operator)
     db.commit()
     assert auth_service.link_self(db, operator, employee_id="X1").employee_id == "X1"
+
+
+def test_employee_count_includes_working_statuses_only(api_db):
+    db = api_db
+    employee(db, "ACT", status="Active")
+    for employee_id, status in (("LOAN", "Loaned"), ("RES", "Resigned"), ("TER", "Terminated")):
+        employee(db, employee_id, "ACT", status=status)
+    row = department(db, "Working", "ACT")
+    assert department_service.read_department(db, row.id).employee_count == 2

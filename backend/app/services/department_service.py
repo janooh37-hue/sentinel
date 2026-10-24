@@ -168,7 +168,7 @@ def list_departments(db: Session, department_id: int | None = None) -> list[Depa
     employee_counts = dict(
         db.execute(
             select(Employee.department_id, func.count())
-            .where(Employee.department_id.in_(ids))
+            .where(Employee.department_id.in_(ids), Employee.status.in_(WORKING_STATUSES))
             .group_by(Employee.department_id)
         )
         .tuples()
