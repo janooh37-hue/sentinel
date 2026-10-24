@@ -62,7 +62,7 @@ export function ReportingLines({ go }: { go: (next: Partial<OrgRoute>) => void }
     const moved = people.map((person) => (person.id === selected.id ? { ...person, supervisor_id: proposed } : person))
     const before = deriveMembership(index, departments.data ?? [], exceptions.data)
     const after = deriveMembership(buildOrgIndex(moved), departments.data ?? [], exceptions.data)
-    return { from: before.get(selected.id) ?? null, to: after.get(selected.id) ?? null, changed: membershipChanges(before, after).length }
+    return { from: before.get(selected.id) ?? null, to: after.get(selected.id) ?? null, changed: membershipChanges(before, after, index.isWorking).length }
   }, [canManage, departments.data, exceptions.data, exceptions.isSuccess, index, people, proposed, selected])
 
   const save = useMutation({
@@ -186,7 +186,7 @@ export function ReportingLines({ go }: { go: (next: Partial<OrgRoute>) => void }
                       </>
                     )}
                   </p>
-                  {index.branchSize(selected.id) > 1 && <p>{t('orgDepartments.reporting.teamMoves', { count: index.branchSize(selected.id) - 1 })}</p>}
+                  {index.branchSize(selected.id) - (index.isWorking(selected.id) ? 1 : 0) > 0 && <p>{t('orgDepartments.reporting.teamMoves', { count: index.branchSize(selected.id) - (index.isWorking(selected.id) ? 1 : 0) })}</p>}
                   <p className="text-muted-foreground">{t('orgDepartments.reporting.changedDepartments', { count: impact.changed })}</p>
                 </>
               ) : (

@@ -128,6 +128,20 @@ describe('previewDrafts', () => {
     const [x, y] = previewDrafts(buildOrgIndex(loop), [], [], ['X', 'Y'])
     expect([x!.parent, y!.parent]).toEqual([{ kind: 'none' }, { kind: 'none' }])
   })
+
+  it('counts working employees only, while leavers still derive their department', () => {
+    const people = [...PEOPLE, person('G9', 'G2', { status: 'Resigned' }), person('G10', 'G3', { status: 'Terminated' })]
+    const index = buildOrgIndex(people)
+    expect(deriveMembership(index, [], [], new Map([['G2', -9]])).get('G9')).toBe(-9)
+    const [unit, section] = previewDrafts(index, [], [exception('G5', null)], ['G1', 'G3'])
+    expect(unit).toMatchObject({ branchSize: 6, inSubDepartments: 2, elsewhere: 1 })
+    expect(unit!.memberIds.toSorted()).toEqual(['G1', 'G2', 'G4'])
+    expect(section!.movedFrom).toEqual([{ from: null, count: 2 }])
+    expect(unitSuggestions(index)[0]).toMatchObject({ branchSize: 6 })
+    const before = deriveMembership(index, [], [])
+    const after = deriveMembership(index, [], [], new Map([['G2', -1]]))
+    expect(membershipChanges(before, after, index.isWorking).map((change) => change.employeeId)).toEqual(['G2', 'G4', 'G5'])
+  })
 })
 
 describe('whyIncluded', () => {

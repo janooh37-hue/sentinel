@@ -153,12 +153,12 @@ export function ChangeHeadDialog({ department, onClose }: {
     const before = deriveMembership(index, all, exceptions.data ?? [])
     const edited = all.map((item) => item.id === department.id ? { ...item, head_employee_id: candidate.id } : item)
     const after = deriveMembership(index, edited, exceptions.data ?? [])
-    const count = (membership: Map<string, number | null>): number => [...membership.values()].filter((value) => value === department.id).length
+    const count = (membership: Map<string, number | null>): number => [...membership].filter(([id, value]) => value === department.id && index.isWorking(id)).length
     const parentId = deriveParents(index, edited, after).get(department.id) ?? null
     return {
       before: count(before),
       after: count(after),
-      moved: membershipChanges(before, after).length,
+      moved: membershipChanges(before, after, index.isWorking).length,
       parent: parentId === null ? undefined : departmentsById.get(parentId),
     }
   }, [candidate, department.id, departments.data, departmentsById, exceptions.data, index])
@@ -443,7 +443,7 @@ export function PlacementDialog({ person, onClose }: {
     return {
       before: before.get(person.id) ?? null,
       after: after.get(person.id) ?? null,
-      others: membershipChanges(before, after).filter((change) => change.employeeId !== person.id).length,
+      others: membershipChanges(before, after, index.isWorking).filter((change) => change.employeeId !== person.id).length,
     }
   }, [departments.data, exceptions.data, index, next, person.id])
   const unchanged = choice === 'tree'

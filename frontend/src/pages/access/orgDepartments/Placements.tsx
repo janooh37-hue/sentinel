@@ -44,7 +44,7 @@ export function Placements({ go }: { go: (next: Partial<OrgRoute>) => void }): R
     const current = deriveMembership(index, departments.data ?? [], all)
     return new Map(all.map((exception) => [
       exception.employee_id,
-      membershipChanges(current, deriveMembership(index, departments.data ?? [], all.filter((item) => item !== exception))).length,
+      membershipChanges(current, deriveMembership(index, departments.data ?? [], all.filter((item) => item !== exception)), index.isWorking).length,
     ]))
   }, [departments.data, exceptions.data, index])
   const label = (id: number | null): string => {

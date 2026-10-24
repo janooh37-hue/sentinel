@@ -142,15 +142,20 @@ function PeopleSection({ department, initialQuery }: { department: DepartmentRea
     const rank = (person: OrgNodeRead): number => person.id === department.head_employee_id
       ? 0
       : person.head_of_department_id != null && ids.has(person.head_of_department_id) ? 1 : 2
+    // Leavers keep their derived department but are not listed or counted,
+    // so these numbers match the register and the outside review.
     return (tree.data ?? [])
-      .filter((person) => person.department_id != null && ids.has(person.department_id))
+      .filter((person) => person.department_id != null && ids.has(person.department_id) && index.isWorking(person.id))
       .sort((a, b) => rank(a) - rank(b))
-  }, [department.head_employee_id, ids, tree.data])
-  const ownCount = useMemo(() => (tree.data ?? []).filter((person) => person.department_id === department.id).length, [department.id, tree.data])
+  }, [department.head_employee_id, ids, index, tree.data])
+  const ownCount = useMemo(
+    () => (tree.data ?? []).filter((person) => person.department_id === department.id && index.isWorking(person.id)).length,
+    [department.id, index, tree.data],
+  )
   const allCount = useMemo(() => {
     const every = departmentDescendantIds(departments.data ?? [], department.id)
-    return (tree.data ?? []).filter((person) => person.department_id != null && every.has(person.department_id)).length
-  }, [department.id, departments.data, tree.data])
+    return (tree.data ?? []).filter((person) => person.department_id != null && every.has(person.department_id) && index.isWorking(person.id)).length
+  }, [department.id, departments.data, index, tree.data])
   const hasSubDepartments = allCount !== ownCount || (departments.data ?? []).some((item) => item.parent_id === department.id)
   const visible = members.filter((person) => matchesPerson(person, query))
   const showWhy = canManage && exceptions.isSuccess

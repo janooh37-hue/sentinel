@@ -25,8 +25,11 @@ export interface OrgIndex {
   /** Direct reports in reporting-line order. */
   reports: ReadonlyMap<string, OrgNodeRead[]>
   supervisorOf: (id: string) => string | null
-  /** The person plus everyone below them, cycle-safe. */
+  /** Working status (Active, Loaned): the population every displayed count uses. */
+  isWorking: (id: string) => boolean
+  /** Working employees among the person and everyone below them, cycle-safe. */
   branchSize: (id: string) => number
+  /** Everyone below and including the person, whatever their status. */
   branchIds: (id: string) => string[]
 }
 
@@ -56,16 +59,17 @@ export function buildOrgIndex(people: readonly OrgNodeRead[]): OrgIndex {
     }
     return [...seen]
   }
+  const isWorking = (id: string): boolean => WORKING_STATUSES.has(byId.get(id)?.status ?? '')
   const sizes = new Map<string, number>()
   const branchSize = (id: string): number => {
     let size = sizes.get(id)
     if (size === undefined) {
-      size = branchIds(id).length
+      size = branchIds(id).filter(isWorking).length
       sizes.set(id, size)
     }
     return size
   }
-  return { people, byId, reports, supervisorOf, branchSize, branchIds }
+  return { people, byId, reports, supervisorOf, isWorking, branchSize, branchIds }
 }
 
 /** Anchors the server honours: active heads, and placements that are outside
@@ -136,11 +140,12 @@ export interface MembershipChange {
   to: number | null
 }
 
-export function membershipChanges(before: Membership, after: Membership): MembershipChange[] {
+/** Who changes department; `keep` limits the list to the people a screen counts. */
+export function membershipChanges(before: Membership, after: Membership, keep?: (id: string) => boolean): MembershipChange[] {
   const changes: MembershipChange[] = []
   for (const [employeeId, from] of before) {
     const to = after.get(employeeId) ?? null
-    if (to !== from) changes.push({ employeeId, from, to })
+    if (to !== from && (!keep || keep(employeeId))) changes.push({ employeeId, from, to })
   }
   return changes
 }
@@ -160,9 +165,9 @@ export type DraftParent =
 export interface DraftPreview {
   headId: string
   parent: DraftParent
-  /** People whose department this draft becomes (sub-departments excluded). */
+  /** Working employees whose department this draft becomes (sub-departments excluded). */
   memberIds: string[]
-  /** The head plus everyone below them, whatever their department. */
+  /** Working employees among the head and everyone below them, whatever their department. */
   branchSize: number
   /** People in the branch whose derived department is a sub-department of this draft. */
   inSubDepartments: number
@@ -234,14 +239,15 @@ export function previewDrafts(
   const parents = deriveParents(index, departments, after, tempIds)
   return headIds.map((headId) => {
     const temp = tempIds.get(headId)!
-    const memberIds = [...after].filter(([, value]) => value === temp).map(([id]) => id)
+    // Leavers still derive a department; previews count working employees only.
+    const memberIds = [...after].filter(([id, value]) => value === temp && index.isWorking(id)).map(([id]) => id)
     const parentValue = parents.get(temp) ?? null
     const parent: DraftParent = parentValue === null
       ? { kind: 'none' }
       : parentValue < 0
         ? { kind: 'draft', headId: headByTemp.get(parentValue)! }
         : { kind: 'department', id: parentValue }
-    const branch = index.branchIds(headId)
+    const branch = index.branchIds(headId).filter(index.isWorking)
     const inSubDepartments = branch.filter((id) => {
       const value = after.get(id) ?? null
       return value !== null && value !== temp && isUnder(parents, value, temp)
