@@ -1148,6 +1148,9 @@ body {
   letter-spacing: 0;
   text-transform: none;
 }
+@media (max-width: 767px) {
+  .hero-label { letter-spacing: 0.04em; }
+}
 .hero-cross {
   position: absolute;
   z-index: 2;
@@ -1205,14 +1208,10 @@ body {
 /* Each time the dashboard opens, the sheet fills in reading order, one part
    after another, travelling in the writing direction (left to right in
    English, right to left in Arabic), while one scan line sweeps it top to
-   bottom. The readouts count up in DashboardHero.tsx. */
+   bottom. The approval counts run up in DashboardHero.tsx. */
 @keyframes hero-seq-in {
   from { opacity: 0; transform: translateX(var(--hero-seq-from)); }
   to   { opacity: 1; transform: none; }
-}
-@keyframes hero-rule-in {
-  from { transform: scaleX(0); }
-  to   { transform: scaleX(1); }
 }
 @keyframes hero-scan {
   0%   { opacity: 1; transform: translateY(-100%); }
@@ -1224,11 +1223,6 @@ body {
 .hero-intro .hero-seq {
   animation: hero-seq-in 360ms var(--ease-out-expo) calc(var(--seq, 0) * 55ms) both;
 }
-.hero-intro .hero-rule {
-  transform-origin: left;
-  animation: hero-rule-in 520ms var(--ease-out-expo) calc(var(--seq, 0) * 55ms) both;
-}
-[dir="rtl"] .hero-intro .hero-rule { transform-origin: right; }
 .hero-intro .hero-slab::before {
   content: "";
   position: absolute;
@@ -1878,7 +1872,6 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .anim-fade-up,
   .hero-intro .hero-seq,
-  .hero-intro .hero-rule,
   .anim-stagger > *,
   .anim-pop-in,
   .anim-scrim-in,

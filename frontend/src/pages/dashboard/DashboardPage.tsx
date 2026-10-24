@@ -522,17 +522,6 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           name={welcomeName}
           initials={welcomeName ? initialsFor(welcomeName) : ''}
           isAr={isAr}
-          counts={
-            summary
-              ? {
-                  onSite: summary.totals.present_today,
-                  onLeave: summary.totals.on_leave_today,
-                  returning: summary.upcoming_leave_ends.length,
-                  activeStaff: summary.totals.employees_active,
-                }
-              : null
-          }
-          onReviewLeaves={() => onNavigate('leaves')}
         />
 
         {/* ============ MY WIDGETS HEADER ============ */}

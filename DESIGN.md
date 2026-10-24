@@ -1534,21 +1534,23 @@ Command band.
 
 The signed-in person's staff file, set as a telemetry sheet (industrial
 brutalist: ruled compartments, square corners, mono uppercase micro labels,
-one red accent). Flat navy, no gradient, no crest. Every figure is real data.
+one red accent). Flat navy, no gradient, no crest. Everything in it is about
+the signed-in person and today, never the team: team figures live in the
+permission-gated widgets below, so the hero never repeats them or shows a
+number a user is not allowed to see.
 
 **Anatomy:**
 
 ```
  ┌[GSSG] STAFF FILE ╲
- │+                  ╲───────────────────┬────────────────┬───────────────┐
- │ ┌────┐  GOOD EVENING ///                │ ON SITE        │ ON LEAVE    ■ │
- │ │ HA │  Hamdan Saeed Ali                │ 134            │ 8           ↗ │
- │ └────┘  HR Officer · Human Resources    ├────────────────┼───────────────┤
- │         [ID G-10482]                    │ BACK WITHIN 7… │ TOTAL STAFF   │
- │                                         │ 8              │ 142           │
- ├─────────────────────────────────────────┴────────────────┴───────────────┤
- │ SAT 24 OCT 2026  /  hijri                                          01:15 +│
- └──────────────────────────────────────────────────────────────────────────┘
+ │+                  ╲──────────────────┬────────────────────────────────────┐
+ │ ┌────┐  GOOD EVENING ///              │ 24   SATURDAY · OCTOBER 2026      │
+ │ │ HA │  Hamdan Saeed Ali              │      13 Jumada I 1448 AH          │
+ │ └────┘  HR Officer · Human Resources  │      09:41  Week 43               │
+ │         [ID G-10482]                  ├───────────┬────────────┬──────────┤
+ │                                       │■ WAITING ↗│■ NEEDS     ↗│ SENT,   ↗│
+ │+                                      │  3        │  1          │ 4        │
+ └───────────────────────────────────────┴───────────┴────────────┴──────────┘
 ```
 
 **Folder tab:** `.hero-folder-tab`, `absolute start-0 top-0 h-[30px]
@@ -1563,9 +1565,9 @@ cut from `gssg-wordmark.png`) so the letters are white on navy and the
 swoosh is `--accent`. `direction: ltr`; the mark is never mirrored.
 
 **Sheet:** `<header class="hero-slab">`, square corners, `text-white`.
-`.hero-slab::after` lays faint 1-in-4px scan lines over it; two
-`.hero-cross` registration marks pin the top-start and bottom-end corners.
-Below `md` the identity block stacks over the readouts.
+`.hero-slab::after` lays faint 1-in-4px scan lines over it; `.hero-cross`
+registration marks pin the top-start corner and, from `md`, the
+bottom-start corner. Below `md` the identity block stacks over the panel.
 
 - Identity (inline start): portrait (linked users only), 4:5, `w-[52px]
   md:w-[68px]`, square, `bg-[var(--hero-slab-raised)]`, 1px 25%-white
@@ -1576,42 +1578,49 @@ Below `md` the identity block stacks over the readouts.
   `dashboard.welcomeBackGuest`). Meta: position · department, then a
   square 1px-ruled ID field (`dashboard.hero.idLabel` + mono G-number,
   `dir="ltr"`).
-- Readouts (inline end): a `gap-px` ruled grid, 2×2 from `md` (each cell
-  188px), 4 across at `sm`, 2×2 on phones. Cells: `.hero-label`
-  `dashboard.hero.readout.*` over a mono count: on site (`present_today`),
-  on leave (`on_leave_today`), back within 7 days
-  (`upcoming_leave_ends.length`), total staff (`employees_active`). `--`
-  (with a screen-reader `common.loading`) while the summary loads. When anyone is on leave, the on-leave cell is a
-  `<button>` to Leaves with a red square and an ↗.
-- Foot: a 1px rule, then the Gregorian date (`EEE d MMM yyyy`, mono
-  uppercase in English; `EEEE d MMMM yyyy` in Arabic, which has no short
-  weekday), the Umm al-Qura Hijri date (from `md`) and the
-  local time (`<time>`, `HH:mm`, re-read each minute) at the inline end.
+- Panel (inline end, `md:w-[440px]`, `gap-px` ruled):
+  - Date plate: the day numeral (`font-[800]`, `-0.05em` tracking), then
+    `EEEE · MMMM yyyy` as a `.hero-label`, the Umm al-Qura Hijri date, and
+    the local time (`HH:mm`, re-read each minute) with
+    `dashboard.hero.week` (ISO week).
+  - My desk: the user's own approval queue from `useApprovalSummary()`
+    (shared cache with the nav badge and the approval widgets), one
+    `<Link>` cell per item the user can open:
+    - `waiting` (`actionable_count`) when `available_received_kinds` is
+      non-empty; opens the received queue (signature work first, then
+      review).
+    - `returned` (`returned_count`, records they sent that a signer
+      returned) and `sent` (`sent.count`, still pending) when
+      `can_view_sent`; open the Sent tab filtered to returned / pending.
+    Counts are mono; zero is dimmed. A red square precedes the label of
+    `waiting` / `returned` while non-zero. Every cell ends in an ↗.
+  - No approval work (or the summary not loaded yet): the date plate takes
+    the whole panel at a larger numeral (`md:text-[5.2em]`).
 
-**`.hero-label`:** mono, `0.66em`, `500`, uppercase, `0.1em` tracking. In
-Arabic it switches to `--font-arabic` at `max(0.76em, 0.6875rem)` with no
-case or tracking.
+**`.hero-label`:** mono, `0.66em`, `500`, uppercase, `0.1em` tracking
+(`0.04em` below `md`). In Arabic it switches to `--font-arabic` at
+`max(0.76em, 0.6875rem)` with no case or tracking.
 
 **Motion:** every time the dashboard opens, the parts arrive in reading
-order (tab, portrait, greeting, name, meta, readout contents, rule, foot),
-each sliding 14px in the writing direction; one scan line sweeps the sheet
-top to bottom; the counts run up from 0 over 700ms once the summary arrives.
-The readout cell frames stand from the start so the ruled grid never
-flashes. See §5.
+order (tab, portrait, greeting, name, meta, plate, queue contents), each
+sliding 14px in the writing direction; one scan line sweeps the sheet top to
+bottom; the queue counts run up from 0 over 700ms once the summary arrives.
+The queue cell frames stand from the start so the ruled grid never flashes.
+See §5.
 
 **Dark theme:** `--hero-slab` deepens to `#131f3a` with a 1px `#24304f`
 inset edge. Text stays white.
 
 **RTL:** the tab and identity block sit at the inline start (right), the
-readouts at the inline end (left). The tab cut and the ↗ flip, and the intro
+panel at the inline end (left). The tab cut and the ↗ flip, and the intro
 travels right to left.
 
 **a11y:**
 
 - The name is a real `<h2>`; the mark is `role="img" aria-label="GSSG"`;
-  the portrait, `///`, crosses and scan lines are decorative.
-- Counts render in `<data value>`; the on-leave button's accessible name
-  includes the count and "Review leave records".
+  the portrait, `///`, red squares, crosses and scan lines are decorative.
+- Dates are `<time datetime>`; counts are `<data value>`; each queue cell is
+  a link named by its label and count.
 - Reduced motion cancels the intro, the scan and the count-up.
 
 ---
@@ -2371,7 +2380,6 @@ Every named animation on the Dashboard and chrome.
 | ------------------------- | ----------------------------------------------------------------- | ---------------------------- | -------- | ------------------------ | ---------- | ---------------------------------------------------------------- |
 | `dash-fade-up`            | `.dash-anim` (every direct child of dashboard shell + hero)       | opacity 0→1 + translateY 8→0 | `0.42s`  | `cubic-bezier(.16,1,.3,1)` | once (`both`) | `.dash-anim { animation: none }` under `prefers-reduced-motion` |
 | `hero-seq-in`             | `.hero-intro .hero-seq` (Dashboard hero parts)                    | opacity 0→1 + translateX ∓14px→0 in the writing direction | `360ms` + `--seq × 55ms` | `var(--ease-out-expo)` | once per dashboard mount | cancelled |
-| `hero-rule-in`            | `.hero-intro .hero-rule` (Dashboard hero foot line)               | scaleX 0→1 from the inline start | `520ms` | `var(--ease-out-expo)` | once per dashboard mount | cancelled                                                        |
 | `hero-scan`               | `.hero-intro .hero-slab::before` (Dashboard hero scan line)       | a 1px line translateY −100%→0, fading out at the end | `900ms`, 150ms delay | `cubic-bezier(0.4, 0, 0.6, 1)` | once per dashboard mount | hidden |
 | `dash-pending-grow`       | inline style on PendingDocumentsCard progress fill                | width 0%→{pct}%              | `1.4s`   | `ease-out`               | once       | both animations cancelled via attribute-selector override        |
 | `dash-pending-pulse`      | same (delayed `1.4s` so it follows the grow)                      | opacity 0.85↔1               | `3s`     | `ease-in-out`            | infinite   | as above                                                         |

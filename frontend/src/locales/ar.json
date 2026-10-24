@@ -4529,17 +4529,11 @@
     "hero": {
       "staffFile": "ملف الموظف",
       "idLabel": "الرقم الوظيفي",
-      "onLeaveAria_zero": "{{count}} في إجازة اليوم. مراجعة سجلات الإجازات",
-      "onLeaveAria_one": "{{count}} في إجازة اليوم. مراجعة سجلات الإجازات",
-      "onLeaveAria_two": "{{count}} في إجازة اليوم. مراجعة سجلات الإجازات",
-      "onLeaveAria_few": "{{count}} في إجازة اليوم. مراجعة سجلات الإجازات",
-      "onLeaveAria_many": "{{count}} في إجازة اليوم. مراجعة سجلات الإجازات",
-      "onLeaveAria_other": "{{count}} في إجازة اليوم. مراجعة سجلات الإجازات",
-      "readout": {
-        "onSite": "في الموقع",
-        "onLeave": "في إجازة",
-        "returning": "العائدون خلال 7 أيام",
-        "activeStaff": "إجمالي الموظفين"
+      "week": "الأسبوع {{n}}",
+      "desk": {
+        "waiting": "بانتظاري",
+        "returned": "تحتاج إلى تعديل",
+        "sent": "المرسل المعلّق"
       }
     },
     "heroSubtitle_zero": "لا توجد مستندات بانتظار اهتمامك",

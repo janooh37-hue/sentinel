@@ -4203,13 +4203,11 @@
     "hero": {
       "staffFile": "Staff file",
       "idLabel": "ID",
-      "onLeaveAria_one": "{{count}} on leave today. Review leave records",
-      "onLeaveAria_other": "{{count}} on leave today. Review leave records",
-      "readout": {
-        "onSite": "On site",
-        "onLeave": "On leave",
-        "returning": "Back within 7 days",
-        "activeStaff": "Total staff"
+      "week": "Week {{n}}",
+      "desk": {
+        "waiting": "Waiting on me",
+        "returned": "Needs changes",
+        "sent": "Sent, pending"
       }
     },
     "heroSubtitle_one": "{{count}} document needs your attention",

@@ -3,35 +3,80 @@
  *
  * A square-cornered navy folder whose tab carries the GSSG wordmark. The
  * identity block (photo or initials, greeting, name, position · department,
- * G-number) sits at the inline start; a ruled readout panel at the inline end
- * reports today's numbers from the dashboard summary; a foot strip carries the
- * Gregorian and Hijri dates and the local time. Every figure is real data;
- * nothing is invented for decoration.
+ * G-number) sits at the inline start. The inline end is about the same person,
+ * never the team: a date plate (day, weekday, month, Hijri date, local time,
+ * week) over their own approval queue — waiting on them, returned to them for
+ * changes, sent by them and still pending. The queue comes from the approvals
+ * summary, which only ever counts the caller's own authorized items, so the
+ * hero shows nothing a user may not see; a user with no approval work gets the
+ * date plate across the whole panel.
  *
  * Motion: each time the dashboard opens, the sheet fills in reading order
  * (travelling in the writing direction), a scan line sweeps it once and the
- * readouts count up. Reduced motion shows it settled.
+ * queue counts run up. Reduced motion shows it settled.
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { format } from 'date-fns'
 import { ar as arLocale } from 'date-fns/locale'
 import { ArrowUpRight } from 'lucide-react'
 
-import type { IdentityRead } from '@/lib/api'
+import type { ApprovalSummaryResponse, IdentityRead } from '@/lib/api'
+import { approvalQueueUrl } from '@/lib/approvals'
+import type { ApprovalKind } from '@/lib/approvals'
 import { pickPosition } from '@/lib/employeePosition'
 import { hijriToday } from '@/lib/hijri'
+import { useApprovalSummary } from '@/lib/useApprovalSummary'
 
 const COUNT_UP_MS = 700
 
-/** Today's figures for the readout panel. */
-export interface HeroCounts {
-  onSite: number
-  onLeave: number
-  /** Approved leaves ending within the next seven days. */
-  returning: number
-  activeStaff: number
+interface DeskItem {
+  key: 'waiting' | 'returned' | 'sent'
+  count: number
+  to: string
+  /** The item asks the user to act: flagged red while it is non-zero. */
+  actionable: boolean
+}
+
+/** The queue kind the "waiting on me" cell opens: signature work first, then
+ *  review work, then whichever received kind the user holds. */
+function waitingKind(summary: ApprovalSummaryResponse): ApprovalKind {
+  if (summary.signature.count > 0) return 'sign'
+  if (summary.review.count > 0) return 'review'
+  return summary.available_received_kinds.includes('approver') ? 'sign' : 'review'
+}
+
+/** The user's own approval queue, limited to the parts they can open. */
+function deskItems(summary: ApprovalSummaryResponse | undefined): DeskItem[] {
+  if (!summary) return []
+  const items: DeskItem[] = []
+  if (summary.available_received_kinds.length > 0) {
+    items.push({
+      key: 'waiting',
+      count: summary.actionable_count,
+      to: approvalQueueUrl({ tab: 'received', kind: waitingKind(summary), status: 'pending', sort: 'newest', page: 1 }),
+      actionable: true,
+    })
+  }
+  if (summary.can_view_sent) {
+    items.push(
+      {
+        key: 'returned',
+        count: summary.returned_count,
+        to: approvalQueueUrl({ tab: 'sent', status: 'returned', sort: 'newest', page: 1 }),
+        actionable: true,
+      },
+      {
+        key: 'sent',
+        count: summary.sent.count,
+        to: approvalQueueUrl({ tab: 'sent', status: 'pending', sort: 'newest', page: 1 }),
+        actionable: false,
+      },
+    )
+  }
+  return items
 }
 
 /** Time-of-day greeting bucket from the local clock. */
@@ -96,41 +141,23 @@ export interface DashboardHeroProps {
   /** Initials shown in the portrait when the record has no photo. */
   initials: string
   isAr: boolean
-  /** Today's figures; null while the dashboard summary loads. */
-  counts: HeroCounts | null
-  onReviewLeaves: () => void
 }
 
-export function DashboardHero({
-  identity,
-  name,
-  initials,
-  isAr,
-  counts,
-  onReviewLeaves,
-}: DashboardHeroProps): React.JSX.Element {
+export function DashboardHero({ identity, name, initials, isAr }: DashboardHeroProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const now = useMinuteClock()
-  const progress = useCountUpProgress(counts !== null)
+  const approvals = useApprovalSummary()
+  const desk = deskItems(approvals.data)
+  const progress = useCountUpProgress(approvals.data !== undefined)
   const [photoFailed, setPhotoFailed] = useState(false)
 
   const linked = Boolean(identity?.linked && name)
   const dfLocale = isAr ? arLocale : undefined
-  // Arabic has no short weekday form, so it keeps the full names.
-  const gregorian = format(now, isAr ? 'EEEE d MMMM yyyy' : 'EEE d MMM yyyy', { locale: dfLocale })
-  const time = format(now, 'HH:mm')
-  const hijri = hijriToday()
   const position = identity ? pickPosition(identity, i18n.language) : null
   const roleLine = [position, identity?.department].filter(Boolean).join(' · ')
   const photoUrl = identity?.photo_url && !photoFailed ? identity.photo_url : null
-  const shown = (n: number) => Math.round(n * progress)
-
-  const readouts = [
-    { key: 'onSite', value: counts?.onSite },
-    { key: 'onLeave', value: counts?.onLeave },
-    { key: 'returning', value: counts?.returning },
-    { key: 'activeStaff', value: counts?.activeStaff },
-  ] as const
+  const hijri = hijriToday()
+  const tall = desk.length === 0
 
   return (
     <div className="hero-intro relative mb-4 pt-[29px] md:mb-6">
@@ -143,13 +170,11 @@ export function DashboardHero({
       </span>
 
       <header className="hero-slab relative overflow-hidden text-white">
-        <span aria-hidden className="hero-cross start-1.5 top-1" />
-        <span aria-hidden className="hero-cross bottom-1 end-1.5" />
+        <span aria-hidden className="hero-cross start-1.5 top-1.5" />
+        <span aria-hidden className="hero-cross bottom-1.5 start-1.5 hidden md:block" />
 
         <div className="grid md:grid-cols-[minmax(0,1fr)_auto]">
-          <div
-            className={`flex min-w-0 items-center gap-3.5 px-4 py-4 md:gap-5 md:px-7 md:py-5 ${linked ? '' : 'md:py-7'}`}
-          >
+          <div className="flex min-w-0 items-center gap-3.5 px-4 py-4 md:gap-5 md:px-7 md:py-5">
             {linked && (
               <span
                 aria-hidden
@@ -186,7 +211,9 @@ export function DashboardHero({
                   {roleLine && <span>{roleLine}</span>}
                   {identity?.employee_id && (
                     <span className="inline-flex items-center gap-2 border border-white/25 px-2 py-px">
-                      <span className="hero-label text-white/55">{t('dashboard.hero.idLabel')}</span>
+                      <span className="font-mono text-[0.85em] uppercase tracking-[0.1em] text-white/55 rtl:font-[family-name:var(--font-arabic)] rtl:text-[length:max(0.85em,0.6875rem)] rtl:normal-case rtl:tracking-normal">
+                        {t('dashboard.hero.idLabel')}
+                      </span>
                       <span className="font-mono text-white" dir="ltr">
                         {identity.employee_id}
                       </span>
@@ -197,75 +224,77 @@ export function DashboardHero({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-px border-t border-white/15 bg-white/15 sm:grid-cols-4 md:grid-cols-2 md:border-s md:border-t-0">
-            {readouts.map(({ key, value }, i) => {
-              // The cell frames stand from the start so the ruled grid never
-              // flashes; only their contents arrive in sequence.
-              const body = (
-                <span className="hero-seq pointer-events-none block" style={seq(5 + i)}>
-                  <span className="hero-label block text-white/55">{t(`dashboard.hero.readout.${key}`)}</span>
-                  <span className="mt-1.5 block font-mono text-[1.45em] font-medium leading-none tabular-nums text-white md:text-[1.6em]">
-                    {value === undefined ? (
-                      <>
-                        <span aria-hidden className="text-white/30">
-                          --
-                        </span>
-                        <span className="sr-only">{t('common.loading')}</span>
-                      </>
-                    ) : (
-                      <data value={value}>{shown(value)}</data>
-                    )}
-                  </span>
+          <div className="grid gap-px border-t border-white/15 bg-white/15 md:w-[440px] md:border-s md:border-t-0">
+            <div
+              className={`grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 bg-[var(--hero-slab)] ${
+                tall ? 'gap-y-2 px-5 py-5 md:px-6 md:py-6' : 'gap-y-1 px-4 py-3.5 md:px-5'
+              }`}
+            >
+              <time
+                dateTime={format(now, 'yyyy-MM-dd')}
+                className={`hero-seq row-span-3 font-[800] leading-[0.86] tracking-[-0.05em] tabular-nums ${
+                  tall ? 'text-[4em] md:text-[5.2em]' : 'text-[3em] md:text-[3.4em]'
+                }`}
+                style={seq(5)}
+              >
+                {format(now, 'd')}
+              </time>
+              <span className="hero-seq hero-label text-white" style={seq(6)}>
+                {format(now, 'EEEE · MMMM yyyy', { locale: dfLocale })}
+              </span>
+              {hijri ? (
+                <span className="hero-seq text-[0.8em] text-white/70" style={{ ...seq(7), fontFamily: 'var(--font-arabic)' }}>
+                  <bdi dir="rtl">{hijri}</bdi>
                 </span>
-              )
-              const cell =
-                'relative flex min-w-0 flex-col justify-between bg-[var(--hero-slab)] px-4 py-3 md:w-[188px] md:px-5 md:py-3.5'
-              if (key === 'onLeave' && value !== undefined && value > 0) {
-                return (
-                  <div key={key} className={cell}>
-                    {body}
-                    <span aria-hidden className="absolute end-2.5 top-2.5 h-2 w-2 bg-[var(--accent)]" />
+              ) : (
+                <span />
+              )}
+              <span className="hero-seq flex gap-2.5 font-mono text-[0.8em] text-white/70" style={seq(8)}>
+                <time className="text-white tabular-nums" dateTime={format(now, 'HH:mm')}>
+                  {format(now, 'HH:mm')}
+                </time>
+                <span className="rtl:font-[family-name:var(--font-arabic)]">
+                  {t('dashboard.hero.week', { n: format(now, 'I') })}
+                </span>
+              </span>
+            </div>
+
+            {desk.length > 0 && (
+              <div
+                className="grid gap-px"
+                style={{ gridTemplateColumns: `repeat(${desk.length}, minmax(0, 1fr))` }}
+              >
+                {desk.map((item, i) => (
+                  <Link
+                    key={item.key}
+                    to={item.to}
+                    className="group relative block min-w-0 bg-[var(--hero-slab)] px-4 py-3 transition-colors hover:bg-[var(--hero-slab-raised)] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white md:px-[18px] md:py-3.5"
+                  >
                     <ArrowUpRight
                       aria-hidden
-                      className="pointer-events-none absolute bottom-2.5 end-2.5 h-3.5 w-3.5 text-white/50 rtl:-scale-x-100"
+                      className="absolute bottom-2.5 end-2.5 h-3.5 w-3.5 text-white/40 transition-colors group-hover:text-white rtl:-scale-x-100"
                     />
-                    <button
-                      type="button"
-                      onClick={onReviewLeaves}
-                      aria-label={t('dashboard.hero.onLeaveAria', { count: value })}
-                      className="absolute inset-0 cursor-pointer transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
-                    />
-                  </div>
-                )
-              }
-              return (
-                <div key={key} className={cell}>
-                  {body}
-                </div>
-              )
-            })}
+                    <span className="hero-seq block" style={seq(9 + i)}>
+                      <span className="hero-label block text-white/55">
+                        {item.actionable && item.count > 0 && (
+                          <span aria-hidden className="me-1.5 inline-block h-[7px] w-[7px] bg-[var(--accent)] align-[0.05em]" />
+                        )}
+                        {t(`dashboard.hero.desk.${item.key}`)}
+                      </span>
+                      <data
+                        value={item.count}
+                        className={`mt-1.5 block font-mono text-[1.45em] font-medium leading-none tabular-nums md:text-[1.6em] ${
+                          item.count === 0 ? 'text-white/45' : 'text-white'
+                        }`}
+                      >
+                        {Math.round(item.count * progress)}
+                      </data>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-
-        <span aria-hidden className="hero-rule block h-px bg-white/15" style={seq(9)} />
-        <div
-          className="hero-seq flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-[0.72em] text-white/70 md:px-7"
-          style={seq(10)}
-        >
-          <span className={isAr ? '' : 'font-mono uppercase tracking-[0.06em]'}>{gregorian}</span>
-          {hijri && (
-            <>
-              <span aria-hidden className="hidden text-white/30 md:inline">
-                /
-              </span>
-              <span dir="rtl" className="hidden md:inline" style={{ fontFamily: 'var(--font-arabic)' }}>
-                {hijri}
-              </span>
-            </>
-          )}
-          <time className="ms-auto font-mono tabular-nums text-white" dateTime={format(now, "yyyy-MM-dd'T'HH:mm")}>
-            {time}
-          </time>
         </div>
       </header>
     </div>
