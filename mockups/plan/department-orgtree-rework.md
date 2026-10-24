@@ -353,3 +353,75 @@ Preview (2026-10-24):
   deletes the copy and the old `.bak`, and cleans `.env` and the static build.
 - The preview's sign-in cookie shares the host with the dev URL, so signing into one
   signs you out of the other.
+
+## Redesign S: task-first department setup (user approved 2026-10-24, "build all of it")
+
+The user found the tree-canvas editor overwhelming. Research and critique:
+`research-org-department-setup.md` and `org-editor-critique.md`, both in this folder. The
+critique's "Proposed screen flow" and "Rough low-fidelity layouts" are the design
+contract.
+
+**Frontend only. The data model, API and capability gates stay the same.**
+
+- **Permissions → Organization & departments lands on a department register**, a
+  table on desktop and a list on phone. It shows:
+  - department, head, number of people, and one plain-language "needs attention" item:
+    "Choose services" or "No one can receive Records" (meaning no head account and no
+    deputy). Rows are indented by derived parent and can be expanded;
+  - search across departments and people, and a unit filter;
+  - a coverage line: "X of N employees are in a department · Y outside [Review]";
+  - an access-limits state line with a single action;
+  - primary actions "+ Add department" and "Set up departments" (the guided flow);
+  - secondary links "Fix reporting lines" and "People placed by hand".
+
+  The register replaces the units rail, the canvas, the side columns and the per-card
+  building menus.
+- **Guided setup, 4 resumable steps.** Persisted departments are the resume state;
+  there are no drafts.
+  1. **Choose heads:**
+     - the 8 unit roots are suggestions, shown with "Manager + team: N";
+     - "Split this unit into departments" expands a unit to its direct-report managers
+       with branch sizes;
+     - "Find another manager" searches the whole tree;
+     - nothing is auto-selected, and you never see all 174 supervisors at once.
+  2. **Names and people:**
+     - Arabic and English names are required;
+     - preview the derived parent and the resulting membership, calculated with
+       exceptions and existing heads;
+     - "Create selected departments" calls the existing POST once per department and
+       reports each success or failure.
+  3. **Deputies and services**, only for departments that need attention. Batch
+     "apply services to selected departments" with a replace-vs-add choice. No default
+     services (D10).
+  4. **Review and turn on:**
+     - refetch the real preflight, with fix links in context;
+     - state what changes and what doesn't;
+     - the action is "Turn on department access limits".
+- **Department page**, with three tabs:
+  - **People**: "This department" vs "Including sub-departments", search, and a "Why
+    included" column (reporting structure vs placed by hand);
+  - **Access & services**: deputies, "Extra department access" (the viewer grant) and
+    services;
+  - **Settings**: names, head, active, delete.
+
+  "Show reporting chart" opens a read-only branch preview built on `OrgTreeView`.
+- **Two separate correction tools:**
+  - **Fix reporting lines** (`employees.edit`): search an employee, then Change
+    supervisor, with a preview of old/new supervisor and the department impact. The
+    drag chart may stay as an optional advanced view, but is never required.
+  - **People placed by hand** (the exceptions API): "Use reporting structure", "Place in
+    another department" or "Outside all departments", each with a before/after summary.
+- **Plain wording in both languages:**
+  - scoping → "Department access limits";
+  - viewer → "Extra department access";
+  - exception → "Placed by hand".
+
+  Explain each term once, in context. Arabic and English are peers; use logical CSS;
+  on phone, a list opens a full-page task.
+- **Delete** the replaced canvas-editor parts of `pages/access/orgDepartments/**` that no
+  longer have a caller. Keep `OrgTreeView` (it serves the read-only Employees tree and
+  the preview) and `SupervisorPicker` (used by Fix reporting lines).
+- **Tests:** register attention states; guided-setup suggestions and derived preview;
+  why-included; gating stays as it is (`employees.view` plus `employees.edit` or
+  `departments.manage`; reporting-line editing only with `employees.edit`, department
+  actions only with `departments.manage`); the Employees tree stays read-only.
