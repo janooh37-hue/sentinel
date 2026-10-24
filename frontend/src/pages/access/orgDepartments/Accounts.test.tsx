@@ -62,11 +62,12 @@ const ACCOUNTS: AccountAccessRead[] = [
   account(1, 'Admin Amal', { role: 'admin', sees: 'organization', organization_reason: 'admin', visible_count: 5 }),
   account(2, 'Aisha Wide', { sees: 'organization', organization_reason: 'all_departments', visible_count: 5 }),
   account(3, 'Saeed Lead', {
-    employee_id: 'G1', employee_name_en: 'Saeed Lead', designation_en: 'Project Manager', sees: 'branch',
+    employee_id: 'G1', employee_name_en: 'Saeed Lead', designation_en: 'Project Manager', designation_ar: 'مدير المشروع', sees: 'branch',
     team_size: 70, visible_count: 71,
   }),
   account(4, 'Huda Manager', {
-    employee_id: 'G5', employee_name_en: 'Huda Manager', designation_en: 'Branch Manager', sees: 'department',
+    employee_id: 'G5', employee_name_en: 'Huda Manager', position: 'Operations lead', position_ar: 'قائدة العمليات',
+    designation_en: 'Branch Manager', designation_ar: 'مدير فرع', sees: 'department',
     visible_count: 40, reports_to_name_en: 'Mona Chief',
     departments: [{ department_id: 7, name_en: 'Operations', name_ar: 'العمليات', role: 'deputy', sub_department_count: 2 }],
     receives_department_records: [7],
@@ -150,9 +151,9 @@ describe('Accounts', () => {
     renderTab()
 
     expect(await screen.findByText('1 unit reports to nobody: its people are visible only to admins and to people inside it.')).toBeVisible()
-    // Same convention as Reporting lines and setup; the title is the account-access designation, not the tree's.
+    // Same convention as Reporting lines and setup; the title follows the org tree: position first.
     const unit = screen.getByRole('button', { name: iso('Set who Lina Orphan reports to') }).closest('li')!
-    expect(strip(unit.textContent!)).toBe('Lina Orphan · Commander · First company · Manager + team: 3 peopleSet who Lina Orphan reports to')
+    expect(strip(unit.textContent!)).toBe('Lina Orphan · Profile title · First company · Manager + team: 3 peopleSet who Lina Orphan reports to')
     await userEvent.click(screen.getByRole('button', { name: iso('Set who Lina Orphan reports to') }))
 
     expect(await screen.findByRole('tab', { name: 'Reporting lines' })).toHaveAttribute('aria-selected', 'true')
@@ -160,12 +161,24 @@ describe('Accounts', () => {
     expect(screen.getByRole('button', { name: 'Change supervisor' })).toBeVisible()
   })
 
-  it('shows unit titles and team counts in Arabic from the same fields', async () => {
+  it('shows unit titles and team counts in Arabic by the same rule', async () => {
     await i18n.changeLanguage('ar')
     renderTab()
 
     const unit = (await screen.findByRole('button', { name: iso('تحديد من يتبعه لينا') })).closest('li')!
-    expect(strip(unit.textContent!)).toContain('لينا · قائد · First company · المدير وفريقه: 3 موظفين')
+    expect(strip(unit.textContent!)).toContain('لينا · لقب الملف · First company · المدير وفريقه: 3 موظفين')
+  })
+
+  it('titles accounts like the org tree: position when set, else the roster designation', async () => {
+    renderTab()
+    expect(within(await rowOf('Huda Manager')).getByText('Operations lead')).toBeVisible()
+    expect(within(await rowOf('Saeed Lead')).getByText('Project Manager')).toBeVisible()
+
+    cleanup()
+    await i18n.changeLanguage('ar')
+    renderTab()
+    expect(within(await rowOf('Huda Manager')).getByText('قائدة العمليات')).toBeVisible()
+    expect(within(await rowOf('Saeed Lead')).getByText('مدير المشروع')).toBeVisible()
   })
 
   it('gives an account extra access to an existing department and removes it again', async () => {
