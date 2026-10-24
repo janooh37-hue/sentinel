@@ -40,6 +40,8 @@
       "dismissHint": "Dismiss this tip",
       "unattached_one": "{{count}} unit reports to nobody: its people are visible only to admins and to people inside it.",
       "unattached_other": "{{count}} units report to nobody: their people are visible only to admins and to people inside them.",
+      "unattachedOff_one": "{{count}} unit reports to nobody. When access limits are on, its people will be visible only to admins and to people inside it.",
+      "unattachedOff_other": "{{count}} units report to nobody. When access limits are on, their people will be visible only to admins and to people inside them.",
       "unattachedHint": "Set who each top person reports to; their whole unit then sits under that person in the reporting lines.",
       "setReportsTo": "Set who {{name}} reports to",
       "colAccount": "Account",

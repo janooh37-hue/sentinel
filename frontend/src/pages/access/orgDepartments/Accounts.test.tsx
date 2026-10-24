@@ -147,10 +147,20 @@ describe('Accounts', () => {
     expect(within(await rowOf('Huda Manager')).getByText(iso('Deputy of Operations'))).toBeVisible()
   })
 
-  it('lists units that report to nobody and opens Reporting lines on the chosen person', async () => {
+  it('states the unattached-unit consequence as current only while access limits are on', async () => {
+    const overview = await api.departments.accountAccess()
+    vi.mocked(api.departments.accountAccess).mockResolvedValue({ ...overview, limits_enabled: true })
     renderTab()
 
     expect(await screen.findByText('1 unit reports to nobody: its people are visible only to admins and to people inside it.')).toBeVisible()
+    expect(screen.queryByText(/When access limits are on/)).not.toBeInTheDocument()
+  })
+
+  it('lists units that report to nobody and opens Reporting lines on the chosen person', async () => {
+    renderTab()
+
+    // Limits are off in the fixture: say what will happen, not what is.
+    expect(await screen.findByText('1 unit reports to nobody. When access limits are on, its people will be visible only to admins and to people inside it.')).toBeVisible()
     // Same convention as Reporting lines and setup; the title follows the org tree: position first.
     const unit = screen.getByRole('button', { name: iso('Set who Lina Orphan reports to') }).closest('li')!
     expect(strip(unit.textContent!)).toBe('Lina Orphan · Profile title · First company · Manager + team: 3 peopleSet who Lina Orphan reports to')

@@ -211,7 +211,7 @@ export function Accounts({ go }: { go: (next: Partial<OrgRoute>) => void }): Rea
         <section aria-labelledby="accounts-unattached" className={cn(PANEL, 'space-y-2 px-4 py-4')}>
           <h3 id="accounts-unattached" className="flex items-start gap-2 text-[0.95em] font-semibold text-foreground">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
-            {t('orgDepartments.accounts.unattached', { count: units.length })}
+            {t(limitsOn ? 'orgDepartments.accounts.unattached' : 'orgDepartments.accounts.unattachedOff', { count: units.length })}
           </h3>
           <p className="max-w-[72ch] text-[0.84em] text-muted-foreground">
             {t(canRelink ? 'orgDepartments.accounts.unattachedHint' : 'orgDepartments.accounts.reportingNeedsEdit')}
