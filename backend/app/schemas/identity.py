@@ -19,6 +19,7 @@ class IdentityRead(BaseModel):
     name_en: str | None = None
     name_ar: str | None = None
     position: str | None = None
+    position_ar: str | None = None
     department: str | None = None
     photo_url: str | None = None
     role: str = "operator"

@@ -781,6 +781,7 @@ def to_session_user(db: Session, user: User) -> SessionUser:
         name_en=employee.name_en if employee else user.display_name,
         name_ar=employee.name_ar if employee else None,
         position=employee.position if employee else None,
+        position_ar=employee.position_ar if employee else None,
         department=employee.department if employee else None,
         photo_url=(identity_service.photo_url_for(db, employee.id) if employee else None),
         role=user.role,
