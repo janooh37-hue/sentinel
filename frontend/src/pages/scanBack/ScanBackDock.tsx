@@ -126,7 +126,7 @@ export function ScanBackDock(): React.JSX.Element | null {
         // the corner in both directions; never add an `rtl:` override.
         // No gap: the open body and the pill are one toast shape.
         'scanback-dock fixed z-30 flex flex-col items-end end-4',
-        // Toasts live at the top; this dock rests above the mobile BottomTabBar.
+        // This dock rests above the mobile BottomTabBar, independently of toasts.
         '[--dock-rest:calc(5.5rem+var(--safe-bottom))] md:[--dock-rest:1.5rem]',
         'bottom-[var(--dock-rest)]',
       )}
@@ -146,7 +146,7 @@ export function ScanBackDock(): React.JSX.Element | null {
             <button
               type="button"
               onClick={() => navigate('/scan-back')}
-              className="scanback-action flex h-7 items-center rounded-full px-3 text-[0.75rem] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="scanback-action flex h-7 items-center rounded-full px-3 text-[0.75em] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {t('scanBack.viewAll', { count })}
             </button>
@@ -172,7 +172,7 @@ export function ScanBackDock(): React.JSX.Element | null {
           type="button"
           onClick={toggle}
           aria-expanded={open}
-          className="flex h-full items-center gap-2 rounded-full ps-2 pe-2.5 text-[0.825rem] font-medium leading-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-full items-center gap-2 rounded-full ps-2 pe-2.5 text-[0.825em] font-medium leading-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="scanback-badge flex h-6 w-6 shrink-0 items-center justify-center rounded-full" aria-hidden>
             <Printer className="h-3.5 w-3.5" strokeWidth={2} />

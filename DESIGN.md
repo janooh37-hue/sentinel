@@ -1540,11 +1540,17 @@ theme's `--success`/`--accent`/`--warning`/`--info` values, tuned for ≥ 4.5:1
 against the pill (warning on the light pill is `#9a4507`, a shade darker than
 `--warning`). A theme change flips live toasts.
 
-**Position.** All toasts sit at `top-center` in both languages. The viewport
-starts 12px plus `env(safe-area-inset-top)` below the top edge; Sileo's 12px
-inner padding places the first pill 24px plus the safe area below it. Bodies
-expand downward and the stack grows down from the top. Toasts may briefly
-overlay the header.
+**Position and scale.** Placement is the same in both languages. Desktop uses
+`bottom-center`, 90px above the bottom edge, at 110% zoom; bodies expand upward.
+Phones use `top-center`, 12px plus `env(safe-area-inset-top)` below the top edge,
+at 105% zoom; bodies expand downward and may briefly overlay the header. The
+existing `useIsMobile` breakpoint (below 768px) chooses the placement. Phone
+zoom is capped to `viewport width / 350px` so even a narrow screen holds the
+whole toast. Sileo's viewport padding is removed and offsets are divided by
+zoom, so the requested distances are rendered pixels. Zoom covers only the
+viewport; title-fit probing and Sileo's width/height measurements stay in CSS
+pixels. A resize updates the placement for new toasts; Sileo pins existing
+toasts to the edge where they were raised until they close.
 
 **RTL.** Position does not change with language. Text, the badge and the
 action follow `<html dir>`; the body uses `text-align: start` and Arabic body
@@ -1557,8 +1563,10 @@ pill's right edge and the room trails the title, mirroring English.
 `ScanBackDock.css`) is drawn as a toast, collapsed or open, in its own bottom
 inline-end corner. Its collapsed pill uses the toast pill's fill (navy `--rail`
 on the cream page, `#fafaf6` on the dark page), 40px height, a 24px round badge
-(Printer, warning tone at 20% behind it) and the toast title type (0.825rem,
-500) in the warning tone (`#fbbf24` / `#9a4507`); the chevron and dismiss are
+(Printer, warning tone at 20% behind it) and the toast title type (0.825em,
+500) in the warning tone (`#fbbf24` / `#9a4507`); all Arabic dock text is 5%
+smaller than English, in both the collapsed pill and the open body, without
+shrinking thumbnails, icons or hit targets. The chevron and dismiss are
 the toast description colour. Open, it is an expanded toast: the body grows up
 out of the pill in the same fill with Sileo's 16px radius, square at its
 inline-end bottom corner where the pill continues it; the pill's top corners go

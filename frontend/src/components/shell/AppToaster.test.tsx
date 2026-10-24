@@ -4,6 +4,7 @@
  * stacking, update-in-place, action/dismiss, announcements and theme.
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { RenderResult } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/lib/i18n'
@@ -12,6 +13,11 @@ import { TOAST_TITLE_MAX_CHARS } from '@/lib/toastFit'
 
 import { AppToaster } from './AppToaster'
 
+const phone = vi.hoisted(() => ({ on: false }))
+vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => phone.on }))
+
+let host: RenderResult
+
 const toastEls = (): HTMLElement[] =>
   Array.from(document.querySelectorAll<HTMLElement>('[data-sileo-toast]:not([data-exiting="true"])'))
 
@@ -19,8 +25,9 @@ const titleOf = (el: HTMLElement): string | null =>
   el.querySelector('[data-sileo-header-inner][data-layer="current"] [data-sileo-title]')!.textContent
 
 beforeEach(() => {
+  phone.on = false
   document.documentElement.dataset.theme = 'light'
-  render(<AppToaster />)
+  host = render(<AppToaster />)
 })
 
 afterEach(() => {
@@ -220,14 +227,27 @@ describe('AppToaster + toast adapter', () => {
     expect(newer.dataset.expanded).toBe('true')
   })
 
-  it.each(['ltr', 'rtl'])('sits at top-center and opens downward in %s', (dir) => {
+  it.each([
+    { dir: 'ltr', mobile: false },
+    { dir: 'rtl', mobile: false },
+    { dir: 'ltr', mobile: true },
+    { dir: 'rtl', mobile: true },
+  ])('uses the chosen edge and offset in $dir (phone=$mobile)', ({ dir, mobile }) => {
     document.documentElement.dir = dir
+    phone.on = mobile
+    host.rerender(<AppToaster />)
     try {
       act(() => {
         toast.success(dir === 'rtl' ? 'محفوظ' : 'Saved', { description: 'Details' })
       })
-      expect(document.querySelector('[data-sileo-viewport]')).toHaveAttribute('data-position', 'top-center')
-      expect(toastEls()[0]).toHaveAttribute('data-edge', 'bottom')
+      const viewport = document.querySelector<HTMLElement>('[data-sileo-viewport]')!
+      expect(viewport).toHaveAttribute('data-position', mobile ? 'top-center' : 'bottom-center')
+      if (mobile) {
+        expect(viewport).toHaveStyle({ top: 'calc((12px + env(safe-area-inset-top)) / 1.05)' })
+      } else {
+        expect(viewport.style.bottom).toBe(`${90 / 1.1}px`)
+      }
+      expect(toastEls()[0]).toHaveAttribute('data-edge', mobile ? 'bottom' : 'top')
     } finally {
       document.documentElement.dir = 'ltr'
     }
