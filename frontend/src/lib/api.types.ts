@@ -798,6 +798,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/departments/account-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Account Access */
+        get: operations["account_access_api_v1_departments_account_access_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/departments/candidate-users": {
         parameters: {
             query?: never;
@@ -7547,6 +7564,76 @@ export interface components {
             days: number;
             /** Notes */
             notes?: string | null;
+        };
+        /** AccountAccessDepartmentRead */
+        AccountAccessDepartmentRead: {
+            /** Department Id */
+            department_id: number;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "head" | "deputy" | "viewer" | "member";
+            /** Sub Department Count */
+            sub_department_count: number;
+        };
+        /** AccountAccessOverviewRead */
+        AccountAccessOverviewRead: {
+            /** Limits Enabled */
+            limits_enabled: boolean;
+            /** Accounts */
+            accounts: components["schemas"]["AccountAccessRead"][];
+            /** Unattached Units */
+            unattached_units: components["schemas"]["UnattachedUnitRead"][];
+        };
+        /**
+         * AccountAccessRead
+         * @description What one account sees, and why, as if access limits were on.
+         */
+        AccountAccessRead: {
+            /** User Id */
+            user_id: number;
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string;
+            /** Role */
+            role: string;
+            /** Employee Id */
+            employee_id: string | null;
+            /** Employee Name En */
+            employee_name_en: string | null;
+            /** Employee Name Ar */
+            employee_name_ar: string | null;
+            /** Designation En */
+            designation_en: string | null;
+            /** Designation Ar */
+            designation_ar: string | null;
+            /** Duty Unit */
+            duty_unit: string | null;
+            /** Reports To Name En */
+            reports_to_name_en: string | null;
+            /** Reports To Name Ar */
+            reports_to_name_ar: string | null;
+            /**
+             * Sees
+             * @enum {string}
+             */
+            sees: "organization" | "department" | "branch" | "self";
+            /** Organization Reason */
+            organization_reason: ("admin" | "all_departments") | null;
+            /** Team Size */
+            team_size: number;
+            /** Visible Count */
+            visible_count: number;
+            /** Departments */
+            departments: components["schemas"]["AccountAccessDepartmentRead"][];
+            /** Receives Department Records */
+            receives_department_records: number[];
         };
         /** ActivityItemRead */
         ActivityItemRead: {
@@ -15619,6 +15706,24 @@ export interface components {
             employee_ids: string[];
         };
         /**
+         * UnattachedUnitRead
+         * @description A tree root, other than the largest, that reports to nobody.
+         */
+        UnattachedUnitRead: {
+            /** Top Employee Id */
+            top_employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Designation En */
+            designation_en: string | null;
+            /** Duty Unit */
+            duty_unit: string | null;
+            /** Team Size */
+            team_size: number;
+        };
+        /**
          * UncountedRecordOut
          * @description A filed Record that belongs to no Violation month.
          */
@@ -19183,6 +19288,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DepartmentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    account_access_api_v1_departments_account_access_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountAccessOverviewRead"];
                 };
             };
             /** @description Validation Error */
