@@ -22,8 +22,6 @@ vi.mock('@/lib/authContext', async (importOriginal) => ({
 }))
 
 import i18n from '@/lib/i18n'
-// jsdom has no Web Animations; "Show in tree" pulses the centred card.
-Element.prototype.animate ??= vi.fn() as never
 import { api, type DepartmentRead, type OrgNodeRead } from '@/lib/api'
 import { OrgTreeView } from '@/pages/employees/orgTree/OrgTreeView'
 import { OrgDepartmentsTab } from './OrgDepartmentsTab'
@@ -34,29 +32,39 @@ const UNIT = 'Admin office'
 function person(id: string, name: string, supervisor_id: string | null, over: Partial<OrgNodeRead> = {}): OrgNodeRead {
   return {
     id, name_en: name, name_ar: null, position: null, position_ar: null, department: null,
-    duty_unit: UNIT, duty_post: null, status: 'Active', supervisor_id, ...over,
+    duty_unit: UNIT, duty_post: null, status: 'Active', supervisor_id, department_id: null, ...over,
   }
 }
 
+// Mona heads Operations; Huda manages Omar inside it. Lina's line is outside every department.
 const PEOPLE = [
   person('G1', 'Mona Chief', null, { head_of_department_id: 7, department_id: 7 }),
   person('G2', 'Sami Staff', 'G1', { department_id: 7 }),
-  // A second supervisor-less root: drawn as an orphan chip, not a card.
-  person('G3', 'Lina Orphan', null),
-  person('G4', 'Ziad Report', 'G3'),
+  person('G5', 'Huda Manager', 'G1', { department_id: 7 }),
+  person('G6', 'Omar Clerk', 'G5', { department_id: 7 }),
+  person('G3', 'Lina Orphan', null, { duty_unit: 'First company' }),
+  person('G4', 'Ziad Report', 'G3', { duty_unit: 'First company' }),
 ]
 
-const OPERATIONS: DepartmentRead = {
-  id: 7, name_en: 'Operations', name_ar: 'العمليات', head_employee_id: 'G1', head_name_en: 'Mona Chief',
-  head_name_ar: null, head_user_id: 3, parent_id: null, active: true, employee_count: 2,
-  deputies: [], viewers: [], service_ids: [], exception_count: 0,
+function department(over: Partial<DepartmentRead>): DepartmentRead {
+  return {
+    id: 7, name_en: 'Operations', name_ar: 'العمليات', head_employee_id: 'G1', head_name_en: 'Mona Chief',
+    head_name_ar: null, head_user_id: 3, parent_id: null, active: true, employee_count: 4,
+    deputies: [], viewers: [], service_ids: ['leave'], exception_count: 0, ...over,
+  }
 }
 
-function renderWithClient(ui: React.ReactElement): void {
+const OPERATIONS = department({})
+
+/** Names are wrapped in Unicode isolates (see `bidi`); compare what the reader sees. */
+const strip = (text: string): string => text.replace(/[\u2066-\u2069]/g, '')
+const iso = (expected: string) => (content: string): boolean => strip(content) === expected
+
+function renderAt(ui: React.ReactElement, path = '/permissions?tab=org'): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[`/permissions?tab=org&unit=${encodeURIComponent(UNIT)}`]}>{ui}</MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -65,14 +73,11 @@ beforeEach(async () => {
   await i18n.changeLanguage('en')
   capabilityState.allowed = new Set()
   vi.spyOn(api, 'listOrgTree').mockResolvedValue(PEOPLE)
-  vi.spyOn(api, 'listEmployees').mockResolvedValue({
-    items: PEOPLE.map((p) => ({ id: p.id, name_en: p.name_en, name_ar: null, status: 'Active', department: null, position: null, has_photo: false, duty_unit: UNIT })),
-    total: PEOPLE.length,
-  } as never)
   vi.spyOn(api.departments, 'list').mockResolvedValue([OPERATIONS])
   vi.spyOn(api.departments, 'listExceptions').mockResolvedValue([])
   vi.spyOn(api.departments, 'unassignedEmployees').mockResolvedValue([])
   vi.spyOn(api.departments, 'candidateUsers').mockResolvedValue([])
+  vi.spyOn(api.departments, 'serviceOptions').mockResolvedValue([{ id: 'leave', label_en: 'Leave', label_ar: 'إجازة' }] as never)
   vi.spyOn(api.departments, 'getScoping').mockResolvedValue({
     enabled: false, records_backfilled: 0, users_without_department: [],
     departments_without_receiver: [], departments_without_services: [],
@@ -87,97 +92,147 @@ afterEach(() => {
 describe('Employees org tree', () => {
   it('stays read-only even for employees.edit, and badges department heads', async () => {
     capabilityState.allowed = new Set(['employees.edit', 'departments.manage'])
-    renderWithClient(<OrgTreeView unit={UNIT} />)
+    renderAt(<OrgTreeView unit={UNIT} />)
 
     const head = (await screen.findByText('Mona Chief')).closest('article')!
-    expect(await within(head).findByText('Head of Operations')).toBeInTheDocument()
+    expect(await within(head).findByText('Operations')).toBeInTheDocument()
     expect(screen.getByText('View only')).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Edit links' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Department actions/ })).not.toBeInTheDocument()
   })
 })
 
-describe('Organization & departments editor', () => {
-  it('lets employees.edit relink supervisors but hides department actions', async () => {
-    capabilityState.allowed = new Set(['employees.edit'])
-    renderWithClient(<OrgDepartmentsTab />)
+describe('Department register', () => {
+  it('names one plain next step per department and counts coverage once per employee', async () => {
+    capabilityState.allowed = new Set(['employees.view', 'departments.manage'])
+    vi.mocked(api.departments.list).mockResolvedValue([
+      department({ service_ids: [] }),
+      department({ id: 8, name_en: 'Finance', head_employee_id: 'G5', head_name_en: 'Huda Manager', head_user_id: null, parent_id: 7 }),
+      department({ id: 9, name_en: 'Archive', head_employee_id: 'G6', head_name_en: 'Omar Clerk', active: false, service_ids: [] }),
+      department({ id: 10, name_en: 'Field', head_employee_id: 'G3', head_name_en: 'Lina Orphan' }),
+    ])
+    renderAt(<OrgDepartmentsTab />)
 
-    expect(await screen.findByRole('button', { name: 'Edit links' })).toBeVisible()
-    expect(screen.queryByRole('button', { name: /Department actions/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('complementary', { name: 'Departments and exceptions' })).not.toBeInTheDocument()
-    expect(api.departments.listExceptions).not.toHaveBeenCalled()
-  })
+    const table = await screen.findByRole('table')
+    const row = (name: string): HTMLElement => within(table).getByRole('button', { name }).closest('tr')!
+    expect(within(row('Operations')).getByRole('button', { name: 'Choose services' })).toBeVisible()
+    expect(within(row('Finance')).getByRole('button', { name: 'No one can receive Records' })).toBeVisible()
+    expect(within(row('Archive')).getByText('Inactive')).toBeVisible()
+    expect(within(row('Field')).getByText('Ready')).toBeVisible()
+    expect(screen.getByText('4 of 6 employees are in a department')).toBeVisible()
+    expect(screen.getByText(/2 outside all departments/)).toBeVisible()
 
-  it('offers department actions to departments.manage without supervisor relinking', async () => {
-    capabilityState.allowed = new Set(['departments.manage'])
-    renderWithClient(<OrgDepartmentsTab />)
-
-    expect(await screen.findByRole('complementary', { name: 'Departments and exceptions' })).toBeVisible()
-    expect(screen.queryByRole('button', { name: 'Edit links' })).not.toBeInTheDocument()
-
-    const staff = (await screen.findByText('Sami Staff')).closest('article')!
-    await userEvent.click(within(staff).getByRole('button', { name: 'Department actions for Sami Staff' }))
-    expect(await screen.findByRole('menuitem', { name: 'Make department head…' })).toBeVisible()
-    expect(screen.queryByRole('menuitem', { name: 'Edit department…' })).not.toBeInTheDocument()
-    await userEvent.keyboard('{Escape}')
-
-    const head = screen.getByText('Mona Chief', { selector: 'article p' }).closest('article')!
-    await userEvent.click(within(head).getByRole('button', { name: 'Department actions for Mona Chief' }))
-    expect(await screen.findByRole('menuitem', { name: 'Edit department…' })).toBeVisible()
-    expect(screen.getByRole('menuitem', { name: 'Deputies & department viewers…' })).toBeVisible()
-    // An active department's head cannot take an exception.
-    expect(screen.queryByRole('menuitem', { name: 'Place in a department…' })).not.toBeInTheDocument()
+    await userEvent.click(within(row('Operations')).getByRole('button', { name: 'Choose services' }))
+    expect(await screen.findByRole('dialog', { name: iso('Services: Operations') })).toBeVisible()
   })
 })
 
-describe('Orphan roots in the editor', () => {
-  it('gives orphan chips department actions', async () => {
+describe('Guided setup', () => {
+  it('suggests unit tops, splits a unit into its managers, and previews the derived department before creating it', async () => {
     capabilityState.allowed = new Set(['employees.view', 'departments.manage'])
-    renderWithClient(<OrgDepartmentsTab />)
+    const create = vi.spyOn(api.departments, 'create').mockResolvedValue(department({ id: 8, name_en: 'Field team', head_employee_id: 'G5' }))
+    renderAt(<OrgDepartmentsTab />, '/permissions?tab=org&view=setup&step=1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Department actions for Lina Orphan' }))
-    expect(await screen.findByRole('menuitem', { name: 'Make department head…' })).toBeVisible()
+    // Nothing is preselected; a current head is shown, not offered.
+    expect(await screen.findByText(iso('Already heads Operations'))).toBeVisible()
+    expect(screen.getByText('Manager + team: 2 people')).toBeVisible()
+    expect(screen.queryAllByRole('checkbox', { checked: true })).toHaveLength(0)
+    expect(screen.queryByText('Omar Clerk')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Split this unit into departments' })[0]!)
+    const managers = screen.getByRole('list', { name: 'Managers under Mona Chief' })
+    expect(within(managers).getByText('Huda Manager')).toBeVisible()
+    expect(within(managers).queryByText('Sami Staff')).not.toBeInTheDocument()
+    await userEvent.click(within(managers).getByRole('checkbox'))
+    await userEvent.click(screen.getByRole('button', { name: 'Review 1 selection' }))
+
+    expect(await screen.findByText(iso('Headed by Huda Manager'))).toBeVisible()
+    expect(screen.getByText(iso('Part of Operations'))).toBeVisible()
+    expect(screen.getByText('2 people in this department')).toBeVisible()
+    expect(screen.getByText(iso('2 move from Operations'))).toBeVisible()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create 1 department' }))
+    expect(await screen.findAllByText('Enter a department name.')).toHaveLength(2)
+    expect(create).not.toHaveBeenCalled()
+
+    await userEvent.type(screen.getByLabelText('English name'), 'Field team')
+    await userEvent.type(screen.getByLabelText('Arabic name'), 'الفريق الميداني')
+    await userEvent.click(screen.getByRole('button', { name: 'Create 1 department' }))
+    expect(create).toHaveBeenCalledWith({ name_en: 'Field team', name_ar: 'الفريق الميداني', head_employee_id: 'G5' })
+    expect((await screen.findAllByText('Created 1 department.')).length).toBeGreaterThan(0)
   })
+})
 
-  it('shows people under an orphan root in the tree from the side list', async () => {
+describe('Department page', () => {
+  it('explains why each person is included', async () => {
     capabilityState.allowed = new Set(['employees.view', 'departments.manage'])
-    vi.mocked(api.departments.unassignedEmployees).mockResolvedValue([{
-      top_employee_id: 'G3', top_name_en: 'Lina Orphan', top_name_ar: null, duty_unit: UNIT, count: 2, employee_ids: ['G3', 'G4'],
+    vi.mocked(api.listOrgTree).mockResolvedValue(PEOPLE.map((item) => (
+      item.id === 'G3' || item.id === 'G4' ? { ...item, department_id: 7 } : item
+    )))
+    vi.mocked(api.departments.listExceptions).mockResolvedValue([{
+      employee_id: 'G3', name_en: 'Lina Orphan', name_ar: null, department_id: 7, tree_department_id: null,
+      created_by: null, created_at: '2026-10-24T00:00:00Z',
     }])
-    renderWithClient(<OrgDepartmentsTab />)
-    await screen.findByText('Mona Chief', { selector: 'article p' })
-    expect(screen.queryByText('Ziad Report')).not.toBeInTheDocument()
+    renderAt(<OrgDepartmentsTab />, '/permissions?tab=org&view=department&dept=7')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Show in tree' }))
-    const card = (await screen.findByText('Ziad Report', { selector: 'article p' })).closest('article')!
-    expect(within(card).getByRole('button', { name: 'Department actions for Ziad Report' })).toBeInTheDocument()
+    const table = await screen.findByRole('table')
+    await within(table).findByText(iso('Follows Lina Orphan, placed by hand'))
+    const why = (name: string): string => {
+      const row = within(table).getAllByRole('row').find((item) => item.querySelector('td bdi')?.textContent === name)!
+      return strip(row.querySelectorAll('td')[2]!.textContent!)
+    }
+    expect(why('Mona Chief')).toBe('Department head')
+    expect(why('Omar Clerk')).toBe('Reporting structure')
+    expect(why('Lina Orphan')).toBe('Placed by hand')
+    expect(why('Ziad Report')).toBe('Follows Lina Orphan, placed by hand')
   })
-})
 
-describe('Deputies & viewers dialog', () => {
   it('keeps an existing deputy with an inactive account visible and removable, and offers only active candidates', async () => {
     capabilityState.allowed = new Set(['employees.view', 'departments.manage'])
-    vi.mocked(api.departments.list).mockResolvedValue([{
-      ...OPERATIONS, deputies: [{ user_id: 40, display_name: 'Gone Deputy', role: 'deputy' }],
-    }])
+    vi.mocked(api.departments.list).mockResolvedValue([department({ deputies: [{ user_id: 40, display_name: 'Gone Deputy', role: 'deputy' }] })])
     vi.mocked(api.departments.candidateUsers).mockResolvedValue([
       { user_id: 41, display_name: 'Active Aide', email: 'aide@gssg.ae', employee_id: null },
     ])
     const setPeople = vi.spyOn(api.departments, 'setPeople').mockResolvedValue(OPERATIONS)
-    renderWithClient(<OrgDepartmentsTab />)
+    renderAt(<OrgDepartmentsTab />, '/permissions?tab=org&view=department&dept=7&section=access')
 
-    const head = (await screen.findByText('Mona Chief', { selector: 'article p' })).closest('article')!
-    await userEvent.click(within(head).getByRole('button', { name: 'Department actions for Mona Chief' }))
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Deputies & department viewers…' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Choose deputies' }))
+    const dialog = await screen.findByRole('dialog', { name: iso('Deputies: Operations') })
+    const gone = await within(dialog).findByRole('checkbox', { name: /Gone Deputy/ })
+    const aide = within(dialog).getByRole('checkbox', { name: /Active Aide/ })
+    expect(gone).toBeChecked()
+    expect(aide).not.toBeChecked()
+    await userEvent.click(gone)
+    await userEvent.click(aide)
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(setPeople).toHaveBeenCalledWith(7, { deputy_user_ids: [41], viewer_user_ids: [] })
+  })
+})
 
-    const gone = await screen.findByRole('combobox', { name: 'Department role for Gone Deputy' })
-    expect(gone).toHaveValue('deputy')
-    const aide = await screen.findByRole('combobox', { name: 'Department role for Active Aide' })
-    expect(aide).toHaveValue('none')
-    await userEvent.selectOptions(gone, 'none')
-    await userEvent.selectOptions(aide, 'viewer')
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(setPeople).toHaveBeenCalledWith(7, { deputy_user_ids: [], viewer_user_ids: [41] })
+describe('Gating', () => {
+  it('gives employees.edit reporting lines but no department actions', async () => {
+    capabilityState.allowed = new Set(['employees.view', 'employees.edit'])
+    renderAt(<OrgDepartmentsTab />)
+
+    expect(await screen.findByRole('heading', { name: 'Departments' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Add department' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Set up departments' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /People placed by hand/ })).not.toBeInTheDocument()
+    expect(api.departments.listExceptions).not.toHaveBeenCalled()
+    expect(api.departments.getScoping).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Fix reporting lines' }))
+    await userEvent.type(await screen.findByLabelText('Find an employee'), 'Sami')
+    await userEvent.click(screen.getByRole('button', { name: /Sami Staff/ }))
+    expect(screen.getByRole('button', { name: 'Change supervisor' })).toBeVisible()
+  })
+
+  it('gives departments.manage department actions but not reporting-line edits', async () => {
+    capabilityState.allowed = new Set(['employees.view', 'departments.manage'])
+    renderAt(<OrgDepartmentsTab />, '/permissions?tab=org&view=reporting')
+
+    expect(await screen.findByRole('button', { name: 'Add department' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Fix reporting lines' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Fix reporting lines' })).not.toBeInTheDocument()
   })
 })
 
@@ -191,7 +246,7 @@ describe('Permissions tabs', () => {
 
   it('hides the Organization & departments tab from a user lacking employees.view', async () => {
     capabilityState.allowed = new Set(['users.manage', 'employees.edit', 'departments.manage'])
-    renderWithClient(<PermissionsPage />)
+    renderAt(<PermissionsPage />)
 
     expect(await screen.findByText('Permissions studio')).toBeVisible()
     expect(screen.queryByRole('tab', { name: 'Organization & departments' })).not.toBeInTheDocument()
@@ -200,7 +255,7 @@ describe('Permissions tabs', () => {
 
   it('shows both tabs once employees.view is held too', async () => {
     capabilityState.allowed = new Set(['users.manage', 'employees.view', 'departments.manage'])
-    renderWithClient(<PermissionsPage />)
+    renderAt(<PermissionsPage />)
 
     expect(await screen.findByRole('tab', { name: 'Organization & departments' })).toHaveAttribute('aria-selected', 'true')
   })

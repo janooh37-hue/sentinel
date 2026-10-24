@@ -251,3 +251,23 @@ export function isBelow(people: readonly OrgPerson[], candidateId: string, ofId:
 export function directReports(people: readonly OrgPerson[], id: string): OrgPerson[] {
   return people.filter((person) => person.supervisor_id === id).toSorted(compareOrgPeople)
 }
+
+/** The person plus everyone below them, in the given order; cycle-safe. */
+export function branchOf(people: readonly OrgPerson[], id: string): OrgPerson[] {
+  const children = new Map<string, string[]>()
+  for (const person of people) {
+    if (!person.supervisor_id) continue
+    const siblings = children.get(person.supervisor_id) ?? []
+    siblings.push(person.id)
+    children.set(person.supervisor_id, siblings)
+  }
+  const inBranch = new Set<string>()
+  const pending = [id]
+  while (pending.length) {
+    const next = pending.pop()!
+    if (inBranch.has(next)) continue
+    inBranch.add(next)
+    pending.push(...(children.get(next) ?? []))
+  }
+  return people.filter((person) => inBranch.has(person.id))
+}

@@ -19,6 +19,7 @@ import {
   isBelow,
   layoutForest,
   supervisorChain,
+  branchOf,
   type OrgLayout,
   type OrgPerson,
 } from '@/lib/orgTree'
@@ -32,14 +33,13 @@ export interface OrgTreeFocus {
 }
 
 interface OrgTreeViewProps {
-  unit: string
+  /** One duty unit's tree: Employees → Organization and the reporting-lines chart. */
+  unit?: string
+  /** Or one person's whole branch, across units: a department's reporting chart. */
+  branchRootId?: string
   /** Offer supervisor relinking (drag and ✎) to holders of `employees.edit`.
-   *  Only the Permissions editor passes it; Employees → Organization is read-only. */
+   *  Only the reporting-lines tool passes it; Employees → Organization is read-only. */
   editable?: boolean
-  /** One extra control in the card's top corner, e.g. department actions. */
-  renderCardAction?: (person: OrgPerson) => React.ReactNode
-  /** A small marker in the card's footer, e.g. a department exception. */
-  renderCardMarker?: (person: OrgPerson) => React.ReactNode
   focus?: OrgTreeFocus | null
 }
 
@@ -54,7 +54,7 @@ interface DragState {
 }
 
 
-export function OrgTreeView({ unit, editable = false, renderCardAction, renderCardMarker, focus = null }: OrgTreeViewProps): React.JSX.Element {
+export function OrgTreeView({ unit = '', branchRootId, editable = false, focus = null }: OrgTreeViewProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const { has } = useCapabilities()
@@ -76,7 +76,11 @@ export function OrgTreeView({ unit, editable = false, renderCardAction, renderCa
 
   const treeQuery = useQuery({ queryKey: ['org-tree'], queryFn: api.listOrgTree })
   const departmentsQuery = useQuery({ queryKey: ['departments'], queryFn: api.departments.list })
-  const people = useMemo(() => (treeQuery.data ?? []).filter((person) => person.duty_unit === unit), [treeQuery.data, unit])
+  const people = useMemo(
+    () => branchRootId ? branchOf(treeQuery.data ?? [], branchRootId) : (treeQuery.data ?? []).filter((person) => person.duty_unit === unit),
+    [branchRootId, treeQuery.data, unit],
+  )
+  const title = branchRootId ? pickEmployeeName(people.find((person) => person.id === branchRootId) ?? { name_en: '' }, i18n.language) : unit
   const departmentsById = useMemo(
     () => new Map((departmentsQuery.data ?? []).map((department) => [department.id, department])),
     [departmentsQuery.data],
@@ -203,7 +207,7 @@ export function OrgTreeView({ unit, editable = false, renderCardAction, renderCa
   const needsFitRef = useRef(true)
   useEffect(() => {
     needsFitRef.current = true
-  }, [depth, scopeId, unit])
+  }, [depth, scopeId, unit, branchRootId])
   useEffect(() => {
     if (!needsFitRef.current || layout.nodes.length === 0) return
     needsFitRef.current = false
@@ -363,7 +367,7 @@ export function OrgTreeView({ unit, editable = false, renderCardAction, renderCa
     <section ref={sectionRef} className="org-tree-view flex min-h-[520px] flex-1 flex-col" aria-label={t('employees.orgTree.title')}>
       <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-surface px-4 py-3">
         <div className="min-w-0">
-          <b className="block text-[1.02em] leading-tight" dir="auto">{unit}</b>
+          <b className="block text-[1.02em] leading-tight" dir="auto">{title}</b>
           <small className="text-[0.76em] text-muted-foreground">
             {t('dutyLocations.roster.summary', { employees: people.length, posts: postCount })}
           </small>
@@ -379,7 +383,8 @@ export function OrgTreeView({ unit, editable = false, renderCardAction, renderCa
         </div>
         {canEdit ? <button type="button" className={`org-toolbar-button${editMode ? ' is-active' : ''}`} onClick={() => setEditMode((current) => !current)}><Pencil size={14} />{t('employees.orgTree.editLinks')}</button> : <span className="org-readonly-chip">{t('employees.orgTree.viewOnly')}</span>}
       </div>
-      {currentScope && <nav className="org-crumbbar" aria-label={t('employees.orgTree.wholeUnit')}><span>{t('employees.orgTree.showing')}</span><button type="button" onClick={() => setScopeId(null)}>{t('employees.orgTree.wholeUnit')}</button>{scopeChain.map((person) => <button key={person.id} type="button" dir="auto" onClick={() => setScopeId(person.id)}>{nameOf(person)}</button>)}<b dir="auto">{nameOf(currentScope)}</b></nav>}
+      {/* In a branch chart the reset crumb is the branch root, not the unit. */}
+      {currentScope && currentScope.id !== branchRootId && <nav className="org-crumbbar" aria-label={branchRootId ? title : t('employees.orgTree.wholeUnit')}><span>{t('employees.orgTree.showing')}</span><button type="button" dir="auto" onClick={() => setScopeId(null)}>{branchRootId ? title : t('employees.orgTree.wholeUnit')}</button>{scopeChain.filter((person) => person.id !== branchRootId).map((person) => <button key={person.id} type="button" dir="auto" onClick={() => setScopeId(person.id)}>{nameOf(person)}</button>)}<b dir="auto">{nameOf(currentScope)}</b></nav>}
       {/* Each stat is ONE pluralized phrase, not a number glued to a bare
           noun: Arabic picks a different form per count (موظف / موظفان /
           موظفين), so splitting the number out of the string breaks it. */}
@@ -436,7 +441,6 @@ export function OrgTreeView({ unit, editable = false, renderCardAction, renderCa
               const invalidDrop = drag?.targetId === person.id && isBelow(people, person.id, drag.employee.id)
               const validDrop = drag?.targetId === person.id && !invalidDrop && person.id !== drag.employee.id
               const headOf = person.head_of_department_id == null ? undefined : departmentsById.get(person.head_of_department_id)
-              const cardAction = renderCardAction?.(person)
               return <div key={person.id} className="org-item" style={{ width: entry.w, height: entry.h, transform: `translate(${mirrorX(entry.x, planeWidth, rtl, entry.w)}px, ${entry.y}px)` }}><article data-person-id={person.id} tabIndex={0} className={`org-card${traced ? ' is-traced' : ''}${!matching ? ' is-dimmed' : ''}${drag?.active && drag.employee.id === person.id ? ' is-dragging' : ''}${validDrop ? ' is-drop' : ''}${invalidDrop ? ' is-nodrop' : ''}`} onPointerDown={(event) => startDrag(event, person)} onClick={(event) => { event.stopPropagation(); if (movedRef.current) { movedRef.current = false; return } setTracedId((current) => current === person.id ? null : person.id) }} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setTracedId((current) => current === person.id ? null : person.id) } }}>
                 <div className="org-card-main"><span className="org-avatar">{initials(person, lang)}</span><div className="min-w-0"><p dir="auto" title={nameOf(person)}>{nameOf(person)}</p><small dir="auto" title={positionOf(person) ?? undefined}>{positionOf(person)}</small></div></div>
                 <div className="org-card-foot">
@@ -450,14 +454,12 @@ export function OrgTreeView({ unit, editable = false, renderCardAction, renderCa
                   ) : (
                     <em dir="auto" title={person.duty_post ?? undefined}>{person.duty_post}</em>
                   )}
-                  {renderCardMarker?.(person)}
                   {directReports(people, person.id).length > 0 && <button type="button" data-org-no-drag onClick={(event) => { event.stopPropagation(); setScopeId(person.id) }}>{directReports(people, person.id).length} ▾</button>}
                 </div>
                 {editMode && canEdit && <GripVertical className="org-grip" size={14} />}
-                {(cardAction || (editMode && canEdit)) && (
+                {editMode && canEdit && (
                   <div className="org-card-tools" data-org-no-drag>
-                    {cardAction}
-                    {editMode && canEdit && <button type="button" data-org-no-drag className="org-edit-button" aria-label={t('employees.orgTree.pickTitle')} onClick={(event) => { event.stopPropagation(); setPicker({ employee: person, anchor: event.currentTarget.closest<HTMLElement>('.org-card'), boundsEl: viewportRef.current }) }}><Pencil size={12} /></button>}
+                    <button type="button" data-org-no-drag className="org-edit-button" aria-label={t('employees.orgTree.pickTitle')} onClick={(event) => { event.stopPropagation(); setPicker({ employee: person, anchor: event.currentTarget.closest<HTMLElement>('.org-card'), boundsEl: viewportRef.current }) }}><Pencil size={12} /></button>
                   </div>
                 )}
               </article>{entry.hasChildren && <button type="button" className="org-collapse-pip" aria-expanded={!collapsed.has(person.id)} aria-label={t(`employees.orgTree.${collapsed.has(person.id) ? 'expandReports' : 'collapseReports'}`)} onClick={(event) => { event.stopPropagation(); toggleCollapsed(person.id) }}>{collapsed.has(person.id) ? '+' : '−'}</button>}</div>
@@ -465,13 +467,8 @@ export function OrgTreeView({ unit, editable = false, renderCardAction, renderCa
           </div>
         </div>
         {/* Supervisor-less people outside the primary tree. Outside edit mode a
-            chip drills into that person's own tree; the department action sits
-            beside it so they are as manageable as any card. */}
-        {unlinked.length > 0 && <div className="org-orphan-banner"><b>▲ {t('employees.orgTree.orphanTitle', { count: unlinked.length })}</b><small>{t('employees.orgTree.orphanBody')}</small><span>{unlinked.map((person) => {
-          const action = renderCardAction?.(person)
-          const chip = <button type="button" dir="auto" data-org-drag-handle className="org-orphan-chip" onPointerDown={(event) => startDrag(event, person)} onClick={() => { if (movedRef.current) { movedRef.current = false; return } if (editMode) setPicker({ employee: person, anchor: null, boundsEl: viewportRef.current }); else setScopeId(person.id) }}>{nameOf(person)}</button>
-          return <span key={person.id} className="org-orphan-entry">{chip}{action}</span>
-        })}</span></div>}
+            chip drills into that person's own tree. */}
+        {unlinked.length > 0 && <div className="org-orphan-banner"><b>▲ {t('employees.orgTree.orphanTitle', { count: unlinked.length })}</b><small>{t('employees.orgTree.orphanBody')}</small><span>{unlinked.map((person) => <button key={person.id} type="button" dir="auto" data-org-drag-handle className="org-orphan-chip" onPointerDown={(event) => startDrag(event, person)} onClick={() => { if (movedRef.current) { movedRef.current = false; return } if (editMode) setPicker({ employee: person, anchor: null, boundsEl: viewportRef.current }); else setScopeId(person.id) }}>{nameOf(person)}</button>)}</span></div>}
         <p className="org-hint">{t(`employees.orgTree.${editMode ? 'hintEdit' : 'hint'}`)}</p>
         <div className="org-zoom-bar"><button type="button" className="org-center-button" onClick={centerOnManager}><Crosshair size={15} />{t('employees.orgTree.centerManager')}</button><button type="button" onClick={() => applyTransform({ ...view, scale: Math.min(2.2, view.scale * 1.15) })} aria-label={t('employees.orgTree.zoomIn')}><ZoomIn size={16} /></button><button type="button" onClick={() => applyTransform({ ...view, scale: Math.max(0.25, view.scale / 1.15) })} aria-label={t('employees.orgTree.zoomOut')}><ZoomOut size={16} /></button><button type="button" onClick={fitView} aria-label={t('employees.orgTree.fitView')}><Shrink size={16} /></button><button type="button" onClick={toggleFullscreen} aria-label={t('employees.orgTree.fullscreen')}>{isFullscreen ? <Minimize2 size={16} /> : <Expand size={16} />}</button></div>
       </div>

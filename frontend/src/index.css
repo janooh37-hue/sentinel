@@ -1007,8 +1007,10 @@ body {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
-/* The Employee hero exposes focus on its complete white search pill. */
-[data-employee-hero-search-input]:focus-visible {
+/* Search pills expose focus on the whole bordered pill (focus-within), not
+   on the bare input inside it: the Employee hero and the department views. */
+[data-employee-hero-search-input]:focus-visible,
+[data-pill-input]:focus-visible {
   outline: none;
 }
 
@@ -2167,7 +2169,6 @@ body {
 .org-dept-badge { display: inline-flex; min-width: 0; max-width: 58%; align-items: center; gap: 4px; border-radius: 5px; background: rgb(127 212 173 / 16%); padding: 1px 5px; color: #7fd4ad; font-family: var(--font-sans); font-weight: 700; }
 .org-dept-badge > span[aria-hidden] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .org-dept-badge > svg { flex: none; }
-.org-card-foot > .org-card-marker { background: rgb(255 199 64 / 18%); color: #ffd98a; font-family: var(--font-sans); font-weight: 700; }
 .org-card.is-traced { border-color: var(--accent); }
 .org-node-layer.is-tracing .org-card:not(.is-traced), .org-card.is-dimmed, .org-card.is-dragging { opacity: .28; }
 .org-card.is-drop { border-color: #7fd4ad; box-shadow: 0 0 0 3px rgb(4 120 87 / 35%); }
@@ -2179,7 +2180,6 @@ body {
 .org-card-tools { position: absolute; inset-block-start: 6px; inset-inline-end: 6px; z-index: 13; display: flex; gap: 4px; }
 /* Keep two-line names clear of the corner tools (logical: RTL names end on the left). */
 .org-card:has(.org-card-tools) .org-card-main { padding-inline-end: 26px; }
-.org-card:has(.org-card-tools > :nth-child(2)) .org-card-main { padding-inline-end: 52px; }
 .org-edit-button { display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid rgb(255 255 255 / 28%); border-radius: 7px; background: rgb(255 255 255 / 14%); color: #fff; }
 .org-edit-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .org-grip { inset-inline-start: 6px; color: rgb(255 255 255 / 50%); cursor: grab; }
@@ -2199,8 +2199,6 @@ body {
 .org-orphan-banner small { color: var(--text-muted); font-size: .75em; }
 .org-orphan-banner > span { display: flex; flex-wrap: wrap; gap: 6px; }
 .org-orphan-chip { border: 1px solid var(--hairline); border-radius: 6px; background: var(--surface); padding: 3px 6px; font-size: .72em; }
-.org-orphan-entry { display: inline-flex; align-items: center; gap: 3px; }
-.org-orphan-entry .org-edit-button { border-color: var(--hairline); background: var(--surface); color: var(--primary); }
 .org-hint { position: absolute; inset-block-end: 6px; inset-inline-start: 14px; z-index: 30; margin: 0; border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--surface) 86%, transparent); padding: 5px 10px; color: var(--text-muted); font-size: .72em; backdrop-filter: blur(4px); }
 @media (width <= 640px) { .org-hint { display: none; } }
 .org-zoom-bar { position: absolute; inset-block-end: 14px; inset-inline-end: 14px; z-index: 30; display: flex; gap: 6px; }

@@ -1,8 +1,8 @@
 /**
  * OrgTreeWorkspace — the duty-unit rail beside one unit's supervisor tree.
  *
- * Shared by the read-only Employees → Organization page and the tree editor
- * under Permissions → Organization & departments, so both agree on unit order,
+ * Shared by the read-only Employees → Organization page and the optional
+ * drag chart in Permissions → Fix reporting lines, so both agree on unit order,
  * headcount and the `?unit=` selection. A reporting structure is per-unit, so
  * the rail drops the Unassigned bucket: those people have no unit to build a
  * tree in.
@@ -16,23 +16,15 @@ import { useSearchParams } from 'react-router-dom'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, type EmployeeListItem } from '@/lib/api'
 import { UNASSIGNED, groupByUnit, unitTallies } from '@/lib/dutyUnits'
-import type { OrgPerson } from '@/lib/orgTree'
 import { UnitRail } from '@/pages/dutyLocations/UnitRail'
 import { OrgTreeView, type OrgTreeFocus } from './OrgTreeView'
 
 interface OrgTreeWorkspaceProps {
   editable?: boolean
-  renderCardAction?: (person: OrgPerson) => React.ReactNode
-  renderCardMarker?: (person: OrgPerson) => React.ReactNode
   focus?: OrgTreeFocus | null
 }
 
-export function OrgTreeWorkspace({
-  editable = false,
-  renderCardAction,
-  renderCardMarker,
-  focus = null,
-}: OrgTreeWorkspaceProps): React.JSX.Element {
+export function OrgTreeWorkspace({ editable = false, focus = null }: OrgTreeWorkspaceProps): React.JSX.Element {
   const { t } = useTranslation()
   const [params, setParams] = useSearchParams()
 
@@ -90,8 +82,6 @@ export function OrgTreeWorkspace({
         <OrgTreeView
           unit={activeKey ?? ''}
           editable={editable}
-          renderCardAction={renderCardAction}
-          renderCardMarker={renderCardMarker}
           focus={focus}
         />
       </section>
