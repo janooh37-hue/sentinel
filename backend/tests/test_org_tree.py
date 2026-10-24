@@ -19,6 +19,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.main import create_app
+from tests.department_fixtures import department as department_fixture
 
 
 def _employee(
@@ -61,6 +62,8 @@ def test_list_org_tree_returns_all_employees_and_denies_missing_view(api_db: Ses
     report = _employee("G-001", name="Report", supervisor_id=supervisor.id)
     api_db.add_all([supervisor, report])
     api_db.commit()
+    # Marking G-002 as a head derives the department for its whole branch.
+    department = department_fixture(api_db, "Ops", "G-002", name_ar="Operations")
 
     viewer = _user(api_db, email="tree-viewer@test.ae")
     response = _client(api_db, viewer).get("/api/v1/org-tree/")
@@ -81,6 +84,8 @@ def test_list_org_tree_returns_all_employees_and_denies_missing_view(api_db: Ses
             "designation_en": None,
             "designation_ar": None,
             "rank_order": None,
+            "department_id": department.id,
+            "head_of_department_id": None,
         },
         {
             "id": "G-002",
@@ -96,6 +101,8 @@ def test_list_org_tree_returns_all_employees_and_denies_missing_view(api_db: Ses
             "designation_en": None,
             "designation_ar": None,
             "rank_order": None,
+            "department_id": department.id,
+            "head_of_department_id": department.id,
         },
     ]
 
@@ -164,6 +171,8 @@ def test_list_org_tree_returns_current_effective_designation_rank(api_db: Sessio
         "designation_en": "Security Supervisor",
         "designation_ar": "مشرف",
         "rank_order": 6,
+        "department_id": None,
+        "head_of_department_id": None,
     }
 
 

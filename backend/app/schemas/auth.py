@@ -13,6 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.schemas._base import ORMBase
+from app.schemas.department import UserDepartmentRead
 
 
 class RegisterRequest(BaseModel):
@@ -55,6 +56,8 @@ class SessionUser(BaseModel):
     name_ar: str | None = None
     position: str | None = None
     department: str | None = None
+    departments: list[UserDepartmentRead] = Field(default_factory=list)
+    department_scope_kind: Literal["organization", "department", "branch", "self"] = "organization"
     photo_url: str | None = None
     role: str
     status: str
@@ -91,6 +94,7 @@ class AdminUserRead(ORMBase):
     created_at: datetime | None = None
     is_default_manager: bool = False
     password_change_required: bool = False
+    departments: list[UserDepartmentRead] = Field(default_factory=list)
 
 
 class AdminUserCreateRequest(BaseModel):

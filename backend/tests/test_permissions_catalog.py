@@ -5,7 +5,7 @@ from app.db.models import BookCategory
 
 
 def test_static_catalog_has_complete_bilingual_request_policy_metadata():
-    assert len(CAPABILITIES) == 60
+    assert len(CAPABILITIES) == 63
     for cap in CAPABILITIES:
         assert cap.label_en.strip(), cap.id
         assert cap.label_ar.strip(), cap.id
@@ -27,11 +27,14 @@ def test_static_catalog_has_complete_bilingual_request_policy_metadata():
     assert {cap.id for cap in CAPABILITIES if cap.sensitive} == set(
         permissions.SENSITIVE_CAPABILITY_IDS
     )
-    # books.secret is the one non-sensitive cap that can't be self-requested:
-    # clearance is granted by an admin or manager, never asked for.
+    # These grants are administered directly rather than self-requested.
     assert {cap.id for cap in CAPABILITIES if not cap.sensitive and not cap.requestable} == {
-        "books.secret"
+        "books.secret",
+        "departments.manage",
+        "departments.all",
     }
+    for role in ("operator", "manager"):
+        assert not {"departments.manage", "departments.all"} & ROLE_DEFAULTS[role]
 
 
 def test_static_role_default_counts_are_preserved():
@@ -40,7 +43,7 @@ def test_static_role_default_counts_are_preserved():
     } == {
         "operator": 19,
         "manager": 43,
-        "admin": 60,
+        "admin": 63,
     }
 
 
@@ -84,7 +87,7 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     db_session.commit()
 
     catalog = capability_catalog_service.list_catalog(db_session)
-    assert len(catalog) == 60 + (2 * (len(SERVICE_IDS) + 1)) + 15 + 2
+    assert len(catalog) == 63 + (2 * (len(SERVICE_IDS) + 1)) + 15 + 2
     assert len({entry.id for entry in catalog}) == len(catalog)
 
     dynamic = catalog[len(CAPABILITIES) :]

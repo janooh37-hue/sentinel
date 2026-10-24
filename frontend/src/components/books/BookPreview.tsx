@@ -24,6 +24,7 @@ import { paperUrl } from '@/pages/books/recordPapers'
 import { useRecordDelete } from '@/pages/books/RecordDeleteProvider'
 import { cn } from '@/lib/utils'
 import { serviceHref } from '@/lib/quickActions'
+import { departmentName } from '@/lib/departments'
 
 const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
 
@@ -123,6 +124,12 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
               </button>
             </Dialog.Close>
           </header>
+          {(book?.department_name_en || book?.department_name_ar) && (
+            <p className="border-b border-hairline px-5 py-2 text-[0.78em] text-muted-foreground">
+              {t('books.record.department')}{' '}
+              <bdi>{departmentName({ name_en: book.department_name_en ?? '', name_ar: book.department_name_ar ?? '' }, i18n.language)}</bdi>
+            </p>
+          )}
 
           {/* document */}
           <div

@@ -54,6 +54,7 @@ import { IconAction } from '@/components/ui/icon-action'
 import { bidi } from '@/lib/bidi'
 import { cn } from '@/lib/utils'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { departmentName } from '@/lib/departments'
 import type { RecordPieceProps } from './recordActions'
 
 function StatePill({
@@ -340,6 +341,14 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
           <span className="shrink-0">· {t('books.record.submittedBy')}</span>
           <bdi data-testid="record-submitter" className="min-w-0 truncate font-semibold text-foreground">
             {submitterName}
+          </bdi>
+        </>
+      )}
+      {(book.department_name_en || book.department_name_ar) && (
+        <>
+          <span className="shrink-0">· {t('books.record.department')}</span>
+          <bdi className="min-w-0 font-semibold text-foreground">
+            {departmentName({ name_en: book.department_name_en ?? '', name_ar: book.department_name_ar ?? '' }, i18n.language)}
           </bdi>
         </>
       )}

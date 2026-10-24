@@ -67,6 +67,22 @@ and HR pages keep their existing permission gates. Announcement recipient and
 WhatsApp-mention searches still require `employees.view` because they use
 contact numbers rather than only employee identities.
 
+Departments follow the org tree: an administrator marks an employee as a
+department head, and everyone below them belongs to it, so moving someone in the
+tree moves their department. A head inside another department's branch makes a
+sub-department. Admins add deputies and department viewers, manual exceptions and
+per-department services on top. The editor is **Permissions → Organization &
+departments** (`/permissions?tab=org`); the Employees org tree is read-only.
+
+Departments narrow people data, Records and services only after an administrator
+enables department scoping there; deploying leaves the switch off. Heads and
+deputies see their department and its sub-departments, viewers that department,
+and every supervisor their own branch; others keep their own work. While scoping
+is on, only an administrator can link an account to an employee record
+(`LINK_REQUIRES_ADMIN`). Admins and users granted `departments.all` retain the
+organization-wide view; action capabilities and Record Levels still apply.
+`departments.manage` controls setup.
+
 ## Record category permissions
 
 The Permissions page lists the 15 General Book classifications, then the legacy

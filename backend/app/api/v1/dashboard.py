@@ -37,11 +37,13 @@ def update_layout(
 def get_summary(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
+    department_id: int | None = None,
 ) -> DashboardSummary:
     return dashboard_service.get_summary(
         db,
         user=current_user,
         owner_user_id=current_user.id,
+        department_id=department_id,
     )
 
 

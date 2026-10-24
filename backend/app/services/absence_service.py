@@ -30,6 +30,7 @@ from app.api.errors import NotFoundError, ValidationFailedError
 from app.core.leave_lifecycle import canonical_status, english_part
 from app.core.timesheet_codes import UNKNOWN_LEAVE, in_roster, is_void
 from app.db.models import Absence, Employee, Leave
+from app.services.department_scope_service import DepartmentScope, employee_visibility_clause
 
 #: English leave types whose record explains an absence and therefore removes it.
 SUPERSEDING_LEAVE_TYPES: Final[frozenset[str]] = frozenset(
@@ -280,13 +281,19 @@ def list_episodes(db: Session, employee_id: str) -> list[Episode]:
     return _group_episodes(rows)
 
 
-def list_register(db: Session) -> list[tuple[Employee, Episode]]:
+def list_register(
+    db: Session, *, scope: DepartmentScope | None = None
+) -> list[tuple[Employee, Episode]]:
     """Every employee's episodes, newest last day first (ties: employee id)."""
-    pairs = db.execute(
+    stmt = (
         select(Absence, Employee)
         .join(Employee, Employee.id == Absence.employee_id)
         .order_by(Absence.employee_id, Absence.date)
-    ).all()
+    )
+    visibility = employee_visibility_clause(scope)
+    if visibility is not None:
+        stmt = stmt.where(visibility)
+    pairs = db.execute(stmt).all()
     out: list[tuple[Employee, Episode]] = []
     for employee, group in itertools.groupby(pairs, key=lambda pair: pair[1]):
         out.extend((employee, episode) for episode in _group_episodes(row for row, _ in group))

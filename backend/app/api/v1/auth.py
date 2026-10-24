@@ -338,7 +338,11 @@ def approve_user(
     db: Annotated[Session, Depends(get_db)],
 ) -> AdminUserRead:
     user = auth_service.approve_user(
-        db, user_id, role=body.role, employee_id=body.employee_id, actor=_actor(admin)
+        db,
+        user_id,
+        role=body.role,
+        employee_id=body.employee_id,
+        actor=_actor(admin),
     )
     return auth_service.admin_read(db, user)
 

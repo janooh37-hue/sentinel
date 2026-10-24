@@ -23,6 +23,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
+from app.api.department_scope import require_leave_in_scope, require_visible_employee
 from app.api.deps import require_capability
 from app.db.models import Leave, User
 from app.db.session import get_db
@@ -40,8 +41,11 @@ from app.schemas.leave import (
     LeaveUpdate,
 )
 from app.services import leave_service, sheet_pdf_service
+from app.services.department_scope_service import narrow_department_scope, resolve_department_scope
 
-router = APIRouter(prefix="/leaves", tags=["leaves"])
+router = APIRouter(
+    prefix="/leaves", tags=["leaves"], dependencies=[Depends(require_leave_in_scope)]
+)
 
 LIST_DEFAULT_LIMIT = 50
 # 500 matches the books/ledger/employees list caps; the desktop Annual Report
@@ -65,6 +69,7 @@ def list_leaves(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("leaves.view"))],
     employee_id: str | None = None,
+    department_id: int | None = None,
     leave_status: Annotated[str | None, Query(alias="status")] = None,
     leave_type: str | None = None,
     from_date: date | None = None,
@@ -85,6 +90,7 @@ def list_leaves(
         include_deleted=include_deleted,
         limit=limit,
         offset=offset,
+        scope=narrow_department_scope(db, resolve_department_scope(db, _user), department_id),
     )
     return LeaveListResponse(
         items=[
@@ -110,8 +116,10 @@ def list_leaves(
 def awaiting_return_count(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("leaves.view"))],
+    department_id: int | None = None,
 ) -> LeaveAwaitingReturnCount:
-    return LeaveAwaitingReturnCount(count=leave_service.awaiting_return_count(db))
+    scope = narrow_department_scope(db, resolve_department_scope(db, _user), department_id)
+    return LeaveAwaitingReturnCount(count=leave_service.awaiting_return_count(db, scope=scope))
 
 
 @router.post("/report/send", response_model=LeaveReportSendResult)
@@ -162,6 +170,7 @@ def create_leave(
 ) -> LeaveRead:
     """Manual record creation — National Service only (other kinds are born
     from form generation)."""
+    require_visible_employee(db, _user, payload.employee_id)
     row = leave_service.create_leave(db, payload, actor=_user.email)
     return _with_employee_name(LeaveRead.model_validate(row), row)
 

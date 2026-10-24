@@ -6,7 +6,14 @@ from datetime import datetime
 from typing import Annotated, ClassVar, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, computed_field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    computed_field,
+    model_validator,
+)
 
 from app.core.form_kind import resolve_service, word_draft_service
 from app.schemas._base import ORMBase
@@ -57,21 +64,28 @@ class BookFolderShareUser(BaseModel):
     title_ar: str | None
 
 
+class BookFolderDepartment(BaseModel):
+    id: int
+    name_en: str
+    name_ar: str
+
+
 class BookFolderShareOption(BookFolderShareUser):
-    department: str | None
+    department_id: int | None
 
 
 class BookFolderShareOptions(BaseModel):
     users: list[BookFolderShareOption]
-    departments: list[str]
+    departments: list[BookFolderDepartment]
 
 
 class BookFolderSharesUpdate(BaseModel):
     everyone: bool
     user_ids: list[int] = Field(default_factory=list)
-    departments: list[
-        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)]
-    ] = Field(default_factory=list)
+    department_ids: list[int] = Field(default_factory=list)
+    legacy_departments: list[Annotated[str, StringConstraints(min_length=1, max_length=128)]] = (
+        Field(default_factory=list)
+    )
 
 
 class BookFolderRead(BaseModel):
@@ -85,7 +99,8 @@ class BookFolderRead(BaseModel):
     created_by_name_ar: str | None
     everyone: bool
     shared_users: list[BookFolderShareUser]
-    shared_departments: list[str]
+    shared_departments: list[BookFolderDepartment]
+    legacy_departments: list[str]
 
 
 # ---------------------------------------------------------------------------
@@ -423,6 +438,9 @@ class BookInboxRead(ORMBase):
     """The caller's own received send of a record (BookRead.my_inbox)."""
 
     id: int
+    department_send_id: int | None = None
+    department_name_en: str | None = None
+    department_name_ar: str | None = None
     purpose: SendPurpose
     note: str | None = None
     sent_by_user_id: int
@@ -439,6 +457,7 @@ class BookInboxRead(ORMBase):
 class BookRecipientRead(ORMBase):
     id: int
     user_id: int
+    department_send_id: int | None = None
     user_name: str | None = None
     user_name_ar: str | None = None
     user_title: str | None = None
@@ -457,17 +476,25 @@ class BookRecipientRead(ORMBase):
 
 
 class BookSendRequest(BaseModel):
-    user_ids: list[int] = Field(min_length=1, max_length=50)
+    user_ids: list[int] = Field(default_factory=list, max_length=50)
+    department_ids: list[int] = Field(default_factory=list, max_length=20)
     purpose: SendPurpose
     note: str | None = Field(default=None, max_length=500)
     # Personal records only: switch the level to directed in the same send.
     make_directed: bool = False
     include_references: bool = True
 
+    @model_validator(mode="after")
+    def require_target(self) -> BookSendRequest:
+        if not self.user_ids and not self.department_ids:
+            raise ValueError("At least one user or department is required.")
+        return self
+
 
 class BookSendSkipped(BaseModel):
-    user_id: int
-    reason: Literal["already_recipient", "self"]
+    user_id: int | None = None
+    department_id: int | None = None
+    reason: Literal["already_recipient", "self", "already_sent", "not_cleared"]
 
 
 class BookReferenceSkipped(BaseModel):
@@ -486,6 +513,64 @@ class BookSendResponse(BaseModel):
     sent: list[BookRecipientRead]
     skipped: list[BookSendSkipped]
     references: list[BookReferenceSendResult] = Field(default_factory=list)
+
+
+class BookDepartmentSendRead(ORMBase):
+    id: int
+    department_id: int
+    department_name_en: str
+    department_name_ar: str
+    parent_send_id: int | None
+    sent_by_user_id: int
+    sent_by_name: str | None
+    sent_by_name_ar: str | None
+    purpose: SendPurpose
+    note: str | None
+    created_at: datetime
+    revoked_at: datetime | None
+    heads_total: int
+    heads_read: int
+    members_reached: int
+    done_count: int
+    can_recall: bool
+    can_distribute: bool
+
+
+class BookDistributionMember(BaseModel):
+    user_id: int
+    name: str
+    name_ar: str | None
+    role: Literal["head", "deputy", "viewer", "member"]
+    already_recipient: bool
+    cleared: bool
+
+
+class BookDistributionDepartment(BaseModel):
+    id: int
+    name_en: str
+    name_ar: str
+    has_head: bool
+
+
+class BookDistributionOptions(BaseModel):
+    members: list[BookDistributionMember]
+    subdepartments: list[BookDistributionDepartment]
+
+
+class BookDistributeRequest(BaseModel):
+    mode: Literal["all", "members", "subdepartment"]
+    user_ids: list[int] = Field(default_factory=list)
+    subdepartment_id: int | None = None
+    purpose: SendPurpose | None = None
+    note: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def require_selection(self) -> BookDistributeRequest:
+        if self.mode == "members" and not self.user_ids:
+            raise ValueError("Select at least one member.")
+        if self.mode == "subdepartment" and self.subdepartment_id is None:
+            raise ValueError("Select a subdepartment.")
+        return self
 
 
 class BookDeriveRequest(BaseModel):
@@ -553,6 +638,9 @@ class BookRead(ORMBase):
     # Restricted historical projections may lack trustworthy category metadata.
     category_id: str | None
     category: BookCategoryRead | None = None
+    department_id: int | None = None
+    department_name_en: str | None = None
+    department_name_ar: str | None = None
     # Subject employee link (G-number) + name snapshot, straight off the Book row.
     # Lets clients resolve the employee record (designation / Arabic name / id)
     # without re-parsing the subject. None for admin-category books with no employee.
@@ -579,6 +667,7 @@ class BookRead(ORMBase):
     can_change_confidentiality: bool = False
     # The caller's newest active received send of this record, if any.
     my_inbox: BookInboxRead | None = None
+    department_sends: list[BookDepartmentSendRead] = Field(default_factory=list)
     selected_version_id: int | None = None
     can_sign: bool = False
     can_review: bool = False

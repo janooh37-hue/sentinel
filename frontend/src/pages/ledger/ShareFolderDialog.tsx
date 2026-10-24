@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Search } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/c
 import { Input } from '@/components/ui/input'
 import { api, type BookFolderRead, type BookFolderShareOption } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { departmentName } from '@/lib/departments'
 import { toastFolderError } from './useBookFolders'
 
 const KEY = 'ledger.booksDesk.folders'
@@ -18,9 +19,11 @@ export function ShareFolderDialog({ folder, close }: { folder: BookFolderRead; c
   const qc = useQueryClient()
   const searchId = useId()
   const modeId = useId()
+  const isAr = i18n.language.startsWith('ar')
   const [everyone, setEveryone] = useState(folder.everyone)
   const [users, setUsers] = useState(() => folder.shared_users.map((user) => user.id))
-  const [departments, setDepartments] = useState(() => [...folder.shared_departments])
+  const [departmentIds, setDepartmentIds] = useState(() => folder.shared_departments.map((department) => department.id))
+  const [legacyDepartments, setLegacyDepartments] = useState(() => [...folder.legacy_departments])
   const [search, setSearch] = useState('')
   const options = useQuery({
     queryKey: ['books', 'folders', 'share-options'],
@@ -30,7 +33,8 @@ export function ShareFolderDialog({ folder, close }: { folder: BookFolderRead; c
     mutationFn: () => api.updateBookFolderShares(folder.id, {
       everyone,
       user_ids: everyone ? [] : users,
-      departments: everyone ? [] : departments,
+      department_ids: everyone ? [] : departmentIds,
+      legacy_departments: everyone ? [] : legacyDepartments,
     }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['books', 'folders'] })
@@ -41,10 +45,18 @@ export function ShareFolderDialog({ folder, close }: { folder: BookFolderRead; c
     onError: (error) => toastFolderError(t, error, `${KEY}.shareError`),
   })
   const needle = search.trim().toLowerCase()
-  const shown = (options.data?.users ?? []).filter((user) => !needle || [user.name, user.name_ar, user.title, user.title_ar, user.department].some((value) => value?.toLowerCase().includes(needle)))
+  const departmentsById = new Map((options.data?.departments ?? []).map((department) => [department.id, department]))
+  const shown = (options.data?.users ?? []).filter((user) => {
+    const department = user.department_id == null ? undefined : departmentsById.get(user.department_id)
+    return !needle || [user.name, user.name_ar, user.title, user.title_ar, department?.name_en, department?.name_ar].some((value) => value?.toLowerCase().includes(needle))
+  })
+  const departmentOf = (user: BookFolderShareOption): string | undefined => {
+    const department = user.department_id == null ? undefined : departmentsById.get(user.department_id)
+    return department ? departmentName(department, i18n.language) : undefined
+  }
   const nameOf = (user: BookFolderShareOption): string => pickEmployeeName({ name_en: user.name, name_ar: user.name_ar }, i18n.language)
   const titleOf = (user: BookFolderShareOption): string | null | undefined => i18n.language.startsWith('ar') ? user.title_ar || user.title : user.title || user.title_ar
-  const canSave = !saving.isPending && (everyone || (users.length + departments.length > 0 && options.isSuccess))
+  const canSave = !saving.isPending && (everyone || (users.length + departmentIds.length + legacyDepartments.length > 0 && options.isSuccess))
 
   return (
     <DialogContent dir={i18n.dir()} onEscapeKeyDown={(event) => { if (saving.isPending) event.preventDefault() }} onPointerDownOutside={(event) => { if (saving.isPending) event.preventDefault() }}>
@@ -72,12 +84,20 @@ export function ShareFolderDialog({ folder, close }: { folder: BookFolderRead; c
               <legend className="mb-2 text-xs font-semibold">{t(`${KEY}.departments`)}</legend>
               {options.data.departments.length === 0 ? <p className="text-xs text-muted-foreground">{t(`${KEY}.noDepartments`)}</p> : (
                 <div className="max-h-40 overflow-y-auto rounded-lg border border-hairline bg-background">
-                  {options.data.departments.map((department) => <label key={department} className={CHECK_ROW}>
-                    <input type="checkbox" checked={departments.includes(department)} onChange={() => setDepartments((previous) => previous.includes(department) ? previous.filter((value) => value !== department) : [...previous, department])} className="h-4 w-4 shrink-0 rounded border-hairline accent-primary" />
-                    <bdi className="min-w-0 break-words text-sm">{department}</bdi>
+                  {options.data.departments.map((department) => <label key={department.id} className={CHECK_ROW}>
+                    <input type="checkbox" checked={departmentIds.includes(department.id)} onChange={() => setDepartmentIds((previous) => previous.includes(department.id) ? previous.filter((id) => id !== department.id) : [...previous, department.id])} className="h-4 w-4 shrink-0 rounded border-hairline accent-primary" />
+                    <bdi className="min-w-0 break-words text-sm">{departmentName(department, i18n.language)}</bdi>
                   </label>)}
                 </div>
               )}
+              {legacyDepartments.length > 0 && <div className="mt-2 flex flex-wrap gap-2">
+                {legacyDepartments.map((department) => <span key={department} className="inline-flex max-w-full items-center gap-1 rounded-lg border border-hairline bg-surface-tinted ps-2 text-xs">
+                  <span className="min-w-0 break-words">{isAr ? 'اسم قسم قديم' : 'Old department name'}: <bdi>{department}</bdi></span>
+                  <button type="button" className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${isAr ? 'إزالة اسم قسم قديم' : 'Remove old department name'}: ${department}`} onClick={() => setLegacyDepartments((previous) => previous.filter((value) => value !== department))}>
+                    <X className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                </span>)}
+              </div>}
             </fieldset>
             <fieldset disabled={saving.isPending}>
               <legend className="mb-2 text-xs font-semibold">{t(`${KEY}.people`)}</legend>
@@ -96,6 +116,7 @@ export function ShareFolderDialog({ folder, close }: { folder: BookFolderRead; c
                     <span className="min-w-0 text-sm">
                       <bdi className="block break-words">{nameOf(user)}</bdi>
                       {titleOf(user) && <>{' '}<bdi className="block break-words text-xs text-muted-foreground">{titleOf(user)}</bdi></>}
+                      {departmentOf(user) && <>{' '}<bdi className="block break-words text-xs text-muted-foreground">{departmentOf(user)}</bdi></>}
                     </span>
                   </label>)}
                 </div>

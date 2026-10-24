@@ -17,7 +17,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Controller, useForm } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -116,7 +116,6 @@ function blankDefaults(): EmployeeFormValues {
     transfer_site: '',
     transfer_return_date: '',
     effective_date: todayIso(),
-    department: '',
     position: '',
     position_ar: '',
     other: '',
@@ -146,7 +145,6 @@ function fromInitial(initial: Partial<EmployeeRead>): EmployeeFormValues {
     transfer_site: initial.transfer_site ?? '',
     transfer_return_date: initial.transfer_return_date ?? '',
     effective_date: todayIso(),
-    department: initial.department ?? '',
     position: initial.position ?? '',
     position_ar: initial.position_ar ?? '',
     other: initial.other ?? '',
@@ -179,12 +177,11 @@ export function EmployeeForm({
     register,
     handleSubmit,
     control,
-    watch,
     setValue,
     formState: { errors },
   } = form
 
-  const status = watch('status')
+  const status = useWatch({ control, name: 'status' })
   const endDateRequired = !isWorkingStatus(status)
   const isTransferred = status === 'Transferred'
   // Reactivating a departed/transferred employee (to Active or Loaned) asks for the return date.
@@ -331,9 +328,27 @@ export function EmployeeForm({
           <CardTitle>{t('employees.sections.employment')}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field id="department" label={fld('department')}>
-            <Input id="department" {...register('department')} />
-          </Field>
+          {/* Read-only: the department follows the org tree (supervisor links
+              and department heads are set under Permissions). */}
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <span className="text-sm font-medium text-foreground">{fld('department')}</span>
+            <p className="flex min-h-9 items-center break-words text-sm text-foreground">
+              {initial?.department_id != null ? (
+                <bdi>
+                  {i18n.language.startsWith('ar')
+                    ? initial.department_name_ar || initial.department_name_en
+                    : initial.department_name_en || initial.department_name_ar}
+                </bdi>
+              ) : initial?.department ? (
+                <span className="text-muted-foreground">
+                  {t('departmentEmployees.previousValue')}: <bdi>{initial.department}</bdi>
+                </span>
+              ) : (
+                <span className="text-muted-foreground">{t('departmentAccess.noTreeDepartment')}</span>
+              )}
+            </p>
+            <span className="text-xs text-muted-foreground">{t('departmentAccess.fromTree')}</span>
+          </div>
           <Field id="position" label={fld('position')}>
             <Input id="position" {...register('position')} />
           </Field>

@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import datetime as dt
 from datetime import UTC, date, datetime
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from sqlalchemy import (
     JSON,
@@ -38,12 +38,18 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
     func,
+    select,
     text,
 )
-from sqlalchemy.orm import Mapped, foreign, mapped_column, query_expression, relationship
+from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Mapped, Mapper, foreign, mapped_column, query_expression, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.services.department_scope_service import DepartmentScope
 
 # Single-row sequence is keyed by this constant so callers don't sprinkle
 # magic ``1`` literals through the codebase.
@@ -53,6 +59,81 @@ REF_SEQUENCE_ID: Final[int] = 1
 def _utcnow() -> datetime:
     """Naive UTC timestamp — matches the rest of the v3 data (no tz info)."""
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+class Department(Base):
+    """A manager in the org tree plus everyone under them (rework R)."""
+
+    __tablename__ = "departments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name_en: Mapped[str] = mapped_column(String(128))
+    name_ar: Mapped[str] = mapped_column(String(128))
+    head_employee_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("employees.id", ondelete="RESTRICT"), nullable=False
+    )
+    # Derived from the org tree; written only by department_tree_service.recompute.
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
+    )
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("1"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, onupdate=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("name_en", name="uq_departments_name_en"),
+        UniqueConstraint("name_ar", name="uq_departments_name_ar"),
+        UniqueConstraint("head_employee_id", name="uq_departments_head_employee_id"),
+    )
+
+
+class DepartmentMember(Base):
+    """User-level department grant: deputy or viewer. Heads come from the tree."""
+
+    __tablename__ = "department_members"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    department_id: Mapped[int] = mapped_column(ForeignKey("departments.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(8))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("department_id", "user_id", name="uq_department_members_user"),
+        CheckConstraint("role IN ('deputy', 'viewer')", name="ck_department_members_role"),
+    )
+
+
+class DepartmentException(Base):
+    """Manual placement overriding the tree; NULL department = outside all departments."""
+
+    __tablename__ = "department_exceptions"
+
+    employee_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("employees.id", ondelete="CASCADE"), primary_key=True
+    )
+    department_id: Mapped[int | None] = mapped_column(
+        ForeignKey("departments.id", ondelete="CASCADE"), nullable=True
+    )
+    created_by: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+
+class DepartmentService(Base):
+    __tablename__ = "department_services"
+
+    department_id: Mapped[int] = mapped_column(
+        ForeignKey("departments.id", ondelete="CASCADE"), primary_key=True
+    )
+    service_id: Mapped[str] = mapped_column(String, primary_key=True)
 
 
 class Employee(Base):
@@ -78,6 +159,13 @@ class Employee(Base):
     # employee on this date. NULL = open-ended transfer.
     transfer_return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     department: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Integrity is validated app-side: SQLite cannot add an FK without rebuilding this table.
+    department_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    department_record: Mapped[Department | None] = relationship(
+        primaryjoin=lambda: foreign(Employee.department_id) == Department.id,
+        viewonly=True,
+        lazy="joined",
+    )
     position: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # Deliberately not a ForeignKey: adding the constraint would force a full
@@ -113,6 +201,14 @@ class Employee(Base):
     documents: Mapped[list[Document]] = relationship(
         back_populates="employee", cascade="all, delete-orphan"
     )
+
+    @property
+    def department_name_en(self) -> str | None:
+        return self.department_record.name_en if self.department_record else None
+
+    @property
+    def department_name_ar(self) -> str | None:
+        return self.department_record.name_ar if self.department_record else None
 
     __table_args__ = (
         Index("ix_employees_status", "status"),
@@ -269,6 +365,15 @@ class Book(Base):
     # Original creator (users.id): immutable; set once at creation. No FK, same
     # SQLite batch-ALTER reason as submitted_by_user_id.
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Immutable creation stamp, resolved for EVERY ORM insertion by the mapper
+    # event below (including form generation, Word drafts and manual Records).
+    # No FK: existing SQLite tables use application-side integrity.
+    department_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    department: Mapped[Department | None] = relationship(
+        primaryjoin="foreign(Book.department_id) == Department.id",
+        viewonly=True,
+        lazy="joined",
+    )
     # Record level (migration 0102): general | personal | secret | directed.
     # Gates who can open the record; see book_service.user_visibility_clause.
     confidentiality: Mapped[str] = mapped_column(
@@ -306,6 +411,14 @@ class Book(Base):
         cascade="all, delete-orphan",
     )
 
+    @property
+    def department_name_en(self) -> str | None:
+        return self.department.name_en if self.department is not None else None
+
+    @property
+    def department_name_ar(self) -> str | None:
+        return self.department.name_ar if self.department is not None else None
+
     __table_args__ = (
         UniqueConstraint("ref_number", name="uq_books_ref_number"),
         Index("ix_books_employee_id", "employee_id"),
@@ -316,6 +429,17 @@ class Book(Base):
             name="ck_books_confidentiality",
         ),
     )
+
+
+@event.listens_for(Book, "before_insert")
+def _stamp_book_department(_mapper: Mapper[Book], connection: Connection, book: Book) -> None:
+    """Use the insertion connection, never a Session query/recursive flush."""
+    if book.department_id is None and book.created_by_user_id is not None:
+        book.department_id = connection.scalar(
+            select(Employee.department_id)
+            .join(User, User.employee_id == Employee.id)
+            .where(User.id == book.created_by_user_id)
+        )
 
 
 class BookApprovalStep(Base):
@@ -482,6 +606,41 @@ class BookRevisionAccess(Base):
     )
 
 
+class BookDepartmentSend(Base):
+    """A department delivery and the root of its recallable hand-downs."""
+
+    __tablename__ = "book_department_sends"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    department_id: Mapped[int] = mapped_column(ForeignKey("departments.id"), nullable=False)
+    parent_send_id: Mapped[int | None] = mapped_column(
+        ForeignKey("book_department_sends.id"), nullable=True
+    )
+    sent_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    __table_args__ = (
+        Index("ix_book_department_sends_book", "book_id"),
+        Index("ix_book_department_sends_parent", "parent_send_id"),
+        Index(
+            "uq_book_department_sends_active",
+            "book_id",
+            "department_id",
+            unique=True,
+            sqlite_where=text("revoked_at IS NULL"),
+        ),
+        CheckConstraint(
+            "purpose IN ('info', 'action', 'reply', 'circulate')",
+            name="ck_book_department_sends_purpose",
+        ),
+    )
+
+
 class BookRecipient(Base):
     """A direct send of a record to one user (migration 0102).
 
@@ -496,6 +655,8 @@ class BookRecipient(Base):
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False)
     sent_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Existing tables add this nullable link without a named SQLite batch FK.
+    department_send_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # info | action | reply | circulate (للاطلاع / للتنفيذ / للإفادة / للتعميم)
     purpose: Mapped[str] = mapped_column(String(16), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -509,6 +670,7 @@ class BookRecipient(Base):
     __table_args__ = (
         Index("ix_book_recipients_user_revoked", "user_id", "revoked_at"),
         Index("ix_book_recipients_book", "book_id"),
+        Index("ix_book_recipients_department_send_id", "department_send_id"),
         Index(
             "uq_book_recipients_active",
             "book_id",
@@ -578,18 +740,21 @@ class BookFolderShare(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     department: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    department_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
     )
 
     __table_args__ = (
         CheckConstraint(
-            "(user_id IS NOT NULL AND department IS NULL) OR "
-            "(user_id IS NULL AND department IS NOT NULL)",
+            "(user_id IS NOT NULL AND department_id IS NULL AND department IS NULL) OR "
+            "(user_id IS NULL AND department_id IS NOT NULL AND department IS NULL) OR "
+            "(user_id IS NULL AND department_id IS NULL AND department IS NOT NULL)",
             name="ck_book_folder_shares_target",
         ),
         UniqueConstraint("folder_id", "user_id", name="uq_book_folder_shares_user"),
         UniqueConstraint("folder_id", "department", name="uq_book_folder_shares_department"),
+        UniqueConstraint("folder_id", "department_id", name="uq_book_folder_shares_department_id"),
     )
 
 
@@ -1850,6 +2015,7 @@ class User(Base):
     # The attribute is populated lazily by perm_service.effective_caps.
     __allow_unmapped__ = True
     _effective_caps_cache: frozenset[str] | None
+    _department_scope_cache: DepartmentScope | None
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(256), nullable=False)  # stored lowercased

@@ -9,6 +9,8 @@ const ERROR_KEYS: Record<string, string | undefined> = {
   FOLDER_NOT_TEAM: 'ledger.booksDesk.folders.errorNotTeam',
   FOLDER_SHARES_EMPTY: 'ledger.booksDesk.folders.errorSharesEmpty',
   FOLDER_SHARE_USER_INVALID: 'ledger.booksDesk.folders.errorShareUserInvalid',
+  FOLDER_SHARE_LEGACY_INVALID: 'ledger.booksDesk.folders.errorShareLegacyInvalid',
+  DEPARTMENT_NOT_FOUND: 'departments.errors.notFound',
 }
 
 /** dataTransfer type for a Books desk row dragged onto a rail folder. */

@@ -21,6 +21,9 @@ class OrgNode(ORMBase):
     designation_en: str | None = None
     designation_ar: str | None = None
     rank_order: int | None = None
+    # Derived from the org tree (department_tree_service.recompute).
+    department_id: int | None = None
+    head_of_department_id: int | None = None
 
 
 class OrgSupervisorUpdate(BaseModel):

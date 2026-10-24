@@ -102,6 +102,24 @@ class Capability:
 
 CAPABILITIES: Final[tuple[Capability, ...]] = (
     Capability(
+        "departments.manage",
+        "departments",
+        "Manage departments",
+        "إدارة الأقسام",
+        "Manage departments, memberships, employee assignments and department services.",
+        "إدارة الأقسام وعضوياتها وتعيينات الموظفين وخدمات الأقسام.",
+        requestable=False,
+    ),
+    Capability(
+        "departments.all",
+        "departments",
+        "Organization-wide view",
+        "عرض جميع الأقسام",
+        "See every department's data once department scoping is on.",
+        "عرض بيانات جميع الأقسام عند تفعيل نطاق الأقسام.",
+        requestable=False,
+    ),
+    Capability(
         "inmate_statistics.review",
         "inmate_statistics",
         "Review inmate monthly reports",

@@ -14,7 +14,8 @@ import { toast } from 'sonner'
 import { IdentityDocCard } from '@/components/employees/IdentityDocCard'
 import { SignaturePad } from '@/components/employees/SignaturePad'
 import { PassportField } from './PassportField'
-import { api, apiErrorMessage } from '@/lib/api'
+import { api } from '@/lib/api'
+import { departmentErrorMessage } from '@/lib/departments'
 import type { EmployeeRead, EmployeeUpdate } from '@/lib/api'
 import { pickPosition } from '@/lib/employeePosition'
 import { useCapabilities } from '@/lib/useCapabilities'
@@ -106,7 +107,11 @@ function getFieldValue(
     case 'position':
       return pickPosition(employee, language)
     case 'department':
-      return employee.department
+      return employee.department_id != null
+        ? (language.startsWith('ar')
+          ? employee.department_name_ar || employee.department_name_en
+          : employee.department_name_en || employee.department_name_ar)
+        : employee.department
     case 'duty_unit':
       return employee.duty_unit
     case 'duty_post':
@@ -145,8 +150,7 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
   }, [])
 
   const save = useMutation({
-    mutationFn: () =>
-      api.updateEmployee(employeeId, { [field]: value.trim() } as EmployeeUpdate),
+    mutationFn: () => api.updateEmployee(employeeId, { [field]: value.trim() } as EmployeeUpdate),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employee-detail', employeeId] })
       void qc.invalidateQueries({ queryKey: ['employees'] })
@@ -154,7 +158,7 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
       onDone()
     },
     onError: (err) => {
-      toast.error(apiErrorMessage(err))
+      toast.error(departmentErrorMessage(err, t))
     },
   })
 
@@ -251,7 +255,7 @@ function FieldRow({
             <span className="text-[0.88em] font-semibold text-amber-600">
               {isFeminine ? t('employee.gaps.notSetF') : t('employee.gaps.notSet')}
             </span>
-            {canEdit && (
+            {canEdit && field !== 'department' && (
               <button
                 type="button"
                 className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[0.75em] font-semibold text-amber-700 transition-colors hover:bg-amber-500/20"
@@ -259,6 +263,9 @@ function FieldRow({
               >
                 {t('employee.gaps.addNow')}
               </button>
+            )}
+            {field === 'department' && (
+              <span className="text-[0.75em] text-muted-foreground">{t('departmentAccess.fromTree')}</span>
             )}
           </span>
         ) : (
@@ -397,6 +404,7 @@ export function ProfileTab({
   }
 
   const missingSet = new Set(missing)
+  if (employee.department_id != null) missingSet.delete('department')
   const uaeExpiryDays = nearExpiryDays(employee.uae_id_expiry)
 
   const transferFooter = canEdit && has('documents.duty_transfer') ? (

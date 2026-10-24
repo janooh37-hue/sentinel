@@ -46,6 +46,7 @@ def api_db(monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory) ->
         yield db
     finally:
         db.close()
+        eng.dispose()
 
 
 @pytest.fixture()

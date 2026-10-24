@@ -140,6 +140,12 @@ beforeEach(() => {
 })
 
 describe('BooksMobileList cards', () => {
+  it('shows the owning department in the UI language', () => {
+    renderList({ rows: [book(1, { department_id: 3, department_name_en: 'Operations', department_name_ar: 'العمليات' })] })
+    expect(screen.getByText('العمليات').parentElement).toHaveTextContent('books.record.department')
+    expect(screen.queryByText('Operations')).not.toBeInTheDocument()
+  })
+
   it('opens a record through a real link carrying { from, queue }', async () => {
     renderList({ rows: [book(1), book(3)] })
     const link = screen.getByRole('link', { name: 'G-2026-003' })

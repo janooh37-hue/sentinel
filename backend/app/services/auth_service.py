@@ -31,7 +31,15 @@ from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE, MANAGER_ROLE, OPERA
 from app.db.models import AuditLog, Employee, User
 from app.db.models import AuthSession as AuthSessionModel
 from app.schemas.auth import AdminUserRead, AuditEntryRead, SessionUser
-from app.services import identity_service, perm_service, user_signature_service
+from app.schemas.department import UserDepartmentRead
+from app.services import (
+    department_scope_service,
+    department_service,
+    identity_service,
+    perm_service,
+    settings_service,
+    user_signature_service,
+)
 
 log = logging.getLogger(__name__)
 
@@ -166,7 +174,6 @@ def create_user(
     employee = db.get(Employee, g) if g else None
     if g is not None and employee is None:
         raise AppError("EMPLOYEE_NOT_FOUND", f"Employee {g} not found", http_status=404)
-
     temporary_password = secrets.token_urlsafe(12)
     user = User(
         email=normalized,
@@ -220,7 +227,8 @@ def approve_user(
             http_status=409,
         )
     g = (employee_id or "").strip().upper() or None
-    if g is not None and db.get(Employee, g) is None:
+    employee = db.get(Employee, g) if g else None
+    if g is not None and employee is None:
         raise AppError("EMPLOYEE_NOT_FOUND", f"Employee {g} not found", http_status=404)
     result = cast(
         "CursorResult[Any]",
@@ -238,16 +246,6 @@ def approve_user(
             http_status=409,
         )
     db.refresh(user)
-    g: str | None = None
-    if employee_id:
-        g = employee_id.strip().upper()
-        if db.get(Employee, g) is None:
-            raise AppError("EMPLOYEE_NOT_FOUND", f"Employee {g} not found", http_status=404)
-        user.employee_id = g
-    user.role = role
-    user.status = "active"
-    user.failed_attempts = 0
-    user.locked_at = None
     _audit(db, actor, "approve", user)
     if g is not None:
         db.flush()
@@ -278,6 +276,15 @@ def link_self(db: Session, user: User, *, employee_id: str | None) -> User:
     is_admin = user.role == ADMIN_ROLE
     target = (employee_id or "").strip().upper() or None
 
+    # The employee link grants department head/branch scope and send delivery,
+    # so under department scoping only an administrator may set it.
+    if not is_admin and settings_service.get_department_scoping_enabled(db):
+        raise AppError(
+            "LINK_REQUIRES_ADMIN",
+            "Ask an administrator to link your employee record.",
+            http_status=403,
+        )
+
     if user.employee_id is not None and target != user.employee_id and not is_admin:
         raise AppError(
             "LINK_CHANGE_FORBIDDEN",
@@ -289,6 +296,7 @@ def link_self(db: Session, user: User, *, employee_id: str | None) -> User:
         raise AppError("EMPLOYEE_NOT_FOUND", f"Employee {target} not found", http_status=404)
 
     user.employee_id = target
+    department_scope_service.invalidate_department_scope(db, user.id)
     # Keep the display_name useful when the account had none (e.g. bootstrap
     # admin that registered before the roster existed).
     if target is not None and not user.display_name:
@@ -322,14 +330,14 @@ def set_user_employee_link(
     """
     user = _require_user(db, user_id)
     target = (employee_id or "").strip().upper() or None
-    if target is not None and db.get(Employee, target) is None:
+    employee = db.get(Employee, target) if target else None
+    if target is not None and employee is None:
         raise AppError("EMPLOYEE_NOT_FOUND", f"Employee {target} not found", http_status=404)
     old = user.employee_id
     user.employee_id = target
-    if target is not None and not user.display_name:
-        employee = db.get(Employee, target)
-        if employee is not None:
-            user.display_name = employee.name_en
+    department_scope_service.invalidate_department_scope(db, user.id)
+    if employee is not None and not user.display_name:
+        user.display_name = employee.name_en
     _audit(
         db,
         actor,
@@ -389,6 +397,7 @@ def set_role(db: Session, user_id: int, role: str, *, actor: str | None = None) 
             http_status=409,
         )
     user.role = role
+    perm_service._invalidate_caps_cache(db, user.id)
     _audit(db, actor, "set_role", user)
     db.commit()
     db.refresh(user)
@@ -782,6 +791,8 @@ def to_session_user(db: Session, user: User) -> SessionUser:
         name_ar=employee.name_ar if employee else None,
         position=employee.position if employee else None,
         department=employee.department if employee else None,
+        departments=department_service.user_departments(db, [user.id]).get(user.id, []),
+        department_scope_kind=department_scope_service.resolve_department_scope(db, user).kind,
         photo_url=(identity_service.photo_url_for(db, employee.id) if employee else None),
         role=user.role,
         status=user.status,
@@ -813,6 +824,13 @@ def set_lock_layout(db: Session, user: User, layout: str) -> User:
 
 def admin_read(db: Session, user: User) -> AdminUserRead:
     employee = db.get(Employee, user.employee_id) if user.employee_id else None
+    departments = department_service.user_departments(db, [user.id]).get(user.id, [])
+    return _admin_read(user, employee, departments)
+
+
+def _admin_read(
+    user: User, employee: Employee | None, departments: list[UserDepartmentRead]
+) -> AdminUserRead:
     return AdminUserRead(
         id=user.id,
         email=user.email,
@@ -826,12 +844,18 @@ def admin_read(db: Session, user: User) -> AdminUserRead:
         created_at=user.created_at,
         is_default_manager=user.is_default_manager,
         password_change_required=user.password_change_required,
+        departments=departments,
     )
 
 
 def list_users(db: Session) -> list[AdminUserRead]:
-    users = db.execute(select(User).order_by(User.created_at.asc())).scalars().all()
-    return [admin_read(db, u) for u in users]
+    rows = db.execute(
+        select(User, Employee)
+        .outerjoin(Employee, User.employee_id == Employee.id)
+        .order_by(User.created_at.asc())
+    ).all()
+    departments = department_service.user_departments(db, [user.id for user, _ in rows])
+    return [_admin_read(user, employee, departments.get(user.id, [])) for user, employee in rows]
 
 
 # ─── Audit ──────────────────────────────────────────────────────────────────────

@@ -51,7 +51,6 @@ export const employeeFormSchema = z
     transfer_site: optionalText(128),
     transfer_return_date: optionalDate,
     effective_date: optionalDate,
-    department: optionalText(128),
     position: optionalText(128),
     position_ar: optionalText(128),
     other: optionalText(),

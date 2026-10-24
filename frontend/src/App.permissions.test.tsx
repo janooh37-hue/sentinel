@@ -1,8 +1,13 @@
 import React from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import i18n from 'i18next'
+import ar from '@/locales/ar.json'
 
-const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
+const capabilityState = vi.hoisted(() => ({
+  allowed: new Set<string>(),
+  scopeKind: 'organization' as 'organization' | 'department' | 'self',
+}))
 
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
@@ -31,7 +36,7 @@ vi.mock('@/lib/api', () => ({
 }))
 vi.mock('@/lib/AuthProvider', () => ({ AuthProvider: ({ children }: { children: React.ReactNode }) => children }))
 vi.mock('@/lib/authContext', () => ({
-  useAuth: () => ({ status: 'authed', user: { id: 999 }, logout: vi.fn() }),
+  useAuth: () => ({ status: 'authed', user: { id: 999, department_scope_kind: capabilityState.scopeKind }, logout: vi.fn() }),
 }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
 vi.mock('@/lib/useLockState', () => ({
@@ -125,28 +130,49 @@ const routes = [
 
 beforeEach(() => {
   capabilityState.allowed = new Set()
+  capabilityState.scopeKind = 'organization'
 })
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   window.history.pushState({}, '', '/')
+  await i18n.changeLanguage('en')
 })
 
 describe('App route capability gates', () => {
+  it.each([
+    ['department', 'en', '/services', 'Your department has no services yet. Ask an administrator to add services to your department.'],
+    ['department', 'ar', '/services/general_book', 'لا توجد خدمات لقسمك بعد. اطلب من المسؤول إضافة خدمات لقسمك.'],
+    ['self', 'en', '/services/general_book', 'You are not assigned to a department yet. Ask an administrator to assign you to a department.'],
+    ['self', 'ar', '/services', 'لم تُضَف إلى قسم بعد. اطلب من المسؤول إضافتك إلى قسم.'],
+  ] as const)('explains missing services for %s in %s at %s before capability guards', async (scope, language, path, copy) => {
+    i18n.addResourceBundle('ar', 'translation', ar)
+    await i18n.changeLanguage(language)
+    capabilityState.scopeKind = scope
+    window.history.pushState({}, '', path)
+    render(<App />)
+    expect(await screen.findByText(copy)).toBeVisible()
+    expect(screen.queryByText('application-page')).not.toBeInTheDocument()
+  })
+
+  it('keeps the capability guard for scoped users who have a service capability', async () => {
+    capabilityState.scopeKind = 'department'
+    capabilityState.allowed = new Set(['books.service.General Book'])
+    window.history.pushState({}, '', '/services')
+    render(<App />)
+    expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+  })
+
   it.each(routes)('denies %s without its required capabilities', async (path) => {
     window.history.pushState({}, '', path)
     render(<App />)
 
-    const denialCopy =
-      path === '/permissions'
-        ? 'Access to this area is managed by administrators and cannot be requested.'
-        : "You don't have access to this page"
-    expect(await screen.findByText(denialCopy)).toBeVisible()
+    expect(await screen.findByText("You don't have access to this page")).toBeVisible()
   })
 
   it.each([
     ['/employees', "You don't have access to this page"],
-    ['/permissions', 'Access to this area is managed by administrators and cannot be requested.'],
+    ['/permissions', "You don't have access to this page"],
   ] as const)('offers no request action for the %s route denial state', async (path, copy) => {
     window.history.pushState({}, '', path)
     render(<App />)
@@ -162,6 +188,27 @@ describe('App route capability gates', () => {
 
     expect(await screen.findByText(pageText)).toBeVisible()
   })
+
+  it.each([
+    [['users.manage']],
+    [['employees.view', 'employees.edit']],
+    [['employees.view', 'departments.manage']],
+  ])('opens /permissions with %j', async (capabilities) => {
+    capabilityState.allowed = new Set(capabilities)
+    window.history.pushState({}, '', '/permissions')
+    render(<App />)
+    expect(await screen.findByText('permissions-page')).toBeVisible()
+  })
+
+  it.each(['employees.edit', 'departments.manage'])(
+    'denies /permissions for %s without employees.view, since the editor reads the tree',
+    async (capability) => {
+      capabilityState.allowed = new Set([capability])
+      window.history.pushState({}, '', '/permissions')
+      render(<App />)
+      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+    },
+  )
 
   it.each(['documents.generate', 'books.view'])(
     'denies /services when %s is the only granted capability',

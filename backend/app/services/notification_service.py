@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core import leave_lifecycle
-from app.db.models import Book, BookRecipient, Leave, User
+from app.db.models import Book, BookDepartmentSend, BookRecipient, Department, Leave, User
 from app.schemas.notifications import NotificationCounts
 from app.services import (
     book_send_service,
@@ -26,6 +26,11 @@ from app.services import (
     ledger_service,
     perm_service,
     scan_inbox_service,
+)
+from app.services.department_scope_service import (
+    DepartmentScope,
+    employee_fk_visible,
+    resolve_department_scope,
 )
 
 
@@ -43,6 +48,8 @@ class ActionableItem:
     attachments: int = 0  # attachment count, for the email body's "size" line
     confidential: bool = False
     requester_ar: str | None = None
+    department_name_en: str | None = None
+    department_name_ar: str | None = None
 
 
 def inbox_item(
@@ -50,8 +57,11 @@ def inbox_item(
     row: BookRecipient,
     sender_name: str | None,
     sender_name_ar: str | None = None,
+    *,
+    department_name_en: str | None = None,
+    department_name_ar: str | None = None,
 ) -> ActionableItem:
-    """Direct-send push item, with record details only for general records."""
+    """Inbox push item, with record details only for general records."""
     confidential = book.confidentiality != "general"
     return ActionableItem(
         kind="inbox",
@@ -62,6 +72,8 @@ def inbox_item(
         requester=None if confidential else sender_name,
         requester_ar=None if confidential else sender_name_ar,
         confidential=confidential,
+        department_name_en=department_name_en,
+        department_name_ar=department_name_ar,
     )
 
 
@@ -203,32 +215,59 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
                 )
             )
 
-    items.extend(
-        inbox_item(
-            book,
-            row,
-            sender_names.get(row.sent_by_user_id),
-            sender_names_ar.get(row.sent_by_user_id),
+    department_row_ids = [row.id for row, _ in received if row.department_send_id is not None]
+    department_names = {}
+    if department_row_ids:
+        # Initial head/deputy deliveries share the send's sender and timestamp.
+        # Current membership must not relabel a member's later hand-down.
+        department_names = {
+            recipient_id: (name_en, name_ar)
+            for recipient_id, name_en, name_ar in db.execute(
+                select(BookRecipient.id, Department.name_en, Department.name_ar)
+                .join(BookDepartmentSend, BookDepartmentSend.id == BookRecipient.department_send_id)
+                .join(Department, Department.id == BookDepartmentSend.department_id)
+                .where(
+                    BookRecipient.id.in_(department_row_ids),
+                    BookRecipient.sent_by_user_id == BookDepartmentSend.sent_by_user_id,
+                    BookRecipient.created_at == BookDepartmentSend.created_at,
+                )
+            )
+        }
+    for row, book in received:
+        department_name_en, department_name_ar = department_names.get(row.id, (None, None))
+        items.append(
+            inbox_item(
+                book,
+                row,
+                sender_names.get(row.sent_by_user_id),
+                sender_names_ar.get(row.sent_by_user_id),
+                department_name_en=department_name_en,
+                department_name_ar=department_name_ar,
+            )
         )
-        for row, book in received
-    )
 
     items.extend(_monthly_items(db, user))
     return items
 
 
-def _leaves_needing_action(db: Session, today_iso: str) -> int:
+def _leaves_needing_action(
+    db: Session, today_iso: str, scope: DepartmentScope | None = None
+) -> int:
     """Count live leaves where ``leave_lifecycle.needs_action`` holds.
 
     needs_action reads the end date only as "overdue or not", so rows are
     counted per (type, status, overdue) and one end date judges each group.
     """
     overdue = Leave.end_date < date.fromisoformat(today_iso)
-    groups = db.execute(
+    stmt = (
         select(Leave.leave_type, Leave.status, func.min(Leave.end_date), func.count())
         .where(Leave.deleted_at.is_(None))
         .group_by(Leave.leave_type, Leave.status, overdue)
-    ).all()
+    )
+    visibility = employee_fk_visible(scope, Leave.employee_id)
+    if visibility is not None:
+        stmt = stmt.where(visibility)
+    groups = db.execute(stmt).all()
     return sum(
         n
         for leave_type, status, end_date, n in groups
@@ -236,29 +275,15 @@ def _leaves_needing_action(db: Session, today_iso: str) -> int:
     )
 
 
-def leaves_needing_action(db: Session) -> int:
-    """Return the org-wide leave-action count.
-
-    Exposed so the scheduler can compute this ONCE per tick and share the
-    result across all per-user ``relevant_counts`` calls, avoiding repeated
-    full-table leave pages when there are many active users.
-    """
-    return _leaves_needing_action(db, datetime.now(UTC).date().isoformat())
-
-
 def relevant_counts(
     db: Session,
     user: User,
-    *,
-    precomputed_leaves: int | None = None,
 ) -> NotificationCounts:
     """Compute per-user notification counts from existing queries.
 
     - approvals: books whose current pending step is assigned to this user.
-    - leaves:    org-wide leave rows that need someone's action (pending requests,
-                 overdue awaiting-return). No per-user filter — leaves have no owner.
-                 Pass ``precomputed_leaves`` to reuse a value computed earlier in
-                 the same tick (avoids repeating the org-wide paging per user).
+    - leaves:    visible employee leave rows that need action (pending requests,
+                 overdue awaiting-return).
     - scans:     scan-inbox items owned by this user (awaiting_confirmation + unrouted).
     - emails:    unread incoming email in this user's mailbox.
     - inbox:     unread active direct sends on records this user can open.
@@ -275,11 +300,7 @@ def relevant_counts(
     approvals = book_service.awaiting_count(db, user_id=user.id, reviewer_only=not can_sign)
     scans = scan_inbox_service.counts(db, owner_user_id=user.id)["total"]
     emails = ledger_service.unread_email_count(db, owner_user_id=user.id)
-    leaves = (
-        precomputed_leaves
-        if precomputed_leaves is not None
-        else _leaves_needing_action(db, today_iso)
-    )
+    leaves = _leaves_needing_action(db, today_iso, resolve_department_scope(db, user))
     monthly = _monthly_items(db, user)
     return NotificationCounts(
         approvals=approvals,

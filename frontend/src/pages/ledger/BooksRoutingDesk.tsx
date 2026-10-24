@@ -13,7 +13,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { ConfidentialityMark } from '@/components/books/ConfidentialityChip'
 import { DocumentState } from '@/components/books/DocumentState'
 import { PurposeMark } from '@/components/books/PurposeMark'
-import { RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
+import { DepartmentInboxBadge, RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
 import { RecordThreadSection } from '@/components/books/RecordThreadSection'
 import { SendRecordDialog } from '@/components/books/SendRecordDialog'
 import { useInboxActions } from '@/components/books/useInboxActions'
@@ -31,6 +31,7 @@ import type { BookInboxRead, BookListResponse, BookRead, BookRecipientRead, Book
 import { useAuth } from '@/lib/authContext'
 import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { departmentName } from '@/lib/departments'
 import { formatDmy } from '@/lib/formatDmy'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { useIsMobile } from '@/lib/useIsMobile'
@@ -436,6 +437,7 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen
     >
       <span className="col-start-1 row-start-1 flex flex-col items-start gap-1 empty:hidden xl:col-start-1 xl:empty:block">
         {purpose && <PurposeMark purpose={purpose} />}
+        {inbox && <DepartmentInboxBadge inbox={inbox} />}
         {showScope && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><ScopeIcon scope={place} className="h-3.5 w-3.5" />{t(`ledger.booksDesk.${place}`)}</span>}
       </span>
       <span className="col-start-1 row-start-2 min-w-0 xl:col-start-3 xl:row-start-1">
@@ -595,6 +597,12 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
     { label: t('ledger.booksDesk.columns.createdBy'), value: <bdi>{pickEmployeeName({ name_en: book.created_by_name ?? '', name_ar: book.created_by_name_ar }, i18n.language)}</bdi> },
     { label: t('ledger.booksDesk.created'), value: <BookDate value={book.created_at} /> },
   ]
+  if (book.department_name_en || book.department_name_ar) {
+    facts.push({
+      label: t('books.record.department'),
+      value: <bdi>{departmentName({ name_en: book.department_name_en ?? '', name_ar: book.department_name_ar ?? '' }, i18n.language)}</bdi>,
+    })
+  }
   facts.push({ label: t('ledger.booksDesk.columns.papers'), value: <bdi dir="ltr" className="font-mono tabular-nums">{papers.length}</bdi> })
   const titleId = `book-title-${book.id}`
   return (
@@ -614,6 +622,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
       <header className="shrink-0 border-b border-hairline px-4 py-4 lg:px-6">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
           {inbox && <PurposeMark purpose={inbox.purpose} />}
+          {inbox && <DepartmentInboxBadge inbox={inbox} />}
           <bdi dir="ltr" className="font-mono text-xs tabular-nums text-muted-foreground">{book.ref_number}</bdi>
           <ConfidentialityMark level={book.confidentiality} />
         </div>
@@ -636,7 +645,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3 text-sm">
               {facts.map(({ label, value }) => <div key={label} className="contents"><dt className="text-muted-foreground">{label}</dt><dd className="min-w-0 break-words font-medium">{value}</dd></div>)}
             </dl>
-            {!loading && <div className="mt-6 space-y-6"><RecordRecipientsPanel bookId={book.id} /><RecordThreadSection book={book} /></div>}
+            {!loading && <div className="mt-6 space-y-6"><RecordRecipientsPanel bookId={book.id} departmentSends={book.department_sends} /><RecordThreadSection book={book} /></div>}
           </aside>
         )}
       </div>

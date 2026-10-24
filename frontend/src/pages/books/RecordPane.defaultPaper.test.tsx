@@ -8,7 +8,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import i18n from 'i18next'
+import ar from '@/locales/ar.json'
 
 import type { BookRead } from '@/lib/api'
 
@@ -111,6 +113,18 @@ const selected = async (): Promise<string | null> =>
   (await screen.findByTestId('viewer-pane')).getAttribute('data-selected')
 
 describe('RecordPane default paper', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it.each([['en', 'Department', 'Operations'], ['ar', 'القسم', 'العمليات']] as const)('shows the owning department in %s', async (language, label, name) => {
+    i18n.addResourceBundle('ar', 'translation', ar)
+    await i18n.changeLanguage(language)
+    renderPane(makeBook({ department_id: 3, department_name_en: 'Operations', department_name_ar: 'العمليات' }))
+    const department = await screen.findByText(name)
+    expect(department.parentElement).toHaveTextContent(label)
+  })
+
   beforeEach(() => {
     window.localStorage.clear()
   })

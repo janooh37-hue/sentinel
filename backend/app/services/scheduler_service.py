@@ -585,20 +585,31 @@ def _doc_push(
 def _inbox_push(
     new_items: list[notification_service.ActionableItem], section_url: str
 ) -> tuple[dict[str, tuple[str, str]], str]:
-    """Direct sends expose record details only for a single general record."""
+    """Inbox sends expose record details only for a single general record."""
     n = len(new_items)
     if n == 1:
         it = new_items[0]
+        department_en = it.department_name_en or it.department_name_ar
+        department_ar = it.department_name_ar
+        head_en = f"New record for {department_en}" if department_en else "New record sent to you"
+        if department_ar:
+            # The preposition ل contracts with the definite article: ل + القسم = للقسم.
+            to_department_ar = "ل" + (
+                department_ar[1:] if department_ar.startswith("ال") else department_ar
+            )
+        else:
+            to_department_ar = f"لـ{department_en}" if department_en else ""
+        head_ar = f"معاملة جديدة {to_department_ar}" if to_department_ar else "لديك معاملة جديدة"
         if it.confidential:
-            return _localized("New record sent to you", "لديك معاملة جديدة"), it.url
+            return _localized(head_en, head_ar), it.url
         subject = f" — {it.subject}" if it.subject else ""
         from_en = f"\nFrom {it.requester}" if it.requester else ""
         requester_ar = it.requester_ar or it.requester
         from_ar = f"\nمن {requester_ar}" if requester_ar else ""
         return (
             _localized(
-                f"New record sent to you · {it.label}{subject}{from_en}",
-                f"لديك معاملة جديدة · {it.label}{subject}{from_ar}",
+                f"{head_en} · {it.label}{subject}{from_en}",
+                f"{head_ar} · {it.label}{subject}{from_ar}",
             ),
             it.url,
         )

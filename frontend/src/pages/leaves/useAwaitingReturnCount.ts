@@ -8,10 +8,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
-export function useAwaitingReturnCount(enabled = true): number {
+export function useAwaitingReturnCount(enabled = true, departmentId?: number): number {
   const { data } = useQuery({
-    queryKey: ['leaves-list', 'awaiting-return-count'],
-    queryFn: api.getLeaveAwaitingReturnCount,
+    queryKey: ['leaves-list', 'awaiting-return-count', departmentId],
+    queryFn: () => api.getLeaveAwaitingReturnCount(departmentId),
     enabled,
     staleTime: 60_000,
   })

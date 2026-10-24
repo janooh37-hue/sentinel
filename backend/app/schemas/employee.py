@@ -107,6 +107,7 @@ class EmployeeCreate(BaseModel):
     transfer_site: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
     # Optional expected return; the daily job reactivates on this date.
     transfer_return_date: date | None = None
+    # Legacy label; the department itself is derived from the org tree.
     department: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
     position: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
     position_ar: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
@@ -146,6 +147,7 @@ class EmployeeUpdate(BaseModel):
     # non-working employee back to work or swaps Active <-> Loaned (defaults to
     # today). Never stored on the employee row; `end_date` still clears on reactivation.
     effective_date: date | None = None
+    # Legacy label; the department itself is derived from the org tree.
     department: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
     position: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
     position_ar: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
@@ -189,6 +191,9 @@ class EmployeeRead(ORMBase):
     # Expected return date of a temporary transfer; NULL = open-ended.
     transfer_return_date: date | None = None
     department: str | None
+    department_id: int | None = None
+    department_name_en: str | None = None
+    department_name_ar: str | None = None
     position: str | None
     position_ar: str | None
     other: str | None
@@ -222,6 +227,9 @@ class EmployeeLookupItem(ORMBase):
     name_en: str
     name_ar: str | None
     department: str | None = None
+    department_id: int | None = None
+    department_name_en: str | None = None
+    department_name_ar: str | None = None
     position: str | None = None
     position_ar: str | None = None
     duty_unit: str | None = None
@@ -251,6 +259,9 @@ class EmployeeListItem(ORMBase):
     name_ar: str | None
     status: EmployeeStatus
     department: str | None
+    department_id: int | None = None
+    department_name_en: str | None = None
+    department_name_ar: str | None = None
     position: str | None
     position_ar: str | None = None
     duty_unit: str | None = None

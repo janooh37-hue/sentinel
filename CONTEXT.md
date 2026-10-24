@@ -251,6 +251,42 @@ including self and assigned organization, department, duty-unit, or duty-post
 populations; request filters may only narrow it.
 _Avoid_: Capability, role, filter
 
+**Department**:
+A manager in the org tree (its head) plus everyone under them, with Arabic and
+English names. A department whose head sits inside another department's branch
+is its sub-department. Employees belong through supervisor links, overridden only
+by a Department exception; it is not the duty unit.
+_Avoid_: Duty unit, company (السرية), team
+
+**Department exception**:
+An administrator's manual placement of an employee, and their branch, in another
+department or outside all departments.
+_Avoid_: Assignment, membership
+
+**Department grant**:
+A user's deputy or viewer role in a Department, given by an administrator on top
+of the tree.
+_Avoid_: Membership, role (that is the account preset), scope
+
+**Department scope**:
+The rows a user may see in scoped areas: departments they head or deputize with
+every sub-department, departments they view, and their own supervisor-tree branch.
+Capabilities and Levels still apply inside it, and request filters may only
+narrow it. Because it follows the employee link, only an administrator may set
+that link while scoping is on (`LINK_REQUIRES_ADMIN`).
+_Avoid_: Workforce scope, filter, capability
+
+**Organization-wide view**:
+The `departments.all` capability, held by admins and granted per user, that
+places a user's Department scope over every department.
+_Avoid_: Admin, manager role
+
+**Department send**:
+A direct send addressed to a Department. It reaches the department's head and
+deputies, who hand it down to everyone, chosen members, or a sub-department;
+each hand-down is an ordinary direct send linked to it.
+_Avoid_: Broadcast, circular, announcement
+
 ### Correspondence and intake
 
 **Mailbox**:
@@ -327,6 +363,12 @@ the domain language above.
 | Send state | `Book.send_state` |
 | Level | `Book.confidentiality` |
 | Direct send | `BookRecipient` |
+| Department | `Department` / `departments` |
+| Department grant | `DepartmentMember` / `department_members` |
+| Department exception | `DepartmentException` / `department_exceptions` |
+| Department scope | `department_scope_service.DepartmentScope` |
+| Organization-wide view | `departments.all` |
+| Department send | `BookDepartmentSend` |
 | Threaded reply confirmation | `ScanInbox.source = "email_reply_match"` |
 | Attendance case | `AttendanceCase` |
 | Automatic verdict | `AttendanceEvaluation` |
