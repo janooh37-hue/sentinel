@@ -464,3 +464,98 @@ Visual check on the real preview data (304 employees), read-only with a temporar
 
 Known, not from this branch: the global top bar's text-size slider overlaps "Permits" at
 1366px.
+
+## Redesign T: account-first access (user approved 2026-10-24)
+
+**The user's point.** Access is managed for about 10 dev and 20 production *accounts*,
+not 304 employees. The page must start from accounts, show what each one sees and why,
+and let the admin adjust it. Nothing is hardcoded: levels come from reporting lines,
+titles come from the editable designation catalogue, and extras are per-account
+choices.
+
+**What the dev data shows.**
+
+- Saeed (Project Manager, top of الدوام الرسمي) has 4 Branch Managers under him, with
+  33, 14, 15 and 5 people.
+- The 5 companies and the Support Group are separate trees whose top person reports to
+  nobody. So the Project Manager sees 71 people, not the guards.
+- Linking each unit top to the responsible Branch Manager (6 reporting lines) produces
+  Project Manager → managers → supervisors → assistant supervisors → guards, with each
+  level seeing everything below it.
+
+### Backend (`dept-be`): `GET /api/v1/departments/account-access` (`departments.manage`)
+
+Returns `AccountAccessRead[]`, one per active, non-inmate-reporter account, ordered by
+display name:
+
+- `user_id`, `display_name`, `email`, `role`.
+- The linked employee: `employee_id: str | null`, `employee_name_en`, `employee_name_ar`,
+  `designation_en`, `designation_ar` (current, as on the org tree), `duty_unit`.
+- `reports_to_name_en`, `reports_to_name_ar`: the linked employee's supervisor, if any.
+- `sees: "organization" | "department" | "branch" | "self"`. Compute it **as if access
+  limits were on**, through a non-caching variant of `resolve_department_scope` with
+  `assume_enabled=True`, so the page explains the configured outcome even while limits
+  are off.
+- `organization_reason: "admin" | "all_departments" | null`.
+- `team_size`: working employees (Active, Loaned) below the linked employee in the
+  tree.
+- `visible_count`: working employees visible under that scope.
+- `departments: [{department_id, name_en, name_ar, role: "head" | "deputy" | "viewer" |
+  "member", sub_department_count}]`. Here `member` is the department the linked employee
+  is in.
+- `receives_department_records`: the department ids where the account is head or
+  deputy.
+
+Top level: wrap the list as
+`{limits_enabled: bool, accounts: [...], unattached_units: [{top_employee_id,
+name_en, name_ar, designation_en, duty_unit, team_size}]}`. `unattached_units` lists
+tree roots other than the single largest one: these are units whose people only admins
+and the people inside them can see.
+
+TDD: admin, `departments.all`, head, deputy, viewer, branch-only manager, plain
+operator, unlinked account, and `visible_count` with limits off vs on. Regenerate
+`api.types.ts` and commit it separately.
+
+### Frontend (`dept-ui`)
+
+**Organization & departments** gets four sub-sections; **Accounts** is the default:
+
+- **Accounts** (default)
+- **Departments** (the redesign S register and setup)
+- **Reporting lines**
+- **Placed by hand**
+
+**Accounts** shows:
+
+- A short dismissible teaching line: "Each account sees the people below it in the
+  reporting lines. Give an account more only when it needs it."
+- An insight card when `unattached_units` is non-empty: "N units report to nobody:
+  their people are visible only to admins and to people inside them", listing each
+  unit's top person with a "Set who they report to" action that opens Reporting lines
+  pre-filled for that person. This is how the user builds Project Manager → managers →
+  supervisors → … with no hardcoding.
+- A table on desktop and cards on phone. Each account shows:
+  - name, role, and the linked employee with designation;
+  - **Sees**, in plain words: "Everything (admin)", "Everything (All departments
+    permission)", "Saeed's team · 71 people", "Department: X (+2 sub-departments) · N
+    people", "Own work only";
+  - receives department Records yes/no;
+  - a **Why** expander: "Reports to …", "Head of …", "Deputy of …", "Extra access to …".
+- Actions per account, as labelled buttons:
+  - **Give more access…**, which offers:
+    - "Extra access to a department" (viewer) or "Deputy of a department". Pick an
+      existing department, or **choose a manager's team**, which opens the existing
+      create-department form pre-filled with that head; names stay editable and
+      nothing is auto-named silently;
+    - "Whole organization" (`departments.all` per-user override via
+      `PUT /auth/users/{id}/permissions`). Shown only with `users.manage`; otherwise a
+      hint to ask an admin.
+  - **Remove** for each extra grant.
+  - **Link to employee** for unlinked accounts (admin only, `PATCH
+    /auth/users/{id}/link`). Explain that unlinked accounts see only their own work.
+- Gating as in redesign S, plus `users.manage` for the whole-organization override and
+  admin for linking. Plain wording in English and Arabic as peers, logical CSS, phone
+  layout.
+- Tests: the Sees wording for each kind, the unattached-units card, the give-more-access
+  flows including create-from-manager, gating of the override and link actions, and the
+  Accounts default tab.
