@@ -45,12 +45,6 @@ function employeeName(account: AccountAccessRead, lang: string): string {
   return pickEmployeeName({ name_en: account.employee_name_en ?? account.display_name, name_ar: account.employee_name_ar }, lang)
 }
 
-/** The org tree's title rule: the profile position in the reader's language,
- *  else the roster designation in the reader's language. */
-function personTitle(item: { position: string | null; position_ar: string | null; designation_en: string | null; designation_ar: string | null }, lang: string): string | null {
-  return pickPosition(item, lang)?.trim() || (lang.startsWith('ar') && item.designation_ar ? item.designation_ar : item.designation_en)
-}
-
 /** "Sees", in plain words, for each kind of scope. */
 function seesText(account: AccountAccessRead, lang: string, t: TFunction): string {
   const people = t('orgDepartments.register.people', { count: account.visible_count })
@@ -230,7 +224,7 @@ export function Accounts({ go }: { go: (next: Partial<OrgRoute>) => void }): Rea
                   <span className="min-w-0 text-[0.88em]">
                     <bdi className="font-medium text-foreground">{name}</bdi>
                     <span className="text-muted-foreground">
-                      {[personTitle(unit, lang), unit.duty_unit]
+                      {[pickPosition(unit, lang), unit.duty_unit]
                         .filter(Boolean).map((value) => <span key={value}> · <bdi>{value}</bdi></span>)}
                       {' · '}{t('orgDepartments.team', { count: unit.team_with_manager })}
                     </span>
@@ -351,7 +345,7 @@ function OrganizationSource({ account, pending, onRemove }: {
 function AccountIdentity({ account }: { account: AccountAccessRead }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
-  const title = personTitle(account, lang)
+  const title = pickPosition(account, lang)
   return (
     <div className="min-w-0">
       {/* The block follows the page direction; only the name is isolated. */}

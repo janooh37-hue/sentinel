@@ -169,16 +169,16 @@ describe('Accounts', () => {
     expect(strip(unit.textContent!)).toContain('لينا · لقب الملف · First company · المدير وفريقه: 3 موظفين')
   })
 
-  it('titles accounts like the org tree: position when set, else the roster designation', async () => {
+  it('titles accounts like the org tree: position only, and no title without one', async () => {
     renderTab()
     expect(within(await rowOf('Huda Manager')).getByText('Operations lead')).toBeVisible()
-    expect(within(await rowOf('Saeed Lead')).getByText('Project Manager')).toBeVisible()
+    expect((await rowOf('Saeed Lead')).textContent).not.toContain('Project Manager')
 
     cleanup()
     await i18n.changeLanguage('ar')
     renderTab()
     expect(within(await rowOf('Huda Manager')).getByText('قائدة العمليات')).toBeVisible()
-    expect(within(await rowOf('Saeed Lead')).getByText('مدير المشروع')).toBeVisible()
+    expect((await rowOf('Saeed Lead')).textContent).not.toContain('مدير المشروع')
   })
 
   it('gives an account extra access to an existing department and removes it again', async () => {
