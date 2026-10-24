@@ -483,7 +483,11 @@ def account_access(db: Session) -> AccountAccessOverviewRead:
                         name_en=grant.name_en,
                         name_ar=grant.name_ar,
                         role=grant.role,
-                        sub_department_count=sub_department_count(grant.department_id),
+                        sub_department_count=(
+                            0
+                            if grant.role == "viewer"
+                            else sub_department_count(grant.department_id)
+                        ),
                     )
                     for grant in grants
                 ],
@@ -500,7 +504,7 @@ def account_access(db: Session) -> AccountAccessOverviewRead:
         (
             (below(employee.id), employee, designation)
             for employee, designation in employees.values()
-            if employee.supervisor_id not in employees and employee.status in WORKING_STATUSES
+            if employee.supervisor_id not in employees
         ),
         key=lambda item: (-item[0], item[1].id),
     )

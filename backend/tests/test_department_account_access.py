@@ -38,14 +38,14 @@ def org(api_db):
     employee(db, "G2", "S", status="Resigned")
     employee(db, "U", name_en="Unit Top")
     employee(db, "U1", "U")
-    employee(db, "U2", "U")
+    employee(db, "U2", "U", status="Loaned")
     employee(db, "LONE")
     branch = department(db, "Branch", "M")
     section = department(db, "Section", "S")
     users = {
         "admin": account(db, "admin", role="admin"),
-        "allops": account(db, "allops"),
-        "head": account(db, "head", "M"),
+        "allops": account(db, "allops", "U"),
+        "head": account(db, "head", "M", display_name="head"),
         "deputy": account(db, "deputy"),
         "viewer": account(db, "viewer"),
         "manager": account(db, "manager", "P"),
@@ -92,7 +92,12 @@ def test_each_account_kind_explains_what_it_sees(org):
         working_total,
     )
     allops = rows["allops"]
-    assert (allops.sees, allops.organization_reason) == ("organization", "all_departments")
+    assert (allops.sees, allops.organization_reason, allops.team_size, allops.visible_count) == (
+        "organization",
+        "all_departments",
+        2,
+        working_total,
+    )
 
     head = rows["head"]
     assert (head.sees, head.organization_reason, head.team_size, head.visible_count) == (
@@ -113,6 +118,9 @@ def test_each_account_kind_explains_what_it_sees(org):
         3,
         [branch.id],
     )
+    assert [(d.department_id, d.role, d.sub_department_count) for d in deputy.departments] == [
+        (branch.id, "deputy", 1)
+    ]
     viewer = rows["viewer"]
     assert (viewer.sees, viewer.visible_count, viewer.receives_department_records) == (
         "department",
@@ -144,6 +152,88 @@ def test_unattached_units_skip_the_largest_root_and_lone_people(org):
     assert [(u.top_employee_id, u.name_en, u.team_size) for u in overview.unattached_units] == [
         ("U", "Unit Top", 2)
     ]
+
+
+def test_unattached_unit_keeps_non_working_root_with_working_reports(api_db):
+    db = api_db
+    employee(db, "P")
+    employee(db, "P1", "P")
+    employee(db, "P2", "P")
+    employee(db, "U", status="Resigned")
+    employee(db, "U1", "U")
+    db.commit()
+
+    overview = department_service.account_access(db)
+
+    assert [(u.top_employee_id, u.team_size) for u in overview.unattached_units] == [("U", 1)]
+
+
+def test_viewer_does_not_include_sub_departments_in_access_summary(org):
+    db, users, branch, section = org
+    grant(db, branch.id, users["viewer"], "viewer")
+
+    _overview, rows = by_user(db)
+
+    assert {
+        (d.department_id, d.role, d.sub_department_count) for d in rows["viewer"].departments
+    } == {(branch.id, "viewer", 0), (section.id, "viewer", 0)}
+
+
+def test_account_access_terminates_on_supervisor_cycle(api_db):
+    db = api_db
+    root = employee(db, "A")
+    employee(db, "B", "A")
+    employee(db, "C", "A")
+    root.supervisor_id = "C"
+    account(db, "cycle", "A")
+
+    overview, rows = by_user(db)
+
+    assert (rows["cycle"].sees, rows["cycle"].team_size, rows["cycle"].visible_count) == (
+        "branch",
+        2,
+        3,
+    )
+    assert overview.unattached_units == []
+
+
+def test_inactive_department_deputy_does_not_receive_department_records(org):
+    db, users, branch, _section = org
+    inactive = department(db, "Inactive", "U", active=False)
+    grant(db, inactive.id, users["deputy"], "deputy")
+
+    _overview, rows = by_user(db)
+    deputy = rows["deputy"]
+
+    assert (inactive.id, "deputy") in [(d.department_id, d.role) for d in deputy.departments]
+    assert deputy.receives_department_records == [branch.id]
+
+
+@pytest.mark.parametrize("roots", [("A", "Z"), ("Z", "A")])
+def test_equal_size_roots_exclude_lowest_employee_id_regardless_of_insert_order(api_db, roots):
+    db = api_db
+    for root in roots:
+        employee(db, root)
+        employee(db, f"{root}1", root)
+    db.commit()
+
+    overview = department_service.account_access(db)
+
+    assert [(u.top_employee_id, u.team_size) for u in overview.unattached_units] == [("Z", 1)]
+
+
+@pytest.mark.parametrize(
+    ("employee_id", "expected_name"),
+    [("E", "Employee fallback"), (None, "fallback@access.test")],
+)
+def test_display_name_falls_back_to_employee_name_then_email(api_db, employee_id, expected_name):
+    db = api_db
+    employee(db, "E", name_en="Employee fallback")
+    account(db, "fallback", employee_id, display_name=None)
+
+    _overview, rows = by_user(db)
+
+    assert rows["fallback"].display_name == expected_name
 
 
 def test_visible_count_is_the_configured_outcome_with_limits_off_or_on(org):

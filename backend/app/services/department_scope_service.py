@@ -97,7 +97,7 @@ def resolve_department_scope(
     return scope
 
 
-def has_organization_capability(
+def _has_organization_capability(
     db: Session, user: User, capabilities: set[str] | None = None
 ) -> bool:
     return (
@@ -113,7 +113,7 @@ def _compute_scope(
     organization = (
         not enabled
         or user.role == ADMIN_ROLE
-        or has_organization_capability(db, user, capabilities)
+        or _has_organization_capability(db, user, capabilities)
     )
     if organization:
         return DepartmentScope(True, frozenset(), frozenset(), "organization")
