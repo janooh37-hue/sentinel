@@ -14,14 +14,16 @@
  * session scope.
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { GitBranch, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { Accounts } from './Accounts'
+import { LeaveGuardContext, NO_PENDING_WORK, type LeaveState } from './leaveGuard'
 import { DepartmentPage } from './DepartmentPage'
 import { DepartmentRegister } from './DepartmentRegister'
 import { DepartmentSetup } from './DepartmentSetup'
@@ -71,12 +73,24 @@ export function OrgDepartmentsTab(): React.JSX.Element {
   // everything else derives organization-wide numbers and needs the whole tree.
   const derived = view !== 'reporting'
 
+  // Guided setup reports unsaved choices and running batches; switching
+  // sections asks first, and waits while a batch runs.
+  const [leave, setLeave] = useState<LeaveState>(NO_PENDING_WORK)
+  const [pendingSection, setPendingSection] = useState<Section | null>(null)
+  function openSection(next: Section): void {
+    if (leave.busy) return
+    if (leave.unsaved > 0) setPendingSection(next)
+    else go({ view: ENTRY[next] })
+  }
+
   return (
     <div ref={topRef} className="min-w-0 scroll-mt-4 space-y-5">
       {sections.length > 1 && (
-        <Tabs value={section} onValueChange={(next) => go({ view: ENTRY[next as Section] })}>
+        <Tabs value={section} onValueChange={(next) => openSection(next as Section)}>
           <TabsList aria-label={t('orgDepartments.sections.label')} className="overflow-x-auto [scrollbar-width:none]">
-            {sections.map((item) => <TabsTrigger key={item} value={item}>{t(`orgDepartments.sections.${item}`)}</TabsTrigger>)}
+            {sections.map((item) => (
+              <TabsTrigger key={item} value={item} disabled={leave.busy} className="disabled:opacity-50">{t(`orgDepartments.sections.${item}`)}</TabsTrigger>
+            ))}
           </TabsList>
         </Tabs>
       )}
@@ -99,15 +113,25 @@ export function OrgDepartmentsTab(): React.JSX.Element {
         )
       ) : (
         <div role={sections.length > 1 ? 'tabpanel' : undefined}>
-          {view === 'accounts' && <Accounts go={go} />}
-          {view === 'register' && <DepartmentRegister go={go} />}
-          {view === 'department' && <DepartmentPage route={route} go={go} />}
-          {view === 'setup' && <DepartmentSetup step={route.step} go={go} />}
-          {view === 'reporting' && <ReportingLines key={route.employeeId ?? ''} initialEmployeeId={route.employeeId} />}
-          {view === 'placements' && <Placements />}
-          {view === 'outside' && <OutsideDepartments go={go} />}
+          <LeaveGuardContext.Provider value={setLeave}>
+            {view === 'accounts' && <Accounts go={go} />}
+            {view === 'register' && <DepartmentRegister go={go} />}
+            {view === 'department' && <DepartmentPage route={route} go={go} />}
+            {view === 'setup' && <DepartmentSetup step={route.step} go={go} />}
+            {view === 'reporting' && <ReportingLines key={route.employeeId ?? ''} initialEmployeeId={route.employeeId} />}
+            {view === 'placements' && <Placements />}
+            {view === 'outside' && <OutsideDepartments go={go} />}
+          </LeaveGuardContext.Provider>
         </div>
       )}
+      <ConfirmDialog
+        open={pendingSection !== null}
+        onOpenChange={(open) => { if (!open) setPendingSection(null) }}
+        title={t('orgDepartments.setup.leaveTitle')}
+        description={t('orgDepartments.setup.leaveHint', { count: leave.unsaved })}
+        confirmLabel={t('orgDepartments.setup.leave')}
+        onConfirm={() => { if (pendingSection) go({ view: ENTRY[pendingSection] }) }}
+      />
     </div>
   )
 }

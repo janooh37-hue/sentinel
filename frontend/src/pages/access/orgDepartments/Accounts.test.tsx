@@ -77,6 +77,11 @@ const ACCOUNTS: AccountAccessRead[] = [
     employee_id: 'G4', employee_name_en: 'Viewer Vera', sees: 'department', visible_count: 3,
     departments: [{ department_id: 7, name_en: 'Operations', name_ar: 'العمليات', role: 'viewer', sub_department_count: 0 }],
   }),
+  account(8, 'Hana Head', {
+    employee_id: 'G1', employee_name_en: 'Mona Chief', sees: 'department', visible_count: 3,
+    departments: [{ department_id: 7, name_en: 'Operations', name_ar: 'العمليات', role: 'head', sub_department_count: 0 }],
+  }),
+  account(9, 'Rami Role', { role: 'manager', sees: 'organization', organization_reason: 'all_departments', visible_count: 5 }),
 ]
 
 function renderTab(path = '/permissions?tab=org'): void {
@@ -108,6 +113,11 @@ beforeEach(async () => {
     accounts: ACCOUNTS,
     unattached_units: [{ top_employee_id: 'G3', name_en: 'Lina Orphan', name_ar: null, designation_en: 'Commander', duty_unit: 'First company', team_size: 2 }],
   })
+  vi.spyOn(api, 'getUserPermissions').mockImplementation(async (id: number) => ({
+    user_id: id, role: id === 9 ? 'manager' : 'operator', is_admin: false, effective: ['departments.all'],
+    role_defaults: id === 9 ? ['departments.all'] : [],
+    overrides: id === 2 ? { 'departments.all': 'grant' } : {},
+  }))
 })
 
 afterEach(() => {
@@ -159,14 +169,14 @@ describe('Accounts', () => {
     expect(setPeople).toHaveBeenLastCalledWith(7, { deputy_user_ids: [], viewer_user_ids: [] })
   })
 
-  it("makes an account deputy of a new department created from a manager's team", async () => {
+  it("returns to Give access after creating a department from a manager's team, and grants only on confirmation", async () => {
     const created: DepartmentRead = { ...OPERATIONS, id: 9, name_en: 'Field team', head_employee_id: 'G5', viewers: [] }
     const create = vi.spyOn(api.departments, 'create').mockResolvedValue(created)
     const setPeople = vi.spyOn(api.departments, 'setPeople').mockResolvedValue(created)
     renderTab()
 
     await userEvent.click(within(await rowOf('Omar Clerk')).getByRole('button', { name: 'Give more access…' }))
-    const dialog = await screen.findByRole('dialog')
+    let dialog = await screen.findByRole('dialog')
     await userEvent.click(within(dialog).getByRole('radio', { name: /Deputy of a department/ }))
     await userEvent.click(within(dialog).getByRole('button', { name: "Choose a manager's team" }))
     await userEvent.type(within(dialog).getByLabelText('Whose team?'), 'Huda')
@@ -174,13 +184,31 @@ describe('Accounts', () => {
 
     const add = await screen.findByRole('dialog', { name: 'Add department' })
     expect(within(add).getByText(iso('Head: Huda Manager'))).toBeVisible()
+    expect(within(add).getByText(iso('After creating it, you choose what Omar Clerk gets in this department.'))).toBeVisible()
     expect(within(add).getByLabelText('English name')).toHaveValue('')
     await userEvent.type(within(add).getByLabelText('English name'), 'Field team')
     await userEvent.type(within(add).getByLabelText('Arabic name'), 'الفريق الميداني')
     await userEvent.click(within(add).getByRole('button', { name: 'Create department' }))
-
     expect(create).toHaveBeenCalledWith({ name_en: 'Field team', name_ar: 'الفريق الميداني', head_employee_id: 'G5' })
-    await vi.waitFor(() => expect(setPeople).toHaveBeenCalledWith(9, { deputy_user_ids: [5], viewer_user_ids: [] }))
+
+    dialog = await screen.findByRole('dialog', { name: iso('Give more access: Omar Clerk') })
+    expect(within(dialog).getByRole('combobox', { name: 'Department' })).toHaveValue('9')
+    expect(within(dialog).getByRole('radio', { name: /Deputy of a department/ })).toBeChecked()
+    expect(setPeople).not.toHaveBeenCalled()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Give access' }))
+    expect(setPeople).toHaveBeenCalledWith(9, { deputy_user_ids: [5], viewer_user_ids: [] })
+  })
+
+  it('starts Give access with no role chosen and leaves out departments the account heads', async () => {
+    renderTab()
+
+    await userEvent.click(within(await rowOf('Hana Head')).getByRole('button', { name: 'Give more access…' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryAllByRole('radio', { checked: true })).toHaveLength(0)
+    expect(within(dialog).getByRole('button', { name: 'Give access' })).toBeDisabled()
+    await userEvent.click(within(dialog).getByRole('radio', { name: /Extra access to a department/ }))
+    const options = within(within(dialog).getByRole('combobox', { name: 'Department' })).getAllByRole('option').map((option) => option.getAttribute('value'))
+    expect(options).not.toContain('7')
   })
 
   it('offers whole-organization access only with users.manage, and linking only to admins', async () => {
@@ -203,6 +231,21 @@ describe('Accounts', () => {
     expect(grant).toHaveBeenCalledWith(5, 'departments.all', 'grant')
   })
 
+  it('says where whole-organization access comes from and removes it truthfully', async () => {
+    const set = vi.spyOn(api, 'setUserPermission').mockResolvedValue({} as never)
+    renderTab()
+
+    const given = await rowOf('Aisha Wide')
+    expect(await within(given).findByText('Given to this account')).toBeVisible()
+    await userEvent.click(within(given).getByRole('button', { name: 'Remove whole-organization access' }))
+    expect(set).toHaveBeenLastCalledWith(2, 'departments.all', null)
+
+    const fromRole = await rowOf('Rami Role')
+    expect(await within(fromRole).findByText(iso('From the Manager role'))).toBeVisible()
+    await userEvent.click(within(fromRole).getByRole('button', { name: 'Turn off whole-organization access for this account' }))
+    expect(set).toHaveBeenLastCalledWith(9, 'departments.all', 'deny')
+  })
+
   it('hides the override and linking from a department manager who is not an admin', async () => {
     session.allowed = new Set(['employees.view', 'departments.manage'])
     session.role = 'manager'
@@ -210,9 +253,48 @@ describe('Accounts', () => {
 
     expect(within(await rowOf('Nadia Unlinked')).queryByRole('button', { name: 'Link to employee…' })).not.toBeInTheDocument()
     expect(within(await rowOf('Nadia Unlinked')).getByText(/only their own work/)).toBeVisible()
+    expect(within(await rowOf('Aisha Wide')).queryByRole('button', { name: /whole-organization access/ })).not.toBeInTheDocument()
+    expect(api.getUserPermissions).not.toHaveBeenCalled()
     await userEvent.click(within(await rowOf('Omar Clerk')).getByRole('button', { name: 'Give more access…' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).queryByRole('radio', { name: /Whole organization/ })).not.toBeInTheDocument()
     expect(within(dialog).getByText('Whole-organization access needs an administrator. Ask one to give this account the All departments permission.')).toBeVisible()
+  })
+
+  it('offers to set who a unit reports to only with employees.edit', async () => {
+    session.allowed = new Set(['employees.view', 'departments.manage'])
+    renderTab()
+
+    expect(await screen.findByText(/1 unit reports to nobody/)).toBeVisible()
+    expect(screen.queryByRole('button', { name: iso('Set who Lina Orphan reports to') })).not.toBeInTheDocument()
+    expect(screen.getByText('Changing reporting lines needs the Edit employees permission.')).toBeVisible()
+  })
+
+  it('states a missing employee link, and claims own work only when that is what the account sees', async () => {
+    renderTab()
+
+    const admin = await rowOf('Admin Amal')
+    expect(within(admin).getByText('Not linked to an employee')).toBeVisible()
+    expect(within(admin).queryByText(/only their own work/)).not.toBeInTheDocument()
+    expect(within(await rowOf('Nadia Unlinked')).getByText('Not linked to an employee: this account sees only their own work.')).toBeVisible()
+  })
+
+  it('asks before section tabs discard setup choices, and locks them while a batch runs', async () => {
+    // A create that never settles keeps the batch running (lib is pre-ES2024: no withResolvers).
+    vi.spyOn(api.departments, 'create').mockReturnValue(new Promise<DepartmentRead>(() => {}))
+    renderTab('/permissions?tab=org&view=setup&step=1')
+
+    await userEvent.type(await screen.findByLabelText('Find another manager'), 'Huda')
+    await userEvent.click(screen.getByRole('button', { name: /Huda Manager/ }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Accounts' }))
+    const confirm = await screen.findByRole('dialog', { name: 'Leave setup?' })
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('tab', { name: 'Departments' })).toHaveAttribute('aria-selected', 'true')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Review 1 selection' }))
+    await userEvent.type(await screen.findByLabelText('English name'), 'Field team')
+    await userEvent.type(screen.getByLabelText('Arabic name'), 'الفريق الميداني')
+    await userEvent.click(screen.getByRole('button', { name: 'Create 1 department' }))
+    await vi.waitFor(() => expect(screen.getByRole('tab', { name: 'Accounts' })).toBeDisabled())
   })
 })

@@ -47,8 +47,10 @@ function useHeadLabels() {
 
 // ── Add one department ─────────────────────────────────────────────────────
 
-export function AddDepartmentDialog({ initialHeadId, onClose, onCreated }: {
+export function AddDepartmentDialog({ initialHeadId, note, onClose, onCreated }: {
   initialHeadId?: string
+  /** What happens after creation, e.g. the account waiting for a grant here. */
+  note?: React.ReactNode
   onClose: () => void
   onCreated?: (department: DepartmentRead) => void
 }): React.JSX.Element {
@@ -99,6 +101,7 @@ export function AddDepartmentDialog({ initialHeadId, onClose, onCreated }: {
         <form onSubmit={form.handleSubmit((values) => create.mutate(values))} noValidate className="flex min-h-0 flex-col">
           <div className="min-h-0 space-y-4 overflow-y-auto px-4 py-4">
             <LiveEditsNotice show={limitsOn} />
+            {note ? <p className="rounded-xl bg-surface-tinted/60 px-3.5 py-2.5 text-[0.86em] text-foreground">{note}</p> : null}
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <p className="text-[0.9em] text-foreground">
                 {t('orgDepartments.add.headIs', { name: bidi(pickEmployeeName(head, lang)) })}

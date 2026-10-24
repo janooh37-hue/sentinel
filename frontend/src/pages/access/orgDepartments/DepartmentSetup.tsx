@@ -4,7 +4,7 @@
  * choices in steps 1–2 live here until "Create selected departments".
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -38,6 +38,7 @@ import {
 import { PersonSearch } from './PersonSearch'
 import { BackLink, LABEL, LINK_BUTTON, LiveEditsNotice, PANEL, QueryFailure, ViewHeading } from './ui'
 import { useOrgData, type OrgRoute, type SetupStep } from './useOrgData'
+import { LeaveGuardContext, NO_PENDING_WORK } from './leaveGuard'
 
 const STEPS: readonly SetupStep[] = [1, 2, 3, 4]
 const SETUP_BATCH = ['department-setup-batch']
@@ -53,6 +54,11 @@ export function DepartmentSetup({ step, go }: { step: SetupStep; go: (next: Part
   // A batch create or service save reports per department; leaving mid-run
   // would drop those outcomes, so navigation waits for it.
   const busy = useIsMutating({ mutationKey: SETUP_BATCH }) > 0
+  const reportLeave = useContext(LeaveGuardContext)
+  useEffect(() => {
+    reportLeave({ busy, unsaved: selected.length })
+  }, [busy, reportLeave, selected.length])
+  useEffect(() => () => reportLeave(NO_PENDING_WORK), [reportLeave])
 
   return (
     <div className="space-y-5 pb-24 md:pb-0">

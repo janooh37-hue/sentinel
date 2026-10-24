@@ -7,7 +7,7 @@
  */
 
 import { useId, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ChevronDown, Info, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -15,7 +15,7 @@ import type { TFunction } from 'i18next'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, type AccountAccessRead, type DepartmentRead, type OrgNodeRead } from '@/lib/api'
+import { api, type AccountAccessRead, type DepartmentRead, type OrgNodeRead, type PermissionEffect } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { bidi } from '@/lib/bidi'
 import { departmentErrorMessage, departmentName, invalidateDepartmentData, orderDepartments } from '@/lib/departments'
@@ -29,8 +29,17 @@ import { INPUT, LABEL, LINK_BUTTON, PANEL, QueryFailure, Sheet, SheetFooter, Vie
 import { useOrgData, type OrgRoute } from './useOrgData'
 
 type Grant = 'deputy' | 'viewer'
+type Choice = Grant | 'organization'
 
 const HINT_KEY = 'orgDepartments.accountsHintDismissed'
+const ORGANIZATION_CAPABILITY = 'departments.all'
+
+/** Grants, links and overrides change the account's departments, services and
+ *  effective permissions, wherever those are shown. */
+function refreshAccount(qc: QueryClient, userId: number): void {
+  invalidateDepartmentData(qc)
+  void qc.invalidateQueries({ queryKey: ['user-permissions', userId] })
+}
 
 function employeeName(account: AccountAccessRead, lang: string): string {
   return pickEmployeeName({ name_en: account.employee_name_en ?? account.display_name, name_ar: account.employee_name_ar }, lang)
@@ -93,6 +102,14 @@ function peopleWith(department: DepartmentRead, userId: number, role: Grant | nu
   return { deputy_user_ids: deputies, viewer_user_ids: viewers }
 }
 
+interface Giving {
+  account: AccountAccessRead
+  departmentId?: number
+  choice?: Choice | null
+  /** A department just created for this grant, before the list refetches. */
+  created?: DepartmentRead
+}
+
 export function Accounts({ go }: { go: (next: Partial<OrgRoute>) => void }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
@@ -101,27 +118,28 @@ export function Accounts({ go }: { go: (next: Partial<OrgRoute>) => void }): Rea
   const { has } = useCapabilities()
   const canOverride = has('users.manage')
   const isAdmin = user?.role === 'admin'
-  const { departmentsById, index } = useOrgData()
+  const { canRelink, departmentsById, index } = useOrgData()
   const overview = useQuery({ queryKey: ['departments', 'account-access'], queryFn: api.departments.accountAccess })
   const [hintHidden, setHintHidden] = useState(() => window.localStorage.getItem(HINT_KEY) === '1')
-  const [giving, setGiving] = useState<AccountAccessRead | null>(null)
+  const [giving, setGiving] = useState<Giving | null>(null)
   const [linking, setLinking] = useState<AccountAccessRead | null>(null)
-  const [creating, setCreating] = useState<{ account: AccountAccessRead; headId: string; role: Grant } | null>(null)
+  const [creating, setCreating] = useState<{ account: AccountAccessRead; headId: string; choice: Choice | null } | null>(null)
 
   const setPeople = useMutation({
     mutationFn: ({ department, userId, role }: { department: DepartmentRead; userId: number; role: Grant | null }) =>
       api.departments.setPeople(department.id, peopleWith(department, userId, role)),
     onSuccess: (_result, variables) => {
-      invalidateDepartmentData(qc)
+      refreshAccount(qc, variables.userId)
       toast.success(t(variables.role ? 'orgDepartments.accounts.granted' : 'orgDepartments.accounts.removed'))
     },
     onError: (error) => toast.error(departmentErrorMessage(error, t)),
   })
   const setOrganization = useMutation({
-    mutationFn: ({ userId, grant }: { userId: number; grant: boolean }) => api.setUserPermission(userId, 'departments.all', grant ? 'grant' : null),
+    mutationFn: ({ userId, effect }: { userId: number; effect: PermissionEffect | null }) =>
+      api.setUserPermission(userId, ORGANIZATION_CAPABILITY, effect),
     onSuccess: (_result, variables) => {
-      invalidateDepartmentData(qc)
-      toast.success(t(variables.grant ? 'orgDepartments.accounts.granted' : 'orgDepartments.accounts.removed'))
+      refreshAccount(qc, variables.userId)
+      toast.success(t(variables.effect === 'grant' ? 'orgDepartments.accounts.granted' : 'orgDepartments.accounts.removed'))
     },
     onError: (error) => toast.error(departmentErrorMessage(error, t)),
   })
@@ -136,7 +154,7 @@ export function Accounts({ go }: { go: (next: Partial<OrgRoute>) => void }): Rea
     return (
       <div className="flex flex-wrap gap-x-2 gap-y-1">
         {account.organization_reason !== 'admin' && (
-          <Button variant="outline" size="sm" className="min-h-10" onClick={() => setGiving(account)}>{t('orgDepartments.accounts.giveMore')}</Button>
+          <Button variant="outline" size="sm" className="min-h-10" onClick={() => setGiving({ account })}>{t('orgDepartments.accounts.giveMore')}</Button>
         )}
         {!account.employee_id && isAdmin && (
           <Button variant="outline" size="sm" className="min-h-10" onClick={() => setLinking(account)}>{t('orgDepartments.accounts.link')}</Button>
@@ -158,15 +176,11 @@ export function Accounts({ go }: { go: (next: Partial<OrgRoute>) => void }): Rea
           )
         })}
         {account.organization_reason === 'all_departments' && canOverride && (
-          <button
-            type="button"
-            className={cn(LINK_BUTTON, 'text-accent')}
-            disabled={setOrganization.isPending}
-            onClick={() => setOrganization.mutate({ userId: account.user_id, grant: false })}
-          >
-            <X className="h-3.5 w-3.5" aria-hidden />
-            {t('orgDepartments.accounts.removeOrganization')}
-          </button>
+          <OrganizationSource
+            account={account}
+            pending={setOrganization.isPending}
+            onRemove={(effect) => setOrganization.mutate({ userId: account.user_id, effect })}
+          />
         )}
       </div>
     )
@@ -203,24 +217,29 @@ export function Accounts({ go }: { go: (next: Partial<OrgRoute>) => void }): Rea
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
             {t('orgDepartments.accounts.unattached', { count: units.length })}
           </h3>
-          <p className="max-w-[72ch] text-[0.84em] text-muted-foreground">{t('orgDepartments.accounts.unattachedHint')}</p>
+          <p className="max-w-[72ch] text-[0.84em] text-muted-foreground">
+            {t(canRelink ? 'orgDepartments.accounts.unattachedHint' : 'orgDepartments.accounts.reportingNeedsEdit')}
+          </p>
           <ul className="divide-y divide-hairline">
             {units.map((unit) => {
               const name = pickEmployeeName({ name_en: unit.name_en, name_ar: unit.name_ar }, lang)
+              const top = index.byId.get(unit.top_employee_id)
               return (
                 <li key={unit.top_employee_id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
                   <span className="min-w-0 text-[0.88em]">
                     <bdi className="font-medium text-foreground">{name}</bdi>
                     <span className="text-muted-foreground">
                       {/* Title in the reader's language from the tree; the unit row carries English only. */}
-                      {[index.byId.get(unit.top_employee_id) ? personPosition(index.byId.get(unit.top_employee_id)!, lang) : unit.designation_en, unit.duty_unit]
+                      {[top ? personPosition(top, lang) : unit.designation_en, unit.duty_unit]
                         .filter(Boolean).map((value) => <span key={value}> · <bdi>{value}</bdi></span>)}
                       {' · '}{t('orgDepartments.register.people', { count: unit.team_size })}
                     </span>
                   </span>
-                  <button type="button" className={LINK_BUTTON} onClick={() => go({ view: 'reporting', employeeId: unit.top_employee_id })}>
-                    {t('orgDepartments.accounts.setReportsTo', { name: bidi(name) })}
-                  </button>
+                  {canRelink && (
+                    <button type="button" className={LINK_BUTTON} onClick={() => go({ view: 'reporting', employeeId: unit.top_employee_id })}>
+                      {t('orgDepartments.accounts.setReportsTo', { name: bidi(name) })}
+                    </button>
+                  )}
                 </li>
               )
             })}
@@ -263,23 +282,69 @@ export function Accounts({ go }: { go: (next: Partial<OrgRoute>) => void }): Rea
 
       {giving && (
         <GiveAccessDialog
-          account={giving}
+          key={`${giving.account.user_id}:${giving.departmentId ?? ''}`}
+          giving={giving}
           canOverride={canOverride}
           onClose={() => setGiving(null)}
-          onGrant={(department, role) => setPeople.mutate({ department, userId: giving.user_id, role })}
-          onOrganization={() => setOrganization.mutate({ userId: giving.user_id, grant: true })}
-          onCreateFrom={(headId, role) => setCreating({ account: giving, headId, role })}
+          onGrant={(department, role) => setPeople.mutate({ department, userId: giving.account.user_id, role })}
+          onOrganization={() => setOrganization.mutate({ userId: giving.account.user_id, effect: 'grant' })}
+          onCreateFrom={(headId, choice) => {
+            setGiving(null)
+            setCreating({ account: giving.account, headId, choice })
+          }}
         />
       )}
       {creating && (
         <AddDepartmentDialog
           initialHeadId={creating.headId}
-          onClose={() => setCreating(null)}
-          onCreated={(department) => setPeople.mutate({ department, userId: creating.account.user_id, role: creating.role })}
+          note={t('orgDepartments.accounts.createNote', { name: bidi(creating.account.display_name) })}
+          // Cancelling goes back to Give access; creating returns there with the
+          // new department chosen, and nothing is granted until confirmed.
+          onClose={() => {
+            setCreating(null)
+            setGiving({ account: creating.account, choice: creating.choice })
+          }}
+          onCreated={(department) => setGiving({ account: creating.account, choice: creating.choice, departmentId: department.id, created: department })}
         />
       )}
       {linking && <LinkEmployeeDialog account={linking} onClose={() => setLinking(null)} />}
     </div>
+  )
+}
+
+/** Where whole-organization access comes from, and the removal that actually ends it. */
+function OrganizationSource({ account, pending, onRemove }: {
+  account: AccountAccessRead
+  pending: boolean
+  onRemove: (effect: PermissionEffect | null) => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const permissions = useQuery({
+    queryKey: ['user-permissions', account.user_id],
+    queryFn: () => api.getUserPermissions(account.user_id),
+  })
+  if (permissions.isPending) return <span className="text-[0.84em] text-muted-foreground">{t('common.loading')}</span>
+  if (permissions.isError) return <QueryFailure error={permissions.error} retry={() => void permissions.refetch()} className="text-[0.84em]" />
+  // A role default can only be switched off with an explicit deny; an account
+  // override is cleared, which returns to a role that does not grant it.
+  const fromRole = permissions.data.role_defaults.includes(ORGANIZATION_CAPABILITY)
+  return (
+    <span className="flex basis-full flex-col items-start">
+      <span className="text-[0.84em] text-muted-foreground">
+        {fromRole
+          ? t('orgDepartments.accounts.organizationFromRole', { role: bidi(t(`access.roleName.${permissions.data.role}`, { defaultValue: permissions.data.role })) })
+          : t('orgDepartments.accounts.organizationGiven')}
+      </span>
+      <button
+        type="button"
+        className={cn(LINK_BUTTON, '-ms-2 text-accent')}
+        disabled={pending}
+        onClick={() => onRemove(fromRole ? 'deny' : null)}
+      >
+        <X className="h-3.5 w-3.5" aria-hidden />
+        {t(fromRole ? 'orgDepartments.accounts.turnOffOrganization' : 'orgDepartments.accounts.removeOrganization')}
+      </button>
+    </span>
   )
 }
 
@@ -297,8 +362,10 @@ function AccountIdentity({ account }: { account: AccountAccessRead }): React.JSX
           <bdi>{employeeName(account, lang)}</bdi>
           {title ? <> · <bdi>{title}</bdi></> : null}
         </span>
+      ) : account.sees === 'self' ? (
+        <span className="block text-[0.84em] text-warning">{t('orgDepartments.accounts.unlinkedSelf')}</span>
       ) : (
-        <span className="block text-[0.84em] text-warning">{t('orgDepartments.accounts.unlinked')}</span>
+        <span className="block text-[0.84em] text-muted-foreground">{t('orgDepartments.accounts.unlinked')}</span>
       )}
     </div>
   )
@@ -346,26 +413,31 @@ function AccountRecords({ account }: { account: AccountAccessRead }): React.JSX.
 
 // ── Give more access ───────────────────────────────────────────────────────
 
-type Choice = Grant | 'organization'
-
-function GiveAccessDialog({ account, canOverride, onClose, onGrant, onOrganization, onCreateFrom }: {
-  account: AccountAccessRead
+function GiveAccessDialog({ giving, canOverride, onClose, onGrant, onOrganization, onCreateFrom }: {
+  giving: Giving
   canOverride: boolean
   onClose: () => void
   onGrant: (department: DepartmentRead, role: Grant) => void
   onOrganization: () => void
-  onCreateFrom: (headId: string, role: Grant) => void
+  onCreateFrom: (headId: string, choice: Choice | null) => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
   const id = useId()
+  const { account, created } = giving
   const { tree, departments, departmentsById, index } = useOrgData()
-  const [choice, setChoice] = useState<Choice>('viewer')
-  const [departmentId, setDepartmentId] = useState('')
+  // Nothing is preselected: the admin picks what this account gets.
+  const [choice, setChoice] = useState<Choice | null>(giving.choice ?? null)
+  const [departmentId, setDepartmentId] = useState(giving.departmentId ? String(giving.departmentId) : '')
   const [fromManager, setFromManager] = useState(false)
   const options: Choice[] = canOverride ? ['viewer', 'deputy', 'organization'] : ['viewer', 'deputy']
-  const department = departmentId ? departmentsById.get(Number(departmentId)) : undefined
-  const ready = choice === 'organization' || department !== undefined
+  // Same rule as the department people picker: a head is not also its deputy or viewer.
+  const headed = new Set(account.departments.filter((item) => item.role === 'head').map((item) => item.department_id))
+  const all = departments.data ?? []
+  const listed = created && !all.some((item) => item.id === created.id) ? [...all, created] : all
+  const choices = orderDepartments(listed).filter(({ department: item }) => item.active && !headed.has(item.id))
+  const department = departmentId ? departmentsById.get(Number(departmentId)) ?? (created?.id === Number(departmentId) ? created : undefined) : undefined
+  const ready = choice === 'organization' || (choice !== null && department !== undefined)
 
   return (
     <Sheet
@@ -405,7 +477,7 @@ function GiveAccessDialog({ account, canOverride, onClose, onGrant, onOrganizati
                 className={INPUT}
               >
                 <option value="">{t('departments.choose')}</option>
-                {orderDepartments(departments.data ?? []).filter(({ department: item }) => item.active).map(({ department: item, depth }) => (
+                {choices.map(({ department: item, depth }) => (
                   <option key={item.id} value={item.id}>{`${'\u00a0\u00a0'.repeat(depth)}${departmentName(item, lang)}`}</option>
                 ))}
               </select>
@@ -424,13 +496,11 @@ function GiveAccessDialog({ account, canOverride, onClose, onGrant, onOrganizati
                   label={t('orgDepartments.accounts.whoseTeam')}
                   meta={(person: OrgNodeRead) => t('orgDepartments.team', { count: index.branchSize(person.id) })}
                   disabledReason={(person: OrgNodeRead) => {
-                    const headed = (departments.data ?? []).find((item) => item.head_employee_id === person.id)
-                    return headed ? t('orgDepartments.headPicker.alreadyHeads', { name: bidi(departmentName(headed, lang)) }) : null
+                    if (person.id === account.employee_id) return t('orgDepartments.accounts.ownEmployee')
+                    const existing = all.find((item) => item.head_employee_id === person.id)
+                    return existing ? t('orgDepartments.headPicker.alreadyHeads', { name: bidi(departmentName(existing, lang)) }) : null
                   }}
-                  onPick={(person) => {
-                    onClose()
-                    onCreateFrom(person.id, choice === 'deputy' ? 'deputy' : 'viewer')
-                  }}
+                  onPick={(person) => onCreateFrom(person.id, choice)}
                 />
               </>
             )}
@@ -444,7 +514,7 @@ function GiveAccessDialog({ account, canOverride, onClose, onGrant, onOrganizati
           disabled={!ready}
           onClick={() => {
             if (choice === 'organization') onOrganization()
-            else if (department) onGrant(department, choice)
+            else if (choice && department) onGrant(department, choice)
             onClose()
           }}
         >
@@ -465,7 +535,7 @@ function LinkEmployeeDialog({ account, onClose }: { account: AccountAccessRead; 
   const save = useMutation({
     mutationFn: (employeeId: string) => api.setAuthUserLink(account.user_id, employeeId),
     onSuccess: () => {
-      invalidateDepartmentData(qc)
+      refreshAccount(qc, account.user_id)
       toast.success(t('orgDepartments.accounts.linked'))
       onClose()
     },
