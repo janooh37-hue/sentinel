@@ -6,7 +6,7 @@ import json
 from datetime import date
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func, select
+from sqlalchemy import Select, and_, func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import (
@@ -24,9 +24,8 @@ from app.services.department_scope_service import (
 )
 
 
-def list_nodes(
-    db: Session, *, scope: DepartmentScope | None = None
-) -> list[tuple[Employee, TimesheetDesignation | None]]:
+def _employee_designations() -> Select[Employee, TimesheetDesignation]:
+    """One current roster designation per employee, effective at this month's start."""
     month_start = date.today().replace(day=1)
     latest = (
         select(
@@ -37,7 +36,7 @@ def list_nodes(
         .group_by(TimesheetRosterAssignment.employee_id)
         .subquery()
     )
-    stmt = (
+    return (
         select(Employee, TimesheetDesignation)
         .outerjoin(latest, latest.c.employee_id == Employee.id)
         .outerjoin(
@@ -53,6 +52,12 @@ def list_nodes(
         )
         .order_by(Employee.id)
     )
+
+
+def list_nodes(
+    db: Session, *, scope: DepartmentScope | None = None
+) -> list[tuple[Employee, TimesheetDesignation | None]]:
+    stmt = _employee_designations()
     visibility = employee_visibility_clause(scope)
     if visibility is not None:
         stmt = stmt.where(visibility)
@@ -61,21 +66,8 @@ def list_nodes(
 
 
 def get_current_designation(db: Session, employee_id: str) -> TimesheetDesignation | None:
-    month_start = date.today().replace(day=1)
-    return db.scalar(
-        select(TimesheetDesignation)
-        .select_from(TimesheetRosterAssignment)
-        .outerjoin(
-            TimesheetDesignation,
-            TimesheetDesignation.id == TimesheetRosterAssignment.designation_id,
-        )
-        .where(
-            TimesheetRosterAssignment.employee_id == employee_id,
-            TimesheetRosterAssignment.effective_from <= month_start,
-        )
-        .order_by(TimesheetRosterAssignment.effective_from.desc())
-        .limit(1)
-    )
+    row = db.execute(_employee_designations().where(Employee.id == employee_id)).first()
+    return row[1] if row is not None else None
 
 
 def set_supervisor(

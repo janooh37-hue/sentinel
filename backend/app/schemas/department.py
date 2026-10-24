@@ -139,6 +139,10 @@ class AccountAccessRead(BaseModel):
     employee_id: str | None
     employee_name_en: str | None
     employee_name_ar: str | None
+    # Employee profile title displayed by the org tree.
+    position: str | None
+    position_ar: str | None
+    # Current roster designation, effective at this month's start.
     designation_en: str | None
     designation_ar: str | None
     duty_unit: str | None
@@ -161,9 +165,16 @@ class UnattachedUnitRead(BaseModel):
     top_employee_id: str
     name_en: str
     name_ar: str | None
+    # Employee profile title displayed by the org tree.
+    position: str | None
+    position_ar: str | None
+    # Current roster designation, effective at this month's start.
     designation_en: str | None
+    designation_ar: str | None
     duty_unit: str | None
+    # Working reports, excluding the manager; team_with_manager includes the manager.
     team_size: int
+    team_with_manager: int
 
 
 class AccountAccessOverviewRead(BaseModel):

@@ -468,6 +468,8 @@ def account_access(db: Session) -> AccountAccessOverviewRead:
                 employee_id=employee.id if employee else None,
                 employee_name_en=employee.name_en if employee else None,
                 employee_name_ar=employee.name_ar if employee else None,
+                position=employee.position if employee else None,
+                position_ar=employee.position_ar if employee else None,
                 designation_en=designation.name_en if designation else None,
                 designation_ar=designation.name_ar if designation else None,
                 duty_unit=employee.duty_unit if employee else None,
@@ -518,9 +520,13 @@ def account_access(db: Session) -> AccountAccessOverviewRead:
                 top_employee_id=employee.id,
                 name_en=employee.name_en,
                 name_ar=employee.name_ar,
+                position=employee.position,
+                position_ar=employee.position_ar,
                 designation_en=designation.name_en if designation else None,
+                designation_ar=designation.name_ar if designation else None,
                 duty_unit=employee.duty_unit,
                 team_size=size,
+                team_with_manager=size + 1,
             )
             for size, employee, designation in units[1:]
         ],

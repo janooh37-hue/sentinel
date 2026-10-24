@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user
-from app.db.models import User, UserPermission
+from app.db.models import (
+    Employee,
+    TimesheetDesignation,
+    TimesheetRosterAssignment,
+    User,
+    UserPermission,
+)
 from app.db.session import get_db
 from app.main import create_app
 from app.services import department_scope_service, department_service
@@ -144,6 +152,77 @@ def test_each_account_kind_explains_what_it_sees(org):
 
     unlinked = rows["unlinked"]
     assert (unlinked.sees, unlinked.employee_id, unlinked.visible_count) == ("self", None, 0)
+
+
+def test_access_designations_match_org_tree_current_roster_for_accounts_and_units(org):
+    db, users, *_ = org
+    month_start = date.today().replace(day=1)
+    designations = [
+        TimesheetDesignation(name_en="Old", name_ar="قديم", rank_order=101),
+        TimesheetDesignation(name_en="Current", name_ar="حالي", rank_order=102),
+        TimesheetDesignation(name_en="Future", name_ar="مستقبلي", rank_order=103),
+    ]
+    db.add_all(designations)
+    db.flush()
+    for employee_id in ("M", "U"):
+        person = db.get(Employee, employee_id)
+        person.position = "Security Guard"
+        person.position_ar = "حارس أمن"
+        for designation, effective_from in zip(
+            designations,
+            (
+                month_start - timedelta(days=60),
+                month_start - timedelta(days=1),
+                month_start + timedelta(days=31),
+            ),
+            strict=True,
+        ):
+            db.add(
+                TimesheetRosterAssignment(
+                    employee_id=employee_id,
+                    designation_id=designation.id,
+                    effective_from=effective_from,
+                )
+            )
+    db.commit()
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: users["admin"]
+    with TestClient(app) as client:
+        tree_response = client.get("/api/v1/org-tree/")
+        access_response = client.get("/api/v1/departments/account-access")
+    assert tree_response.status_code == 200, tree_response.text
+    assert access_response.status_code == 200, access_response.text
+    tree = {node["id"]: node for node in tree_response.json()}
+    overview = access_response.json()
+    for employee_id in ("M", "U"):
+        node = tree[employee_id]
+        assert (node["designation_en"], node["designation_ar"]) == ("Current", "حالي")
+        row = next(row for row in overview["accounts"] if row["employee_id"] == employee_id)
+        assert (row["designation_en"], row["designation_ar"]) == (
+            node["designation_en"],
+            node["designation_ar"],
+        )
+        assert (
+            (row["position"], row["position_ar"])
+            == (
+                node["position"],
+                node["position_ar"],
+            )
+            == ("Security Guard", "حارس أمن")
+        )
+    unit = next(row for row in overview["unattached_units"] if row["top_employee_id"] == "U")
+    assert (unit["designation_en"], unit["designation_ar"]) == ("Current", "حالي")
+    assert (
+        (unit["position"], unit["position_ar"])
+        == (
+            tree["U"]["position"],
+            tree["U"]["position_ar"],
+        )
+        == ("Security Guard", "حارس أمن")
+    )
+    assert unit["team_size"] == 2
+    assert unit["team_with_manager"] == 3
 
 
 def test_unattached_units_skip_the_largest_root_and_lone_people(org):

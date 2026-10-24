@@ -167,6 +167,12 @@ department-scope bypass.
   view capability, also not requestable; setup permission does not imply it.
 - The editor (supervisor links plus department controls) lives on
   `/permissions?tab=org`; the Employees org tree is read-only for everyone.
+- `GET /departments/account-access` returns employee profile `position` /
+  `position_ar` (the titles displayed in the org tree) separately from
+  `designation_en` / `designation_ar` (the latest roster designation effective
+  on or before this month's start, using the org tree's shared query).
+  Both accounts and unattached units expose both title sources; unit `team_size`
+  counts working reports, while `team_with_manager` adds the root person.
 - Active direct sends and assigned/revision-retained approval access keep their
   cross-department Record access, without bypassing Record Levels or capabilities.
   A user's services come from every department they belong to (derived, headed,
