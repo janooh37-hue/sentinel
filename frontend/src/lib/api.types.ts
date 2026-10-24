@@ -7609,6 +7609,10 @@ export interface components {
             employee_name_en: string | null;
             /** Employee Name Ar */
             employee_name_ar: string | null;
+            /** Position */
+            position: string | null;
+            /** Position Ar */
+            position_ar: string | null;
             /** Designation En */
             designation_en: string | null;
             /** Designation Ar */
@@ -15716,12 +15720,20 @@ export interface components {
             name_en: string;
             /** Name Ar */
             name_ar: string | null;
+            /** Position */
+            position: string | null;
+            /** Position Ar */
+            position_ar: string | null;
             /** Designation En */
             designation_en: string | null;
+            /** Designation Ar */
+            designation_ar: string | null;
             /** Duty Unit */
             duty_unit: string | null;
             /** Team Size */
             team_size: number;
+            /** Team With Manager */
+            team_with_manager: number;
         };
         /**
          * UncountedRecordOut
