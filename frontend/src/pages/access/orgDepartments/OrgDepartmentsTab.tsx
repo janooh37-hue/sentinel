@@ -1,14 +1,17 @@
 /**
  * OrgDepartmentsTab — Permissions → Organization & departments.
  *
- * A department is a manager plus everyone who reports to them, so this tab is
- * task-first: it lands on the department register, and every other job opens
- * as its own view (`?view=`): guided setup, one department, fixing reporting
- * lines, people placed by hand, and people outside all departments.
+ * Four sub-sections, Accounts first: access is managed for a few dozen
+ * accounts, so the tab starts from what each account sees and why.
+ *   - Accounts (`departments.manage`, the default);
+ *   - Departments: the register, guided setup, one department, and people
+ *     outside all departments (`?view=` register/setup/department/outside);
+ *   - Reporting lines (`employees.edit`), optionally opened on one employee;
+ *   - Placed by hand (`departments.manage`).
  *
- * Gates (unchanged): opening the tab needs `employees.view` plus
- * `employees.edit` or `departments.manage`; reporting lines need
- * `employees.edit`; every department action needs `departments.manage`.
+ * Gates: opening the tab needs `employees.view` plus `employees.edit` or
+ * `departments.manage`; every derived number also needs organization-wide
+ * session scope.
  */
 
 import { useEffect, useRef } from 'react'
@@ -16,7 +19,9 @@ import { GitBranch, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
+import { Accounts } from './Accounts'
 import { DepartmentPage } from './DepartmentPage'
 import { DepartmentRegister } from './DepartmentRegister'
 import { DepartmentSetup } from './DepartmentSetup'
@@ -25,26 +30,36 @@ import { ReportingLines } from './ReportingLines'
 import { LINK_BUTTON, PANEL, QueryFailure } from './ui'
 import { useOrgData, useOrgRoute, type OrgView } from './useOrgData'
 
+type Section = 'accounts' | 'departments' | 'reporting' | 'placements'
+
+const SECTION_OF: Record<OrgView, Section> = {
+  accounts: 'accounts',
+  register: 'departments',
+  setup: 'departments',
+  department: 'departments',
+  outside: 'departments',
+  reporting: 'reporting',
+  placements: 'placements',
+}
+
+/** The view each sub-section opens on. */
+const ENTRY: Record<Section, OrgView> = { accounts: 'accounts', departments: 'register', reporting: 'reporting', placements: 'placements' }
+
 export function OrgDepartmentsTab(): React.JSX.Element {
   const { t } = useTranslation()
   const { canManage, canRelink, orgWide, reads } = useOrgData()
   const { route, go } = useOrgRoute()
   const topRef = useRef<HTMLDivElement>(null)
 
-  // Views a user may not open fall back to the register.
-  const allowed: Record<OrgView, boolean> = {
-    register: true,
-    department: true,
-    setup: canManage,
-    placements: canManage,
-    outside: canManage,
-    reporting: canRelink,
-  }
-  const view: OrgView = allowed[route.view] ? route.view : 'register'
+  const allowed: Record<Section, boolean> = { accounts: canManage, departments: true, reporting: canRelink, placements: canManage }
+  const sections = (['accounts', 'departments', 'reporting', 'placements'] as const).filter((section) => allowed[section])
+  const viewAllowed = allowed[SECTION_OF[route.view]] && (canManage || !['setup', 'outside'].includes(route.view))
+  const view: OrgView = viewAllowed ? route.view : canManage ? 'accounts' : 'register'
+  const section = SECTION_OF[view]
 
   // Each view is a new page: when the admin moves between views, bring the
   // top back into sight. A first load keeps the page header where it is.
-  const viewKey = `${view}:${route.step}:${route.departmentId}`
+  const viewKey = `${view}:${route.step}:${route.departmentId}:${route.employeeId}`
   const shownKey = useRef(viewKey)
   useEffect(() => {
     if (shownKey.current === viewKey) return
@@ -57,7 +72,14 @@ export function OrgDepartmentsTab(): React.JSX.Element {
   const derived = view !== 'reporting'
 
   return (
-    <div ref={topRef} className="min-w-0 scroll-mt-4">
+    <div ref={topRef} className="min-w-0 scroll-mt-4 space-y-5">
+      {sections.length > 1 && (
+        <Tabs value={section} onValueChange={(next) => go({ view: ENTRY[next as Section] })}>
+          <TabsList aria-label={t('orgDepartments.sections.label')} className="overflow-x-auto [scrollbar-width:none]">
+            {sections.map((item) => <TabsTrigger key={item} value={item}>{t(`orgDepartments.sections.${item}`)}</TabsTrigger>)}
+          </TabsList>
+        </Tabs>
+      )}
       {derived && !orgWide ? (
         <div className={cn(PANEL, 'space-y-2 px-5 py-6')}>
           <p role="status" className="flex items-start gap-2 text-[0.92em] text-foreground">
@@ -76,14 +98,15 @@ export function OrgDepartmentsTab(): React.JSX.Element {
           <div role="status" aria-label={t('orgDepartments.dataLoading')}><Skeleton className="h-64 w-full rounded-2xl" /></div>
         )
       ) : (
-        <>
+        <div role={sections.length > 1 ? 'tabpanel' : undefined}>
+          {view === 'accounts' && <Accounts go={go} />}
           {view === 'register' && <DepartmentRegister go={go} />}
           {view === 'department' && <DepartmentPage route={route} go={go} />}
           {view === 'setup' && <DepartmentSetup step={route.step} go={go} />}
-          {view === 'reporting' && <ReportingLines go={go} />}
-          {view === 'placements' && <Placements go={go} />}
+          {view === 'reporting' && <ReportingLines key={route.employeeId ?? ''} initialEmployeeId={route.employeeId} />}
+          {view === 'placements' && <Placements />}
           {view === 'outside' && <OutsideDepartments go={go} />}
-        </>
+        </div>
       )}
     </div>
   )

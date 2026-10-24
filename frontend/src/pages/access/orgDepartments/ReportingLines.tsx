@@ -24,16 +24,17 @@ import { SupervisorPicker } from '@/pages/employees/orgTree/SupervisorPicker'
 import { buildOrgIndex, deriveMembership, membershipChanges } from './model'
 import { personPosition } from './labels'
 import { PersonSearch } from './PersonSearch'
-import { BackLink, LABEL, LINK_BUTTON, LiveEditsNotice, PANEL, QueryFailure, ViewHeading } from './ui'
-import { useOrgData, type OrgRoute } from './useOrgData'
+import { LABEL, LINK_BUTTON, LiveEditsNotice, PANEL, QueryFailure, ViewHeading } from './ui'
+import { useOrgData } from './useOrgData'
 
-export function ReportingLines({ go }: { go: (next: Partial<OrgRoute>) => void }): React.JSX.Element {
+export function ReportingLines({ initialEmployeeId }: { initialEmployeeId?: string | null }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
   const qc = useQueryClient()
   const [, setParams] = useSearchParams()
   const { canManage, tree, departments, exceptions, index, departmentsById, limitsOn } = useOrgData()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Opened from the unattached-units card: start on that person.
+  const [selectedId, setSelectedId] = useState<string | null>(initialEmployeeId ?? null)
   // undefined: nothing proposed yet; null: no supervisor (top of a tree).
   const [proposed, setProposed] = useState<string | null | undefined>(undefined)
   const [chartOpen, setChartOpen] = useState(false)
@@ -111,7 +112,6 @@ export function ReportingLines({ go }: { go: (next: Partial<OrgRoute>) => void }
 
   return (
     <div className="space-y-5">
-      <BackLink onClick={() => go({})} />
       <ViewHeading title={t('orgDepartments.reporting.title')}>{t('orgDepartments.reporting.intro')}</ViewHeading>
       <LiveEditsNotice show={limitsOn} />
 

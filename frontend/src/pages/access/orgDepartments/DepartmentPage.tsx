@@ -54,7 +54,7 @@ export function DepartmentPage({ route, go }: { route: OrgRoute; go: (next: Part
   if (!department) {
     return (
       <div className="space-y-3">
-        <BackLink onClick={() => go({})} />
+        <BackLink onClick={() => go({ view: 'register' })} />
         <p className="text-[0.9em] text-muted-foreground">{t('orgDepartments.department.missing')}</p>
       </div>
     )
@@ -66,7 +66,7 @@ export function DepartmentPage({ route, go }: { route: OrgRoute; go: (next: Part
 
   return (
     <div className="space-y-5">
-      <BackLink onClick={() => go({})} />
+      <BackLink onClick={() => go({ view: 'register' })} />
       <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
           <h2 className="flex flex-wrap items-center gap-2 break-words text-[1.4em] font-semibold tracking-tight text-foreground">
@@ -102,7 +102,7 @@ export function DepartmentPage({ route, go }: { route: OrgRoute; go: (next: Part
         <div role={canManage ? 'tabpanel' : undefined} className="mt-5">
           {section === 'people' && <PeopleSection department={department} initialQuery={route.query} />}
           {section === 'access' && <AccessSection department={department} />}
-          {section === 'settings' && <SettingsSection key={department.id} department={department} onDeleted={() => go({})} />}
+          {section === 'settings' && <SettingsSection key={department.id} department={department} onDeleted={() => go({ view: 'register' })} />}
         </div>
       </Tabs>
 

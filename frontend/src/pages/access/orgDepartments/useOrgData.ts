@@ -65,7 +65,7 @@ export function useOrgData() {
   }
 }
 
-export type OrgView = 'register' | 'setup' | 'department' | 'reporting' | 'placements' | 'outside'
+export type OrgView = 'accounts' | 'register' | 'setup' | 'department' | 'reporting' | 'placements' | 'outside'
 export type DepartmentSection = 'people' | 'access' | 'settings'
 export type SetupStep = 1 | 2 | 3 | 4
 
@@ -75,13 +75,15 @@ export interface OrgRoute {
   departmentId: number | null
   section: DepartmentSection
   query: string
+  /** Reporting lines: the employee to open with, e.g. from the unattached-units card. */
+  employeeId: string | null
 }
 
-const VIEWS: readonly OrgView[] = ['register', 'setup', 'department', 'reporting', 'placements', 'outside']
+const VIEWS: readonly OrgView[] = ['accounts', 'register', 'setup', 'department', 'reporting', 'placements', 'outside']
 const SECTIONS: readonly DepartmentSection[] = ['people', 'access', 'settings']
 
 /** Route keys this tab owns; everything else in the URL (`tab`, `user`) is kept. */
-const KEYS = ['view', 'step', 'dept', 'section', 'q'] as const
+const KEYS = ['view', 'step', 'dept', 'section', 'q', 'employee'] as const
 
 export function useOrgRoute(): { route: OrgRoute; go: (next: Partial<OrgRoute>) => void } {
   const [params, setParams] = useSearchParams()
@@ -90,23 +92,25 @@ export function useOrgRoute(): { route: OrgRoute; go: (next: Partial<OrgRoute>) 
   const rawDept = Number(params.get('dept'))
   const rawSection = params.get('section')
   const route: OrgRoute = {
-    view: VIEWS.includes(rawView as OrgView) ? (rawView as OrgView) : 'register',
+    view: VIEWS.includes(rawView as OrgView) ? (rawView as OrgView) : 'accounts',
     step: rawStep >= 1 && rawStep <= 4 ? (rawStep as SetupStep) : 1,
     departmentId: Number.isInteger(rawDept) && rawDept > 0 ? rawDept : null,
     section: SECTIONS.includes(rawSection as DepartmentSection) ? (rawSection as DepartmentSection) : 'people',
     query: params.get('q') ?? '',
+    employeeId: params.get('employee'),
   }
   const go = useCallback((next: Partial<OrgRoute>) => {
     setParams((prev) => {
       const merged = new URLSearchParams(prev)
       for (const key of KEYS) merged.delete(key)
-      const view = next.view ?? 'register'
-      if (view !== 'register') merged.set('view', view)
+      const view = next.view ?? 'accounts'
+      if (view !== 'accounts') merged.set('view', view)
       if (view === 'setup') merged.set('step', String(next.step ?? 1))
       if (view === 'department' && next.departmentId != null) {
         merged.set('dept', String(next.departmentId))
         if (next.section && next.section !== 'people') merged.set('section', next.section)
       }
+      if (view === 'reporting' && next.employeeId) merged.set('employee', next.employeeId)
       if (next.query) merged.set('q', next.query)
       return merged
     })

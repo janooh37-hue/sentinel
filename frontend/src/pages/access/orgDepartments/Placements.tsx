@@ -23,7 +23,7 @@ import { PersonSearch } from './PersonSearch'
 import { BackLink, LINK_BUTTON, LiveEditsNotice, PANEL, QueryFailure, ViewHeading } from './ui'
 import { useOrgData, type OrgRoute } from './useOrgData'
 
-export function Placements({ go }: { go: (next: Partial<OrgRoute>) => void }): React.JSX.Element {
+export function Placements(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
   const qc = useQueryClient()
@@ -55,7 +55,6 @@ export function Placements({ go }: { go: (next: Partial<OrgRoute>) => void }): R
 
   return (
     <div className="space-y-5">
-      <BackLink onClick={() => go({})} />
       <ViewHeading
         title={t('orgDepartments.placements.title')}
         actions={<Button className="min-h-11" aria-expanded={searching} onClick={() => setSearching((value) => !value)}>{t('orgDepartments.placements.add')}</Button>}
@@ -134,7 +133,7 @@ export function OutsideDepartments({ go }: { go: (next: Partial<OrgRoute>) => vo
 
   return (
     <div className="space-y-5">
-      <BackLink onClick={() => go({})} />
+      <BackLink onClick={() => go({ view: 'register' })} />
       <ViewHeading title={t('orgDepartments.outside.title', { count: total })}>
         <p>{t('orgDepartments.outside.intro')}</p>
       </ViewHeading>

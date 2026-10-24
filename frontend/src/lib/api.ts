@@ -211,6 +211,9 @@ export type DepartmentServicesUpdate = components['schemas']['DepartmentServices
 export type DepartmentExceptionRead = components['schemas']['DepartmentExceptionRead']
 export type UserDepartmentRead = components['schemas']['UserDepartmentRead']
 export type UnassignedEmployeeGroup = components['schemas']['UnassignedEmployeeGroup']
+export type AccountAccessOverviewRead = components['schemas']['AccountAccessOverviewRead']
+export type AccountAccessRead = components['schemas']['AccountAccessRead']
+export type UnattachedUnitRead = components['schemas']['UnattachedUnitRead']
 
 // Unified outbound log read type (covers WhatsApp + SMS); used for the book/employee Messages surface.
 export type NotifyMessageRead = components['schemas']['NotifyMessageRead']
@@ -1407,6 +1410,9 @@ export const api = {
     delete: (id: number) => request<void>('DELETE', `/departments/${id}`),
     setPeople: (id: number, body: DepartmentPeopleUpdate) =>
       request<DepartmentRead>('PUT', `/departments/${id}/people`, body),
+    /** What each account sees and why, as if access limits were on (departments.manage). */
+    accountAccess: () =>
+      request<AccountAccessOverviewRead>('GET', '/departments/account-access'),
     /** Active accounts eligible as deputies or viewers (departments.manage). */
     candidateUsers: () =>
       request<DepartmentCandidateUserRead[]>('GET', '/departments/candidate-users'),

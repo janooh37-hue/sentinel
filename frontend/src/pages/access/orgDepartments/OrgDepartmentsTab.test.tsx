@@ -75,6 +75,7 @@ beforeEach(async () => {
   capabilityState.scopeKind = 'organization'
   vi.spyOn(api, 'listOrgTree').mockResolvedValue(PEOPLE)
   vi.spyOn(api.departments, 'list').mockResolvedValue([OPERATIONS])
+  vi.spyOn(api.departments, 'accountAccess').mockResolvedValue({ limits_enabled: false, accounts: [], unattached_units: [] })
   vi.spyOn(api.departments, 'listExceptions').mockResolvedValue([])
   vi.spyOn(api.departments, 'unassignedEmployees').mockResolvedValue([])
   vi.spyOn(api.departments, 'candidateUsers').mockResolvedValue([])
@@ -111,7 +112,7 @@ describe('Department register', () => {
       department({ id: 9, name_en: 'Archive', head_employee_id: 'G6', head_name_en: 'Omar Clerk', active: false, service_ids: [] }),
       department({ id: 10, name_en: 'Field', head_employee_id: 'G3', head_name_en: 'Lina Orphan' }),
     ])
-    renderAt(<OrgDepartmentsTab />)
+    renderAt(<OrgDepartmentsTab />, '/permissions?tab=org&view=register')
 
     const table = await screen.findByRole('table')
     const row = (name: string): HTMLElement => within(table).getByRole('button', { name }).closest('tr')!
@@ -217,11 +218,12 @@ describe('Gating', () => {
     expect(await screen.findByRole('heading', { name: 'Departments' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Add department' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Set up departments' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /People placed by hand/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Placed by hand' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Accounts' })).not.toBeInTheDocument()
     expect(api.departments.listExceptions).not.toHaveBeenCalled()
     expect(api.departments.getScoping).not.toHaveBeenCalled()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Fix reporting lines' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Reporting lines' }))
     await userEvent.type(await screen.findByLabelText('Find an employee'), 'Sami')
     await userEvent.click(screen.getByRole('button', { name: /Sami Staff/ }))
     expect(screen.getByRole('button', { name: 'Change supervisor' })).toBeVisible()
@@ -231,9 +233,11 @@ describe('Gating', () => {
     capabilityState.allowed = new Set(['employees.view', 'departments.manage'])
     renderAt(<OrgDepartmentsTab />, '/permissions?tab=org&view=reporting')
 
+    expect(await screen.findByRole('tab', { name: 'Accounts' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Placed by hand' })).toBeVisible()
+    expect(screen.queryByRole('tab', { name: 'Reporting lines' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: 'Departments' }))
     expect(await screen.findByRole('button', { name: 'Add department' })).toBeVisible()
-    expect(screen.queryByRole('button', { name: 'Fix reporting lines' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Fix reporting lines' })).not.toBeInTheDocument()
   })
 
   it('shows a notice instead of derived numbers without organization-wide scope, and keeps reporting lines', async () => {

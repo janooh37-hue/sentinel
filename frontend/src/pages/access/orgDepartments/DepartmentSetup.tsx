@@ -56,7 +56,7 @@ export function DepartmentSetup({ step, go }: { step: SetupStep; go: (next: Part
 
   return (
     <div className="space-y-5 pb-24 md:pb-0">
-      <BackLink disabled={busy} onClick={() => (unsaved ? setLeaving(true) : go({}))} />
+      <BackLink disabled={busy} onClick={() => (unsaved ? setLeaving(true) : go({ view: 'register' }))} />
       <ViewHeading title={t('orgDepartments.setup.title')}>{t('orgDepartments.setup.intro')}</ViewHeading>
       <nav aria-label={t('orgDepartments.setup.progress')}>
         <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -81,7 +81,7 @@ export function DepartmentSetup({ step, go }: { step: SetupStep; go: (next: Part
       </nav>
       <p className="sr-only" aria-live="polite">{t('orgDepartments.setup.stepOf', { step, name: t(`orgDepartments.setup.steps.${step}`) })}</p>
 
-      {step === 1 && <ChooseHeads selected={selected} setSelected={setSelected} onNext={() => toStep(2)} onCancel={() => (unsaved ? setLeaving(true) : go({}))} />}
+      {step === 1 && <ChooseHeads selected={selected} setSelected={setSelected} onNext={() => toStep(2)} onCancel={() => (unsaved ? setLeaving(true) : go({ view: 'register' }))} />}
       {step === 2 && (
         <NamesAndPeople
           selected={selected}
@@ -94,7 +94,7 @@ export function DepartmentSetup({ step, go }: { step: SetupStep; go: (next: Part
         />
       )}
       {step === 3 && <Configure onBack={() => toStep(2)} onNext={() => toStep(4)} />}
-      {step === 4 && <AccessLimitsReview onBack={() => toStep(3)} onDone={() => go({})} />}
+      {step === 4 && <AccessLimitsReview onBack={() => toStep(3)} onDone={() => go({ view: 'register' })} />}
 
       <ConfirmDialog
         open={leaving}
@@ -102,7 +102,7 @@ export function DepartmentSetup({ step, go }: { step: SetupStep; go: (next: Part
         title={t('orgDepartments.setup.leaveTitle')}
         description={t('orgDepartments.setup.leaveHint', { count: selected.length })}
         confirmLabel={t('orgDepartments.setup.leave')}
-        onConfirm={() => go({})}
+        onConfirm={() => go({ view: 'register' })}
       />
     </div>
   )

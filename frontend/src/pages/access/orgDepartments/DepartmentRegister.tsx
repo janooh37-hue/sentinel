@@ -5,7 +5,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Check, ChevronDown, ChevronRight, GitBranch, Hand, Plus, Search, ShieldCheck, Users } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Plus, Search, ShieldCheck, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -26,7 +26,7 @@ type Fix = { kind: Attention; department: DepartmentRead }
 export function DepartmentRegister({ go }: { go: (next: Partial<OrgRoute>) => void }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
-  const { canManage, canRelink, tree, departments, exceptions, index, departmentsById, scoping } = useOrgData()
+  const { canManage, tree, departments, index, departmentsById, scoping } = useOrgData()
   const [search, setSearch] = useState('')
   const [unit, setUnit] = useState('')
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set())
@@ -359,23 +359,6 @@ export function DepartmentRegister({ go }: { go: (next: Partial<OrgRoute>) => vo
             </section>
           )}
         </section>
-      )}
-
-      {(canRelink || canManage) && (
-        <nav aria-label={t('orgDepartments.register.tools')} className="flex flex-wrap gap-x-4 gap-y-1 border-t border-hairline pt-3">
-          {canRelink && (
-            <button type="button" className={LINK_BUTTON} onClick={() => go({ view: 'reporting' })}>
-              <GitBranch className="h-4 w-4" aria-hidden />
-              {t('orgDepartments.reporting.title')}
-            </button>
-          )}
-          {canManage && (
-            <button type="button" className={LINK_BUTTON} onClick={() => go({ view: 'placements' })}>
-              <Hand className="h-4 w-4" aria-hidden />
-              {t('orgDepartments.placements.linkCount', { count: exceptions.data?.length ?? 0 })}
-            </button>
-          )}
-        </nav>
       )}
 
       {adding && <AddDepartmentDialog onClose={() => setAdding(false)} onCreated={(created) => go({ view: 'department', departmentId: created.id })} />}
