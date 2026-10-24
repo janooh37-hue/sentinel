@@ -12,11 +12,18 @@ import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { buildOrgIndex } from './model'
 
 export function useOrgData() {
   const { has } = useCapabilities()
+  const { user } = useAuth()
+  // With access limits on, /org-tree is scoped to what the user may see, and
+  // departments.manage is not organization-wide: derivations over a partial
+  // tree would be wrong. Admins, departments.all holders, and everyone while
+  // limits are off are scoped to the organization.
+  const orgWide = user?.department_scope_kind === 'organization'
   const canManage = has('departments.manage')
   const canRelink = has('employees.edit')
   const tree = useQuery({ queryKey: ['org-tree'], queryFn: api.listOrgTree })
@@ -24,19 +31,23 @@ export function useOrgData() {
   const exceptions = useQuery({
     queryKey: ['departments', 'exceptions'],
     queryFn: api.departments.listExceptions,
-    enabled: canManage,
+    enabled: canManage && orgWide,
   })
   const scoping = useQuery({
     queryKey: ['department-scoping'],
     queryFn: api.departments.getScoping,
-    enabled: canManage,
+    enabled: canManage && orgWide,
   })
   const index = useMemo(() => buildOrgIndex(tree.data ?? []), [tree.data])
   const departmentsById = useMemo(
     () => new Map((departments.data ?? []).map((department) => [department.id, department])),
     [departments.data],
   )
+  // Every exact count and preview needs all of these; an empty fallback for a
+  // pending or failed read would silently change the answer.
+  const required = canManage ? [tree, departments, exceptions] : [tree, departments]
   return {
+    orgWide,
     canManage,
     canRelink,
     tree,
@@ -46,6 +57,11 @@ export function useOrgData() {
     index,
     departmentsById,
     limitsOn: scoping.data?.enabled === true,
+    reads: {
+      ready: required.every((query) => query.isSuccess && !query.isError),
+      failed: required.find((query) => query.isError),
+      retry: () => { for (const query of required) if (query.isError) void query.refetch() },
+    },
   }
 }
 

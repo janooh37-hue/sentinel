@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as AuthContextModule from '@/lib/authContext'
 
-const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
+const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>(), scopeKind: 'organization' }))
 
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
@@ -18,7 +18,7 @@ vi.mock('@/lib/useCapabilities', () => ({
 
 vi.mock('@/lib/authContext', async (importOriginal) => ({
   ...(await importOriginal<typeof AuthContextModule>()),
-  useAuth: () => ({ status: 'authed', user: { id: 1 } }),
+  useAuth: () => ({ status: 'authed', user: { id: 1, department_scope_kind: capabilityState.scopeKind } }),
 }))
 
 import i18n from '@/lib/i18n'
@@ -72,6 +72,7 @@ function renderAt(ui: React.ReactElement, path = '/permissions?tab=org'): void {
 beforeEach(async () => {
   await i18n.changeLanguage('en')
   capabilityState.allowed = new Set()
+  capabilityState.scopeKind = 'organization'
   vi.spyOn(api, 'listOrgTree').mockResolvedValue(PEOPLE)
   vi.spyOn(api.departments, 'list').mockResolvedValue([OPERATIONS])
   vi.spyOn(api.departments, 'listExceptions').mockResolvedValue([])
@@ -118,7 +119,7 @@ describe('Department register', () => {
     expect(within(row('Finance')).getByRole('button', { name: 'No one can receive Records' })).toBeVisible()
     expect(within(row('Archive')).getByText('Inactive')).toBeVisible()
     expect(within(row('Field')).getByText('Ready')).toBeVisible()
-    expect(screen.getByText('4 of 6 employees are in a department')).toBeVisible()
+    expect(screen.getByText('4 of 6 working employees are in a department')).toBeVisible()
     expect(screen.getByText(/2 outside all departments/)).toBeVisible()
 
     await userEvent.click(within(row('Operations')).getByRole('button', { name: 'Choose services' }))
@@ -233,6 +234,40 @@ describe('Gating', () => {
     expect(await screen.findByRole('button', { name: 'Add department' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Fix reporting lines' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Fix reporting lines' })).not.toBeInTheDocument()
+  })
+
+  it('shows a notice instead of derived numbers without organization-wide scope, and keeps reporting lines', async () => {
+    capabilityState.allowed = new Set(['employees.view', 'employees.edit', 'departments.manage'])
+    capabilityState.scopeKind = 'department'
+    renderAt(<OrgDepartmentsTab />, '/permissions?tab=org&view=setup&step=1')
+
+    expect(await screen.findByText('Department setup needs organization-wide access. Ask an administrator for the All departments permission.')).toBeVisible()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(screen.queryByText(/employees are in a department/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Choose department heads')).not.toBeInTheDocument()
+    expect(api.departments.listExceptions).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Fix reporting lines' }))
+    await userEvent.type(await screen.findByLabelText('Find an employee'), 'Sami')
+    await userEvent.click(screen.getByRole('button', { name: /Sami Staff/ }))
+    expect(screen.getByRole('button', { name: 'Change supervisor' })).toBeVisible()
+  })
+})
+
+describe('Required reads', () => {
+  it('withholds previews and create actions until placements load, and offers a retry', async () => {
+    capabilityState.allowed = new Set(['employees.view', 'departments.manage'])
+    vi.mocked(api.departments.listExceptions).mockRejectedValueOnce(new Error('offline'))
+    const create = vi.spyOn(api.departments, 'create')
+    renderAt(<OrgDepartmentsTab />, '/permissions?tab=org&view=setup&step=1')
+
+    const retry = await screen.findByRole('button', { name: 'Try again' })
+    expect(screen.queryByText('Choose department heads')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Create/ })).not.toBeInTheDocument()
+
+    await userEvent.click(retry)
+    expect(await screen.findByText('Choose department heads')).toBeVisible()
+    expect(create).not.toHaveBeenCalled()
   })
 })
 

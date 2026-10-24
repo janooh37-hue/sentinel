@@ -164,8 +164,56 @@ export interface DraftPreview {
   memberIds: string[]
   /** The head plus everyone below them, whatever their department. */
   branchSize: number
+  /** People in the branch whose derived department is a sub-department of this draft. */
+  inSubDepartments: number
+  /** The rest of the branch: placed by hand elsewhere, or outside all departments. */
+  elsewhere: number
   /** Where the members sit today. */
   movedFrom: Array<{ from: number | null; count: number }>
+}
+
+/**
+ * Each department's derived parent, as `department_tree_service.derive` writes
+ * it: the department of the head's supervisor (never itself), with any derived
+ * parent cycle broken to no parent. `extraHeads` adds proposed departments.
+ */
+export function deriveParents(
+  index: OrgIndex,
+  departments: readonly DepartmentAnchor[],
+  membership: Membership,
+  extraHeads?: ReadonlyMap<string, number>,
+): Map<number, number | null> {
+  const heads: Array<[number, string]> = departments.map((department) => [department.id, department.head_employee_id])
+  for (const [headId, id] of extraHeads ?? []) heads.push([id, headId])
+  const parents = new Map<number, number | null>()
+  for (const [id, headId] of heads) {
+    const supervisor = index.supervisorOf(headId)
+    const parent = supervisor === null ? null : membership.get(supervisor) ?? null
+    parents.set(id, parent === id ? null : parent)
+  }
+  for (const id of [...parents.keys()]) {
+    const seen: number[] = []
+    let current: number | null = id
+    while (current !== null && !seen.includes(current)) {
+      seen.push(current)
+      current = parents.get(current) ?? null
+    }
+    if (current !== null) {
+      for (const item of seen.slice(seen.indexOf(current))) parents.set(item, null)
+    }
+  }
+  return parents
+}
+
+function isUnder(parents: ReadonlyMap<number, number | null>, id: number, ancestor: number): boolean {
+  const seen = new Set<number>()
+  let current = parents.get(id) ?? null
+  while (current !== null && !seen.has(current)) {
+    if (current === ancestor) return true
+    seen.add(current)
+    current = parents.get(current) ?? null
+  }
+  return false
 }
 
 /**
@@ -183,21 +231,28 @@ export function previewDrafts(
   const headByTemp = new Map([...tempIds].map(([headId, temp]) => [temp, headId]))
   const before = deriveMembership(index, departments, exceptions)
   const after = deriveMembership(index, departments, exceptions, tempIds)
+  const parents = deriveParents(index, departments, after, tempIds)
   return headIds.map((headId) => {
     const temp = tempIds.get(headId)!
     const memberIds = [...after].filter(([, value]) => value === temp).map(([id]) => id)
-    const supervisor = index.supervisorOf(headId)
-    const parentValue = supervisor === null ? null : after.get(supervisor) ?? null
-    const parent: DraftParent = parentValue === null || parentValue === temp
+    const parentValue = parents.get(temp) ?? null
+    const parent: DraftParent = parentValue === null
       ? { kind: 'none' }
       : parentValue < 0
         ? { kind: 'draft', headId: headByTemp.get(parentValue)! }
         : { kind: 'department', id: parentValue }
+    const branch = index.branchIds(headId)
+    const inSubDepartments = branch.filter((id) => {
+      const value = after.get(id) ?? null
+      return value !== null && value !== temp && isUnder(parents, value, temp)
+    }).length
     return {
       headId,
       parent,
       memberIds,
-      branchSize: index.branchSize(headId),
+      branchSize: branch.length,
+      inSubDepartments,
+      elsewhere: branch.length - memberIds.length - inSubDepartments,
       movedFrom: countBy(memberIds, (id) => before.get(id) ?? null),
     }
   })
@@ -262,9 +317,15 @@ export interface Coverage {
   outside: number
 }
 
+/** Mirrors backend `schemas.employee.WORKING_STATUSES`, which the
+ *  outside-departments review (`/departments/unassigned-employees`) counts. */
+export const WORKING_STATUSES: ReadonlySet<string> = new Set(['Active', 'Loaned'])
+
+/** Coverage of working employees, the same population as the outside review. */
 export function coverageOf(people: readonly OrgNodeRead[]): Coverage {
-  const inDepartment = people.filter((person) => person.department_id != null).length
-  return { total: people.length, inDepartment, outside: people.length - inDepartment }
+  const working = people.filter((person) => WORKING_STATUSES.has(person.status))
+  const inDepartment = working.filter((person) => person.department_id != null).length
+  return { total: working.length, inDepartment, outside: working.length - inDepartment }
 }
 
 export type Attention = 'noReceiver' | 'noServices'

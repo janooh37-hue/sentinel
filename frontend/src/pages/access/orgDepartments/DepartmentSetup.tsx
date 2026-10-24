@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Check, ChevronDown, ChevronRight, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -40,6 +40,7 @@ import { BackLink, LABEL, LINK_BUTTON, LiveEditsNotice, PANEL, QueryFailure, Vie
 import { useOrgData, type OrgRoute, type SetupStep } from './useOrgData'
 
 const STEPS: readonly SetupStep[] = [1, 2, 3, 4]
+const SETUP_BATCH = ['department-setup-batch']
 
 export function DepartmentSetup({ step, go }: { step: SetupStep; go: (next: Partial<OrgRoute>) => void }): React.JSX.Element {
   const { t } = useTranslation()
@@ -49,10 +50,13 @@ export function DepartmentSetup({ step, go }: { step: SetupStep; go: (next: Part
   const keepNames = useCallback((next: Record<string, DraftNames>) => setNames((current) => ({ ...current, ...next })), [])
   const toStep = (next: SetupStep): void => go({ view: 'setup', step: next })
   const unsaved = selected.length > 0
+  // A batch create or service save reports per department; leaving mid-run
+  // would drop those outcomes, so navigation waits for it.
+  const busy = useIsMutating({ mutationKey: SETUP_BATCH }) > 0
 
   return (
     <div className="space-y-5 pb-24 md:pb-0">
-      <BackLink onClick={() => (unsaved ? setLeaving(true) : go({}))} />
+      <BackLink disabled={busy} onClick={() => (unsaved ? setLeaving(true) : go({}))} />
       <ViewHeading title={t('orgDepartments.setup.title')}>{t('orgDepartments.setup.intro')}</ViewHeading>
       <nav aria-label={t('orgDepartments.setup.progress')}>
         <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -60,6 +64,7 @@ export function DepartmentSetup({ step, go }: { step: SetupStep; go: (next: Part
             <li key={value}>
               <button
                 type="button"
+                disabled={busy}
                 onClick={() => toStep(value)}
                 aria-current={value === step ? 'step' : undefined}
                 className={cn(
@@ -367,6 +372,7 @@ function NamesAndPeople({ selected, names, onKeep, onCreated, onRemove, onBack, 
   }
 
   const create = useMutation({
+    mutationKey: SETUP_BATCH,
     mutationFn: async (values: Values) => {
       const outcome = new Map<string, CreateResult>()
       // One POST per department, in order: each result is shown on its own row.
@@ -528,6 +534,7 @@ function Configure({ onBack, onNext }: { onBack: () => void; onNext: () => void 
   const targets = active.filter((department) => picked.has(department.id))
 
   const apply = useMutation({
+    mutationKey: SETUP_BATCH,
     mutationFn: async () => {
       const outcome = new Map<number, ServiceResult>()
       for (const department of targets) {
@@ -702,8 +709,8 @@ function Configure({ onBack, onNext }: { onBack: () => void; onNext: () => void 
       </section>
 
       <StepActions>
-        <Button variant="outline" className="min-h-11" onClick={onBack}>{t('common.previous')}</Button>
-        <Button className="min-h-11" onClick={onNext}>
+        <Button variant="outline" className="min-h-11" disabled={apply.isPending} onClick={onBack}>{t('common.previous')}</Button>
+        <Button className="min-h-11" disabled={apply.isPending} onClick={onNext}>
           {t('orgDepartments.setup.continueReview')}
           <ChevronRight className="h-4 w-4 rtl:rotate-180" aria-hidden />
         </Button>

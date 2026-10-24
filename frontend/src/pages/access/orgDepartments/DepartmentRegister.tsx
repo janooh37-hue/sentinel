@@ -193,8 +193,7 @@ export function DepartmentRegister({ go }: { go: (next: Partial<OrgRoute>) => vo
           )}
         </section>
       ) : (
-        <section aria-labelledby="org-register-list" className="space-y-3">
-          <h3 id="org-register-list" className="sr-only">{t('orgDepartments.register.title')}</h3>
+        <section className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row">
             <label className="flex min-h-11 flex-1 items-center gap-2 rounded-lg border border-border bg-surface px-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
               <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />

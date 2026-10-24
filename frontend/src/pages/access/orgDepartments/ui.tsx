@@ -53,10 +53,10 @@ export function QueryFailure({ error, retry, className }: { error: unknown; retr
   )
 }
 
-export function BackLink({ onClick, label }: { onClick: () => void; label?: string }): React.JSX.Element {
+export function BackLink({ onClick, label, disabled }: { onClick: () => void; label?: string; disabled?: boolean }): React.JSX.Element {
   const { t } = useTranslation()
   return (
-    <button type="button" onClick={onClick} className={cn(LINK_BUTTON, '-ms-2 text-muted-foreground hover:text-foreground')}>
+    <button type="button" onClick={onClick} disabled={disabled} className={cn(LINK_BUTTON, '-ms-2 text-muted-foreground hover:text-foreground')}>
       <ChevronLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />
       {label ?? t('orgDepartments.nav.departments')}
     </button>

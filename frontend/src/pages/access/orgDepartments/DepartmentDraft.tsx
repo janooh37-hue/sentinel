@@ -91,7 +91,6 @@ export function DraftPreviewSummary({ preview, index, departmentsById, draftName
     : preview.parent.kind === 'draft'
       ? t('orgDepartments.preview.partOfDraft', { name: bidi(draftName(preview.parent.headId)) })
       : t('orgDepartments.preview.partOf', { name: bidi(parent ? departmentName(parent, lang) : '') })
-  const inSubDepartments = preview.branchSize - preview.memberIds.length
   const members = preview.memberIds
     .map((id) => index.byId.get(id))
     .filter((person): person is OrgNodeRead => !!person)
@@ -101,8 +100,11 @@ export function DraftPreviewSummary({ preview, index, departmentsById, draftName
       <p>{parentLabel}</p>
       <p>
         <span className="font-semibold">{t('orgDepartments.preview.members', { count: preview.memberIds.length })}</span>
-        {inSubDepartments > 0 && (
-          <span className="text-muted-foreground"> · {t('orgDepartments.preview.inSubDepartments', { count: inSubDepartments })}</span>
+        {preview.inSubDepartments > 0 && (
+          <span className="text-muted-foreground"> · {t('orgDepartments.preview.inSubDepartments', { count: preview.inSubDepartments })}</span>
+        )}
+        {preview.elsewhere > 0 && (
+          <span className="text-muted-foreground"> · {t('orgDepartments.preview.elsewhere', { count: preview.elsewhere })}</span>
         )}
       </p>
       {preview.movedFrom.length > 0 && (

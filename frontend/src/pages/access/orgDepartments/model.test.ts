@@ -105,6 +105,29 @@ describe('previewDrafts', () => {
     expect(preview!.memberIds.toSorted()).toEqual(['G2', 'G4'])
     expect(preview!.branchSize).toBe(3)
   })
+
+  it('counts derived sub-department members apart from people placed elsewhere or outside', () => {
+    const index = buildOrgIndex(PEOPLE)
+    // G1's branch: G1..G6. G3 heads a proposed sub-department; G5 is placed outside by hand.
+    const [unit] = previewDrafts(index, [], [exception('G5', null)], ['G1', 'G3'])
+    expect(unit!.memberIds.toSorted()).toEqual(['G1', 'G2', 'G4'])
+    expect(unit).toMatchObject({ branchSize: 6, inSubDepartments: 2, elsewhere: 1 })
+  })
+
+  it('breaks a derived department-parent cycle, like the server', () => {
+    // Two roots whose reports are placed by hand into each other's proposed department.
+    const people = [person('A', null), person('A2', 'A'), person('B', null), person('B2', 'B'), person('HA', 'B2'), person('HB', 'A2')]
+    const index = buildOrgIndex(people)
+    const departments = [department(1, 'A'), department(2, 'B')]
+    // HA reports into department 2's branch, HB into department 1's: drafts nest both ways only via the existing ones.
+    const previews = previewDrafts(index, departments, [exception('A2', 2), exception('B2', 1)], ['HA', 'HB'])
+    // HA's supervisor B2 is placed in 1 → parent 1; HB's supervisor A2 in 2 → parent 2: no cycle here.
+    expect(previews.map((item) => item.parent)).toEqual([{ kind: 'department', id: 1 }, { kind: 'department', id: 2 }])
+    // Department heads whose supervisors sit in each other's drafts form a cycle and resolve to top-level.
+    const loop = [person('X', 'Y2'), person('X2', 'X'), person('Y', 'X2'), person('Y2', 'Y')]
+    const [x, y] = previewDrafts(buildOrgIndex(loop), [], [], ['X', 'Y'])
+    expect([x!.parent, y!.parent]).toEqual([{ kind: 'none' }, { kind: 'none' }])
+  })
 })
 
 describe('whyIncluded', () => {
@@ -137,8 +160,10 @@ describe('suggestions', () => {
 })
 
 describe('register helpers', () => {
-  it('counts each employee once for coverage', () => {
+  it('counts working employees once for coverage, like the outside-departments review', () => {
     expect(coverageOf(PEOPLE)).toEqual({ total: 8, inDepartment: 6, outside: 2 })
+    const withLeavers = [...PEOPLE, person('G9', null, { status: 'Resigned' }), person('G10', 'G1', { status: 'Loaned', department_id: 1 })]
+    expect(coverageOf(withLeavers)).toEqual({ total: 9, inDepartment: 7, outside: 2 })
   })
 
   it('reports a missing receiver before missing services and ignores inactive departments', () => {

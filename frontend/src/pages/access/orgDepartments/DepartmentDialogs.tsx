@@ -26,7 +26,7 @@ import { pickEmployeeName } from '@/lib/employeeName'
 import { OrgTreeView } from '@/pages/employees/orgTree/OrgTreeView'
 import { DraftNameFields, DraftPreviewSummary } from './DepartmentDraft'
 import { draftNamesSchema, serviceLabel, type DraftNames } from './labels'
-import { deriveMembership, membershipChanges, previewDrafts, type Placement } from './model'
+import { deriveMembership, deriveParents, membershipChanges, previewDrafts, type Placement } from './model'
 import { PersonSearch } from './PersonSearch'
 import { LINK_BUTTON, LiveEditsNotice, QueryFailure, Sheet, SheetFooter } from './ui'
 import { useOrgData } from './useOrgData'
@@ -154,13 +154,12 @@ export function ChangeHeadDialog({ department, onClose }: {
     const edited = all.map((item) => item.id === department.id ? { ...item, head_employee_id: candidate.id } : item)
     const after = deriveMembership(index, edited, exceptions.data ?? [])
     const count = (membership: Map<string, number | null>): number => [...membership.values()].filter((value) => value === department.id).length
-    const supervisor = index.supervisorOf(candidate.id)
-    const parentId = supervisor === null ? null : after.get(supervisor) ?? null
+    const parentId = deriveParents(index, edited, after).get(department.id) ?? null
     return {
       before: count(before),
       after: count(after),
       moved: membershipChanges(before, after).length,
-      parent: parentId === null || parentId === department.id ? undefined : departmentsById.get(parentId),
+      parent: parentId === null ? undefined : departmentsById.get(parentId),
     }
   }, [candidate, department.id, departments.data, departmentsById, exceptions.data, index])
   const save = useMutation({

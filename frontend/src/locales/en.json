@@ -23,6 +23,8 @@
   },
   "orgDepartments": {
     "help": "Set up departments from the reporting lines you already have, then turn on department access limits when you are ready.",
+    "orgWideRequired": "Department setup needs organization-wide access. Ask an administrator for the All departments permission.",
+    "dataLoading": "Loading the reporting lines and departments…",
     "nav": {
       "departments": "Departments"
     },
@@ -45,8 +47,8 @@
       "addOne": "Add one department",
       "emptyTitle": "No departments yet",
       "empty": "Choose a manager to create a department. Their reporting team is included automatically.",
-      "coverage_one": "{{covered}} of {{count}} employee is in a department",
-      "coverage_other": "{{covered}} of {{count}} employees are in a department",
+      "coverage_one": "{{covered}} of {{count}} working employee is in a department",
+      "coverage_other": "{{covered}} of {{count}} working employees are in a department",
       "outside_one": "{{count}} outside all departments",
       "outside_other": "{{count}} outside all departments",
       "reviewOutside": "Review",
@@ -214,6 +216,8 @@
       "members_other": "{{count}} people in this department",
       "inSubDepartments_one": "{{count}} more in sub-departments",
       "inSubDepartments_other": "{{count}} more in sub-departments",
+      "elsewhere_one": "{{count}} more below them is placed elsewhere or outside all departments",
+      "elsewhere_other": "{{count}} more below them are placed elsewhere or outside all departments",
       "fromDepartment_one": "{{count}} moves from {{name}}",
       "fromDepartment_other": "{{count}} move from {{name}}",
       "fromOutside_one": "{{count}} is outside all departments today",
