@@ -119,6 +119,59 @@ class DepartmentExceptionUpdate(BaseModel):
     department_id: int | None
 
 
+class AccountAccessDepartmentRead(BaseModel):
+    department_id: int
+    name_en: str
+    name_ar: str
+    # ``member``: the department the linked employee is in.
+    role: DepartmentRole
+    # Active derived sub-departments below this department, all levels.
+    sub_department_count: int
+
+
+class AccountAccessRead(BaseModel):
+    """What one account sees, and why, as if access limits were on."""
+
+    user_id: int
+    display_name: str
+    email: str
+    role: str
+    employee_id: str | None
+    employee_name_en: str | None
+    employee_name_ar: str | None
+    designation_en: str | None
+    designation_ar: str | None
+    duty_unit: str | None
+    reports_to_name_en: str | None
+    reports_to_name_ar: str | None
+    sees: Literal["organization", "department", "branch", "self"]
+    organization_reason: Literal["admin", "all_departments"] | None
+    # Working employees (Active, Loaned) below the linked employee in the tree.
+    team_size: int
+    # Working employees visible under that scope.
+    visible_count: int
+    departments: list[AccountAccessDepartmentRead]
+    # Departments whose department Records reach this account (head or deputy).
+    receives_department_records: list[int]
+
+
+class UnattachedUnitRead(BaseModel):
+    """A tree root, other than the largest, that reports to nobody."""
+
+    top_employee_id: str
+    name_en: str
+    name_ar: str | None
+    designation_en: str | None
+    duty_unit: str | None
+    team_size: int
+
+
+class AccountAccessOverviewRead(BaseModel):
+    limits_enabled: bool
+    accounts: list[AccountAccessRead]
+    unattached_units: list[UnattachedUnitRead]
+
+
 class UnassignedEmployeeGroup(BaseModel):
     # Highest supervisor-tree ancestor of the group.
     top_employee_id: str

@@ -9,6 +9,7 @@ from app.api.deps import get_current_user, require_capability
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.department import (
+    AccountAccessOverviewRead,
     DepartmentCandidateUserRead,
     DepartmentCreate,
     DepartmentExceptionRead,
@@ -41,6 +42,11 @@ def create_department(
     body: DepartmentCreate, db: Database, user: DepartmentAdmin
 ) -> DepartmentRead:
     return department_service.create_department(db, body, actor=user.email)
+
+
+@router.get("/account-access", response_model=AccountAccessOverviewRead)
+def account_access(db: Database, _user: DepartmentAdmin) -> AccountAccessOverviewRead:
+    return department_service.account_access(db)
 
 
 @router.get("/candidate-users", response_model=list[DepartmentCandidateUserRead])

@@ -74,51 +74,75 @@ def user_department_ids(db: Session, user: User) -> frozenset[int]:
 
 
 def resolve_department_scope(
-    db: Session, user: User, *, capabilities: set[str] | None = None
+    db: Session,
+    user: User,
+    *,
+    capabilities: set[str] | None = None,
+    assume_enabled: bool = False,
 ) -> DepartmentScope:
+    """The user's scope, memoized on the user for the live switch.
+
+    ``assume_enabled=True`` computes the scope as if access limits were on, for
+    explaining the configured outcome; it never reads or writes the cache.
+    """
+    if assume_enabled:
+        return _compute_scope(db, user, capabilities, enabled=True)
     cached: DepartmentScope | None = getattr(user, "_department_scope_cache", None)
     if cached is not None:
         return cached
-    organization = (
-        not settings_service.get_department_scoping_enabled(db)
-        or user.role == ADMIN_ROLE
-        or (
-            "departments.all" in capabilities
-            if capabilities is not None
-            else perm_service.has_capability(db, user, "departments.all")
-        )
+    scope = _compute_scope(
+        db, user, capabilities, enabled=settings_service.get_department_scoping_enabled(db)
     )
-    if organization:
-        scope = DepartmentScope(True, frozenset(), frozenset(), "organization")
-    else:
-        grants = list(
-            db.execute(
-                select(DepartmentMember.department_id, DepartmentMember.role).where(
-                    DepartmentMember.user_id == user.id
-                )
-            )
-        )
-        headed = (
-            frozenset(
-                db.scalars(
-                    select(Department.id).where(
-                        Department.head_employee_id == user.employee_id,
-                        Department.active.is_(True),
-                    )
-                )
-            )
-            if user.employee_id
-            else frozenset()
-        )
-        leading = headed | {did for did, role in grants if role == "deputy"}
-        ids = descendant_department_ids(db, frozenset(leading)) | {
-            did for did, role in grants if role == "viewer"
-        }
-        employees = branch_employee_ids(db, user.employee_id)
-        kind: ScopeKind = "department" if ids else "branch" if len(employees) > 1 else "self"
-        scope = DepartmentScope(False, frozenset(ids), employees, kind)
     user._department_scope_cache = scope
     return scope
+
+
+def has_organization_capability(
+    db: Session, user: User, capabilities: set[str] | None = None
+) -> bool:
+    return (
+        "departments.all" in capabilities
+        if capabilities is not None
+        else perm_service.has_capability(db, user, "departments.all")
+    )
+
+
+def _compute_scope(
+    db: Session, user: User, capabilities: set[str] | None, *, enabled: bool
+) -> DepartmentScope:
+    organization = (
+        not enabled
+        or user.role == ADMIN_ROLE
+        or has_organization_capability(db, user, capabilities)
+    )
+    if organization:
+        return DepartmentScope(True, frozenset(), frozenset(), "organization")
+    grants = list(
+        db.execute(
+            select(DepartmentMember.department_id, DepartmentMember.role).where(
+                DepartmentMember.user_id == user.id
+            )
+        )
+    )
+    headed = (
+        frozenset(
+            db.scalars(
+                select(Department.id).where(
+                    Department.head_employee_id == user.employee_id,
+                    Department.active.is_(True),
+                )
+            )
+        )
+        if user.employee_id
+        else frozenset()
+    )
+    leading = headed | {did for did, role in grants if role == "deputy"}
+    ids = descendant_department_ids(db, frozenset(leading)) | {
+        did for did, role in grants if role == "viewer"
+    }
+    employees = branch_employee_ids(db, user.employee_id)
+    kind: ScopeKind = "department" if ids else "branch" if len(employees) > 1 else "self"
+    return DepartmentScope(False, frozenset(ids), employees, kind)
 
 
 def invalidate_department_scope(db: Session, user_id: int) -> None:

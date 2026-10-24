@@ -27,6 +27,9 @@ from app.db.models import (
     User,
 )
 from app.schemas.department import (
+    AccountAccessDepartmentRead,
+    AccountAccessOverviewRead,
+    AccountAccessRead,
     DepartmentCandidateUserRead,
     DepartmentCreate,
     DepartmentExceptionRead,
@@ -39,6 +42,7 @@ from app.schemas.department import (
     DepartmentServiceOption,
     DepartmentUpdate,
     UnassignedEmployeeGroup,
+    UnattachedUnitRead,
     UserDepartmentRead,
 )
 from app.schemas.employee import WORKING_STATUSES
@@ -46,6 +50,7 @@ from app.services import (
     capability_catalog_service,
     department_scope_service,
     department_tree_service,
+    org_tree_service,
     settings_service,
 )
 
@@ -382,6 +387,140 @@ def replace_people(
     for user_id in previous | set(wanted):
         department_scope_service.invalidate_department_scope(db, user_id)
     return read_department(db, department_id)
+
+
+def account_access(db: Session) -> AccountAccessOverviewRead:
+    """Each active account's access, computed as if access limits were on."""
+    employees = {
+        employee.id: (employee, designation)
+        for employee, designation in org_tree_service.list_nodes(db)
+    }
+    children: dict[str, list[str]] = defaultdict(list)
+    for node, _ in employees.values():
+        if node.supervisor_id in employees:
+            children[node.supervisor_id].append(node.id)
+
+    def below(root: str) -> int:
+        """Working employees under ``root`` (cycle-safe, root excluded)."""
+        seen = {root}
+        stack = list(children[root])
+        count = 0
+        while stack:
+            current = stack.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            count += employees[current][0].status in WORKING_STATUSES
+            stack.extend(children[current])
+        return count
+
+    departments = {row.id: row for row in db.scalars(select(Department))}
+    active_parents = {row.id: row.parent_id for row in departments.values() if row.active}
+
+    def sub_department_count(department_id: int) -> int:
+        found: set[int] = set()
+        frontier = {department_id}
+        while frontier:
+            frontier = {
+                child
+                for child, parent in active_parents.items()
+                if parent in frontier and child not in found and child != department_id
+            }
+            found |= frontier
+        return len(found)
+
+    users = list(
+        db.scalars(select(User).where(User.status == "active", User.role != INMATE_REPORTER_ROLE))
+    )
+    memberships = user_departments(db, [user.id for user in users])
+    accounts = []
+    for user in users:
+        linked = employees.get(user.employee_id) if user.employee_id else None
+        employee, designation = linked if linked else (None, None)
+        supervisor = (
+            employees[employee.supervisor_id][0]
+            if employee is not None and employee.supervisor_id in employees
+            else None
+        )
+        scope = department_scope_service.resolve_department_scope(db, user, assume_enabled=True)
+        reason = (
+            "admin"
+            if user.role == ADMIN_ROLE
+            else "all_departments"
+            if scope.organization
+            else None
+        )
+        visible = (
+            select(func.count()).select_from(Employee).where(Employee.status.in_(WORKING_STATUSES))
+        )
+        clause = department_scope_service.employee_visibility_clause(scope)
+        if clause is not None:
+            visible = visible.where(clause)
+        grants = memberships.get(user.id, [])
+        accounts.append(
+            AccountAccessRead(
+                user_id=user.id,
+                display_name=user.display_name
+                or (employee.name_en if employee else None)
+                or user.email,
+                email=user.email,
+                role=user.role,
+                employee_id=employee.id if employee else None,
+                employee_name_en=employee.name_en if employee else None,
+                employee_name_ar=employee.name_ar if employee else None,
+                designation_en=designation.name_en if designation else None,
+                designation_ar=designation.name_ar if designation else None,
+                duty_unit=employee.duty_unit if employee else None,
+                reports_to_name_en=supervisor.name_en if supervisor else None,
+                reports_to_name_ar=supervisor.name_ar if supervisor else None,
+                sees=scope.kind,
+                organization_reason=reason,
+                team_size=below(employee.id) if employee else 0,
+                visible_count=db.scalar(visible) or 0,
+                departments=[
+                    AccountAccessDepartmentRead(
+                        department_id=grant.department_id,
+                        name_en=grant.name_en,
+                        name_ar=grant.name_ar,
+                        role=grant.role,
+                        sub_department_count=sub_department_count(grant.department_id),
+                    )
+                    for grant in grants
+                ],
+                receives_department_records=sorted(
+                    grant.department_id
+                    for grant in grants
+                    if grant.role in ("head", "deputy") and departments[grant.department_id].active
+                ),
+            )
+        )
+    accounts.sort(key=lambda row: (row.display_name.casefold(), row.user_id))
+
+    roots = sorted(
+        (
+            (below(employee.id), employee, designation)
+            for employee, designation in employees.values()
+            if employee.supervisor_id not in employees and employee.status in WORKING_STATUSES
+        ),
+        key=lambda item: (-item[0], item[1].id),
+    )
+    # Roots with nobody under them are lone people, not units.
+    units = [item for item in roots if item[0] > 0]
+    return AccountAccessOverviewRead(
+        limits_enabled=settings_service.get_department_scoping_enabled(db),
+        accounts=accounts,
+        unattached_units=[
+            UnattachedUnitRead(
+                top_employee_id=employee.id,
+                name_en=employee.name_en,
+                name_ar=employee.name_ar,
+                designation_en=designation.name_en if designation else None,
+                duty_unit=employee.duty_unit,
+                team_size=size,
+            )
+            for size, employee, designation in units[1:]
+        ],
+    )
 
 
 def candidate_users(db: Session) -> list[DepartmentCandidateUserRead]:
