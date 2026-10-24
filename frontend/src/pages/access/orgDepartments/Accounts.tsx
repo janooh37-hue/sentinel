@@ -23,7 +23,6 @@ import { pickEmployeeName } from '@/lib/employeeName'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { AddDepartmentDialog } from './DepartmentDialogs'
-import { personPosition } from './labels'
 import { PersonSearch } from './PersonSearch'
 import { INPUT, LABEL, LINK_BUTTON, PANEL, QueryFailure, Sheet, SheetFooter, ViewHeading } from './ui'
 import { useOrgData, type OrgRoute } from './useOrgData'
@@ -45,8 +44,9 @@ function employeeName(account: AccountAccessRead, lang: string): string {
   return pickEmployeeName({ name_en: account.employee_name_en ?? account.display_name, name_ar: account.employee_name_ar }, lang)
 }
 
-function designation(account: AccountAccessRead, lang: string): string | null {
-  return lang.startsWith('ar') && account.designation_ar ? account.designation_ar : account.designation_en
+/** Titles come from the account-access read, in the reader's language. */
+function designation(item: { designation_en: string | null; designation_ar: string | null }, lang: string): string | null {
+  return lang.startsWith('ar') && item.designation_ar ? item.designation_ar : item.designation_en
 }
 
 /** "Sees", in plain words, for each kind of scope. */
@@ -118,7 +118,7 @@ export function Accounts({ go }: { go: (next: Partial<OrgRoute>) => void }): Rea
   const { has } = useCapabilities()
   const canOverride = has('users.manage')
   const isAdmin = user?.role === 'admin'
-  const { canRelink, departmentsById, index } = useOrgData()
+  const { canRelink, departmentsById } = useOrgData()
   const overview = useQuery({ queryKey: ['departments', 'account-access'], queryFn: api.departments.accountAccess })
   const [hintHidden, setHintHidden] = useState(() => window.localStorage.getItem(HINT_KEY) === '1')
   const [giving, setGiving] = useState<Giving | null>(null)
@@ -223,16 +223,14 @@ export function Accounts({ go }: { go: (next: Partial<OrgRoute>) => void }): Rea
           <ul className="divide-y divide-hairline">
             {units.map((unit) => {
               const name = pickEmployeeName({ name_en: unit.name_en, name_ar: unit.name_ar }, lang)
-              const top = index.byId.get(unit.top_employee_id)
               return (
                 <li key={unit.top_employee_id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
                   <span className="min-w-0 text-[0.88em]">
                     <bdi className="font-medium text-foreground">{name}</bdi>
                     <span className="text-muted-foreground">
-                      {/* Title in the reader's language from the tree; the unit row carries English only. */}
-                      {[top ? personPosition(top, lang) : unit.designation_en, unit.duty_unit]
+                      {[designation(unit, lang), unit.duty_unit]
                         .filter(Boolean).map((value) => <span key={value}> · <bdi>{value}</bdi></span>)}
-                      {' · '}{t('orgDepartments.register.people', { count: unit.team_size })}
+                      {' · '}{t('orgDepartments.team', { count: unit.team_with_manager })}
                     </span>
                   </span>
                   {canRelink && (

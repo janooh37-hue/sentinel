@@ -39,7 +39,7 @@ const PEOPLE = [
   person('G1', 'Mona Chief', null, { department_id: 7, head_of_department_id: 7 }),
   person('G5', 'Huda Manager', 'G1', { department_id: 7 }),
   person('G6', 'Omar Clerk', 'G5', { department_id: 7 }),
-  person('G3', 'Lina Orphan', null, { duty_unit: 'First company' }),
+  person('G3', 'Lina Orphan', null, { duty_unit: 'First company', position: 'Tree title', position_ar: 'لقب الشجرة' }),
   person('G4', 'Ziad Report', 'G3', { duty_unit: 'First company' }),
 ]
 
@@ -52,7 +52,7 @@ const OPERATIONS: DepartmentRead = {
 function account(user_id: number, display_name: string, over: Partial<AccountAccessRead> = {}): AccountAccessRead {
   return {
     user_id, display_name, email: `${display_name.split(' ')[0]!.toLowerCase()}@gssg.ae`, role: 'operator',
-    employee_id: null, employee_name_en: null, employee_name_ar: null, designation_en: null, designation_ar: null,
+    employee_id: null, employee_name_en: null, employee_name_ar: null, position: null, position_ar: null, designation_en: null, designation_ar: null,
     duty_unit: null, reports_to_name_en: null, reports_to_name_ar: null, sees: 'self', organization_reason: null,
     team_size: 0, visible_count: 1, departments: [], receives_department_records: [], ...over,
   }
@@ -111,7 +111,10 @@ beforeEach(async () => {
   vi.spyOn(api.departments, 'accountAccess').mockResolvedValue({
     limits_enabled: false,
     accounts: ACCOUNTS,
-    unattached_units: [{ top_employee_id: 'G3', name_en: 'Lina Orphan', name_ar: null, designation_en: 'Commander', duty_unit: 'First company', team_size: 2 }],
+    unattached_units: [{
+      top_employee_id: 'G3', name_en: 'Lina Orphan', name_ar: 'لينا', position: 'Profile title', position_ar: 'لقب الملف',
+      designation_en: 'Commander', designation_ar: 'قائد', duty_unit: 'First company', team_size: 2, team_with_manager: 3,
+    }],
   })
   vi.spyOn(api, 'getUserPermissions').mockImplementation(async (id: number) => ({
     user_id: id, role: id === 9 ? 'manager' : 'operator', is_admin: false, effective: ['departments.all'],
@@ -147,11 +150,22 @@ describe('Accounts', () => {
     renderTab()
 
     expect(await screen.findByText('1 unit reports to nobody: its people are visible only to admins and to people inside it.')).toBeVisible()
+    // Same convention as Reporting lines and setup; the title is the account-access designation, not the tree's.
+    const unit = screen.getByRole('button', { name: iso('Set who Lina Orphan reports to') }).closest('li')!
+    expect(strip(unit.textContent!)).toBe('Lina Orphan · Commander · First company · Manager + team: 3 peopleSet who Lina Orphan reports to')
     await userEvent.click(screen.getByRole('button', { name: iso('Set who Lina Orphan reports to') }))
 
     expect(await screen.findByRole('tab', { name: 'Reporting lines' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('heading', { name: 'Lina Orphan' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Change supervisor' })).toBeVisible()
+  })
+
+  it('shows unit titles and team counts in Arabic from the same fields', async () => {
+    await i18n.changeLanguage('ar')
+    renderTab()
+
+    const unit = (await screen.findByRole('button', { name: iso('تحديد من يتبعه لينا') })).closest('li')!
+    expect(strip(unit.textContent!)).toContain('لينا · قائد · First company · المدير وفريقه: 3 موظفين')
   })
 
   it('gives an account extra access to an existing department and removes it again', async () => {
@@ -296,5 +310,28 @@ describe('Accounts', () => {
     await userEvent.type(screen.getByLabelText('Arabic name'), 'الفريق الميداني')
     await userEvent.click(screen.getByRole('button', { name: 'Create 1 department' }))
     await vi.waitFor(() => expect(screen.getByRole('tab', { name: 'Accounts' })).toBeDisabled())
+  })
+
+  it('offers the same sections, with the same guards, as a compact picker for phones', async () => {
+    vi.spyOn(api.departments, 'create').mockReturnValue(new Promise<DepartmentRead>(() => {}))
+    renderTab('/permissions?tab=org&view=setup&step=1')
+
+    const picker = await screen.findByRole('combobox', { name: 'Organization & departments sections' })
+    expect(within(picker).getAllByRole('option').map((option) => option.textContent))
+      .toEqual(['Accounts', 'Departments', 'Reporting lines', 'Placed by hand'])
+    expect(picker).toHaveValue('departments')
+
+    await userEvent.type(await screen.findByLabelText('Find another manager'), 'Huda')
+    await userEvent.click(screen.getByRole('button', { name: /Huda Manager/ }))
+    await userEvent.selectOptions(picker, 'accounts')
+    const confirm = await screen.findByRole('dialog', { name: 'Leave setup?' })
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+    expect(picker).toHaveValue('departments')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Review 1 selection' }))
+    await userEvent.type(await screen.findByLabelText('English name'), 'Field team')
+    await userEvent.type(screen.getByLabelText('Arabic name'), 'الفريق الميداني')
+    await userEvent.click(screen.getByRole('button', { name: 'Create 1 department' }))
+    await vi.waitFor(() => expect(picker).toBeDisabled())
   })
 })

@@ -1495,6 +1495,10 @@ function PeoplePermissionsPanel(): React.JSX.Element {
 
 type PermissionsTab = 'people' | 'org'
 
+/** On phones both areas share the row in equal halves and long labels wrap,
+ *  so neither is pushed offscreen in English or Arabic. */
+const PAGE_TAB = 'max-sm:h-auto max-sm:min-h-11 max-sm:flex-1 max-sm:basis-0 max-sm:justify-center max-sm:whitespace-normal max-sm:py-2 max-sm:text-center max-sm:leading-snug'
+
 /**
  * Permissions — two areas behind one route:
  *   - People & permissions (`users.manage`): per-user capability studio;
@@ -1533,9 +1537,9 @@ export function PermissionsPage(): React.JSX.Element {
         </header>
         <Tabs value={tab} onValueChange={selectTab}>
           {canPeople && canOrg && (
-            <TabsList aria-label={t('access.permissions.mirror.title')} className="mb-5 overflow-x-auto [scrollbar-width:none]">
-              <TabsTrigger value="people">{t('access.permissions.tabs.people')}</TabsTrigger>
-              <TabsTrigger value="org">{t('access.permissions.tabs.org')}</TabsTrigger>
+            <TabsList aria-label={t('access.permissions.mirror.title')} className="mb-5 max-sm:items-stretch max-sm:gap-3">
+              <TabsTrigger value="people" className={PAGE_TAB}>{t('access.permissions.tabs.people')}</TabsTrigger>
+              <TabsTrigger value="org" className={PAGE_TAB}>{t('access.permissions.tabs.org')}</TabsTrigger>
             </TabsList>
           )}
           {tab === 'people' ? <PeoplePermissionsPanel /> : <OrgDepartmentsTab />}

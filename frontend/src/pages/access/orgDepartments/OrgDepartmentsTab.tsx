@@ -29,7 +29,7 @@ import { DepartmentRegister } from './DepartmentRegister'
 import { DepartmentSetup } from './DepartmentSetup'
 import { OutsideDepartments, Placements } from './Placements'
 import { ReportingLines } from './ReportingLines'
-import { LINK_BUTTON, PANEL, QueryFailure } from './ui'
+import { INPUT, LINK_BUTTON, PANEL, QueryFailure } from './ui'
 import { useOrgData, useOrgRoute, type OrgView } from './useOrgData'
 
 type Section = 'accounts' | 'departments' | 'reporting' | 'placements'
@@ -86,13 +86,26 @@ export function OrgDepartmentsTab(): React.JSX.Element {
   return (
     <div ref={topRef} className="min-w-0 scroll-mt-4 space-y-5">
       {sections.length > 1 && (
-        <Tabs value={section} onValueChange={(next) => openSection(next as Section)}>
-          <TabsList aria-label={t('orgDepartments.sections.label')} className="overflow-x-auto [scrollbar-width:none]">
-            {sections.map((item) => (
-              <TabsTrigger key={item} value={item} disabled={leave.busy} className="disabled:opacity-50">{t(`orgDepartments.sections.${item}`)}</TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <>
+          {/* Phones: four labels don't fit one row in either language, so the
+              same sections, through the same guard, become a compact picker. */}
+          <select
+            aria-label={t('orgDepartments.sections.label')}
+            value={section}
+            disabled={leave.busy}
+            onChange={(event) => openSection(event.target.value as Section)}
+            className={cn(INPUT, 'mt-0 font-medium disabled:opacity-50 sm:hidden')}
+          >
+            {sections.map((item) => <option key={item} value={item}>{t(`orgDepartments.sections.${item}`)}</option>)}
+          </select>
+          <Tabs value={section} onValueChange={(next) => openSection(next as Section)} className="hidden sm:block">
+            <TabsList aria-label={t('orgDepartments.sections.label')} className="flex-wrap gap-x-6">
+              {sections.map((item) => (
+                <TabsTrigger key={item} value={item} disabled={leave.busy} className="disabled:opacity-50">{t(`orgDepartments.sections.${item}`)}</TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </>
       )}
       {derived && !orgWide ? (
         <div className={cn(PANEL, 'space-y-2 px-5 py-6')}>
