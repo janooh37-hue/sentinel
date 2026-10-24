@@ -425,3 +425,42 @@ contract.
   why-included; gating stays as it is (`employees.view` plus `employees.edit` or
   `departments.manage`; reporting-line editing only with `employees.edit`, department
   actions only with `departments.manage`); the Employees tree stays read-only.
+
+### Evidence (redesign S)
+
+Commits:
+
+- `5a6a84f2`: the register, guided setup, department pages, the two correction tools,
+  and removal of the canvas editor.
+- `26ecc77f`: review fixes:
+  - the editor requires organization-wide scope (admins, `departments.all`, or access
+    limits off); anyone else sees a notice instead of numbers;
+  - exact sub-department and "placed elsewhere" counts;
+  - previews wait for the org tree, departments and exceptions to load, with
+    loading/error/retry states;
+  - a single working-status population for counts;
+  - step navigation is locked during batches;
+  - the client-side department-parent cycle guard.
+- `021eb273` and `957c3721`: every count, including the server's `employee_count`, uses
+  working employees (Active, Loaned).
+
+Checks:
+
+- **Frontend full Vitest** at `26ecc77f`: 3456 passed. The only failures are the 2 known
+  `PermitDocumentVersions` tests.
+- **Type check, lint and build**: `tsc` is clean, the build passes, and lint shows only
+  the known e2e error.
+- **i18n-rtl review**: 0 must-fix, 7 should-fix, all applied.
+- **Independent review**: 4 must-fix and 2 should-fix, all applied.
+
+Visual check on the real preview data (304 employees), read-only with a temporary admin:
+
+- The register, setup step 1 (admin office split into its managers), step 2 preview,
+  Fix reporting lines and the placed-by-hand/outside review all render in EN and AR at
+  1366px and 390px, with no phone overflow.
+- The nested preview was correct.
+- Data was unchanged: the SHA-256 of `employees(id, supervisor_id)` was identical before
+  and after, the department tables were unchanged, and the temporary account was removed.
+
+Known, not from this branch: the global top bar's text-size slider overlaps "Permits" at
+1366px.
