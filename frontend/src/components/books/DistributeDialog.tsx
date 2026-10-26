@@ -1,7 +1,7 @@
 import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { api, SEND_PURPOSES, type BookDepartmentSendRead, type BookDistributeRequest, type BookRead, type SendPurpose } from '@/lib/api'
 import { departmentErrorMessage, departmentName } from '@/lib/departments'
 import { distributionPayload } from '@/lib/departmentInbox'

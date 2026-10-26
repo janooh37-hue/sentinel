@@ -20,7 +20,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, CalendarClock, ClipboardCheck, FileInput, Flag, Inbox, Paperclip, Printer, ScanLine, ShieldCheck, Stamp } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'

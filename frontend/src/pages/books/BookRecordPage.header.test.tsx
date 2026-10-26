@@ -50,7 +50,7 @@ vi.mock('@/lib/useCapabilities', () => ({
   }),
 }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => viewport.mobile }))
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: Object.assign(vi.fn(), {
     success: vi.fn(),
     error: vi.fn(),

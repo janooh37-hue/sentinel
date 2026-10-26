@@ -6,7 +6,7 @@ import {
   Folder, FolderPlus, Maximize2, MessageSquareText, Minimize2, Search, Send, X,
 } from 'lucide-react'
 import { CheckboxItem, ItemIndicator } from '@radix-ui/react-dropdown-menu'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 
@@ -645,7 +645,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3 text-sm">
               {facts.map(({ label, value }) => <div key={label} className="contents"><dt className="text-muted-foreground">{label}</dt><dd className="min-w-0 break-words font-medium">{value}</dd></div>)}
             </dl>
-            {!loading && <div className="mt-6 space-y-6"><RecordRecipientsPanel bookId={book.id} departmentSends={book.department_sends} /><RecordThreadSection book={book} /></div>}
+            {!loading && <div className="mt-6 space-y-6"><RecordRecipientsPanel bookId={book.id} bookRef={book.ref_number} departmentSends={book.department_sends} /><RecordThreadSection book={book} /></div>}
           </aside>
         )}
       </div>

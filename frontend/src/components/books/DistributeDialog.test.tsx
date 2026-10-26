@@ -2,12 +2,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import i18n from '@/lib/i18n'
 import { api, type BookDepartmentSendRead, type BookRead } from '@/lib/api'
 import { DistributeDialog } from './DistributeDialog'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 const send: BookDepartmentSendRead = {
   id: 12, department_id: 5, department_name_en: 'Operations', department_name_ar: 'العمليات',

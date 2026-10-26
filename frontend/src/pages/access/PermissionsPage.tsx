@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { AdvancedPermissionsPanel } from '@/components/access/AdvancedPermissionsPanel'
 import { ServiceArtwork, type ServiceArtworkId } from '@/components/ui/service-artwork'

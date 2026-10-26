@@ -5,7 +5,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage, type BookRead, type Confidentiality } from '@/lib/api'
 import { DialogContent, DialogDescription, DialogHeader, DialogRoot, DialogTitle } from '@/components/ui/dialog'
@@ -35,7 +35,9 @@ function Body({ book, close }: { book: BookRead; close: () => void }): React.JSX
     mutationFn: () => api.setBookConfidentiality(book.id, level),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['books'] })
-      toast.success(t('books.confidentiality.changed', { level: t(`books.confidentiality.levels.${level}`) }))
+      toast.success(t('books.confidentiality.changed', { level: t(`books.confidentiality.levels.${level}`) }), {
+        reference: book.ref_number,
+      })
       close()
     },
     onError: (err) => toast.error(apiErrorMessage(err)),

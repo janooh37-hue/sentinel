@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { isValidElement } from 'react'
 import type { ReactNode } from 'react'
 import i18n from 'i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api } from '@/lib/api'
 import type { BookInboxRead, BookRead, BookRecipientRead } from '@/lib/api'
@@ -35,7 +35,9 @@ vi.mock('@/lib/api', async (original) => {
   }
 })
 vi.mock('./useReplyActions', () => ({ useReplyActions: () => ({ actions: [], dialog: null }) }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({
+  toast: { success: vi.fn(), info: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'toast-1'), dismiss: vi.fn() },
+}))
 
 const INBOX: BookInboxRead = {
   id: 9, purpose: 'circulate', sent_by_user_id: 2,
@@ -150,9 +152,9 @@ describe('department send rollout', () => {
     render(<SendRecordDialog book={BOOK} open onOpenChange={vi.fn()} />, { wrapper })
     await userEvent.click(await screen.findByRole('checkbox', { name: 'Mariam Recipient' }))
     await userEvent.click(screen.getByRole('button', { name: 'Send' }))
-    await waitFor(() => expect(toast.info).toHaveBeenCalledWith(expect.any(String), {
+    await waitFor(() => expect(toast.info).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
       description: expect.stringContaining(reason === 'self' ? 'Ali Sender' : 'Mariam Recipient'),
-    }))
+    })))
   })
 })
 
@@ -186,7 +188,7 @@ describe('Arabic recipient surfaces and circulation', () => {
     }
     vi.spyOn(api, 'listBookRecipients').mockResolvedValue([recipient])
     const { wrapper } = setup()
-    render(<RecordRecipientsPanel bookId={7} />, { wrapper })
+    render(<RecordRecipientsPanel bookId={7} bookRef={BOOK.ref_number} />, { wrapper })
     const panel = await screen.findByTestId('record-recipients')
     expect(panel).toHaveTextContent('مريم المستلمة')
     expect(panel).toHaveTextContent('خالد المرسل')
@@ -233,7 +235,7 @@ it.each([
   await i18n.changeLanguage(language)
   vi.spyOn(api, 'listBookRecipients').mockResolvedValue([])
   const { wrapper } = setup()
-  render(<RecordRecipientsPanel bookId={7} departmentSends={[{
+  render(<RecordRecipientsPanel bookId={7} bookRef={null} departmentSends={[{
     id: 12, department_id: 5, department_name_en: 'Operations', department_name_ar: 'العمليات',
     parent_send_id: null, sent_by_user_id: 2, sent_by_name: 'Sender', sent_by_name_ar: null,
     purpose: 'info', note: null, created_at: INBOX.sent_at, revoked_at: null,

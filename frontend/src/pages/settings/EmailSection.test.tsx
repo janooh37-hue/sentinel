@@ -29,8 +29,8 @@ vi.mock('@/lib/api', async (orig) => {
 vi.mock('@/lib/useIdentity', () => ({
   useIdentity: vi.fn(),
 }))
-vi.mock('sonner', () => ({
-  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+vi.mock('@/lib/toast', () => ({
+  toast: Object.assign(vi.fn(), { loading: vi.fn(() => 'pending-email'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() }),
 }))
 vi.mock('./SignatureSection', () => ({ SignatureSection: () => null }))
 vi.mock('@/pages/application/EmployeePicker', () => ({ EmployeePicker: () => <div data-testid="employee-picker" /> }))

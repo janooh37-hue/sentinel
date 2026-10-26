@@ -11,7 +11,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import { DialogContent, DialogDescription, DialogHeader, DialogRoot, DialogTitle } from '@/components/ui/dialog'
@@ -62,7 +62,7 @@ function Body({
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success(t('leaves.report.sendDone', { ref: res.ref }))
+      toast.success(t('leaves.report.sendDone'), { reference: res.ref })
       close()
     },
     onError: (err) => toast.error(apiErrorMessage(err)),

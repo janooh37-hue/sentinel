@@ -15,7 +15,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/api', () => ({
   api: {
     listDesignations: vi.fn(),
@@ -31,7 +31,7 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { api, ApiError, type TimesheetDesignationRead } from '@/lib/api'
 import { DesignationCatalog } from './DesignationCatalog'
 

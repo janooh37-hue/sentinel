@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import type * as RouterModule from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, ApiError, type BookRead, type BookThreadItem } from '@/lib/api'
 import en from '@/locales/en.json'
@@ -28,7 +28,7 @@ vi.mock('react-router-dom', async (original) => ({
 }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: auth.authenticated ? { role: auth.role } : null }) }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => !auth.denied.has(cap) }) }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() } }))
 
 const BOOK: BookRead = {
   id: 7, ref_number: '1/1/196', category_id: 'GS',
@@ -124,7 +124,7 @@ describe('derive and reply actions', () => {
     mount(<DeriveRecordDialog book={BOOK} kind="reply" open onOpenChange={vi.fn()} />)
     expect(screen.queryByRole('combobox', { name: /Classification/ })).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: 'Reply' }))
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(message))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(message, expect.anything()))
   })
 
   it('exports read-only reply actions and never carries an open dialog to a different record', async () => {
@@ -337,6 +337,7 @@ describe('reference picker and thread', () => {
 
 describe('send with references', () => {
   it('initializes reply defaults on opening, defaults references on, sends opt-out and reports skip reasons', async () => {
+    vi.mocked(toast.loading).mockReturnValueOnce('send-toast')
     vi.mocked(api.getBookThread).mockResolvedValue([REFERENCE])
     vi.spyOn(api, 'listRecipientCandidates').mockResolvedValue([
       { id: 12, name: 'Recipient', name_ar: 'المستلم', role: 'operator', has_secret_clearance: false },
@@ -356,7 +357,10 @@ describe('send with references', () => {
     await waitFor(() => expect(send).toHaveBeenCalledWith(7, {
       user_ids: [12], department_ids: [], purpose: 'reply', note: null, make_directed: false, include_references: false,
     }))
+    expect(toast.loading).toHaveBeenCalledWith('Sending record…')
     await waitFor(() => expect(toast.info).toHaveBeenCalledWith('Nothing new was sent', {
+      id: 'send-toast',
+      reference: BOOK.ref_number,
       description: expect.stringContaining('Reference deliveries: 1 sent, 2 skipped.'),
     }))
     const description = vi.mocked(toast.info).mock.calls[0]?.[1]?.description

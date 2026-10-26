@@ -20,7 +20,7 @@ const { toastFn, toastError, toastSuccess, toastDismiss } = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   toastDismiss: vi.fn(),
 }))
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: Object.assign(toastFn, { error: toastError, success: toastSuccess, dismiss: toastDismiss }),
 }))
 

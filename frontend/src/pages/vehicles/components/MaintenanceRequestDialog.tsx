@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Controller, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
@@ -91,7 +91,7 @@ function MaintenanceRequestForm({ vehicle, lastMaintenance, onOpenChange, onBusy
       invalidateVehicleQueries(queryClient, { vehicleId: vehicle.id })
       void queryClient.invalidateQueries({ queryKey: ['books'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success(t('vehicles.letterSaved', { ref: result.letter.ref_number }))
+      toast.success(t('vehicles.letterSaved'), { reference: result.letter.ref_number })
       navigate(`/books/${result.letter.book_id}`)
     },
     onError: (error) => {

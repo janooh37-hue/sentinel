@@ -6,7 +6,6 @@ from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import (
-    Book,
     Document,
     Employee,
     EmployeeStatusEvent,
@@ -21,9 +20,8 @@ from app.schemas.employee_activity import (
     EmployeeActivityKind,
     EmployeeActivityListRead,
 )
-from app.services import ledger_service
+from app.services import document_service, ledger_service, perm_service
 from app.services.department_scope_service import DepartmentScope, employee_visibility_clause
-from app.services.employee_detail_service import document_book_visible
 
 DEFAULT_LIMIT = 25
 MAX_LIMIT = 100
@@ -38,21 +36,19 @@ def _documents(
     *,
     employee_id: str | None,
     requested: int,
-    visible: ColumnElement[bool] | None = None,
+    user: User | None,
+    excluded_ids: set[int],
     scope: DepartmentScope | None = None,
 ) -> tuple[list[EmployeeActivityItemRead], int]:
-    book_id = (
-        select(Book.id)
-        .where(Book.ref_number == Document.ref_number, Book.deleted_at.is_(None))
-        .order_by(Book.id.desc())
-        .limit(1)
-        .correlate(Document)
-        .scalar_subquery()
-    )
+    """Documents owned by a live Record the caller may read, filtered in SQL.
+
+    Activity links open Records, so standalone documents have no target.
+    """
+    target_id = document_service.owning_record_id()
     stmt = (
         select(
             Document.id.label("source_id"),
-            book_id.label("target_id"),
+            target_id.label("target_id"),
             Document.created_at.label("occurred_at"),
             Document.template_id.label("title"),
             Document.ref_number.label("reference"),
@@ -63,15 +59,14 @@ def _documents(
         )
         .join(Employee, Document.employee_id == Employee.id)
         .where(
-            Document.employee_id.is_not(None),
             Document.ref_number != "DRAFT",
-            book_id.is_not(None),
+            document_service.live_record_document_clause(db, user),
         )
     )
     if employee_id is not None:
         stmt = stmt.where(Document.employee_id == employee_id)
-    if visible is not None:
-        stmt = stmt.where(visible)
+    if excluded_ids:
+        stmt = stmt.where(Document.id.not_in(excluded_ids))
     clause = employee_visibility_clause(scope)
     if clause is not None:
         stmt = stmt.where(clause)
@@ -375,19 +370,13 @@ def list_employee_activity(
     # owner_user_id is the caller: rows about Records they cannot open are hidden.
     caller = db.get(User, owner_user_id)
     sources: list[tuple[list[EmployeeActivityItemRead], int]] = []
-    if kind in (None, "document"):
-        sources.append(
-            _documents(
-                db,
-                employee_id=employee_id,
-                requested=requested,
-                visible=document_book_visible(db, caller),
-                scope=scope,
-            )
-        )
     if kind in (None, "leave"):
         sources.append(_leaves(db, employee_id=employee_id, requested=requested, scope=scope))
-    if kind in (None, "violation"):
+    if (
+        kind in (None, "violation")
+        and caller is not None
+        and perm_service.has_capability(db, caller, "violations.view")
+    ):
         sources.append(_violations(db, employee_id=employee_id, requested=requested, scope=scope))
     if kind in (None, "ledger"):
         sources.append(
@@ -408,10 +397,38 @@ def list_employee_activity(
         sources.append(
             _status_events(db, employee_id=employee_id, requested=requested, scope=scope)
         )
-    merged = sorted(chain.from_iterable(rows for rows, _ in sources), key=_sort_key)
+
+    # Documents are filtered in SQL; the exact per-document gate then re-checks
+    # only the documents that land on this page. A refused one is excluded and
+    # the page refilled, so each pass removes at least one row.
+    refused: set[int] = set()
+    while True:
+        documents: tuple[list[EmployeeActivityItemRead], int] = ([], 0)
+        if kind in (None, "document"):
+            documents = _documents(
+                db,
+                employee_id=employee_id,
+                requested=requested,
+                user=caller,
+                excluded_ids=refused,
+                scope=scope,
+            )
+        merged = sorted(
+            chain(documents[0], chain.from_iterable(rows for rows, _ in sources)),
+            key=_sort_key,
+        )
+        page = merged[offset : offset + limit]
+        newly_refused = document_service.unreadable_live_record_documents(
+            db,
+            {item.source_id: item.target_id for item in page if item.kind == "document"},
+            user=caller,
+        )
+        if not newly_refused:
+            break
+        refused |= newly_refused
     return EmployeeActivityListRead(
-        items=merged[offset : offset + limit],
-        total=sum(total for _, total in sources),
+        items=page,
+        total=documents[1] + sum(total for _, total in sources),
         limit=limit,
         offset=offset,
     )

@@ -8,7 +8,7 @@ import { ArrowDownLeft, ArrowUpRight, BookOpen, Inbox, Send, Trash2 } from 'luci
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import type { BookRead } from '@/lib/api'
 import {

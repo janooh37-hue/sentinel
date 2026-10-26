@@ -11,7 +11,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { WidgetCard, type BreakdownRow } from '@/components/ui/widget-card'
 import { api, type DashboardSummary, apiErrorMessage } from '@/lib/api'
@@ -47,19 +47,20 @@ export function EmailSyncStatusWidget({ summary }: Props): React.JSX.Element {
   // synced counts/sync timestamp flow through the rest of the UI.
   const syncMutation = useMutation({
     mutationFn: () => api.syncEmail(),
-    onSuccess: (r) => {
+    onMutate: () => toast.loading(t('dashboard.widgets.emailSync.syncingToast')),
+    onSuccess: (r, _vars, toastId) => {
       toast.success(
         t('settings.email.syncOk', {
           imported: r.imported,
           skipped: r.skipped_duplicate,
-          defaultValue: 'Imported {{imported}}, skipped {{skipped}}',
         }),
+        { id: toastId },
       )
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
       void qc.invalidateQueries({ queryKey: ['email-account'] })
       void qc.invalidateQueries({ queryKey: ['ledger'] })
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err, _vars, toastId) => toast.error(apiErrorMessage(err), { id: toastId }),
   })
 
   const total = emailSync?.incoming_today ?? 0

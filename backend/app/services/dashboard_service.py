@@ -48,7 +48,13 @@ from app.schemas.dashboard import (
     DashboardUpcomingLeaveItem,
 )
 from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_LOANED, WORKING_STATUSES
-from app.services import book_service, department_service, email_service, ledger_service
+from app.services import (
+    book_service,
+    department_service,
+    email_service,
+    ledger_service,
+    perm_service,
+)
 from app.services.department_scope_service import (
     DepartmentScope,
     employee_fk_visible,
@@ -127,12 +133,15 @@ def get_summary(
     parity-data scale (< 10k employees, < 100k documents) and keeping the
     queries separate makes the test surface small.
 
-    ``owner_user_id`` scopes only the email-sync widget to the signed-in
-    user's mailbox/rows. ``user`` scopes Book-backed totals to visible record
-    types and people to department visibility; ``None`` preserves unscoped behavior.
+    ``owner_user_id`` scopes mailbox sync and drafts. Authenticated callers'
+    capabilities govern each protected section independently; a denied section
+    never denies the dashboard itself. ``user`` also scopes people to department
+    visibility; ``None`` preserves unscoped behavior.
     """
     if today is None:
         today = date.today()
+    can_view_leaves = user is None or perm_service.has_capability(db, user, "leaves.view")
+    can_view_ledger = user is None or perm_service.has_capability(db, user, "ledger.view")
     resolved_scope = scope or (
         resolve_department_scope(db, user)
         if user is not None
@@ -147,11 +156,15 @@ def get_summary(
         department_scope=DashboardDepartmentScope(
             kind=resolved_scope.kind, departments=departments
         ),
-        totals=_compute_totals(db, today=today, user=user, scope=scope),
-        on_leave_today=_on_leave_today(db, today=today, scope=scope),
-        upcoming_leave_ends=_upcoming_leave_ends(db, today=today, scope=scope),
+        totals=_compute_totals(
+            db, today=today, user=user, owner_user_id=owner_user_id, scope=scope
+        ),
+        on_leave_today=_on_leave_today(db, today=today, scope=scope) if can_view_leaves else [],
+        upcoming_leave_ends=(
+            _upcoming_leave_ends(db, today=today, scope=scope) if can_view_leaves else []
+        ),
         recent_documents=_recent_documents(db, user=user),
-        recent_ledger=_recent_ledger(db, user=user),
+        recent_ledger=_recent_ledger(db, user=user) if can_view_ledger else [],
         email_sync=_email_sync(db, today=today, owner_user_id=owner_user_id),
     )
 
@@ -162,8 +175,16 @@ def get_summary(
 
 
 def _compute_totals(
-    db: Session, *, today: date, user: User | None = None, scope: DepartmentScope | None = None
+    db: Session,
+    *,
+    today: date,
+    user: User | None = None,
+    owner_user_id: int | None = None,
+    scope: DepartmentScope | None = None,
 ) -> DashboardTotals:
+    can_view_employees = user is None or perm_service.has_capability(db, user, "employees.view")
+    can_view_leaves = user is None or perm_service.has_capability(db, user, "leaves.view")
+    can_view_violations = user is None or perm_service.has_capability(db, user, "violations.view")
     visibility = employee_visibility_clause(scope)
     people_clauses = () if visibility is None else (visibility,)
     by_status: dict[str, int] = {
@@ -216,7 +237,9 @@ def _compute_totals(
     violation_visibility = employee_fk_visible(scope, Violation.employee_id)
     if violation_visibility is not None:
         violations_stmt = violations_stmt.where(violation_visibility)
-    open_violations_count = int(db.execute(violations_stmt).scalar_one())
+    open_violations_count = (
+        int(db.execute(violations_stmt).scalar_one()) if can_view_violations else None
+    )
 
     draft_needle = f'%"{DRAFT_TAG}"%'
     draft_stmt = (
@@ -224,6 +247,7 @@ def _compute_totals(
         .select_from(LedgerEntry)
         .where(
             LedgerEntry.deleted_at.is_(None),
+            LedgerEntry.owner_user_id == (user.id if user is not None else owner_user_id),
             cast(LedgerEntry.tags, Text).like(draft_needle),
         )
     )
@@ -244,11 +268,11 @@ def _compute_totals(
     book_draft_count = int(db.execute(book_draft_stmt).scalar_one())
 
     return DashboardTotals(
-        employees_active=our_staff + loaned,
-        our_staff=our_staff,
-        loaned=loaned,
-        on_leave_today=on_leave_count,
-        present_today=present_today,
+        employees_active=our_staff + loaned if can_view_employees else None,
+        our_staff=our_staff if can_view_employees else None,
+        loaned=loaned if can_view_employees else None,
+        on_leave_today=on_leave_count if can_view_leaves else None,
+        present_today=present_today if can_view_employees and can_view_leaves else None,
         forms_this_month=forms_this_month,
         open_violations_count=open_violations_count,
         draft_count=draft_count,
@@ -418,6 +442,8 @@ def _recent_ledger(db: Session, *, user: User | None = None) -> list[DashboardRe
     visible = ledger_service.related_book_visible(db, user)
     if visible is not None:
         stmt = stmt.where(visible)
+    if user is not None:
+        stmt = stmt.where(ledger_service.email_owned_by(user.id))
 
     rows: list[Any] = list(db.execute(stmt).all())
     return [

@@ -8,7 +8,7 @@ const granted = vi.hoisted(() => new Set<string>())
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }),
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/components/shell/CapabilityGate', () => ({
   CapabilityGate: ({ cap, children }: { cap: string; children: ReactNode }) =>
     granted.has(cap) ? children : null,

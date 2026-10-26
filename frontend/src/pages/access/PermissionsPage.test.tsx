@@ -34,11 +34,11 @@ vi.mock('@/lib/useCapabilities', () => ({
   }),
 }))
 
-// Write failures surface through sonner; mocking it lets the rollback test
+// Write failures surface through the toast adapter; mocking it lets the rollback test
 // assert the toast without mounting a Toaster.
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { PermissionsPage } from './PermissionsPage'
 import {

@@ -379,7 +379,7 @@ def test_document_employee_dashboard_and_ledger_projections_hide_foreign_books(r
     from datetime import date
 
     from app.db.models import Employee, LedgerEntry
-    from app.services import dashboard_service, employee_detail_service
+    from app.services import dashboard_service, document_service
     from app.services.ledger_service import DRAFT_TAG
 
     db, users, books, *_ = records
@@ -412,13 +412,15 @@ def test_document_employee_dashboard_and_ledger_projections_hide_foreign_books(r
                     subject=name,
                     tags=[DRAFT_TAG] if draft else [],
                     related_book_id=book.id,
+                    # Dashboard drafts are owner-scoped.
+                    owner_user_id=users["viewer"].id,
                 )
             )
     db.commit()
     user = users["viewer"]
     clause = book_service.document_visibility_clause(db, user)
     assert set(db.scalars(select(Document.id).where(clause))) == {documents["peer"].id}
-    employee_clause = employee_detail_service.document_book_visible(db, user)
+    employee_clause = document_service.live_record_document_clause(db, user)
     assert set(db.scalars(select(Document.id).where(employee_clause))) == {documents["peer"].id}
     totals = dashboard_service._compute_totals(
         db, today=date.today(), user=user, scope=scopes.resolve_department_scope(db, user)

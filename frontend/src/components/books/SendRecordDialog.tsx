@@ -10,7 +10,7 @@ import { useId, useState } from 'react'
 import * as RadixDialog from '@radix-ui/react-dialog'
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { Search, X } from 'lucide-react'
 
 import {
@@ -107,18 +107,19 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery, activ
         make_directed: isPersonal,
         include_references: includeReferences,
       }),
-    onSuccess: (res) => {
+    onMutate: () => toast.loading(t('books.send.sending')),
+    onSuccess: (res, _vars, toastId) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
-      reportResult(res)
+      reportResult(res, toastId)
       close()
     },
-    onError: (err) => {
+    onError: (err, _vars, toastId) => {
       const key = err instanceof ApiError ? SEND_ERROR_KEYS[err.code] : undefined
-      toast.error(key ? t(key) : departmentErrorMessage(err, t))
+      toast.error(key ? t(key) : departmentErrorMessage(err, t), { id: toastId, reference: book.ref_number })
     },
   })
 
-  function reportResult(res: BookSendResult): void {
+  function reportResult(res: BookSendResult, toastId: string | number | undefined): void {
     const byId = new Map(candidates.map((c) => [c.id, nameOf(c)]))
     // The recipient directory deliberately excludes the sender.
     if (user) byId.set(user.id, pickEmployeeName({ name_en: user.name_en || user.email, name_ar: user.name_ar }, i18n.language))
@@ -140,8 +141,8 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery, activ
       references.length ? t('books.thread.sendSummary', { sent: referenceSent, skipped: referenceSkipped.length }) : '',
       referenceSkipped.join(isAr ? '، ' : ', '),
     ].filter(Boolean).join(' · ') || undefined
-    if (res.sent.length > 0) toast.success(t('books.send.sent', { count: res.sent.length }), { description })
-    else toast.info(t('books.send.nothingSent'), { description })
+    if (res.sent.length > 0) toast.success(t('books.send.sent', { count: res.sent.length }), { id: toastId, description, reference: book.ref_number })
+    else toast.info(t('books.send.nothingSent'), { id: toastId, description, reference: book.ref_number })
   }
 
   const canSend = (picked.length > 0 || pickedDepartments.length > 0) && !mutation.isPending

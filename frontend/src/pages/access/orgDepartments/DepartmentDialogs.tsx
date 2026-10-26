@@ -14,7 +14,7 @@ import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { DepartmentPicker } from '@/components/departments/DepartmentPicker'
 import { Button } from '@/components/ui/button'

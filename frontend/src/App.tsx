@@ -2,8 +2,8 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { Toaster } from 'sonner'
 
+import { AppToaster } from '@/components/shell/AppToaster'
 import { BottomTabBar } from '@/components/shell/BottomTabBar'
 import { LockOverlay } from '@/components/shell/LockOverlay'
 import { MobileTopBar } from '@/components/shell/MobileTopBar'
@@ -266,7 +266,7 @@ function Shell(): React.JSX.Element {
     return (
       <>
         <LoginPage />
-        <Toaster position="bottom-right" richColors closeButton />
+        <AppToaster />
       </>
     )
   }
@@ -623,12 +623,7 @@ function Shell(): React.JSX.Element {
           <ScanBackGate />
         </>
       ) : null}
-      {/* Wrapped so print can hide it: sonner renders an empty <section> in
-          normal flow here, and a trailing in-flow box after a named-@page
-          element (the permits register) costs a blank sheet. */}
-      <div data-print-hide>
-        <Toaster position="bottom-right" richColors closeButton />
-      </div>
+      <AppToaster />
       <ShortcutsHelpDialog />
       {locked && (
         <LockOverlay

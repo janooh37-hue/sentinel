@@ -2,7 +2,7 @@ import { useId, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Gauge, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'

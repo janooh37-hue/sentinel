@@ -43,7 +43,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { FileTypeIcon } from '@/components/ledger/FileTypeIcon'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
@@ -270,6 +270,7 @@ export function VehicleDetailPage(): React.JSX.Element {
   })
 
   const uploadPhoto = useMutation({
+    onMutate: () => toast.loading(t('application.attachments.uploading')),
     mutationFn: (target: { vehicleId: number; file: File }) =>
       // Both halves of the label are written now, so the tile reads correctly
       // in the other language too without a second request.
@@ -277,12 +278,15 @@ export function VehicleDetailPage(): React.JSX.Element {
         label_ar: t('vehicles.newPhoto', { lng: 'ar' }),
         label_en: t('vehicles.newPhoto', { lng: 'en' }),
       }),
-    onSuccess: (_file, target) => {
+    onSuccess: (_file, target, toastId) => {
       invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId })
-      toast.success(`${target.file.name}: ${t('common.savedToast')}`)
+      toast.success(t('common.savedToast'), { id: toastId, description: target.file.name })
     },
-    onError: (err, target) =>
-      toast.error(`${target.file.name}: ${vehicleErrorMessage(err, t)}`),
+    onError: (err, target, toastId) =>
+      toast.error(t('common.toastState.error'), {
+        id: toastId,
+        description: `${target.file.name}: ${vehicleErrorMessage(err, t)}`,
+      }),
   })
 
   const saveMainPhoto = useMutation({

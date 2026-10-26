@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { ChevronDown, Inbox, Send } from 'lucide-react'
 
 import { api, apiErrorMessage, type BookRead, type BookRecipientRead, type BookDepartmentSendRead, type BookInboxRead } from '@/lib/api'
@@ -27,11 +27,13 @@ const day = (iso: string): string => formatDmy(iso.slice(0, 10))
 
 export function RecordRecipientsPanel({
   bookId,
+  bookRef,
   className,
   departmentSends = [],
 }: {
   bookId: number
   departmentSends?: BookDepartmentSendRead[]
+  bookRef: string | null
   className?: string
 }): React.JSX.Element | null {
   const { t, i18n } = useTranslation()
@@ -49,7 +51,7 @@ export function RecordRecipientsPanel({
     mutationFn: (recipientId: number) => api.recallBookRecipient(bookId, recipientId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['books'] })
-      toast.success(t('books.send.recalled'))
+      toast.success(t('books.send.recalled'), { reference: bookRef ?? undefined })
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })

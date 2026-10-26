@@ -59,16 +59,15 @@ def records(api_db):
         )
         api_db.add(book)
         api_db.flush()
-        api_db.add(
-            BookVersion(
-                book_id=book.id,
-                version_no=1,
-                template_id="Employment Certificate",
-                fields={},
-                status="approved",
-                created_by_user_id=creator.id,
-            )
+        version = BookVersion(
+            book_id=book.id,
+            version_no=1,
+            template_id="Employment Certificate",
+            fields={},
+            status="approved",
+            created_by_user_id=creator.id,
         )
+        api_db.add(version)
         document = Document(
             employee_id=employee.id,
             template_id="Employment Certificate",
@@ -90,6 +89,8 @@ def records(api_db):
             created_at=book.created_at,
         )
         api_db.add_all([document, log])
+        api_db.flush()
+        version.document_id = document.id
         books.append(book)
         documents.append(document)
         logs.append(log)

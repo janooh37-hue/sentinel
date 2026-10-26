@@ -13,7 +13,7 @@
  * The api mock therefore names every method this page can now reach:
  * `listDesignations` (the catalog the affordance depends on) and
  * `setTimesheetRoster` (the one atomic write), beside the two the shell already
- * used. `sonner` carries `warning` as well, because a locked cell refuses
+ * used. The toast mock carries `warning` as well, because a locked cell refuses
  * through the grid's own one-per-gesture toast rather than by going dead.
  *
  * jsdom has neither `DataTransfer` nor the Web Animations API, so the pointer
@@ -26,13 +26,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ApiModule from '@/lib/api'
 
-vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+vi.mock('@/lib/toast', () => ({
+  toast: { loading: vi.fn(), dismiss: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: {
     getTimesheet: vi.fn(),
     setTimesheetCell: vi.fn(),
@@ -40,17 +42,6 @@ vi.mock('@/lib/api', () => ({
     setTimesheetRoster: vi.fn(),
     createTimesheetDesignation: vi.fn(),
     updateTimesheetDesignation: vi.fn(),
-  },
-  apiErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
-  // The structured envelope: a refusal this UI has its own words for is
-  // recognised by CODE, so the sentence an Arabic operator reads is never the
-  // backend's English one.
-  ApiError: class ApiError extends Error {
-    readonly code: string
-    constructor(_status: number, code: string, message: string) {
-      super(message)
-      this.code = code
-    }
   },
 }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: vi.fn() }))
@@ -506,12 +497,10 @@ describe('saving the draft', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Save roster' }))
 
-    // A refusal with no code of its own falls back to whatever the server
-    // said, beside the draft it refused — ONCE, and in one place: the write is
-    // asked for its quiet variant, so the sentence is not also a toast the
-    // operator has to read twice and can only catch once.
+    // An unstructured refusal uses localized generic text beside the draft
+    // it refused, once. The quiet write must not also emit a duplicate toast.
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('Designation 105 is inactive.')
+    expect(alert).toHaveTextContent('Something went wrong')
     expect(screen.getAllByRole('alert')).toHaveLength(1)
     expect(toast.error).not.toHaveBeenCalled()
     // Nothing was rolled back: the staged order and the mode are both still on

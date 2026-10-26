@@ -9,7 +9,7 @@ import { BookFolderHeader } from './BookFolderHeader'
 vi.mock('@/lib/authContext', () => ({
   useAuth: () => ({ user: { department_scoping_enabled: false } }),
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 const folder: BookFolderRead = {
   id: 9, name: 'Team correspondence', team: true, can_manage: true,

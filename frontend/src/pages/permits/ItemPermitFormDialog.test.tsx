@@ -7,7 +7,7 @@ import type * as ApiModule from '@/lib/api'
 import { api } from '@/lib/api'
 import { ItemPermitFormDialog } from './ItemPermitFormDialog'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 // The real picker searches the employee API; a button is enough to pick one.
 vi.mock('@/pages/application/EmployeePicker', () => ({

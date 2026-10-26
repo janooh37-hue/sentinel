@@ -20,7 +20,7 @@ vi.mock('@/lib/api', async (orig) => {
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }),
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { VehicleFinesReportPage } from './VehicleFinesReportPage'
 

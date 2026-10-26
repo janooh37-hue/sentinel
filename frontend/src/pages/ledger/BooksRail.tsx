@@ -3,7 +3,7 @@ import type { DragEvent, ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Folder, FolderArchive, FolderCheck, FolderInput, FolderOutput, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'

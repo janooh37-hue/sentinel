@@ -14,7 +14,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useUrlOverlay } from '@/lib/urlState'
@@ -190,26 +190,29 @@ export function EmployeeDetailPage(): React.JSX.Element {
     linkedDocIndex >= 0 ? { docs: recentPreviewDocs, index: linkedDocIndex } : null
   )
 
+  const openDocument = docOverlay.open
+  const closeDocument = docOverlay.close
+  const closeEdit = editOverlay.close
   const openDocPreview = useCallback((docs: PreviewDoc[], index = 0) => {
     const doc = docs[index]
     if (!doc) return
     setLocalPreview({ docs, index })
     // Only documents resolvable from the record get a shareable `?doc=`.
-    if (data?.recent_documents.some((item) => item.id === doc.id)) docOverlay.open(String(doc.id))
-  }, [data?.recent_documents, docOverlay.open])
+    if (data?.recent_documents.some((item) => item.id === doc.id)) openDocument(String(doc.id))
+  }, [data?.recent_documents, openDocument])
 
   useEffect(() => {
     if (!data || capabilitiesLoading) return
     if (action === 'edit' || action === 'status') {
-      if (!has('employees.edit')) editOverlay.close()
+      if (!has('employees.edit')) closeEdit()
     } else if (action) {
-      editOverlay.close()
+      closeEdit()
     }
-  }, [action, capabilitiesLoading, data, editOverlay.close, has])
+  }, [action, capabilitiesLoading, data, closeEdit, has])
 
   useEffect(() => {
-    if (data && docOverlay.value && linkedDocIndex < 0) docOverlay.close()
-  }, [data, docOverlay.close, docOverlay.value, linkedDocIndex])
+    if (data && docOverlay.value && linkedDocIndex < 0) closeDocument()
+  }, [data, closeDocument, docOverlay.value, linkedDocIndex])
 
   // Record this profile in recents (for the lookup-page "recently opened" card).
   useEffect(() => {

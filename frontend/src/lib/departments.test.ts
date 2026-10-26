@@ -1,6 +1,6 @@
 import { createInstance } from 'i18next'
 import { describe, expect, it } from 'vitest'
-import { ApiError, type AdminUserRead, type DepartmentRead, type UserDepartmentRead } from './api'
+import { ApiError, apiErrorMessage, type AdminUserRead, type DepartmentRead, type UserDepartmentRead } from './api'
 import {
   departmentDescendantIds,
   departmentErrorMessage,
@@ -119,6 +119,9 @@ describe('department error messages', () => {
       expect(departmentErrorMessage(new ApiError(409, code, 'Raw English server message'), t)).toBe(message)
     }
     expect(departmentErrorMessage(new ApiError(500, 'OTHER_ERROR', 'Other message'), t)).toBe('Other message')
-    expect(departmentErrorMessage('Network failed', t)).toBe('Network failed')
+    expect(departmentErrorMessage('Network failed', t)).toBe(apiErrorMessage('Network failed'))
+    expect(departmentErrorMessage(new TypeError('Network failed'), t)).toBe(apiErrorMessage(new TypeError('Network failed')))
+    const pendingAccount = new ApiError(403, 'ACCOUNT_PENDING', 'Raw English server message')
+    expect(departmentErrorMessage(pendingAccount, t)).toBe(apiErrorMessage(pendingAccount))
   })
 })

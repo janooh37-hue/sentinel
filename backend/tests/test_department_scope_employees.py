@@ -10,6 +10,7 @@ from app.api.deps import get_current_user
 from app.db.models import (
     Book,
     BookCategory,
+    BookVersion,
     Document,
     Employee,
     EmployeeStatusEvent,
@@ -113,22 +114,26 @@ def test_activity_scopes_all_six_sources_and_query_filters(scoped):
     owners = {"G1": 1, "G2": 2, "G3": 3, "GOWN": 3, "GNULL": None}
     for index, employee_id in enumerate(("G1", "G2", "G3", "GOWN", "GNULL"), start=1):
         ref = f"SC-{index:04d}"
+        book = Book(
+            category_id="SC",
+            ref_number=ref,
+            employee_id=employee_id,
+            department_id=owners[employee_id],
+            created_by_user_id=user.id if employee_id == "GOWN" else None,
+        )
+        document = Document(
+            employee_id=employee_id,
+            template_id="Certificate",
+            ref_number=ref,
+            docx_path="output/fake.docx",
+            submission_id=f"scope-{index}",
+        )
+        db.add_all([book, document])
+        db.flush()
+        # Activity lists only Documents owned by a live Record (via its version).
+        db.add(BookVersion(book_id=book.id, version_no=1, document_id=document.id))
         db.add_all(
             [
-                Book(
-                    category_id="SC",
-                    ref_number=ref,
-                    employee_id=employee_id,
-                    department_id=owners[employee_id],
-                    created_by_user_id=user.id if employee_id == "GOWN" else None,
-                ),
-                Document(
-                    employee_id=employee_id,
-                    template_id="Certificate",
-                    ref_number=ref,
-                    docx_path="output/fake.docx",
-                    submission_id=f"scope-{index}",
-                ),
                 Leave(
                     employee_id=employee_id,
                     leave_type="Annual",

@@ -12,7 +12,7 @@ import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/
 import { AlertTriangle, Check, ChevronDown, ChevronRight, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'

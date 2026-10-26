@@ -97,6 +97,14 @@ and every supervisor their own branch; others keep their own work. Admins and
 users granted `departments.all` retain the organization-wide view; action
 capabilities and Record Levels still apply. `departments.manage` controls setup.
 
+Dashboard sections respect the corresponding employee, leave, violation, and
+ledger read capabilities independently: the summary still returns successfully
+when a section is denied, with `null` protected counts and empty protected lists.
+Dashboard correspondence includes only the caller's email and shared non-email
+entries, even for admins; draft counts are owner-scoped. Employee detail and
+activity also honor `violations.view`, and linked document metadata inherits the
+owning record's exact-revision read policy, including deleted-record restrictions.
+
 ## Authorization lifecycle
 
 Temporary capability grants stop at expiry, without waiting for the cleanup

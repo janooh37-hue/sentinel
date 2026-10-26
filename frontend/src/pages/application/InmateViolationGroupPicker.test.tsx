@@ -6,7 +6,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'ar' } }),
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('../../lib/useCapabilities', () => ({
   useCapabilities: () => ({ has: (cap: string) => cap === 'messages.broadcast' }),
 }))

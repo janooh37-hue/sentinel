@@ -10,7 +10,7 @@ import { MessageTemplateEditor } from './MessageTemplateEditor'
 
 const { has } = vi.hoisted(() => ({ has: vi.fn() }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has }) }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn() } }))
 vi.mock('@/lib/messageTemplates', async (importOriginal) => {
   const original = await importOriginal<typeof MessageTemplatesModule>()
   Object.assign(original.messageTemplatesApi, { render: vi.fn(), save: vi.fn(), reset: vi.fn() })
