@@ -873,3 +873,62 @@ start with `RESEARCH_SOURCES` index 2 (Python 3.12 `email.parser`). Questions: c
 RFC 5322 Message-ID / References parsing, same-owner live parent matching, failed
 reconciliation retry, Q02 mail-sync owner gating, and the W1+Q02 merge order. F, H, K and N may be
 re-asked with fresh captures under tomorrow's own allowance.
+
+## WP4 security fix evidence — 2026-10-23
+
+Branch: `fix/sec-wp4-email-owner-binding`, based on fresh `origin/main`
+`5cfe34a7`. This is local implementation evidence, not merge/deployment or
+production-provider validation.
+
+- Read Q02 issue [#205](https://github.com/janooh37-hue/sentinel/issues/205)
+  and research PR [#249](https://github.com/janooh37-hue/sentinel/pull/249)
+  (comments and complete diff) before coding. The current PR diff is a
+  research-only malformed-message/backup summary, not an owner-matching patch;
+  the same-owner/live-parent proposal is recorded in this campaign's Q02
+  routing note above. No research PR changes were imported.
+- `email_service/global-msgid-dedup-cross-owner-backfill`: owner-scope the
+  dedup map, refresh and verify the live nonpending email owner before file or
+  recipient backfill, and owner-scope the internal-direction backfill.
+  Compare full canonical stored Message-IDs; long IDs use SHA-256 tags instead
+  of truncated tags. Historical 160-character tags without a full header
+  cannot authorize backfill. Legacy pending rows match full stored headers.
+  `message_id` is declared `String(512)` and tags are JSON; the digest fits the
+  existing JSON representation, so no schema migration is needed. A public
+  sync regression covers independent IDs longer than 512 characters.
+- `email.thread-match.unbound-reply-authority`: require the receiving
+  account/entry owner to agree, then match only same-owner, live
+  outgoing/internal email parents before confirming. Direct scan filing
+  reuses that parent predicate and limits queued rows to the same owner.
+  Foreign/null-owner, deleted, and non-email parents leave send state,
+  approval/version/step state and signed files unchanged. The same live
+  parent still confirms and files in its actual owner's mailbox.
+
+Commands below use
+`V=/home/amh/Projects/sentinel-wt/feat-employee-status-transfer/.venv/bin`
+from this worktree:
+
+- RED: `$V/python -m pytest backend/tests/test_email_routes.py -k 'cannot_backfill or truncated_message or distinct_long' -q`
+  → exit 1, **5 failed**: foreign/null-owner and truncated-ID targets gained
+  attachment files; distinct long IDs imported only one row. Tests committed
+  as `f0228896`; dedup fix `0e04314b`.
+- RED: `$V/python -m pytest backend/tests/test_email_routes.py -k same_owner_live_email_parent -q`
+  → exit 1, **8 failed**: both thread-header forms confirmed and signed against
+  foreign/null-owner/deleted/non-email parents. Tests committed as `b6fd9f89`;
+  reply/sink fix and compatibility regressions `f5b85846`.
+- GREEN: both RED commands → exit 0, respectively **5 passed** and **8 passed**.
+  No finding's RED case unexpectedly passed on the unfixed code.
+- GREEN: `$V/python -m pytest backend/tests/test_email_routes.py backend/tests/test_email_service.py backend/tests/test_email_scheduler.py backend/tests/test_scan_inbox_service.py backend/tests/test_scan_inbox_target_authz.py backend/tests/test_leave_sign_gate.py -q`
+  → exit 0, **146 passed**.
+- GREEN: `$V/python -m pytest backend/tests/test_scan_inbox_document.py backend/tests/test_scan_inbox_nplus1.py backend/tests/test_email_connection.py backend/tests/test_email_draft_templates.py -q`
+  → exit 0, **85 passed**.
+- `$V/ruff check .` → exit 0, all checks passed.
+- `$V/ruff format backend/app/services/email_service.py backend/app/services/scan_inbox_service.py backend/tests/test_email_routes.py backend/tests/test_leave_sign_gate.py`
+  → exit 0, one file reformatted, three unchanged.
+- `$V/mypy` → exit 1, **58 errors in 13 untouched files**; no diagnostics in
+  either changed service. Unrelated errors were left unchanged.
+
+No UI/i18n, HTTP schema, or generated contract changes. D1–D4 do not apply to
+WP4. Full-suite integration and provider/header-preservation validation remain
+with the integrator/operator. No push, PR creation, merge, or deployment was
+performed; there is no implementation PR URL yet. Execution model:
+`openai-codex/gpt-6.1-sol`.
