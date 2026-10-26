@@ -211,6 +211,11 @@ def test_document_metadata_uses_exact_owning_revision_on_every_employee_route(re
             detail = response.json()
             assert detail["stats"]["documents"] == len(expected_ids)
             assert {doc["id"] for doc in detail["recent_documents"]} == expected_ids
+            # A deleted Record stays listed for readers, but is never a link target.
+            deleted = restriction == "deleted"
+            assert {
+                (doc["book_id"], doc["approval_state"]) for doc in detail["recent_documents"]
+            } <= {(None, None) if deleted else (book.id, "approved")}
             assert {
                 doc["id"] for doc in detail["recent_leaves"][0]["linked_documents"]
             } == expected_ids
@@ -220,15 +225,17 @@ def test_document_metadata_uses_exact_owning_revision_on_every_employee_route(re
             assert {
                 row["ref_id"] for row in detail["recent_activity"] if row["kind"] == "document"
             } == expected_ids
+            # Activity rows link to their Record, so deleted Records are omitted.
+            activity_ids = set() if restriction == "deleted" else expected_ids
             response = records.client.get(
                 "/api/v1/employees/activity",
                 params={"employee_id": records.employee.id, "kind": "document", "limit": 1},
             )
             assert response.status_code == 200, response.text
             body = response.json()
-            assert body["total"] == len(expected_ids)
-            assert len(body["items"]) == min(1, len(expected_ids))
-            assert {row["source_id"] for row in body["items"]} <= expected_ids
+            assert body["total"] == len(activity_ids)
+            assert len(body["items"]) == min(1, len(activity_ids))
+            assert {row["source_id"] for row in body["items"]} <= activity_ids
             assert all(row["target_id"] == book.id for row in body["items"])
     finally:
         assert _state(records) == before
