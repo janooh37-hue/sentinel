@@ -17,6 +17,14 @@ application only. It is pulled to the office server.
 - Shared vehicle-photo library with reusable named images and lightweight WebP previews
 - Runs as an always-on Windows service on the office LAN
 
+Email messages, drafts, attachments, and employee-linked mail metadata are private
+to their mailbox owner. Admins can explicitly select **All mail** to read other
+mailboxes (including legacy messages without an owner); editing, deleting,
+starring, flags, and read-state changes remain limited to their own mailbox.
+Opening another owner's message does not mark it read. Non-email correspondence
+remains shared, subject to the linked Record's visibility; smart-folder counts
+and suggestions respect that same Record visibility.
+
 Material Request is one service in Services. An `English | العربية` tab in its
 form picks the paper to preview and save, and opens on the interface language.
 Switching keeps the delivery date, items, and manager, which both papers share
@@ -27,6 +35,13 @@ signature fields are not offered on the Arabic form. Requester name,
 designation/contact, and manager signing date do not print because its design
 has no slots. The selected manager fills the center-manager approval; the
 contract-manager and final approvals stay blank for hand signing.
+
+Employee identity links are assigned by administrators during registration
+approval or through user management; accounts cannot claim employee records.
+Linked accounts and manager aliases share the employee's canonical signature.
+Manager settings editors also need `employees.edit` to assign/change an
+employee-linked account or replace/delete its signature; standalone manager
+signatures require only `settings.edit`.
 
 ## Requirements
 
@@ -66,6 +81,23 @@ fields are never included in search results. Employee profiles, photos, vaults, 
 and HR pages keep their existing permission gates. Announcement recipient and
 WhatsApp-mention searches still require `employees.view` because they use
 contact numbers rather than only employee identities.
+
+## Authorization lifecycle
+
+Temporary capability grants stop at expiry, without waiting for the cleanup
+sweep. When the capability belongs to the user's current role defaults (or is
+a dynamic capability), expiry restores a deny; an additional non-default grant
+simply expires. Single and bulk permission updates follow the same rule, and
+role changes during the grant window are evaluated against the current role.
+
+Evaluation-queue listing and retry require organization workforce scope as
+well as `workforce.integration.manage`; only terminally failed rows can be retried.
+
+Notification streams revalidate their originating session and current account
+eligibility on every polling tick before accessing the per-user counts cache.
+Revoking that session, expiry, disabling the account, requiring password setup,
+or changing to a role barred from notifications ends the stream, even if another
+session for that user remains valid.
 
 ## Record category permissions
 

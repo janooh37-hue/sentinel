@@ -19,6 +19,7 @@ export function rewriteCidReferences(
   inlineImages: Record<string, string>,
   entryId: number,
   attachmentPaths: string[],
+  scope?: 'mine' | 'all',
 ): string {
   if (!html || Object.keys(inlineImages).length === 0) return html
   return html.replace(CID_SRC_RE, (match, prefix, quote, cid) => {
@@ -26,6 +27,6 @@ export function rewriteCidReferences(
     if (relPath === undefined) return match
     const index = attachmentPaths.indexOf(relPath)
     if (index < 0) return match
-    return `${prefix}${quote}/api/v1/ledger/${entryId}/attachments/by-index/${index}${quote}`
+    return `${prefix}${quote}/api/v1/ledger/${entryId}/attachments/by-index/${index}${scope ? `?scope=${scope}` : ''}${quote}`
   })
 }

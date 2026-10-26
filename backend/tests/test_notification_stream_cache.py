@@ -12,11 +12,14 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.v1 import notifications
 from app.db.models import Base, User
-from app.services import notification_service
+from app.services import auth_service, notification_service
 from tests.conftest import make_user
 
 
 class _NeverDisconnects:
+    def __init__(self, token: str) -> None:
+        self.cookies = {"gssg_session": token}
+
     async def is_disconnected(self) -> bool:
         return False
 
@@ -32,7 +35,9 @@ def test_tabs_of_one_user_share_one_counts_computation(
         bind=engine, autoflush=False, expire_on_commit=False, future=True
     )
     with factory() as setup:
-        user_id = make_user(setup, role="admin", email="tabs@test.ae").id
+        user = make_user(setup, role="admin", email="tabs@test.ae")
+        user_id = user.id
+        token = auth_service.start_session(setup, user)
 
     # Isolate from other tests' cached users (ids repeat across test DBs).
     monkeypatch.setattr(notifications, "_counts_cache", {})
@@ -48,7 +53,7 @@ def test_tabs_of_one_user_share_one_counts_computation(
     def open_tab() -> str:
         injected = factory()
         user = injected.get(User, user_id)
-        response = anyio.run(lambda: notifications.stream(_NeverDisconnects(), injected, user))
+        response = anyio.run(lambda: notifications.stream(_NeverDisconnects(token), injected, user))
 
         async def first_frame() -> str:
             async for chunk in response.body_iterator:
@@ -81,5 +86,5 @@ def test_counts_poll_refreshes_what_sibling_streams_see(
         monkeypatch.setattr(notifications, "_counts_cache", {user.id: (time.monotonic(), stale)})
 
         assert notifications.get_counts(db, user) == fresh
-        assert notifications._shared_counts(factory, user.id) == fresh
+        assert notifications._shared_counts(db, user) == fresh
     engine.dispose()
