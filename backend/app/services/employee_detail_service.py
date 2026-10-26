@@ -6,10 +6,14 @@ docs/leaves/violations/ledger entries, and a merged activity timeline.
 Filter rules:
 - Approved leaves count toward ``leaves_taken_days``; other statuses don't.
 - ``LedgerEntry.deleted_at`` rows are excluded from counts and the recent list.
-- Document counts, links and timeline entries use the canonical exact-revision
-  read policy, including confidentiality, retained access and deleted Records.
-- An explicit ``violations.view`` deny omits violation rows and timeline events;
-  the employee detail's integer violation count is zero.
+- Document counts, lists and timeline entries use the canonical exact-revision
+  read policy, including confidentiality and retained access. A document whose
+  owning Record is soft-deleted stays listed for callers who may still read it
+  (``users.manage``), but carries no ``book_id`` or ``approval_state`` link.
+- An explicit ``violations.view`` deny empties ``recent_violations`` and omits
+  violation timeline events. ``stats.violations`` is then ``0``: the
+  ``EmployeeStatsRead`` field is a plain ``int``, unlike the dashboard's
+  nullable ``open_violations_count``, which reports a deny as ``null``.
 - Tenure is derived from ``Employee.doj`` (the column v3 used; ``doj_company``
   is the start at this specific company, but historical data keeps it equal to
   ``doj`` for most rows — sticking with ``doj`` matches the dashboard service).
@@ -126,17 +130,22 @@ def get_employee_detail(
         tenure_years=tenure_years,
     )
 
-    recent_docs = [
-        sx.RecentDocumentRead(
-            id=document.id,
-            template_id=document.template_id,
-            ref_number=document.ref_number,
-            created_at=document.created_at,
-            book_id=version.book_id if version is not None else None,
-            approval_state=version.book.approval_state if version is not None else None,
+    recent_docs = []
+    for document, version in doc_rows[:RECENT_LIMIT]:
+        # A soft-deleted Record cannot be opened, so it is never a link target.
+        record = version.book if version is not None else None
+        if record is not None and record.deleted_at is not None:
+            record = None
+        recent_docs.append(
+            sx.RecentDocumentRead(
+                id=document.id,
+                template_id=document.template_id,
+                ref_number=document.ref_number,
+                created_at=document.created_at,
+                book_id=record.id if record is not None else None,
+                approval_state=record.approval_state if record is not None else None,
+            )
         )
-        for document, version in doc_rows[:RECENT_LIMIT]
-    ]
 
     recent_leaves = [
         sx.RecentLeaveRead.model_validate(lv)
