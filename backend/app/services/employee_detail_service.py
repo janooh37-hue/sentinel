@@ -76,6 +76,8 @@ def get_employee_detail(
     ]
     if ledger_visible is not None:
         ledger_filters.append(ledger_visible)
+    if user is not None:
+        ledger_filters.append(ledger_service.email_owned_by(user.id))
 
     doc_count = int(
         db.execute(select(func.count(models.Document.id)).where(*doc_filters)).scalar_one()

@@ -47,8 +47,8 @@ def create_manager(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("settings.edit"))],
 ) -> ManagerRead:
-    """Create a new manager row. Requires ``settings.edit`` (admin-only)."""
-    row = manager_service.create_manager(db, payload)
+    """Create a manager; employee-linked accounts also require ``employees.edit``."""
+    row = manager_service.create_manager(db, payload, actor=_user)
     return _read(db, row)
 
 
@@ -59,8 +59,8 @@ def update_manager(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("settings.edit"))],
 ) -> ManagerRead:
-    """Update any manager field (name, title, active, user link). settings.edit."""
-    row = manager_service.update_manager(db, manager_id, payload)
+    """Update a manager; employee-linked user assignments also require employees.edit."""
+    row = manager_service.update_manager(db, manager_id, payload, actor=_user)
     return _read(db, row)
 
 
@@ -73,7 +73,7 @@ async def upload_manager_signature(
 ) -> dict[str, str]:
     data = await upload.read()
     try:
-        path = manager_service.save_manager_signature(db, manager_id, data)
+        path = manager_service.save_manager_signature(db, manager_id, data, actor=_user)
     except signature_core.SignatureError as exc:
         raise ValidationFailedError("SIGNATURE_INVALID", str(exc), manager_id=manager_id) from exc
     return {"path": str(path), "filename": path.name}
@@ -105,5 +105,5 @@ def delete_manager_signature(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("settings.edit"))],
 ) -> Response:
-    manager_service.delete_manager_signature(db, manager_id)
+    manager_service.delete_manager_signature(db, manager_id, actor=_user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

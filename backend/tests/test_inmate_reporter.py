@@ -182,19 +182,21 @@ def _complete_fields(**overrides: Any) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def test_self_link_is_blocked_for_inmate_reporter(api_db: Session) -> None:
-    a = _user(api_db, email="a@x.ae", role=INMATE_REPORTER_ROLE)
+@pytest.mark.parametrize("role", [INMATE_REPORTER_ROLE, OPERATOR_ROLE])
+def test_self_link_route_is_removed(api_db: Session, role: str) -> None:
+    user = _user(api_db, email="a@x.ae", role=role)
     _employee(api_db, "G100", "A Reporter")
-    with pytest.raises(Exception) as exc:
-        auth_service.link_self(api_db, a, employee_id="G100")
-    assert getattr(exc.value, "code", None) == "INMATE_REPORTER_IDENTITY_LOCKED"
-
-
-def test_operator_self_link_still_works(api_db: Session) -> None:
-    op = _user(api_db, email="op@x.ae", role=OPERATOR_ROLE)
-    _employee(api_db, "G900", "Operator Person")
-    updated = auth_service.link_self(api_db, op, employee_id="G900")
-    assert updated.employee_id == "G900"
+    response = _client(api_db, user).post("/api/v1/auth/me/link", json={"employee_id": "G100"})
+    assert response.status_code == 405
+    api_db.refresh(user)
+    assert user.employee_id is None
+    admin = _user(api_db, email="admin@x.ae", role=ADMIN_ROLE)
+    assert (
+        _client(api_db, admin)
+        .patch(f"/api/v1/auth/users/{user.id}/link", json={"employee_id": "G100"})
+        .status_code
+        == 200
+    )
 
 
 def test_admin_link_route_binds_inmate_reporter_g_number(api_db: Session) -> None:

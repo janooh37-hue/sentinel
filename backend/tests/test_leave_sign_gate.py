@@ -500,6 +500,17 @@ def test_a_lock_timeout_aborts_reply_filing_instead_of_half_filing(gate_env, mon
     book, _leave = generate(env)
     submit(env, book)
     now = datetime.now(UTC).replace(tzinfo=None)
+    parent = LedgerEntry(
+        entry_date=date.today(),
+        direction="outgoing",
+        channel="email",
+        counterparty="other@example.com",
+        subject="handoff",
+        owner_user_id=env.signer.id,
+        related_book_id=book.id,
+        message_id="<handoff@example.com>",
+    )
+    env.db.add(parent)
     entry = LedgerEntry(
         entry_date=date.today(),
         direction="incoming",
@@ -513,6 +524,7 @@ def test_a_lock_timeout_aborts_reply_filing_instead_of_half_filing(gate_env, mon
         cc_recipients=[],
         bcc_recipients=[],
         created_at=now,
+        in_reply_to="<handoff@example.com>",
         read_at=now,
     )
     env.db.add(entry)
@@ -523,6 +535,7 @@ def test_a_lock_timeout_aborts_reply_filing_instead_of_half_filing(gate_env, mon
     item = ScanInbox(
         source="email_attachment",
         ledger_entry_id=entry.id,
+        owner_user_id=env.signer.id,
         file_path="scan_inbox/reply.pdf",
         filename="reply.pdf",
         state="pending_ocr",

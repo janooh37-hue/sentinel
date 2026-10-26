@@ -130,11 +130,8 @@ class SetRoleRequest(BaseModel):
     role: str
 
 
-class LinkSelfRequest(BaseModel):
-    """Set (or clear, admin-only) the signed-in user's own employee link.
-
-    ``employee_id`` is the G-number to claim; ``null`` clears the link.
-    """
+class SetUserEmployeeLinkRequest(BaseModel):
+    """Administrator-confirmed employee identity; null clears the link."""
 
     employee_id: str | None = Field(default=None, max_length=16)
 
@@ -237,7 +234,6 @@ __all__ = [
     "ApproveRequest",
     "AuditEntryRead",
     "CapabilityRead",
-    "LinkSelfRequest",
     "LoginRequest",
     "RegisterRequest",
     "RegisterResult",
@@ -247,6 +243,7 @@ __all__ = [
     "SetPermissionBulkRequest",
     "SetPermissionRequest",
     "SetRoleRequest",
+    "SetUserEmployeeLinkRequest",
     "UserPermissionRead",
     "VerifyPasswordRequest",
 ]

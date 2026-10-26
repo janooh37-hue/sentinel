@@ -149,7 +149,7 @@ def effective_caps(db: Session, user: User) -> set[str]:
         for ov in overrides:
             if ov.effect == "grant":
                 if ov.expires_at is not None and ov.expires_at <= now:
-                    if ov.capability in dynamic_caps:
+                    if ov.capability in role_caps or ov.capability in dynamic_caps:
                         caps.discard(ov.capability)
                     continue
                 caps.add(ov.capability)
@@ -424,7 +424,7 @@ def denied_record_types(db: Session, user: User) -> tuple[set[str], set[str]]:
 
 
 def sweep_expired_grants(db: Session) -> int:
-    """Clean expired grants, restoring dynamic caps to their prior deny."""
+    """Clean expired grants, restoring denies for current role/default caps."""
     now = datetime.now(UTC).replace(tzinfo=None)
     expired = list(
         db.scalars(
@@ -437,9 +437,15 @@ def sweep_expired_grants(db: Session) -> int:
     )
     dynamic_caps = dynamic_capability_ids(db)
     affected_user_ids: set[int] = set()
+    defaults_by_user: dict[int, set[str]] = {}
     for row in expired:
         affected_user_ids.add(row.user_id)
-        if row.capability in dynamic_caps:
+        if row.user_id not in defaults_by_user:
+            user = db.get(User, row.user_id)
+            defaults_by_user[row.user_id] = (
+                role_default_caps_with_dynamic(db, user.role) if user is not None else set()
+            )
+        if row.capability in dynamic_caps or row.capability in defaults_by_user[row.user_id]:
             row.effect = "deny"
             row.expires_at = None
         else:

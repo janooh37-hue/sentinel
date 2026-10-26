@@ -23,11 +23,13 @@ import { fileKindFromName, fileMeta, formatBytes } from '@/lib/fileTypes'
 
 interface LedgerAttachmentsProps {
   entryId: number
+  scope?: 'mine' | 'all'
   attachments: LedgerAttachmentMeta[]
 }
 
 export function LedgerAttachments({
   entryId,
+  scope,
   attachments,
 }: LedgerAttachmentsProps): React.JSX.Element | null {
   const { t } = useTranslation()
@@ -56,7 +58,7 @@ export function LedgerAttachments({
               variant="secondary"
               className="rounded-full"
               onClick={() => {
-                window.location.href = api.ledgerAttachmentsZipUrl(entryId)
+                window.location.href = api.ledgerAttachmentsZipUrl(entryId, scope)
               }}
             >
               <Download className="h-3.5 w-3.5" />
@@ -69,7 +71,7 @@ export function LedgerAttachments({
           {attachments.map((att, idx) => {
             const kind = fileKindFromName(att.name)
             const sizeLabel = formatBytes(att.size)
-            const href = api.ledgerAttachmentUrl(entryId, att.index)
+            const href = api.ledgerAttachmentUrl(entryId, att.index, { scope })
             const meta = (
               <>
                 <span className="shrink-0">
@@ -158,7 +160,7 @@ export function LedgerAttachments({
             const kind = fileKindFromName(att.name)
             const sizeLabel = formatBytes(att.size)
             const meta = fileMeta(kind)
-            const href = api.ledgerAttachmentUrl(entryId, att.index)
+            const href = api.ledgerAttachmentUrl(entryId, att.index, { scope })
             return (
               <li
                 key={`${att.name}-${idx}-m`}
@@ -226,6 +228,7 @@ export function LedgerAttachments({
       {previewIndex !== null && (
         <AttachmentPreviewDialog
           entryId={entryId}
+          scope={scope}
           attachments={attachments}
           startIndex={previewIndex}
           onClose={() => setPreviewIndex(null)}

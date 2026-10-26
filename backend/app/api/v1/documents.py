@@ -41,7 +41,6 @@ from app.api.department_scope import require_visible_employee
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
-from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_ALIASES, SERVICE_IDS
 from app.core.pdf_merge import merge_pdfs_to_bytes
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import Book, BookVersion, Document, User
@@ -80,11 +79,6 @@ from app.services.job_registry import (
 )
 
 log = logging.getLogger(__name__)
-
-
-def _effective_document_service(template_id: str) -> str:
-    resolved = SERVICE_ALIASES.get(template_id, template_id)
-    return resolved if resolved in SERVICE_IDS else OTHER_SERVICE_ID
 
 
 def _require_document_record_access(
@@ -153,7 +147,7 @@ def _require_document_record_access(
     book_service.require_record_type_access(
         db,
         user,
-        service_id=_effective_document_service(row.template_id),
+        service_id=document_service.effective_document_service(row.template_id),
     )
     return None
 
@@ -444,22 +438,13 @@ def _run_generation(
 def generate_document(
     payload: DocumentGenerateRequest,
     background_tasks: BackgroundTasks,
-    user: Annotated[User, Depends(require_capability("documents.generate"))],
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-    _viewer: Annotated[User, Depends(require_capability("books.view"))],
 ) -> DocumentGenerateResponse:
     if payload.employee_id is not None:
         require_visible_employee(db, user, payload.employee_id)
-    effective_service = _effective_document_service(payload.template_id)
-    category_id = document_service.record_category_for_template(payload.template_id)
-    book_service.require_record_type_access(
-        db,
-        user,
-        category_id=category_id,
-        service_id=effective_service,
-        classification_code=(
-            payload.classification_code if effective_service == "General Book" else None
-        ),
+    document_service.authorize_interactive_generation(
+        db, user, payload.template_id, classification_code=payload.classification_code
     )
     revise_book: Book | None = None
     if payload.revise_of_book_id is not None:

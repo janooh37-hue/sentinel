@@ -3,7 +3,7 @@
  *
  * Renders three sub-cards inside a single Email integration SectionCard:
  *   1. Account config (email / username / password / folders / sync interval)
- *   2. Linked employee (single FK on EmailAccount.linked_employee_id)
+ *   2. Administrator-confirmed employee identity (read-only)
  *   3. Signature (delegated to SignatureSection)
  *
  * IONOS-only: imap_host/smtp_host are baked in at save-time. Password is
@@ -24,13 +24,10 @@ import {
   EyeOff,
 } from 'lucide-react'
 
-import { ApiError, api, apiErrorMessage } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { EmailAccountRead, EmailAccountUpsert } from '@/lib/api'
 import { useIdentity } from '@/lib/useIdentity'
-import { useAuth } from '@/lib/authContext'
-import { invalidateSignatures } from '@/lib/globalRefresh'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { EmployeePicker } from '@/pages/application/EmployeePicker'
 import { SignatureSection } from './SignatureSection'
 
 const DEFAULTS: EmailAccountUpsert = {
@@ -112,9 +109,6 @@ export function EmailSection(): React.JSX.Element {
   })
 
   const { identity, isAdmin } = useIdentity()
-  const { setUser } = useAuth()
-  const [linkPickerId, setLinkPickerId] = useState<string | null>(null)
-  const [isChangingLink, setIsChangingLink] = useState(false)
 
   const account = accountQuery.data
   // Sparse overrides let async/refreshed account data update untouched fields
@@ -180,35 +174,6 @@ export function EmailSection(): React.JSX.Element {
       toast.error(apiErrorMessage(err)),
   })
 
-  // Identity is the signed-in *user's* `employee_id` (not the email account's
-  // linked_employee_id), so the link must write the user via /auth/me/link.
-  const linkMutation = useMutation({
-    mutationFn: (employee_id: string | null) => api.linkMyEmployee(employee_id),
-    onSuccess: (user) => {
-      // Update the auth cache so `identity.linked` flips immediately.
-      setUser(user)
-      if (user.employee_id) {
-        toast.success(
-          t('settings.email.linkSuccess', {
-            name: user.name_en ?? user.employee_id,
-            id: user.employee_id,
-          }),
-        )
-      }
-      invalidateSignatures(qc)
-      setIsChangingLink(false)
-      setLinkPickerId(null)
-    },
-    onError: (err) =>
-      // Under department scoping a link grants department/branch access, so
-      // only an administrator may set it.
-      toast.error(
-        err instanceof ApiError && err.code === 'LINK_REQUIRES_ADMIN'
-          ? t('settings.email.linkRequiresAdmin')
-          : apiErrorMessage(err),
-      ),
-  })
-
   const update = <K extends keyof EmailAccountUpsert>(
     key: K,
     value: EmailAccountUpsert[K],
@@ -227,8 +192,7 @@ export function EmailSection(): React.JSX.Element {
       smtp_host: 'smtp.ionos.com',
       smtp_port: 587,
       smtp_use_tls: true,
-      // Preserve the linked employee — Save shouldn't clear an existing link.
-      // The dedicated linkMutation owns changes to this field.
+      // Preserve the email account's existing linked-employee metadata.
       linked_employee_id: account?.linked_employee_id ?? null,
     }
     if (!payload.password) delete (payload as Record<string, unknown>).password
@@ -507,93 +471,45 @@ export function EmailSection(): React.JSX.Element {
       </div>
 
       {/* Linked employee sub-card */}
-      {hasAccount && (
+      {hasAccount && identity?.linked && (
         <div className="mt-5 rounded-lg border border-hairline bg-surface-raised p-4">
-          {identity?.linked && !isChangingLink ? (
-            <div className="flex items-center gap-3.5">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary-soft text-primary">
-                {identity.photo_url ? (
-                  <img
-                    src={identity.photo_url}
-                    alt=""
-                    className="h-12 w-12 rounded-full object-cover"
-                  />
-                ) : (
-                  <span className="text-base font-semibold">
-                    {identity.name_en?.[0] ?? '?'}
-                  </span>
-                )}
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <div className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
-                  {t('settings.email.linkedHeading')}
-                </div>
-                <div className="text-[0.95em] font-semibold text-foreground">
-                  {(isAr ? identity.name_ar : identity.name_en) ?? identity.name_en}{' '}
-                  <span className="font-mono text-[0.78em] text-muted-foreground">
-                    ({identity.employee_id})
-                  </span>
-                </div>
-                <div className="text-[0.82em] text-muted-foreground">
-                  {identity.position}
-                  {identity.role === 'admin' && (
-                    <>
-                      {' · '}
-                      <span className="font-semibold text-primary">
-                        {t('settings.email.adminBadge')}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-              <button
-                type="button"
-                className={OUTLINE_PILL}
-                disabled={!isAdmin}
-                onClick={() => setIsChangingLink(true)}
-                title={!isAdmin ? t('settings.email.linkAdminOnly') : undefined}
-              >
-                {t('settings.email.changeLink')}
-              </button>
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary-soft text-primary">
+              {identity.photo_url ? (
+                <img
+                  src={identity.photo_url}
+                  alt=""
+                  className="h-12 w-12 rounded-full object-cover"
+                />
+              ) : (
+                <span className="text-base font-semibold">
+                  {identity.name_en?.[0] ?? '?'}
+                </span>
+              )}
             </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                <div className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
-                  {t('settings.email.linkHeading')}
-                </div>
-                <p className="text-[0.82em] text-muted-foreground">
-                  {t('settings.email.linkHint')}
-                </p>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
+                {t('settings.email.linkedHeading')}
               </div>
-              <EmployeePicker selectedId={linkPickerId} onSelect={setLinkPickerId} />
-              <div className="flex items-center gap-2.5">
-                <button
-                  type="button"
-                  className={PRIMARY_PILL}
-                  disabled={!linkPickerId || linkMutation.isPending}
-                  onClick={() => linkPickerId && linkMutation.mutate(linkPickerId)}
-                >
-                  {linkMutation.isPending && (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  )}
-                  {t('settings.email.linkButton')}
-                </button>
-                {isChangingLink && (
-                  <button
-                    type="button"
-                    className={OUTLINE_PILL}
-                    onClick={() => {
-                      setIsChangingLink(false)
-                      setLinkPickerId(null)
-                    }}
-                  >
-                    {t('settings.email.skipLink')}
-                  </button>
+              <div className="text-[0.95em] font-semibold text-foreground">
+                {(isAr ? identity.name_ar : identity.name_en) ?? identity.name_en}{' '}
+                <span className="font-mono text-[0.78em] text-muted-foreground">
+                  ({identity.employee_id})
+                </span>
+              </div>
+              <div className="text-[0.82em] text-muted-foreground">
+                {identity.position}
+                {identity.role === 'admin' && (
+                  <>
+                    {' · '}
+                    <span className="font-semibold text-primary">
+                      {t('settings.email.adminBadge')}
+                    </span>
+                  </>
                 )}
               </div>
             </div>
-          )}
+          </div>
         </div>
       )}
 

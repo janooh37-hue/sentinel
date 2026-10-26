@@ -126,6 +126,14 @@ record vs a scope capability otherwise), not on a static route-level id. Any rev
 only reads route signatures will misread these as ungated — hence the audit reports them
 as their own class.
 
+Interactive publication uses `document_service.authorize_interactive_generation`:
+`POST /documents/generate`, leave-return filing, and all four fleet publication
+workflows require `documents.generate`, `books.view`, and the template's category
+and effective service capabilities before rendering, reference allocation, or
+persistence. General Book publication also checks its classification capability
+(maintenance requests use `11/1`). Leave and fleet edit gates and nested-resource
+validation remain in force; permission denial leaves publication state unchanged.
+
 **Tier 4 — department row scope (ADR 0007).** Capabilities answer what the user may
 do; `department_scope_service.resolve_department_scope` answers whose data they
 may see. It is memoized per request and applied to people data, dashboard counts,
@@ -153,10 +161,9 @@ department-scope bypass.
   Everyone also sees their own supervisor-tree branch (scope kind `branch` when
   they have reports), including Records created by users in it. A user outside
   every department with no reports has only self scope and no services.
-- Because the employee link now confers head/branch scope and department-send
-  delivery, `POST /auth/me/link` (`link_self`) by a non-admin answers
-  `403 LINK_REQUIRES_ADMIN` while scoping is on. Admins may still self-link and
-  set any account's link; with scoping off, self-linking is unchanged.
+- The employee link confers head/branch scope and department-send delivery; it
+  is set only by an administrator (`PATCH /auth/users/{user_id}/link` or at
+  approval).
 - `departments.manage` gates department create/edit/delete, deputy and viewer
   grants (`PUT /departments/{id}/people`), services, exceptions, unassigned
   groups, the picker list `GET /departments/candidate-users` (active,

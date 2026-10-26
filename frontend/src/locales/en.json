@@ -4047,16 +4047,8 @@
       "draftsFolderHint": "Where \"Draft in Outlook\" puts the message. IONOS calls it Drafts.",
       "adminBadge": "Admin",
       "ionosOnly": "GSSG uses IONOS for email. Other providers are not supported.",
-      "linkHeading": "Link your employee record",
-      "linkHint": "Helps the app default the submitter and signer on every form you fill in.",
-      "linkButton": "Link",
-      "skipLink": "Skip",
       "linkedHeading": "Linked employee",
-      "changeLink": "Change",
-      "linkAdminOnly": "Only the app admin can change the linked employee",
-      "linkSuccess": "Linked as {{name}} ({{id}})",
-      "linkRequiresAdmin": "Department access limits are on, so only an administrator can link your employee record. Ask an administrator to link it for you.",
-      "linkAdminGranted": "Linked as {{name}} ({{id}}) — admin",
+
       "confirmDelete": "Remove email account?",
       "confirmDeleteDesc": "This will remove the email account and stop syncing."
     },

@@ -155,35 +155,6 @@ def test_delete_clears_the_deleted_department_label(tree):
     assert db.get(Employee, "X1").department is None
 
 
-def test_self_link_needs_an_administrator_while_scoping_is_on(tree):
-    from app.api.errors import AppError
-    from app.services import auth_service
-    from tests.department_fixtures import enable_scoping
-
-    db, *_ = tree
-    operator = User(email="claim@test.ae", password_hash="x", role="operator", status="active")
-    admin = User(email="self-admin@test.ae", password_hash="x", role="admin", status="active")
-    db.add_all([operator, admin])
-    db.commit()
-    enable_scoping(db)
-    with pytest.raises(AppError) as raised:
-        auth_service.link_self(db, operator, employee_id="A")
-    assert (raised.value.code, raised.value.http_status) == ("LINK_REQUIRES_ADMIN", 403)
-    assert db.get(User, operator.id).employee_id is None
-    assert auth_service.link_self(db, admin, employee_id="BOSS").employee_id == "BOSS"
-    assert department_service.read_scoping(db).enabled
-
-
-def test_self_link_is_unchanged_while_scoping_is_off(tree):
-    from app.services import auth_service
-
-    db, *_ = tree
-    operator = User(email="claim-off@test.ae", password_hash="x", role="operator", status="active")
-    db.add(operator)
-    db.commit()
-    assert auth_service.link_self(db, operator, employee_id="X1").employee_id == "X1"
-
-
 def test_employee_count_includes_working_statuses_only(api_db):
     db = api_db
     employee(db, "ACT", status="Active")

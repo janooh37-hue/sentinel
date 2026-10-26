@@ -472,12 +472,9 @@ def mark_read(
     entry_id: int,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(require_capability("ledger.view"))],
-    scope: str = Query("mine", description="mine (default) | all (admin only)"),
 ) -> LedgerEntryRead:
     """Set ``read_at=utcnow()`` if currently NULL. Idempotent."""
-    row = ledger_service.mark_entry_read(
-        db, entry_id, owner_user_id=resolve_mail_scope(current_user, scope)
-    )
+    row = ledger_service.mark_entry_read(db, entry_id, owner_user_id=current_user.id)
     return _flagged_read(db, row, current_user.id)
 
 
@@ -486,13 +483,10 @@ def mark_unread(
     entry_id: int,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(require_capability("ledger.view"))],
-    scope: str = Query("mine", description="mine (default) | all (admin only)"),
 ) -> LedgerEntryRead:
     """Clear ``read_at`` (mark unread) if currently set. Idempotent — powers the
     bulk "Mark unread" action."""
-    row = ledger_service.mark_entry_unread(
-        db, entry_id, owner_user_id=resolve_mail_scope(current_user, scope)
-    )
+    row = ledger_service.mark_entry_unread(db, entry_id, owner_user_id=current_user.id)
     return _flagged_read(db, row, current_user.id)
 
 
@@ -562,9 +556,13 @@ def get_entry(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(require_capability("ledger.view"))],
     include_deleted: bool = False,
+    scope: str = Query("mine", description="mine (default) | all (admin only)"),
 ) -> LedgerEntryRead:
     row = ledger_service.get_entry(
-        db, entry_id, include_deleted=include_deleted, owner_user_id=current_user.id
+        db,
+        entry_id,
+        include_deleted=include_deleted,
+        owner_user_id=resolve_mail_scope(current_user, scope),
     )
     result = LedgerEntryRead.model_validate(row)
 
@@ -748,9 +746,12 @@ def download_attachments_zip(
     entry_id: int,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(require_capability("ledger.view"))],
+    scope: str = Query("mine", description="mine (default) | all (admin only)"),
 ) -> StreamingResponse:
     """Bundle every attachment for an entry into a single zip stream."""
-    row = ledger_service.get_entry(db, entry_id, owner_user_id=current_user.id)
+    row = ledger_service.get_entry(
+        db, entry_id, owner_user_id=resolve_mail_scope(current_user, scope)
+    )
     data_dir = get_settings().data_dir.resolve()
 
     # Skip inline/signature images — "save all attachments" excludes them.
@@ -797,6 +798,7 @@ def download_attachment_by_index(
     current_user: Annotated[User, Depends(require_capability("ledger.view"))],
     disposition: Annotated[str, Query(pattern="^(attachment|inline)$")] = "attachment",
     encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
+    scope: str = Query("mine", description="mine (default) | all (admin only)"),
 ) -> Response:
     """Stream the ``index``-th attachment of an entry.
 
@@ -809,7 +811,9 @@ def download_attachment_by_index(
     body (Chrome's PDF stream handler otherwise claims it and the JS ``fetch``
     receives an empty 204). pdf.js decodes + renders the bytes itself.
     """
-    row = ledger_service.get_entry(db, entry_id, owner_user_id=current_user.id)
+    row = ledger_service.get_entry(
+        db, entry_id, owner_user_id=resolve_mail_scope(current_user, scope)
+    )
     paths = row.attachment_paths or []
     if index < 0 or index >= len(paths):
         raise HTTPException(status_code=404, detail="attachment not found")
@@ -845,6 +849,7 @@ def download_attachment(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(require_capability("ledger.view"))],
     disposition: Annotated[str, Query(pattern="^(attachment|inline)$")] = "attachment",
+    scope: str = Query("mine", description="mine (default) | all (admin only)"),
 ) -> FileResponse:
     """Stream an attachment file back to the client.
 
@@ -854,7 +859,9 @@ def download_attachment(
     ``disposition=inline`` lets the browser render PDFs/images in place (the
     in-app preview); the default ``attachment`` forces a download.
     """
-    row = ledger_service.get_entry(db, entry_id, owner_user_id=current_user.id)
+    row = ledger_service.get_entry(
+        db, entry_id, owner_user_id=resolve_mail_scope(current_user, scope)
+    )
     # Match on the exact basename. Two attachments can share a basename under
     # different stored paths; a basename here can't disambiguate them, so when
     # the match is ambiguous we 404 and require the index-based route
