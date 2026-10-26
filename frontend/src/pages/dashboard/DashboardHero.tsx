@@ -5,11 +5,12 @@
  * identity block (photo or initials, greeting, name, position · department,
  * G-number) sits at the inline start. The inline end is about the same person,
  * never the team: a date plate (day, weekday, month, Hijri date, local time,
- * week) over their own approval queue — waiting on them, returned to them for
- * changes, sent by them and still pending. The queue comes from the approvals
- * summary, which only ever counts the caller's own authorized items, so the
- * hero shows nothing a user may not see; a user with no approval work gets the
- * date plate across the whole panel.
+ * week) over their own approval queue — to sign, to review, returned to them
+ * for changes, sent by them and still pending. Each cell counts exactly the
+ * list it opens. The queue comes from the approvals summary, which only ever
+ * counts the caller's own authorized items, so the hero shows nothing a user
+ * may not see; a user with no approval work gets the date plate across the
+ * whole panel.
  *
  * Motion: each time the dashboard opens, the sheet fills in reading order
  * (travelling in the writing direction), a scan line sweeps it once and the
@@ -25,7 +26,6 @@ import { ArrowUpRight } from 'lucide-react'
 
 import type { ApprovalSummaryResponse, IdentityRead } from '@/lib/api'
 import { approvalQueueUrl } from '@/lib/approvals'
-import type { ApprovalKind } from '@/lib/approvals'
 import { pickPosition } from '@/lib/employeePosition'
 import { hijriToday } from '@/lib/hijri'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
@@ -33,30 +33,32 @@ import { useApprovalSummary } from '@/lib/useApprovalSummary'
 const COUNT_UP_MS = 700
 
 interface DeskItem {
-  key: 'waiting' | 'returned' | 'sent'
+  key: 'sign' | 'review' | 'returned' | 'sent'
   count: number
   to: string
   /** The item asks the user to act: flagged red while it is non-zero. */
   actionable: boolean
 }
 
-/** The queue kind the "waiting on me" cell opens: signature work first, then
- *  review work, then whichever received kind the user holds. */
-function waitingKind(summary: ApprovalSummaryResponse): ApprovalKind {
-  if (summary.signature.count > 0) return 'sign'
-  if (summary.review.count > 0) return 'review'
-  return summary.available_received_kinds.includes('approver') ? 'sign' : 'review'
-}
-
-/** The user's own approval queue, limited to the parts they can open. */
+/** The user's own approval queue, limited to the parts they can open. Each
+ *  received kind gets its own cell: no single list shows signature and review
+ *  work together, so a combined count would promise more than its link shows. */
 function deskItems(summary: ApprovalSummaryResponse | undefined): DeskItem[] {
   if (!summary) return []
   const items: DeskItem[] = []
-  if (summary.available_received_kinds.length > 0) {
+  if (summary.available_received_kinds.includes('approver')) {
     items.push({
-      key: 'waiting',
-      count: summary.actionable_count,
-      to: approvalQueueUrl({ tab: 'received', kind: waitingKind(summary), status: 'pending', sort: 'newest', page: 1 }),
+      key: 'sign',
+      count: summary.signature.count,
+      to: approvalQueueUrl({ tab: 'received', kind: 'sign', status: 'pending', sort: 'newest', page: 1 }),
+      actionable: true,
+    })
+  }
+  if (summary.available_received_kinds.includes('reviewer')) {
+    items.push({
+      key: 'review',
+      count: summary.review.count,
+      to: approvalQueueUrl({ tab: 'received', kind: 'review', status: 'pending', sort: 'newest', page: 1 }),
       actionable: true,
     })
   }
@@ -268,13 +270,13 @@ export function DashboardHero({ identity, name, initials, isAr }: DashboardHeroP
                   <Link
                     key={item.key}
                     to={item.to}
-                    className="group relative block min-w-0 bg-[var(--hero-slab)] px-4 py-3 transition-colors hover:bg-[var(--hero-slab-raised)] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white md:px-[18px] md:py-3.5"
+                    className="group relative flex min-w-0 flex-col bg-[var(--hero-slab)] px-4 py-3 transition-colors hover:bg-[var(--hero-slab-raised)] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white md:px-[18px] md:py-3.5"
                   >
                     <ArrowUpRight
                       aria-hidden
                       className="absolute bottom-2.5 end-2.5 h-3.5 w-3.5 text-white/40 transition-colors group-hover:text-white rtl:-scale-x-100"
                     />
-                    <span className="hero-seq block" style={seq(9 + i)}>
+                    <span className="hero-seq flex flex-1 flex-col" style={seq(9 + i)}>
                       <span className="hero-label block text-white/55">
                         {item.actionable && item.count > 0 && (
                           <span aria-hidden className="me-1.5 inline-block h-[7px] w-[7px] bg-[var(--accent)] align-[0.05em]" />
@@ -283,7 +285,7 @@ export function DashboardHero({ identity, name, initials, isAr }: DashboardHeroP
                       </span>
                       <data
                         value={item.count}
-                        className={`mt-1.5 block font-mono text-[1.45em] font-medium leading-none tabular-nums md:text-[1.6em] ${
+                        className={`mt-auto block pt-1.5 font-mono text-[1.45em] font-medium leading-none tabular-nums md:text-[1.6em] ${
                           item.count === 0 ? 'text-white/45' : 'text-white'
                         }`}
                       >

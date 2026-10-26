@@ -4197,7 +4197,8 @@
       "idLabel": "ID",
       "week": "Week {{n}}",
       "desk": {
-        "waiting": "Waiting on me",
+        "sign": "To sign",
+        "review": "To review",
         "returned": "Needs changes",
         "sent": "Sent, pending"
       }
