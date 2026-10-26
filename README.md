@@ -17,6 +17,14 @@ application only. It is pulled to the office server.
 - Shared vehicle-photo library with reusable named images and lightweight WebP previews
 - Runs as an always-on Windows service on the office LAN
 
+Email messages, drafts, attachments, and employee-linked mail metadata are private
+to their mailbox owner. Admins can explicitly select **All mail** to read other
+mailboxes (including legacy messages without an owner); editing, deleting,
+starring, flags, and read-state changes remain limited to their own mailbox.
+Opening another owner's message does not mark it read. Non-email correspondence
+remains shared, subject to the linked Record's visibility; smart-folder counts
+and suggestions respect that same Record visibility.
+
 Material Request is one service in Services. An `English | العربية` tab in its
 form picks the paper to preview and save, and opens on the interface language.
 Switching keeps the delivery date, items, and manager, which both papers share

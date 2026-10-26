@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from itertools import chain
 
-from sqlalchemy import ColumnElement, func, or_, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import (
@@ -199,7 +199,7 @@ def _ledger(
             LedgerEntry.related_employee_id.is_not(None),
             LedgerEntry.deleted_at.is_(None),
             ledger_service._tags_contain(ledger_service.DRAFT_TAG, negate=True),
-            or_(LedgerEntry.channel != "email", LedgerEntry.owner_user_id == owner_user_id),
+            ledger_service.email_owned_by(owner_user_id),
         )
     )
     if employee_id is not None:

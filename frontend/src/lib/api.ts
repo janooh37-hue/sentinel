@@ -2479,9 +2479,10 @@ export const api = {
     limit?: number
     offset?: number
   } = {}) => request<LedgerListResponse>('GET', `/ledger${qs({ ...params })}`),
-  getLedgerEntry: (id: number) => request<LedgerEntryRead>('GET', `/ledger/${id}`),
-  listLedgerThread: (id: number, limit = 50) =>
-    request<LedgerListItem[]>('GET', `/ledger/${id}/thread${qs({ limit })}`),
+  getLedgerEntry: (id: number, scope?: 'mine' | 'all') =>
+    request<LedgerEntryRead>('GET', `/ledger/${id}${qs({ scope })}`),
+  listLedgerThread: (id: number, limit = 50, scope?: 'mine' | 'all') =>
+    request<LedgerListItem[]>('GET', `/ledger/${id}/thread${qs({ limit, scope })}`),
   createLedgerEntry: (body: LedgerEntryCreate) =>
     request<LedgerEntryRead>('POST', '/ledger', body),
   updateLedgerEntry: (id: number, body: LedgerEntryUpdate) =>
@@ -2532,22 +2533,22 @@ export const api = {
   /** Soft-delete a smart folder. */
   deleteSmartFolder: (id: number) =>
     request<void>('DELETE', `/ledger/smart-folders/${id}`),
-  ledgerAttachmentsZipUrl: (id: number) =>
-    `${BASE}/ledger/entries/${id}/attachments.zip`,
+  ledgerAttachmentsZipUrl: (id: number, scope?: 'mine' | 'all') =>
+    `${BASE}/ledger/entries/${id}/attachments.zip${qs({ scope })}`,
   /** URL for a single attachment, addressed by its `attachment_paths` index
    * (keeps non-ASCII/spaced filenames out of the path). `inline: true` asks the
    * backend to serve it `Content-Disposition: inline` so preview can render it. */
   ledgerAttachmentUrl: (
     id: number,
     index: number,
-    opts?: { inline?: boolean; base64?: boolean },
+    opts?: { inline?: boolean; base64?: boolean; scope?: 'mine' | 'all' },
   ) => {
-    const qs = opts?.base64
-      ? '?encoding=base64'
-      : opts?.inline
-        ? '?disposition=inline'
-        : ''
-    return `${BASE}/ledger/${id}/attachments/by-index/${index}${qs}`
+    const query = qs({
+      encoding: opts?.base64 ? 'base64' : undefined,
+      disposition: !opts?.base64 && opts?.inline ? 'inline' : undefined,
+      scope: opts?.scope,
+    })
+    return `${BASE}/ledger/${id}/attachments/by-index/${index}${query}`
   },
 
   // --- Phase 16: FTS5 search ---

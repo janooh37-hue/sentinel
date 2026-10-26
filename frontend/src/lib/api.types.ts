@@ -12276,6 +12276,8 @@ export interface components {
             direction: string;
             /** Channel */
             channel: string;
+            /** Owner User Id */
+            owner_user_id?: number | null;
             /** Counterparty */
             counterparty: string;
             /** Subject */
@@ -26007,10 +26009,7 @@ export interface operations {
     };
     mark_read_api_v1_ledger_entries__entry_id__mark_read_post: {
         parameters: {
-            query?: {
-                /** @description mine (default) | all (admin only) */
-                scope?: string;
-            };
+            query?: never;
             header?: never;
             path: {
                 entry_id: number;
@@ -26043,10 +26042,7 @@ export interface operations {
     };
     mark_unread_api_v1_ledger_entries__entry_id__mark_unread_post: {
         parameters: {
-            query?: {
-                /** @description mine (default) | all (admin only) */
-                scope?: string;
-            };
+            query?: never;
             header?: never;
             path: {
                 entry_id: number;
@@ -26182,6 +26178,8 @@ export interface operations {
         parameters: {
             query?: {
                 include_deleted?: boolean;
+                /** @description mine (default) | all (admin only) */
+                scope?: string;
             };
             header?: never;
             path: {
@@ -26428,7 +26426,10 @@ export interface operations {
     };
     download_attachments_zip_api_v1_ledger_entries__entry_id__attachments_zip_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description mine (default) | all (admin only) */
+                scope?: string;
+            };
             header?: never;
             path: {
                 entry_id: number;
@@ -26464,6 +26465,8 @@ export interface operations {
             query?: {
                 disposition?: string;
                 encoding?: string | null;
+                /** @description mine (default) | all (admin only) */
+                scope?: string;
             };
             header?: never;
             path: {
@@ -26500,6 +26503,8 @@ export interface operations {
         parameters: {
             query?: {
                 disposition?: string;
+                /** @description mine (default) | all (admin only) */
+                scope?: string;
             };
             header?: never;
             path: {
