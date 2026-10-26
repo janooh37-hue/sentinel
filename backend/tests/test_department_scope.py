@@ -105,6 +105,42 @@ def test_heads_and_deputies_see_subtree_viewers_only_the_granted_department(
     assert not scopes.employee_in_scope(scope, Employee(id="NULL", name_en="Unassigned"))
 
 
+@pytest.mark.parametrize("role", ["head", "deputy", "viewer"])
+def test_inactive_department_confers_nothing_to_heads_deputies_or_viewers(scope_data, role):
+    db, user, root, _child, _grandchild, _other, own = scope_data
+    enable_scoping(db)
+    if role == "head":
+        link(db, user, root.head_employee_id)
+        db.commit()
+    else:
+        grant(db, root.id, user, role)
+    root.active = False
+    recompute(db)
+    scopes.invalidate_department_scope(db, user.id)
+    scope = scopes.resolve_department_scope(db, user)
+    assert root.id not in scope.department_ids
+    assert root.id not in scopes.user_department_ids(db, user)
+    if role != "head":
+        assert scope.kind == "self"
+        assert visible_employee_ids(db, scope) == {own.id}
+
+
+def test_inmate_reporters_keep_their_services_when_scoping_is_on(scope_data):
+    db, _user, _root, _child, _grandchild, _other, own = scope_data
+    reporter = User(
+        email="reporter-scope@test.ae", password_hash="x", role="inmate_reporter", status="active"
+    )
+    db.add(reporter)
+    link(db, reporter, own.id)
+    db.commit()
+    services = {"books.service.Inmate Conduct Violations", "books.service.Report"}
+    assert services <= perm_service.effective_caps(db, reporter)
+    enable_scoping(db)
+    perm_service._invalidate_caps_cache(db, reporter.id)
+    assert not scopes.resolve_department_scope(db, reporter).organization
+    assert services <= perm_service.effective_caps(db, reporter)
+
+
 @pytest.mark.parametrize("admin", [True, False])
 def test_admin_and_explicit_organization_capability_are_unrestricted(scope_data, admin):
     db, user, *_ = scope_data

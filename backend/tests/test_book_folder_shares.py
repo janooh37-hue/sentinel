@@ -13,6 +13,7 @@ from app.db.models import (
     Department,
     UserPermission,
 )
+from app.schemas.department import DepartmentUpdate
 from app.services import department_service
 from tests.conftest import make_user
 from tests.department_fixtures import department, employee, grant, link
@@ -233,7 +234,59 @@ def test_share_options_shape_and_active_directory(confidentiality_api: ApiHarnes
         "title": "Coordinator",
         "title_ar": "منسق",
         "department_id": finance.id,
+        "department": "Finance",
     }
+    assert body["legacy_departments"] == []
+
+
+def test_without_active_departments_free_text_shares_work_like_main(
+    confidentiality_api: ApiHarness,
+) -> None:
+    api = confidentiality_api
+    _employee(api, "A")
+    _employee(api, "B", " Finance ")
+    _employee(api, "C", "Stores")
+    _department(api, "Retired", active=False)
+    api.as_user("D")
+    options = api.client.get(f"{API}/books/folders/share-options")
+    assert options.status_code == 200, options.text
+    assert options.json()["departments"] == []
+    assert options.json()["legacy_departments"] == ["Finance", "Stores"]
+    by_id = {u["id"]: u for u in options.json()["users"]}
+    assert by_id[api.users["B"].id]["department"] == "Finance"
+    assert by_id[api.users["A"].id]["department"] is None
+    folder_id = _create_folder(api, "Finance desk", team=True)["id"]
+    shared = _share(api, folder_id, everyone=False, legacy_departments=[" Finance ", "finance"])
+    assert shared.status_code == 200, shared.text
+    assert shared.json()["legacy_departments"] == ["Finance"]
+    api.as_user("B")
+    assert [f["id"] for f in _folders(api)] == [folder_id]
+    for actor in ("A", "C"):
+        api.as_user(actor)
+        assert _folders(api) == []
+
+
+def test_retained_deactivated_department_share_can_still_be_saved(
+    confidentiality_api: ApiHarness,
+) -> None:
+    api = confidentiality_api
+    finance = _department(api)
+    stores = _department(api, "Stores")
+    api.as_user("D")
+    folder_id = _create_folder(api, "Shared desk", team=True)["id"]
+    assert _share(api, folder_id, everyone=False, department_ids=[finance.id]).status_code == 200
+    department_service.update_department(
+        api.db, finance.id, DepartmentUpdate(active=False), actor="test"
+    )
+    resaved = _share(api, folder_id, everyone=False, department_ids=[finance.id, stores.id])
+    assert resaved.status_code == 200, resaved.text
+    assert {row["id"] for row in resaved.json()["shared_departments"]} >= {stores.id}
+    other_id = _create_folder(api, "Other desk", team=True)["id"]
+    _error(
+        _share(api, other_id, everyone=False, department_ids=[finance.id]),
+        422,
+        "DEPARTMENT_NOT_FOUND",
+    )
 
 
 @pytest.mark.parametrize("actor", ["M", "D"])

@@ -150,6 +150,35 @@ def test_head_and_deputy_distribute_with_progress_and_member_privacy(department_
         _error(api.client.get(f"{API}/books/{api.records['directed'].id}"), 404, "BOOK_NOT_FOUND")
 
 
+def test_head_keeping_a_delivery_is_recorded_for_the_sender_progress(department_api):
+    api, root, _child = department_api
+    send_department(api, root)
+    send_id = sends(api)[0]["id"]
+    assert sends(api)[0]["kept_at"] is None
+    api.as_user("C")
+    _error(
+        api.client.post(endpoint(api, send_id, "/distribute"), json={"mode": "keep"}),
+        404,
+        "DEPARTMENT_SEND_NOT_FOUND",
+    )
+    api.as_user("B")
+    kept = api.client.post(endpoint(api, send_id, "/distribute"), json={"mode": "keep"})
+    assert kept.status_code == 200, kept.text
+    assert kept.json()["sent"] == [] and kept.json()["skipped"] == []
+    api.as_user("A")
+    first = sends(api)[0]
+    assert first["kept_at"] is not None
+    assert first["kept_by_user_id"] == api.users["B"].id
+    assert first["kept_by_name"] == "SEND-B"
+    assert first["members_reached"] == 0
+    api.as_user("C2")
+    again = api.client.post(endpoint(api, send_id, "/distribute"), json={"mode": "keep"})
+    assert again.status_code == 200, again.text
+    api.as_user("A")
+    assert sends(api)[0]["kept_at"] == first["kept_at"]
+    assert sends(api)[0]["kept_by_user_id"] == api.users["B"].id
+
+
 @pytest.mark.parametrize("actor", ["B", "C2"])
 def test_distribution_options_include_derived_members_and_viewer_grants(department_api, actor):
     api, root, child = department_api
@@ -352,6 +381,18 @@ def test_secret_skips_uncleared_heads_and_members_and_duplicate_department(depar
     assert {
         row["user_id"] for row in response.json()["skipped"] if row["reason"] == "not_cleared"
     } == {api.users[name].id for name in ("B", "C", "E")}
+
+
+def test_sender_who_receives_for_the_department_is_skipped_as_self(department_api):
+    api, root, _child = department_api
+    grant(api.db, root.id, api.users["A"], "deputy")
+    result = send_department(api, root)
+    assert {row["user_id"] for row in result["sent"]} == {
+        api.users[name].id for name in ("B", "C2")
+    }
+    assert result["skipped"] == [
+        {"user_id": api.users["A"].id, "department_id": root.id, "reason": "self"}
+    ]
 
 
 def test_existing_recipient_is_not_relinked_and_single_recall_remains_independent(department_api):

@@ -28,7 +28,7 @@ from app.schemas.auth import AdminUserCreateRequest, ApproveRequest
 from app.schemas.department import DepartmentCreate, DepartmentUpdate
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate
 from app.services.department_scope_service import resolve_department_scope
-from tests.department_fixtures import department, employee, grant
+from tests.department_fixtures import department, employee, enable_scoping, grant
 
 API = "/api/v1/departments"
 
@@ -183,6 +183,7 @@ def test_patch_head_and_active_recompute_membership_and_parent(client, api_db):
 
 
 def test_department_arabic_rename_updates_derived_labels_only(client, api_db):
+    enable_scoping(api_db)
     employee(api_db, "HEAD")
     employee(api_db, "REPORT", "HEAD")
     target = create_department(client, "HEAD")
@@ -195,6 +196,7 @@ def test_department_arabic_rename_updates_derived_labels_only(client, api_db):
 
 
 def test_employee_writes_preserve_tree_derived_department_and_label(client, api_db):
+    enable_scoping(api_db)
     employee(api_db, "HEAD")
     target = create_department(client, "HEAD")
     created = client.post(
@@ -499,6 +501,31 @@ def test_plain_users_can_list_but_not_manage_departments_or_scoping(client, api_
     )
     assert client.get(f"{API}/scoping").status_code == 403
     assert client.put(f"{API}/scoping", json={"enabled": True}).status_code == 403
+
+
+def test_department_list_hides_grant_emails_from_non_managers_and_refuses_reporters(client, api_db):
+    employee(api_db, "HEAD")
+    target = create_department(client, "HEAD")
+    nameless = account(api_db, "nameless")
+    response = client.put(
+        f"{API}/{target['id']}/people",
+        json={"deputy_user_ids": [], "viewer_user_ids": [nameless.id]},
+    )
+    assert response.status_code == 200, response.text
+    assert client.get(API).json()[0]["viewers"][0]["display_name"] == nameless.email
+    caller = api_db.scalar(select(User).where(User.role == "admin"))
+    caller.role = "operator"
+    caller._effective_caps_cache = None
+    api_db.commit()
+    listed = client.get(API)
+    assert listed.status_code == 200, listed.text
+    viewer = listed.json()[0]["viewers"][0]
+    assert viewer["user_id"] == nameless.id
+    assert nameless.email not in viewer["display_name"]
+    caller.role = "inmate_reporter"
+    caller._effective_caps_cache = None
+    api_db.commit()
+    assert client.get(API).status_code == 403
 
 
 def test_session_user_reports_whether_department_scoping_is_on(client):

@@ -9,13 +9,17 @@ from app.api.errors import ValidationFailedError
 from app.db.models import Department, Employee, User
 from app.schemas.department import DepartmentCreate
 from app.services import department_service, department_tree_service, org_tree_service
-from tests.department_fixtures import department, employee, exception, recompute
+from tests.department_fixtures import department, employee, enable_scoping, exception, recompute
 
 
 @pytest.fixture()
 def tree(api_db):
-    """BOSS > A(Admin head) > A1 > A11; A > S(Section head) > S1; BOSS > X > X1."""
+    """BOSS > A(Admin head) > A1 > A11; A > S(Section head) > S1; BOSS > X > X1.
+
+    Scoping is on so department labels are synchronized.
+    """
     db = api_db
+    enable_scoping(db)
     employee(db, "BOSS")
     employee(db, "A", "BOSS")
     employee(db, "A1", "A", department="Legacy")
@@ -59,6 +63,21 @@ def test_exception_moves_branch_and_none_clears_owned_label(tree):
     got = departments(db)
     assert got["A1"] is None and got["A11"] is None
     assert db.get(Employee, "A11").department is None
+
+
+def test_labels_wait_for_the_switch_and_sync_when_it_turns_on(api_db):
+    db = api_db
+    employee(db, "HEAD", department="Free text")
+    employee(db, "STAFF", "HEAD", department="Legacy label")
+    employee(db, "OUTSIDE", department="Outside label")
+    row = department(db, "Ops", "HEAD", name_ar="العمليات")
+    assert db.get(Employee, "STAFF").department_id == row.id
+    assert db.get(Employee, "STAFF").department == "Legacy label"
+    assert db.get(Employee, "HEAD").department == "Free text"
+    department_service.set_scoping(db, True, actor="test")
+    assert db.get(Employee, "STAFF").department == "العمليات"
+    assert db.get(Employee, "HEAD").department == "العمليات"
+    assert db.get(Employee, "OUTSIDE").department == "Outside label"
 
 
 def test_inactive_department_falls_through_to_department_above(tree):
