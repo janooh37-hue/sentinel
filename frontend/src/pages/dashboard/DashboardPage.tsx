@@ -35,7 +35,7 @@ import {
 
 import { api } from '@/lib/api'
 import { DepartmentPicker } from '@/components/departments/DepartmentPicker'
-import { departmentName } from '@/lib/departments'
+import { departmentName, useDepartmentRollout } from '@/lib/departments'
 import { APPROVALS_LOG_PATH, approvalQueueUrl, defaultApprovalContext } from '@/lib/approvals'
 import type {
   DashboardLayout,
@@ -173,7 +173,8 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null)
-  const isOrganizationScope = user?.department_scope_kind === 'organization'
+  const { scopingOn, departmentsUsable } = useDepartmentRollout()
+  const isOrganizationScope = scopingOn && departmentsUsable && user?.department_scope_kind === 'organization'
   const departmentId = isOrganizationScope ? selectedDepartmentId ?? undefined : undefined
 
   // Row-level deep-link helper for recent-activity sections. The destination

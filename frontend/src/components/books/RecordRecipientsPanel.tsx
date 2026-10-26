@@ -97,6 +97,7 @@ export function RecordRecipientsPanel({
               {send.note && <p className="mt-0.5 whitespace-pre-line" dir="auto">{send.note}</p>}
               <p className="mt-0.5 text-muted-foreground">{t('books.send.sentByOn', { name: bidi(pickEmployeeName({ name_en: send.sent_by_name ?? '', name_ar: send.sent_by_name_ar }, i18n.language)), date: bidi(day(send.created_at)) })}</p>
               <p className="mt-0.5 text-muted-foreground">{t('books.distribute.progress', { read: send.heads_read, total: send.heads_total, reached: send.members_reached, done: send.done_count })}</p>
+              {send.kept_at && <p className="mt-0.5 font-medium text-foreground">{t('books.distribute.keptBy', { name: bidi(pickEmployeeName({ name_en: send.kept_by_name || '—', name_ar: send.kept_by_name_ar }, i18n.language)) })}</p>}
             </div>
             {send.can_recall && !send.revoked_at && <button type="button" disabled={recallDepartment.isPending} onClick={() => setDepartmentRecallTarget(send)} className="min-h-9 rounded-lg border border-hairline px-3 font-medium text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">{t('books.send.recall')}</button>}
           </li>

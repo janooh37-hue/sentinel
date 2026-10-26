@@ -17,7 +17,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, type DepartmentRead, type OrgNodeRead } from '@/lib/api'
+import { api, type DepartmentRead, type DepartmentScopingRead, type OrgNodeRead } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { departmentErrorMessage, departmentName, invalidateDepartmentData } from '@/lib/departments'
 import { pickEmployeeName } from '@/lib/employeeName'
@@ -738,6 +738,7 @@ function AccessLimitsReview({ onBack, onDone }: { onBack: () => void; onDone: ()
   const { departmentsById } = useOrgData()
   const [fix, setFix] = useState<{ kind: 'deputy' | 'services'; department: DepartmentRead } | null>(null)
   const [confirmOff, setConfirmOff] = useState(false)
+  const [confirmOn, setConfirmOn] = useState<DepartmentScopingRead | null>(null)
   const [justTurnedOn, setJustTurnedOn] = useState(false)
   // Always the real, current preflight: never a cached answer.
   const scoping = useQuery({ queryKey: ['department-scoping'], queryFn: api.departments.getScoping, refetchOnMount: 'always' })
@@ -844,13 +845,40 @@ function AccessLimitsReview({ onBack, onDone }: { onBack: () => void; onDone: ()
             aria-busy={save.isPending || undefined}
             onClick={() => {
               // Re-check right before acting: the preflight may have changed while the page was open.
-              void scoping.refetch().then((result) => { if (result.isSuccess && !result.data.enabled) save.mutate(true) })
+              void scoping.refetch().then((result) => { if (result.isSuccess && !result.data.enabled) setConfirmOn(result.data) })
             }}
           >
             {t(save.isPending ? 'orgDepartments.form.saving' : 'orgDepartments.limits.turnOn')}
           </Button>
         )}
       </StepActions>
+
+      <ConfirmDialog
+        open={confirmOn !== null}
+        onOpenChange={(open) => { if (!open) setConfirmOn(null) }}
+        title={t('orgDepartments.limits.confirmOn')}
+        description={confirmOn && (
+          <div className="max-h-[55dvh] space-y-3 overflow-y-auto text-start">
+            <p>{t('orgDepartments.limits.labelSyncWarning')}</p>
+            <section>
+              <p className="font-medium">{t('orgDepartments.limits.usersWithout', { count: confirmOn.users_without_department.length })}</p>
+              <ul className="list-disc ps-5">
+                {confirmOn.users_without_department.map((user) => <li key={user.user_id}><bdi>{user.display_name || user.email}</bdi></li>)}
+              </ul>
+            </section>
+            {(['departments_without_receiver', 'departments_without_services'] as const).map((key) => (
+              <section key={key}>
+                <p className="font-medium">{t(`orgDepartments.limits.${key}`, { count: confirmOn[key].length })}</p>
+                <ul className="list-disc ps-5">
+                  {confirmOn[key].map((department) => <li key={department.id}><bdi>{departmentName(department, lang)}</bdi></li>)}
+                </ul>
+              </section>
+            ))}
+          </div>
+        )}
+        confirmLabel={t('orgDepartments.limits.turnOn')}
+        onConfirm={() => { if (confirmOn && !save.isPending) save.mutate(true) }}
+      />
 
       <ConfirmDialog
         open={confirmOff}

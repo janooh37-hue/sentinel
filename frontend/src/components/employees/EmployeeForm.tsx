@@ -37,6 +37,7 @@ import { ExtractionDropzone } from '@/components/extraction/ExtractionDropzone'
 import { ExtractionReviewPanel } from '@/components/extraction/ExtractionReviewPanel'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { useDepartmentRollout } from '@/lib/departments'
 
 import {
   EMPLOYEE_STATUSES,
@@ -118,6 +119,7 @@ function blankDefaults(): EmployeeFormValues {
     effective_date: todayIso(),
     position: '',
     position_ar: '',
+    department: '',
     other: '',
     notes: '',
     passport_no: '',
@@ -147,6 +149,7 @@ function fromInitial(initial: Partial<EmployeeRead>): EmployeeFormValues {
     effective_date: todayIso(),
     position: initial.position ?? '',
     position_ar: initial.position_ar ?? '',
+    department: initial.department ?? '',
     other: initial.other ?? '',
     notes: initial.notes ?? '',
     passport_no: initial.passport_no ?? '',
@@ -168,6 +171,8 @@ export function EmployeeForm({
   submitting = false,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const { scopingOn } = useDepartmentRollout(false)
+  const departmentReadOnly = scopingOn && initial?.department_id != null
   const form = useForm<EmployeeFormValues, unknown, EmployeeFormOutput>({
     resolver: zodResolver(employeeFormSchema),
     defaultValues: initial ? fromInitial(initial) : blankDefaults(),
@@ -240,8 +245,10 @@ export function EmployeeForm({
         // date — sending nulls would make the flip land a site-less transfer.
         const keepPendingTransfer =
           isWorkingStatus(vals.status) && initial?.pending_status === 'Transferred'
+        const { department, ...fields } = vals
         await onSubmit({
-          ...vals,
+          ...fields,
+          ...(!departmentReadOnly ? { department } : {}),
           transfer_site:
             vals.status === 'Transferred'
               ? vals.transfer_site
@@ -328,27 +335,21 @@ export function EmployeeForm({
           <CardTitle>{t('employees.sections.employment')}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {/* Read-only: the department follows the org tree (supervisor links
-              and department heads are set under Permissions). */}
-          <div className="flex min-w-0 flex-col gap-1.5">
+          {departmentReadOnly ? <div className="flex min-w-0 flex-col gap-1.5">
             <span className="text-sm font-medium text-foreground">{fld('department')}</span>
             <p className="flex min-h-9 items-center break-words text-sm text-foreground">
-              {initial?.department_id != null ? (
                 <bdi>
                   {i18n.language.startsWith('ar')
                     ? initial.department_name_ar || initial.department_name_en
                     : initial.department_name_en || initial.department_name_ar}
                 </bdi>
-              ) : initial?.department ? (
-                <span className="text-muted-foreground">
-                  {t('departmentEmployees.previousValue')}: <bdi>{initial.department}</bdi>
-                </span>
-              ) : (
-                <span className="text-muted-foreground">{t('departmentAccess.noTreeDepartment')}</span>
-              )}
             </p>
             <span className="text-xs text-muted-foreground">{t('departmentAccess.fromTree')}</span>
-          </div>
+          </div> : (
+            <Field id="department" label={fld('department')}>
+              <Input id="department" dir="auto" {...register('department')} />
+            </Field>
+          )}
           <Field id="position" label={fld('position')}>
             <Input id="position" {...register('position')} />
           </Field>

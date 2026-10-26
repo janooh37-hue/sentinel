@@ -38,7 +38,7 @@ interface OrgTreeViewProps {
   /** Or one person's whole branch, across units: a department's reporting chart. */
   branchRootId?: string
   /** Offer supervisor relinking (drag and ✎) to holders of `employees.edit`.
-   *  Only the reporting-lines tool passes it; Employees → Organization is read-only. */
+   *  Both Employees → Organization and the reporting-lines tool enable it. */
   editable?: boolean
   focus?: OrgTreeFocus | null
 }

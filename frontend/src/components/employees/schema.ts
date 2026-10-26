@@ -53,6 +53,7 @@ export const employeeFormSchema = z
     effective_date: optionalDate,
     position: optionalText(128),
     position_ar: optionalText(128),
+    department: optionalText(128).optional(),
     other: optionalText(),
     notes: optionalText(2048),
     passport_no: optionalText(64),

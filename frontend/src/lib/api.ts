@@ -463,6 +463,7 @@ export interface SessionUser {
   department: string | null
   departments?: UserDepartmentRead[]
   department_scope_kind?: components['schemas']['SessionUser']['department_scope_kind']
+  department_scoping_enabled: boolean
   photo_url: string | null
   role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
   status: 'pending' | 'active' | 'locked' | 'disabled'

@@ -30,7 +30,7 @@ import type { ExtractionResponse } from '@/lib/extraction'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { useUrlOverlay } from '@/lib/urlState'
 import { DepartmentPicker } from '@/components/departments/DepartmentPicker'
-import { visibleDepartmentIds } from '@/lib/departments'
+import { useDepartmentRollout, visibleDepartmentIds } from '@/lib/departments'
 
 export function EmployeeLookupPage(): React.JSX.Element {
   const { t } = useTranslation()
@@ -71,16 +71,12 @@ export function EmployeeLookupPage(): React.JSX.Element {
     staleTime: 60_000,
   })
   const scope = dashboardQuery.data?.department_scope
-  const departments = useQuery({
-    queryKey: ['departments'],
-    queryFn: api.departments.list,
-    enabled: scope?.kind === 'organization' || scope?.kind === 'department',
-  })
+  const { departments, activeDepartments, scopingOn, departmentsUsable } = useDepartmentRollout()
   const allowedIds = scope?.kind === 'department'
-    ? visibleDepartmentIds(departments.data ?? [], scope.departments ?? [])
+    ? visibleDepartmentIds(departments, scope.departments ?? [])
     : undefined
-  const showDepartmentFilter = scope?.kind === 'organization'
-    || (scope?.kind === 'department' && (departments.data ?? []).filter((department) => department.active && allowedIds?.has(department.id)).length > 1)
+  const showDepartmentFilter = scopingOn && departmentsUsable && (scope?.kind === 'organization'
+    || (scope?.kind === 'department' && activeDepartments.filter((department) => allowedIds?.has(department.id)).length > 1))
   const departmentId = showDepartmentFilter && (allowedIds === undefined || (selectedDepartmentId !== null && allowedIds.has(selectedDepartmentId)))
     ? selectedDepartmentId ?? undefined : undefined
   const onLeaveIds = useMemo(() => {

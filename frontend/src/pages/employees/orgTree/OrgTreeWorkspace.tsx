@@ -1,7 +1,7 @@
 /**
  * OrgTreeWorkspace — the duty-unit rail beside one unit's supervisor tree.
  *
- * Shared by the read-only Employees → Organization page and the optional
+ * Shared by Employees → Organization and the optional
  * drag chart in Permissions → Fix reporting lines, so both agree on unit order,
  * headcount and the `?unit=` selection. A reporting structure is per-unit, so
  * the rail drops the Unassigned bucket: those people have no unit to build a

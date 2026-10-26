@@ -1,8 +1,9 @@
-import type { QueryClient } from '@tanstack/react-query'
-import { AUTH_KEY } from './authContext'
+import { useQuery, type QueryClient } from '@tanstack/react-query'
+import { AUTH_KEY, useAuth } from './authContext'
 import type { TFunction } from 'i18next'
 import {
   ApiError,
+  api,
   apiErrorMessage,
   type AdminUserRead,
   type DepartmentRead,
@@ -25,6 +26,25 @@ const DEPARTMENT_ERROR_KEYS: Record<string, string | undefined> = {
   DISTRIBUTE_NOT_MEMBER: 'books.send.errors.notMember',
   DISTRIBUTE_NOT_SUBDEPARTMENT: 'books.send.errors.notSubdepartment',
   DEPARTMENT_SEND_NOT_FOUND: 'books.send.errors.sendNotFound',
+}
+
+/** Rollout gates shared by desktop and mobile surfaces. A denied catalogue is
+ *  unconfigured, never a reason to replace the legacy UI with an empty picker. */
+export function useDepartmentRollout(enabled = true) {
+  const { user } = useAuth()
+  const query = useQuery({
+    queryKey: ['departments'],
+    queryFn: api.departments.list,
+    enabled,
+  })
+  const departments = query.isError ? [] : query.data ?? []
+  const activeDepartments = departments.filter((department) => department.active)
+  return {
+    departments,
+    activeDepartments,
+    departmentsUsable: activeDepartments.length > 0,
+    scopingOn: user?.department_scoping_enabled === true,
+  }
 }
 
 export function departmentErrorMessage(error: unknown, t: TFunction): string {

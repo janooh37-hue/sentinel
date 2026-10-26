@@ -25,7 +25,7 @@ function Body({ book, send, close }: Pick<Props, 'book' | 'send'> & { close: () 
   const { t, i18n } = useTranslation()
   const id = useId()
   const qc = useQueryClient()
-  const [mode, setMode] = useState<BookDistributeRequest['mode'] | 'keep'>('all')
+  const [mode, setMode] = useState<BookDistributeRequest['mode']>('all')
   const [members, setMembers] = useState<number[]>([])
   const [subdepartment, setSubdepartment] = useState<number | null>(null)
   const [purpose, setPurpose] = useState<SendPurpose>(send.purpose)
@@ -36,10 +36,10 @@ function Body({ book, send, close }: Pick<Props, 'book' | 'send'> & { close: () 
   })
   const mutation = useMutation({
     mutationFn: (body: BookDistributeRequest) => api.distributeBookDepartmentSend(book.id, send.id, body),
-    onSuccess: (result) => {
+    onSuccess: (result, body) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
-      toast.success(t('books.distribute.result', { sent: result.sent.length, skipped: result.skipped.length }))
+      toast.success(body.mode === 'keep' ? t('books.distribute.keptSuccess') : t('books.distribute.result', { sent: result.sent.length, skipped: result.skipped.length }))
       close()
     },
     onError: (error) => toast.error(departmentErrorMessage(error, t)),
@@ -101,9 +101,8 @@ function Body({ book, send, close }: Pick<Props, 'book' | 'send'> & { close: () 
       <footer className="flex flex-wrap justify-end gap-2 border-t border-hairline px-4 py-3">
         <Button variant="outline" onClick={close}>{t('common.cancel')}</Button>
         <Button disabled={!canSubmit || mutation.isPending} aria-busy={mutation.isPending || undefined} onClick={() => {
-          if (mode === 'keep') close()
-          else mutation.mutate(distributionPayload(mode, members, subdepartment, purpose, note))
-        }}>{t(mode === 'keep' ? 'common.close' : 'books.distribute.title')}</Button>
+          mutation.mutate(mode === 'keep' ? { mode: 'keep' } : distributionPayload(mode, members, subdepartment, purpose, note))
+        }}>{t(mode === 'keep' ? 'books.distribute.modes.keep' : 'books.distribute.title')}</Button>
       </footer>
     </DialogContent>
   )

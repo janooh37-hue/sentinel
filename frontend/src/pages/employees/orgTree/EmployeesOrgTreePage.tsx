@@ -5,9 +5,8 @@
  * `/employees/org-tree`), because "who reports to whom" is a fact about people,
  * not about the transfer-letter workflow that owns /duty-locations.
  *
- * Always read-only. Supervisor links and departments are edited in one place,
- * Permissions → Organization & departments; people who may edit there get a
- * link to it.
+ * Supervisor links remain editable here for employees.edit holders; the
+ * Permissions workspace also provides department administration.
  *
  * `?unit=` carries the selection so a company is linkable and survives reload.
  */
@@ -69,7 +68,7 @@ export function EmployeesOrgTreePage(): React.JSX.Element {
       </section>
 
       <div className="mx-auto w-full max-w-[1400px] flex-1 px-8 pb-10 pt-4">
-        <OrgTreeWorkspace />
+        <OrgTreeWorkspace editable={has('employees.edit')} />
       </div>
     </div>
   )

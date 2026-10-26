@@ -209,6 +209,8 @@
       "turnedOn": "Department access limits are on.",
       "turnedOff": "Department access limits are off.",
       "confirmOff": "Turn off department access limits?",
+      "confirmOn": "Turn on department access limits?",
+      "labelSyncWarning": "Turning on access limits will change employees' department labels to their department's Arabic name. Review the current warnings before continuing.",
       "offWarning": "Department limits will be removed. Users will see organization-wide data wherever their permissions allow."
     },
     "setup": {
@@ -2665,7 +2667,7 @@
       "sent_other": "Sent to {{count}} people",
       "nothingSent": "Nothing new was sent",
       "skipped": "Skipped: {{list}}",
-      "skippedSelf": "you",
+      "skippedSelf": "{{name}} (you)",
       "skippedAlready": "{{name}} (already has it)",
       "skippedDepartment": "{{name}} (already sent)",
       "skippedNotCleared": "{{name}} (no Secret clearance)",
@@ -2711,6 +2713,8 @@
       "noMembers": "No members available.",
       "noSubdepartments": "No active sub-departments.",
       "result": "Sent: {{sent}} · Skipped: {{skipped}}",
+      "keptSuccess": "Kept with you.",
+      "keptBy": "Kept by {{name}}",
       "progress": "Head read {{read}}/{{total}} · Members reached {{reached}} · Done {{done}}",
       "recallBody": "This recalls the department send and removes access for everyone the head shared it with, including sub-department deliveries. Independent sends are kept."
     },
@@ -3444,6 +3448,8 @@
         "everyoneAudience": "Everyone can see this folder. Each person sees only the books they are allowed to open.",
         "restrictedAudience": "Shared with: {{audience}}.",
         "departmentAudience": "{{name}} department",
+        "legacyDepartmentName": "Previous department name: {{name}}",
+        "removeLegacyDepartment": "Remove previous department name: {{name}}",
         "bookVisibility": "Each person sees only the books they are allowed to open.",
         "createdBy": "Created by {{name}}",
         "share": "Share",
@@ -3466,7 +3472,7 @@
         "errorNotTeam": "Only team folders can be shared.",
         "errorSharesEmpty": "Choose at least one person or department.",
         "errorShareUserInvalid": "A selected person is no longer available. Choose active users.",
-        "errorShareLegacyInvalid": "An old department name can only be kept or removed. Reopen sharing to load the current audience.",
+        "errorShareLegacyInvalid": "A previous department name can only be kept or removed. Reopen sharing to load the current audience.",
         "filedBy": "Filed by {{name}}",
         "unknownPerson": "Unknown person"
       },
