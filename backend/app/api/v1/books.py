@@ -2243,13 +2243,13 @@ async def scan_back_book(
     decoded = codes[0]
     if isinstance(classification, scan_triage_service.ReturnedFormClassification):
         match = classification.match
+        _require_full_book(db, user, match.book.book_id, write=True)
         if match.book.approval_state != "awaiting_scan":
             raise ValidationFailedError(
                 "BOOK_NOT_AWAITING_SCAN",
                 "هذا السجل غير جاهز لاستلام النسخة الموقعة",
             )
         if match.confidence == 1.0:
-            _require_full_book(db, user, match.book.book_id, write=True)
             row = book_service.add_attachment(
                 db,
                 match.book.book_id,
