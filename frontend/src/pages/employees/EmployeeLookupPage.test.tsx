@@ -10,8 +10,13 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { api } from '@/lib/api'
 
 const scrollIntoView = vi.fn()
+const rollout = vi.hoisted(() => ({ enabled: false }))
+vi.mock('@/lib/authContext', () => ({
+  useAuth: () => ({ user: { department_scoping_enabled: rollout.enabled } }),
+}))
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -26,6 +31,7 @@ vi.mock('@/lib/api', async (orig) => {
         on_leave_today: [],
         totals: { employees_active: 5 },
       }),
+      departments: { list: vi.fn().mockResolvedValue([]) },
       createEmployee: vi.fn().mockResolvedValue({ id: 'G9999' }),
     },
     apiErrorMessage: vi.fn().mockReturnValue('error'),
@@ -38,11 +44,13 @@ vi.mock('@/components/employees/EmployeeSearchHero', () => ({
     onSelect,
     onCreate,
     children,
+    filters,
   }: {
     onSelect: (id: string) => void
     onCreate: () => void
     onLeaveIds: ReadonlySet<string>
     children?: React.ReactNode
+    filters?: React.ReactNode
   }) => (
     <div data-testid="hero">
       <button type="button" onClick={() => onSelect('G3190')}>
@@ -52,6 +60,7 @@ vi.mock('@/components/employees/EmployeeSearchHero', () => ({
         create
       </button>
       {children}
+      {filters}
     </div>
   ),
 }))
@@ -113,7 +122,7 @@ vi.mock('@/components/employees/EmployeeActivitySection', () => ({
 
 // Silence i18n
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
+  useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en', dir: () => 'ltr' } }),
 }))
 
 // Silence sonner
@@ -174,8 +183,31 @@ function LocationProbe(): React.JSX.Element {
 describe('EmployeeLookupPage', () => {
   beforeEach(() => {
     localStorage.clear()
+    rollout.enabled = false
+    vi.mocked(api.departments.list).mockResolvedValue([])
     scrollIntoView.mockClear()
     Element.prototype.scrollIntoView = scrollIntoView
+  })
+
+  it('keeps the department-scope filter hidden with scoping off and no departments', async () => {
+    vi.mocked(api.getDashboardSummary).mockResolvedValueOnce({
+      on_leave_today: [],
+      department_scope: { kind: 'organization', departments: [] },
+    } as never)
+    setup()
+    await waitFor(() => expect(api.departments.list).toHaveBeenCalled())
+    expect(screen.queryByText('departmentScope.allDepartments')).not.toBeInTheDocument()
+    expect(screen.queryByText('departments.empty')).not.toBeInTheDocument()
+  })
+
+  it('offers the organization department filter when scoping is on and active departments exist', async () => {
+    rollout.enabled = true
+    vi.mocked(api.departments.list).mockResolvedValue([{ id: 3, name_en: 'Operations', name_ar: 'العمليات', active: true }] as never)
+    vi.mocked(api.getDashboardSummary).mockResolvedValueOnce({
+      on_leave_today: [], department_scope: { kind: 'organization', departments: [] },
+    } as never)
+    setup()
+    expect(await screen.findByText('departmentScope.allDepartments')).toBeInTheDocument()
   })
 
   it('navigates to the employee profile when a search result is selected', async () => {
@@ -206,4 +238,19 @@ describe('EmployeeLookupPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'activity-open-G3190' }))
     expect(await screen.findByTestId('profile-stub')).toBeInTheDocument()
   })
+})
+
+it('keeps active descendant department filters across an inactive intermediate node', async () => {
+  rollout.enabled = true
+  vi.mocked(api.departments.list).mockResolvedValue([
+    { id: 1, parent_id: null, name_en: 'Parent', name_ar: 'الأصل', active: true },
+    { id: 2, parent_id: 1, name_en: 'Inactive middle', name_ar: 'وسيط غير نشط', active: false },
+    { id: 3, parent_id: 2, name_en: 'Child', name_ar: 'الفرع', active: true },
+  ] as never)
+  vi.mocked(api.getDashboardSummary).mockResolvedValueOnce({
+    on_leave_today: [], department_scope: { kind: 'department', departments: [{ department_id: 1, role: 'head' }] },
+  } as never)
+  setup()
+  await userEvent.click(await screen.findByRole('combobox'))
+  expect(await screen.findByRole('option', { name: 'Child' })).toBeInTheDocument()
 })

@@ -8,12 +8,13 @@ import { DEFAULT_LAYOUT } from '@/lib/dashboardLayout'
 import { DashboardPage } from './DashboardPage'
 
 const authState = vi.hoisted(() => ({
-  user: { id: 1 } as { id: number } | null,
+  user: { id: 1 } as { id: number; department_scoping_enabled?: boolean; department_scope_kind?: string } | null,
 }))
 
 vi.mock('@/lib/api', () => ({
   api: {
     getDashboardSummary: vi.fn().mockResolvedValue({
+      department_scope: { kind: 'organization', departments: [] },
       totals: {
         employees_active: 0,
         our_staff: 0,
@@ -37,6 +38,7 @@ vi.mock('@/lib/api', () => ({
       },
     }),
     getDashboardLayout: vi.fn(),
+    departments: { list: vi.fn().mockResolvedValue([]) },
     updateDashboardLayout: vi.fn(),
     getSettings: vi.fn(),
     updateSettings: vi.fn(),
@@ -117,10 +119,26 @@ describe('DashboardPage per-user layout', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     authState.user = { id: 1 }
+    vi.mocked(api.departments.list).mockResolvedValue([])
     mockedApi.getDashboardLayout.mockResolvedValue(null)
     mockedApi.updateDashboardLayout.mockImplementation(async (layout) => layout)
     mockedApi.getSettings.mockResolvedValue({} as never)
     mockedApi.updateSettings.mockResolvedValue({} as never)
+  })
+
+  it('hides the department scope picker with scoping off and no active departments', async () => {
+    authState.user = { id: 1, department_scope_kind: 'organization', department_scoping_enabled: false }
+    renderPage()
+    await screen.findByRole('button', { name: `save-widget-layout-${DEFAULT_LAYOUT.widgets.length}` })
+    expect(screen.queryByText('No departments available.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Department' })).not.toBeInTheDocument()
+  })
+
+  it('shows the organization department filter only when scoping is on and departments are usable', async () => {
+    authState.user = { id: 1, department_scope_kind: 'organization', department_scoping_enabled: true }
+    vi.mocked(api.departments.list).mockResolvedValue([{ id: 3, name_en: 'Operations', name_ar: 'العمليات', active: true }] as never)
+    renderPage()
+    expect(await screen.findByRole('combobox', { name: 'Department' })).toBeEnabled()
   })
 
   it('loads the per-user route, falls back to defaults, and saves the full layout', async () => {

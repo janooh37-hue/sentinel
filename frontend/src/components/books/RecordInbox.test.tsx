@@ -17,6 +17,10 @@ import { RecordInboxStrip, RecordRecipientsPanel } from './RecordRecipientsPanel
 import { SendRecordDialog } from './SendRecordDialog'
 import { useInboxActions } from './useInboxActions'
 
+vi.mock('@/lib/authContext', () => ({
+  useAuth: () => ({ user: { id: 1, name_en: 'Ali Sender', name_ar: 'علي المرسل', email: 'ali@example.com', department_scoping_enabled: false } }),
+}))
+
 vi.mock('@/lib/api', async (original) => {
   const actual = await original<typeof ApiModule>()
   return {
@@ -110,6 +114,48 @@ describe('shared inbox action descriptor', () => {
   })
 })
 
+describe('department send rollout', () => {
+  it.each(['empty', 'inactive', 'denied'])('hides Departments for an unusable catalogue (%s)', async (catalogue) => {
+    vi.spyOn(api, 'getBookThread').mockResolvedValue([])
+    vi.spyOn(api, 'listRecipientCandidates').mockResolvedValue([])
+    if (catalogue === 'inactive') vi.mocked(api.departments.list).mockResolvedValue([{ id: 5, active: false }] as never)
+    if (catalogue === 'denied') vi.mocked(api.departments.list).mockRejectedValue(new Error('Forbidden'))
+    const { wrapper } = setup()
+    render(<SendRecordDialog book={BOOK} open onOpenChange={vi.fn()} />, { wrapper })
+    await screen.findByRole('dialog')
+    expect(screen.queryByText('Departments')).not.toBeInTheDocument()
+  })
+
+  it('offers department sends when active departments exist even with scoping off', async () => {
+    vi.spyOn(api, 'getBookThread').mockResolvedValue([])
+    vi.spyOn(api, 'listRecipientCandidates').mockResolvedValue([])
+    vi.mocked(api.departments.list).mockResolvedValue([{
+      id: 5, active: true, name_en: 'Operations', name_ar: 'العمليات',
+      parent_id: null, head_user_id: 3, deputies: [],
+    }] as never)
+    const { wrapper } = setup()
+    render(<SendRecordDialog book={BOOK} open onOpenChange={vi.fn()} />, { wrapper })
+    expect(await screen.findByRole('checkbox', { name: 'Operations' })).toBeEnabled()
+  })
+
+  it.each(['not_cleared', 'self'] as const)('names the person rather than the department for %s when both ids are present', async (reason) => {
+    vi.spyOn(api, 'getBookThread').mockResolvedValue([])
+    vi.spyOn(api, 'listRecipientCandidates').mockResolvedValue([
+      { id: 3, name: 'Mariam Recipient', name_ar: null, role: 'operator', has_secret_clearance: false },
+    ])
+    vi.spyOn(api, 'sendBook').mockResolvedValue({
+      sent: [], skipped: [{ department_id: 5, user_id: reason === 'self' ? 1 : 3, reason }],
+    })
+    const { wrapper } = setup()
+    render(<SendRecordDialog book={BOOK} open onOpenChange={vi.fn()} />, { wrapper })
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Mariam Recipient' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(toast.info).toHaveBeenCalledWith(expect.any(String), {
+      description: expect.stringContaining(reason === 'self' ? 'Ali Sender' : 'Mariam Recipient'),
+    }))
+  })
+})
+
 describe('Arabic recipient surfaces and circulation', () => {
   beforeEach(async () => {
     i18n.addResourceBundle('ar', 'translation', ar, true, true)
@@ -177,4 +223,23 @@ describe('Arabic recipient surfaces and circulation', () => {
     expect(pickEmployeeName({ name_en: 'English', name_ar: '  ' }, 'ar')).toBe('English')
     expect(pickEmployeeName({ name_en: 'English', name_ar: null }, 'ar')).toBe('English')
   })
+})
+
+it.each([
+  ['en', /Kept by.*Mariam Recipient/],
+  ['ar', /احتُفظ بها لدى.*مريم المستلمة/],
+] as const)('shows the persisted keeper in the sender progress (%s)', async (language, label) => {
+  i18n.addResourceBundle('ar', 'translation', ar, true, true)
+  await i18n.changeLanguage(language)
+  vi.spyOn(api, 'listBookRecipients').mockResolvedValue([])
+  const { wrapper } = setup()
+  render(<RecordRecipientsPanel bookId={7} departmentSends={[{
+    id: 12, department_id: 5, department_name_en: 'Operations', department_name_ar: 'العمليات',
+    parent_send_id: null, sent_by_user_id: 2, sent_by_name: 'Sender', sent_by_name_ar: null,
+    purpose: 'info', note: null, created_at: INBOX.sent_at, revoked_at: null,
+    heads_total: 1, heads_read: 1, members_reached: 0, done_count: 0, can_recall: false, can_distribute: false,
+    kept_at: '2026-10-12T10:00:00Z', kept_by_user_id: 3, kept_by_name: 'Mariam Recipient', kept_by_name_ar: 'مريم المستلمة',
+  }]} />, { wrapper })
+  await userEvent.click(screen.getByTestId('record-recipients').querySelector('summary')!)
+  expect(screen.getByText(label)).toBeVisible()
 })

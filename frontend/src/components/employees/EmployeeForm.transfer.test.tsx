@@ -2,10 +2,19 @@ import type { ReactElement } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render as renderComponent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { EmployeeRead } from '@/lib/api'
+import type * as AuthModule from '@/lib/authContext'
 import { EmployeeForm } from './EmployeeForm'
+
+const rollout = vi.hoisted(() => ({ enabled: false }))
+beforeEach(() => { rollout.enabled = false })
+
+vi.mock('@/lib/authContext', async (original) => {
+  const actual = await original<typeof AuthModule>()
+  return { ...actual, useAuth: () => ({ user: { department_scoping_enabled: rollout.enabled } }) }
+})
 
 const BASE = { id: 'G3190', name_en: 'ABDULLA ALABRI', status: 'Active' } as Partial<EmployeeRead>
 
@@ -26,6 +35,27 @@ function setDate(id: string, value: string) {
 }
 
 describe('EmployeeForm transfer fields', () => {
+  it('keeps the free-text department editable while scoping is off, even with a derived department', async () => {
+    render(<EmployeeForm mode="edit" initial={{ ...BASE, department: 'Operations', department_id: 3 }} onSubmit={vi.fn()} />)
+    const field = screen.getByRole('textbox', { name: 'Department' })
+    expect(field).toHaveAttribute('dir', 'auto')
+    expect(field).toHaveValue('Operations')
+    await userEvent.clear(field)
+    await userEvent.type(field, 'Support')
+    expect(field).toHaveValue('Support')
+  })
+
+  it('shows the derived department read-only when scoping is on and omits its label from saves', async () => {
+    rollout.enabled = true
+    const onSubmit = vi.fn()
+    render(<EmployeeForm mode="edit" initial={{ ...BASE, department: 'Legacy', department_id: 3, department_name_en: 'Operations', department_name_ar: 'العمليات' }} onSubmit={onSubmit} />)
+    expect(screen.queryByRole('textbox', { name: 'Department' })).not.toBeInTheDocument()
+    expect(screen.getByText('Operations')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('department')
+  })
+
   it('shows site + return date only for Transferred and blocks submit without a site', async () => {
     const onSubmit = vi.fn()
     render(<EmployeeForm mode="edit" initial={BASE} onSubmit={onSubmit} />)

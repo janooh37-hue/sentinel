@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as AuthContextModule from '@/lib/authContext'
 
+vi.mock('@/components/employees/useAttendanceAttention', () => ({
+  useAttendanceAttention: () => ({ attention: null }),
+}))
 const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>(), scopeKind: 'organization' }))
 
 vi.mock('@/lib/useCapabilities', () => ({
@@ -24,6 +27,7 @@ vi.mock('@/lib/authContext', async (importOriginal) => ({
 import i18n from '@/lib/i18n'
 import { api, type DepartmentRead, type OrgNodeRead } from '@/lib/api'
 import { OrgTreeView } from '@/pages/employees/orgTree/OrgTreeView'
+import { EmployeesOrgTreePage } from '@/pages/employees/orgTree/EmployeesOrgTreePage'
 import { OrgDepartmentsTab } from './OrgDepartmentsTab'
 import { PermissionsPage } from '../PermissionsPage'
 
@@ -100,6 +104,14 @@ describe('Employees org tree', () => {
     expect(await within(head).findByText('Operations')).toBeInTheDocument()
     expect(screen.getByText('View only')).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Edit links' })).not.toBeInTheDocument()
+  })
+
+  it('lets employees.edit holders edit supervisor links from Employees', async () => {
+    capabilityState.allowed = new Set(['employees.view', 'employees.edit'])
+    vi.spyOn(api, 'listEmployees').mockResolvedValue({ items: PEOPLE, total: PEOPLE.length } as never)
+    renderAt(<EmployeesOrgTreePage />, '/employees/org-tree')
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit links' }))
+    expect(screen.getAllByRole('button', { name: 'Change supervisor' }).length).toBeGreaterThan(0)
   })
 })
 
@@ -298,4 +310,31 @@ describe('Permissions tabs', () => {
 
     expect(await screen.findByRole('tab', { name: 'Organization & departments' })).toHaveAttribute('aria-selected', 'true')
   })
+})
+
+it('confirms enabling only after showing freshly fetched rollout warnings', async () => {
+  capabilityState.allowed = new Set(['employees.view', 'departments.manage'])
+  const setScoping = vi.spyOn(api.departments, 'setScoping').mockResolvedValue({
+    enabled: true, records_backfilled: 0, users_without_department: [],
+    departments_without_receiver: [], departments_without_services: [],
+  })
+  renderAt(<OrgDepartmentsTab />, '/permissions?tab=org&view=setup&step=4')
+  const turnOn = await screen.findByRole('button', { name: 'Turn on department access limits' })
+  vi.mocked(api.departments.getScoping).mockResolvedValue({
+    enabled: false, records_backfilled: 0,
+    users_without_department: [{ user_id: 25, display_name: 'New colleague', email: 'new@example.com' }],
+    departments_without_receiver: [{ id: 8, name_en: 'No receiver team', name_ar: 'قسم بلا مستلم' }],
+    departments_without_services: [{ id: 9, name_en: 'No services team', name_ar: 'قسم بلا خدمات' }],
+  })
+  vi.mocked(api.departments.getScoping).mockClear()
+  await userEvent.click(turnOn)
+  const dialog = await screen.findByRole('dialog', { name: 'Turn on department access limits?' })
+  expect(within(dialog).getByText('New colleague')).toBeVisible()
+  expect(within(dialog).getByText('No receiver team')).toBeVisible()
+  expect(within(dialog).getByText('No services team')).toBeVisible()
+  expect(within(dialog).getByText(/Arabic name/)).toBeVisible()
+  expect(api.departments.getScoping).toHaveBeenCalledTimes(1)
+  expect(setScoping).not.toHaveBeenCalled()
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Turn on department access limits' }))
+  expect(setScoping).toHaveBeenCalledWith(true, expect.anything())
 })

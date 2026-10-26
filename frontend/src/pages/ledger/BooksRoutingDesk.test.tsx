@@ -56,6 +56,7 @@ function mount(url = '/ledger?tab=books'): QueryClient {
 }
 beforeEach(() => {
   vi.mocked(useIsMobile).mockReturnValue(false)
+  vi.spyOn(api.departments, 'list').mockResolvedValue([{ ...DEPARTMENT, active: true }] as never)
   vi.spyOn(api, 'listBooks').mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 })
   vi.spyOn(api, 'listBookFolders').mockResolvedValue([])
   vi.spyOn(api, 'getInboxSummary').mockResolvedValue({ unread: 0, received: 0, sent: 0, archived: 0, by_purpose: { info: 0, action: 0, reply: 0, circulate: 0 } })
@@ -116,7 +117,7 @@ describe('Books routing desk', () => {
     expect(header).toHaveTextContent('Team')
     expect(header).toHaveTextContent('Books: 2')
     expect(header).toHaveTextContent(/Shared with:.*Aisha.*Operations.*department/)
-    expect(header).toHaveTextContent(/Old department name:.*Former Operations/)
+    await waitFor(() => expect(header).toHaveTextContent(/Previous department name:.*Former Operations/))
     expect(header).toHaveTextContent('Each person sees only the books they are allowed to open.')
     expect(header).toHaveTextContent(/Created by.*Khalid/)
     expect(within(header).getByRole('button', { name: 'Share' })).toBeInTheDocument()
@@ -126,7 +127,8 @@ describe('Books routing desk', () => {
     vi.mocked(api.listBookFolders).mockResolvedValue([{ ...FOLDER, team: true, everyone: true }])
     vi.spyOn(api, 'getBookFolderShareOptions').mockResolvedValue({
       departments: [DEPARTMENT],
-      users: [{ id: 2, name: 'Aisha', name_ar: 'عائشة', title: 'HR officer', title_ar: null, department_id: 4 }],
+      legacy_departments: [],
+      users: [{ id: 2, name: 'Aisha', name_ar: 'عائشة', title: 'HR officer', title_ar: null, department_id: 4, department: 'Operations' }],
     })
     vi.spyOn(api, 'updateBookFolderShares').mockResolvedValue({ ...FOLDER, team: true })
     const qc = mount('/ledger?tab=books&folder=3')
@@ -154,7 +156,8 @@ describe('Books routing desk', () => {
     }])
     vi.spyOn(api, 'getBookFolderShareOptions').mockResolvedValue({
       departments: [DEPARTMENT],
-      users: [{ id: 2, name: 'Aisha', name_ar: null, title: null, title_ar: null, department_id: 4 }],
+      legacy_departments: [],
+      users: [{ id: 2, name: 'Aisha', name_ar: null, title: null, title_ar: null, department_id: 4, department: 'Operations' }],
     })
     vi.spyOn(api, 'updateBookFolderShares').mockResolvedValue({ ...FOLDER, team: true, everyone: true })
     mount('/ledger?tab=books&folder=3')
@@ -453,19 +456,20 @@ describe('Books routing desk (Arabic)', () => {
     }], total: 1, limit: 50, offset: 0 })
     vi.spyOn(api, 'getBookFolderShareOptions').mockResolvedValue({
       departments: [DEPARTMENT],
-      users: [{ id: 2, name: 'Aisha', name_ar: 'عائشة', title: 'HR officer', title_ar: 'مسؤولة الموارد البشرية', department_id: 4 }],
+      legacy_departments: [],
+      users: [{ id: 2, name: 'Aisha', name_ar: 'عائشة', title: 'HR officer', title_ar: 'مسؤولة الموارد البشرية', department_id: 4, department: 'العمليات' }],
     })
     mount('/ledger?tab=books&folder=3')
     const header = (await screen.findByRole('heading', { name: 'شؤون الموظفين' })).closest('header')!
     expect(header).toHaveTextContent(/تمت المشاركة مع:.*عائشة.*قسم.*العمليات/)
-    expect(header).toHaveTextContent(/اسم قسم قديم:.*قسم سابق/)
+    await waitFor(() => expect(header).toHaveTextContent(/اسم القسم السابق:.*قسم سابق/))
     expect(await screen.findByRole('button', { name: /GS-7/ })).toHaveTextContent('أضافه \u2068عائشة\u2069 · 15/10/2026')
     await userEvent.click(screen.getByRole('button', { name: 'مشاركة' }))
     const dialog = await screen.findByRole('dialog', { name: 'مشاركة مجلد الفريق' })
     expect(dialog).toHaveAttribute('dir', 'rtl')
     expect(await within(dialog).findByRole('checkbox', { name: 'العمليات' })).toBeChecked()
     expect(within(dialog).getByRole('checkbox', { name: 'عائشة مسؤولة الموارد البشرية العمليات' })).toBeChecked()
-    expect(within(dialog).getByRole('button', { name: 'إزالة اسم قسم قديم: قسم سابق' })).toBeVisible()
+    expect(within(dialog).getByRole('button', { name: 'إزالة اسم القسم السابق: قسم سابق' })).toBeVisible()
     expect(rendered(dialog)).not.toMatch(/[A-Za-z]/)
   })
 

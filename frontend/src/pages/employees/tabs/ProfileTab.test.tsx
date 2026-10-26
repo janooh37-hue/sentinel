@@ -16,6 +16,10 @@ import { vi, test, expect, beforeEach } from 'vitest'
 
 const updateEmployee = vi.fn().mockResolvedValue({})
 const hasCapability = vi.fn<(cap: string) => boolean>()
+const rollout = vi.hoisted(() => ({ enabled: false }))
+vi.mock('@/lib/authContext', () => ({
+  useAuth: () => ({ user: { department_scoping_enabled: rollout.enabled } }),
+}))
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => ({ data: undefined, isError: false }),
@@ -39,7 +43,7 @@ vi.mock('react-i18next', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/api', () => ({
-  api: { updateEmployee: (...args: unknown[]) => updateEmployee(...args), getVault: vi.fn() },
+  api: { updateEmployee: (...args: unknown[]) => updateEmployee(...args), getVault: vi.fn(), departments: { list: vi.fn() } },
   apiErrorMessage: (e: unknown) => String(e),
 }))
 vi.mock('@/lib/useCapabilities', () => ({
@@ -56,6 +60,7 @@ import type { EmployeeRead } from '@/lib/api'
 
 beforeEach(() => {
   updateEmployee.mockClear()
+  rollout.enabled = false
   hasCapability.mockReturnValue(true)
 })
 
@@ -187,4 +192,17 @@ test('requestedFixField opens the editor for that field and reports handled', ()
   )
   expect(screen.getByLabelText('employee.field.nationality')).toBeInTheDocument()
   expect(onFixHandled).toHaveBeenCalled()
+})
+
+test('department gap stays editable with scoping off and a derived department', async () => {
+  render(<ProfileTab employee={{ ...baseEmployee, department: null, department_id: 3 }} missing={['department']} />)
+  fireEvent.click(screen.getByRole('button', { name: 'employee.gaps.addNow' }))
+  expect(screen.getByRole('textbox')).toBeInTheDocument()
+})
+
+test('derived department is read-only with an org-tree explanation when limits are on', () => {
+  rollout.enabled = true
+  render(<ProfileTab employee={{ ...baseEmployee, department_id: 3, department_name_en: 'Operations', department_name_ar: 'العمليات' }} missing={['department']} />)
+  expect(screen.queryByRole('button', { name: 'employee.gaps.addNow' })).not.toBeInTheDocument()
+  expect(screen.getByText('departmentAccess.fromTree')).toBeInTheDocument()
 })
