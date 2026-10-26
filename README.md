@@ -87,7 +87,8 @@ department head, and everyone below them belongs to it, so moving someone in the
 tree moves their department. A head inside another department's branch makes a
 sub-department. Admins add deputies and department viewers, manual exceptions and
 per-department services on top. The editor is **Permissions → Organization &
-departments** (`/permissions?tab=org`); the Employees org tree is read-only.
+departments** (`/permissions?tab=org`); supervisor links stay editable from the
+Employees org tree for `employees.edit` holders.
 
 Departments narrow people data, Records and services only after an administrator
 enables department scoping there; deploying leaves the switch off. Heads and

@@ -27,8 +27,8 @@ Capabilities still gate every action; the scope only narrows rows.
   only an administrator sets it (account linking is admin-only since #255).
   Grant pickers list active, non-inmate-reporter accounts from
   `GET /departments/candidate-users` (`departments.manage`).
-- The editor lives on `/permissions?tab=org`; the Employees org tree is
-  read-only. Supervisor links stay on `employees.edit`.
+- The department editor lives on `/permissions?tab=org`. Supervisor links stay
+  on `employees.edit` and remain editable from the Employees org tree.
 - Heads and deputies see their department and every derived sub-department.
   Viewers see that department only. Every user also sees their own
   supervisor-tree branch: themselves and everyone below them.
@@ -86,8 +86,11 @@ which departments have no services before it asks for confirmation.
   department.
 - Team-folder shares from PR #247 move from the free-text department to
   `department_id`. Keep `employees.department` as a label synchronized from the
-  derived Department's Arabic name; leaving a department clears the label only
-  when it still equals that department's name. Workforce continues matching
+  derived Department's Arabic name while scoping is on; the label sync waits for
+  the switch (turning it on syncs every label in the same commit), so creating
+  departments with the switch off never rewrites labels that Workforce scopes,
+  document templates and legacy folder shares read. Leaving a department clears
+  the label only when it still equals that department's name. Workforce continues matching
   department text in attendance snapshots, duty events, staffing requirements
   and its own scopes without a rewrite. The rollout data has Arabic labels on
   only 36 of 304 employees, zero `user_workforce_scopes` rows and zero
@@ -103,6 +106,8 @@ Implemented migrations, in order:
 - `0111_book_department`: Record department FK.
 - `0112_department_sends`: department sends, recipient links and ID-based
   team-folder shares, retaining restricted unmatched legacy audiences.
+- `0113_department_send_keep`: nullable `kept_at` / `kept_by_user_id` on
+  department sends, recording a head's choice to keep a delivery.
 P5 label synchronization requires no schema migration.
 
 ## Department inbox API (P4)
@@ -121,7 +126,9 @@ Current heads/deputies and admins use
 `GET /books/{book_id}/department-sends/{send_id}/distribution-options` and
 `POST /books/{book_id}/department-sends/{send_id}/distribute`. Distribution
 targets all members (derived members, head, deputies and viewers), selected
-members, or a direct active sub-department.
+members, or a direct active sub-department; `mode: "keep"` records (once) that
+the head keeps the delivery, shown to the sender as `kept_at` / `kept_by_name`.
+A sender who is also a receiver of the target department is skipped (`self`).
 Non-head callers receive 404. Hand-downs retain the department-send link and
 name the distributing head as sender; subdepartment deliveries create a child
 send. A recalled send refuses further distribution with
@@ -143,8 +150,11 @@ count when every head already holds an independent recipient grant.
 Team-folder shares use department IDs, independent of the scoping switch. A
 department share reaches the active users who belong to it (derived, headed,
 deputy or viewer). Share options return active departments (`id`, `name_en`,
-`name_ar`) and each user's derived `department_id`. Updates accept `department_ids` and
-`legacy_departments` to retain; they never create new free-text shares.
+`name_ar`) and each user's derived `department_id` and trimmed label. Updates
+accept `department_ids` (only newly added ones must be active) and
+`legacy_departments`; existing legacy labels may be retained, and new free-text
+labels are accepted only while no active department exists (share options then
+list them as `legacy_departments`).
 Migration maps unambiguous trimmed, case-insensitive English or Arabic names.
 Unmapped or ambiguous text remains restricted by the old employee-department
 match and is exposed as `legacy_departments`; removing all audiences requires
@@ -161,5 +171,7 @@ The AR/EN send picker lists active departments in tree order beside people.
 Heads and deputies distribute to everyone, chosen members or a subdepartment,
 or keep delivery at their desk. Incoming badges name the department; the sender
 sees department-level read/reached/done progress and can recall the full chain.
-Folder share editing uses department IDs and separately retained legacy labels.
-The employee form shows the derived department read-only.
+Folder share editing uses department IDs and separately retained legacy labels
+once departments exist, and free-text labels before then. The employee form
+keeps the free-text department until scoping is on and the employee belongs to
+a department; then it shows the derived department read-only.

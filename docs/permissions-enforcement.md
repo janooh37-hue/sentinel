@@ -161,6 +161,8 @@ department-scope bypass.
   Everyone also sees their own supervisor-tree branch (scope kind `branch` when
   they have reports), including Records created by users in it. A user outside
   every department with no reports has only self scope and no services.
+  Deputy and viewer grants to an inactive department confer nothing, like its
+  head and derived members.
 - The employee link confers head/branch scope and department-send delivery; it
   is set only by an administrator (`PATCH /auth/users/{user_id}/link` or at
   approval).
@@ -169,11 +171,13 @@ department-scope bypass.
   groups, the picker list `GET /departments/candidate-users` (active,
   non-inmate-reporter accounts), preflight and the switch. It is admin-only by
   default, delegable and not requestable. Supervisor links stay on
-  `employees.edit`. The department list itself needs only a session.
+  `employees.edit`. The department list `GET /departments` needs a session and
+  refuses inmate reporters (403); without `departments.manage`, deputy and
+  viewer names never fall back to the account email.
   `departments.all` is the separately grantable, non-sensitive Organization-wide
   view capability, also not requestable; setup permission does not imply it.
-- The editor (supervisor links plus department controls) lives on
-  `/permissions?tab=org`; the Employees org tree is read-only for everyone.
+- The department editor lives on `/permissions?tab=org`. Supervisor links stay
+  editable from the Employees org tree for `employees.edit` holders, as before.
 - `GET /departments/account-access` returns employee profile `position` /
   `position_ar` (the titles displayed in the org tree) separately from
   `designation_en` / `designation_ar` (the latest roster designation effective
@@ -184,12 +188,23 @@ department-scope bypass.
   cross-department Record access, without bypassing Record Levels or capabilities.
   A user's services come from every department they belong to (derived, headed,
   deputy or viewer), intersected with per-service denials; an unconfigured
-  department supplies no services.
+  department supplies no services. Inmate reporters keep their two fixed
+  services: the department service filter does not apply to them.
+- A department send never gives the sender their own copy: a head or deputy
+  sending to their own department is skipped with reason `self`. A receiving
+  head may keep a delivery (`mode: "keep"`), recorded once as `kept_at` /
+  `kept_by_user_id` for the sender's progress.
+- Team-folder shares already on a folder are not re-validated: a department
+  deactivated later can be retained, while newly added departments must be
+  active. While no active department exists, free-text department audiences
+  can still be added, matched trimmed and case-insensitively as before.
 - Workforce retains its independent text-based scopes. `employees.department`
-  is synchronized from the derived Department's Arabic name; leaving a department
-  (including rename-and-deactivate or delete) clears the label only when it still
-  equals that department's name. Historical attendance snapshots and duty events
-  are not rewritten.
+  is synchronized from the derived Department's Arabic name only while scoping
+  is on; turning the switch on syncs every label in the same commit, and while
+  it is off labels stay free text. Leaving a department (including
+  rename-and-deactivate or delete) clears the label only when it still equals
+  that department's name. Historical attendance snapshots and duty events are
+  not rewritten.
 
 ## 4. Fixed: `books.view` was not enforced on the register listing
 
