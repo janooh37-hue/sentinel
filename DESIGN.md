@@ -1547,10 +1547,11 @@ number a user is not allowed to see.
  │ ┌────┐  GOOD EVENING ///              │ 24   SATURDAY · OCTOBER 2026      │
  │ │ HA │  Hamdan Saeed Ali              │      13 Jumada I 1448 AH          │
  │ └────┘  HR Officer · Human Resources  │      09:41  Week 43               │
- │         [ID G-10482]                  ├───────────┬────────────┬──────────┤
- │                                       │■ WAITING ↗│■ NEEDS     ↗│ SENT,   ↗│
- │+                                      │  3        │  1          │ 4        │
- └───────────────────────────────────────┴───────────┴────────────┴──────────┘
+ │         [ID G-10482]                  ├────────┬─────────┬────────┬────────┤
+ │                                       │■ TO    │■ TO     │■ NEEDS │ SENT, ↗│
+ │                                       │ SIGN ↗ │ REVIEW ↗│CHANGES↗│PENDING │
+ │+                                      │  3     │  2      │  1     │ 4      │
+ └───────────────────────────────────────┴────────┴─────────┴────────┴────────┘
 ```
 
 **Folder tab:** `.hero-folder-tab`, `absolute start-0 top-0 h-[30px]
@@ -1565,9 +1566,10 @@ cut from `gssg-wordmark.png`) so the letters are white on navy and the
 swoosh is `--accent`. `direction: ltr`; the mark is never mirrored.
 
 **Sheet:** `<header class="hero-slab">`, square corners, `text-white`.
-`.hero-slab::after` lays faint 1-in-4px scan lines over it; `.hero-cross`
-registration marks pin the top-start corner and, from `md`, the
-bottom-start corner. Below `md` the identity block stacks over the panel.
+`.hero-slab::after` lays faint 1-in-4px scan lines over it (`z-index: 1`,
+`pointer-events: none`); `.hero-cross` registration marks pin the top-start
+corner and, from `md`, the bottom-start corner. Below `md` the identity block
+stacks over the panel.
 
 - Identity (inline start): portrait (linked users only), 4:5, `w-[52px]
   md:w-[68px]`, square, `bg-[var(--hero-slab-raised)]`, 1px 25%-white
@@ -1586,27 +1588,34 @@ bottom-start corner. Below `md` the identity block stacks over the panel.
   - My desk: the user's own approval queue from `useApprovalSummary()`
     (shared cache with the nav badge and the approval widgets), one
     `<Link>` cell per item the user can open:
-    - `waiting` (`actionable_count`) when `available_received_kinds` is
-      non-empty; opens the received queue (signature work first, then
-      review).
-    - `returned` (`returned_count`, records they sent that a signer
-      returned) and `sent` (`sent.count`, still pending) when
-      `can_view_sent`; open the Sent tab filtered to returned / pending.
-    Counts are mono; zero is dimmed. A red square precedes the label of
-    `waiting` / `returned` while non-zero. Every cell ends in an ↗.
-  - No approval work (or the summary not loaded yet): the date plate takes
+    - To sign (`signature.count`) when `available_received_kinds` includes
+      `approver`; opens received / sign / pending.
+    - To review (`review.count`) when `available_received_kinds` includes
+      `reviewer`; opens received / review / pending.
+    - Needs changes (`returned_count`, records they sent that a signer
+      returned) and Sent, pending (`sent.count`) when `can_view_sent`;
+      open sent / returned and sent / pending respectively.
+    Each count matches its destination list. Counts are mono; zero is dimmed.
+    A red square precedes To sign / To review / Needs changes while non-zero.
+    Every cell ends in an ↗.
+  - No queue cells (or the summary not loaded yet): the date plate takes
     the whole panel at a larger numeral (`md:text-[5.2em]`).
 
 **`.hero-label`:** mono, `0.66em`, `500`, uppercase, `0.1em` tracking
 (`0.04em` below `md`). In Arabic it switches to `--font-arabic` at
 `max(0.76em, 0.6875rem)` with no case or tracking.
 
-**Motion:** every time the dashboard opens, the parts arrive in reading
-order (tab, portrait, greeting, name, meta, plate, queue contents), each
-sliding 14px in the writing direction; one scan line sweeps the sheet top to
-bottom; the queue counts run up from 0 over 700ms once the summary arrives.
-The queue cell frames stand from the start so the ruled grid never flashes.
-See §5.
+**Motion:** on every dashboard mount (each visit), the parts arrive in reading
+order: tab (sequence 0), portrait (1), greeting (2), name (3), role line (4),
+day numeral (5), weekday/month (6), Hijri (7), time · week (8), queue cells
+(9–12). Each slides 14px in the writing direction over 360ms, delayed by its
+sequence index × 55ms; with four cells, the parts finish by 1020ms (earlier
+with fewer cells). One scan line sweeps the sheet top to bottom over 900ms
+after a 150ms delay, finishing at 1050ms. Nothing is stored between visits.
+The queue counts run up from 0 over 700ms (ease-out quart), once when the
+summary first arrives on that mount. The queue cell frames stand from the
+start so the ruled grid never flashes. Reduced motion shows settled parts
+and final counts, with the scan hidden. See §5.
 
 **Dark theme:** `--hero-slab` deepens to `#131f3a` with a 1px `#24304f`
 inset edge. Text stays white.
@@ -2402,7 +2411,7 @@ Every named animation on the Dashboard and chrome.
 
 | Element                                          | `animationDelay` |
 | ------------------------------------------------ | ---------------- |
-| Hero (own sequence, first visit of the day only) | `0ms`–`490ms`    |
+| Hero (own sequence, every dashboard mount)        | `0ms`–`1050ms`   |
 | "My Widgets" strap                               | `60ms`           |
 | PendingDocumentsCard                             | `80ms`           |
 | WorkspaceCard                                    | `120ms`          |
