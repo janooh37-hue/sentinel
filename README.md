@@ -36,6 +36,13 @@ designation/contact, and manager signing date do not print because its design
 has no slots. The selected manager fills the center-manager approval; the
 contract-manager and final approvals stay blank for hand signing.
 
+Employee identity links are assigned by administrators during registration
+approval or through user management; accounts cannot claim employee records.
+Linked accounts and manager aliases share the employee's canonical signature.
+Manager settings editors also need `employees.edit` to assign/change an
+employee-linked account or replace/delete its signature; standalone manager
+signatures require only `settings.edit`.
+
 ## Requirements
 
 - Python 3.12

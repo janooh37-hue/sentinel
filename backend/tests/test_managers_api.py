@@ -36,18 +36,21 @@ def test_manager_create_accepts_arabic_only_name():
 
 
 def test_create_then_update_and_soft_delete(db_session):
+    actor = _user(db_session)
     mgr = manager_service.create_manager(
-        db_session, ManagerCreate(name_en="Ada Lovelace", title="Director")
+        db_session, ManagerCreate(name_en="Ada Lovelace", title="Director"), actor=actor
     )
     assert mgr.id is not None
     assert mgr.active is True
 
-    manager_service.update_manager(db_session, mgr.id, ManagerUpdate(title="Chief Director"))
+    manager_service.update_manager(
+        db_session, mgr.id, ManagerUpdate(title="Chief Director"), actor=actor
+    )
     assert db_session.get(type(mgr), mgr.id).title == "Chief Director"
     # name untouched by partial patch
     assert db_session.get(type(mgr), mgr.id).name_en == "Ada Lovelace"
 
-    manager_service.update_manager(db_session, mgr.id, ManagerUpdate(active=False))
+    manager_service.update_manager(db_session, mgr.id, ManagerUpdate(active=False), actor=actor)
     active = manager_service.list_managers(db_session)
     assert all(m.id != mgr.id for m in active)
     allm = manager_service.list_managers(db_session, include_inactive=True)

@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as ApiModule from '@/lib/api'
 import { api } from '@/lib/api'
+import { useIdentity } from '@/lib/useIdentity'
 import { EmailSection } from './EmailSection'
 
 vi.mock('@/lib/api', async (orig) => {
@@ -22,19 +23,17 @@ vi.mock('@/lib/api', async (orig) => {
       testEmailConnection: vi.fn(),
       syncEmail: vi.fn(),
       deleteEmailAccount: vi.fn(),
-      linkMyEmployee: vi.fn(),
     },
   }
 })
 vi.mock('@/lib/useIdentity', () => ({
-  useIdentity: () => ({ identity: { email: 'me@gssg.ae', linked: true }, isAdmin: true }),
+  useIdentity: vi.fn(),
 }))
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ setUser: vi.fn() }) }))
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }))
 vi.mock('./SignatureSection', () => ({ SignatureSection: () => null }))
-vi.mock('@/pages/application/EmployeePicker', () => ({ EmployeePicker: () => null }))
+vi.mock('@/pages/application/EmployeePicker', () => ({ EmployeePicker: () => <div data-testid="employee-picker" /> }))
 
 const ACCOUNT = {
   email: 'ops@gssg.ae',
@@ -73,11 +72,43 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(useIdentity).mockReturnValue({
+    identity: { email: 'me@gssg.ae', linked: true, role: 'admin', is_admin: true, is_manager: false },
+    isAdmin: true,
+    isLinked: true,
+    isManager: false,
+    isLoading: false,
+  })
   vi.mocked(api.getEmailAccount).mockResolvedValue(ACCOUNT as never)
   vi.mocked(api.upsertEmailAccount).mockResolvedValue(ACCOUNT as never)
 })
 
 describe('EmailSection account form', () => {
+  it.each([
+    { linked: false, isAdmin: false, width: 360 },
+    { linked: false, isAdmin: false, width: 1280 },
+    { linked: true, isAdmin: false, width: 360 },
+    { linked: true, isAdmin: false, width: 1280 },
+    { linked: false, isAdmin: true, width: 360 },
+    { linked: false, isAdmin: true, width: 1280 },
+    { linked: true, isAdmin: true, width: 360 },
+    { linked: true, isAdmin: true, width: 1280 },
+  ])('does not offer self-linking for $linked/$isAdmin at $width px', async ({ linked, isAdmin, width }) => {
+    vi.stubGlobal('innerWidth', width)
+    vi.mocked(useIdentity).mockReturnValue({
+      identity: { email: 'me@gssg.ae', linked, role: isAdmin ? 'admin' : 'operator', is_admin: isAdmin, is_manager: false },
+      isAdmin,
+      isLinked: linked,
+      isManager: false,
+      isLoading: false,
+    })
+    renderSection()
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /IMAP username/ })).toHaveValue('ops@gssg.ae'))
+    expect(screen.queryByTestId('employee-picker')).not.toBeInTheDocument()
+    expect(screen.queryByText('Link your employee record')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Change' })).not.toBeInTheDocument()
+  })
+
   it('hydrates the configured drafts folder instead of the default', async () => {
     renderSection()
     const field = await screen.findByLabelText('Drafts folder')
