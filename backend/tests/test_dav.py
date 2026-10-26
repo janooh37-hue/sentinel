@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api import dav as dav_api
 from app.db import session as session_mod
-from app.db.models import Base, Book, BookCategory, BookEditSession, User
+from app.db.models import Base, Book, BookCategory, BookEditSession, BookVersion, Employee, User
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
 from app.services import perm_service
@@ -50,7 +50,7 @@ def client(api_db: Session) -> TestClient:
 
 
 def _make_owner(
-    db: Session, *, status: str = "active", password_change_required: bool = False
+    db: Session, *, role: str, status: str = "active", password_change_required: bool = False
 ) -> User:
     """A real account eligible (or not) to authenticate — the WebDAV bearer
     token is only as good as its owner's ability to sign in."""
@@ -59,6 +59,7 @@ def _make_owner(
         password_hash="x",
         status=status,
         password_change_required=password_change_required,
+        role=role,
     )
     db.add(owner)
     db.commit()
@@ -76,7 +77,7 @@ def _make_session(
 ) -> BookEditSession:
     """Seed a minimal Book + BookEditSession row, owned by a real user."""
     if owner is None:
-        owner = _make_owner(db)
+        owner = _make_owner(db, role="manager")
     cat = BookCategory(id="GEN", name_en="General", name_ar="عام", prefix="GEN")
     db.add(cat)
     db.flush()
@@ -277,7 +278,7 @@ def test_dav_diagnostic_event_is_structured_and_redacted(
 def test_dav_blocked_after_owner_disabled(client: TestClient, api_db: Session, tmp_path):
     p = tmp_path / "owned.docx"
     p.write_bytes(b"PK-original")
-    owner = _make_owner(api_db)
+    owner = _make_owner(api_db, role="manager")
     _make_session(api_db, working_path=str(p), token="tok_disabled", owner=owner)
 
     assert client.get("/dav/tok_disabled/owned.docx").status_code == 200
@@ -301,7 +302,7 @@ def test_dav_blocked_for_owner_awaiting_password_setup(
 ):
     p = tmp_path / "pending-setup.docx"
     p.write_bytes(b"PK")
-    owner = _make_owner(api_db, password_change_required=True)
+    owner = _make_owner(api_db, role="manager", password_change_required=True)
     _make_session(api_db, working_path=str(p), token="tok_setup", owner=owner)
 
     r = client.get("/dav/tok_setup/pending-setup.docx")
@@ -332,3 +333,112 @@ def test_dav_blocked_for_missing_owner(client: TestClient, api_db: Session, tmp_
     r = client.get("/dav/tok_orphan/orphan.docx")
 
     assert r.status_code == 404
+
+
+def test_dav_book_put_requires_operator_edit_grant(client: TestClient, api_db: Session, tmp_path):
+    path = tmp_path / "operator.docx"
+    path.write_bytes(b"PK-original")
+    owner = _make_owner(api_db, role="operator")
+    session = _make_session(api_db, working_path=str(path), token="operator", owner=owner)
+    url = "/dav/operator/operator.docx"
+    assert not perm_service.has_capability(api_db, owner, "books.edit")
+    assert client.get(url).status_code == 200
+    saved_at = session.last_put_at
+    assert saved_at is None
+
+    response = client.put(url, content=b"PK-denied")
+
+    assert response.status_code == 404
+    assert path.read_bytes() == b"PK-original"
+    api_db.refresh(session)
+    assert session.last_put_at == saved_at
+
+    perm_service.set_user_override(
+        api_db, user_id=owner.id, capability="books.edit", effect="grant"
+    )
+    assert client.put(url, content=b"PK-authorized").status_code == 204
+    assert path.read_bytes() == b"PK-authorized"
+    api_db.refresh(session)
+    assert session.last_put_at is not None
+
+
+@pytest.mark.parametrize("method", ["PUT", "LOCK"])
+@pytest.mark.parametrize("kind", ["book", "template"])
+def test_dav_rechecks_current_mutation_capability(
+    client: TestClient, api_db: Session, tmp_path, method: str, kind: str
+):
+    path = tmp_path / "editable.docx"
+    path.write_bytes(b"PK-original")
+    owner = _make_owner(api_db, role="manager")
+    if kind == "book":
+        session = _make_session(api_db, working_path=str(path), token="revoked", owner=owner)
+        capability = "books.edit"
+    else:
+        session = BookEditSession(
+            user_id=owner.id,
+            token="revoked",
+            working_path=str(path),
+            template_name="Test",
+            state="active",
+        )
+        api_db.add(session)
+        api_db.commit()
+        capability = "books.templates"
+        perm_service.set_user_override(
+            api_db, user_id=owner.id, capability=capability, effect="grant"
+        )
+    url = "/dav/revoked/editable.docx"
+    assert client.put(url, content=b"PK-before-revocation").status_code == 204
+    api_db.refresh(session)
+    saved_at = session.last_put_at
+    assert saved_at is not None
+    perm_service.set_user_override(api_db, user_id=owner.id, capability=capability, effect="deny")
+
+    response = client.request(method, url, content=b"PK-denied")
+
+    assert response.status_code == 404
+    assert path.read_bytes() == b"PK-before-revocation"
+    api_db.refresh(session)
+    assert session.last_put_at == saved_at
+    perm_service.set_user_override(api_db, user_id=owner.id, capability=capability, effect="grant")
+    assert client.request(method, url, content=b"PK-authorized").status_code == (
+        204 if method == "PUT" else 200
+    )
+    assert path.read_bytes() == (b"PK-authorized" if method == "PUT" else b"PK-before-revocation")
+
+
+@pytest.mark.parametrize("state", ["none", "returned"])
+def test_dav_preserves_reporter_own_report_authoring(
+    client: TestClient, api_db: Session, tmp_path, state: str
+):
+    path = tmp_path / "report.docx"
+    path.write_bytes(b"PK-report")
+    owner = _make_owner(api_db, role="inmate_reporter")
+    api_db.add(Employee(id="G-REPORTER", name_en="Reporter"))
+    api_db.flush()
+    owner.employee_id = "G-REPORTER"
+    session = _make_session(api_db, working_path=str(path), token="reporter", owner=owner)
+    book = api_db.get_one(Book, session.book_id)
+    book.category_id = "GS"
+    api_db.add(BookCategory(id="GS", prefix="GS"))
+    book.ref_number = "REPORT-1"
+    book.approval_state = state
+    book.created_by_user_id = owner.id
+    book.submitted_by_user_id = owner.id
+    if state == "returned":
+        book.versions.append(
+            BookVersion(
+                version_no=1,
+                template_id="Report",
+                fields={"signer_employee_id": owner.employee_id},
+                created_by_user_id=owner.id,
+                status="returned",
+            )
+        )
+    api_db.commit()
+    assert not perm_service.has_capability(api_db, owner, "books.edit")
+    assert client.request("LOCK", "/dav/reporter/report.docx").status_code == 200
+    assert client.put("/dav/reporter/report.docx", content=b"PK-report-edited").status_code == 204
+    assert path.read_bytes() == b"PK-report-edited"
+    api_db.refresh(session)
+    assert session.last_put_at is not None
