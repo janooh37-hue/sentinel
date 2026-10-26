@@ -8,12 +8,12 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.errors import NotFoundError
+from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
 from app.core import signature as signature_core
 from app.db.models import Manager, User
 from app.schemas.manager import ManagerCreate, ManagerUpdate
-from app.services import user_signature_service
+from app.services import perm_service, user_signature_service
 
 
 def list_managers(db: Session, *, include_inactive: bool = False) -> list[Manager]:
@@ -31,7 +31,25 @@ def _get_or_404(db: Session, manager_id: int) -> Manager:
     return mgr
 
 
-def create_manager(db: Session, data: ManagerCreate) -> Manager:
+def _linked_employee_id(db: Session, user_id: int | None) -> str | None:
+    linked = db.get(User, user_id) if user_id is not None else None
+    return linked.employee_id if linked is not None else None
+
+
+def _require_employee_signature_edit(db: Session, actor: User, user_id: int | None) -> str | None:
+    employee_id = _linked_employee_id(db, user_id)
+    if employee_id is not None and not perm_service.has_capability(db, actor, "employees.edit"):
+        raise AppError(
+            "FORBIDDEN",
+            "Missing capability: employees.edit",
+            http_status=403,
+            details={"capability": "employees.edit"},
+        )
+    return employee_id
+
+
+def create_manager(db: Session, data: ManagerCreate, *, actor: User) -> Manager:
+    employee_id = _require_employee_signature_edit(db, actor, data.user_id)
     mgr = Manager(
         name_en=data.name_en,
         name_ar=data.name_ar,
@@ -41,30 +59,30 @@ def create_manager(db: Session, data: ManagerCreate) -> Manager:
     )
     db.add(mgr)
     db.flush()
-    if mgr.user_id is not None:
-        linked = db.get(User, mgr.user_id)
-        if linked is not None and linked.employee_id:
-            user_signature_service.consolidate_or_raise(
-                db, linked.employee_id, data_dir=get_settings().data_dir
-            )
+    if employee_id is not None:
+        user_signature_service.consolidate_or_raise(
+            db, employee_id, data_dir=get_settings().data_dir
+        )
     db.commit()
     db.refresh(mgr)
     return mgr
 
 
-def update_manager(db: Session, manager_id: int, data: ManagerUpdate) -> Manager:
+def update_manager(db: Session, manager_id: int, data: ManagerUpdate, *, actor: User) -> Manager:
     """Partial update. Only fields explicitly set on ``data`` are written."""
     mgr = _get_or_404(db, manager_id)
     changes = data.model_dump(exclude_unset=True)
+    target_employee_id = None
+    if "user_id" in changes:
+        _require_employee_signature_edit(db, actor, mgr.user_id)
+        target_employee_id = _require_employee_signature_edit(db, actor, changes["user_id"])
     for field, value in changes.items():
         setattr(mgr, field, value)
-    if "user_id" in changes and mgr.user_id is not None:
+    if target_employee_id is not None:
         db.flush()
-        linked = db.get(User, mgr.user_id)
-        if linked is not None and linked.employee_id:
-            user_signature_service.consolidate_or_raise(
-                db, linked.employee_id, data_dir=get_settings().data_dir
-            )
+        user_signature_service.consolidate_or_raise(
+            db, target_employee_id, data_dir=get_settings().data_dir
+        )
     db.commit()
     db.refresh(mgr)
     return mgr
@@ -84,12 +102,10 @@ def manager_signature_path(manager_id: int) -> Path:
 def _profile_path(db: Session, manager: Manager) -> Path | None:
     """Employee profile signature path when `manager` is linked to a login
     account carrying an employee record, else None."""
-    if manager.user_id is None:
+    employee_id = _linked_employee_id(db, manager.user_id)
+    if employee_id is None:
         return None
-    linked = db.get(User, manager.user_id)
-    if linked is None or not linked.employee_id:
-        return None
-    return signature_core.employee_signature_path(get_settings().vault_dir, linked.employee_id)
+    return signature_core.employee_signature_path(get_settings().vault_dir, employee_id)
 
 
 def signature_path(db: Session, manager: Manager) -> Path:
@@ -123,7 +139,7 @@ def has_signature(db: Session, manager: Manager) -> bool:
     return signature_str(db, manager) is not None
 
 
-def save_manager_signature(db: Session, manager_id: int, data: bytes) -> Path:
+def save_manager_signature(db: Session, manager_id: int, data: bytes, *, actor: User) -> Path:
     """Normalize to PNG and write to the manager's canonical signature path.
 
     A manager linked to an account with an employee profile writes THAT file
@@ -131,6 +147,7 @@ def save_manager_signature(db: Session, manager_id: int, data: bytes) -> Path:
     manager-only image. A standalone manager keeps its own file/`sig_path`.
     """
     mgr = _get_or_404(db, manager_id)
+    _require_employee_signature_edit(db, actor, mgr.user_id)
     png = signature_core.normalize_to_png(data)  # raises SignatureError on bad input
     signature_core.validate(png)
     profile = _profile_path(db, mgr)
@@ -145,13 +162,14 @@ def save_manager_signature(db: Session, manager_id: int, data: bytes) -> Path:
     return path
 
 
-def delete_manager_signature(db: Session, manager_id: int) -> None:
+def delete_manager_signature(db: Session, manager_id: int, *, actor: User) -> None:
     """Remove the manager's signature file and null `sig_path`. Idempotent.
 
     A linked manager's delete removes the employee profile file — the SAME
     file the linked account and employee profile use. Any legacy standalone
     file goes either way."""
     mgr = _get_or_404(db, manager_id)
+    _require_employee_signature_edit(db, actor, mgr.user_id)
     with contextlib.suppress(signature_core.SignatureError):
         signature_path(db, mgr).unlink(missing_ok=True)
     manager_signature_path(manager_id).unlink(missing_ok=True)

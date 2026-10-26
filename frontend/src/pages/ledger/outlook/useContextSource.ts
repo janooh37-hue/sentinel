@@ -9,8 +9,8 @@
  *
  * Shared by the desktop 4th-column `ContextPanel` and the mobile Sheet (Task 4)
  * so the "People (N)" button count and the panel body can never drift. Runs the
- * SAME `['ledger-entry', id]` query the reading pane uses (TanStack de-dupes —
- * no double fetch).
+ * SAME scope-keyed `['ledger-entry', id, scope]` query the reading pane uses
+ * (TanStack de-dupes — no double fetch and no All-mail/Mine cache crossover).
  *
  * (The Correspondence-Log `'log'` record branch was removed 2026-06-25 — every
  * selected row is now an email.)
@@ -35,10 +35,11 @@ export interface ContextSource {
 export function useContextSource(
   selectedId: number | null,
   selectedKind: 'mail' | null,
+  scope?: 'mine' | 'all',
 ): ContextSource {
   const entryQuery = useQuery({
-    queryKey: ['ledger-entry', selectedId],
-    queryFn: () => api.getLedgerEntry(selectedId!),
+    queryKey: ['ledger-entry', selectedId, scope],
+    queryFn: () => api.getLedgerEntry(selectedId!, scope),
     enabled: selectedId != null && selectedKind === 'mail',
   })
 

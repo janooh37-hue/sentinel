@@ -28,6 +28,7 @@ interface ReadingPaneSlotProps {
   /** The id of the currently selected ledger entry/log record, or null when
    *  nothing is selected. */
   selectedId: number | null
+  scope?: 'mine' | 'all'
   /**
    * The kind of the selected row:
    *   null  → show the empty state (the default when absent)
@@ -48,6 +49,7 @@ interface ReadingPaneSlotProps {
 
 export function ReadingPaneSlot({
   selectedId,
+  scope,
   selectedKind,
   onReply,
   onReplyAll,
@@ -63,6 +65,7 @@ export function ReadingPaneSlot({
     return (
       <ReadingPane
         entryId={selectedId}
+        scope={scope}
         onReply={onReply}
         onReplyAll={onReplyAll}
         onForward={onForward}

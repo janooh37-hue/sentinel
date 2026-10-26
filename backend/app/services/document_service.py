@@ -50,6 +50,7 @@ from app.core.constants import (
 from app.core.dateutils import excel_date_to_datetime
 from app.core.docx_engine import aztec_corner_for, syncs_general_book_footer
 from app.core.docx_render import _arabic_clock, _arabic_weekday
+from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_ALIASES, SERVICE_IDS
 from app.core.html_text import html_to_text
 from app.core.inmate_wings import normalize_wing
 from app.core.nationalities import resolve_nationality
@@ -141,6 +142,39 @@ _FORM_CATEGORY: dict[str, str] = {
 def record_category_for_template(template_id: str) -> str:
     """Category persisted on the Book created by a committed generation."""
     return _FORM_CATEGORY.get(template_id, "HR")
+
+
+def effective_document_service(template_id: str) -> str:
+    resolved = SERVICE_ALIASES.get(template_id, template_id)
+    return resolved if resolved in SERVICE_IDS else OTHER_SERVICE_ID
+
+
+def authorize_interactive_generation(
+    db: Session,
+    user: User,
+    template_id: str,
+    *,
+    classification_code: str | None = None,
+) -> None:
+    """Authorize interactive publication before rendering or allocating references."""
+    from app.services import book_service, perm_service
+
+    for capability in ("documents.generate", "books.view"):
+        if not perm_service.has_capability(db, user, capability):
+            raise AppError(
+                "FORBIDDEN",
+                f"Missing capability: {capability}",
+                http_status=403,
+                details={"capability": capability},
+            )
+    service_id = effective_document_service(template_id)
+    book_service.require_record_type_access(
+        db,
+        user,
+        category_id=record_category_for_template(template_id),
+        service_id=service_id,
+        classification_code=classification_code if service_id == "General Book" else None,
+    )
 
 
 #: Inmate Conduct Violations — the fixed "إجراءات المشرف" bullets, in the order

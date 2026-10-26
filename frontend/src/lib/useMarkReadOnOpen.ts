@@ -1,6 +1,6 @@
 /**
  * useMarkReadOnOpen — fire-and-forget mark-read when opening an unread email
- * entry that lives in the Inbox. Invalidates the NavBell unread-recent + the
+ * owned by the signed-in user, including in All mail. Invalidates unread-recent + the
  * list view so the badge and any "unread" row styling refresh. Guarded so we
  * don't double-POST on re-renders of the same entry.
  *
@@ -19,12 +19,16 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api'
 import type { LedgerEntryRead } from '@/lib/api'
+import { useAuth } from '@/lib/authContext'
 
 export function useMarkReadOnOpen(entry: LedgerEntryRead | undefined): void {
   const qc = useQueryClient()
+  const { user } = useAuth()
   useEffect(() => {
     if (
       !entry ||
+      entry.owner_user_id == null ||
+      entry.owner_user_id !== user?.id ||
       entry.channel !== 'email' ||
       (entry.direction !== 'incoming' && entry.direction !== 'internal') ||
       entry.read_at != null
@@ -41,5 +45,5 @@ export function useMarkReadOnOpen(entry: LedgerEntryRead | undefined): void {
     return () => {
       active = false
     }
-  }, [entry, qc])
+  }, [entry, user?.id, qc])
 }

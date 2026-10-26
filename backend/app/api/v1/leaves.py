@@ -39,7 +39,7 @@ from app.schemas.leave import (
     LeaveReturnRequest,
     LeaveUpdate,
 )
-from app.services import leave_service, sheet_pdf_service
+from app.services import document_service, leave_service, sheet_pdf_service
 
 router = APIRouter(prefix="/leaves", tags=["leaves"])
 
@@ -224,6 +224,7 @@ def file_leave_return(
     user: Annotated[User, Depends(require_capability("leaves.edit"))],
 ) -> LeaveRead:
     """File the Duty Resumption (return) form and complete the leave."""
+    document_service.authorize_interactive_generation(db, user, "Duty Resumption Form")
     row = leave_service.file_return(
         db,
         leave_id,

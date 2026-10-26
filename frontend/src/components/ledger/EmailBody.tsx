@@ -38,6 +38,7 @@ export interface EmailBodyProps {
   inlineImages?: Record<string, string>
   /** Owning entry id — used to address cid attachments. */
   entryId: number
+  scope?: 'mine' | 'all'
   /** Attachment paths for cid fallback (`entry.attachment_paths`). */
   attachmentPaths?: string[]
   /** Fired when a decorated smart-link chip is clicked. */
@@ -56,6 +57,7 @@ export function BodyContent({
   html,
   inlineImages,
   entryId,
+  scope,
   attachmentPaths,
   onSmartLinkClick,
   variant = 'desktop',
@@ -66,7 +68,7 @@ export function BodyContent({
   // run before any sanitisation step downstream — broken cid hits would render
   // as 404 boxes otherwise.
   const renderedHtml = html
-    ? rewriteCidReferences(html, inlineImages ?? {}, entryId, attachmentPaths)
+    ? rewriteCidReferences(html, inlineImages ?? {}, entryId, attachmentPaths ?? [], scope)
     : ''
 
   // Phase 5 — render the body in its OWN source direction "as sent", not the
