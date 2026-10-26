@@ -6,7 +6,6 @@ from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import (
-    BookVersion,
     Document,
     Employee,
     EmployeeStatusEvent,
@@ -37,34 +36,53 @@ def _documents(
     employee_id: str | None,
     requested: int,
     user: User | None,
+    excluded_ids: set[int],
 ) -> tuple[list[EmployeeActivityItemRead], int]:
+    """Documents owned by a live Record the caller may read, filtered in SQL.
+
+    Activity links open Records, so standalone documents have no target.
+    """
+    target_id = document_service.owning_record_id()
     stmt = (
-        select(Document)
+        select(
+            Document.id.label("source_id"),
+            target_id.label("target_id"),
+            Document.created_at.label("occurred_at"),
+            Document.template_id.label("title"),
+            Document.ref_number.label("reference"),
+            Employee.id.label("employee_id"),
+            Employee.name_en.label("employee_name_en"),
+            Employee.name_ar.label("employee_name_ar"),
+            func.count().over().label("source_total"),
+        )
         .join(Employee, Document.employee_id == Employee.id)
-        .where(Document.ref_number != "DRAFT")
-        .order_by(Document.created_at.desc(), Document.id.desc())
+        .where(
+            Document.ref_number != "DRAFT",
+            document_service.live_record_document_clause(db, user),
+        )
     )
     if employee_id is not None:
         stmt = stmt.where(Document.employee_id == employee_id)
-    readable = document_service.readable_documents(db, db.scalars(stmt), user=user)
-    # Activity links open Records, so standalone documents have no target.
-    owned: list[tuple[Document, BookVersion]] = [
-        (document, version) for document, version in readable if version is not None
-    ]
+    if excluded_ids:
+        stmt = stmt.where(Document.id.not_in(excluded_ids))
+    rows = db.execute(
+        stmt.order_by(Document.created_at.desc(), Document.id.desc()).limit(requested)
+    ).all()
+    total = int(rows[0].source_total) if rows else 0
     return [
         EmployeeActivityItemRead(
             kind="document",
-            source_id=document.id,
-            target_id=version.book_id,
-            occurred_at=document.created_at,
-            employee_id=document.employee_id,
-            employee_name_en=document.employee.name_en if document.employee is not None else None,
-            employee_name_ar=document.employee.name_ar if document.employee is not None else None,
-            title=document.template_id,
-            reference=document.ref_number,
+            source_id=row.source_id,
+            target_id=row.target_id,
+            occurred_at=row.occurred_at,
+            employee_id=row.employee_id,
+            employee_name_en=row.employee_name_en,
+            employee_name_ar=row.employee_name_ar,
+            title=row.title,
+            reference=row.reference,
         )
-        for document, version in owned[:requested]
-    ], len(owned)
+        for row in rows
+    ], total
 
 
 def _leaves(
@@ -330,15 +348,6 @@ def list_employee_activity(
     # owner_user_id is the caller: rows about Records they cannot open are hidden.
     caller = db.get(User, owner_user_id)
     sources: list[tuple[list[EmployeeActivityItemRead], int]] = []
-    if kind in (None, "document"):
-        sources.append(
-            _documents(
-                db,
-                employee_id=employee_id,
-                requested=requested,
-                user=caller,
-            )
-        )
     if kind in (None, "leave"):
         sources.append(_leaves(db, employee_id=employee_id, requested=requested))
     if (
@@ -361,10 +370,37 @@ def list_employee_activity(
         sources.append(_duty_locations(db, employee_id=employee_id, requested=requested))
     if kind in (None, "status"):
         sources.append(_status_events(db, employee_id=employee_id, requested=requested))
-    merged = sorted(chain.from_iterable(rows for rows, _ in sources), key=_sort_key)
+
+    # Documents are filtered in SQL; the exact per-document gate then re-checks
+    # only the documents that land on this page. A refused one is excluded and
+    # the page refilled, so each pass removes at least one row.
+    refused: set[int] = set()
+    while True:
+        documents: tuple[list[EmployeeActivityItemRead], int] = ([], 0)
+        if kind in (None, "document"):
+            documents = _documents(
+                db,
+                employee_id=employee_id,
+                requested=requested,
+                user=caller,
+                excluded_ids=refused,
+            )
+        merged = sorted(
+            chain(documents[0], chain.from_iterable(rows for rows, _ in sources)),
+            key=_sort_key,
+        )
+        page = merged[offset : offset + limit]
+        newly_refused = document_service.unreadable_live_record_documents(
+            db,
+            {item.source_id: item.target_id for item in page if item.kind == "document"},
+            user=caller,
+        )
+        if not newly_refused:
+            break
+        refused |= newly_refused
     return EmployeeActivityListRead(
-        items=merged[offset : offset + limit],
-        total=sum(total for _, total in sources),
+        items=page,
+        total=documents[1] + sum(total for _, total in sources),
         limit=limit,
         offset=offset,
     )

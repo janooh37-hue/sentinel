@@ -31,8 +31,8 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import InstrumentedAttribute, Session
+from sqlalchemy import ColumnElement, and_, case, exists, func, not_, or_, select
+from sqlalchemy.orm import InstrumentedAttribute, Session, aliased
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
@@ -175,6 +175,7 @@ def authorize_interactive_generation(
         service_id=service_id,
         classification_code=classification_code if service_id == "General Book" else None,
     )
+
 
 #: Inmate Conduct Violations — the fixed "إجراءات المشرف" bullets, in the order
 #: they print. Key = the _fields.json checkbox key. The Arabic copy lives here
@@ -937,6 +938,138 @@ def readable_documents(
             continue
         readable.append((row, version))
     return readable
+
+
+def owning_record_id() -> ColumnElement[int | None]:
+    """SQL: the owning Record id ``document_owning_version`` resolves to."""
+    direct = (
+        select(BookVersion.book_id)
+        .where(BookVersion.document_id == Document.id)
+        .correlate(Document)
+        .limit(1)
+        .scalar_subquery()
+    )
+    primary_document = aliased(Document)
+    via_primary = (
+        select(BookVersion.book_id)
+        .join(primary_document, primary_document.id == BookVersion.document_id)
+        .where(
+            primary_document.role == "primary",
+            primary_document.submission_id == Document.submission_id,
+        )
+        .correlate(Document)
+        .limit(1)
+        .scalar_subquery()
+    )
+    return func.coalesce(direct, case((Document.role == "companion", via_primary)))
+
+
+def _owning_revision_matches(
+    condition: Callable[[Any], ColumnElement[bool]],
+) -> ColumnElement[bool]:
+    """SQL twin of ``document_owning_version``: correlated on ``Document``.
+
+    ``condition`` receives the owning ``BookVersion`` alias; ``Book`` is its
+    Record. The alias keeps the policy's own ``BookVersion`` subqueries
+    uncorrelated.
+    """
+    direct_version = aliased(BookVersion)
+    owner_version = aliased(BookVersion)
+    primary_document = aliased(Document)
+    owns_directly = exists(
+        select(direct_version.id)
+        .where(direct_version.document_id == Document.id)
+        .correlate(Document)
+    )
+    direct = exists(
+        select(owner_version.id)
+        .join(Book, Book.id == owner_version.book_id)
+        .where(owner_version.document_id == Document.id, condition(owner_version))
+        .correlate(Document)
+    )
+    via_primary = exists(
+        select(owner_version.id)
+        .join(Book, Book.id == owner_version.book_id)
+        .join(primary_document, primary_document.id == owner_version.document_id)
+        .where(
+            primary_document.role == "primary",
+            primary_document.submission_id == Document.submission_id,
+            condition(owner_version),
+        )
+        .correlate(Document)
+    )
+    return or_(direct, and_(Document.role == "companion", not_(owns_directly), via_primary))
+
+
+def live_record_document_clause(db: Session, user: User | None) -> ColumnElement[bool]:
+    """SQL: Documents owned by a live Record that ``user`` may read.
+
+    Mirrors ``require_document_record_access`` for owned Documents: full Record
+    access, a retained revision grant, or a pending review of the current
+    revision. ``None`` (internal callers) applies ownership only.
+    """
+    from app.services import book_service
+
+    if user is None:
+        return _owning_revision_matches(lambda _version: Book.deleted_at.is_(None))
+    full_access = book_service.full_read_access_clause(db, user)
+    current_version_id = (
+        select(BookVersion.id)
+        .where(BookVersion.book_id == Book.id)
+        .order_by(BookVersion.version_no.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+
+    def readable(version: Any) -> ColumnElement[bool]:
+        if user.role == INMATE_REPORTER_ROLE:
+            allowed = and_(full_access, version.id == current_version_id)
+        else:
+            retained = exists(
+                select(BookRevisionAccess.id).where(
+                    BookRevisionAccess.version_id == version.id,
+                    BookRevisionAccess.user_id == user.id,
+                    BookRevisionAccess.revoked_at.is_(None),
+                )
+            )
+            reviewing = and_(
+                version.id == current_version_id,
+                Book.voided_at.is_(None),
+                exists(
+                    select(BookApprovalStep.id).where(
+                        BookApprovalStep.version_id == version.id,
+                        BookApprovalStep.assignee_user_id == user.id,
+                        BookApprovalStep.state == "pending",
+                        BookApprovalStep.kind.in_(("approver", "reviewer")),
+                    )
+                ),
+            )
+            allowed = or_(full_access, retained, reviewing)
+        return and_(Book.deleted_at.is_(None), allowed)
+
+    return _owning_revision_matches(readable)
+
+
+def unreadable_live_record_documents(
+    db: Session, expected_book_ids: dict[int, int], *, user: User | None
+) -> set[int]:
+    """Re-check a page window with the canonical per-document read gate.
+
+    ``expected_book_ids`` maps each Document to the live Record a SQL
+    projection linked it to. Returns the ids the exact gate refuses or
+    resolves elsewhere; callers drop them and refill the window.
+    """
+    if not expected_book_ids:
+        return set()
+    rows = db.scalars(select(Document).where(Document.id.in_(expected_book_ids)))
+    confirmed = {
+        document.id
+        for document, version in readable_documents(db, rows, user=user)
+        if version is not None
+        and version.book.deleted_at is None
+        and version.book_id == expected_book_ids[document.id]
+    }
+    return set(expected_book_ids) - confirmed
 
 
 def _linked_documents(
