@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.core.permit_letter import build_item_permit_letter_html
-from app.db.models import AuditLog, Employee, ItemPermit, User
+from app.db.models import AuditLog, Book, Employee, ItemPermit, User
 from app.schemas.item_permit import ItemPermitCreate, ItemPermitRead, ItemPermitUpdate
 from app.services import book_service, permit_service
 
@@ -171,6 +171,20 @@ def _regenerate_book(db: Session, row: ItemPermit, *, user: User, submit: bool =
         _submit_book(db, row, user=user)
 
 
+def _authorize_live_letter(db: Session, row: ItemPermit, user: User) -> bool:
+    """Authorize the permit's linked letter before any permit write (WP2).
+
+    Permit grants delegate the letter's edits without ``books.edit``; the
+    letter's level and write policy still apply. A letter already deleted from
+    Records gates nothing; returns whether a live letter is linked.
+    """
+    book = db.get(Book, row.book_id) if row.book_id is not None else None
+    if book is None or book.deleted_at is not None:
+        return False
+    book_service.require_full_book_access(db, user, book, write=True)
+    return True
+
+
 # ─── mutations ─────────────────────────────────────────────────────────────────
 
 
@@ -198,10 +212,7 @@ def update_item_permit(
 ) -> ItemPermit:
     actor = user.email
     row = get_item_permit(db, permit_id)
-    if row.book_id is not None:
-        book_service.require_full_book_access(
-            db, user, book_service.get_book(db, row.book_id), write=True
-        )
+    regenerate = row.book_id is None or _authorize_live_letter(db, row, user)
     data = payload.model_dump(exclude_unset=True)
     # Omitted = unchanged; an explicit null only means something for manager_id.
     data = {k: v for k, v in data.items() if v is not None or k == "manager_id"}
@@ -213,7 +224,8 @@ def update_item_permit(
     db.commit()
     db.refresh(row)  # reload `employee` after an employee_id change
     _audit(db, "item_permit.updated", permit_id, actor, {"fields": sorted(data)})
-    _regenerate_book(db, row, user=user)
+    if regenerate:
+        _regenerate_book(db, row, user=user)
     return get_item_permit(db, permit_id)
 
 
@@ -234,10 +246,7 @@ def submit_item_permit_book(db: Session, permit_id: int, *, user: User) -> ItemP
 def soft_delete_item_permit(db: Session, permit_id: int, *, user: User) -> None:
     actor = user.email
     row = get_item_permit(db, permit_id)
-    if row.book_id is not None:
-        book_service.require_full_book_access(
-            db, user, book_service.get_book(db, row.book_id), write=True
-        )
+    _authorize_live_letter(db, row, user)
     row.deleted_at = _utcnow()
     db.commit()
     _audit(db, "item_permit.deleted", permit_id, actor, {})

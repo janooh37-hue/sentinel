@@ -108,12 +108,16 @@ sessions require current `books.templates`. Denied DAV requests return 404 and
 leave the working file and save timestamp untouched.
 
 Alternate record entrances enforce the same resource policy as explicit book-ID
-routes: scan-back authorizes the barcode-selected record for writing before
-filing a signed copy. Item-permit update, deletion, regeneration and submission
-authorize the existing linked letter before changing permit or approval state.
+routes: scan-back authorizes the barcode-selected record for writing before it
+reveals the record's approval state or files a signed copy. Item-permit update,
+deletion, regeneration and submission authorize the existing linked letter
+before changing permit or approval state, so the outcome is all-or-nothing.
 Personal, read-only Directed and uncleared Secret letters stay protected even
 when the caller holds the permit capability; confidential denials use the
-canonical record guard's 404 response.
+canonical record guard's 404 response. The permit capabilities delegate the
+letter's edits themselves, so `books.edit` is not also required. A letter
+already deleted from Records no longer gates its permit: the permit can still
+be edited (the deleted letter is left as is) or deleted.
 
 **Tier 1 — baseline session.** `auth_gate = [Depends(get_current_user)]` (`main.py:167`)
 is passed as `dependencies=` on every other `include_router` call. This means "logged in",

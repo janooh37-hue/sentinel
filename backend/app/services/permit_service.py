@@ -430,6 +430,10 @@ def regenerate_letter_book(
     Word-authored version is treated as a revision too, so its immutable
     DOCX/PDF stays in history. The letter is generated UNSIGNED — the manager
     signature is applied by the approval chain at sign time.
+
+    ``record_access_user`` enforces the existing letter's level and write
+    policy. It is not forwarded into generation: permit capabilities delegate
+    the letter's edits without ``books.edit``.
     """
     from app.services import book_service, document_service
 
@@ -524,7 +528,6 @@ def regenerate_letter_book(
         manager_id=manager_id,
         revise_of_book_id=book_id,  # None on first gen → fresh 1/5 ref
         current_user=submitter,
-        record_access_user=record_access_user,
     )
     if book_id is not None:
         current_book = db.get(Book, book_id)
