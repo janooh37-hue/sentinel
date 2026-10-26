@@ -234,15 +234,20 @@ def test_api_requires_permits_capabilities(env: Session) -> None:
     assert r.status_code == 403 and r.json()["error"]["details"]["capability"] == "permits.create"
 
 
+@pytest.mark.parametrize("caller", ["manager", "permit_operator"])
 @pytest.mark.parametrize("level", ["personal", "directed", "secret"])
 @pytest.mark.parametrize("operation", ["update", "submit", "delete"])
 def test_item_permit_mutations_require_linked_letter_write_access(
-    env: Session, level: str, operation: str
+    env: Session, level: str, operation: str, caller: str
 ) -> None:
     creator = env.query(User).filter_by(email="op@x.ae").one()
-    editor = User(email="editor@x.ae", password_hash="x", role="manager", status="active")
-    env.add(editor)
-    env.commit()
+    if caller == "manager":
+        editor = User(email="editor@x.ae", password_hash="x", role="manager", status="active")
+        env.add(editor)
+        env.commit()
+    else:
+        # Delegated permit grants never widen the letter's level policy.
+        editor = _permit_operator(env)
     manager = _linked_manager(env)
     row = item_permit_service.create_item_permit(
         env, _payload(manager_id=manager.id, send_for_approval=operation == "update"), user=creator
@@ -389,6 +394,7 @@ def test_permit_with_deleted_letter_stays_editable(env: Session, operation: str)
         assert row.site == "Changed site"
     else:
         assert row.deleted_at is not None
+    assert row.book_id == book.id and env.query(Book).count() == 1
     assert book.deleted_at is not None
     assert [(v.id, v.fields) for v in book.versions] == letter_before
 
