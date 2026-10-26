@@ -347,7 +347,7 @@ def test_unlinked_user_and_standalone_manager_remain_isolated(api_db: Session) -
     api_db.commit()
     standalone_bytes = _png((220, 200, 40, 255))
     standalone_path = manager_service.save_manager_signature(
-        api_db, standalone.id, standalone_bytes
+        api_db, standalone.id, standalone_bytes, actor=unlinked
     )
     api_db.refresh(standalone)
 
