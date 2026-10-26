@@ -64,10 +64,9 @@ const COPY = {
 
 type Locale = keyof typeof COPY
 
-// Expected numeric fields for the fixture's fixed initial position
-// (page 1, x=0.3, y=0.4 on a 612x792pt page) — ptToMm(0.3*612) / ptToMm(0.4*792).
+// Expected left field for the fixture's fixed initial position
+// (page 1, x=0.3 on a 612pt-wide page): ptToMm(0.3*612).
 const INITIAL_LEFT_MM = '64.8'
-const INITIAL_TOP_MM = '111.8'
 
 interface Deferred<T> {
   promise: Promise<T>
