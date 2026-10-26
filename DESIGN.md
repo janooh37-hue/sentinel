@@ -1545,7 +1545,7 @@ number a user is not allowed to see.
  ┌[GSSG] STAFF FILE ╲
  │+                  ╲──────────────────┬────────────────────────────────────┐
  │ ┌────┐  GOOD EVENING ///              │ 24   SATURDAY · OCTOBER 2026      │
- │ │ HA │  Hamdan Saeed Ali              │      13 Jumada I 1448 AH          │
+ │ │ HA │  Hamdan Saeed Ali              │      13 جمادى الأولى 1448 هـ       │
  │ └────┘  HR Officer · Human Resources  │      09:41  Week 43               │
  │         [ID G-10482]                  ├────────┬─────────┬────────┬────────┤
  │                                       │■ TO    │■ TO     │■ NEEDS │ SENT, ↗│
@@ -1582,7 +1582,8 @@ stacks over the panel.
   `dir="ltr"`).
 - Panel (inline end, `md:w-[440px]`, `gap-px` ruled):
   - Date plate: the day numeral (`font-[800]`, `-0.05em` tracking), then
-    `EEEE · MMMM yyyy` as a `.hero-label`, the Umm al-Qura Hijri date, and
+    `EEEE · MMMM yyyy` as a `.hero-label`, the Umm al-Qura Hijri date (always
+    Arabic script, Western digits), and
     the local time (`HH:mm`, re-read each minute) with
     `dashboard.hero.week` (ISO week).
   - My desk: the user's own approval queue from `useApprovalSummary()`

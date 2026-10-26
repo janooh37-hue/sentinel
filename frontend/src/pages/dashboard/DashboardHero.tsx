@@ -146,7 +146,7 @@ export interface DashboardHeroProps {
 }
 
 export function DashboardHero({ identity, name, initials, isAr }: DashboardHeroProps): React.JSX.Element {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const now = useMinuteClock()
   const approvals = useApprovalSummary()
   const desk = deskItems(approvals.data)
@@ -155,7 +155,7 @@ export function DashboardHero({ identity, name, initials, isAr }: DashboardHeroP
 
   const linked = Boolean(identity?.linked && name)
   const dfLocale = isAr ? arLocale : undefined
-  const position = identity ? pickPosition(identity, i18n.language) : null
+  const position = identity ? pickPosition(identity, isAr ? 'ar' : 'en') : null
   const roleLine = [position, identity?.department].filter(Boolean).join(' · ')
   const photoUrl = identity?.photo_url && !photoFailed ? identity.photo_url : null
   const hijri = hijriToday()
@@ -180,7 +180,7 @@ export function DashboardHero({ identity, name, initials, isAr }: DashboardHeroP
             {linked && (
               <span
                 aria-hidden
-                className="hero-seq grid aspect-[4/5] w-[52px] shrink-0 place-items-center overflow-hidden bg-[var(--hero-slab-raised)] font-mono text-[0.95em] font-medium text-white/90 outline outline-1 outline-offset-2 outline-white/25 md:w-[68px] md:text-[1.15em]"
+                className="hero-seq grid aspect-[4/5] w-[52px] shrink-0 place-items-center overflow-hidden bg-[var(--hero-slab-raised)] font-mono text-[0.95em] font-medium text-white/90 outline outline-1 outline-offset-2 outline-white/25 md:w-[68px] md:text-[1.15em] rtl:font-[family-name:var(--font-arabic)]"
                 style={seq(1)}
               >
                 {photoUrl ? (

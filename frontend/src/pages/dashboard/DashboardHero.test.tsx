@@ -224,7 +224,7 @@ describe('DashboardHero in Arabic', () => {
               sign: 'للتوقيع',
               review: 'للمراجعة',
               returned: 'تحتاج إلى تعديل',
-              sent: 'المرسل المعلّق',
+              sent: 'المرسل قيد الاعتماد',
             },
           },
         },
@@ -262,7 +262,7 @@ describe('DashboardHero in Arabic', () => {
       expect.stringContaining('للتوقيع'),
       expect.stringContaining('للمراجعة'),
       expect.stringContaining('تحتاج إلى تعديل'),
-      expect.stringContaining('المرسل المعلّق'),
+      expect.stringContaining('المرسل قيد الاعتماد'),
     ])
   })
 
