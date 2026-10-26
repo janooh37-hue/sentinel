@@ -74,6 +74,7 @@ import {
   groupDepartmentUsers,
   orderDepartments,
   primaryDepartment,
+  useDepartmentRollout,
   type DepartmentFilter,
 } from '@/lib/departments'
 
@@ -81,13 +82,14 @@ import {
  *  place in the org tree, so create and approve only show where it lands. */
 function TreeDepartment({ employeeId }: { employeeId: string | null }): React.JSX.Element | null {
   const { t, i18n } = useTranslation()
+  const { departmentsUsable } = useDepartmentRollout()
   const employee = useQuery({
     queryKey: ['employee-lookup', employeeId],
     queryFn: () => api.getEmployeeLookup(employeeId!),
-    enabled: employeeId !== null,
+    enabled: employeeId !== null && departmentsUsable,
     staleTime: 30_000,
   })
-  if (employeeId === null) return null
+  if (employeeId === null || !departmentsUsable) return null
   const data = employee.data
   const name = data?.department_id == null
     ? null
@@ -625,7 +627,9 @@ export function UsersTable({
   const { t, i18n } = useTranslation()
   const locale = i18n.language
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>('all')
-  const groups = groupDepartmentUsers(users, departmentFilter)
+  // Until a department exists the list stays main's plain table.
+  const departmentsUsable = departments.some((department) => department.active)
+  const groups = departmentsUsable ? groupDepartmentUsers(users, departmentFilter) : [[null, users] as const]
   const unassigned = users.filter((u) => !u.departments?.length).length
 
   if (users.length === 0) {
@@ -634,7 +638,7 @@ export function UsersTable({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3">
+      {departmentsUsable && <div className="flex flex-wrap items-end gap-3">
         <label className="flex min-w-0 flex-col gap-1 text-[0.82em] text-muted-foreground">
           {t('departmentAccess.filter')}
           <select
@@ -653,7 +657,7 @@ export function UsersTable({
           <AlertTriangle className="h-3.5 w-3.5" />
           {t('departmentAccess.noDepartment')} ({unassigned})
         </button>
-      </div>
+      </div>}
       {groups.length === 0 ? <EmptyState icon={Inbox} message={t('departmentAccess.noMatches')} className="py-12" /> : (
       <div className="overflow-x-auto rounded-2xl border border-hairline bg-surface">
       <table className="w-full border-collapse text-start">
@@ -676,7 +680,7 @@ export function UsersTable({
             const department = departments.find((d) => d.id === departmentId) ?? groupUsers[0]?.departments?.find((d) => d.department_id === departmentId)
             return (
               <Fragment key={departmentId ?? 'none'}>
-                <tr className={departmentId === null ? 'bg-warning-soft text-warning' : 'bg-surface-tinted text-muted-foreground'}>
+                {departmentsUsable && <tr className={departmentId === null ? 'bg-warning-soft text-warning' : 'bg-surface-tinted text-muted-foreground'}>
                   <th scope="rowgroup" colSpan={6} className="px-3.5 py-2 text-start text-[0.8em] font-semibold">
                     <span className="inline-flex items-center gap-2">
                       {departmentId === null && <AlertTriangle className="h-3.5 w-3.5" />}
@@ -684,7 +688,7 @@ export function UsersTable({
                       <span className="font-mono">({groupUsers.length})</span>
                     </span>
                   </th>
-                </tr>
+                </tr>}
           {groupUsers.map((u) => {
             const primary = primaryDepartment(u)
             const locked = u.status === 'locked' || u.status === 'disabled'
@@ -716,10 +720,10 @@ export function UsersTable({
                       {u.employee_id && <span className="font-mono">{u.employee_id} · </span>}
                       <span className="font-mono">{u.email}</span>
                     </span>
-                    <span className={`mt-1 flex flex-wrap items-center gap-1 text-[0.76em] ${primary ? 'text-muted-foreground' : 'text-warning'}`}>
+                    {departmentsUsable && <span className={`mt-1 flex flex-wrap items-center gap-1 text-[0.76em] ${primary ? 'text-muted-foreground' : 'text-warning'}`}>
                       <span dir="auto">{primary ? departmentName(primary, locale) : t('departmentAccess.noDepartment')}</span>
                       {(u.departments?.length ?? 0) > 1 && <span className="rounded-full bg-surface-tinted px-1.5 py-px text-muted-foreground">{t('departmentAccess.more', { count: u.departments!.length - 1 })}</span>}
-                    </span>
+                    </span>}
                     <span className="mt-1 sm:hidden"><RolePill role={u.role} status={u.status} /></span>
                   </div>
                 </td>
