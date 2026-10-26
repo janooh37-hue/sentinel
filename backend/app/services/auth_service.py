@@ -37,6 +37,7 @@ from app.services import (
     department_service,
     identity_service,
     perm_service,
+    settings_service,
     user_signature_service,
 )
 
@@ -730,6 +731,7 @@ def to_session_user(db: Session, user: User) -> SessionUser:
         department=employee.department if employee else None,
         departments=department_service.user_departments(db, [user.id]).get(user.id, []),
         department_scope_kind=department_scope_service.resolve_department_scope(db, user).kind,
+        department_scoping_enabled=settings_service.get_department_scoping_enabled(db),
         photo_url=(identity_service.photo_url_for(db, employee.id) if employee else None),
         role=user.role,
         status=user.status,

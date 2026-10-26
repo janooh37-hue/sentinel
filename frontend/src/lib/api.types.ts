@@ -14890,6 +14890,11 @@ export interface components {
              * @enum {string}
              */
             department_scope_kind: "organization" | "department" | "branch" | "self";
+            /**
+             * Department Scoping Enabled
+             * @default false
+             */
+            department_scoping_enabled: boolean;
             /** Photo Url */
             photo_url?: string | null;
             /** Role */

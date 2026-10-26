@@ -58,6 +58,8 @@ class SessionUser(BaseModel):
     department: str | None = None
     departments: list[UserDepartmentRead] = Field(default_factory=list)
     department_scope_kind: Literal["organization", "department", "branch", "self"] = "organization"
+    # Whether department access limits are on; while off the UI keeps main's surfaces.
+    department_scoping_enabled: bool = False
     photo_url: str | None = None
     role: str
     status: str
