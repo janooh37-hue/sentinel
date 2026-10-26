@@ -166,7 +166,12 @@ def effective_caps(db: Session, user: User) -> set[str]:
             user_department_ids_select,
         )
 
-        if not resolve_department_scope(db, user, capabilities=caps).organization:
+        # Inmate reporters keep their two fixed services: they cannot hold
+        # departments.all and are never department receivers.
+        if (
+            user.role != INMATE_REPORTER_ROLE
+            and not resolve_department_scope(db, user, capabilities=caps).organization
+        ):
             allowed = set(
                 db.scalars(
                     select(DepartmentService.service_id).where(

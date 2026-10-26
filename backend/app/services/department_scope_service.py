@@ -58,7 +58,9 @@ def user_department_pairs() -> Select[tuple[int, int]]:
             select(User.id, Department.id)
             .join(Department, Department.head_employee_id == User.employee_id)
             .where(Department.active.is_(True)),
-            select(DepartmentMember.user_id, DepartmentMember.department_id),
+            select(DepartmentMember.user_id, DepartmentMember.department_id)
+            .join(Department, Department.id == DepartmentMember.department_id)
+            .where(Department.active.is_(True)),
         ).subquery()
     )
 
@@ -117,11 +119,12 @@ def _compute_scope(
     )
     if organization:
         return DepartmentScope(True, frozenset(), frozenset(), "organization")
+    # Grants to an inactive department confer nothing, like its head and members.
     grants = list(
         db.execute(
-            select(DepartmentMember.department_id, DepartmentMember.role).where(
-                DepartmentMember.user_id == user.id
-            )
+            select(DepartmentMember.department_id, DepartmentMember.role)
+            .join(Department, Department.id == DepartmentMember.department_id)
+            .where(DepartmentMember.user_id == user.id, Department.active.is_(True))
         )
     )
     headed = (

@@ -72,11 +72,15 @@ class BookFolderDepartment(BaseModel):
 
 class BookFolderShareOption(BookFolderShareUser):
     department_id: int | None
+    # Employee's free-text department label (trimmed).
+    department: str | None = None
 
 
 class BookFolderShareOptions(BaseModel):
     users: list[BookFolderShareOption]
     departments: list[BookFolderDepartment]
+    # Free-text labels offered only while no active department exists.
+    legacy_departments: list[str] = Field(default_factory=list)
 
 
 class BookFolderSharesUpdate(BaseModel):
@@ -528,6 +532,10 @@ class BookDepartmentSendRead(ORMBase):
     note: str | None
     created_at: datetime
     revoked_at: datetime | None
+    kept_at: datetime | None = None
+    kept_by_user_id: int | None = None
+    kept_by_name: str | None = None
+    kept_by_name_ar: str | None = None
     heads_total: int
     heads_read: int
     members_reached: int
@@ -558,7 +566,8 @@ class BookDistributionOptions(BaseModel):
 
 
 class BookDistributeRequest(BaseModel):
-    mode: Literal["all", "members", "subdepartment"]
+    # "keep" records that the receiving head keeps the delivery; nothing is sent.
+    mode: Literal["all", "members", "subdepartment", "keep"]
     user_ids: list[int] = Field(default_factory=list)
     subdepartment_id: int | None = None
     purpose: SendPurpose | None = None

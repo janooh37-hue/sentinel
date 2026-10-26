@@ -79,3 +79,5 @@ def enable_scoping(db: Session) -> None:
         entity_type="settings",
         entity_id="department_scoping_enabled",
     )
+    # Like department_service.set_scoping, turning the switch on syncs labels.
+    recompute(db)

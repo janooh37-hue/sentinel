@@ -162,7 +162,10 @@ def _audit(db: Session, actor: str | None, action: str, row: Department, **extra
     )
 
 
-def list_departments(db: Session, department_id: int | None = None) -> list[DepartmentRead]:
+def list_departments(
+    db: Session, department_id: int | None = None, *, include_emails: bool = True
+) -> list[DepartmentRead]:
+    """``include_emails`` is for setup callers: others never see an account email."""
     stmt = select(Department, Employee).join(Employee, Employee.id == Department.head_employee_id)
     if department_id is not None:
         stmt = stmt.where(Department.id == department_id)
@@ -212,7 +215,9 @@ def list_departments(db: Session, department_id: int | None = None) -> list[Depa
     ):
         people[(did, role)].append(
             DepartmentPersonRead(
-                user_id=user_id, display_name=display_name or employee_name or email, role=role
+                user_id=user_id,
+                display_name=display_name or employee_name or (email if include_emails else ""),
+                role=role,
             )
         )
     heads = head_user_ids(db, ids)
@@ -765,6 +770,8 @@ def set_scoping(db: Session, enabled: bool, *, actor: str) -> DepartmentScopingR
         )
         records_backfilled = result.rowcount
         db.expire_all()
+        # Labels wait for the switch; they sync in the same commit as turning it on.
+        department_tree_service.recompute(db, sync_labels=True)
     settings_service.set_audited_setting(
         db,
         "settings.department_scoping_enabled",

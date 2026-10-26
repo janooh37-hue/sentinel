@@ -623,6 +623,9 @@ class BookDepartmentSend(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     revoked_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # The receiving head chose to keep the delivery rather than hand it down.
+    kept_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    kept_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
         Index("ix_book_department_sends_book", "book_id"),

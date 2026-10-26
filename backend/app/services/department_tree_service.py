@@ -107,14 +107,24 @@ def tree_only_membership(db: Session) -> dict[str, int | None]:
     return _resolver(supervisors, heads, {})
 
 
-def recompute(db: Session, *, previous_names: dict[int, str] | None = None) -> int:
+def recompute(
+    db: Session,
+    *,
+    previous_names: dict[int, str] | None = None,
+    sync_labels: bool | None = None,
+) -> int:
     """Materialize derived departments and parents; return the changed row count.
 
     ``previous_names`` carries Arabic names of departments renamed or deleted in
     this transaction, so labels synchronized from the old name are still cleared.
+    ``employees.department`` labels follow departments only while scoping is on
+    (``sync_labels`` overrides the stored switch while it is being turned on);
+    while off they stay free text, as before departments existed.
     """
-    from app.services import department_scope_service
+    from app.services import department_scope_service, settings_service
 
+    if sync_labels is None:
+        sync_labels = settings_service.get_department_scoping_enabled(db)
     db.flush()  # Sessions run with autoflush=False; derive from pending edits too.
     membership, parents = derive(db)
     names = dict(db.execute(select(Department.id, Department.name_ar)).tuples().all())
@@ -126,10 +136,10 @@ def recompute(db: Session, *, previous_names: dict[int, str] | None = None) -> i
         values: dict[str, object] = {}
         if target != current:
             values["department_id"] = target
-        if target is not None:
+        if sync_labels and target is not None:
             if label != names[target]:
                 values["department"] = names[target]
-        elif current is not None and label is not None:
+        elif sync_labels and current is not None and label is not None:
             old_names = {names.get(current), (previous_names or {}).get(current)}
             if label in old_names:
                 values["department"] = None

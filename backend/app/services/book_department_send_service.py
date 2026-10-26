@@ -178,11 +178,16 @@ def stage_sends(
             )
         )
         for target in heads:
-            if target.id in active:
+            reason = (
+                "self"
+                if target.id == user.id
+                else "already_recipient"
+                if target.id in active
+                else None
+            )
+            if reason is not None:
                 skipped.append(
-                    BookSendSkipped(
-                        user_id=target.id, department_id=department.id, reason="already_recipient"
-                    )
+                    BookSendSkipped(user_id=target.id, department_id=department.id, reason=reason)
                 )
                 continue
             row = BookRecipient(
@@ -332,6 +337,16 @@ def distribute(
     body: BookDistributeRequest,
 ) -> tuple[list[BookRecipientRead], list[BookSendSkipped]]:
     delivery = _require_head(db, user, book, send_id)
+    if body.mode == "keep":
+        # The first keep is the one the sender's progress reports; repeats are no-ops.
+        if delivery.kept_at is None:
+            delivery.kept_at = book_send_service._now()
+            delivery.kept_by_user_id = user.id
+            book_send_service._audit(
+                db, user, "book_department_send_kept", book, {"department_send_id": delivery.id}
+            )
+            db.commit()
+        return [], []
     purpose = body.purpose or cast(SendPurpose, delivery.purpose)
     if body.mode == "subdepartment":
         child = department_service.require_active_department(db, cast(int, body.subdepartment_id))
@@ -511,7 +526,9 @@ def sends_by_book(
             )
         ):
             recipients[cast(int, recipient.department_send_id)].append(recipient)
-    sender_ids = {row.sent_by_user_id for row, _ in visible}
+    sender_ids = {row.sent_by_user_id for row, _ in visible} | {
+        row.kept_by_user_id for row, _ in visible if row.kept_by_user_id is not None
+    }
     names = book_service.resolve_names_by_ids(db, sender_ids)
     names_ar = book_service.resolve_names_ar_by_ids(db, sender_ids)
     result: dict[int, list[BookDepartmentSendRead]] = {book.id: [] for book in books}
@@ -537,6 +554,10 @@ def sends_by_book(
                 note=row.note,
                 created_at=row.created_at,
                 revoked_at=row.revoked_at,
+                kept_at=row.kept_at,
+                kept_by_user_id=row.kept_by_user_id,
+                kept_by_name=names.get(row.kept_by_user_id) if row.kept_by_user_id else None,
+                kept_by_name_ar=names_ar.get(row.kept_by_user_id) if row.kept_by_user_id else None,
                 heads_total=len(initial),
                 heads_read=sum(recipient.read_at is not None for recipient in initial),
                 members_reached=len(reached) - len(initial),

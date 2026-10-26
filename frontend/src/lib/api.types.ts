@@ -8889,6 +8889,14 @@ export interface components {
             created_at: string;
             /** Revoked At */
             revoked_at: string | null;
+            /** Kept At */
+            kept_at?: string | null;
+            /** Kept By User Id */
+            kept_by_user_id?: number | null;
+            /** Kept By Name */
+            kept_by_name?: string | null;
+            /** Kept By Name Ar */
+            kept_by_name_ar?: string | null;
             /** Heads Total */
             heads_total: number;
             /** Heads Read */
@@ -8925,7 +8933,7 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "all" | "members" | "subdepartment";
+            mode: "all" | "members" | "subdepartment" | "keep";
             /** User Ids */
             user_ids?: number[];
             /** Subdepartment Id */
@@ -9069,6 +9077,8 @@ export interface components {
             title_ar: string | null;
             /** Department Id */
             department_id: number | null;
+            /** Department */
+            department?: string | null;
         };
         /** BookFolderShareOptions */
         BookFolderShareOptions: {
@@ -9076,6 +9086,8 @@ export interface components {
             users: components["schemas"]["BookFolderShareOption"][];
             /** Departments */
             departments: components["schemas"]["BookFolderDepartment"][];
+            /** Legacy Departments */
+            legacy_departments?: string[];
         };
         /** BookFolderShareUser */
         BookFolderShareUser: {

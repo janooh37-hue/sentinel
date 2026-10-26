@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_capability
+from app.api.errors import AppError
+from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.department import (
@@ -23,7 +25,7 @@ from app.schemas.department import (
     DepartmentUpdate,
     UnassignedEmployeeGroup,
 )
-from app.services import department_service
+from app.services import department_service, perm_service
 
 router = APIRouter(prefix="/departments", tags=["departments"])
 Database = Annotated[Session, Depends(get_db)]
@@ -32,9 +34,14 @@ DepartmentAdmin = Annotated[User, Depends(require_capability("departments.manage
 
 @router.get("", response_model=list[DepartmentRead])
 def list_departments(
-    db: Database, _user: Annotated[User, Depends(get_current_user)]
+    db: Database, user: Annotated[User, Depends(get_current_user)]
 ) -> list[DepartmentRead]:
-    return department_service.list_departments(db)
+    # Senders and pickers need the list; inmate reporters do neither.
+    if user.role == INMATE_REPORTER_ROLE:
+        raise AppError("FORBIDDEN", "Departments are not available to this role.", http_status=403)
+    return department_service.list_departments(
+        db, include_emails=perm_service.has_capability(db, user, "departments.manage")
+    )
 
 
 @router.post("", response_model=DepartmentRead, status_code=201)
