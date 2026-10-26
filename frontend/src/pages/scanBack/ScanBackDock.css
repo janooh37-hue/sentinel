@@ -1,0 +1,145 @@
+/* The dock is drawn as a toast (components/shell/AppToaster.css), collapsed or
+   open, though it rests in its own bottom corner. Like the toasts it is the
+   inverse of the page: the navy rail on the cream page, the light theme's
+   raised cream on the near-black page. Tones are the toasts' own, picked there
+   for >=4.5:1 against the fill: the title and badge take the warning tone, the
+   body text the toast description colour, the "View all" button the action
+   tone, and hover/drop states the info tone. */
+.scanback-dock {
+  --_fill: var(--rail);
+  --_tone: #fbbf24;
+  --_text: var(--rail-text);
+  --_muted: var(--rail-faint);
+  --_line: rgb(255 255 255 / 0.1);
+  --_info: #60a5fa;
+  --_action: #8da6e8;
+  /* Sileo's body radius (DEFAULT_ROUNDNESS). */
+  --_radius: 16px;
+}
+
+[data-theme='dark'] .scanback-dock {
+  --_fill: #fafaf6;
+  --_tone: #9a4507;
+  --_text: rgb(28 31 36 / 0.86);
+  --_muted: rgb(28 31 36 / 0.72);
+  --_line: rgb(28 31 36 / 0.1);
+  --_info: #1d4ed8;
+  --_action: #0d2845;
+}
+
+.scanback-pill {
+  background: var(--_fill);
+  color: var(--_tone);
+}
+
+.scanback-badge {
+  color: var(--_tone);
+  background: color-mix(in oklch, var(--_tone) 20%, transparent);
+}
+
+.scanback-muted {
+  color: var(--_text);
+}
+
+.scanback-pill button {
+  transition: background-color 150ms ease-out;
+}
+
+.scanback-pill button:hover {
+  background: color-mix(in oklch, var(--_text) 14%, transparent);
+}
+
+/* The open body is an expanded toast. Re-pointing the app's colour tokens here
+   repaints everything inside (rows, chips, dashed drop targets, the barcode
+   zone, focus rings) in the toast palette without forking those components.
+   Thumbnails keep their white paper. */
+.scanback-panel {
+  background: var(--_fill);
+  color: var(--_text);
+  --text: var(--_text);
+  --text-muted: var(--_muted);
+  --text-faint: var(--_muted);
+  --surface-raised: transparent;
+  --surface-tinted: color-mix(in oklch, var(--_text) 12%, transparent);
+  --hairline: var(--_line);
+  --border: var(--_line);
+  --border-strong: color-mix(in oklch, var(--_text) 35%, transparent);
+  --info: var(--_info);
+  --info-soft: color-mix(in oklch, var(--_info) 10%, transparent);
+  --primary: var(--_action);
+  border-radius: var(--_radius);
+  border-end-end-radius: 0;
+}
+
+/* Sileo's action button: the action tone on a 15% wash, 25% on hover. */
+.scanback-action {
+  color: var(--_action);
+  background: color-mix(in oklch, var(--_action) 15%, transparent);
+  transition: background-color 150ms ease;
+}
+
+.scanback-action:hover {
+  background: color-mix(in oklch, var(--_action) 25%, transparent);
+}
+
+/* Open, the pill and the body are one shape: the pill's top corners go square
+   where it meets the body, and a concave fillet fills the inside corner beside
+   it, the join Sileo's gooey filter draws between its pill and body. Radii are
+   explicit: `rounded-full` with two square corners would scale the remaining
+   ones to the full 40px height and pull the pill's side away from the join. */
+.scanback-pill[data-open] {
+  border-radius: 0 0 20px 20px;
+}
+
+.scanback-pill[data-open]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  inset-inline-end: 100%;
+  width: var(--_radius);
+  height: var(--_radius);
+  pointer-events: none;
+  background: radial-gradient(
+    circle var(--_radius) at 0 100%,
+    transparent calc(var(--_radius) - 0.5px),
+    var(--_fill) var(--_radius)
+  );
+}
+
+[dir='rtl'] .scanback-pill[data-open]::before {
+  background: radial-gradient(
+    circle var(--_radius) at 100% 100%,
+    transparent calc(var(--_radius) - 0.5px),
+    var(--_fill) var(--_radius)
+  );
+}
+
+/* The body grows out of the pill with the toasts' spring (Sileo defines
+   --sileo-spring-easing on :root). */
+@media (prefers-reduced-motion: no-preference) {
+  .scanback-panel {
+    transform-origin: bottom right;
+    animation: scanback-open 400ms var(--sileo-spring-easing, ease-out) both;
+  }
+
+  [dir='rtl'] .scanback-panel {
+    transform-origin: bottom left;
+  }
+
+  .scanback-pill[data-open]::before {
+    animation: scanback-fade 200ms ease-out both;
+  }
+}
+
+@keyframes scanback-open {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.95);
+  }
+}
+
+@keyframes scanback-fade {
+  from {
+    opacity: 0;
+  }
+}

@@ -58,7 +58,7 @@ vi.mock('@/lib/useCapabilities', () => ({
 }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
 vi.mock('@/lib/clipboard', () => ({ copyToClipboard }))
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: Object.assign(vi.fn(), {
     success: toastSuccess,
     error: toastError,
@@ -214,7 +214,7 @@ describe('BookRecordPage — keys', () => {
     press('c', 'KeyC')
     await waitFor(() => expect(copyToClipboard).toHaveBeenCalledWith('GS-0048'))
     await waitFor(() => expect(toastSuccess).toHaveBeenCalled())
-    expect(String(toastSuccess.mock.calls[0][0])).toContain('GS-0048')
+    expect(toastSuccess).toHaveBeenCalledWith('Reference copied', { reference: 'GS-0048' })
   })
 
   it('S opens the sign confirmation for the decider and never signs', async () => {

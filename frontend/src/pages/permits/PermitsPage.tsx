@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Car, Plus, Printer, ShieldCheck, Paperclip, Users, X } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, type PermitListItem, type PermitRead, type PermitZone } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -480,7 +480,7 @@ export function PermitsPage(): React.JSX.Element {
             createdRef.current = p
             setLastCreated(p)
             setHighlightedId(p.id)
-            toast.success(t('permits.createdToast', { no: p.permit_no ?? `#${p.id}` }))
+            toast.success(t('permits.createdToast'), { reference: p.permit_no ?? `#${p.id}` })
             return
           }
           // After editing from the detail dialog, keep the detail open on it.

@@ -25,7 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, FormProvider, Controller } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import {
   ArrowLeft,
   Check,
@@ -39,7 +39,7 @@ import {
   X,
 } from 'lucide-react'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { EmployeeLookupItem, LedgerEntryRead } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { base64PdfToFile, desiredRefPdfDocIds, mergeFiles } from '@/lib/refPdfAttachments'
@@ -490,20 +490,6 @@ export function OutlookHandoffDialog({
     mutationFn: async (values: FormValues): Promise<{ entryId: number; url: string | null }> => {
       const to = (values.to ?? []).filter(Boolean)
       const cc = (values.cc ?? []).filter(Boolean)
-      if (to.length === 0) {
-        throw new Error(
-          t('compose.toRequired', { defaultValue: 'At least one recipient is required' }),
-        )
-      }
-      const totalBytes = allFiles.reduce((sum, f) => sum + f.size, 0)
-      if (totalBytes > MAX_ATTACHMENTS_BYTES) {
-        throw new Error(
-          t('compose.attachmentsTooLarge', {
-            max: formatBytes(MAX_ATTACHMENTS_BYTES),
-            defaultValue: 'Attachments exceed the {{max}} limit',
-          }),
-        )
-      }
       const isMailto = effectiveMode === 'mailto'
       // Mailto is plain text and thread-less: the quote would only be noise.
       const html = isMailto ? stripQuote(values.body ?? '') : (values.body ?? '')
@@ -547,8 +533,7 @@ export function OutlookHandoffDialog({
       }
       onHandedOff(entryId)
     },
-    onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : (err as Error).message),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const hasContent = useCallback((): boolean => {
@@ -701,7 +686,20 @@ export function OutlookHandoffDialog({
       {windowControls?.state !== 'minimized' && (
         <FormProvider {...methods}>
           <form
-            onSubmit={handleSubmit((values) => handoffMutation.mutate(values))}
+            onSubmit={handleSubmit((values) => {
+              if (!(values.to ?? []).some(Boolean)) {
+                toast.error(t('compose.toRequired', { defaultValue: 'At least one recipient is required' }))
+                return
+              }
+              if (allFiles.reduce((sum, file) => sum + file.size, 0) > MAX_ATTACHMENTS_BYTES) {
+                toast.error(t('compose.attachmentsTooLarge', {
+                  max: formatBytes(MAX_ATTACHMENTS_BYTES),
+                  defaultValue: 'Attachments exceed the {{max}} limit',
+                }))
+                return
+              }
+              handoffMutation.mutate(values)
+            })}
             className="flex min-h-0 flex-1 flex-col"
           >
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3">

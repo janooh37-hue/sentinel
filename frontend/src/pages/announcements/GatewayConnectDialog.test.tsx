@@ -2,7 +2,7 @@
  * GatewayConnectDialog tests — QR image render + step instructions.
  *
  * Mirrors the harness in SendToGroupPage.test.tsx:
- *   QueryClientProvider + i18n stub + vi.mock('@/lib/api') + sonner mock.
+ *   QueryClientProvider + i18n stub + vi.mock('@/lib/api') + toast mock.
  *
  * Strategy: assert initial render only; no fake timers needed since we only
  * check that the QR img and the 3 step texts appear after the query resolves.
@@ -17,7 +17,7 @@ vi.mock('react-i18next', () => ({
     i18n: { language: 'en' },
   }),
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('../../lib/api', () => ({
   api: {
     gatewayQr: vi.fn().mockResolvedValue({ qr: 'data:image/png;base64,AAAA' }),

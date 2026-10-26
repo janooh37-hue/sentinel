@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ChevronDown, Search, ShieldCheck, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'

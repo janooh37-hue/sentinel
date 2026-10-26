@@ -40,7 +40,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, FileDown, FileText, Printer } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { Button } from '@/components/ui/button'

@@ -13,7 +13,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { UserPlus } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -45,10 +45,8 @@ export function EmployeeSuggestionBanner({
       void qc.invalidateQueries({ queryKey: ['ledger-entry', entryId] })
       void qc.invalidateQueries({ queryKey: ['ledger'] })
       toast.success(
-        t('ledger.suggestEmployee.linked', {
-          defaultValue: 'Linked to {{id}}',
-          id: gnumber,
-        }),
+        t('ledger.suggestEmployee.linked'),
+        { reference: gnumber },
       )
     },
     onError: (err) =>

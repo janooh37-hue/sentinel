@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -38,6 +38,7 @@ import {
   type DebugMachine,
 } from '@/lib/api'
 import { copyToClipboard } from '@/lib/clipboard'
+import i18n from '@/lib/i18n'
 
 const STATUS_STYLE: Record<DebugCheck['status'], { Icon: typeof CheckCircle2; cls: string }> = {
   ok: { Icon: CheckCircle2, cls: 'text-success bg-success-soft' },
@@ -76,7 +77,7 @@ function fmtDuration(s: number): string {
 
 async function copy(text: string, ok: string): Promise<void> {
   if (await copyToClipboard(text)) toast.success(ok)
-  else toast.error('Clipboard unavailable')
+  else toast.error(i18n.t('common.copyFailed'))
 }
 
 // ── AI helpers ───────────────────────────────────────────────────────────────

@@ -28,7 +28,7 @@ vi.mock('react-i18next', () => ({
     i18n: { language: 'ar' },
   }),
 }))
-vi.mock('sonner', () => ({ toast: mocks.toast }))
+vi.mock('@/lib/toast', () => ({ toast: mocks.toast }))
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ capabilities: new Set(), isLoading: false, has: () => true }),
 }))

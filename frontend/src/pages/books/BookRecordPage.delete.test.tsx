@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ApiModule from '@/lib/api'
 import type * as AuthContextModule from '@/lib/authContext'
 import { api } from '@/lib/api'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { BookRecordPage } from './BookRecordPage'
 import { RecordDeleteProvider } from './RecordDeleteProvider'
 
@@ -52,7 +52,7 @@ vi.mock('@/lib/useCapabilities', () => ({
   }),
 }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: Object.assign(vi.fn(), {
     success: vi.fn(),
     error: vi.fn(),

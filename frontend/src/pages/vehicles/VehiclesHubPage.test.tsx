@@ -38,7 +38,7 @@ vi.mock('@/lib/copyTable', () => ({
   copyTable: vi.fn(),
 }))
 
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: {
     success: outputState.toastSuccess,
     error: outputState.toastError,

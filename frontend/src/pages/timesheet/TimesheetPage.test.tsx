@@ -18,11 +18,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ApiModule from '@/lib/api'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: {
     getTimesheet: vi.fn(),
     setTimesheetCell: vi.fn(),
@@ -30,7 +32,6 @@ vi.mock('@/lib/api', () => ({
     // whether there is anything to drop onto, so every case here reaches it.
     listDesignations: vi.fn(),
   },
-  apiErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }))
 // `useCapabilities` reads AuthContext, which throws outside <AuthProvider> —
 // stub it as the house tests do (components/perms/CapabilityGate.test.tsx:18).
@@ -928,7 +929,7 @@ describe('useSetCell', () => {
     expect(qc.getQueryState(['absence-register'])?.isInvalidated).toBe(true)
   })
 
-  it('restores the previous code and surfaces the server message on failure', async () => {
+  it('restores the previous code and surfaces a localized error on failure', async () => {
     getTimesheet.mockResolvedValue({ ...EMPTY_MONTH, rows: [ROW] })
     let reject: (err: Error) => void = () => {}
     setTimesheetCell.mockReturnValue(
@@ -949,7 +950,7 @@ describe('useSetCell', () => {
       reject(new Error('The month is closed.'))
     })
     await waitFor(() => expect(result.current.read.rows[0].codes[2]).toBe('P'))
-    expect(toast.error).toHaveBeenCalledWith('The month is closed.')
+    expect(toast.error).toHaveBeenCalledWith('Something went wrong')
   })
 
   // The load-bearing case for Task 8, whose whole job is drag-to-fill: two
@@ -1010,7 +1011,7 @@ describe('useSetCell', () => {
     expect(result.current.read.rows[0].codes[2]).toBe('AL')
     expect(result.current.read.postCount).toBe(250)
     expect(result.current.read.blocking).toHaveLength(1)
-    expect(toast.error).toHaveBeenCalledWith('Day 4 is outside the month.')
+    expect(toast.error).toHaveBeenCalledWith('Something went wrong')
   })
 
   /**
@@ -1104,6 +1105,6 @@ describe('useSetCell', () => {
     // mutate time says, so the accepted answer has to overwrite it.
     await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
     expect(cachedCode(3)).toBe('AL')
-    expect(toast.error).toHaveBeenCalledWith('Sick leave needs a note.')
+    expect(toast.error).toHaveBeenCalledWith('Something went wrong')
   })
 })

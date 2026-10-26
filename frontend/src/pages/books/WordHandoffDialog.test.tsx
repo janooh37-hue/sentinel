@@ -8,7 +8,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createElement, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { WordHandoffDialog } from './WordHandoffDialog'
 import * as apiMod from '@/lib/api'
@@ -28,7 +28,7 @@ vi.mock('react-i18next', () => ({
         'books.word.noSavesYet': 'لم يصل أي حفظ من Word بعد',
         'books.word.discardConfirm': 'سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟',
         'books.word.discardConfirmLabel': 'تجاهل المسودة',
-        'books.word.finished': opts?.ref ? `تم اعتماد الإصدار — ${String(opts.ref)}` : 'تم اعتماد الإصدار',
+        'books.word.finished': 'تم حفظ الإصدار',
         'books.word.finishedPdfTitle': opts?.ref ? `تم حفظ الكتاب — ${String(opts.ref)}` : 'تم حفظ الكتاب',
         'books.word.pdfPending': 'جارٍ تجهيز ملف PDF — يمكنك تنزيل ملف DOCX الآن',
         'books.word.close': 'إغلاق',
@@ -46,9 +46,7 @@ vi.mock('react-i18next', () => ({
         'books.word.saveAsTemplateName': 'اسم القالب',
         'books.word.saveAsTemplateHint':
           'سيصبح محتوى الكتاب قالباً مشتركاً متاحاً لجميع مديري الكتب.',
-        'books.word.savedAsTemplate': opts?.name
-          ? `حُفظ في مكتبة القوالب: ${String(opts.name)}`
-          : 'حُفظ في مكتبة القوالب',
+        'books.word.savedAsTemplate': 'تم الحفظ كقالب',
         'common.confirm': 'تأكيد',
         'common.cancel': 'إلغاء',
         'common.save': 'حفظ',
@@ -59,7 +57,7 @@ vi.mock('react-i18next', () => ({
   }),
 }))
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'loading-toast'), dismiss: vi.fn() } }))
 
 // Mock the heavy pdf.js canvas — a sentinel div carrying the pdfUrl.
 vi.mock('@/pages/application/DocPdfCanvas', () => ({
@@ -276,7 +274,7 @@ describe('WordHandoffDialog', () => {
 
     await user.click(screen.getByText('إنهاء التحرير'))
     await waitFor(() => expect(finishSpy).toHaveBeenCalledWith(42))
-    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('تم حفظ الإصدار', { id: 'loading-toast', reference: FAKE_SESSION.ref_number }))
     // Dialog stays open showing the PDF — onClose NOT called automatically.
     expect(onClose).not.toHaveBeenCalled()
     const canvas = await screen.findByTestId('doc-pdf-canvas')

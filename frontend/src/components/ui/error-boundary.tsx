@@ -11,7 +11,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { APP_VERSION } from '@/lib/appVersion'
-import { api } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import { copyToClipboard } from '@/lib/clipboard'
 import i18n from '@/lib/i18n'
 
@@ -227,8 +227,8 @@ export class ErrorBoundary extends Component<Props, State> {
 
           <div className="mt-5 flex w-full max-w-[420px] items-start gap-2 rounded-lg border border-hairline bg-surface-tinted px-3.5 py-3 text-start font-mono text-xs leading-snug text-muted-foreground">
             <span className="shrink-0 font-semibold tracking-wide text-accent">ERR</span>
-            <code className="break-words" dir="ltr">
-              {this.state.error.message}
+            <code className="break-words" dir="auto">
+              {apiErrorMessage(this.state.error)}
             </code>
           </div>
 

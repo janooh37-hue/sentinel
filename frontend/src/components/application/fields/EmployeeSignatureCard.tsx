@@ -26,7 +26,7 @@ import { useEffect, useState } from 'react'
 import { Controller, useFormContext, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -124,13 +124,14 @@ export function EmployeeSignatureCard({
     setValue(embedName, true, { shouldDirty: true })
     setReplaceMode(false)
     if (saveToProfile) {
+      const toastId = toast.loading(t('application.attachments.uploading'))
       try {
         const blob = await (await fetch(dataUrl)).blob()
         await api.uploadSignature(employeeId, blob)
-        toast.success(t('empSig.saved'))
+        toast.success(t('empSig.saved'), { id: toastId })
         invalidateSignatures(qc)
       } catch (err) {
-        toast.error(apiErrorMessage(err))
+        toast.error(apiErrorMessage(err), { id: toastId })
       }
     }
   }

@@ -2,10 +2,11 @@
  * The all-day ambient reminder: a pill anchored bottom-end that expands into
  * the six oldest stranded records, each a drop target.
  *
- * Positioned with `inset-inline-end` so it flips in Arabic, and lifted clear
- * of both BottomTabBar (mobile, `fixed inset-x-0 bottom-0 z-40`) and sonner's
- * app-wide bottom-right Toaster (same corner in LTR, z-index far above ours)
- * — see the `bottom-[...]` comment below for the clearance arithmetic.
+ * Collapsed or open, it is drawn as a toast (ScanBackDock.css): the collapsed
+ * pill is a toast pill, and the open dock is an expanded toast — the body
+ * grows up out of the pill in the same fill, joined to it the way Sileo's
+ * gooey pill joins its body. Positioned with `inset-inline-end` so it flips in
+ * Arabic, and lifted clear of BottomTabBar (mobile) — see `--dock-rest` below.
  */
 import { useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -19,6 +20,8 @@ import { useIsMobile } from '@/lib/useIsMobile'
 import { ScanBackThumb } from './ScanBackThumb'
 import { ScanBackUploadZone } from './ScanBackRow'
 import { ageDays, dockDismissKeyFor, today, useFileSignedCopy, useScanBack, useScanBackUpload } from './useScanBack'
+
+import './ScanBackDock.css'
 
 const OPEN_KEY = 'scanback-dock-open'
 const MAX_ROWS = 6
@@ -38,7 +41,7 @@ function DockRow({
       <ScanBackThumb book={book} className="w-28" />
       <div className="min-w-0 flex-1">
       <div className="mb-1.5 flex items-center gap-2">
-        <span className="shrink-0 rounded bg-surface-tinted px-1.5 py-0.5 font-mono text-[0.68em] font-semibold">
+        <span className="shrink-0 rounded-full bg-surface-tinted px-2 py-0.5 font-mono text-[0.68em] font-semibold tracking-[0.02em]">
           {ref}
         </span>
         <span dir="auto" className="min-w-0 flex-1 truncate text-[0.74em]">{book.subject}</span>
@@ -118,71 +121,76 @@ export function ScanBackDock(): React.JSX.Element | null {
       data-print-hide
       className={cn(
         // `end-4` is the logical utility (inset-inline-end) — it flips in RTL.
-        // Never `right-4`. Precedent: IdentityDocCard.tsx:97.
-        'fixed z-30 flex flex-col items-end gap-2 end-4',
-        // sonner's Toaster (App.tsx, position="bottom-right") sits at the same
-        // corner in LTR and paints over anything under it (z-index 999999999 —
-        // we clear it spatially, not by fighting z-index). Its default 24px
-        // bottom offset + a single toast's ~64px height is a ~88px (5.5rem)
-        // band; 5.5rem also exceeds the 3.5rem BottomTabBar clearance
-        // App.tsx's <main> already reserves on mobile, so one value covers
-        // both viewports. A stack of several toasts can still reach higher —
-        // accepted residual, not solved here.
-        'bottom-[calc(5.5rem+var(--safe-bottom))] md:bottom-[5.5rem]',
-        'rtl:items-start',
+        // Never `right-4`. Precedent: IdentityDocCard.tsx:97. `items-end` is
+        // logical too (the column's cross axis is inline), so the pill sits in
+        // the corner in both directions; never add an `rtl:` override.
+        // No gap: the open body and the pill are one toast shape.
+        'scanback-dock fixed z-30 flex flex-col items-end end-4',
+        // Toasts live at the top; this dock rests above the mobile BottomTabBar.
+        '[--dock-rest:calc(5.5rem+var(--safe-bottom))] md:[--dock-rest:1.5rem]',
+        'bottom-[var(--dock-rest)]',
       )}
     >
       {open && (
-        /* 26rem, not 20rem: each row now carries a page-1 thumbnail, and the
-           dock has to be wide enough for the thumb to still be a preview
-           (~7rem here) and leave the drop target room beside it. */
-        <div className="w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
-          <div className="flex items-center gap-2 border-b border-hairline px-3 py-2">
-            <Printer className="h-3.5 w-3.5 text-warning" strokeWidth={2} aria-hidden />
+        /* 26rem, not Sileo's 350px body: each row carries a page-1 thumbnail,
+           and the dock has to be wide enough for the thumb to still be a
+           preview (~7rem here) and leave the drop target room beside it.
+           Its inline-end bottom corner is square: the pill continues it. */
+        <div className="scanback-panel flex w-[min(26rem,calc(100vw-2rem))] max-h-[min(50dvh,max(6rem,calc(100dvh-var(--dock-rest)-4rem)))] flex-col overflow-hidden">
+          <div className="flex shrink-0 items-center gap-2 border-b border-hairline py-2 ps-2 pe-2">
+            {/* The pill's badge, in the pill's warning tone. */}
+            <span className="scanback-badge flex h-6 w-6 shrink-0 items-center justify-center rounded-full" aria-hidden>
+              <Printer className="h-3.5 w-3.5" strokeWidth={2} />
+            </span>
             <span className="flex-1 text-[0.76em] font-semibold">{t('scanBack.dock.header')}</span>
             <button
               type="button"
               onClick={() => navigate('/scan-back')}
-              className="rounded px-1.5 py-0.5 text-[0.72em] font-semibold text-info hover:bg-info-soft"
+              className="scanback-action flex h-7 items-center rounded-full px-3 text-[0.75rem] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {t('scanBack.viewAll', { count })}
             </button>
           </div>
-          <ScanBackUploadZone onFile={upload} busy={autoBusy} compact />
-          {/* The barcode target adds ~7rem above the rows; 15rem keeps the
-              expanded dock inside its previous ~22rem mobile height budget. */}
-          <div className="max-h-[15rem] overflow-auto">
-            {books.slice(0, MAX_ROWS).map((b) => (
-              <DockRow key={b.id} book={b} onFile={file} busy={busy} />
-            ))}
+          {/* Everything under the header scrolls when the capped panel is short. */}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <ScanBackUploadZone onFile={upload} busy={autoBusy} compact />
+            {/* The barcode target adds ~7rem above the rows; 15rem keeps the
+                expanded dock inside its previous ~22rem mobile height budget. */}
+            <div className="max-h-[15rem] overflow-auto">
+              {books.slice(0, MAX_ROWS).map((b) => (
+                <DockRow key={b.id} book={b} onFile={file} busy={busy} />
+              ))}
+            </div>
           </div>
         </div>
       )}
 
       {/* Two buttons in one pill, not a button inside a button: the toggle and
           the dismiss are separate actions and nested buttons are invalid. */}
-      <div className="flex items-center rounded-full bg-primary pe-1 shadow-lg">
+      <div data-open={open || undefined} className="scanback-pill relative flex h-10 items-center rounded-full pe-1">
         <button
           type="button"
           onClick={toggle}
           aria-expanded={open}
-          className="flex items-center gap-2 rounded-full py-2.5 ps-4 pe-2 text-[0.78em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-full items-center gap-2 rounded-full ps-2 pe-2.5 text-[0.825rem] font-medium leading-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary-foreground" aria-hidden />
+          <span className="scanback-badge flex h-6 w-6 shrink-0 items-center justify-center rounded-full" aria-hidden>
+            <Printer className="h-3.5 w-3.5" strokeWidth={2} />
+          </span>
           {t('scanBack.dock.pill', { count })}
           {/* The visible pill text is already a meaningful accessible name (and
               is what callers query by); expand/collapse is state, not identity,
               so it rides along as extra text for screen readers rather than
               overriding the name via aria-label. */}
           <span className="sr-only">{open ? t('scanBack.dock.collapse') : t('scanBack.dock.expand')}</span>
-          {open ? <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-                : <ChevronUp className="h-3.5 w-3.5" aria-hidden />}
+          {open ? <ChevronDown className="scanback-muted h-3.5 w-3.5" aria-hidden />
+                : <ChevronUp className="scanback-muted h-3.5 w-3.5" aria-hidden />}
         </button>
         <button
           type="button"
           onClick={() => { localStorage.setItem(dismissKey, today()); setDismissed(true) }}
           aria-label={t('scanBack.gate.close')}
-          className="rounded-full p-1.5 text-primary-foreground/70 transition-colors hover:bg-primary-hover hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="scanback-muted rounded-full p-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <X className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
         </button>

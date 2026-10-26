@@ -2,13 +2,13 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { useLeaveDecisionActions } from './useLeaveDecisionActions'
 import * as apiMod from '@/lib/api'
 import i18n from '@/lib/i18n'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 function wrapperFor(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) =>
@@ -93,7 +93,8 @@ describe('useLeaveDecisionActions', () => {
     result.current.updateMutation.mutate({ status: 'Approved', n: '' })
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
-      'Record HR-42 decides this leave. It is approved when the manager signs that record.',
+      'Decided by another record',
+      { reference: 'HR-42', description: 'This leave is approved when the manager signs that record.' },
     ))
     expect(toast.error).not.toHaveBeenCalledWith(rawMessage)
   })

@@ -18,9 +18,9 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
-import { api, ApiError, type SmartFolder } from '@/lib/api'
+import { api, apiErrorMessage, type SmartFolder } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
@@ -148,8 +148,7 @@ function SmartFolderRow({
       if (active) onDeleted()
       toast(t('ledger.smart.deleted'))
     },
-    onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   return (

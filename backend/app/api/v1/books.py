@@ -148,46 +148,6 @@ def _require_full_book(db: Session, user: User, book_id: int, *, write: bool = F
     return row
 
 
-def _inmate_report_word_access(db: Session, user: User, book_id: int) -> Book:
-    """Authorize Word actions on this reporter's own Report only."""
-    row = book_service.get_book(db, book_id)
-    if user.employee_id is None:
-        raise AppError(
-            "INMATE_REPORTER_EMPLOYEE_REQUIRED",
-            "Your account has no linked employee record yet.",
-            http_status=409,
-        )
-    if row.voided_at is not None:
-        raise AppError(
-            "INMATE_REPORTER_STATE_LOCKED",
-            "This report can no longer be edited.",
-            http_status=409,
-        )
-    if row.category_id != "GS" or not row.ref_number.startswith("REPORT-"):
-        raise AppError("INMATE_REPORTER_NOT_OWNER", "This is not a Report.", http_status=403)
-    if row.approval_state not in ("none", "returned"):
-        raise AppError(
-            "INMATE_REPORTER_STATE_LOCKED",
-            "This report can no longer be edited.",
-            http_status=409,
-        )
-    from app.services import included_papers_service
-
-    creator_id = (
-        included_papers_service.original_creator_user_id(row)
-        if row.versions
-        else row.submitted_by_user_id
-    )
-    session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
-    if creator_id != user.id or (session is not None and session.user_id != user.id):
-        raise AppError(
-            "INMATE_REPORTER_NOT_OWNER", "You are not the author of this report.", http_status=403
-        )
-    if row.versions:
-        book_service.require_inmate_report_write_access(db, user, row, action="revise")
-    return row
-
-
 def _require_word_capability(db: Session, user: User, capability: str) -> None:
     if not perm_service.has_capability(db, user, capability):
         raise AppError(
@@ -649,7 +609,7 @@ def finish_word_session(
 ) -> BookRead:
     """Finish the active Word editing session."""
     if user.role == INMATE_REPORTER_ROLE:
-        _inmate_report_word_access(db, user, book_id)
+        book_service.require_inmate_report_word_access(db, user, book_id)
     else:
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id, write=True)
@@ -664,7 +624,7 @@ def get_word_session(
     user: Annotated[User, Depends(get_current_user)],
 ) -> WordSessionDetailRead:
     if user.role == INMATE_REPORTER_ROLE:
-        _inmate_report_word_access(db, user, book_id)
+        book_service.require_inmate_report_word_access(db, user, book_id)
     else:
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id)
@@ -679,7 +639,7 @@ def word_session_status(
 ) -> WordSaveStatusRead:
     """Small poll for Word saves; avoid rebuilding the full Record every second."""
     if user.role == INMATE_REPORTER_ROLE:
-        _inmate_report_word_access(db, user, book_id)
+        book_service.require_inmate_report_word_access(db, user, book_id)
     else:
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id)
@@ -704,7 +664,7 @@ def word_session_preview(
 ) -> Response:
     """PDF preview of the active Word session."""
     if user.role == INMATE_REPORTER_ROLE:
-        _inmate_report_word_access(db, user, book_id)
+        book_service.require_inmate_report_word_access(db, user, book_id)
     else:
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id)
@@ -730,7 +690,7 @@ def reopen_word_session(
 ) -> WordSessionRead:
     """Re-open a finished book for Word editing."""
     if user.role == INMATE_REPORTER_ROLE:
-        _inmate_report_word_access(db, user, book_id)
+        book_service.require_inmate_report_word_access(db, user, book_id)
     else:
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id, write=True)
@@ -756,7 +716,7 @@ def discard_word_session(
 ) -> BookRead:
     """Discard the active Word editing session."""
     if user.role == INMATE_REPORTER_ROLE:
-        _inmate_report_word_access(db, user, book_id)
+        book_service.require_inmate_report_word_access(db, user, book_id)
     else:
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id, write=True)
@@ -2283,6 +2243,7 @@ async def scan_back_book(
     decoded = codes[0]
     if isinstance(classification, scan_triage_service.ReturnedFormClassification):
         match = classification.match
+        _require_full_book(db, user, match.book.book_id, write=True)
         if match.book.approval_state != "awaiting_scan":
             raise ValidationFailedError(
                 "BOOK_NOT_AWAITING_SCAN",

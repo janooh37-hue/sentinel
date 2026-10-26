@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { FolderInput, Loader2 } from 'lucide-react'
 
 import { api, apiErrorMessage } from '@/lib/api'
@@ -69,10 +69,8 @@ export function SendToVaultDialog({
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['vault', employeeId] })
       toast.success(
-        t('ledger.vault.dialog.sentTo', {
-          defaultValue: 'Sent to {{id}}',
-          id: employeeId,
-        }),
+        t('ledger.vault.dialog.sentTo'),
+        { reference: employeeId ?? undefined },
       )
       onClose()
     },

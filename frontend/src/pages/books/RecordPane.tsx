@@ -39,7 +39,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, type BookRead } from '@/lib/api'
 import {
@@ -177,7 +177,7 @@ export function RecordPane({
   const replaceRef = useRef<HTMLInputElement | null>(null)
   const closeRef = useRef<HTMLButtonElement | null>(null)
   const addScan = useAddScan(book?.id ?? null)
-  const manage = useManagePaper(book?.id ?? null)
+  const manage = useManagePaper(book?.id ?? null, book?.ref_number ?? undefined)
   const [deleteTarget, setDeleteTarget] = useState<Paper | null>(null)
   const [replaceTarget, setReplaceTarget] = useState<Paper | null>(null)
   const [deleteRecordOpen, setDeleteRecordOpen] = useState(false)
@@ -568,7 +568,7 @@ export function RecordPane({
             aria-label={t('books.record.copyRef')}
             onClick={() => {
               void copyToClipboard(book.ref_number).then((ok) => {
-                if (ok) toast.success(t('books.record.copiedRef', { ref: bidi(book.ref_number) }))
+                if (ok) toast.success(t('books.record.copiedRef'), { reference: book.ref_number })
                 else toast.error(t('common.copyFailed'))
               })
             }}
@@ -672,7 +672,7 @@ export function RecordPane({
             <WordSessionBanner book={book} compact live={false} />
           </div>
         )}
-        <RecordRecipientsPanel bookId={book.id} className="mt-2 border-t border-hairline" />
+        <RecordRecipientsPanel bookId={book.id} bookRef={book.ref_number} className="mt-2 border-t border-hairline" />
         <div className="flex min-h-[20rem] flex-col pt-2">
           <Suspense fallback={<DocumentState kind="loading" />}>
             <RecordPaperViewer
