@@ -501,6 +501,12 @@ def test_plain_users_can_list_but_not_manage_departments_or_scoping(client, api_
     assert client.put(f"{API}/scoping", json={"enabled": True}).status_code == 403
 
 
+def test_session_user_reports_whether_department_scoping_is_on(client):
+    assert client.get("/api/v1/auth/me").json()["department_scoping_enabled"] is False
+    assert client.put(f"{API}/scoping", json={"enabled": True}).status_code == 200
+    assert client.get("/api/v1/auth/me").json()["department_scoping_enabled"] is True
+
+
 def test_scoping_preflight_receivers_audit_and_cache_invalidation(client, api_db):
     for employee_id in ("EMPTY", "HEAD", "DEPUTY", "INACTIVE"):
         employee(api_db, employee_id)
