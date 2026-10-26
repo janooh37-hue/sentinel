@@ -277,11 +277,12 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   // Returners-from-leave whose leave ends today (days_remaining <= 0) — the
   // honest signal behind the hero insight line. Names are language-aware.
   const heroReturners = useMemo<HeroReturner[]>(() => {
+    if (!has('leaves.view')) return []
     const rows = summary?.upcoming_leave_ends ?? []
     return rows
       .filter((r) => r.days_remaining <= 0)
       .map((r) => ({ name: pickName(r, isAr), employee_id: r.employee_id }))
-  }, [summary, isAr])
+  }, [summary, isAr, has])
 
   // Ledger unread counts — derived from the `recent_ledger` snapshot (latest
   // entries in the summary payload). The summary doesn't carry a strict
@@ -330,15 +331,16 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           />
         )
       case 'workspace':
+        if (!has('employees.view')) return null
         return (
           <WorkspaceCard
-            staff={summary?.totals.employees_active ?? 0}
+            staff={summary?.totals.employees_active ?? null}
             header={t('dashboard.workspace.title')}
             currency={t('dashboard.workspace.total')}
-            ourStaff={summary?.totals.our_staff ?? 0}
-            onSite={summary?.totals.present_today ?? 0}
-            loaned={summary?.totals.loaned ?? 0}
-            onLeave={summary?.totals.on_leave_today ?? 0}
+            ourStaff={summary?.totals.our_staff ?? null}
+            onSite={summary?.totals.present_today ?? null}
+            loaned={summary?.totals.loaned ?? null}
+            onLeave={summary?.totals.on_leave_today ?? null}
             onClick={() => onNavigate('employees')}
             isLoading={summaryQuery.isPending}
           />
@@ -360,6 +362,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       case 'inbox':
         return <InboxWidget />
       case 'violations': {
+        if (!has('violations.view')) return null
         const openViolations = summary?.totals.open_violations_count ?? 0
         return (
           <WidgetCard
@@ -397,6 +400,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         )
       }
       case 'ledger':
+        if (!has('ledger.view')) return null
         return (
           <WidgetCard
             header={t('dashboard.widgets.ledger.header')}
@@ -429,6 +433,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       case 'workforce_pulse':
         return <WorkforcePulseWidget onOpenCoverage={() => setCoverageOpen(true)} />
       case 'on_leave_today':
+        if (!has('leaves.view')) return null
         return (
           <SectionCard icon={CalendarCheck} title={t('dashboard.onLeave.title')} count={summary?.on_leave_today.length}>
             {summaryQuery.isPending ? (
@@ -451,6 +456,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           </SectionCard>
         )
       case 'upcoming_leave':
+        if (!has('leaves.view')) return null
         return (
           <SectionCard icon={CalendarClock} title={t('dashboard.upcoming.title')} count={summary?.upcoming_leave_ends.length}>
             {summaryQuery.isPending ? (
@@ -501,6 +507,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           </SectionCard>
         )
       case 'recent_ledger':
+        if (!has('ledger.view')) return null
         return (
           <SectionCard icon={ScrollText} title={t('dashboard.recent.ledger')} count={summary?.recent_ledger.length}>
             {summaryQuery.isPending ? (
@@ -530,6 +537,20 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       </div>
     )
   }
+  const topCells = zones.top.map((w, i) => {
+    const node = renderWidget(w.id as WidgetId, 'top')
+    return node == null ? null : (
+      <div key={w.id} className="anim-fade-up" style={{ animationDelay: `${80 + i * 40}ms` }}>
+        {node}
+      </div>
+    )
+  }).filter((cell) => cell != null)
+  const underWorkspaceCells = zones.under_workspace
+    .map((w, i) => widgetCell(w.id as WidgetId, 'under_workspace', i))
+    .filter((cell) => cell != null)
+  const underQuickActionsCells = zones.under_quick_actions
+    .map((w, i) => widgetCell(w.id as WidgetId, 'under_quick_actions', i))
+    .filter((cell) => cell != null)
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
@@ -547,8 +568,8 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           isAr={isAr}
           isLoading={summaryQuery.isPending}
           welcomeGuest={t('dashboard.welcomeBackGuest')}
-          staffOnSite={summary?.totals.present_today ?? 0}
-          onLeaveToday={summary?.totals.on_leave_today ?? 0}
+          staffOnSite={summary?.totals.present_today ?? null}
+          onLeaveToday={has('leaves.view') ? summary?.totals.on_leave_today ?? null : null}
           returnersToday={heroReturners}
           upcomingThisWeek={summary?.upcoming_leave_ends.length ?? 0}
           onReviewLeaves={() => onNavigate('leaves')}
@@ -577,24 +598,16 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         </div>
 
         {/* ============ TOP ZONE (2 big cards) ============ */}
-        {zones.top.length > 0 && (
-          <div className="mb-6 grid grid-cols-1 gap-3.5 md:grid-cols-2">
-            {zones.top.map((w, i) => {
-              const node = renderWidget(w.id as WidgetId, 'top')
-              if (node == null) return null
-              return (
-                <div key={w.id} className="anim-fade-up" style={{ animationDelay: `${80 + i * 40}ms` }}>
-                  {node}
-                </div>
-              )
-            })}
+        {topCells.length > 0 && (
+          <div className={`mb-6 grid grid-cols-1 gap-3.5 ${topCells.length > 1 ? 'md:grid-cols-2' : ''}`}>
+            {topCells}
           </div>
         )}
 
         {/* ============ UNDER-WORKSPACE ZONE ============ */}
-        {zones.under_workspace.length > 0 && (
+        {underWorkspaceCells.length > 0 && (
           <div className="mb-6 grid auto-rows-fr grid-cols-1 gap-3.5 md:grid-cols-3">
-            {zones.under_workspace.map((w, i) => widgetCell(w.id as WidgetId, 'under_workspace', i))}
+            {underWorkspaceCells}
           </div>
         )}
 
@@ -652,9 +665,9 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         )}
 
         {/* ============ UNDER-QUICK-ACTIONS ZONE ============ */}
-        {zones.under_quick_actions.length > 0 && (
+        {underQuickActionsCells.length > 0 && (
           <div className="mb-6 grid auto-rows-fr grid-cols-1 gap-3.5 md:grid-cols-3">
-            {zones.under_quick_actions.map((w, i) => widgetCell(w.id as WidgetId, 'under_quick_actions', i))}
+            {underQuickActionsCells}
           </div>
         )}
       </div>
@@ -725,8 +738,8 @@ interface DashboardHeroProps {
   isAr: boolean
   isLoading: boolean
   welcomeGuest: string
-  staffOnSite: number
-  onLeaveToday: number
+  staffOnSite: number | null
+  onLeaveToday: number | null
   returnersToday: HeroReturner[]
   upcomingThisWeek: number
   onReviewLeaves: () => void
@@ -770,7 +783,9 @@ function DashboardHero({
   )
 
   let insight: React.ReactNode
-  if (returnersToday.length === 0) {
+  if (onLeaveToday == null || staffOnSite == null) {
+    insight = null
+  } else if (returnersToday.length === 0) {
     insight = (
       <span>
         {t('dashboard.hero.calm', { n: staffOnSite })}
@@ -845,22 +860,26 @@ function DashboardHero({
               </>
             )}
           </span>
-          <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-white/35" />
-          {onLeaveToday > 0 ? (
-            <button
-              type="button"
-              onClick={onReviewLeaves}
-              className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.08] px-2.5 py-1 font-medium text-white/90 transition-colors hover:bg-white/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-            >
-              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-300" />
-              <span className="font-mono font-semibold tabular-nums text-white">{onLeaveToday}</span>
-              {t('dashboard.hero.onLeaveChip')}
-            </button>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.08] px-2.5 py-1 font-medium text-white/90">
-              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
-              {t('dashboard.hero.allPresent')}
-            </span>
+          {onLeaveToday != null && (
+            <>
+              <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-white/35" />
+              {onLeaveToday > 0 ? (
+                <button
+                  type="button"
+                  onClick={onReviewLeaves}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.08] px-2.5 py-1 font-medium text-white/90 transition-colors hover:bg-white/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                >
+                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-300" />
+                  <span className="font-mono font-semibold tabular-nums text-white">{onLeaveToday}</span>
+                  {t('dashboard.hero.onLeaveChip')}
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.08] px-2.5 py-1 font-medium text-white/90">
+                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                  {t('dashboard.hero.allPresent')}
+                </span>
+              )}
+            </>
           )}
         </div>
 
@@ -1039,13 +1058,13 @@ function PendingDocumentsCard({
 }
 
 interface WorkspaceCardProps {
-  staff: number
+  staff: number | null
   header: string
   currency: string
-  ourStaff: number
-  onSite: number
-  loaned: number
-  onLeave: number
+  ourStaff: number | null
+  onSite: number | null
+  loaned: number | null
+  onLeave: number | null
   onClick: () => void
   isLoading: boolean
 }
@@ -1078,7 +1097,7 @@ function WorkspaceCard({
         <span className="me-1.5 text-[0.32em] font-medium text-muted-foreground align-middle">
           {currency}
         </span>
-        {isLoading ? <Skeleton className="h-9 w-16" /> : staff}
+        {isLoading ? <Skeleton className="h-9 w-16" /> : staff ?? <UnavailableWorkspaceFigure />}
       </div>
 
       <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[0.78em] text-muted-foreground">
@@ -1122,19 +1141,24 @@ function WorkspaceCard({
   )
 }
 
+function UnavailableWorkspaceFigure(): React.JSX.Element {
+  const { t } = useTranslation()
+  return <><span aria-hidden>—</span><span className="sr-only">{t('dashboard.workspace.unavailable')}</span></>
+}
+
 function WorkspaceChip({
   dotClass,
   count,
   label,
 }: {
   dotClass: string
-  count: number
+  count: number | null
   label: string
 }): React.JSX.Element {
   return (
     <span className="flex items-center gap-1.5">
       <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} aria-hidden />
-      <span className="font-semibold tabular-nums text-foreground">{count}</span>
+      <span className="font-semibold tabular-nums text-foreground">{count ?? <UnavailableWorkspaceFigure />}</span>
       {label}
     </span>
   )

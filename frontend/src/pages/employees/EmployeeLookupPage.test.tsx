@@ -10,8 +10,27 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import type { DashboardSummary } from '@/lib/api'
 
 const scrollIntoView = vi.fn()
+const dashboardSummary = vi.hoisted(() => ({
+  totals: {
+    employees_active: 5,
+    our_staff: 5,
+    loaned: 0,
+    on_leave_today: null,
+    present_today: null,
+    forms_this_month: 0,
+    open_violations_count: null,
+    draft_count: 0,
+    book_draft_count: 0,
+  },
+  on_leave_today: [],
+  upcoming_leave_ends: [],
+  recent_documents: [],
+  recent_ledger: [],
+  email_sync: { enabled: false, last_synced_at: null, interval_minutes: 0, incoming_today: 0 },
+} satisfies DashboardSummary))
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -22,10 +41,7 @@ vi.mock('@/lib/api', async (orig) => {
     ...real,
     api: {
       ...real.api,
-      getDashboardSummary: vi.fn().mockResolvedValue({
-        on_leave_today: [],
-        totals: { employees_active: 5 },
-      }),
+      getDashboardSummary: vi.fn().mockResolvedValue(dashboardSummary),
       createEmployee: vi.fn().mockResolvedValue({ id: 'G9999' }),
     },
     apiErrorMessage: vi.fn().mockReturnValue('error'),

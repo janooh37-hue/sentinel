@@ -4,12 +4,21 @@ from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_current_user
 from app.db import session as session_mod
-from app.db.models import Base, Book, BookCategory, Document, Employee, User, UserPermission
+from app.db.models import (
+    Base,
+    Book,
+    BookCategory,
+    BookVersion,
+    Document,
+    Employee,
+    User,
+    UserPermission,
+)
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.db.workforce_models import DutyAssignmentEvent
 from app.main import create_app
@@ -43,6 +52,16 @@ def api_db(monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory) ->
                 submission_id="00000000-0000-0000-0000-000000000011",
             ),
         ]
+    )
+    db.commit()
+    db.add(
+        BookVersion(
+            book_id=71,
+            version_no=1,
+            document_id=11,
+            template_id="Employment Certificate",
+            status="approved",
+        )
     )
     db.commit()
     try:
@@ -262,3 +281,134 @@ def test_employee_view_alone_allows_lookup(api_db: Session):
     client = _client(api_db, user)
     assert client.get("/api/v1/employees/lookup").status_code == 200
     assert client.get("/api/v1/employees/lookup/G100").status_code == 200
+
+
+def _seed_linked_documents(
+    db: Session, count: int, *, first_id: int, personal_every_third: bool = False
+) -> list[int]:
+    """Seed ``count`` committed documents, each owned by its own live Record.
+
+    With ``personal_every_third``, every third Record is someone else's personal
+    Record, which no other non-admin caller may open.
+    """
+    created = datetime(2026, 8, 1, 8)
+    books: list[Book] = []
+    documents: list[Document] = []
+    hidden: list[int] = []
+    for offset in range(count):
+        record_id = first_id + offset
+        personal = personal_every_third and offset % 3 == 0
+        if personal:
+            hidden.append(record_id)
+        books.append(
+            Book(
+                id=record_id,
+                category_id="HR",
+                ref_number=f"HR-{record_id}",
+                employee_id="G100",
+                confidentiality="personal" if personal else "general",
+                created_by_user_id=None,
+            )
+        )
+        documents.append(
+            Document(
+                id=record_id,
+                employee_id="G100",
+                template_id="Employment Certificate",
+                ref_number=f"HR-{record_id}",
+                docx_path="output/fake.docx",
+                submission_id=f"00000000-0000-0000-0000-{record_id:012d}",
+                created_at=created,
+            )
+        )
+    db.add_all([*books, *documents])
+    db.flush()
+    db.add_all(
+        BookVersion(
+            book_id=record_id,
+            version_no=1,
+            document_id=record_id,
+            template_id="Employment Certificate",
+            status="approved",
+        )
+        for record_id in range(first_id, first_id + count)
+    )
+    db.commit()
+    return hidden
+
+
+def _counted_activity(db: Session, client: TestClient, params: dict[str, object]):
+    statements = 0
+
+    def _count(*_args: object) -> None:
+        nonlocal statements
+        statements += 1
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", _count)
+    try:
+        response = client.get("/api/v1/employees/activity", params=params)
+    finally:
+        event.remove(engine, "before_cursor_execute", _count)
+    assert response.status_code == 200
+    return statements, response.json()
+
+
+@pytest.mark.parametrize("kind", [None, "document"])
+def test_activity_page_cost_does_not_grow_with_document_total(
+    api_db: Session, manager_client: TestClient, kind: str | None
+):
+    params: dict[str, object] = {"limit": 25, "offset": 0}
+    if kind is not None:
+        params["kind"] = kind
+    _seed_linked_documents(api_db, 200, first_id=1000)
+    smaller, body = _counted_activity(api_db, manager_client, params)
+    assert body["total"] == 201
+    assert len(body["items"]) == 25
+
+    _seed_linked_documents(api_db, 200, first_id=2000)
+    larger, body = _counted_activity(api_db, manager_client, params)
+    assert body["total"] == 401
+    assert len(body["items"]) == 25
+
+    assert larger - smaller <= 2, (smaller, larger)
+
+
+def test_activity_total_matches_the_pages_when_records_are_hidden(
+    api_db: Session, manager_client: TestClient
+):
+    hidden = set(_seed_linked_documents(api_db, 30, first_id=1000, personal_every_third=True))
+
+    seen: list[int] = []
+    total = None
+    offset = 0
+    while True:
+        response = manager_client.get(
+            "/api/v1/employees/activity",
+            params={"kind": "document", "limit": 7, "offset": offset},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        total = body["total"]
+        if not body["items"]:
+            break
+        seen.extend(item["source_id"] for item in body["items"])
+        offset += 7
+
+    assert hidden.isdisjoint(seen)
+    assert len(seen) == len(set(seen)) == total == 31 - len(hidden)
+
+
+def test_activity_omits_documents_of_soft_deleted_records_for_admins(api_db: Session):
+    admin = User(email="admin@x.ae", password_hash="x", role="admin", status="active")
+    api_db.add(admin)
+    record = api_db.get(Book, 71)
+    assert record is not None
+    record.deleted_at = datetime(2026, 8, 2, 8)
+    api_db.commit()
+
+    response = _client(api_db, admin).get("/api/v1/employees/activity", params={"kind": "document"})
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+    assert response.json()["total"] == 0

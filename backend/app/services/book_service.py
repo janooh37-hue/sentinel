@@ -435,10 +435,9 @@ def _hidden_by_confidentiality(user: User, book: Book, *, existing: bool) -> boo
     return existing or (book.confidentiality != "general" and user.role != ADMIN_ROLE)
 
 
-def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | None:
-    """SQL clause for the records ``user`` may open: denied services/categories,
-    the inmate-reporter matrix, and the record level (``_confidentiality_clause``).
-    ``None`` only for an admin with nothing denied."""
+def _record_type_clause(db: Session, user: User) -> ColumnElement[bool] | None:
+    """SQL: denied services/categories and the inmate-reporter matrix.
+    ``None`` when nothing is hidden by record type."""
     denied_services, denied_categories = perm_service.denied_record_types(db, user)
     clauses: list[ColumnElement[bool]] = []
     if denied_categories:
@@ -450,10 +449,35 @@ def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | Non
         )
     if user.role == INMATE_REPORTER_ROLE:
         clauses.append(_inmate_reporter_visibility_clause(user))
-    type_ok = and_(*clauses) if clauses else None
+    return and_(*clauses) if clauses else None
+
+
+def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | None:
+    """SQL clause for the records ``user`` may open: denied services/categories,
+    the inmate-reporter matrix, and the record level (``_confidentiality_clause``).
+    ``None`` only for an admin with nothing denied."""
+    type_ok = _record_type_clause(db, user)
     if user.role == ADMIN_ROLE:
         return type_ok
     return _confidentiality_clause(db, user, type_ok if type_ok is not None else true())
+
+
+def full_read_access_clause(db: Session, user: User) -> ColumnElement[bool]:
+    """SQL mirror of ``resolve_book_read_access`` granting every revision.
+
+    Unlike ``user_visibility_clause`` it applies ``books.view`` exactly as the
+    read gate does, so a direct send still opens a general Record without it.
+    Deleted Records and revision-scoped access are the caller's to add.
+    """
+    if user.role == INMATE_REPORTER_ROLE:
+        return _confidentiality_clause(db, user, _inmate_reporter_visibility_clause(user))
+    type_ok: ColumnElement[bool] = false()
+    if perm_service.has_capability(db, user, "books.view"):
+        record_types = _record_type_clause(db, user)
+        type_ok = record_types if record_types is not None else true()
+    if user.role == ADMIN_ROLE:
+        return type_ok
+    return _confidentiality_clause(db, user, type_ok)
 
 
 def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | None:
@@ -4257,6 +4281,7 @@ __all__ = [
     "delete_book",
     "detach_attachment",
     "document_visibility_clause",
+    "full_read_access_clause",
     "get_book",
     "get_book_by_ref",
     "get_book_detail",

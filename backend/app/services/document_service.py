@@ -25,14 +25,14 @@ import json
 import logging
 import shutil
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import InstrumentedAttribute, Session
+from sqlalchemy import ColumnElement, and_, case, exists, func, not_, or_, select
+from sqlalchemy.orm import InstrumentedAttribute, Session, aliased
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
@@ -868,10 +868,216 @@ def _unlink_document_files(doc: Document, data_dir: Path) -> None:
             p.unlink(missing_ok=True)
 
 
+def require_document_record_access(
+    db: Session,
+    user: User,
+    row: Document,
+    *,
+    expected_version_id: int | None = None,
+) -> BookVersion | None:
+    """Authorize stored metadata and bytes against their exact owning revision.
+
+    Companions inherit their submission's primary ownership. Standalone
+    documents retain the interactive generation and record-type read gates.
+    A stale expected revision must never silently resolve to different bytes.
+    """
+    from app.services import book_service, perm_service
+
+    owning_version = document_owning_version(db, row)
+    if owning_version is not None:
+        if expected_version_id is not None and expected_version_id != owning_version.id:
+            raise NotFoundError("DOCUMENT_NOT_FOUND", f"Document {row.id} not found", id=row.id)
+        book_service.resolve_book_read_access(
+            db, user, owning_version.book, version_id=owning_version.id
+        )
+        return owning_version
+    if user.role == INMATE_REPORTER_ROLE or not perm_service.has_capability(
+        db, user, "documents.generate"
+    ):
+        raise AppError(
+            "FORBIDDEN", "You don't have permission to access this document", http_status=403
+        )
+    book_service.require_record_type_access(
+        db, user, service_id=effective_document_service(row.template_id)
+    )
+    return None
+
+
+def document_owning_version(db: Session, row: Document) -> BookVersion | None:
+    """Resolve actual ownership, including deleted records and companions."""
+    owning = db.scalar(select(BookVersion).where(BookVersion.document_id == row.id))
+    if owning is None and row.role == "companion":
+        primary_document_ids = select(Document.id).where(
+            Document.submission_id == row.submission_id, Document.role == "primary"
+        )
+        owning = db.scalar(
+            select(BookVersion).where(BookVersion.document_id.in_(primary_document_ids))
+        )
+    return owning
+
+
+def readable_documents(
+    db: Session, rows: Iterable[Document], *, user: User | None
+) -> list[tuple[Document, BookVersion | None]]:
+    """Filter projections with the canonical read gate, before counting/paging.
+
+    ``None`` is reserved for internal callers that deliberately bypass policy.
+    Unexpected failures propagate rather than being mistaken for a denial.
+    """
+    readable: list[tuple[Document, BookVersion | None]] = []
+    for row in rows:
+        try:
+            version = (
+                require_document_record_access(db, user, row)
+                if user is not None
+                else document_owning_version(db, row)
+            )
+        except AppError as exc:
+            if exc.http_status not in (403, 404):
+                raise
+            continue
+        readable.append((row, version))
+    return readable
+
+
+def owning_record_id() -> ColumnElement[int | None]:
+    """SQL: the owning Record id ``document_owning_version`` resolves to."""
+    direct = (
+        select(BookVersion.book_id)
+        .where(BookVersion.document_id == Document.id)
+        .correlate(Document)
+        .limit(1)
+        .scalar_subquery()
+    )
+    primary_document = aliased(Document)
+    via_primary = (
+        select(BookVersion.book_id)
+        .join(primary_document, primary_document.id == BookVersion.document_id)
+        .where(
+            primary_document.role == "primary",
+            primary_document.submission_id == Document.submission_id,
+        )
+        .correlate(Document)
+        .limit(1)
+        .scalar_subquery()
+    )
+    return func.coalesce(direct, case((Document.role == "companion", via_primary)))
+
+
+def _owning_revision_matches(
+    condition: Callable[[Any], ColumnElement[bool]],
+) -> ColumnElement[bool]:
+    """SQL twin of ``document_owning_version``: correlated on ``Document``.
+
+    ``condition`` receives the owning ``BookVersion`` alias; ``Book`` is its
+    Record. The alias keeps the policy's own ``BookVersion`` subqueries
+    uncorrelated.
+    """
+    direct_version = aliased(BookVersion)
+    owner_version = aliased(BookVersion)
+    primary_document = aliased(Document)
+    owns_directly = exists(
+        select(direct_version.id)
+        .where(direct_version.document_id == Document.id)
+        .correlate(Document)
+    )
+    direct = exists(
+        select(owner_version.id)
+        .join(Book, Book.id == owner_version.book_id)
+        .where(owner_version.document_id == Document.id, condition(owner_version))
+        .correlate(Document)
+    )
+    via_primary = exists(
+        select(owner_version.id)
+        .join(Book, Book.id == owner_version.book_id)
+        .join(primary_document, primary_document.id == owner_version.document_id)
+        .where(
+            primary_document.role == "primary",
+            primary_document.submission_id == Document.submission_id,
+            condition(owner_version),
+        )
+        .correlate(Document)
+    )
+    return or_(direct, and_(Document.role == "companion", not_(owns_directly), via_primary))
+
+
+def live_record_document_clause(db: Session, user: User | None) -> ColumnElement[bool]:
+    """SQL: Documents owned by a live Record that ``user`` may read.
+
+    Mirrors ``require_document_record_access`` for owned Documents: full Record
+    access, a retained revision grant, or a pending review of the current
+    revision. ``None`` (internal callers) applies ownership only.
+    """
+    from app.services import book_service
+
+    if user is None:
+        return _owning_revision_matches(lambda _version: Book.deleted_at.is_(None))
+    full_access = book_service.full_read_access_clause(db, user)
+    current_version_id = (
+        select(BookVersion.id)
+        .where(BookVersion.book_id == Book.id)
+        .order_by(BookVersion.version_no.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+
+    def readable(version: Any) -> ColumnElement[bool]:
+        if user.role == INMATE_REPORTER_ROLE:
+            allowed = and_(full_access, version.id == current_version_id)
+        else:
+            retained = exists(
+                select(BookRevisionAccess.id).where(
+                    BookRevisionAccess.version_id == version.id,
+                    BookRevisionAccess.user_id == user.id,
+                    BookRevisionAccess.revoked_at.is_(None),
+                )
+            )
+            reviewing = and_(
+                version.id == current_version_id,
+                Book.voided_at.is_(None),
+                exists(
+                    select(BookApprovalStep.id).where(
+                        BookApprovalStep.version_id == version.id,
+                        BookApprovalStep.assignee_user_id == user.id,
+                        BookApprovalStep.state == "pending",
+                        BookApprovalStep.kind.in_(("approver", "reviewer")),
+                    )
+                ),
+            )
+            allowed = or_(full_access, retained, reviewing)
+        return and_(Book.deleted_at.is_(None), allowed)
+
+    return _owning_revision_matches(readable)
+
+
+def unreadable_live_record_documents(
+    db: Session, expected_book_ids: dict[int, int], *, user: User | None
+) -> set[int]:
+    """Re-check a page window with the canonical per-document read gate.
+
+    ``expected_book_ids`` maps each Document to the live Record a SQL
+    projection linked it to. Returns the ids the exact gate refuses or
+    resolves elsewhere; callers drop them and refill the window.
+    """
+    if not expected_book_ids:
+        return set()
+    rows = db.scalars(select(Document).where(Document.id.in_(expected_book_ids)))
+    confirmed = {
+        document.id
+        for document, version in readable_documents(db, rows, user=user)
+        if version is not None
+        and version.book.deleted_at is None
+        and version.book_id == expected_book_ids[document.id]
+    }
+    return set(expected_book_ids) - confirmed
+
+
 def _linked_documents(
     db: Session,
     fk_column: InstrumentedAttribute[int | None],
     ids: Sequence[int],
+    *,
+    user: User | None,
 ) -> dict[int, list[LinkedDocumentRead]]:
     if not ids:
         return {}
@@ -885,7 +1091,7 @@ def _linked_documents(
         .order_by(Document.created_at.asc(), Document.id.asc())
     )
     linked_by_record_id: dict[int, list[LinkedDocumentRead]] = {}
-    for document in rows:
+    for document, _ in readable_documents(db, rows, user=user):
         record_id = getattr(document, fk_column.key)
         if record_id is None:
             continue
@@ -896,15 +1102,15 @@ def _linked_documents(
 
 
 def documents_for_leaves(
-    db: Session, leave_ids: Sequence[int]
+    db: Session, leave_ids: Sequence[int], *, user: User | None = None
 ) -> dict[int, list[LinkedDocumentRead]]:
-    return _linked_documents(db, Document.leave_id, leave_ids)
+    return _linked_documents(db, Document.leave_id, leave_ids, user=user)
 
 
 def documents_for_violations(
-    db: Session, violation_ids: Sequence[int]
+    db: Session, violation_ids: Sequence[int], *, user: User | None = None
 ) -> dict[int, list[LinkedDocumentRead]]:
-    return _linked_documents(db, Document.violation_id, violation_ids)
+    return _linked_documents(db, Document.violation_id, violation_ids, user=user)
 
 
 def _purge_superseded_drafts(

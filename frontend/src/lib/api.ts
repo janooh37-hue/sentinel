@@ -1023,14 +1023,14 @@ export interface DashboardEmailSync {
 export interface DashboardSummary {
   totals: {
     /** Total working: our staff + loaned. */
-    employees_active: number
-    our_staff: number
-    loaned: number
+    employees_active: number | null
+    our_staff: number | null
+    loaned: number | null
     /** Our staff only; a loaned employee counts only as loaned. */
-    on_leave_today: number
-    present_today: number
+    on_leave_today: number | null
+    present_today: number | null
     forms_this_month: number
-    open_violations_count: number
+    open_violations_count: number | null
     draft_count: number
     book_draft_count: number
   }
