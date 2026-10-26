@@ -79,7 +79,6 @@ from app.services.job_registry import (
 log = logging.getLogger(__name__)
 
 
-
 def _should_autosend(
     *,
     commit: bool,
