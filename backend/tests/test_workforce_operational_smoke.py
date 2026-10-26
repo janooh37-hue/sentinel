@@ -48,6 +48,7 @@ from app.services import (
     workforce_scope_service,
 )
 from app.services.workforce_access_service import organization_scope
+from tests.department_fixtures import enable_scoping
 from tests.factories.attendance import build_attendance_day, local
 from tests.fakes.attendance_provider import DeterministicAttendanceProvider, person, punch
 
@@ -692,6 +693,8 @@ def test_office_to_company_move_replaces_future_attendance_only(db_session):
     # Departments follow the org tree; an exception moves the target in.
     db_session.add(DepartmentException(employee_id=target.id, department_id=department.id))
     db_session.flush()
+    # Department labels follow departments only while department scoping is on.
+    enable_scoping(db_session)
 
     crew_2 = db_session.scalar(select(WorkCrew).where(WorkCrew.code == "crew_2"))
     assert crew_2 is not None
