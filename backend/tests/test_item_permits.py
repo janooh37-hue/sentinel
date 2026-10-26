@@ -309,6 +309,90 @@ def test_item_permit_mutations_require_linked_letter_write_access(
         assert row.deleted_at is not None
 
 
+def _permit_operator(db: Session) -> User:
+    """An operator granted the permit register but not generic record editing."""
+    user = User(email="permits@x.ae", password_hash="x", role="operator", status="active")
+    db.add(user)
+    db.commit()
+    for capability in ("permits.create", "permits.edit", "permits.delete"):
+        db.add(UserPermission(user_id=user.id, capability=capability, effect="grant"))
+    db.commit()
+    return user
+
+
+@pytest.mark.parametrize("operation", ["update", "regenerate", "submit", "delete"])
+def test_permit_grants_carry_linked_letter_edits_without_books_edit(
+    env: Session, operation: str
+) -> None:
+    """Permit grants (split from books.* by migration 0078) delegate edits to the
+    linked letter; its level and write policy still apply. The outcome is
+    all-or-nothing: the permit row and the letter body never disagree."""
+    creator = env.query(User).filter_by(email="op@x.ae").one()
+    operator = _permit_operator(env)
+    manager = _linked_manager(env)
+    row = item_permit_service.create_item_permit(
+        env,
+        _payload(manager_id=manager.id, send_for_approval=operation == "regenerate"),
+        user=creator,
+    )
+    book = env.get_one(Book, row.book_id)
+    client = _client(env, operator)
+    path = f"/api/v1/item-permits/{row.id}"
+    if operation in ("update", "regenerate"):
+        response = client.patch(path, json={"site": "Changed site"})
+    elif operation == "submit":
+        response = client.post(f"{path}/submit-approval")
+    else:
+        response = client.delete(path)
+
+    assert response.status_code == (204 if operation == "delete" else 200), response.text
+    env.expire_all()
+    if operation in ("update", "regenerate"):
+        assert row.site == "Changed site"
+        assert "Changed site" in book.versions[-1].fields["body"]
+        assert book.approval_state == ("pending" if operation == "regenerate" else "none")
+    elif operation == "submit":
+        assert book.approval_state == "pending"
+        assert book.submitted_by_user_id == operator.id
+    else:
+        assert row.deleted_at is not None
+
+
+@pytest.mark.parametrize("operation", ["update", "delete"])
+def test_permit_with_deleted_letter_stays_editable(env: Session, operation: str) -> None:
+    """A draft letter deleted from Records no longer gates its permit; the
+    permit capability still does. The deleted letter is left untouched."""
+    creator = env.query(User).filter_by(email="op@x.ae").one()
+    row = item_permit_service.create_item_permit(env, _payload(), user=creator)
+    book = env.get_one(Book, row.book_id)
+    assert _client(env, creator).delete(f"/api/v1/books/{book.id}").status_code == 204
+    letter_before = [(v.id, v.fields) for v in book.versions]
+    path = f"/api/v1/item-permits/{row.id}"
+    viewer = User(email="viewer@x.ae", password_hash="x", role="operator", status="active")
+    env.add(viewer)
+    env.commit()
+
+    def request(user: User):
+        client = _client(env, user)
+        if operation == "update":
+            return client.patch(path, json={"site": "Changed site"})
+        return client.delete(path)
+
+    denied = request(viewer)
+    assert denied.status_code == 403, denied.text
+    capability = "permits.edit" if operation == "update" else "permits.delete"
+    assert denied.json()["error"]["details"]["capability"] == capability
+    response = request(_permit_operator(env))
+    assert response.status_code == (200 if operation == "update" else 204), response.text
+    env.expire_all()
+    if operation == "update":
+        assert row.site == "Changed site"
+    else:
+        assert row.deleted_at is not None
+    assert book.deleted_at is not None
+    assert [(v.id, v.fields) for v in book.versions] == letter_before
+
+
 # ─── letter body builder (pure) ────────────────────────────────────────────────
 
 _EMP = {"id": "G1", "title": "فني", "name": "سالم"}
