@@ -9971,10 +9971,7 @@ export interface components {
             present_today: number | null;
             /** Forms This Month */
             forms_this_month: number;
-            /**
-             * Open Violations Count
-             * @default 0
-             */
+            /** Open Violations Count */
             open_violations_count: number | null;
             /**
              * Draft Count

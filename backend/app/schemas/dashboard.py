@@ -144,7 +144,7 @@ class DashboardTotals(BaseModel):
     on_leave_today: int | None
     present_today: int | None
     forms_this_month: int
-    open_violations_count: int | None = 0
+    open_violations_count: int | None
     draft_count: int = 0
     book_draft_count: int = 0
 
