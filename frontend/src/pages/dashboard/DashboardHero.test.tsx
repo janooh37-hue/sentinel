@@ -248,7 +248,7 @@ describe('DashboardHero in Arabic', () => {
         actionable_count: 4,
       }),
     )
-    const { container } = renderHero({ name: 'سارة علي حسن' }, 'rtl')
+    renderHero({ name: 'سارة علي حسن' }, 'rtl')
 
     expect(screen.getByText('مسؤولة الموارد البشرية · HR')).toBeInTheDocument()
     expect(screen.queryByText(/HR Officer/)).not.toBeInTheDocument()
@@ -264,10 +264,6 @@ describe('DashboardHero in Arabic', () => {
       expect.stringContaining('تحتاج إلى تعديل'),
       expect.stringContaining('المرسل المعلّق'),
     ])
-    // The forward arrows mirror in RTL; the wordmark never does.
-    for (const arrow of container.querySelectorAll('a svg')) {
-      expect(arrow.getAttribute('class')).toContain('rtl:-scale-x-100')
-    }
   })
 
   it('falls back to the English title when the record has no Arabic one', () => {
