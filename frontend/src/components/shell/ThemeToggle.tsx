@@ -16,7 +16,8 @@ interface Props {
 export function ThemeToggle({ value, onChange }: Props): React.JSX.Element {
   const isDark = value === 'dark'
   return (
-    <label className="theme-switch relative inline-block h-[30px] w-[56px] cursor-pointer">
+    // Touch: the label is a 44px-tall box and the 30px pill is centred in it (slider/sun/moon shift down 7px).
+    <label className="theme-switch relative inline-block h-[30px] w-[56px] cursor-pointer pointer-coarse:h-[44px]">
       <input
         type="checkbox"
         role="switch"
@@ -25,8 +26,8 @@ export function ThemeToggle({ value, onChange }: Props): React.JSX.Element {
         aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
         className="theme-switch-input absolute h-0 w-0 opacity-0"
       />
-      <span className="theme-switch-slider absolute inset-0 cursor-pointer rounded-[30px] bg-[#73C0FC] transition-colors duration-300" />
-      <span className="theme-switch-sun pointer-events-none absolute left-[32px] top-[6px] z-[1] block h-[18px] w-[18px]">
+      <span className="theme-switch-slider absolute inset-0 cursor-pointer rounded-[30px] bg-[#73C0FC] transition-colors duration-300 pointer-coarse:inset-y-[7px]" />
+      <span className="theme-switch-sun pointer-events-none absolute left-[32px] top-[6px] z-[1] block h-[18px] w-[18px] pointer-coarse:top-[13px]">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
           <g fill="#ffd43b">
             <circle r={5} cy={12} cx={12} />
@@ -34,7 +35,7 @@ export function ThemeToggle({ value, onChange }: Props): React.JSX.Element {
           </g>
         </svg>
       </span>
-      <span className="theme-switch-moon pointer-events-none absolute left-[6px] top-[4px] z-[1] block h-[18px] w-[18px]">
+      <span className="theme-switch-moon pointer-events-none absolute left-[6px] top-[4px] z-[1] block h-[18px] w-[18px] pointer-coarse:top-[11px]">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="#73C0FC">
           <path d="m223.5 32c-123.5 0-223.5 100.3-223.5 224s100 224 223.5 224c60.6 0 115.5-24.2 155.8-63.4 5-4.9 6.3-12.5 3.1-18.7s-10.1-9.7-17-8.5c-9.8 1.7-19.8 2.6-30.1 2.6-96.9 0-175.5-78.8-175.5-176 0-65.8 36-123.1 89.3-153.3 6.1-3.5 9.2-10.5 7.7-17.3s-7.3-11.9-14.3-12.5c-6.3-.5-12.6-.8-19-.8z" />
         </svg>

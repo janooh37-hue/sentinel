@@ -158,6 +158,7 @@
     "lockApp": "Lock app",
     "emailSettings": "Email settings",
     "notifications": "Notifications",
+    "notificationsUnread": "Notifications, {{count}} unread",
     "markAllRead": "Mark all read",
     "noNotifications": "No unread notifications",
     "hasAttachment": "Has attachment",

@@ -76,7 +76,7 @@ export function GatewayIndicator(): React.JSX.Element | null {
         aria-expanded={open}
         title={`${label} · ${checked}`}
         onClick={() => setOpen((v) => !v)}
-        className="relative rounded-lg p-2 text-foreground transition-colors hover:bg-surface-tinted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+        className="relative rounded-lg p-2 text-foreground transition-colors hover:bg-surface-tinted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 pointer-coarse:inline-flex pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:items-center pointer-coarse:justify-center"
       >
         <MessageCircle className="h-[1.15em] w-[1.15em]" strokeWidth={1.8} aria-hidden />
         <span

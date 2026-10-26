@@ -175,6 +175,7 @@
     "lockApp": "قفل التطبيق",
     "emailSettings": "إعدادات البريد الإلكتروني",
     "notifications": "الإشعارات",
+    "notificationsUnread": "الإشعارات، {{count}} غير مقروءة",
     "markAllRead": "تحديد الكل كمقروء",
     "noNotifications": "لا توجد إشعارات غير مقروءة",
     "hasAttachment": "يحتوي على مرفق",

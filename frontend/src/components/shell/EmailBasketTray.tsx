@@ -66,7 +66,7 @@ export function EmailBasketTray(): React.JSX.Element | null {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:h-[44px] pointer-coarse:w-[44px]"
           aria-label={t('basket.tray.title')}
         >
           <Mail className="h-[18px] w-[18px]" strokeWidth={1.8} aria-hidden />

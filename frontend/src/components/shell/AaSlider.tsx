@@ -47,7 +47,8 @@ export function AaSlider({ value, onChange }: AaSliderProps): React.JSX.Element 
   return (
     <div
       data-topnav-aa
-      className="inline-flex items-center gap-2 rounded-full bg-surface-tinted px-3 py-1.5"
+      // In a container narrower than 200px (the drawer at 200% zoom) the A / slider / A row cannot sit side by side: stack it.
+      className="inline-flex items-center gap-2 rounded-full bg-surface-tinted px-3 py-1.5 pointer-coarse:px-1 pointer-coarse:py-0 @max-[200px]:w-full @max-[200px]:flex-col @max-[200px]:rounded-2xl"
     >
       <button
         type="button"
@@ -56,6 +57,7 @@ export function AaSlider({ value, onChange }: AaSliderProps): React.JSX.Element 
         aria-label="Decrease text size"
         className={cn(
           'rounded-md px-1 py-0.5 text-[0.78em] font-semibold leading-none text-muted-foreground transition-colors',
+          'pointer-coarse:grid pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:place-items-center',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface-tinted',
           !atMin && 'hover:bg-surface hover:text-foreground',
           atMin && 'cursor-not-allowed opacity-40',
@@ -75,7 +77,7 @@ export function AaSlider({ value, onChange }: AaSliderProps): React.JSX.Element 
         aria-valuemax={stops[maxIndex]}
         aria-valuenow={snapped}
         data-topnav-aa-range
-        className="aa-slider h-1 w-[100px] cursor-pointer appearance-none rounded-full bg-border"
+        className="aa-slider h-1 w-[100px] min-w-[44px] shrink cursor-pointer @max-[200px]:w-full appearance-none rounded-full bg-border"
       />
       <button
         type="button"
@@ -84,6 +86,7 @@ export function AaSlider({ value, onChange }: AaSliderProps): React.JSX.Element 
         aria-label="Increase text size"
         className={cn(
           'rounded-md px-1 py-0.5 text-[1.15em] font-bold leading-none text-foreground transition-colors',
+          'pointer-coarse:grid pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:place-items-center',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface-tinted',
           !atMax && 'hover:bg-surface',
           atMax && 'cursor-not-allowed opacity-40',
