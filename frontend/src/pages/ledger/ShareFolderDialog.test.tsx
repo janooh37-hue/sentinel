@@ -48,7 +48,7 @@ it('localizes retained text department labels in the header and share editor', a
     users: [], departments: [{ id: 5, name_en: 'Finance', name_ar: 'المالية' }], legacy_departments: [],
   })
   mount({ ...folder, legacy_departments: ['Operations'] })
-  expect(await screen.findByText(/Previous department name/)).toBeInTheDocument()
+  expect(await screen.findByText(/Operations.*\(previous department name\)/)).toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: 'Share' }))
   expect(await screen.findByRole('button', { name: 'Remove previous department name: Operations' })).toBeInTheDocument()
 })

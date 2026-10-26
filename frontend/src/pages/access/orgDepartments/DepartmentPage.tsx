@@ -200,6 +200,7 @@ function PeopleSection({ department, initialQuery }: { department: DepartmentRea
           <span className="sr-only">{t('orgDepartments.people.search')}</span>
           <input
             type="search"
+            dir="auto"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t('orgDepartments.people.search')}

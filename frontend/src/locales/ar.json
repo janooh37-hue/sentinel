@@ -262,7 +262,7 @@
       "turnedOff": "تم إيقاف تقييد الوصول حسب الأقسام.",
       "confirmOff": "هل تريد إيقاف تقييد الوصول حسب الأقسام؟",
       "confirmOn": "هل تريد تفعيل تقييد الوصول حسب الأقسام؟",
-      "labelSyncWarning": "سيؤدي تفعيل قيود الوصول إلى تغيير مسميات أقسام الموظفين إلى الاسم العربي للقسم التابعين له. راجع التنبيهات الحالية قبل المتابعة.",
+      "labelSyncWarning": "سيؤدي تفعيل تقييد الوصول حسب الأقسام إلى استبدال مسمى القسم لكل موظف بالاسم العربي لقسمه. راجع التنبيهات الحالية قبل المتابعة.",
       "offWarning": "ستُزال قيود الأقسام، وسيرى المستخدمون بيانات المؤسسة ضمن الصلاحيات الممنوحة لهم."
     },
     "setup": {
@@ -2971,7 +2971,12 @@
       "recipients": "المرسل إليهم",
       "departments": "الأقسام",
       "noHead": "لا حساب لرئيسه ولا نائب",
-      "deliveryCount": "مرسلة إلى {{count}} جهات استلام",
+      "deliveryCount_zero": "مرسلة إلى {{count}} جهة استلام",
+      "deliveryCount_one": "مرسلة إلى جهة استلام واحدة",
+      "deliveryCount_two": "مرسلة إلى جهتَي استلام",
+      "deliveryCount_few": "مرسلة إلى {{count}} جهات استلام",
+      "deliveryCount_many": "مرسلة إلى {{count}} جهة استلام",
+      "deliveryCount_other": "مرسلة إلى {{count}} جهة استلام",
       "selected_zero": "تم تحديد {{count}}",
       "selected_one": "تم تحديد {{count}}",
       "selected_two": "تم تحديد {{count}}",
@@ -3043,7 +3048,7 @@
     "distribute": {
       "title": "توزيع",
       "forDepartment": "توزيع على {{name}}",
-      "forInbox": "وارد لـ{{name}}",
+      "forInbox": "واردة إلى {{name}}",
       "audience": "من يستلم المعاملة؟",
       "modes": {
         "all": "جميع أعضاء القسم",
@@ -3058,7 +3063,7 @@
       "result": "تم الإرسال: {{sent}} · تم التخطي: {{skipped}}",
       "keptSuccess": "تم الاحتفاظ بالمعاملة لديك.",
       "keptBy": "احتُفظ بها لدى {{name}}",
-      "progress": "اطّلع الرؤساء {{read}}/{{total}} · وصلت إلى {{reached}} عضوًا · أُنجزت {{done}}",
+      "progress": "اطّلع الرئيس ونوابه: {{read}}/{{total}} · الأعضاء الذين وصلتهم: {{reached}} · المنجَز: {{done}}",
       "recallBody": "يسترجع هذا الإرسال إلى القسم ويلغي وصول كل من وزّعها عليه رئيس القسم، بما في ذلك الأقسام الفرعية. تبقى الإرسالات المستقلة."
     },
     "inbox": {
@@ -3856,6 +3861,7 @@
         "restrictedAudience": "تمت المشاركة مع: {{audience}}.",
         "departmentAudience": "قسم {{name}}",
         "legacyDepartmentName": "اسم القسم السابق: {{name}}",
+        "legacyDepartmentAudience": "{{name}} (اسم قسم سابق)",
         "removeLegacyDepartment": "إزالة اسم القسم السابق: {{name}}",
         "bookVisibility": "لا يرى كل شخص إلا الكتب المسموح له بفتحها.",
         "createdBy": "أنشأه {{name}}",

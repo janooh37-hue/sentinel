@@ -25,7 +25,7 @@ export function BookFolderHeader({ folder }: { folder: BookFolderRead }): React.
   })
   const departments = folder.shared_departments.map((department) => t(`${KEY}.departmentAudience`, { name: bidi(departmentName(department, i18n.language)) }))
   const legacyDepartments = folder.legacy_departments.map((department) => departmentsUsable
-    ? t(`${KEY}.legacyDepartmentName`, { name: bidi(department) })
+    ? t(`${KEY}.legacyDepartmentAudience`, { name: bidi(department) })
     : t(`${KEY}.departmentAudience`, { name: bidi(department) }))
   const audience = [...people.map((person) => bidi(person.short)), ...departments, ...legacyDepartments]
   const separator = isAr ? '، ' : ', '

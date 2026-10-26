@@ -200,6 +200,7 @@ export function DepartmentRegister({ go }: { go: (next: Partial<OrgRoute>) => vo
               <span className="sr-only">{t('orgDepartments.register.search')}</span>
               <input
                 type="search"
+                dir="auto"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={t('orgDepartments.register.search')}

@@ -40,6 +40,7 @@ export function PersonSearch({ people, label, placeholder, onPick, meta, disable
         <input
           id={`${id}-q`}
           type="search"
+          dir="auto"
           value={query}
           autoFocus={autoFocus}
           onChange={(event) => setQuery(event.target.value)}

@@ -117,7 +117,7 @@ describe('Books routing desk', () => {
     expect(header).toHaveTextContent('Team')
     expect(header).toHaveTextContent('Books: 2')
     expect(header).toHaveTextContent(/Shared with:.*Aisha.*Operations.*department/)
-    await waitFor(() => expect(header).toHaveTextContent(/Previous department name:.*Former Operations/))
+    await waitFor(() => expect(header).toHaveTextContent(/Former Operations.*\(previous department name\)/))
     expect(header).toHaveTextContent('Each person sees only the books they are allowed to open.')
     expect(header).toHaveTextContent(/Created by.*Khalid/)
     expect(within(header).getByRole('button', { name: 'Share' })).toBeInTheDocument()
@@ -462,7 +462,7 @@ describe('Books routing desk (Arabic)', () => {
     mount('/ledger?tab=books&folder=3')
     const header = (await screen.findByRole('heading', { name: 'شؤون الموظفين' })).closest('header')!
     expect(header).toHaveTextContent(/تمت المشاركة مع:.*عائشة.*قسم.*العمليات/)
-    await waitFor(() => expect(header).toHaveTextContent(/اسم القسم السابق:.*قسم سابق/))
+    await waitFor(() => expect(header).toHaveTextContent(/قسم سابق.*\(اسم قسم سابق\)/))
     expect(await screen.findByRole('button', { name: /GS-7/ })).toHaveTextContent('أضافه \u2068عائشة\u2069 · 15/10/2026')
     await userEvent.click(screen.getByRole('button', { name: 'مشاركة' }))
     const dialog = await screen.findByRole('dialog', { name: 'مشاركة مجلد الفريق' })

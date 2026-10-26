@@ -333,6 +333,7 @@ export function DepartmentPeopleDialog({ department, role, onClose }: {
               <input
                 id={`${id}-q`}
                 type="search"
+                dir="auto"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={t('orgDepartments.grants.search')}
