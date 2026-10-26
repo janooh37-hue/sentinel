@@ -55,6 +55,8 @@
     "passwordTooShort": "Password must be at least 8 characters.",
     "emailRequired": "Email is required.",
     "errDisabled": "This account is disabled. Contact your administrator.",
+    "errRejected": "Your access request was declined. Contact IT.",
+    "errLocked": "This account is locked. Contact IT to unlock it.",
     "passwordSetup": {
       "title": "Choose your password",
       "description": "Replace your temporary password before using the app.",
@@ -3656,6 +3658,15 @@
   "errors": {
     "generic": "Something went wrong",
     "network": "Could not reach the server",
+    "forbidden": {
+      "docxLockedAfterSigning": "This document is signed, so its editable Word file is locked.",
+      "secretClearance": "Secret clearance is required for Secret records.",
+      "recordType": "You don't have access to this record type.",
+      "includedPapersCreatorOnly": "Only the person who created this record can manage its included papers.",
+      "wordSessionNotOwner": "This Word session belongs to another user.",
+      "signerMismatch": "The signer must be the employee linked to your account.",
+      "stagedImportOwner": "This staged import belongs to another user."
+    },
     "boundary": {
       "bodyLead": "This screen lost its connection.",
       "bodyReassure": "Nothing you did is lost",

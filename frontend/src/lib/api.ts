@@ -1131,15 +1131,32 @@ export class ApiError extends Error {
 
 const ARABIC_LETTER = /(?=\p{L})\p{Script=Arabic}/u
 
-/** Localized user-facing error text. A 403 always uses the shared permission
- * message; other server details pass through unless an Arabic UI receives text
- * without Arabic letters. Network TypeErrors and unexpected thrown values use
- * localized network and generic messages respectively. Callers with translated
- * code-specific refusals check `err.code` before calling this. */
+/** Refusals whose code says more than "no permission": translated text that
+ * replaces the server detail, so they stay specific in both languages. */
+const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
+  ACCOUNT_PENDING: 'auth.errPending',
+  ACCOUNT_REJECTED: 'auth.errRejected',
+  ACCOUNT_DISABLED: 'auth.errDisabled',
+  ACCOUNT_LOCKED: 'auth.errLocked',
+  DOCX_LOCKED_AFTER_SIGNING: 'errors.forbidden.docxLockedAfterSigning',
+  SECRET_CLEARANCE_REQUIRED: 'errors.forbidden.secretClearance',
+  RECORD_TYPE_FORBIDDEN: 'errors.forbidden.recordType',
+  INCLUDED_PAPERS_CREATOR_ONLY: 'errors.forbidden.includedPapersCreatorOnly',
+  WORD_SESSION_NOT_OWNER: 'errors.forbidden.wordSessionNotOwner',
+  INMATE_REPORTER_IDENTITY_MISMATCH: 'errors.forbidden.signerMismatch',
+  APPROVED_IMPORT_TOKEN_FORBIDDEN: 'errors.forbidden.stagedImportOwner',
+}
+
+/** Localized user-facing error text. A code in `CODE_MESSAGE_KEYS` uses its
+ * translated message; any other 403 uses the shared permission message; other
+ * server details pass through unless an Arabic UI receives text without Arabic
+ * letters. Network TypeErrors and unexpected thrown values use localized
+ * network and generic messages respectively. */
 export function apiErrorMessage(err: unknown): string {
   if (!(err instanceof ApiError)) {
     return i18n.t(err instanceof TypeError ? 'errors.network' : 'errors.generic')
   }
+  if (Object.hasOwn(CODE_MESSAGE_KEYS, err.code)) return i18n.t(CODE_MESSAGE_KEYS[err.code])
   if (err.status === 403) return i18n.t('common.forbiddenError')
   // ponytail: Arabic users lose specific server detail until err.code maps to locale keys.
   if (i18n.language.startsWith('ar') && !ARABIC_LETTER.test(err.message)) {
