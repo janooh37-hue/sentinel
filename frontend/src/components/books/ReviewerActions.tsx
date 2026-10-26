@@ -11,7 +11,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { Check, FileText } from 'lucide-react'
 import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -31,11 +31,11 @@ export function ReviewerActions({ bookId, versionId, onDone }: Props): React.JSX
   const mut = useMutation({
     mutationFn: (v: { decision: 'reviewed' | 'changes_requested'; note?: string }) =>
       api.reviewBook(bookId, versionId, v.decision, v.note),
-    onSuccess: () => {
+    onSuccess: (book) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['books', 'detail', bookId] })
       void qc.invalidateQueries({ queryKey: ['books', 'awaiting'] })
-      toast.success(t('books.reviewers.recorded'))
+      toast.success(t('books.reviewers.recorded'), { reference: book.ref_number })
       setMode(null)
       setNote('')
       onDone?.()

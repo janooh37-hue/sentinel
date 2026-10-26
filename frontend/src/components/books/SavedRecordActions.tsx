@@ -3,12 +3,12 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ExternalLink, Forward, Printer, Send } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { SubmitForApprovalDialog } from './SubmitForApprovalDialog'
 import { ConfidentialityChip } from './ConfidentialityChip'
 import { SendRecordDialog } from './SendRecordDialog'
-import { api, ApiError } from '@/lib/api'
+import { api } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { canSendForApproval, inmateReporterActionFor } from './book-detail-drawer-utils'
 import { useInmateReportSubmit } from './useInmateReportSubmit'
@@ -61,19 +61,7 @@ export function SavedRecordActions({
     : state === 'none' && canSendForApproval(state, { canSubmitBook: has('books.submit') }))
   const reporterSubmitMutation = useInmateReportSubmit({
     onSuccess: () => toast.success(t('books.approval.submitted')),
-    onError: (err, message) => {
-      if (err instanceof ApiError && err.code === 'INMATE_REPORT_INCOMPLETE') {
-        toast.error(message, {
-          action: {
-            label: t('books.pane.continueDraft'),
-            onClick: () =>
-              navigate(`${serviceHref('Inmate Conduct Violations')}?revise=${bookId}`),
-          },
-        })
-      } else {
-        toast.error(message)
-      }
-    },
+    onRevise: (id) => navigate(`${serviceHref('Inmate Conduct Violations')}?revise=${id}`),
   })
   const print = () => {
     const opened = window.open(`/books/${bookId}?print=1`, '_blank')

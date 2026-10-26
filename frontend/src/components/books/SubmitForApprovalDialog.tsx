@@ -22,7 +22,7 @@ import * as RadixDialog from '@radix-ui/react-dialog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { CheckCircle2, X } from 'lucide-react'
 
 import { api, ApiError, type ApproverOptionRead, apiErrorMessage } from '@/lib/api'
@@ -129,14 +129,15 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
         approver_user_id: Number.parseInt(selectedUserId, 10),
         reviewer_user_ids: reviewerIds,
       }),
-    onSuccess: () => {
+    onSuccess: (submitted) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['books', 'awaiting'] })
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
       // Rare milestone — mark it with a one-shot settling check (frequency
       // gate; reduced-motion guarded by .anim-check-settle in index.css).
       toast.success(t(isReport ? 'books.approval.sentForReview' : 'books.approval.submitted'), {
-        icon: <CheckCircle2 className="anim-check-settle h-4 w-4 text-success" strokeWidth={2} />,
+        reference: submitted.ref_number,
+        icon: <CheckCircle2 className="anim-check-settle h-4 w-4" strokeWidth={2} />,
       })
       onClose()
     },

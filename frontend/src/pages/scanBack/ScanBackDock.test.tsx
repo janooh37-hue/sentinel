@@ -35,12 +35,16 @@ describe('ScanBackDock', () => {
     await i18n.changeLanguage('en')
   })
 
-  it('starts collapsed and expands on click', async () => {
+  it.each(['en', 'ar'])('starts collapsed and expands on click in %s', async (lang) => {
+    await i18n.changeLanguage(lang)
     renderDock()
     expect(screen.queryByText('GS-0410')).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /to scan back/i }))
+    const toggle = screen.getByRole('button', { name: /to scan back|بانتظار المسح/i })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText('GS-0410')).toBeInTheDocument()
-    expect(screen.getByText("Don't know which record?")).toBeInTheDocument()
+    expect(screen.getByText(i18n.t('scanBack.autoDropTitle'))).toBeInTheDocument()
   })
 
   it('remembers the expanded state', async () => {

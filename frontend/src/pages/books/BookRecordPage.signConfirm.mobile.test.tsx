@@ -53,7 +53,7 @@ vi.mock('@/lib/useCapabilities', () => ({
 // which switches the decide surface from the header bar to the inline panel
 // + fixed dock.
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => true }))
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: Object.assign(vi.fn(), {
     success: vi.fn(),
     error: vi.fn(),

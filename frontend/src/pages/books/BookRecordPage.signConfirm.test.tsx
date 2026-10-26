@@ -58,7 +58,7 @@ vi.mock('@/lib/useCapabilities', () => ({
 }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
 const toastError = vi.fn()
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: Object.assign(vi.fn(), {
     success: vi.fn(),
     error: (...args: unknown[]) => toastError(...args),

@@ -32,7 +32,7 @@ vi.mock('react-i18next', () => ({
   }),
 }))
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: vi.fn() }))
 const mockUseCapabilities = vi.mocked(useCapabilities)

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Download, FileSpreadsheet } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,16 +36,17 @@ export function ImportUploadStep({
   const { t } = useTranslation()
   const [downloadError, setDownloadError] = useState<string | null>(null)
   const download = useMutation({
+    onMutate: () => toast.loading(t('vehicles.import.downloadingTemplate')),
     mutationFn: () => api.downloadVehicleImportTemplate(),
-    onSuccess: (blob) => {
+    onSuccess: (blob, _vars, toastId) => {
       saveTemplate(blob)
       setDownloadError(null)
-      toast.success(t('vehicles.import.templateDownloaded'))
+      toast.success(t('vehicles.import.templateDownloaded'), { id: toastId })
     },
-    onError: (err) => {
+    onError: (err, _vars, toastId) => {
       const message = vehicleErrorMessage(err, t)
       setDownloadError(message)
-      toast.error(message)
+      toast.error(message, { id: toastId })
     },
   })
 

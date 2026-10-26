@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import SignatureCanvas from 'react-signature-canvas'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { Loader2, FileSignature } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 

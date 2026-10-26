@@ -8,7 +8,7 @@
 import { useCallback, useRef, useState } from 'react'
 import SignatureCanvas from 'react-signature-canvas'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { Button } from '@/components/ui/button'
 import { SIGNATURE_PEN } from '@/components/signature/penConfig'

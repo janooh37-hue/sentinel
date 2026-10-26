@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, type PermitRead } from '@/lib/api'
 import { PermitFormDialog } from './PermitFormDialog'
@@ -12,7 +12,7 @@ vi.mock('@/lib/useCapabilities', () => ({
 }))
 
 // Silence toast in tests
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@/lib/api')>()
@@ -436,7 +436,7 @@ describe('PermitFormDialog', () => {
 
   it('warns (and still resolves) when the permit-paper scan fails to attach; create does not toast saved', async () => {
     vi.mocked(toast.success).mockClear()
-    vi.spyOn(api, 'createPermit').mockResolvedValue({ id: 7, people: [], vehicles: [] } as never)
+    vi.spyOn(api, 'createPermit').mockResolvedValue({ id: 7, permit_no: 'P-7', people: [], vehicles: [] } as never)
     vi.spyOn(api, 'uploadPermitDocument').mockRejectedValue(new Error('boom'))
     const onSaved = vi.fn()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -455,6 +455,6 @@ describe('PermitFormDialog', () => {
     await userEvent.click(screen.getByRole('button', { name: /issue permit/i }))
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ id: 7 })))
-    expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining('1 scan could not be attached'))
+    expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining('1 scan could not be attached'), { reference: 'P-7' })
     expect(toast.success).not.toHaveBeenCalled()
   })

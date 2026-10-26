@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { PackagePlus, Plus, X } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, type ItemPermitRead } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -287,8 +287,9 @@ export function ItemPermitsTab(): React.JSX.Element {
             setHighlightedId(created.id)
             toast.success(
               created.book_ref
-                ? t('permits.items.createdToast', { ref: created.book_ref })
+                ? t('permits.items.createdToast')
                 : t('permits.items.createdToastNoRef'),
+              { reference: created.book_ref || undefined },
             )
             replaceSearch(['itemAction', 'iq', 'istatus'], { itemPreview: String(created.id) }, false)
           } else if (actionOverlay.value === 'new') {

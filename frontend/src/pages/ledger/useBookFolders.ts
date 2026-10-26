@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { api, ApiError } from '@/lib/api'
 
 const ERROR_KEYS: Record<string, string | undefined> = {

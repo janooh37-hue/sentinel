@@ -30,7 +30,7 @@ vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ capabilities: new Set<string>(), isLoading: false, has: hasCapability }),
 }))
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { AbsencesTab } from './AbsencesTab'
 

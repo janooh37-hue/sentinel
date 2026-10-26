@@ -11,9 +11,9 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { ScanInboxItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { ScanPreview } from './ScanPreview'
@@ -49,14 +49,22 @@ export function ScanMatchDialog({
   })
 
   const route = useMutation({
-    mutationFn: (body: { employee_id?: string; book_id?: number }) =>
-      api.routeScanItem(item.id, body),
-    onSuccess: () => {
+    mutationFn: ({ employee_id, book_id }: {
+      employee_id?: string; book_id?: number; reference?: string; description?: string
+    }) => api.routeScanItem(item.id, { employee_id, book_id }),
+    onMutate: () => toast.loading(t('common.saving')),
+    onSuccess: (_data, vars, id) => {
       void qc.invalidateQueries({ queryKey: ['scan-inbox'] })
-      toast.success(t('scanInbox.toast.filed'))
+      toast.success(t('scanInbox.toast.filed'), {
+        id,
+        reference: vars.reference,
+        description: vars.description,
+      })
       onClose()
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('scanInbox.toast.error')),
+    onError: (e, vars, id) => toast.error(apiErrorMessage(e), {
+      id, reference: vars.reference, description: vars.description,
+    }),
   })
 
   const bookRows = books.data?.items ?? []
@@ -107,7 +115,9 @@ export function ScanMatchDialog({
                     key={`e-${e.id}`}
                     type="button"
                     disabled={route.isPending}
-                    onClick={() => route.mutate({ employee_id: e.id })}
+                    onClick={() => route.mutate({
+                      employee_id: e.id, description: pickEmployeeName(e, i18n.language),
+                    })}
                     className="flex w-full items-center gap-2.5 px-3 py-1.5 text-start text-sm hover:bg-surface-tinted"
                   >
                     <span className="flex-none rounded-sm bg-primary-soft px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary">
@@ -130,7 +140,7 @@ export function ScanMatchDialog({
                     key={`b-${b.id}`}
                     type="button"
                     disabled={route.isPending}
-                    onClick={() => route.mutate({ book_id: b.id })}
+                    onClick={() => route.mutate({ book_id: b.id, reference: b.ref_number })}
                     className="flex w-full items-center gap-2.5 px-3 py-1.5 text-start text-sm hover:bg-surface-tinted"
                   >
                     <span className="flex-none rounded-sm bg-accent-soft px-1.5 py-0.5 font-mono text-[10px] font-bold text-accent">

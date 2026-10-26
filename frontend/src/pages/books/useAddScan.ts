@@ -7,9 +7,10 @@
  * - external / no ref           → info toast pointing at the Scan drawer
  */
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import type { ReturnedFormOut } from '@/lib/api'
@@ -30,37 +31,46 @@ export function useAddScan(currentBookId: number | null): {
   fileToCurrent: (file: File, ref: string) => Promise<void>
 } {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const qc = useQueryClient()
   const [busy, setBusy] = useState(false)
   const [otherMatch, setOtherMatch] = useState<OtherMatch | null>(null)
 
-  const attach = async (bookId: number, file: File, ref: string): Promise<void> => {
+  const attach = async (bookId: number, file: File, ref: string, toastId?: string | number): Promise<void> => {
     await api.addBookAttachment(bookId, file, false)
     await qc.invalidateQueries({ queryKey: ['books'] })
-    toast.success(t('books.pane.scanFiledHere', { ref }))
+    toast.success(t('books.pane.scanFiledHere'), { id: toastId, reference: ref })
   }
 
   const submit = async (file: File): Promise<void> => {
     if (currentBookId === null || busy) return
     setBusy(true)
     const reading = toast.loading(t('books.pane.scanReading'))
+    let reference: string | undefined
     try {
       const result = await api.postIntake(file)
-      toast.dismiss(reading)
       // TypeScript narrows result to ReturnedFormOut via the discriminant
       if (result.mode === 'returned_form') {
         const r: ReturnedFormOut = result
+        reference = r.ref_number
         if (r.book_id === currentBookId) {
-          await attach(currentBookId, file, r.ref_number)
+          await attach(currentBookId, file, r.ref_number, reading)
         } else {
           setOtherMatch({ bookId: r.book_id, ref: r.ref_number, file })
+          toast.dismiss(reading)
         }
       } else {
-        toast.info(t('books.pane.scanNoRef'))
+        toast.info(t('books.pane.scanNoRef'), {
+          id: reading,
+          duration: 8000,
+          action: {
+            label: t('books.pane.scanOpenDrawer'),
+            onClick: () => navigate('/intake'),
+          },
+        })
       }
     } catch (err) {
-      toast.dismiss(reading)
-      toast.error(apiErrorMessage(err))
+      toast.error(apiErrorMessage(err), { id: reading, reference })
     } finally {
       setBusy(false)
     }
@@ -68,10 +78,11 @@ export function useAddScan(currentBookId: number | null): {
 
   const fileToOther = async (): Promise<void> => {
     if (!otherMatch) return
+    const id = toast.loading(t('common.saving'))
     try {
-      await attach(otherMatch.bookId, otherMatch.file, otherMatch.ref)
+      await attach(otherMatch.bookId, otherMatch.file, otherMatch.ref, id)
     } catch (err) {
-      toast.error(apiErrorMessage(err))
+      toast.error(apiErrorMessage(err), { id, reference: otherMatch.ref })
     } finally {
       setOtherMatch(null)
     }
@@ -86,12 +97,13 @@ export function useAddScan(currentBookId: number | null): {
   const fileSignedCopy = async (file: File, ref: string): Promise<void> => {
     if (currentBookId === null || busy) return
     setBusy(true)
+    const id = toast.loading(t('scanBack.filing'))
     try {
       await api.addBookAttachment(currentBookId, file, true)
       await qc.invalidateQueries({ queryKey: ['books'] })
-      toast.success(t('books.pane.signedCopyFiled', { ref }))
+      toast.success(t('books.pane.signedCopyFiled'), { id, reference: ref })
     } catch (err) {
-      toast.error(apiErrorMessage(err))
+      toast.error(apiErrorMessage(err), { id, reference: ref })
     } finally {
       setBusy(false)
     }
@@ -102,10 +114,11 @@ export function useAddScan(currentBookId: number | null): {
   const fileToCurrent = async (file: File, ref: string): Promise<void> => {
     if (currentBookId === null || busy) return
     setBusy(true)
+    const id = toast.loading(t('common.saving'))
     try {
-      await attach(currentBookId, file, ref)
+      await attach(currentBookId, file, ref, id)
     } catch (err) {
-      toast.error(apiErrorMessage(err))
+      toast.error(apiErrorMessage(err), { id, reference: ref })
     } finally {
       setBusy(false)
     }

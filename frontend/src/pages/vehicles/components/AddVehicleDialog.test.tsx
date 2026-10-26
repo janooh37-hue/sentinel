@@ -16,7 +16,7 @@ import i18n from '@/lib/i18n'
 
 import { AddVehicleDialog } from './AddVehicleDialog'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 type ApiModule = { api: typeof api } & Record<string, unknown>
 

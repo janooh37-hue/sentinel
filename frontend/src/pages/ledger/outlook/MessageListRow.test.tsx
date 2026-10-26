@@ -17,7 +17,7 @@ import type { LedgerListItem } from '@/lib/api'
 import { MessageListRow } from './MessageListRow'
 import { OUTLOOK_PENDING_TAG } from './mailboxTypes'
 
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }))
 

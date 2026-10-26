@@ -7,11 +7,10 @@ import { Copy, Download, ExternalLink, Lock, Printer, Send, SquareArrowOutUpRigh
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api } from '@/lib/api'
 import type { BookRead } from '@/lib/api'
-import { bidi } from '@/lib/bidi'
 import { copyToClipboard } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 import { ChangeConfidentialityDialog } from '@/components/books/ChangeConfidentialityDialog'
@@ -108,7 +107,7 @@ export function useRecordRowMenu({
         icon: <Copy className={icon} aria-hidden />,
         onSelect: () => {
           void copyToClipboard(book.ref_number).then((ok) => {
-            if (ok) toast.success(t('books.record.copiedRef', { ref: bidi(book.ref_number) }))
+            if (ok) toast.success(t('books.record.copiedRef'), { reference: book.ref_number })
             else toast.error(t('common.copyFailed'))
           })
         },
