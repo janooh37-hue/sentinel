@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api, type CapabilityRead, type SessionUser } from '@/lib/api'
+import { api, ApiError, type CapabilityRead, type SessionUser } from '@/lib/api'
 
 import { AuthProvider } from './AuthProvider'
 import { registerPdfCachePurger } from './pdfCachePurge'
@@ -58,7 +58,7 @@ function CatalogAuthControls(): React.JSX.Element {
 describe('AuthProvider login activity', () => {
   beforeEach(() => {
     localStorage.clear()
-    vi.spyOn(api, 'authMe').mockResolvedValue(null)
+    vi.spyOn(api, 'authMe').mockRejectedValue(new ApiError(401, 'UNAUTHORIZED', 'Not signed in'))
     vi.spyOn(api, 'login').mockResolvedValue(USER)
   })
 

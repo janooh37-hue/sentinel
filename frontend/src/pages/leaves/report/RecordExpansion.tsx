@@ -85,7 +85,7 @@ export function RecordExpansion({
           setConfirmDelete(false)
           return
         }
-        onRequestClose()
+        onRequestClose?.()
       }
     }
     window.addEventListener('keydown', onKey)

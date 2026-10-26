@@ -166,10 +166,9 @@ describe('EmployeeActivitySection', () => {
     ))
     const dutyRow = screen.getByRole('link', { name: /open employee activity/i })
     expect(dutyRow).toHaveAttribute('href', '/employees/G500?tab=activity')
-    expect(dutyRow.querySelector('span[aria-hidden="true"]')).toHaveStyle({
-      background: 'var(--primary-soft)',
-      color: 'var(--primary-on-soft)',
-    })
+    const indicator = dutyRow.querySelector<HTMLElement>('span[aria-hidden="true"]')
+    expect(indicator?.style.getPropertyValue('background')).toBe('var(--primary-soft)')
+    expect(indicator?.style.getPropertyValue('color')).toBe('var(--primary-on-soft)')
   })
 
   it('filters and links status history to the employee profile', async () => {
@@ -219,7 +218,7 @@ describe('EmployeeActivitySection', () => {
   it('appends the next 25, keeps Load more full-width on phone, and hides it at total', async () => {
     const pageOne = Array.from({ length: 25 }, (_, index) => ({ ...items[0], source_id: index + 1, target_id: index + 1, title: `Document ${index + 1}` }))
     const finalItem = { ...items[0], source_id: 26, target_id: 26, title: 'Document 26' }
-    vi.mocked(api.listEmployeeActivity).mockImplementation(({ offset = 0 }) => Promise.resolve({ items: offset === 0 ? pageOne : [finalItem], total: 26, limit: 25, offset }))
+    vi.mocked(api.listEmployeeActivity).mockImplementation(({ offset = 0 } = {}) => Promise.resolve({ items: offset === 0 ? pageOne : [finalItem], total: 26, limit: 25, offset }))
     wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
     await screen.findByText('Document 1')
     const loadMore = screen.getByRole('button', { name: /load more activity/i })
@@ -279,7 +278,7 @@ describe('EmployeeActivitySection', () => {
       title: `Document ${index + 1}`,
     }))
     const finalItem = { ...items[0], source_id: 26, target_id: 26, title: 'Document 26' }
-    vi.mocked(api.listEmployeeActivity).mockImplementation(({ offset = 0 }) =>
+    vi.mocked(api.listEmployeeActivity).mockImplementation(({ offset = 0 } = {}) =>
       Promise.resolve({
         items: offset === 0 ? pageOne : [finalItem],
         total: 26,

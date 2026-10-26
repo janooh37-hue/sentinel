@@ -20,7 +20,7 @@ vi.mock('react-i18next', () => ({
         'employees.activity.dutyLocation.unassigned': 'غير محدد',
         'employees.activity.dutyLocation.historyBegins': 'يبدأ السجل من',
       },
-    })[language.value][key] ?? key,
+    } as Record<string, Record<string, string>>)[language.value]?.[key] ?? key,
   }),
 }))
 

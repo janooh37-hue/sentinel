@@ -25,7 +25,7 @@ describe('pdfDocCache', () => {
     getDocumentMock.mockImplementation(() => {
       const doc: FakeDoc = { url: `doc-${docs.length}`, destroy: vi.fn().mockResolvedValue(undefined) }
       docs.push(doc)
-      return { promise: Promise.resolve(doc) }
+      return { promise: Promise.resolve(doc), destroy: doc.destroy }
     })
     fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => 'AQ==' })
     vi.stubGlobal('fetch', fetchMock)

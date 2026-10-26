@@ -174,9 +174,9 @@ function buildTimeline(
         tone: 'blue',
       })
     }
-    const note = [...v.approval_steps].reverse().find((s) => s.note)?.note ?? null
+    const note = [...(v.approval_steps ?? [])].reverse().find((s) => s.note)?.note ?? null
     // A Report's version status stays its author's signature; the verdict lives on the step.
-    const verdict = v.approval_steps.find((s) => s.kind !== 'reviewer' && s.state !== 'pending')?.state
+    const verdict = v.approval_steps?.find((s) => s.kind !== 'reviewer' && s.state !== 'pending')?.state
     if (v.status === 'returned' || verdict === 'returned') {
       out.push({
         key: `ret-${v.id}`,
@@ -712,8 +712,10 @@ function BookRecordPageBody(): React.JSX.Element {
       // dropped: this is not a basket send, and carrying it would let a
       // successful handoff clear a same-kind basket the operator is still
       // filling. Clear only the persisted-basket identity, not the prefill.
-      const prefill = buildBasketPrefill([item], getRecentRecipientsForForm(key), draftOverrides)
-      prefill.basketKey = undefined
+      const prefill = {
+        ...buildBasketPrefill([item], getRecentRecipientsForForm(key), draftOverrides),
+        basketKey: undefined,
+      }
       navigate('/ledger?tab=email', { state: { composePrefill: prefill } })
     } catch (err) {
       toast.error(apiErrorMessage(err))

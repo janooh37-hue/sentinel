@@ -6,7 +6,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import i18n from 'i18next'
 
 import ar from '@/locales/ar.json'
-import { api, type BookRead } from '@/lib/api'
+import { api, type BookRead, type BookVersionRead } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { SavedRecordActions } from './SavedRecordActions'
@@ -127,7 +127,7 @@ describe('SavedRecordActions', () => {
 
   it('disables Print and explains when no current or imported PDF exists', async () => {
     vi.mocked(api.getBook).mockResolvedValue(
-      makeBook({ versions: [{ pdf_url: null } as BookRead['versions'][number]] }),
+      makeBook({ versions: [{ pdf_url: null } as BookVersionRead] }),
     )
     renderActions()
 
@@ -144,7 +144,7 @@ describe('SavedRecordActions', () => {
             status: 'approved',
             pdf_url: null,
             signed_pdf_url: '/signed.pdf',
-          } as BookRead['versions'][number],
+          } as BookVersionRead,
         ],
       }),
     )

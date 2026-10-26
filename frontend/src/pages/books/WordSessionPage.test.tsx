@@ -24,10 +24,15 @@ const session: WordSessionDetailRead = {
   created_at: '2026-10-12T10:00:00Z', last_put_at: null, template_name: 'نموذج.docx',
   subject: 'التصاريح الأمنية', recipient_name: 'مدير الموارد البشرية', cc: ['الإدارة'],
 }
-const book = {
-  id: 42, ref_number: session.ref_number, subject: session.subject, service_id: 'General Book',
+const book: BookRead = {
+  id: 42, ref_number: session.ref_number, subject: session.subject ?? null, service_id: 'General Book',
   created_at: session.created_at, submitted_by_name: 'SAEED ALHARBI', submitted_by_g: 'G1234', classification_code: '1/5', versions: [],
-} as BookRead
+  category_id: null, direction: null, stamp_style: null, deleted_at: null, priority: 'Normal',
+  approval_state: 'none', access_scope: 'full', confidentiality: 'general',
+  can_write: true, can_send: true, can_change_confidentiality: false, can_sign: false, can_review: false,
+  is_draft: true, is_word_book: true, doc_manager_has_signature: false, current_template_id: null,
+  included_papers_revision: 0, included_papers_fixed_page_count: 0, included_papers_total_page_count: 0,
+}
 
 function setup() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })

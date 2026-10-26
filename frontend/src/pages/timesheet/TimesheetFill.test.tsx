@@ -133,7 +133,7 @@ beforeEach(() => {
 describe('drag to fill, through the page', () => {
   it('commits one write per swept cell and confirms the run once', async () => {
     setTimesheetCell.mockImplementation((_p, body) =>
-      Promise.resolve(accept(body.employee_id, body.day, body.code)),
+      Promise.resolve(accept(body.employee_id, body.day, body.code ?? null)),
     )
     renderPage()
     await screen.findByRole('table')
@@ -164,7 +164,7 @@ describe('drag to fill, through the page', () => {
     // would name a span that only half the writes belong to.
     month = { ...MONTH, rows: [ROW, { ...ROW, employee_id: 'G1002', row_no: 2 }] }
     setTimesheetCell.mockImplementation((_p, body) =>
-      Promise.resolve(accept(body.employee_id, body.day, body.code)),
+      Promise.resolve(accept(body.employee_id, body.day, body.code ?? null)),
     )
     renderPage()
     await screen.findByRole('table')
@@ -190,7 +190,7 @@ describe('drag to fill, through the page', () => {
     setTimesheetCell.mockImplementation((_p, body) =>
       body.day <= 4
         ? Promise.reject(new Error(OFF_ROSTER))
-        : Promise.resolve(accept(body.employee_id, body.day, body.code)),
+        : Promise.resolve(accept(body.employee_id, body.day, body.code ?? null)),
     )
     renderPage()
     await screen.findByRole('table')

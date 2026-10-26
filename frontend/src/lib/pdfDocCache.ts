@@ -9,9 +9,10 @@
  *   … render lease.doc …
  *   lease.release()                        // on cleanup / unmount
  *
- * A document is destroyed when it is evicted (more than `PDF_DOC_CACHE_SIZE`
- * loaded entries, least-recently-used idle one first) — never while a lease is
- * still held. Idle entries older than `IDLE_TTL_MS` are dropped instead of
+ * A document's loading task is destroyed when it is evicted (more than
+ * `PDF_DOC_CACHE_SIZE` loaded entries, least-recently-used idle one first) —
+ * never while a lease is still held. This releases its worker-side resources.
+ * Idle entries older than `IDLE_TTL_MS` are dropped instead of
  * reused. A paper whose bytes change gets a new URL (see `recordPapers`), and
  * `invalidatePdfDocs` / `purgePdfCaches` forget entries after a mutation, so
  * replaced files are never served stale. A failed load is never cached, so a
@@ -40,6 +41,7 @@ interface Entry {
   controller: AbortController
   promise: Promise<PDFDocumentProxy>
   doc: PDFDocumentProxy | null
+  loadingTask: pdfjsLib.PDFDocumentLoadingTask | null
   releasedAt: number
 }
 
@@ -57,7 +59,7 @@ function destroyQuietly(target: { destroy: () => Promise<void> }): void {
 
 function drop(entry: Entry): void {
   if (entries.get(entry.key) === entry) entries.delete(entry.key)
-  if (entry.doc) destroyQuietly(entry.doc)
+  if (entry.doc && entry.loadingTask) destroyQuietly(entry.loadingTask)
   else entry.controller.abort()
 }
 
@@ -118,6 +120,7 @@ export function leasePdfDoc(
       refs: 0,
       controller,
       doc: null,
+      loadingTask: null,
       releasedAt: Date.now(),
       promise: Promise.resolve(null as unknown as PDFDocumentProxy),
     }
@@ -125,6 +128,7 @@ export function leasePdfDoc(
       .then((data) => {
         if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError')
         const task = pdfjsLib.getDocument({ data, disableFontFace: true })
+        created.loadingTask = task
         // An abort while pdf.js is still parsing must stop the worker-side load too.
         controller.signal.addEventListener('abort', () => destroyQuietly(task), { once: true })
         return task.promise
@@ -132,7 +136,6 @@ export function leasePdfDoc(
       .then((doc) => {
         if (controller.signal.aborted) {
           // Every lease was released while loading — nothing wants it.
-          destroyQuietly(doc)
           throw new DOMException('Aborted', 'AbortError')
         }
         created.doc = doc
@@ -171,7 +174,7 @@ export function leasePdfDoc(
       return
     }
     // Forgotten by `invalidatePdfDocs` while leased: destroy now, nothing can reuse it.
-    if (!cached) destroyQuietly(held.doc)
+    if (!cached && held.loadingTask) destroyQuietly(held.loadingTask)
     else trim()
   }
 

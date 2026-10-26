@@ -43,7 +43,6 @@ function PdfPage({ file }: { file: File }): React.JSX.Element {
     let cancelled = false
     let renderTask: { cancel: () => void } | null = null
     let loadingTask: { destroy: () => Promise<void> } | null = null
-    let pdfDocument: { destroy: () => Promise<void> } | null = null
 
     void (async () => {
       try {
@@ -52,7 +51,6 @@ function PdfPage({ file }: { file: File }): React.JSX.Element {
         const task = pdfjsLib.getDocument({ data, disableFontFace: true })
         loadingTask = task
         const pdf = await task.promise
-        pdfDocument = pdf
         const page = await pdf.getPage(1)
         const canvas = canvasRef.current
         const context = canvas?.getContext('2d')
@@ -79,7 +77,6 @@ function PdfPage({ file }: { file: File }): React.JSX.Element {
     return () => {
       cancelled = true
       renderTask?.cancel()
-      void pdfDocument?.destroy()
       void loadingTask?.destroy()
     }
   }, [file])

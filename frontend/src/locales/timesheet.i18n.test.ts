@@ -383,6 +383,7 @@ describe('timesheet i18n parity', () => {
     const RANGE = /^\u2066(?:\d+|\{\{\w+\}\})–(?:\d+|\{\{\w+\}\})\u2069$/
     for (const key of ranged) {
       const value = get(ar as unknown as Rec, key)
+      if (value === undefined) throw new Error(`Missing translation: ${key}`)
       // Balanced, not merely present: a stray opener leaks the isolation into
       // the rest of the sentence, and a stray closer does nothing at all.
       const opens = value.split(LRI).length - 1
