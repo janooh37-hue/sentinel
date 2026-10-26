@@ -166,10 +166,10 @@ describe('EmployeeActivitySection', () => {
     ))
     const dutyRow = screen.getByRole('link', { name: /open employee activity/i })
     expect(dutyRow).toHaveAttribute('href', '/employees/G500?tab=activity')
-    expect(dutyRow.querySelector('span[aria-hidden="true"]')).toHaveStyle({
-      background: 'var(--primary-soft)',
-      color: 'var(--primary-on-soft)',
-    })
+    // jsdom leaves var()-based shorthands out of computed style, so read the inline style.
+    const badge = dutyRow.querySelector<HTMLElement>('span[aria-hidden="true"]')
+    expect(badge?.style.background).toBe('var(--primary-soft)')
+    expect(badge?.style.color).toBe('var(--primary-on-soft)')
   })
 
   it('filters and links status history to the employee profile', async () => {
