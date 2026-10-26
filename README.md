@@ -82,6 +82,23 @@ and HR pages keep their existing permission gates. Announcement recipient and
 WhatsApp-mention searches still require `employees.view` because they use
 contact numbers rather than only employee identities.
 
+## Authorization lifecycle
+
+Temporary capability grants stop at expiry, without waiting for the cleanup
+sweep. When the capability belongs to the user's current role defaults (or is
+a dynamic capability), expiry restores a deny; an additional non-default grant
+simply expires. Single and bulk permission updates follow the same rule, and
+role changes during the grant window are evaluated against the current role.
+
+Evaluation-queue listing and retry require organization workforce scope as
+well as `workforce.integration.manage`; only terminally failed rows can be retried.
+
+Notification streams revalidate their originating session and current account
+eligibility on every polling tick before accessing the per-user counts cache.
+Revoking that session, expiry, disabling the account, requiring password setup,
+or changing to a role barred from notifications ends the stream, even if another
+session for that user remains valid.
+
 ## Record category permissions
 
 The Permissions page lists the 15 General Book classifications, then the legacy
