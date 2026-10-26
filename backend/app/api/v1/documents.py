@@ -79,6 +79,7 @@ from app.services.job_registry import (
 log = logging.getLogger(__name__)
 
 
+
 def _should_autosend(
     *,
     commit: bool,
@@ -365,20 +366,11 @@ def _run_generation(
 def generate_document(
     payload: DocumentGenerateRequest,
     background_tasks: BackgroundTasks,
-    user: Annotated[User, Depends(require_capability("documents.generate"))],
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-    _viewer: Annotated[User, Depends(require_capability("books.view"))],
 ) -> DocumentGenerateResponse:
-    effective_service = document_service.effective_document_service(payload.template_id)
-    category_id = document_service.record_category_for_template(payload.template_id)
-    book_service.require_record_type_access(
-        db,
-        user,
-        category_id=category_id,
-        service_id=effective_service,
-        classification_code=(
-            payload.classification_code if effective_service == "General Book" else None
-        ),
+    document_service.authorize_interactive_generation(
+        db, user, payload.template_id, classification_code=payload.classification_code
     )
     revise_book: Book | None = None
     if payload.revise_of_book_id is not None:

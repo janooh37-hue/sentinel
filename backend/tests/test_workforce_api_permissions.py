@@ -232,7 +232,7 @@ def test_department_manager_retains_capability_global_metadata_reads(
     assert detail.status_code == 200, detail.text
 
 
-def test_department_manager_retains_capability_global_integration_actions(
+def test_department_manager_integration_actions_keep_queue_retry_organization_scoped(
     api_db: Session, monkeypatch
 ) -> None:
     fixture = build_attendance_day(
@@ -270,17 +270,50 @@ def test_department_manager_retains_capability_global_integration_actions(
     monkeypatch.setattr(attendance_sync_service, "sync_people", lambda *args, **kwargs: 2)
     monkeypatch.setattr(attendance_sync_service, "sync_punches", lambda *args, **kwargs: 3)
     client = _client(api_db, manager)
+    api_db.refresh(failed)
+    queue_state = {column.name: getattr(failed, column.name) for column in failed.__table__.columns}
 
     tested = client.post("/api/v1/workforce/integration/test")
     synced = client.post("/api/v1/workforce/integration/sync")
+    listed = client.get("/api/v1/workforce/integration/evaluation-queue")
     retried = client.post(f"/api/v1/workforce/integration/evaluation-queue/{failed.id}/retry")
 
     assert tested.status_code == 200, tested.text
     assert tested.json() == {"status": "ok", "summary": "Synthetic provider"}
     assert synced.status_code == 202, synced.text
     assert synced.json() == {"imported_people": 2, "imported_punches": 3}
+    assert listed.status_code == 403, listed.text
+    assert retried.status_code == 403, retried.text
+    api_db.expire_all()
+    assert {
+        column.name: getattr(failed, column.name) for column in failed.__table__.columns
+    } == queue_state
+
+    organization_manager = _user(api_db, email="organization-integration@test.ae")
+    perm_service.set_user_override(
+        api_db, organization_manager.id, "workforce.integration.manage", "grant"
+    )
+    _scope(api_db, organization_manager, kind="organization")
+    authorized = _client(api_db, organization_manager)
+    assert authorized.get("/api/v1/workforce/integration/evaluation-queue").status_code == 200
+    retried = authorized.post(f"/api/v1/workforce/integration/evaluation-queue/{failed.id}/retry")
     assert retried.status_code == 200, retried.text
     assert retried.json()["id"] == failed.id
+    api_db.expire_all()
+    assert failed.failed_at is None
+    assert failed.attempts == 0
+    assert failed.last_error_code is None
+    retried_state = {
+        column.name: getattr(failed, column.name) for column in failed.__table__.columns
+    }
+    nonterminal = authorized.post(
+        f"/api/v1/workforce/integration/evaluation-queue/{failed.id}/retry"
+    )
+    assert nonterminal.status_code == 422, nonterminal.text
+    api_db.expire_all()
+    assert {
+        column.name: getattr(failed, column.name) for column in failed.__table__.columns
+    } == retried_state
 
 
 def test_double_shift_attendance_responses_publish_exact_case_ids(api_db: Session) -> None:

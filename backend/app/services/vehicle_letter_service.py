@@ -99,6 +99,7 @@ def generate_fines_letter(
             vehicle_id=vehicle_id,
             fine_ids=sorted(missing_ids),
         )
+    document_service.authorize_interactive_generation(db, user, "Vehicle Fines")
 
     selected.sort(key=lambda fine: (fine.date, fine.id))
     lines = [
@@ -165,6 +166,7 @@ def generate_accident_letter(
             vehicle_id=vehicle_id,
             accident_id=accident_id,
         )
+    document_service.authorize_interactive_generation(db, user, "Vehicle Accident Report")
 
     if accident.letter_book_id is not None:
         return _existing_accident_letter(db, accident.letter_book_id)
@@ -223,6 +225,9 @@ def generate_odometer_form(
     user: User,
 ) -> LetterResult:
     """File the monthly fleet mileage and maintenance register as a GS book."""
+    document_service.authorize_interactive_generation(
+        db, user, "Vehicle Mileage Log", classification_code="11/1"
+    )
     report = vehicle_service.odometer_month(db, month, vehicle_ids=vehicle_ids)
     if not report.rows:
         raise ValidationFailedError(
@@ -267,6 +272,9 @@ def create_maintenance_request(
 ) -> VehicleMaintenanceRequestResult:
     """Generate and link a contractor book in the request's single transaction."""
     vehicle = vehicle_service.require_active_vehicle(db, vehicle_id)
+    document_service.authorize_interactive_generation(
+        db, user, "General Book", classification_code="11/1"
+    )
     contractor_id = settings_service.get_vehicle_maintenance_contractor_id(db)
     contractor_name = (
         recipient_service.resolve_name(db, contractor_id) if contractor_id is not None else None

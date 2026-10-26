@@ -37,12 +37,14 @@ const DIRECTION_META: Record<
 
 interface LedgerThreadProps {
   entryId: number
+  scope?: 'mine' | 'all'
   entry: LedgerEntryRead
   onOpenEntry?: (id: number) => void
 }
 
 export function LedgerThread({
   entryId,
+  scope,
   entry,
   onOpenEntry,
 }: LedgerThreadProps): React.JSX.Element | null {
@@ -52,8 +54,8 @@ export function LedgerThread({
   const [threadExpanded, setThreadExpanded] = useState(false)
 
   const threadQuery = useQuery({
-    queryKey: ['ledger-thread', entryId],
-    queryFn: () => api.listLedgerThread(entryId),
+    queryKey: ['ledger-thread', entryId, scope],
+    queryFn: () => api.listLedgerThread(entryId, 50, scope),
     enabled: isEmail,
   })
   const threadItems: LedgerListItem[] = useMemo(

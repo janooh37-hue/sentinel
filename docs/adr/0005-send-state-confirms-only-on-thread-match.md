@@ -16,6 +16,14 @@ the Scan Inbox as `awaiting_confirmation` for a person to approve, the same
 bar a Scan-back match already applies to a reference match against the wrong
 Paper date.
 
+The parent must be a live, non-deleted outgoing/internal email owned by the
+receiving mailbox's owner. A matching Message-ID in another owner's mailbox,
+legacy null-owner correspondence, or deleted/non-email correspondence is not
+authority to confirm or file against that Record. Incoming reconciliation
+checks the account/entry owner before changing `send_state`; direct reply
+filing reuses the same parent predicate and only files queued attachments
+belonging to that entry's owner.
+
 ## Considered options
 
 - Reuse the existing subject/ref-number match and auto-confirm on it: cheaper,

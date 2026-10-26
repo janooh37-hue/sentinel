@@ -149,6 +149,33 @@ def effective_document_service(template_id: str) -> str:
     return resolved if resolved in SERVICE_IDS else OTHER_SERVICE_ID
 
 
+def authorize_interactive_generation(
+    db: Session,
+    user: User,
+    template_id: str,
+    *,
+    classification_code: str | None = None,
+) -> None:
+    """Authorize interactive publication before rendering or allocating references."""
+    from app.services import book_service, perm_service
+
+    for capability in ("documents.generate", "books.view"):
+        if not perm_service.has_capability(db, user, capability):
+            raise AppError(
+                "FORBIDDEN",
+                f"Missing capability: {capability}",
+                http_status=403,
+                details={"capability": capability},
+            )
+    service_id = effective_document_service(template_id)
+    book_service.require_record_type_access(
+        db,
+        user,
+        category_id=record_category_for_template(template_id),
+        service_id=service_id,
+        classification_code=classification_code if service_id == "General Book" else None,
+    )
+
 #: Inmate Conduct Violations — the fixed "إجراءات المشرف" bullets, in the order
 #: they print. Key = the _fields.json checkbox key. The Arabic copy lives here
 #: (not in the docx) so the template stays a layout and the wording has one home.

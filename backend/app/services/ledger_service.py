@@ -491,16 +491,12 @@ def get_entry(
             id=entry_id,
         )
     if owner_user_id is not None and (
-        (
-            row.channel == "email"
-            and DRAFT_TAG in (row.tags or [])
-            and row.owner_user_id != owner_user_id
-        )
+        (row.channel == "email" and row.owner_user_id != owner_user_id)
         or not _related_book_visible_to(db, row, owner_user_id)
     ):
-        # Shared mailbox: synced/sent email opens for any signed-in user; only a
-        # cross-owner DRAFT is a 404 (don't leak existence), not a 403. A row
-        # about a Record the caller cannot open is a 404 for the same reason.
+        # Mailboxes are private, including drafts and legacy null-owner mail.
+        # Hide foreign email and inaccessible linked Records with the same 404
+        # so neither lookup discloses that the entry exists.
         raise NotFoundError(
             "LEDGER_ENTRY_NOT_FOUND",
             f"Ledger entry {entry_id} does not exist",
