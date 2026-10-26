@@ -1,0 +1,36 @@
+diff --git a/dist/index.js b/dist/index.js
+index 79aa792998ed2f8917d4b46725af2b0bbab692e0..7f92c00dfcd87a8cc8831d50906ad4c9819a24eb 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -985,11 +985,10 @@ function Toaster({ children, position = "top-right", offset, options, theme }) {
+         if (cached) return cached;
+         cached = {
+             enter: (e)=>{
+-                setActiveId((prev)=>prev === toastId ? prev : toastId);
++                // GSSG patch: see dist/index.mjs (hover keeps the newest toast open).
+                 handleMouseEnterRef.current == null ? void 0 : handleMouseEnterRef.current.call(handleMouseEnterRef, e);
+             },
+             leave: (e)=>{
+-                setActiveId((prev)=>prev === latestRef.current ? prev : latestRef.current);
+                 handleMouseLeaveRef.current == null ? void 0 : handleMouseLeaveRef.current.call(handleMouseLeaveRef, e);
+             },
+             dismiss: ()=>dismissToast(toastId)
+diff --git a/dist/index.mjs b/dist/index.mjs
+index f687f84725d587b4c539fccb2f86568a9c18294d..d12dd94907703d879bd7b79e7b8f804f432c139d 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -983,11 +983,12 @@ function Toaster({ children, position = "top-right", offset, options, theme }) {
+         if (cached) return cached;
+         cached = {
+             enter: (e)=>{
+-                setActiveId((prev)=>prev === toastId ? prev : toastId);
++                // GSSG patch: hovering an older toast no longer takes the "open" slot from the
++                // newest. Its own enter handler still opens it; collapsing the newest under it
++                // shifted the stack out from under the pointer, which closed it again.
+                 handleMouseEnterRef.current == null ? void 0 : handleMouseEnterRef.current.call(handleMouseEnterRef, e);
+             },
+             leave: (e)=>{
+-                setActiveId((prev)=>prev === latestRef.current ? prev : latestRef.current);
+                 handleMouseLeaveRef.current == null ? void 0 : handleMouseLeaveRef.current.call(handleMouseLeaveRef, e);
+             },
+             dismiss: ()=>dismissToast(toastId)

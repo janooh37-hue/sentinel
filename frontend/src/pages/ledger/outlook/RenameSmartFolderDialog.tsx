@@ -8,9 +8,9 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
-import { api, ApiError, type SmartFolder } from '@/lib/api'
+import { api, apiErrorMessage, type SmartFolder } from '@/lib/api'
 import {
   DialogRoot,
   DialogContent,
@@ -58,8 +58,7 @@ export function RenameSmartFolderDialog({
       onOpenChange(false)
       toast(t('ledger.smart.renamed'))
     },
-    onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const canSave = nameEn.trim().length > 0 && nameAr.trim().length > 0

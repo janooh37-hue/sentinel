@@ -2,10 +2,9 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, ApiError, apiErrorMessage } from '@/lib/api'
-import { bidi } from '@/lib/bidi'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -37,13 +36,14 @@ export function WordSessionPage(): React.JSX.Element {
   const session = sessionQuery.data
   const finishMutation = useMutation({
     mutationFn: () => api.finishWordSession(bookId),
-    onSuccess: (book) => {
+    onMutate: () => toast.loading(t('books.word.finishing')),
+    onSuccess: (book, _vars, toastId) => {
       qc.setQueryData(['books', bookId], book)
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['word-session', bookId] })
-      toast.success(t('books.word.finished', { ref: bidi(book.ref_number) }))
+      toast.success(t('books.word.finished'), { id: toastId, reference: book.ref_number })
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err, _vars, toastId) => toast.error(apiErrorMessage(err), { id: toastId, reference: bookQuery.data?.ref_number }),
   })
   const noActiveSession = sessionQuery.error instanceof ApiError && sessionQuery.error.status === 409 && sessionQuery.error.code === 'NO_ACTIVE_SESSION'
   const finishedBook = finishMutation.data ?? (noActiveSession ? bookQuery.data : undefined)
@@ -89,19 +89,22 @@ export function WordSessionPage(): React.JSX.Element {
     mutationFn: () => api.discardWordSession(bookId),
     onSuccess: (book) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
-      toast.success(t(book.voided_at ? 'books.toast.voided' : 'books.toast.wordSessionDiscarded'))
+      toast.success(t(book.voided_at ? 'books.toast.voided' : 'books.toast.wordSessionDiscarded'), { reference: book.ref_number })
       goBack()
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
   const saveTemplateMutation = useMutation({
     mutationFn: () => api.saveBookAsTemplate(bookId, templateName.trim()),
-    onSuccess: (tpl) => {
+    onMutate: () => toast.loading(t('books.word.savingTemplate')),
+    onSuccess: (tpl, _vars, toastId) => {
       setTemplateAction(null)
       void qc.invalidateQueries({ queryKey: ['word-templates'] })
-      toast.success(t('books.word.savedAsTemplate', { name: tpl.name.replace(/\.docx$/i, '') }))
+      toast.success(t('books.word.savedAsTemplate'), {
+        id: toastId, reference: bookQuery.data?.ref_number, description: tpl.name.replace(/\.docx$/i, ''),
+      })
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err, _vars, toastId) => toast.error(apiErrorMessage(err), { id: toastId, reference: bookQuery.data?.ref_number }),
   })
   const newTemplateMutation = useMutation({
     mutationFn: () => api.createTemplateSession(templateName.trim()),

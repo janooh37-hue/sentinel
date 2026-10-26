@@ -12,9 +12,9 @@
 
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
-import { api, ApiError, type SmartFolderSuggestion } from '@/lib/api'
+import { api, apiErrorMessage, type SmartFolderSuggestion } from '@/lib/api'
 import {
   Sheet,
   SheetContent,
@@ -80,8 +80,7 @@ function SuggestionRow({ suggestion, onCreate }: SuggestionRowProps): React.JSX.
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['ledger-smart-suggestions'] })
     },
-    onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   return (

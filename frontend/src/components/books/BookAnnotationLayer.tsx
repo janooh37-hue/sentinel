@@ -15,7 +15,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronLeft, ChevronRight, Highlighter, MapPin, MessageSquare, Trash2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { Hint } from '@/components/ui/hint'
 import { cn } from '@/lib/utils'

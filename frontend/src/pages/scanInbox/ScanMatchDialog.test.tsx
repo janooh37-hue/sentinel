@@ -4,12 +4,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ScanMatchDialog } from './ScanMatchDialog'
 import type { ScanInboxItem } from '../../lib/api'
 import * as apiMod from '../../lib/api'
+import { toast } from '@/lib/toast'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
 }))
 
 vi.mock('./ScanPdfCanvas', () => ({ default: () => <div data-testid="pdf-canvas" /> }))
+vi.mock('@/lib/toast', () => ({ toast: {
+  loading: vi.fn(() => 'scan-job'), success: vi.fn(), error: vi.fn(), dismiss: vi.fn(),
+} }))
 
 const item = { id: 7, filename: 'scan.pdf', state: 'unrouted' } as unknown as ScanInboxItem
 
@@ -25,6 +29,7 @@ function renderDialog() {
 describe('ScanMatchDialog', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    vi.clearAllMocks()
     vi.spyOn(apiMod.api, 'scanDocumentUrl').mockReturnValue('/api/v1/scan-inbox/7/document')
     vi.spyOn(apiMod.api, 'listBooks').mockResolvedValue({ items: [], total: 0 } as never)
     vi.spyOn(apiMod.api, 'lookupEmployees').mockResolvedValue({
@@ -63,5 +68,24 @@ describe('ScanMatchDialog', () => {
     const row = await screen.findByText('Ahmed Ali')
     fireEvent.click(row)
     await waitFor(() => expect(route).toHaveBeenCalledWith(7, { employee_id: 'G1' }))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('scanInbox.toast.filed', {
+      id: 'scan-job', description: 'Ahmed Ali', reference: undefined,
+    }))
+  })
+
+  it('keeps the selected book reference without an Undo action', async () => {
+    const route = vi.spyOn(apiMod.api, 'routeScanItem').mockResolvedValue({} as never)
+    vi.spyOn(apiMod.api, 'listBooks').mockResolvedValue({
+      items: [{ id: 42, ref_number: 'GS-0410', subject: 'Leave' }], total: 1,
+    } as never)
+    renderDialog()
+    fireEvent.change(screen.getByPlaceholderText('scanInbox.match.searchPlaceholder'), {
+      target: { value: 'GS-0410' },
+    })
+    fireEvent.click(await screen.findByText('GS-0410'))
+    await waitFor(() => expect(route).toHaveBeenCalledWith(7, { book_id: 42, employee_id: undefined }))
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+    const options = vi.mocked(toast.success).mock.calls[0][1]!
+    expect(options).toEqual({ id: 'scan-job', reference: 'GS-0410', description: undefined })
   })
 })

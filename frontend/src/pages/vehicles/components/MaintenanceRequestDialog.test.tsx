@@ -8,7 +8,7 @@ import { api, type VehicleMaintenanceRead, type VehicleMaintenanceRequestRead } 
 import i18n from '@/lib/i18n'
 import { MaintenanceRequestDialog } from './MaintenanceRequestDialog'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<{ api: typeof api }>()
   return {

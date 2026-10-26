@@ -25,13 +25,13 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Controller, useFormContext } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { X } from 'lucide-react'
 
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { CapabilityGate } from '@/components/shell/CapabilityGate'
-import { api } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { RecipientRead } from '@/lib/api'
 import { RecipientManagerDialog } from '../RecipientManagerDialog'
 import type { FieldProps } from '../types'
@@ -82,7 +82,7 @@ export function MultiRecipientPickerField({
       toast.success(t('application.cc.addedToast'))
       return created
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(apiErrorMessage(e)),
   })
 
   const error = (errors[name] as { message?: string } | undefined)?.message

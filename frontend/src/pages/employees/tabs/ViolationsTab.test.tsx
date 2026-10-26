@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ApiModule from '@/lib/api'
 
 const capabilityState = vi.hoisted(() => ({ canManage: false }))
 const translationState = vi.hoisted(() => ({ language: 'en' }))
@@ -15,7 +16,7 @@ vi.mock('react-i18next', () => ({
     i18n: { language: translationState.language },
   }),
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
     capabilities: new Set(
@@ -29,7 +30,8 @@ vi.mock('@/lib/useCapabilities', () => ({
       ['violations.create', 'violations.edit', 'violations.delete'].includes(capability),
   }),
 }))
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: {
     listViolations: vi.fn(),
     createViolation: vi.fn(),
@@ -40,7 +42,6 @@ vi.mock('@/lib/api', () => ({
   },
   getNotifyStatus: vi.fn().mockResolvedValue({ enabled: false, last: null }),
   sendNotify: vi.fn(),
-  apiErrorMessage: (error: unknown) => String(error),
 }))
 
 import { api } from '@/lib/api'
@@ -254,7 +255,7 @@ describe('ViolationsTab deep-link targeting', () => {
       </QueryClientProvider>,
     )
     expect(await screen.findByTestId('violation-row-41')).toBeInTheDocument()
-    expect(await screen.findByRole('alert')).toHaveTextContent('refresh failed')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong')
     expect(onConsumed).not.toHaveBeenCalled()
     expect(screen.getByText('Retry')).toBeInTheDocument()
   })

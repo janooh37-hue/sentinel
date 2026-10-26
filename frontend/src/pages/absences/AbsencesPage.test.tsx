@@ -58,7 +58,7 @@ vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ capabilities: new Set<string>(), isLoading: false, has: hasCapability }),
 }))
 
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: { success: toastSuccess, warning: toastWarning, info: toastInfo, error: toastError },
 }))
 

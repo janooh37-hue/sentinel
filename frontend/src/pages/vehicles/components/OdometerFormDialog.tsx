@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { Button } from '@/components/ui/button'
 import { api, type OdometerRowRead } from '@/lib/api'
@@ -38,7 +38,7 @@ function OdometerForm({ month, rows, onClose, onBusyChange }: { month: string; r
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['books'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success(t('vehicles.letterSaved', { ref: result.ref_number }))
+      toast.success(t('vehicles.letterSaved'), { reference: result.ref_number })
       navigate(`/books/${result.book_id}`)
     },
     onError: (err) => toast.error(vehicleErrorMessage(err, t)),

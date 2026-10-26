@@ -138,13 +138,13 @@ class DashboardLayout(BaseModel):
 
 class DashboardTotals(BaseModel):
     # Total working (our staff + loaned). on_leave_today / present_today are our staff only.
-    employees_active: int
-    our_staff: int
-    loaned: int
-    on_leave_today: int
-    present_today: int
+    employees_active: int | None
+    our_staff: int | None
+    loaned: int | None
+    on_leave_today: int | None
+    present_today: int | None
     forms_this_month: int
-    open_violations_count: int = 0
+    open_violations_count: int | None
     draft_count: int = 0
     book_draft_count: int = 0
 

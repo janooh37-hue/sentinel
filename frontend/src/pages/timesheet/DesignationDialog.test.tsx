@@ -20,7 +20,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
 vi.mock('@/lib/api', () => ({
   api: {
     listDesignations: vi.fn(),
@@ -37,7 +37,7 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { ApiError, api, type TimesheetDesignationRead } from '@/lib/api'
 
 import { DesignationDialog } from './DesignationDialog'

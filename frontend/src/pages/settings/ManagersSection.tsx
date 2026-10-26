@@ -6,7 +6,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { Loader2 } from 'lucide-react'
 
 import { api, apiErrorMessage, type ManagerRead } from '@/lib/api'

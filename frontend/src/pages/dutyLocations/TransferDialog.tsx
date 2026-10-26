@@ -15,7 +15,8 @@ import { useId, useState } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { useNavigate } from 'react-router-dom'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage, type DutyTransferResult, type EmployeeLookupItem } from '@/lib/api'
 import { unitOptions, postsForUnit } from '@/lib/dutyUnits'
@@ -67,6 +68,7 @@ export function TransferDialog({
 }: TransferDialogProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const unitListId = useId()
   const postListId = useId()
 
@@ -106,20 +108,29 @@ export function TransferDialog({
         }),
       )
     },
-    onSuccess: (result) => {
+    onMutate: () => toast.loading(t('dutyLocations.transfer.generating')),
+    onSuccess: (result, _variables, toastId) => {
       const v = methods.getValues()
       saveTransferDefaults({ recipientId: v.recipient_id, managerId: v.manager_id, cc: v.cc })
       void qc.invalidateQueries({ queryKey: ['employees'] })
       void qc.invalidateQueries({ queryKey: ['books'] })
       if (result.book_id == null) {
-        toast.success(t('dutyLocations.transfer.movedNoBook', { count: result.moved.length }))
+        toast.success(t('dutyLocations.transfer.movedNoBook', { count: result.moved.length }), { id: toastId })
       } else {
-        toast.success(t('dutyLocations.transfer.success', { ref: result.ref }))
+        toast.success(t('dutyLocations.transfer.success'), {
+          id: toastId,
+          duration: 8000,
+          reference: result.ref ?? undefined,
+          action: {
+            label: t('dutyLocations.transfer.viewRecord'),
+            onClick: () => navigate(`/books/${result.book_id}`),
+          },
+        })
       }
       onTransferred(result)
       onOpenChange(false)
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err, _variables, toastId) => toast.error(apiErrorMessage(err), { id: toastId }),
   })
 
   const canSubmit = employees.length > 0 && missing === 0 && !mutation.isPending

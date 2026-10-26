@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Archive, ArchiveRestore, CheckCheck, Undo2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import type { BookInboxRead, BookRead } from '@/lib/api'
@@ -37,7 +37,7 @@ export function useInboxActions(
       // Detail, lists, recipient rows and inbox summary all live under this key.
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
-      toast.success(t(`books.inbox.toast.${action}`))
+      toast.success(t(`books.inbox.toast.${action}`), { reference: book?.ref_number })
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })

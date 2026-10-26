@@ -26,7 +26,7 @@ vi.mock('@/lib/api', async (orig) => {
       }),
       listApprovers: vi.fn().mockResolvedValue([{ id: 2, name: 'Manager Khalid', is_default: false }]),
       listReviewerCandidates: vi.fn().mockResolvedValue([]),
-      submitBook: vi.fn().mockResolvedValue({ id: 48 }),
+      submitBook: vi.fn().mockResolvedValue({ id: 48, ref_number: 'GS-48' }),
     },
   }
 })
@@ -37,7 +37,7 @@ vi.mock('@/lib/useCapabilities', () => ({
     has: (cap: string) => cap === 'books.submit',
   }),
 }))
-vi.mock('sonner', () => ({
+vi.mock('@/lib/toast', () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }))
 

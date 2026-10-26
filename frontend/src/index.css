@@ -1938,11 +1938,11 @@ body {
      page (12mm cost ~11% of the width and the letterhead's bleed).
 
      A page-NAME change forces a page break, so any in-flow box outside the
-     named element emits a blank sheet — sonner's <Toaster> renders an empty
+     named element emits a blank sheet — the previous toast host rendered an empty
      <section> right after the shell and did exactly that. The record sheet is
      the daily path, so it takes the UNNAMED page and can never regress that
      way; only the permits register (rare, bulk) carries a name, and the one
-     known trailing box is print-hidden in App.tsx. */
+     known trailing box is print-hidden in AppToaster. */
   @page {
     size: A4;
     margin: 0;

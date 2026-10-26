@@ -33,7 +33,6 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, StringConstraints
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
@@ -42,7 +41,7 @@ from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
 from app.core.pdf_merge import merge_pdfs_to_bytes
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
-from app.db.models import Book, BookVersion, Document, User
+from app.db.models import Book, Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
 from app.schemas.book import BookConfidentiality
@@ -78,77 +77,6 @@ from app.services.job_registry import (
 )
 
 log = logging.getLogger(__name__)
-
-
-def _require_document_record_access(
-    db: Session,
-    user: User,
-    row: Document,
-    *,
-    expected_version_id: int | None = None,
-) -> BookVersion | None:
-    """Apply the complete read gate for a stored document; return its exact
-    owning ``BookVersion`` (``None`` for a standalone/unlinked document).
-
-    Linked documents inherit their book's revision-scoped read policy for the
-    EXACT version that owns them, not merely the book in general — a caller
-    authorized only for a different revision must not reach these bytes.
-    Companion documents inherit the primary document's exact ownership.
-    ``expected_version_id``, when given, must match the resolved owning
-    version or the document is treated as not found (a stale cached link
-    pointing at a superseded revision must not silently serve different
-    bytes than the caller expects).
-    """
-    owning = db.execute(
-        select(Book, BookVersion)
-        .join(BookVersion, BookVersion.book_id == Book.id)
-        .where(BookVersion.document_id == row.id)
-    ).first()
-    if owning is None and row.role == "companion":
-        primary_document_ids = select(Document.id).where(
-            Document.submission_id == row.submission_id,
-            Document.role == "primary",
-        )
-        owning = db.execute(
-            select(Book, BookVersion)
-            .join(BookVersion, BookVersion.book_id == Book.id)
-            .where(BookVersion.document_id.in_(primary_document_ids))
-        ).first()
-    if owning is not None:
-        linked_book, owning_version = owning.tuple()
-        if expected_version_id is not None and expected_version_id != owning_version.id:
-            raise NotFoundError(
-                "DOCUMENT_NOT_FOUND",
-                f"Document {row.id} not found",
-                id=row.id,
-            )
-        book_service.resolve_book_read_access(
-            db,
-            user,
-            linked_book,
-            version_id=owning_version.id,
-        )
-        return owning_version
-    if user.role == INMATE_REPORTER_ROLE:
-        # Never an orphan/standalone (unsaved-preview) document — this role's
-        # generations are always committed and linked to a Book/BookVersion.
-        raise AppError(
-            "FORBIDDEN",
-            "You don't have permission to access this document",
-            http_status=status.HTTP_403_FORBIDDEN,
-        )
-    if not perm_service.has_capability(db, user, "documents.generate"):
-        raise AppError(
-            "FORBIDDEN",
-            "You don't have permission to access this document",
-            http_status=status.HTTP_403_FORBIDDEN,
-        )
-    book_service.require_record_type_access(
-        db,
-        user,
-        service_id=document_service.effective_document_service(row.template_id),
-    )
-    return None
 
 
 def _should_autosend(
@@ -621,7 +549,7 @@ def get_document(
             id=document_id,
         )
 
-    _require_document_record_access(db, user, row, expected_version_id=version_id)
+    document_service.require_document_record_access(db, user, row, expected_version_id=version_id)
     return DocumentRead.model_validate(row)
 
 
@@ -682,7 +610,9 @@ def download_document(
             "This role can only download the current PDF.",
             http_status=status.HTTP_403_FORBIDDEN,
         )
-    version = _require_document_record_access(db, user, row, expected_version_id=version_id)
+    version = document_service.require_document_record_access(
+        db, user, row, expected_version_id=version_id
+    )
 
     artifact = document_service.resolve_document_artifact(
         db, document_id, format=format, original=original, version=version
@@ -809,7 +739,7 @@ def get_signature_editor(
     measure: Annotated[bool, Query()] = False,
 ) -> SignatureEditorRead:
     row = _document_or_404(db, document_id)
-    _require_document_record_access(db, user, row)
+    document_service.require_document_record_access(db, user, row)
     description = signature_placement_service.describe_editor(
         db, document_id, user=user, measure=measure
     )
@@ -827,7 +757,7 @@ def get_signature_editor_pdf(
     """The verified current standalone primary PDF — NOT the combined
     included-papers package. Editor/identification authority required."""
     row = _document_or_404(db, document_id)
-    _require_document_record_access(db, user, row)
+    document_service.require_document_record_access(db, user, row)
     description = signature_placement_service.describe_editor(db, document_id, user=user)
     if not (description.can_adjust or description.can_identify):
         raise AppError("FORBIDDEN", "Signature editor access is required", http_status=403)
@@ -857,7 +787,7 @@ def get_signature_editor_image(
     encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
 ) -> Response:
     row = _document_or_404(db, document_id)
-    _require_document_record_access(db, user, row)
+    document_service.require_document_record_access(db, user, row)
     description = signature_placement_service.describe_editor(db, document_id, user=user)
     if not (description.can_adjust or description.can_identify):
         raise AppError("FORBIDDEN", "Signature editor access is required", http_status=403)
@@ -889,7 +819,7 @@ def get_signature_editor_candidate_image(
     encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
 ) -> Response:
     row = _document_or_404(db, document_id)
-    _require_document_record_access(db, user, row)
+    document_service.require_document_record_access(db, user, row)
     if user.role != ADMIN_ROLE:
         raise AppError("FORBIDDEN", "Legacy identification is administrator-only", http_status=403)
     candidate = signature_placement_service.resolve_legacy_candidate(db, document_id, candidate_id)
@@ -919,7 +849,7 @@ def get_signature_editor_background(
     preview's background while the client overlays the extracted original
     image on top."""
     row = _document_or_404(db, document_id)
-    _require_document_record_access(db, user, row)
+    document_service.require_document_record_access(db, user, row)
     description = signature_placement_service.describe_editor(db, document_id, user=user)
     if not description.can_adjust:
         raise AppError("FORBIDDEN", "Signature editor access is required", http_status=403)
@@ -952,7 +882,7 @@ def post_signature_identification(
     user: Annotated[User, Depends(get_current_user)],
 ) -> SignatureEditorRead:
     row = _document_or_404(db, document_id)
-    _require_document_record_access(db, user, row)
+    document_service.require_document_record_access(db, user, row)
     description = signature_placement_service.identify_signature(
         db,
         document_id,
@@ -976,7 +906,7 @@ def put_signature_position(
     user: Annotated[User, Depends(get_current_user)],
 ) -> SignatureEditorRead:
     row = _document_or_404(db, document_id)
-    _require_document_record_access(db, user, row)
+    document_service.require_document_record_access(db, user, row)
     description = signature_placement_service.move_signature(
         db,
         document_id,
@@ -1007,7 +937,7 @@ def put_signature_identity(
     picker (never available to a non-admin; ``reassign_signature`` itself
     also enforces this)."""
     row = _document_or_404(db, document_id)
-    _require_document_record_access(db, user, row)
+    document_service.require_document_record_access(db, user, row)
     description = signature_placement_service.reassign_signature(
         db,
         document_id,
@@ -1028,7 +958,7 @@ def get_signature_history(
     user: Annotated[User, Depends(get_current_user)],
 ) -> SignatureHistoryRead:
     row = _document_or_404(db, document_id)
-    _require_document_record_access(db, user, row)
+    document_service.require_document_record_access(db, user, row)
     rows = signature_placement_service.list_history(db, document_id)
     items = [
         SignatureHistoryItemRead(
@@ -1068,7 +998,7 @@ def get_signature_history_download(
     still applies here — a DOCX from an ``approval`` source_kind is never
     served to a non-admin, matching the live download endpoint's rule."""
     row = _document_or_404(db, document_id)
-    _require_document_record_access(db, user, row)
+    document_service.require_document_record_access(db, user, row)
     history_row = signature_placement_service.resolve_history_revision(db, document_id, revision)
     if (
         format == "docx"

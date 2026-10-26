@@ -19,7 +19,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { useTranslation } from 'react-i18next'
 import { format, parseISO, type Locale } from 'date-fns'
 import { ar as arLocale } from 'date-fns/locale'
@@ -33,7 +33,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-import { api } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import { APPROVALS_LOG_PATH, approvalQueueUrl, defaultApprovalContext } from '@/lib/approvals'
 import type {
   DashboardLayout,
@@ -210,7 +210,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       }
       toast.success(isAr ? 'تم حفظ تخطيط لوحة التحكم' : 'Dashboard layout saved')
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(apiErrorMessage(err)),
   })
 
   const [widgetDialogOpen, setWidgetDialogOpen] = useState(false)
@@ -305,15 +305,16 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           />
         )
       case 'workspace':
+        if (!has('employees.view')) return null
         return (
           <WorkspaceCard
-            staff={summary?.totals.employees_active ?? 0}
+            staff={summary?.totals.employees_active ?? null}
             header={t('dashboard.workspace.title')}
             currency={t('dashboard.workspace.total')}
-            ourStaff={summary?.totals.our_staff ?? 0}
-            onSite={summary?.totals.present_today ?? 0}
-            loaned={summary?.totals.loaned ?? 0}
-            onLeave={summary?.totals.on_leave_today ?? 0}
+            ourStaff={summary?.totals.our_staff ?? null}
+            onSite={summary?.totals.present_today ?? null}
+            loaned={summary?.totals.loaned ?? null}
+            onLeave={summary?.totals.on_leave_today ?? null}
             onClick={() => onNavigate('employees')}
             isLoading={summaryQuery.isPending}
           />
@@ -335,6 +336,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       case 'inbox':
         return <InboxWidget />
       case 'violations': {
+        if (!has('violations.view')) return null
         const openViolations = summary?.totals.open_violations_count ?? 0
         return (
           <WidgetCard
@@ -372,6 +374,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         )
       }
       case 'ledger':
+        if (!has('ledger.view')) return null
         return (
           <WidgetCard
             header={t('dashboard.widgets.ledger.header')}
@@ -404,6 +407,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       case 'workforce_pulse':
         return <WorkforcePulseWidget onOpenCoverage={() => setCoverageOpen(true)} />
       case 'on_leave_today':
+        if (!has('leaves.view')) return null
         return (
           <SectionCard icon={CalendarCheck} title={t('dashboard.onLeave.title')} count={summary?.on_leave_today.length}>
             {summaryQuery.isPending ? (
@@ -426,6 +430,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           </SectionCard>
         )
       case 'upcoming_leave':
+        if (!has('leaves.view')) return null
         return (
           <SectionCard icon={CalendarClock} title={t('dashboard.upcoming.title')} count={summary?.upcoming_leave_ends.length}>
             {summaryQuery.isPending ? (
@@ -476,6 +481,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           </SectionCard>
         )
       case 'recent_ledger':
+        if (!has('ledger.view')) return null
         return (
           <SectionCard icon={ScrollText} title={t('dashboard.recent.ledger')} count={summary?.recent_ledger.length}>
             {summaryQuery.isPending ? (
@@ -505,6 +511,20 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       </div>
     )
   }
+  const topCells = zones.top.map((w, i) => {
+    const node = renderWidget(w.id as WidgetId, 'top')
+    return node == null ? null : (
+      <div key={w.id} className="anim-fade-up" style={{ animationDelay: `${80 + i * 40}ms` }}>
+        {node}
+      </div>
+    )
+  }).filter((cell) => cell != null)
+  const underWorkspaceCells = zones.under_workspace
+    .map((w, i) => widgetCell(w.id as WidgetId, 'under_workspace', i))
+    .filter((cell) => cell != null)
+  const underQuickActionsCells = zones.under_quick_actions
+    .map((w, i) => widgetCell(w.id as WidgetId, 'under_quick_actions', i))
+    .filter((cell) => cell != null)
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
@@ -547,24 +567,16 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         </div>
 
         {/* ============ TOP ZONE (2 big cards) ============ */}
-        {zones.top.length > 0 && (
-          <div className="mb-6 grid grid-cols-1 gap-3.5 md:grid-cols-2">
-            {zones.top.map((w, i) => {
-              const node = renderWidget(w.id as WidgetId, 'top')
-              if (node == null) return null
-              return (
-                <div key={w.id} className="anim-fade-up" style={{ animationDelay: `${80 + i * 40}ms` }}>
-                  {node}
-                </div>
-              )
-            })}
+        {topCells.length > 0 && (
+          <div className={`mb-6 grid grid-cols-1 gap-3.5 ${topCells.length > 1 ? 'md:grid-cols-2' : ''}`}>
+            {topCells}
           </div>
         )}
 
         {/* ============ UNDER-WORKSPACE ZONE ============ */}
-        {zones.under_workspace.length > 0 && (
+        {underWorkspaceCells.length > 0 && (
           <div className="mb-6 grid auto-rows-fr grid-cols-1 gap-3.5 md:grid-cols-3">
-            {zones.under_workspace.map((w, i) => widgetCell(w.id as WidgetId, 'under_workspace', i))}
+            {underWorkspaceCells}
           </div>
         )}
 
@@ -622,9 +634,9 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         )}
 
         {/* ============ UNDER-QUICK-ACTIONS ZONE ============ */}
-        {zones.under_quick_actions.length > 0 && (
+        {underQuickActionsCells.length > 0 && (
           <div className="mb-6 grid auto-rows-fr grid-cols-1 gap-3.5 md:grid-cols-3">
-            {zones.under_quick_actions.map((w, i) => widgetCell(w.id as WidgetId, 'under_quick_actions', i))}
+            {underQuickActionsCells}
           </div>
         )}
       </div>
@@ -796,13 +808,13 @@ function PendingDocumentsCard({
 }
 
 interface WorkspaceCardProps {
-  staff: number
+  staff: number | null
   header: string
   currency: string
-  ourStaff: number
-  onSite: number
-  loaned: number
-  onLeave: number
+  ourStaff: number | null
+  onSite: number | null
+  loaned: number | null
+  onLeave: number | null
   onClick: () => void
   isLoading: boolean
 }
@@ -835,7 +847,7 @@ function WorkspaceCard({
         <span className="me-1.5 text-[0.32em] font-medium text-muted-foreground align-middle">
           {currency}
         </span>
-        {isLoading ? <Skeleton className="h-9 w-16" /> : staff}
+        {isLoading ? <Skeleton className="h-9 w-16" /> : staff ?? <UnavailableWorkspaceFigure />}
       </div>
 
       <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[0.78em] text-muted-foreground">
@@ -879,19 +891,24 @@ function WorkspaceCard({
   )
 }
 
+function UnavailableWorkspaceFigure(): React.JSX.Element {
+  const { t } = useTranslation()
+  return <><span aria-hidden>—</span><span className="sr-only">{t('dashboard.workspace.unavailable')}</span></>
+}
+
 function WorkspaceChip({
   dotClass,
   count,
   label,
 }: {
   dotClass: string
-  count: number
+  count: number | null
   label: string
 }): React.JSX.Element {
   return (
     <span className="flex items-center gap-1.5">
       <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} aria-hidden />
-      <span className="font-semibold tabular-nums text-foreground">{count}</span>
+      <span className="font-semibold tabular-nums text-foreground">{count ?? <UnavailableWorkspaceFigure />}</span>
       {label}
     </span>
   )

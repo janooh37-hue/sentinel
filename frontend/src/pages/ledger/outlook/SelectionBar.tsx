@@ -17,10 +17,10 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { CheckCheck, Flag, Mail, Star, Trash2, X } from 'lucide-react'
 
-import { api, ApiError } from '@/lib/api'
+import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 interface SelectionBarProps {
@@ -63,7 +63,7 @@ export function SelectionBar({ ids, onClear, onTrash }: SelectionBarProps): Reac
       onClear()
     } catch (err) {
       invalidate()
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     } finally {
       setBusy(false)
     }
