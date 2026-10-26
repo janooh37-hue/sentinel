@@ -269,6 +269,71 @@ def test_scan_back_directed_recipient_cannot_write_but_creator_can(
         get_settings.cache_clear()
 
 
+def test_scan_back_hides_non_awaiting_state_from_directed_recipient(
+    api_db: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    try:
+        creator = User(email="creator@test.ae", password_hash="x", role="manager", status="active")
+        recipient = User(
+            email="recipient@test.ae", password_hash="x", role="manager", status="active"
+        )
+        api_db.add_all([creator, recipient])
+        api_db.commit()
+        book = _book(api_db, state="none")
+        book.confidentiality = "directed"
+        book.created_by_user_id = creator.id
+        version = book.versions[0]
+        version.created_by_user_id = creator.id
+        api_db.add(
+            BookRecipient(
+                book_id=book.id,
+                user_id=recipient.id,
+                sent_by_user_id=creator.id,
+                purpose="info",
+            )
+        )
+        api_db.commit()
+
+        def snapshot():
+            api_db.expire_all()
+            return (
+                list(book.attachment_paths or []),
+                book.approval_state,
+                book.send_state,
+                version.status,
+                version.signed_pdf_path,
+                version.signed_base_pdf_path,
+                version.signed_by_user_id,
+                version.signed_at,
+            )
+
+        before = snapshot()
+        raw = _barcode_pdf(book.ref_number)
+        response = _client(api_db, recipient).post(
+            "/api/v1/books/scan-back",
+            files={"file": ("signed.pdf", raw, "application/pdf")},
+        )
+        assert response.status_code == 404, response.text
+        assert response.json()["error"]["code"] != "BOOK_NOT_AWAITING_SCAN"
+        assert snapshot() == before
+        assert not (tmp_path / "book_attachments").exists()
+        assert api_db.scalars(select(ScanInbox)).all() == []
+
+        response = _client(api_db, creator).post(
+            "/api/v1/books/scan-back",
+            files={"file": ("signed.pdf", raw, "application/pdf")},
+        )
+        assert response.status_code == 422, response.text
+        assert response.json()["error"]["code"] == "BOOK_NOT_AWAITING_SCAN"
+        assert snapshot() == before
+        assert not (tmp_path / "book_attachments").exists()
+        assert api_db.scalars(select(ScanInbox)).all() == []
+    finally:
+        get_settings.cache_clear()
+
+
 def test_scan_back_route_parks_unknown_reference_for_confirmation(
     api_db: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
