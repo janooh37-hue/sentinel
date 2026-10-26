@@ -1216,6 +1216,12 @@ test.describe('viewport meta', () => {
       expect(content).toContain('viewport-fit=cover')
       expect(content).not.toMatch(/user-scalable\s*=\s*(no|0)/)
       expect(content).not.toMatch(/maximum-scale/)
+      // iOS Home Screen apps can letterbox the standalone viewport when this
+      // legacy translucent status-bar mode is requested. Keep the OS-managed
+      // status bar instead of trying to offset a fixed dock into an unavailable band.
+      const statusBarMeta = h.page.locator('meta[name="apple-mobile-web-app-status-bar-style"]')
+      const statusBarStyle = (await statusBarMeta.count()) > 0 ? await statusBarMeta.getAttribute('content') : null
+      expect(statusBarStyle).not.toBe('black-translucent')
     } finally {
       await h.ctx.close()
     }

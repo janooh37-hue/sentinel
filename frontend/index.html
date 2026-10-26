@@ -13,7 +13,9 @@
     <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-v3.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- Keep the iOS Home Screen app in the system-managed status-bar layout.
+         black-translucent can letterbox standalone viewports on current iOS,
+         leaving a bottom band outside the fixed-position viewport. -->
   </head>
   <body>
     <div id="root"></div>
