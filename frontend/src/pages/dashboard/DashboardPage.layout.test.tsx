@@ -238,7 +238,7 @@ describe('DashboardPage per-user layout', () => {
       }),
     )
     await waitFor(() => expect(mockedApi.updateDashboardLayout).toHaveBeenCalledTimes(1))
-    expect(mockedApi.updateDashboardLayout.mock.calls[0]?.[0].widgets[0]?.id).toBe(
+    expect(mockedApi.updateDashboardLayout.mock.calls[0]?.[0].widgets?.[0]?.id).toBe(
       firstDefaultWidget!.id,
     )
   })

@@ -57,7 +57,7 @@ function AwaitingRow({
 
   return (
     <Link
-      to={approvalRecordUrl(item.book_id, item.version_id, context)}
+      to={approvalRecordUrl(item.book_id, item.version_id ?? null, context)}
       data-testid="approval-preview-row"
       className={cn(
         'relative flex flex-col gap-2 rounded-xl border border-hairline bg-surface px-4 py-3 transition-shadow hover:shadow-sm',
@@ -129,9 +129,9 @@ export function BooksAwaitingWidget(): React.JSX.Element | null {
       ? 'sign'
       : reviewCount > 0
         ? 'review'
-        : summary?.available_received_kinds.includes('approver')
+        : summary?.available_received_kinds?.includes('approver')
           ? 'sign'
-          : summary?.available_received_kinds.includes('reviewer')
+          : summary?.available_received_kinds?.includes('reviewer')
             ? 'review'
             : null
 
@@ -156,7 +156,7 @@ export function BooksAwaitingWidget(): React.JSX.Element | null {
   // Gate: self-hide only when the caller has no assigned received kind at
   // all. A valid zero-work scope still renders — Home summaries anchor the
   // dashboard for authorized-but-idle callers.
-  if (summary && summary.available_received_kinds.length === 0) return null
+  if (summary && (summary.available_received_kinds ?? []).length === 0) return null
 
   const rows = (previewQuery.data?.items ?? []).filter((item) => !pendingIds.has(item.book_id))
   const isLoading = summaryQuery.isPending || (context != null && previewQuery.isPending)

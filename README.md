@@ -69,6 +69,12 @@ venv/Scripts/python backend/serve.py
 
 Then open `http://<server>/` from any device on the network.
 
+The frontend uses TypeScript 7, Vitest 5, and pdf.js 6. Keep
+`frontend/pnpm-workspace.yaml` alongside the manifest and lockfile: it isolates
+TypeScript 6 for ESLint and API generation, overrides FortuneSheet's vulnerable
+UUID dependency, and applies the Sileo patch. Run
+`pnpm -C frontend install --frozen-lockfile` to reproduce the dependency set.
+
 ## Employee picker permissions
 
 Service forms can look up employee names with `documents.generate` even when
