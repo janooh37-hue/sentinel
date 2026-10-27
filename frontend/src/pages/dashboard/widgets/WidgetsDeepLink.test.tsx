@@ -124,6 +124,14 @@ it.each([
   expect(screen.queryByText(i18n.t(otherLabel))).not.toBeInTheDocument()
 })
 
+it.each([null, 'Normal'])('does not flag %s urgency in waiting approvals', async (urgency) => {
+  vi.mocked(api.listApprovalLog).mockResolvedValue({ items: [{ ...APPROVAL_ROW, urgency }], total: 1, limit: 5, offset: 0 })
+  mount(<WaitingApprovalsWidget tier="list" rows={3} />)
+  expect(await screen.findByText('Transfer letter')).toBeInTheDocument()
+  expect(screen.queryByText(i18n.t('books.urgency.high'))).not.toBeInTheDocument()
+  expect(screen.queryByText(i18n.t('books.urgency.veryHigh'))).not.toBeInTheDocument()
+})
+
 it('links every nonzero monthly state and approved row to matching Records filters', async () => {
   mount(<MyDocumentsWidget tier="list" rows={2} />)
   await screen.findByRole('link', { name: /Document 0/ })

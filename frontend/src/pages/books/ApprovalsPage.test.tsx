@@ -164,6 +164,15 @@ it.each([
   expect(screen.queryByText(i18n.t(otherLabel))).not.toBeInTheDocument()
 })
 
+it.each([null, 'Normal'])('does not flag %s urgency', async (urgency) => {
+  vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
+  vi.mocked(api.listApprovalLog).mockResolvedValue({ ...emptyLog, items: [row({ urgency })], total: 1 })
+  renderPage()
+  expect(await screen.findByText('HR-0001')).toBeInTheDocument()
+  expect(screen.queryByText(i18n.t('books.urgency.high'))).not.toBeInTheDocument()
+  expect(screen.queryByText(i18n.t('books.urgency.veryHigh'))).not.toBeInTheDocument()
+})
+
 describe('ApprovalsPage generic landing + URL canonicalization', () => {
   it('lands on received/sign/pending when the caller has signature work', async () => {
     vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())

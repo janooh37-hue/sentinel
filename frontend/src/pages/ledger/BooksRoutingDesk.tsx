@@ -452,7 +452,7 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen
         <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
           <span dir="auto" className={cn('min-w-0 break-words', inbox && !inbox.read_at ? 'font-semibold' : 'font-medium')}>{book.subject || t('ledger.booksDesk.untitled')}</span>
           {papers > 1 && <PaperCount count={papers} />}
-          {book.urgency !== 'Normal' && (
+          {(book.urgency === 'High' || book.urgency === 'Very High') && (
             <span className={cn('inline-flex shrink-0 items-center gap-1 text-xs font-semibold', book.urgency === 'Very High' ? 'text-destructive' : 'text-warning')}>
               <Flag className="h-3.5 w-3.5 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden />{t(`books.urgency.${book.urgency === 'Very High' ? 'veryHigh' : 'high'}`)}
             </span>

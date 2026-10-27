@@ -103,6 +103,14 @@ describe('Books routing desk', () => {
     expect(veryHigh).toHaveClass('text-destructive')
   })
 
+  it.each([null, 'Normal'])('does not flag %s urgency on ledger rows', async (urgency) => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, urgency }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(within(row).queryByText('Urgent')).not.toBeInTheDocument()
+    expect(within(row).queryByText('Very Urgent')).not.toBeInTheDocument()
+  })
+
   it.each([
     ['incoming', 'received'], ['done', 'done'], ['outgoing', 'sent'], ['archived', 'archived'],
   ])('maps the %s URL scope to inbox=%s', async (scope, inbox) => {
