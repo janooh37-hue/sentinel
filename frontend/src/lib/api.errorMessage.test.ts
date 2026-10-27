@@ -52,6 +52,20 @@ describe('apiErrorMessage', () => {
     expect(apiErrorMessage(refusal)).toBe(ar)
   })
 
+  it.each([
+    [
+      'LEDGER_BOOK_CHAIN_ONLY',
+      'Ledger Books are approved and signed only through their branch chain.',
+      'لا يُعتمد كتاب السجل ولا يُوقَّع إلا عبر تسلسل الفرع.',
+    ],
+    ['DRAFT_TAB_REQUIRED', 'Choose the tab (classification) first.', 'اختر التبويب أولاً.'],
+  ])('localizes the %s Ledger Book refusal even when the server text has Arabic letters', async (code, en, ar) => {
+    const refusal = new ApiError(409, code, 'Choose the tab (التبويب) first.')
+    expect(apiErrorMessage(refusal)).toBe(en)
+    await i18n.changeLanguage('ar')
+    expect(apiErrorMessage(refusal)).toBe(ar)
+  })
+
   it('keeps server detail in English', () => {
     expect(apiErrorMessage(new ApiError(401, 'UNAUTHENTICATED', 'Sign in again.'))).toBe('Sign in again.')
     expect(apiErrorMessage(new ApiError(409, 'LEAVE_STATE_FORBIDDEN', 'Leave is already approved.'))).toBe(

@@ -4004,6 +4004,17 @@
       "signerMismatch": "يجب أن يكون الموقّع هو الموظف المرتبط بحسابك.",
       "stagedImportOwner": "ملف الاستيراد المؤقت تابع لمستخدم آخر."
     },
+    "ledger": {
+      "chainOnly": "لا يُعتمد كتاب السجل ولا يُوقَّع إلا عبر تسلسل الفرع.",
+      "revisionLocked": "هذا الإصدار موقّع ومقفل. ابدأ تصحيحًا لتعديله.",
+      "revisionNotSigned": "لا يبدأ التصحيح إلا من إصدار موقّع.",
+      "draftTabRequired": "اختر التبويب أولاً.",
+      "draftSubjectRequired": "اكتب موضوعًا واحدًا على الأقل.",
+      "draftBodyRequired": "اكتب نص الكتاب أولاً.",
+      "imageEmpty": "الصورة فارغة.",
+      "imageTooLarge": "الصورة كبيرة جدًا (5 ميجابايت كحد أقصى).",
+      "imageTypeUnsupported": "تُقبل صور PNG وJPEG وGIF وWebP فقط."
+    },
     "boundary": {
       "bodyLead": "فقدت هذه الشاشة اتصالها.",
       "bodyReassure": "لن يضيع أي عمل قمت به",
