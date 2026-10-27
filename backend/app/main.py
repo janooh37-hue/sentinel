@@ -41,6 +41,7 @@ from app.api.v1 import intake as intake_v1
 from app.api.v1 import item_permits as item_permits_v1
 from app.api.v1 import leaves as leaves_v1
 from app.api.v1 import ledger as ledger_v1
+from app.api.v1 import ledger_books as ledger_books_v1
 from app.api.v1 import managers as managers_v1
 from app.api.v1 import notifications as notifications_v1
 from app.api.v1 import notify as notify_v1
@@ -311,6 +312,8 @@ def create_app() -> FastAPI:
     # Smart folders mount BEFORE the ledger router so the static
     # /ledger/smart-folders paths win over the /ledger/{entry_id} catch-all.
     app.include_router(smart_folders_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    # Ledger Books mount before ledger too: /ledger/drafts, /ledger/books.
+    app.include_router(ledger_books_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(ledger_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(correspondence_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(editor_templates_v1.router, prefix="/api/v1", dependencies=auth_gate)

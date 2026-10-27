@@ -26,7 +26,12 @@ from sqlalchemy.sql.elements import ColumnElement
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import grades
-from app.core.constants import ALLOWED_DOC_EXTS, CLASSIFIED_BOOK_FORMS, STAMP_STYLES
+from app.core.constants import (
+    ALLOWED_DOC_EXTS,
+    CLASSIFIED_BOOK_FORMS,
+    LEDGER_BOOK_TEMPLATE_ID,
+    STAMP_STYLES,
+)
 from app.core.form_kind import (
     OTHER_SERVICE_ID,
     SERVICE_IDS,
@@ -338,10 +343,18 @@ def _inmate_reporter_book_visible(book: Book, user_id: int) -> bool:
     return False
 
 
+# Records numbered in the classified register: the DOCX forms plus Ledger Books
+# (HTML, so not in CLASSIFIED_BOOK_FORMS). A denied التبويب hides them all.
+_CLASSIFIED_REGISTER_TEMPLATE_IDS: Final[frozenset[str]] = CLASSIFIED_BOOK_FORMS | {
+    LEDGER_BOOK_TEMPLATE_ID
+}
+
+
 def _classified_under_clause(category_ids: set[str]) -> ColumnElement[bool]:
-    """A classified-register book (General Book / Security Permit, or version-less
-    or template-less) filed under one of these classifications. Auto-classified papers
-    from other forms (leave, resignation) carry a code too but are never matched."""
+    """A classified-register book (General Book / Security Permit / Ledger Book, or
+    version-less or template-less) filed under one of these classifications.
+    Auto-classified papers from other forms (leave, resignation) carry a code too
+    but are never matched."""
     newest_template_id = (
         select(BookVersion.template_id)
         .where(BookVersion.book_id == Book.id)
@@ -354,7 +367,7 @@ def _classified_under_clause(category_ids: set[str]) -> ColumnElement[bool]:
         Book.classification_code.in_(sorted(category_ids)),
         or_(
             newest_template_id.is_(None),
-            newest_template_id.in_(sorted(CLASSIFIED_BOOK_FORMS)),
+            newest_template_id.in_(sorted(_CLASSIFIED_REGISTER_TEMPLATE_IDS)),
         ),
     )
 
@@ -666,7 +679,7 @@ def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
         )
     newest_template_id = newest.template_id if newest is not None else None
     classification_denied = row.classification_code in denied_categories and (
-        newest_template_id is None or newest_template_id in CLASSIFIED_BOOK_FORMS
+        newest_template_id is None or newest_template_id in _CLASSIFIED_REGISTER_TEMPLATE_IDS
     )
     if (
         row.category_id in denied_categories
@@ -830,6 +843,40 @@ def require_grade_clearance(db: Session, user: User, grade: str) -> None:
             "Secret clearance is required for Secret records.",
             http_status=403,
         )
+
+
+def is_ledger_book(book: Book) -> bool:
+    """A Ledger Book: every Revision carries the Ledger Book template id."""
+    return bool(book.versions) and all(
+        version.template_id == LEDGER_BOOK_TEMPLATE_ID for version in book.versions
+    )
+
+
+def ledger_revision_locked(db: Session, book: Book) -> bool:
+    """A Ledger Book whose latest Revision is signed (ADR 0008): immutable."""
+    if not is_ledger_book(book):
+        return False
+    latest = max(book.versions, key=lambda version: version.version_no)
+    return latest.signed_at is not None
+
+
+_REVISION_LOCKED_MESSAGE = (
+    "The signed Revision is locked. Start a correction Revision to change it."
+)
+
+
+def require_ledger_revision_unlocked(db: Session, book: Book) -> None:
+    """Refuse any change to a signed Ledger Book Revision; a correction
+    Revision is the only way forward (ADR 0008, "Signature locks the Revision")."""
+    if ledger_revision_locked(db, book):
+        raise AppError("REVISION_LOCKED", _REVISION_LOCKED_MESSAGE, http_status=409)
+
+
+def _require_ledger_version_unsigned(version: BookVersion) -> None:
+    """Version-scoped twin of :func:`require_ledger_revision_unlocked`: any
+    signed Ledger Book Revision, superseded or not, stays immutable."""
+    if version.template_id == LEDGER_BOOK_TEMPLATE_ID and version.signed_at is not None:
+        raise AppError("REVISION_LOCKED", _REVISION_LOCKED_MESSAGE, http_status=409)
 
 
 def resolve_inmate_report_manager(db: Session) -> tuple[User, Manager]:
@@ -1538,6 +1585,7 @@ def create_book(db: Session, payload: BookCreate, *, created_by_user_id: int | N
 def update_book(db: Session, book_id: int, payload: BookUpdate) -> Book:
     """Partial update — subject, direction, stamp_style only."""
     row = get_book(db, book_id)
+    require_ledger_revision_unlocked(db, row)
     data: dict[str, Any] = payload.model_dump(exclude_unset=True)
     for k, v in data.items():
         setattr(row, k, v)
@@ -1579,6 +1627,7 @@ def delete_book(db: Session, book_id: int, *, user_id: int | None = None) -> Non
     approved (or awaiting a scan), or has an active Word edit session.
     """
     row = get_book(db, book_id)
+    require_ledger_revision_unlocked(db, row)
     has_active_session = has_active_edit_session(db, row.id)
     if not is_deletable(row, has_active_session):
         raise AppError(
@@ -1947,6 +1996,7 @@ def submit_for_approval(
     reviewer steps. The approver defaults to the doc's linked manager
     (Book.doc_manager_id → Manager.user_id) when ``approver_user_id`` is None."""
     book = _get_book_with_versions(db, book_id)
+    require_ledger_revision_unlocked(db, book)
     version = _current_version(book)
     if version is None:
         raise ValidationFailedError("NO_VERSION", "Book has no version to submit")
@@ -2138,6 +2188,7 @@ def decide_step(
             "Approval is via sign_book, not decide_step",
         )
     book = _get_book_with_versions(db, book_id)
+    require_ledger_revision_unlocked(db, book)
     _require_current_revision(db, book, version_id)
     _require_assignment_action(db, book, user_id)
     current = _current_pending_step(book)
@@ -2302,6 +2353,7 @@ def override_state(
             allowed=list(OVERRIDABLE_STATES),
         )
     book = _get_book_with_versions(db, book_id)
+    require_ledger_revision_unlocked(db, book)
     previous = displayed_state(book)
     if previous == target_state:
         raise ValidationFailedError(
@@ -2359,6 +2411,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     from app.services import document_service, included_papers_service, signature_placement_service
 
     book = _get_book_with_versions(db, book_id)
+    require_ledger_revision_unlocked(db, book)
     _require_current_revision(db, book, version_id)
     _require_assignment_action(db, book, user_id)
     current = _current_pending_step(book)
@@ -2528,6 +2581,7 @@ def add_note(
     if not note:
         raise ValidationFailedError("EMPTY_NOTE", "A note is required")
     book = _get_book_with_versions(db, book_id)
+    require_ledger_revision_unlocked(db, book)
     _require_current_revision(db, book, version_id)
     _require_assignment_action(db, book, user_id)
     current = _current_pending_step(book)
@@ -2582,6 +2636,7 @@ def create_annotation(
 ) -> BookAnnotation:
     """Persist a pin/highlight markup against a version. Geometry is normalized 0-1."""
     version = _get_version_in_book(db, book_id, version_id)
+    _require_ledger_version_unsigned(version)
     if version.status == "approved":
         raise ValidationFailedError(
             "VERSION_LOCKED",
@@ -2628,6 +2683,7 @@ def delete_annotation(
     db: Session, book_id: int, version_id: int, annotation_id: int, *, user_id: int
 ) -> None:
     version = _get_version_in_book(db, book_id, version_id)
+    _require_ledger_version_unsigned(version)
     if version.status == "approved":
         raise ValidationFailedError(
             "VERSION_LOCKED",
@@ -3493,6 +3549,7 @@ def record_review(
     if decision not in _REVIEW_DECISIONS:
         raise ValidationFailedError("BAD_DECISION", f"{decision!r} is not a valid review decision")
     book = _get_book_with_versions(db, book_id)
+    require_ledger_revision_unlocked(db, book)
     _require_current_revision(db, book, version_id)
     _require_assignment_action(db, book, user_id, reviewer=True)
     step = _my_pending_reviewer_step(book, user_id)
@@ -3530,6 +3587,7 @@ def add_reviewers(db: Session, book_id: int, *, user_ids: Sequence[int]) -> Book
     """Append advisory reviewer steps to the current pending version. Skips the
     approver and existing reviewers; requires the book to be pending."""
     book = _get_book_with_versions(db, book_id)
+    require_ledger_revision_unlocked(db, book)
     if book.approval_state != "pending":
         raise ValidationFailedError(
             "NOT_PENDING", "Reviewers can only be added to a pending record"
@@ -3575,6 +3633,7 @@ def add_reviewers(db: Session, book_id: int, *, user_ids: Sequence[int]) -> Book
 def remove_reviewer(db: Session, book_id: int, *, user_id: int) -> Book:
     """Drop a pending reviewer step (no-op if absent). Never touches the approver."""
     book = _get_book_with_versions(db, book_id)
+    require_ledger_revision_unlocked(db, book)
     version = _current_version(book)
     if version is not None:
         for s in list(version.approval_steps):
@@ -3813,6 +3872,7 @@ def add_attachment(
     collisions are de-duped so no upload overwrites an earlier file's bytes.
     """
     book = get_book(db, book_id)
+    require_ledger_revision_unlocked(db, book)
 
     if len(data) == 0:
         raise ValidationFailedError("BOOK_EMPTY_FILE", "Uploaded file is empty")
@@ -3992,6 +4052,7 @@ def replace_attachment(db: Session, book_id: int, index: int, filename: str, dat
     upload) while keeping the index stable. Validates like ``add_attachment``;
     unlinks the previous file. Raises ``NotFoundError`` on an out-of-range index."""
     book = get_book(db, book_id)
+    require_ledger_revision_unlocked(db, book)
     paths = list(book.attachment_paths or [])
     if index < 0 or index >= len(paths):
         raise NotFoundError("ATTACHMENT_NOT_FOUND", "attachment not found", index=index)
@@ -4045,6 +4106,7 @@ def replace_signed_copy(
     "I filed the wrong signed scan" fix. Image scans are converted to PDF, as in
     the scan-back flip. Raises when the current version carries no signed copy."""
     book = get_book(db, book_id)
+    require_ledger_revision_unlocked(db, book)
     version = _current_version(book)
     if version is None or not version.signed_pdf_path:
         raise ValidationFailedError("NO_SIGNED_COPY", "This record has no signed copy to replace")
@@ -4140,6 +4202,7 @@ def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -
     from app.services import included_papers_service, signature_placement_service
 
     book = get_book(db, book_id)
+    require_ledger_revision_unlocked(db, book)
     version = _current_version(book)
     if version is None or not version.signed_pdf_path:
         raise ValidationFailedError("NO_SIGNED_COPY", "This record has no signed copy to unfile")
@@ -4196,6 +4259,7 @@ def detach_attachment(db: Session, book_id: int, rel_path: str) -> Book:
     ``add_attachment``): drop ``rel_path`` from ``Book.attachment_paths`` and
     delete the file. Used to UNDO an auto-filed scan. Idempotent."""
     book = get_book(db, book_id)
+    require_ledger_revision_unlocked(db, book)
     paths = list(book.attachment_paths or [])
     if rel_path in paths:
         paths.remove(rel_path)

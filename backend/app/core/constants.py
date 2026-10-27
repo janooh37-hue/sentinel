@@ -124,6 +124,12 @@ CLASSIFIED_BOOK_FORMS: Final[frozenset[str]] = frozenset(
     {"General Book", "Security Permit", "Vehicle Mileage Log"}
 )
 
+#: ``BookVersion.template_id`` of every Ledger Book Revision (ADR 0007/0008).
+#: HTML-authored, never a DOCX form, so deliberately NOT in
+#: ``CLASSIFIED_BOOK_FORMS`` (that set drives DOCX paths). Access checks that
+#: key the التبويب classification on that set name this id explicitly.
+LEDGER_BOOK_TEMPLATE_ID: Final[str] = "Ledger Book"
+
 #: Vehicle letterhead papers minted only by the vehicles module. Their refs
 #: print in the body's «الرقم:» line instead of the English header stamp.
 VEHICLE_LETTER_FORMS: Final[frozenset[str]] = frozenset(
