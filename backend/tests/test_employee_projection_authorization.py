@@ -159,7 +159,7 @@ def _revision(records, book, number):
     return version, documents
 
 
-@pytest.mark.parametrize("restriction", ["personal", "secret", "deleted", "revision"])
+@pytest.mark.parametrize("restriction", ["named", "secret", "deleted", "revision"])
 def test_document_metadata_uses_exact_owning_revision_on_every_employee_route(records, restriction):
     book = Book(
         category_id="HR",
@@ -167,7 +167,8 @@ def test_document_metadata_uses_exact_owning_revision_on_every_employee_route(re
         subject="Protected Record",
         employee_id=records.employee.id,
         created_by_user_id=records.admin.id,
-        confidentiality=restriction if restriction in ("personal", "secret") else "general",
+        grade="secret" if restriction == "secret" else "unclassified",
+        distribution="named" if restriction == "named" else "organization",
         approval_state="approved",
     )
     records.db.add(book)

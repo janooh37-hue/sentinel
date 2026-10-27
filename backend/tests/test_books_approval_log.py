@@ -720,7 +720,7 @@ def test_completed_review_survives_resubmission_without_reviving_revocation(api_
     book_service.submit_for_approval(
         api_db,
         book.id,
-        priority="Normal",
+        urgency="Normal",
         approver_user_id=signer.id,
         reviewer_user_ids=[reviewer.id],
         submitted_by_user_id=submitter.id,
@@ -926,7 +926,7 @@ def test_restricted_worklist_row_never_leaks_the_live_current_submitter_name(api
     to the Book's LIVE, current submitter for a restricted (assigned_revision)
     row — that submitter may belong to a later revision the caller has no
     authorization to read. It must come from the assigned revision's own
-    frozen `approval_context` snapshot, exactly like `priority` and the
+    frozen `approval_context` snapshot, exactly like `urgency` and the
     doc-manager fields already do."""
     from app.db.models import UserPermission
     from app.services import book_service
@@ -946,6 +946,7 @@ def test_restricted_worklist_row_never_leaks_the_live_current_submitter_name(api
         decided_at=_days_ago(1),
     )
     v1 = book.versions[0]
+    book.urgency = "Very High"
     book_service.capture_approval_context(
         api_db,
         book,
@@ -960,6 +961,7 @@ def test_restricted_worklist_row_never_leaks_the_live_current_submitter_name(api
     # Book.submitted_by_user_id now points at someone the restricted signer
     # (retained access to v1 only) is not authorized to see.
     book.submitted_by_user_id = secret_resubmitter.id
+    book.urgency = "Normal"
     api_db.commit()
 
     row = (
@@ -971,6 +973,7 @@ def test_restricted_worklist_row_never_leaks_the_live_current_submitter_name(api
     assert row["submitted_by_user_id"] is None
     assert row["submitted_by_name"] != "secret-resubmitter@x.ae"
     assert row["submitted_by_name"] == "original-submitter@x.ae"
+    assert row["urgency"] == "Very High"
 
 
 # ── default sort: newest first ────────────────────────────────────────────────
@@ -1054,3 +1057,23 @@ def test_approval_summary_sent_oldest_stays_the_oldest(api_db: Session):
     summary = _client(api_db, submitter).get("/api/v1/books/approval-summary").json()
     assert summary["sent"]["count"] == 3
     assert summary["sent"]["oldest"]["book_id"] == 1
+
+
+def test_submit_very_high_urgency_round_trips(api_db: Session):
+    submitter = _user(api_db, "urgent-submitter@x.ae", "admin")
+    signer = _user(api_db, "urgent-signer@x.ae", "manager")
+    book = _submitted_book(api_db, book_id=1, ref="HR-URGENT", submitter=submitter, approver=signer)
+    book.approval_state = "none"
+    book.versions[0].status = "draft"
+    api_db.commit()
+    client = _client(api_db, submitter)
+    response = client.post(
+        f"/api/v1/books/{book.id}/submit",
+        json={"urgency": "Very High", "approver_user_id": signer.id},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["urgency"] == "Very High"
+    assert client.get(f"/api/v1/books/{book.id}").json()["urgency"] == "Very High"
+    api_db.refresh(book)
+    assert book.urgency == "Very High"
+    assert book.versions[0].approval_context["urgency"] == "Very High"

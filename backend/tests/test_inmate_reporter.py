@@ -409,7 +409,7 @@ def test_submit_routes_to_the_configured_manager_only(api_db: Session) -> None:
     client_a = _client(api_db, a)
     resp = client_a.post(
         f"/api/v1/books/{result.book_id}/submit",
-        json={"priority": "Normal", "approver_user_id": None, "reviewer_user_ids": []},
+        json={"urgency": "Normal", "approver_user_id": None, "reviewer_user_ids": []},
     )
     assert resp.status_code == 200, resp.text
     book = api_db.get(Book, result.book_id)
@@ -431,7 +431,7 @@ def test_submit_rejects_explicit_approver_override(api_db: Session) -> None:
         book_service.submit_for_approval(
             api_db,
             result.book_id,
-            priority="Normal",
+            urgency="Normal",
             approver_user_id=n.id,
             reviewer_user_ids=[],
             submitted_by_user_id=a.id,
@@ -447,7 +447,7 @@ def test_submit_blocks_without_creating_steps_when_manager_unconfigured(api_db: 
         book_service.submit_for_approval(
             api_db,
             result.book_id,
-            priority="Normal",
+            urgency="Normal",
             approver_user_id=None,
             reviewer_user_ids=[],
             submitted_by_user_id=a.id,
@@ -468,7 +468,7 @@ def test_incomplete_submit_rejects_without_creating_steps(api_db: Session) -> No
         book_service.submit_for_approval(
             api_db,
             result.book_id,
-            priority="Normal",
+            urgency="Normal",
             approver_user_id=None,
             reviewer_user_ids=[],
             submitted_by_user_id=a.id,
@@ -490,7 +490,7 @@ def _full_lifecycle_to_pending(api_db: Session) -> tuple[User, User, Book]:
     book_service.submit_for_approval(
         api_db,
         result.book_id,
-        priority="Normal",
+        urgency="Normal",
         approver_user_id=None,
         reviewer_user_ids=[],
         submitted_by_user_id=a.id,
@@ -516,7 +516,7 @@ def test_b_can_read_pending_report_but_not_edit_or_submit(api_db: Session) -> No
 
     resubmit = client_b.post(
         f"/api/v1/books/{book.id}/submit",
-        json={"priority": "Normal", "approver_user_id": None, "reviewer_user_ids": []},
+        json={"urgency": "Normal", "approver_user_id": None, "reviewer_user_ids": []},
     )
     assert resubmit.status_code in (403, 409)
     assert a.id != b.id  # sanity: distinct accounts
@@ -552,7 +552,7 @@ def test_return_then_correct_then_resubmit_retains_owner_and_ref(api_db: Session
     book_service.submit_for_approval(
         api_db,
         book.id,
-        priority="Normal",
+        urgency="Normal",
         approver_user_id=None,
         reviewer_user_ids=[],
         submitted_by_user_id=a.id,
@@ -694,7 +694,7 @@ def test_duplicate_submit_cannot_reopen_pending_state(api_db: Session) -> None:
         book_service.submit_for_approval(
             api_db,
             book.id,
-            priority="Normal",
+            urgency="Normal",
             approver_user_id=None,
             reviewer_user_ids=[],
             submitted_by_user_id=a.id,
@@ -985,7 +985,7 @@ def test_signed_report_submit_routes_to_manager_pending_worklist(api_db: Session
 
     response = _client(api_db, reporter).post(
         f"/api/v1/books/{book.id}/submit",
-        json={"priority": "Normal", "approver_user_id": None, "reviewer_user_ids": []},
+        json={"urgency": "Normal", "approver_user_id": None, "reviewer_user_ids": []},
     )
     assert response.status_code == 200, response.text
     api_db.refresh(book)

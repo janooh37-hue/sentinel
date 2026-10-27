@@ -1,4 +1,4 @@
-"""Printed level mark (سري / شخصي) in every header part of a record DOCX."""
+"""Printed grade marks in every header part of a record DOCX."""
 
 import shutil
 from pathlib import Path
@@ -38,9 +38,16 @@ def general_book(tmp_path: Path) -> Path:
     return path
 
 
-@pytest.mark.parametrize(("level", "text"), [("secret", "سري"), ("personal", "شخصي")])
-def test_mark_in_every_header_part(general_book: Path, level: str, text: str) -> None:
-    assert apply_level_mark(general_book, level)
+@pytest.mark.parametrize(
+    ("grade", "text"),
+    [
+        ("secret", "سري"),
+        ("top_secret", "سري للغاية"),
+        ("addressee_only", "سري للغاية — لعنايته فقط"),
+    ],
+)
+def test_mark_in_every_header_part(general_book: Path, grade: str, text: str) -> None:
+    assert apply_level_mark(general_book, grade)
     headers = _header_elements(general_book)
     assert len(headers) == 3  # even, default, first
     for hdr in headers:
@@ -66,13 +73,16 @@ def test_run_properties_exact(general_book: Path) -> None:
 def test_repeat_and_switch_keep_one_mark_then_remove(general_book: Path) -> None:
     assert apply_level_mark(general_book, "secret")
     assert apply_level_mark(general_book, "secret")
-    assert apply_level_mark(general_book, "personal")
-    for hdr in _header_elements(general_book):
-        (mark,) = _marks(hdr)
-        assert _text(mark) == "شخصي"
-    for level in ("general", "directed"):
-        assert apply_level_mark(general_book, level)
-        assert all(not _marks(hdr) for hdr in _header_elements(general_book))
+    for grade, text in (
+        ("top_secret", "سري للغاية"),
+        ("addressee_only", "سري للغاية — لعنايته فقط"),
+    ):
+        assert apply_level_mark(general_book, grade)
+        for hdr in _header_elements(general_book):
+            (mark,) = _marks(hdr)
+            assert _text(mark) == text
+    assert apply_level_mark(general_book, "unclassified")
+    assert all(not _marks(hdr) for hdr in _header_elements(general_book))
 
 
 def test_document_without_header_gets_one(tmp_path: Path) -> None:
@@ -81,7 +91,7 @@ def test_document_without_header_gets_one(tmp_path: Path) -> None:
     assert apply_level_mark(path, "secret")
     (hdr,) = _header_elements(path)
     assert len(_marks(hdr)) == 1
-    assert apply_level_mark(path, "general")
+    assert apply_level_mark(path, "unclassified")
     assert not _marks(_header_elements(path)[0])
 
 
