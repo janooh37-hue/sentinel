@@ -244,6 +244,7 @@ def _discard_inaccessible_word_session(db: Session, book: Book) -> None:
 
 def set_grade(db: Session, user: User, book: Book, grade: str) -> Book:
     book_service.require_full_book_access(db, user, book, write=True)
+    book_service.require_ledger_revision_unlocked(db, book)
     if not can_change_grade(user, book):
         raise AppError(
             "FORBIDDEN",
@@ -268,6 +269,7 @@ def restore_organization_distribution(db: Session, user: User, book: Book, reaso
         raise AppError(
             "FORBIDDEN", "Only an admin can restore organization distribution.", http_status=403
         )
+    book_service.require_ledger_revision_unlocked(db, book)
     if book.grade != grades.UNCLASSIFIED or book.distribution != grades.NAMED:
         raise AppError(
             "DISTRIBUTION_NOT_NAMED",
@@ -444,6 +446,7 @@ def send(
     if user.role == INMATE_REPORTER_ROLE:
         raise AppError("FORBIDDEN", "Inmate reporters cannot send records.", http_status=403)
     book_service.require_full_book_access(db, user, book)
+    book_service.require_ledger_revision_unlocked(db, book)
     if book.grade in grades.RESTRICTED_GRADES and not _is_writer(user, book):
         raise AppError(
             "WRITER_ONLY_SEND",
@@ -612,6 +615,7 @@ def _get_row(db: Session, book: Book, recipient_id: int) -> BookRecipient:
 def recall(db: Session, user: User, book: Book, recipient_id: int) -> None:
     """Sender, manager, or admin revokes one active send (history row stays)."""
     book_service.require_full_book_access(db, user, book)
+    book_service.require_ledger_revision_unlocked(db, book)
     row = _get_row(db, book, recipient_id)
     if row.sent_by_user_id != user.id and not _is_manager_or_admin(user):
         raise AppError(

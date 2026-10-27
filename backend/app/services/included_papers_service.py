@@ -952,6 +952,7 @@ def save_package(
     proposal: Sequence[PaperProposal],
 ) -> PackageResult:
     book, version, document = _editable_context(db, book_id, user_id)
+    book_service.require_ledger_revision_unlocked(db, book)
     _check_revision(book, revision)
     old_metadata, proposed = _resolve_proposal(book, version, proposal, user_id=user_id)
     with tempfile.TemporaryDirectory(prefix="included-base-") as raw_temp:

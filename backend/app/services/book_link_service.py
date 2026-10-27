@@ -126,6 +126,7 @@ def thread(db: Session, user: User, book: Book) -> list[BookThreadItem]:
 
 def link(db: Session, user: User, book: Book, target_id: int) -> BookThreadItem:
     book_service.require_full_book_access(db, user, book, write=True)
+    book_service.require_ledger_revision_unlocked(db, book)
     target = book_service.get_book(db, target_id)
     book_service.require_full_book_access(db, user, target)
     if target.id == book.id:
@@ -153,6 +154,7 @@ def link(db: Session, user: User, book: Book, target_id: int) -> BookThreadItem:
 
 def unlink(db: Session, user: User, book: Book, target_id: int) -> None:
     book_service.require_full_book_access(db, user, book, write=True)
+    book_service.require_ledger_revision_unlocked(db, book)
     target = db.get(Book, target_id)
     if target is None or target.deleted_at is not None:
         raise NotFoundError("LINK_NOT_FOUND", "Reference not found")
