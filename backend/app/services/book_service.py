@@ -879,6 +879,22 @@ def _require_ledger_version_unsigned(version: BookVersion) -> None:
         raise AppError("REVISION_LOCKED", _REVISION_LOCKED_MESSAGE, http_status=409)
 
 
+def require_not_ledger_book(book: Book) -> None:
+    """Refuse the generic approval flow for any Ledger Book, signed or not.
+
+    ADR 0008: Ledger Book signing authority comes only from the Branch chain,
+    never from a capability, so no generic submit/sign/return/reject/review,
+    reviewer change, state override or recorded signed scan applies. Checked
+    before the signature lock, so these paths always answer this code.
+    """
+    if is_ledger_book(book):
+        raise AppError(
+            "LEDGER_BOOK_CHAIN_ONLY",
+            "Ledger Books are approved only through their Branch chain.",
+            http_status=409,
+        )
+
+
 def resolve_inmate_report_manager(db: Session) -> tuple[User, Manager]:
     """The one User + linked Manager pair ``inmate_reporter`` submissions
     route to (``settings.inmate_reporter_manager_user_id``, admin-only —
@@ -1987,7 +2003,7 @@ def submit_for_approval(
     reviewer steps. The approver defaults to the doc's linked manager
     (Book.doc_manager_id → Manager.user_id) when ``approver_user_id`` is None."""
     book = _get_book_with_versions(db, book_id)
-    require_ledger_revision_unlocked(db, book)
+    require_not_ledger_book(book)
     version = _current_version(book)
     if version is None:
         raise ValidationFailedError("NO_VERSION", "Book has no version to submit")
@@ -2179,7 +2195,7 @@ def decide_step(
             "Approval is via sign_book, not decide_step",
         )
     book = _get_book_with_versions(db, book_id)
-    require_ledger_revision_unlocked(db, book)
+    require_not_ledger_book(book)
     _require_current_revision(db, book, version_id)
     _require_assignment_action(db, book, user_id)
     current = _current_pending_step(book)
@@ -2344,7 +2360,7 @@ def override_state(
             allowed=list(OVERRIDABLE_STATES),
         )
     book = _get_book_with_versions(db, book_id)
-    require_ledger_revision_unlocked(db, book)
+    require_not_ledger_book(book)
     previous = displayed_state(book)
     if previous == target_state:
         raise ValidationFailedError(
@@ -2402,7 +2418,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     from app.services import document_service, included_papers_service, signature_placement_service
 
     book = _get_book_with_versions(db, book_id)
-    require_ledger_revision_unlocked(db, book)
+    require_not_ledger_book(book)
     _require_current_revision(db, book, version_id)
     _require_assignment_action(db, book, user_id)
     current = _current_pending_step(book)
@@ -2572,7 +2588,7 @@ def add_note(
     if not note:
         raise ValidationFailedError("EMPTY_NOTE", "A note is required")
     book = _get_book_with_versions(db, book_id)
-    require_ledger_revision_unlocked(db, book)
+    require_not_ledger_book(book)
     _require_current_revision(db, book, version_id)
     _require_assignment_action(db, book, user_id)
     current = _current_pending_step(book)
@@ -3540,7 +3556,7 @@ def record_review(
     if decision not in _REVIEW_DECISIONS:
         raise ValidationFailedError("BAD_DECISION", f"{decision!r} is not a valid review decision")
     book = _get_book_with_versions(db, book_id)
-    require_ledger_revision_unlocked(db, book)
+    require_not_ledger_book(book)
     _require_current_revision(db, book, version_id)
     _require_assignment_action(db, book, user_id, reviewer=True)
     step = _my_pending_reviewer_step(book, user_id)
@@ -3578,7 +3594,7 @@ def add_reviewers(db: Session, book_id: int, *, user_ids: Sequence[int]) -> Book
     """Append advisory reviewer steps to the current pending version. Skips the
     approver and existing reviewers; requires the book to be pending."""
     book = _get_book_with_versions(db, book_id)
-    require_ledger_revision_unlocked(db, book)
+    require_not_ledger_book(book)
     if book.approval_state != "pending":
         raise ValidationFailedError(
             "NOT_PENDING", "Reviewers can only be added to a pending record"
@@ -3624,7 +3640,7 @@ def add_reviewers(db: Session, book_id: int, *, user_ids: Sequence[int]) -> Book
 def remove_reviewer(db: Session, book_id: int, *, user_id: int) -> Book:
     """Drop a pending reviewer step (no-op if absent). Never touches the approver."""
     book = _get_book_with_versions(db, book_id)
-    require_ledger_revision_unlocked(db, book)
+    require_not_ledger_book(book)
     version = _current_version(book)
     if version is not None:
         for s in list(version.approval_steps):
@@ -3915,6 +3931,7 @@ def add_attachment(
         else None
     )
     if flip_version is not None:
+        require_not_ledger_book(book)
         # Recording a physically-signed paper. Authority is the route gate
         # (books.edit) — unified across all flip states; the real signature is
         # on the paper, the app user is recording it.
@@ -4193,7 +4210,7 @@ def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -
     from app.services import included_papers_service, signature_placement_service
 
     book = get_book(db, book_id)
-    require_ledger_revision_unlocked(db, book)
+    require_not_ledger_book(book)
     version = _current_version(book)
     if version is None or not version.signed_pdf_path:
         raise ValidationFailedError("NO_SIGNED_COPY", "This record has no signed copy to unfile")

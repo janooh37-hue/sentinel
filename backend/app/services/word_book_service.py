@@ -704,7 +704,7 @@ def finish_word_session(
     book = db.get(Book, book_id)
     if book is None:
         raise AppError("BOOK_NOT_FOUND", f"Book {book_id} not found", http_status=404)
-    book_service.require_ledger_revision_unlocked(db, book)
+    book_service.require_not_ledger_book(book)
 
     session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
     if session is None:

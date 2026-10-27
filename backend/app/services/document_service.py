@@ -2101,10 +2101,12 @@ def generate_document(
                 f"Book {revise_of_book_id} does not exist",
                 id=revise_of_book_id,
             )
-        if record_access_user is not None:
-            from app.services import book_service
+        from app.services import book_service
 
+        if record_access_user is not None:
             book_service.require_revise_access(db, record_access_user, revise_book)
+        # A DOCX revision would reset a Ledger Book's approval_state outside its chain.
+        book_service.require_not_ledger_book(revise_book)
         if revise_book.approval_state not in (
             "returned",
             "rejected",
