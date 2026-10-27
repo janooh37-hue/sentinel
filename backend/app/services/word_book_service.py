@@ -616,9 +616,7 @@ def create_report_word_book(
         template_id="Report",
         data=data,
         destination=output_path,
-        stamps=artifact_service.StampPlan(
-            grade=book.grade, sync_general_book_footer=True
-        ),
+        stamps=artifact_service.StampPlan(grade=book.grade, sync_general_book_footer=True),
         convert_pdf=False,
         collision="exact",
     )
