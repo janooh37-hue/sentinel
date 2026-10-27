@@ -1,93 +1,54 @@
-/**
- * SentApprovalsWidget — lower-zone metric card for the caller's own pending
- * sent submissions (#31, revision-scoped). Registered as widget id
- * `sent_approvals`. Uses separate links for "Needs your changes" and "All
- * requests I sent" rather than a clickable parent containing interactive
- * children.
- *
- * Self-hides only when the caller lacks sent-scope visibility at all
- * (`can_view_sent === false`) — a valid zero-pending scope still renders the
- * mockup's calm empty state.
- */
-
+import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { differenceInCalendarDays, parseISO } from 'date-fns'
-import { CheckCircle2, Send } from 'lucide-react'
-
-import { Skeleton } from '@/components/ui/skeleton'
-import { approvalQueueUrl } from '@/lib/approvals'
+import { WidgetEmpty, WidgetFrame } from '@/components/dashboard/WidgetFrame'
+import { useFitCount } from '@/components/dashboard/useFitCount'
+import { api } from '@/lib/api'
+import { approvalQueueUrl, approvalRecordUrl } from '@/lib/approvals'
+import type { ApprovalContext } from '@/lib/approvals'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
+import { useAuth } from '@/lib/authContext'
+import { useRecordDelete } from '@/pages/books/RecordDeleteProvider'
+import { BIG_NUMBER, INLINE_LINK, MoreRecords, RECORD_ROW, WidgetFeedback } from './recordWidgetParts'
+import { recordAge } from './recordWidgetTime'
+import type { WidgetProps } from './types'
 
-export function SentApprovalsWidget(): React.JSX.Element | null {
-  const { t } = useTranslation()
-  const summaryQuery = useApprovalSummary()
-  const summary = summaryQuery.data
-  const isLoading = summaryQuery.isPending
+const CONTEXT: ApprovalContext = { tab: 'sent', status: 'pending', sort: 'newest', page: 1 }
+const PENDING_URL = approvalQueueUrl(CONTEXT)
+const RETURNED_URL = approvalQueueUrl({ ...CONTEXT, status: 'returned' })
 
-  if (summary && !summary.can_view_sent) return null
-
-  const count = summary?.sent.count ?? 0
+export function SentApprovalsWidget({ tier, rows }: WidgetProps): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+  const isAr = i18n.language.startsWith('ar')
+  const { user } = useAuth()
+  const { pendingIds } = useRecordDelete()
+  const query = useApprovalSummary()
+  const summary = query.data
+  const list = tier === 'list' || tier === 'tall'
+  const preview = useQuery({
+    queryKey: ['books', 'approval-log', user?.id ?? 0, 'preview', CONTEXT, rows],
+    queryFn: () => api.listApprovalLog({ scope: 'sent', status: 'pending', sort: 'newest', limit: rows }),
+    enabled: list && !!summary && summary.sent.count > 0,
+  })
+  const candidates = preview.data?.items.filter((item) => !pendingIds.has(item.book_id)) ?? []
+  const { listRef, visibleCount } = useFitCount(Math.min(candidates.length, rows))
+  const visible = candidates.slice(0, visibleCount)
   const oldest = summary?.sent.oldest
-  const returnedCount = summary?.returned_count ?? 0
-  const age =
-    oldest?.submitted_at != null
-      ? Math.max(0, differenceInCalendarDays(new Date(), parseISO(oldest.submitted_at)))
-      : null
-
-  const allSentUrl = approvalQueueUrl({ tab: 'sent', status: 'all', sort: 'newest', page: 1 })
-  const returnedUrl = approvalQueueUrl({ tab: 'sent', status: 'returned', sort: 'newest', page: 1 })
-
   return (
-    <div className="flex h-full w-full flex-col rounded-2xl bg-surface p-5">
-      <div className="flex min-h-[28px] items-center gap-2 text-[0.86em] font-medium text-muted-foreground">
-        <Send className="h-4 w-4" strokeWidth={1.8} aria-hidden />
-        {t('dashboard.widgetLabels.sent_approvals')}
-      </div>
-
-      <div className="mt-1.5 text-[2.4em] font-bold leading-none tracking-tight text-foreground tabular-nums">
-        {isLoading ? <Skeleton className="h-9 w-16" /> : count}
-      </div>
-
-      {!isLoading &&
-        (count > 0 && oldest ? (
-          <div className="mt-2 flex flex-col gap-0.5 text-[0.78em] text-muted-foreground">
-            {oldest.subject && (
-              <p className="line-clamp-1" dir="auto">
-                {oldest.subject}
-              </p>
-            )}
-            <p>
-              {t('books.approvals.assignedSigner')}:{' '}
-              <span className="text-foreground">{oldest.approver_name ?? '—'}</span>
-              {age != null && ` · ${t('books.approvals.daysAgo', { count: age })}`}
-            </p>
-          </div>
-        ) : (
-          <div className="mt-2 flex items-center gap-1.5 text-[0.78em] text-success">
-            <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-            {t('books.approvals.emptySent')}
-          </div>
-        ))}
-
-      {returnedCount > 0 && (
-        <Link
-          to={returnedUrl}
-          className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-full bg-warning-soft px-2.5 py-1 text-[0.72em] font-semibold text-warning hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-        >
-          {t('books.approvals.needsChanges')} · {returnedCount}
-        </Link>
-      )}
-
-      <Link
-        to={allSentUrl}
-        className="ms-auto mt-auto flex items-center gap-1 pt-3.5 text-[0.78em] font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-      >
-        {t('books.approvals.allSent')}
-        <span aria-hidden className="rtl:rotate-180">
-          →
-        </span>
-      </Link>
-    </div>
+    <WidgetFrame title={t('dashboard.widgets.sent_approvals.title')} count={list ? summary?.sent.count : undefined} viewAllTo={PENDING_URL} compact={tier === 'glance'}>
+      {query.isPending || query.isError || !summary ? <WidgetFeedback pending={query.isPending} retry={query.refetch} /> : <>
+        {!list && summary.sent.count > 0 && <Link to={PENDING_URL} className={`${INLINE_LINK} flex shrink-0 items-baseline gap-2`}><bdi dir="ltr" className={BIG_NUMBER}>{summary.sent.count}</bdi>{' '}<span className="text-[0.75em] text-muted-foreground">{t('dashboard.widgets.sent_approvals.pending')}</span></Link>}
+        {summary.returned_count > 0 && <Link to={RETURNED_URL} className={`${INLINE_LINK} mt-1 w-fit shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[0.75em] text-accent`}>{t('dashboard.widgets.sent_approvals.needsChanges', { count: summary.returned_count })}</Link>}
+        {summary.sent.count === 0 ? <WidgetEmpty message={t('dashboard.widgets.sent_approvals.empty')} to={PENDING_URL} action={t('dashboard.widgets.sent_approvals.emptyAction')} /> : list ? preview.isPending || preview.isError ? <WidgetFeedback pending={preview.isPending} retry={preview.refetch} /> : <>
+          <ul ref={listRef} className="min-h-0 flex-1 overflow-hidden divide-y divide-hairline">
+            {visible.map((item) => <li key={item.book_id}><Link to={approvalRecordUrl(item.book_id, item.version_id ?? null, CONTEXT)} className={RECORD_ROW}>
+              <span className="min-w-0 flex-1"><span className="block truncate" dir="auto">{item.subject || item.ref_number}</span><span className="block truncate text-muted-foreground">{t('dashboard.widgets.sent_approvals.waitingOn', { name: (isAr ? item.approver_name_ar || item.approver_name : item.approver_name) || t('dashboard.widgets.sent_approvals.unassigned') })}</span></span>
+              <span className="max-w-24 shrink-0 text-muted-foreground">{recordAge(item.submitted_at, isAr)}</span>
+            </Link></li>)}
+          </ul>
+          <MoreRecords count={summary.sent.count - visible.length} to={PENDING_URL} labelKey="dashboard.widgets.sent_approvals.more" />
+        </> : tier === 'summary' && oldest && <p className="line-clamp-2 pt-1 text-[0.75em] text-muted-foreground" dir="auto">{t('dashboard.widgets.sent_approvals.oldest', { subject: oldest.subject || oldest.ref_number })} · {t('dashboard.widgets.sent_approvals.waitingOn', { name: (isAr ? oldest.approver_name_ar || oldest.approver_name : oldest.approver_name) || t('dashboard.widgets.sent_approvals.unassigned') })} · {recordAge(oldest.submitted_at, isAr)}</p>}
+      </>}
+    </WidgetFrame>
   )
 }

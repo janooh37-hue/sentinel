@@ -19,22 +19,21 @@ vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1 } }) }))
 vi.mock('@/lib/useIdentity', () => ({ useIdentity: () => ({ identity: null }) }))
 vi.mock('@/lib/useApprovalSummary', () => ({ useApprovalSummary: () => ({ data: undefined }) }))
 vi.mock('@/lib/api', () => ({
-  api: { getDashboardSummary: vi.fn(), getDashboardLayout: vi.fn() },
+  api: { getDashboardSummary: vi.fn(), getDashboardLayout: vi.fn(), getWorkforceAccess: vi.fn() },
 }))
-vi.mock('@/components/dashboard/CustomizeWidgetsDialog', () => ({ CustomizeWidgetsDialog: () => null }))
+vi.mock('@/pages/books/RecordDeleteProvider', () => ({ useRecordDelete: () => ({ pendingIds: new Set<number>() }) }))
 vi.mock('@/components/dashboard/WidgetEditDialog', () => ({ WidgetEditDialog: () => null }))
 vi.mock('@/pages/dashboard/widgets/WorkforceCoverageSheet', () => ({ WorkforceCoverageSheet: () => null }))
 vi.mock('@/components/refresh/PullToRefresh', () => ({ PullToRefresh: ({ children }: { children: React.ReactNode }) => children }))
 vi.mock('@/components/refresh/RefreshButton', () => ({ RefreshButton: () => null }))
 
-const readerCaps = ['employees.view', 'leaves.view', 'violations.view', 'ledger.view']
+const readerCaps = ['employees.view', 'leaves.view', 'violations.view', 'ledger.view', 'books.view']
 const visibleWidgets: Record<string, true> = {
   workspace: true,
   violations: true,
   ledger: true,
   on_leave_today: true,
   upcoming_leave: true,
-  recent_ledger: true,
 }
 
 function summary(): DashboardSummary {
@@ -47,7 +46,6 @@ function summary(): DashboardSummary {
       present_today: 7,
       forms_this_month: 4,
       open_violations_count: 6,
-      draft_count: 1,
       book_draft_count: 1,
     },
     on_leave_today: [{
@@ -65,11 +63,13 @@ function summary(): DashboardSummary {
       employee_name_en: 'Aisha Noor',
       employee_name_ar: 'عائشة نور',
       leave_type: 'annual',
+      start_date: '2026-10-20',
       end_date: '2026-10-23',
       days_remaining: 0,
     }],
-    recent_documents: [],
-    recent_ledger: [],
+    my_records: { month: '2026-10', from_date: '2026-10-01', to_date: '2026-10-31', approved: 4, pending: 0, awaiting_scan: 0, returned: 0, rejected: 0, not_submitted: 0, drafts: 1, latest_approved: [] },
+    unread_mail: { count: 2, latest: [] },
+    open_violations: { count: 6, latest: [] },
     email_sync: { enabled: false, last_synced_at: null, interval_minutes: 0, incoming_today: 0 },
   }
 }
@@ -116,27 +116,24 @@ describe.each([
 
   it('preserves all cards and hero returners for authorized readers', () => {
     renderPage()
-    expect(screen.getByRole('button', { name: i18n.t('dashboard.widgets.violations.header') })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: i18n.t('dashboard.widgets.ledger.header') })).toBeInTheDocument()
-    expect(screen.getByText(i18n.t('dashboard.workspace.title'))).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: i18n.t('dashboard.onLeave.title') })).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: i18n.t('dashboard.upcoming.title') })).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: i18n.t('dashboard.recent.ledger') })).toBeInTheDocument()
+    for (const id of ['violations', 'ledger', 'workspace', 'on_leave_today', 'upcoming_leave']) {
+      expect(screen.getByRole('region', { name: i18n.t(`dashboard.widgets.${id}.title`) })).toBeInTheDocument()
+    }
     expect(screen.getByRole('button', { name: i18n.t('dashboard.hero.reviewLeave') })).toBeInTheDocument()
   })
 
   it('hides violations when violations.view is denied', () => {
     capabilityState.allowed.delete('violations.view')
     renderPage()
-    expect(screen.queryByRole('button', { name: i18n.t('dashboard.widgets.violations.header') })).not.toBeInTheDocument()
-    expect(screen.getByText(i18n.t('dashboard.workspace.title'))).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: i18n.t('dashboard.widgets.violations.title') })).not.toBeInTheDocument()
+    expect(screen.getByText(i18n.t('dashboard.widgets.workspace.title'))).toBeInTheDocument()
   })
 
   it('hides leave sections, hero names and mobile leave chip when leaves.view is denied', () => {
     capabilityState.allowed.delete('leaves.view')
     renderPage()
-    expect(screen.queryByRole('region', { name: i18n.t('dashboard.onLeave.title') })).not.toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: i18n.t('dashboard.upcoming.title') })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: i18n.t('dashboard.widgets.on_leave_today.title') })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: i18n.t('dashboard.widgets.upcoming_leave.title') })).not.toBeInTheDocument()
     expect(screen.queryByText(language === 'ar' ? 'عائشة نور' : 'Aisha Noor')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: i18n.t('dashboard.hero.reviewLeave') })).not.toBeInTheDocument()
     expect(screen.queryByText(i18n.t('dashboard.hero.onLeaveChip'))).not.toBeInTheDocument()
@@ -146,15 +143,14 @@ describe.each([
   it('hides ledger metric and recent correspondence when ledger.view is denied', () => {
     capabilityState.allowed.delete('ledger.view')
     renderPage()
-    expect(screen.queryByRole('button', { name: i18n.t('dashboard.widgets.ledger.header') })).not.toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: i18n.t('dashboard.recent.ledger') })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: i18n.t('dashboard.widgets.ledger.title') })).not.toBeInTheDocument()
   })
 
   it('hides workspace when employees.view is denied', () => {
     capabilityState.allowed.delete('employees.view')
     renderPage()
-    expect(screen.queryByText(i18n.t('dashboard.workspace.title'))).not.toBeInTheDocument()
-    expect(screen.getByRole('region', { name: i18n.t('dashboard.onLeave.title') })).toBeInTheDocument()
+    expect(screen.queryByText(i18n.t('dashboard.widgets.workspace.title'))).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: i18n.t('dashboard.widgets.on_leave_today.title') })).toBeInTheDocument()
   })
 
   it('renders unavailable leave and on-site counts as em dashes, not zero or all-present claims', () => {
@@ -165,7 +161,7 @@ describe.each([
     data.on_leave_today = []
     data.upcoming_leave_ends = []
     renderPage(data)
-    const workspace = screen.getByText(i18n.t('dashboard.workspace.title')).closest('button')!
+    const workspace = screen.getByRole('region', { name: i18n.t('dashboard.widgets.workspace.title') })
     expect(within(workspace).getAllByText('—')).toHaveLength(2)
     expect(within(workspace).queryByText('0')).not.toBeInTheDocument()
     expect(within(workspace).getAllByText(language === 'ar' ? 'غير متاح' : 'Not available')).toHaveLength(2)
@@ -183,24 +179,23 @@ describe.each([
     expect(screen.queryByText(i18n.t('dashboard.hero.calm', { n: '—' }))).not.toBeInTheDocument()
   })
 
-  it('lets the sole rendered top card fill the row', () => {
+  it('packs the sole authorized card without a denied workspace placeholder', () => {
     capabilityState.allowed.delete('employees.view')
     const widgets = DEFAULT_WIDGETS.map((widget) => ({
-      ...widget, visible: widget.id === 'workspace' || widget.id === 'pending', zone: 'top' as const,
+      ...widget, visible: widget.id === 'workspace' || widget.id === 'pending',
     }))
     renderPage(summary(), widgets)
-    const card = screen.getByRole('button', { name: new RegExp(i18n.t('dashboard.pending.title')) })
-    expect(card.parentElement?.parentElement).not.toHaveClass('md:grid-cols-2')
+    expect(screen.getByTestId('widget-grid').querySelectorAll('[data-widget-id]')).toHaveLength(1)
+    expect(screen.getByRole('article', { name: i18n.t('dashboard.widgets.pending.title') })).toBeInTheDocument()
   })
 
-  it('omits zone wrappers when every configured card is denied', () => {
+  it('packs no placeholders when every configured card is denied', () => {
     capabilityState.allowed = new Set()
     const widgets = DEFAULT_WIDGETS.map((widget) => ({
       ...widget,
       visible: ['workspace', 'violations', 'ledger'].includes(widget.id),
-      zone: widget.id === 'workspace' ? 'top' as const : widget.id === 'violations' ? 'under_workspace' as const : 'under_quick_actions' as const,
     }))
-    const { container } = renderPage(summary(), widgets)
-    expect(container.querySelectorAll('.mb-6.grid')).toHaveLength(0)
+    renderPage(summary(), widgets)
+    expect(screen.getByTestId('widget-grid').querySelectorAll('[data-widget-id]')).toHaveLength(0)
   })
 })

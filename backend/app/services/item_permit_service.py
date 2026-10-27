@@ -13,13 +13,20 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Select, func, or_, select, text
+from sqlalchemy import ColumnElement, Select, case, func, or_, select, text
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.sql.elements import TextClause
 
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.core.permit_letter import build_item_permit_letter_html
 from app.db.models import AuditLog, Book, Employee, ItemPermit, User
-from app.schemas.item_permit import ItemPermitCreate, ItemPermitRead, ItemPermitUpdate
+from app.schemas.item_permit import (
+    ItemPermitCreate,
+    ItemPermitRead,
+    ItemPermitSummary,
+    ItemPermitUpdate,
+    ItemPermitZone,
+)
 from app.services import book_service, permit_service
 
 log = logging.getLogger(__name__)
@@ -65,10 +72,43 @@ def _base_query() -> Select[tuple[ItemPermit]]:
     )
 
 
+def _zone_clause(zone: ItemPermitZone) -> TextClause:
+    return text(
+        "EXISTS (SELECT 1 FROM json_each(item_permits.zones) WHERE value = :zone)"
+    ).bindparams(zone=zone)
+
+
+def summary(db: Session, *, user: User, zone: ItemPermitZone | None = None) -> ItemPermitSummary:
+    """Match to_read's visibility: inaccessible/missing letters count as none."""
+    visibility = book_service.user_visibility_clause(db, user)
+    state: ColumnElement[str] = func.coalesce(Book.approval_state, "none")
+    if visibility is not None:
+        state = case((visibility, state), else_="none")
+    stmt = (
+        select(state, func.count())
+        .select_from(ItemPermit)
+        .outerjoin(Book, Book.id == ItemPermit.book_id)
+        .where(ItemPermit.deleted_at.is_(None))
+        .group_by(state)
+    )
+    if zone is not None:
+        stmt = stmt.where(_zone_clause(zone))
+    return ItemPermitSummary.model_validate(
+        {state: count for state, count in db.execute(stmt).tuples()}
+    )
+
+
 def list_item_permits(
-    db: Session, *, q: str | None = None, limit: int = 100, offset: int = 0
+    db: Session,
+    *,
+    q: str | None = None,
+    zone: ItemPermitZone | None = None,
+    limit: int = 100,
+    offset: int = 0,
 ) -> tuple[list[ItemPermit], int]:
     stmt = _base_query().join(Employee, Employee.id == ItemPermit.employee_id)
+    if zone is not None:
+        stmt = stmt.where(_zone_clause(zone))
     if q:
         like = f"%{q}%"
         stmt = stmt.where(

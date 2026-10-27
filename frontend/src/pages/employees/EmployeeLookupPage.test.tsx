@@ -22,13 +22,13 @@ const dashboardSummary = vi.hoisted(() => ({
     present_today: null,
     forms_this_month: 0,
     open_violations_count: null,
-    draft_count: 0,
     book_draft_count: 0,
   },
   on_leave_today: [],
   upcoming_leave_ends: [],
-  recent_documents: [],
-  recent_ledger: [],
+  my_records: null,
+  unread_mail: null,
+  open_violations: null,
   email_sync: { enabled: false, last_synced_at: null, interval_minutes: 0, incoming_today: 0 },
 } satisfies DashboardSummary))
 
@@ -43,6 +43,7 @@ vi.mock('@/lib/api', async (orig) => {
       ...real.api,
       getDashboardSummary: vi.fn().mockResolvedValue(dashboardSummary),
       createEmployee: vi.fn().mockResolvedValue({ id: 'G9999' }),
+      listEmployees: vi.fn().mockResolvedValue({ items: [{ id: 'G1', name_en: 'Filtered employee', name_ar: 'موظف مطابق', status: 'Active' }], total: 31 }),
     },
     apiErrorMessage: vi.fn().mockReturnValue('error'),
   }
@@ -137,6 +138,7 @@ vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 import { EmployeeLookupPage } from './EmployeeLookupPage'
+import { api } from '@/lib/api'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -190,6 +192,7 @@ function LocationProbe(): React.JSX.Element {
 describe('EmployeeLookupPage', () => {
   beforeEach(() => {
     localStorage.clear()
+    vi.mocked(api.listEmployees).mockClear()
     scrollIntoView.mockClear()
     Element.prototype.scrollIntoView = scrollIntoView
   })
@@ -221,5 +224,23 @@ describe('EmployeeLookupPage', () => {
     expect(screen.getByTestId('employee-activity')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'activity-open-G3190' }))
     expect(await screen.findByTestId('profile-stub')).toBeInTheDocument()
+  })
+  it.each([
+    ['status=Active', { status: 'Active' }],
+    ['status=Loaned', { status: 'Loaned' }],
+    ['pending=1', { pending: true }],
+    ['violations=open', { open_violations: true }],
+    ['working=true', { working: true }],
+    ['present=true', { present: true }],
+    ['on_leave=true', { on_leave: true }],
+  ])('reads %s into a real filtered and paginated employee list', async (search, expected) => {
+    setup(`/employees?${search}`)
+    expect(await screen.findByRole('link', { name: /Filtered employee/ })).toBeInTheDocument()
+    expect(api.listEmployees).toHaveBeenCalledWith(expect.objectContaining({ ...expected, limit: 30, offset: 0 }))
+    expect(screen.queryByTestId('employee-activity')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'dashboard.widgets.workspace.next' }))
+    await waitFor(() => expect(api.listEmployees).toHaveBeenLastCalledWith(expect.objectContaining({ ...expected, offset: 30 })))
+    await userEvent.click(screen.getByRole('link', { name: 'dashboard.widgets.workspace.clearFilters' }))
+    expect(await screen.findByTestId('employee-activity')).toBeInTheDocument()
   })
 })

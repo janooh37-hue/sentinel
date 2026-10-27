@@ -18,11 +18,11 @@ Filters worth flagging:
 
 from __future__ import annotations
 
-from datetime import date, datetime
-from typing import Any
+from calendar import monthrange
+from datetime import date, datetime, timedelta
 
 from pydantic import ValidationError
-from sqlalchemy import Text, and_, cast, func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import (
@@ -37,28 +37,33 @@ from app.db.models import (
 )
 from app.schemas.dashboard import (
     DASHBOARD_QUICK_ACTION_IDS,
+    DASHBOARD_WIDGET_IDS,
+    DashboardApprovedRecord,
     DashboardLayout,
     DashboardLeaveItem,
-    DashboardRecentDocument,
-    DashboardRecentLedger,
+    DashboardMyRecords,
+    DashboardOpenViolation,
+    DashboardOpenViolations,
     DashboardSummary,
     DashboardSyncStatus,
     DashboardTotals,
+    DashboardUnreadMail,
+    DashboardUnreadMailItem,
     DashboardUpcomingLeaveItem,
 )
 from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_LOANED, WORKING_STATUSES
 from app.services import book_service, email_service, ledger_service, perm_service
-from app.services.ledger_service import DRAFT_TAG
 
 # How many "recent" rows to surface per stream.
 RECENT_LIMIT = 5
 
-# Upcoming-window length in days (exclusive of today, inclusive of today+N).
+# Upcoming window includes today and today+N.
 UPCOMING_WINDOW_DAYS = 7
 
 # Only Approved leaves are considered real absences.
 _APPROVED_STATUS = "Approved"
 _VALID_QUICK_ACTION_IDS = frozenset(DASHBOARD_QUICK_ACTION_IDS)
+_VALID_WIDGET_IDS = frozenset(DASHBOARD_WIDGET_IDS)
 
 
 def get_user_layout(db: Session, user_id: int) -> DashboardLayout | None:
@@ -77,6 +82,16 @@ def get_user_layout(db: Session, user_id: int) -> DashboardLayout | None:
                 if isinstance(action, dict) and action.get("id") in _VALID_QUICK_ACTION_IDS
             ],
         }
+    widgets = raw.get("widgets") if isinstance(raw, dict) else None
+    if isinstance(raw, dict) and isinstance(widgets, list):
+        raw = {
+            **raw,
+            "widgets": [
+                widget
+                for widget in widgets
+                if isinstance(widget, dict) and widget.get("id") in _VALID_WIDGET_IDS
+            ],
+        }
     try:
         return DashboardLayout.model_validate(raw)
     except ValidationError:
@@ -89,14 +104,14 @@ def set_user_layout(
     layout: DashboardLayout,
 ) -> DashboardLayout:
     """Persist a complete private layout for one user."""
-    payload = layout.model_dump(mode="json")
+    payload = layout.model_dump(mode="json", exclude={"widgets": {"__all__": {"zone"}}})
     row = db.get(UserDashboardLayout, user_id)
     if row is None:
         db.add(UserDashboardLayout(user_id=user_id, layout=payload))
     else:
         row.layout = payload
     db.commit()
-    return layout
+    return DashboardLayout.model_validate(payload)
 
 
 def _first_of_month(today: date) -> datetime:
@@ -117,21 +132,30 @@ def get_summary(
     parity-data scale (< 10k employees, < 100k documents) and keeping the
     queries separate makes the test surface small.
 
-    ``owner_user_id`` scopes mailbox sync and drafts. Authenticated callers'
-    capabilities govern each protected section independently; a denied section
-    never denies the dashboard itself.
+    Source-page capabilities govern each protected section independently; a denied
+    section never denies the dashboard itself. Mail is always caller-owned.
+    The month is chosen in the organization timezone, while its date boundaries
+    use the Records page's UTC creation-day semantics, including voided rows.
     """
     if today is None:
-        today = date.today()
+        today = datetime.now(book_service._ORGANIZATION_TIMEZONE).date()
     can_view_leaves = user is None or perm_service.has_capability(db, user, "leaves.view")
-    can_view_ledger = user is None or perm_service.has_capability(db, user, "ledger.view")
+    if user is not None:
+        owner_user_id = user.id
 
     return DashboardSummary(
-        totals=_compute_totals(db, today=today, user=user, owner_user_id=owner_user_id),
+        totals=_compute_totals(db, today=today, user=user),
         on_leave_today=_on_leave_today(db, today=today) if can_view_leaves else [],
         upcoming_leave_ends=_upcoming_leave_ends(db, today=today) if can_view_leaves else [],
-        recent_documents=_recent_documents(db, user=user),
-        recent_ledger=_recent_ledger(db, user=user) if can_view_ledger else [],
+        my_records=_my_records(db, user=user, today=today)
+        if user is not None and perm_service.has_capability(db, user, "books.view")
+        else None,
+        unread_mail=_unread_mail(db, user=user)
+        if user is not None and perm_service.has_capability(db, user, "ledger.view")
+        else None,
+        open_violations=_open_violations(db)
+        if user is not None and perm_service.has_capability(db, user, "violations.view")
+        else None,
         email_sync=_email_sync(db, today=today, owner_user_id=owner_user_id),
     )
 
@@ -146,7 +170,6 @@ def _compute_totals(
     *,
     today: date,
     user: User | None = None,
-    owner_user_id: int | None = None,
 ) -> DashboardTotals:
     can_view_employees = user is None or perm_service.has_capability(db, user, "employees.view")
     can_view_leaves = user is None or perm_service.has_capability(db, user, "leaves.view")
@@ -205,21 +228,6 @@ def _compute_totals(
         else None
     )
 
-    draft_needle = f'%"{DRAFT_TAG}"%'
-    draft_count = int(
-        db.execute(
-            select(func.count())
-            .select_from(LedgerEntry)
-            .where(
-                and_(
-                    LedgerEntry.deleted_at.is_(None),
-                    LedgerEntry.owner_user_id == (user.id if user is not None else owner_user_id),
-                    cast(LedgerEntry.tags, Text).like(draft_needle),
-                )
-            )
-        ).scalar_one()
-    )
-
     book_draft_stmt = (
         select(func.count())
         .select_from(Book)
@@ -239,7 +247,6 @@ def _compute_totals(
         present_today=present_today if can_view_employees and can_view_leaves else None,
         forms_this_month=forms_this_month,
         open_violations_count=open_violations_count,
-        draft_count=draft_count,
         book_draft_count=book_draft_count,
     )
 
@@ -300,7 +307,7 @@ def _upcoming_leave_ends(db: Session, *, today: date) -> list[DashboardUpcomingL
         .where(
             Leave.deleted_at.is_(None),
             Leave.status == _APPROVED_STATUS,
-            Leave.end_date > today,
+            Leave.end_date >= today,
             Leave.end_date <= horizon,
         )
         .order_by(Leave.end_date.asc(), Leave.id.asc())
@@ -321,100 +328,100 @@ def _upcoming_leave_ends(db: Session, *, today: date) -> list[DashboardUpcomingL
     ]
 
 
-# ---------------------------------------------------------------------------
-# Recent activity
-# ---------------------------------------------------------------------------
-
-
-def _recent_documents(
-    db: Session,
-    *,
-    user: User | None = None,
-) -> list[DashboardRecentDocument]:
-    stmt = (
-        select(
-            Document.id,
-            Document.template_id,
-            Document.ref_number,
-            Document.role,
-            Document.created_at,
-            Employee.id.label("employee_id"),
+def _my_records(db: Session, *, user: User, today: date) -> DashboardMyRecords:
+    start = today.replace(day=1)
+    end = today.replace(day=monthrange(today.year, today.month)[1])
+    # Records compares created_at's calendar day (not approval/signed dates).
+    base = select(Book).where(Book.deleted_at.is_(None), Book.created_by_user_id == user.id)
+    visibility = book_service.user_visibility_clause(db, user)
+    if visibility is not None:
+        base = base.where(visibility)
+    month = base.where(
+        Book.created_at >= datetime.combine(start, datetime.min.time()),
+        Book.created_at < datetime.combine(end + timedelta(days=1), datetime.min.time()),
+    )
+    counts = {
+        state: count
+        for state, count in db.execute(
+            month.with_only_columns(Book.approval_state, func.count()).group_by(Book.approval_state)
+        ).tuples()
+    }
+    drafts = (
+        db.scalar(
+            base.with_only_columns(func.count()).where(
+                Book.voided_at.is_(None), ~Book.versions.any()
+            )
+        )
+        or 0
+    )
+    latest = db.execute(
+        month.with_only_columns(
+            Book.id.label("book_id"),
+            Book.ref_number,
+            Book.subject,
+            Book.employee_id,
             Employee.name_en.label("employee_name_en"),
             Employee.name_ar.label("employee_name_ar"),
+            Book.created_at,
         )
-        .outerjoin(Employee, Employee.id == Document.employee_id)
-        .where(Document.ref_number != "DRAFT")
-        .order_by(Document.created_at.desc(), Document.id.desc())
+        .outerjoin(Employee, Employee.id == Book.employee_id)
+        .where(Book.approval_state == "approved")
+        .order_by(Book.created_at.desc(), Book.id.desc())
         .limit(RECENT_LIMIT)
+    ).mappings()
+    return DashboardMyRecords(
+        month=start.strftime("%Y-%m"),
+        from_date=start,
+        to_date=end,
+        approved=counts.get("approved", 0),
+        pending=counts.get("pending", 0),
+        awaiting_scan=counts.get("awaiting_scan", 0),
+        returned=counts.get("returned", 0),
+        rejected=counts.get("rejected", 0),
+        not_submitted=counts.get("none", 0),
+        drafts=drafts,
+        latest_approved=[DashboardApprovedRecord.model_validate(row) for row in latest],
     )
-    if user is not None:
-        document_visibility = book_service.document_visibility_clause(db, user)
-        if document_visibility is not None:
-            stmt = stmt.where(document_visibility)
-
-    return [
-        DashboardRecentDocument(
-            id=r.id,
-            employee_id=r.employee_id,
-            # Admin-category docs have no employee — label them rather than
-            # dropping the row (the join is now outer).
-            employee_name_en=r.employee_name_en or "General Book",
-            employee_name_ar=r.employee_name_ar,
-            template_id=r.template_id,
-            ref_number=r.ref_number,
-            role=r.role,
-            created_at=r.created_at,
-        )
-        for r in db.execute(stmt).all()
-    ]
 
 
-def _recent_ledger(db: Session, *, user: User | None = None) -> list[DashboardRecentLedger]:
-    related_emp = Employee.__table__.alias("related_emp")
-
-    stmt = (
-        select(
-            LedgerEntry.id,
-            LedgerEntry.entry_date,
-            LedgerEntry.direction,
-            LedgerEntry.channel,
-            LedgerEntry.counterparty,
-            LedgerEntry.subject,
-            LedgerEntry.related_employee_id,
-            LedgerEntry.created_at,
-            related_emp.c.name_en.label("related_employee_name_en"),
-            related_emp.c.name_ar.label("related_employee_name_ar"),
-        )
-        .outerjoin(related_emp, related_emp.c.id == LedgerEntry.related_employee_id)
-        .where(
-            LedgerEntry.deleted_at.is_(None),
-            cast(LedgerEntry.tags, Text).not_like(f'%"{DRAFT_TAG}"%'),
-        )
-        .order_by(LedgerEntry.created_at.desc(), LedgerEntry.id.desc())
-        .limit(RECENT_LIMIT)
-    )
+def _unread_mail(db: Session, *, user: User) -> DashboardUnreadMail:
+    stmt = select(LedgerEntry).where(ledger_service.unread_email_clause(user.id))
     visible = ledger_service.related_book_visible(db, user)
     if visible is not None:
         stmt = stmt.where(visible)
-    if user is not None:
-        stmt = stmt.where(ledger_service.email_owned_by(user.id))
+    count = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    latest = db.scalars(
+        stmt.order_by(LedgerEntry.created_at.desc(), LedgerEntry.id.desc()).limit(RECENT_LIMIT)
+    )
+    return DashboardUnreadMail(
+        count=count,
+        latest=[DashboardUnreadMailItem.model_validate(row) for row in latest],
+    )
 
-    rows: list[Any] = list(db.execute(stmt).all())
-    return [
-        DashboardRecentLedger(
-            id=r.id,
-            entry_date=r.entry_date,
-            direction=r.direction,
-            channel=r.channel,
-            counterparty=r.counterparty,
-            subject=r.subject,
-            related_employee_id=r.related_employee_id,
-            related_employee_name_en=r.related_employee_name_en,
-            related_employee_name_ar=r.related_employee_name_ar,
-            created_at=r.created_at,
+
+def _open_violations(db: Session) -> DashboardOpenViolations:
+    rows = db.execute(
+        select(
+            Violation.id,
+            Violation.employee_id,
+            Employee.name_en.label("employee_name_en"),
+            Employee.name_ar.label("employee_name_ar"),
+            Violation.violation_type.label("title"),
+            Violation.date,
         )
-        for r in rows
-    ]
+        .join(Employee, Employee.id == Violation.employee_id)
+        .where(Violation.status == "Open")
+        .order_by(Violation.date.desc(), Violation.id.desc())
+        .limit(RECENT_LIMIT)
+    ).mappings()
+    count = (
+        db.scalar(select(func.count()).select_from(Violation).where(Violation.status == "Open"))
+        or 0
+    )
+    return DashboardOpenViolations(
+        count=count,
+        latest=[DashboardOpenViolation.model_validate(row) for row in rows],
+    )
 
 
 # ---------------------------------------------------------------------------

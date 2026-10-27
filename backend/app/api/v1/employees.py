@@ -119,9 +119,24 @@ def list_employees(
     department: str | None = None,
     duty_unit: str | None = None,
     pending: bool = False,
+    open_violations: bool = False,
+    present: bool = False,
+    working: bool = False,
+    on_leave: bool = False,
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
     offset: int = Query(0, ge=0),
 ) -> EmployeeListResponse:
+    for requested, capability in (
+        (open_violations, "violations.view"),
+        (present or on_leave, "leaves.view"),
+    ):
+        if requested and not perm_service.has_capability(db, _user, capability):
+            raise AppError(
+                "FORBIDDEN",
+                f"Missing capability: {capability}",
+                http_status=403,
+                details={"capability": capability},
+            )
     rows, total = employee_service.list_employees(
         db,
         q=q,
@@ -129,6 +144,10 @@ def list_employees(
         department=department,
         duty_unit=duty_unit,
         pending=pending,
+        open_violations=open_violations,
+        present=present,
+        working=working,
+        on_leave=on_leave,
         limit=limit,
         offset=offset,
     )

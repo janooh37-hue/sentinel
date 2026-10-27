@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import datetime
 from typing import Any
 
 import pytest
@@ -232,6 +233,70 @@ def test_api_requires_permits_capabilities(env: Session) -> None:
     assert c.get("/api/v1/item-permits").status_code == 200
     r = c.post("/api/v1/item-permits", json={})
     assert r.status_code == 403 and r.json()["error"]["details"]["capability"] == "permits.create"
+    assert _client(env, denied).get("/api/v1/item-permits/summary").status_code == 403
+
+
+def test_summary_and_list_match_zone_membership_and_visible_approval_states(env: Session) -> None:
+    user = env.query(User).filter_by(email="op@x.ae").one()
+    for index, state in enumerate(
+        ["none", "pending", "awaiting_scan", "approved", "returned", "rejected"]
+    ):
+        book = Book(category_id="GS", ref_number=f"summary-{index}", approval_state=state)
+        env.add(book)
+        env.flush()
+        env.add(
+            ItemPermit(
+                employee_id="G3082",
+                recipient="recipient",
+                site="site",
+                items=[],
+                zones=["red", "green"] if index % 2 else ["red"],
+                book_id=book.id,
+            )
+        )
+    env.add_all(
+        [
+            ItemPermit(
+                employee_id="G3082",
+                recipient="recipient",
+                site="site",
+                items=[],
+                zones=["work_residence"],
+                book_id=None,
+            ),
+            ItemPermit(
+                employee_id="G3082",
+                recipient="recipient",
+                site="site",
+                items=[],
+                zones=["red"],
+                deleted_at=datetime(2026, 10, 23),
+            ),
+        ]
+    )
+    env.commit()
+    client = _client(env, user)
+    for zone in [None, "red", "green", "work_residence"]:
+        params = {"zone": zone} if zone else {}
+        response = client.get("/api/v1/item-permits/summary", params=params)
+        assert response.status_code == 200, response.text
+        listed = client.get("/api/v1/item-permits", params=params).json()["items"]
+        expected = {key: 0 for key in response.json()}
+        for row in listed:
+            assert not zone or zone in row["zones"]
+            expected[row["approval_state"] or "none"] += 1
+        assert response.json() == expected
+    assert client.get("/api/v1/item-permits/summary", params={"zone": "blue"}).status_code == 422
+    # Inaccessible letters contribute to none, just like to_read on the list.
+    viewer = User(email="summary-viewer@x.ae", password_hash="x", role="manager", status="active")
+    env.add(viewer)
+    env.flush()
+    env.add(UserPermission(user_id=viewer.id, capability="books.category.GS", effect="deny"))
+    env.commit()
+    response = _client(env, viewer).get("/api/v1/item-permits/summary", params={"zone": "red"})
+    assert response.status_code == 200, response.text
+    assert response.json()["none"] == 6
+    assert sum(response.json().values()) == 6
 
 
 @pytest.mark.parametrize("caller", ["manager", "permit_operator"])

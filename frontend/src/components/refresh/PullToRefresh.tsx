@@ -17,7 +17,7 @@ function buzz(ms: number) {
   }
 }
 
-export function PullToRefresh({ children }: { children: React.ReactNode }) {
+export function PullToRefresh({ children, scrollerClassName = '' }: { children: React.ReactNode; scrollerClassName?: string }) {
   const qc = useQueryClient()
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [stage, setStage] = useState<PtrStage>('idle')
@@ -194,7 +194,7 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
       <div
         data-ptr-scroller
         ref={scrollerRef}
-        className="h-full overflow-y-auto overscroll-y-contain will-change-transform"
+        className={`h-full overflow-y-auto overscroll-y-contain will-change-transform ${scrollerClassName}`}
         style={{ transform: `translateY(${Math.min(offset, PTR_CONST.CLAMP)}px)` }}
       >
         {children}

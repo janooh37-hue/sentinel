@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { FileText, List } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -52,6 +52,10 @@ export function LeavesReport({
 }: LeavesReportProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const onDate = searchParams.get('on')
+  const endFrom = searchParams.get('end_from')
+  const endTo = searchParams.get('end_to')
   const qc = useQueryClient()
   const report = useLeaveReport()
   // The `figures` wrapper is a fresh object every render — destructure the
@@ -141,7 +145,7 @@ export function LeavesReport({
   // UI-state only: collapsing the expansion keeps a deleted row from leaving
   // a stale `expandedId` behind, and RegisterTable's focus-return effect
   // hands focus back to the row's chevron after a decision.
-  const handleMutated = useCallback(() => setExpandedId(null), [])
+  const handleMutated = useCallback(() => setExpandedId(null), [setExpandedId])
 
   const clearScope = useCallback(() => {
     setMonth(null)
@@ -150,7 +154,12 @@ export function LeavesReport({
     setStatuses([])
     setQ('')
     setAwaitingReturnOnly(false)
-  }, [setMonth, setEmployeeId, setKinds, setStatuses, setQ])
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous)
+      for (const key of ['status', 'on', 'end_from', 'end_to', 'from', 'to']) next.delete(key)
+      return next
+    }, { replace: true })
+  }, [setMonth, setEmployeeId, setKinds, setStatuses, setQ, setSearchParams])
 
   // Awaiting-return filter is a computed display state, not a stored status, so
   // it cannot go through applyScope's statuses facet. Apply it as a post-filter
@@ -249,6 +258,10 @@ export function LeavesReport({
         {view === 'register' && (
           <>
             {/* active-scope chips (dismiss = clear that facet) */}
+            {(onDate || endFrom || endTo) && <button type="button" className={SCOPE_CHIP} onClick={clearScope}>
+              {onDate ? t('dashboard.widgets.on_leave_today.filter', { date: onDate }) : t('dashboard.widgets.upcoming_leave.filter', { from: endFrom ?? '', to: endTo ?? '' })}
+              <span aria-hidden>×</span>
+            </button>}
             {(scope.month !== null || scope.employeeId !== null) && (
               <div className="flex flex-wrap items-center gap-2">
                 {scope.month !== null && (

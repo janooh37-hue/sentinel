@@ -18,7 +18,7 @@ LAYOUT = {
             "id": "pending",
             "visible": True,
             "order": 0,
-            "zone": "top",
+            "size": "M",
         }
     ],
     "quick_actions": [

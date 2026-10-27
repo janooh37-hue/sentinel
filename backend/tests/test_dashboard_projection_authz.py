@@ -8,7 +8,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import Employee, Leave, LedgerEntry, User, UserPermission, Violation
+from app.db.models import (
+    Book,
+    BookCategory,
+    Employee,
+    Leave,
+    LedgerEntry,
+    User,
+    UserPermission,
+    Violation,
+)
 from app.db.session import get_db
 from app.main import create_app
 from app.services.ledger_service import DRAFT_TAG
@@ -60,7 +69,7 @@ def _seed(db: Session, actor: User, other: User) -> None:
         db.add(
             LedgerEntry(
                 entry_date=today,
-                direction="incoming",
+                direction="outgoing" if DRAFT_TAG in tags else "incoming",
                 channel=channel,
                 counterparty="Synthetic",
                 subject=subject,
@@ -95,8 +104,9 @@ def test_dashboard_denies_hide_only_protected_sections(api_db: Session, denied: 
         assert totals["present_today"] is None
     elif denied == "violations.view":
         assert totals["open_violations_count"] is None
+        assert data["open_violations"] is None
     elif denied == "ledger.view":
-        assert data["recent_ledger"] == []
+        assert data["unread_mail"] is None
     else:
         for field in ("employees_active", "our_staff", "loaned", "present_today"):
             assert totals[field] is None
@@ -108,24 +118,58 @@ def test_dashboard_denies_hide_only_protected_sections(api_db: Session, denied: 
     assert authorized["totals"]["employees_active"] == 1
     assert authorized["totals"]["on_leave_today"] == 1
     assert authorized["totals"]["present_today"] == 0
-    assert authorized["recent_ledger"]
+    assert authorized["unread_mail"]["count"] == 1
+    assert authorized["unread_mail"]["latest"]
     assert _snapshot(api_db) == before
 
 
 @pytest.mark.parametrize("role", ["operator", "admin"])
-def test_dashboard_mail_is_private_and_drafts_are_owner_scoped(api_db: Session, role: str) -> None:
+def test_dashboard_mail_is_private_and_excludes_drafts(api_db: Session, role: str) -> None:
     actor = _user(api_db, "actor@example.test", role=role)
     other = _user(api_db, "other@example.test")
     _seed(api_db, actor, other)
     before = _snapshot(api_db)
     data = _get(api_db, actor)
-    assert {row["subject"] for row in data["recent_ledger"]} == {"Own mail", "Shared letter"}
-    assert data["totals"]["draft_count"] == 1
+    assert {row["subject"] for row in data["unread_mail"]["latest"]} == {"Own mail"}
+    assert data["unread_mail"]["count"] == 1
+    assert data["email_sync"]["incoming_today"] == 1
+    assert "recent_ledger" not in data
+    assert "draft_count" not in data["totals"]
     assert _snapshot(api_db) == before
     other_data = _get(api_db, other)
-    assert {row["subject"] for row in other_data["recent_ledger"]} == {
-        "Foreign mail",
-        "Shared letter",
-    }
-    assert other_data["totals"]["draft_count"] == 1
+    assert {row["subject"] for row in other_data["unread_mail"]["latest"]} == {"Foreign mail"}
+    assert other_data["unread_mail"]["count"] == 1
+    assert other_data["email_sync"]["incoming_today"] == 1
+    assert _snapshot(api_db) == before
+
+
+def test_dashboard_unread_mail_hides_denied_linked_records_before_limit(api_db: Session) -> None:
+    actor = _user(api_db, "restricted@example.test", role="manager")
+    other = _user(api_db, "other@example.test")
+    _seed(api_db, actor, other)
+    api_db.add(BookCategory(id="HIDDEN", prefix="H"))
+    api_db.flush()
+    book = Book(category_id="HIDDEN", ref_number="HIDDEN-MAIL")
+    api_db.add(book)
+    api_db.flush()
+    api_db.add(UserPermission(user_id=actor.id, capability="books.category.HIDDEN", effect="deny"))
+    for index in range(6):
+        api_db.add(
+            LedgerEntry(
+                entry_date=date.today(),
+                direction="incoming",
+                channel="email",
+                counterparty="Synthetic",
+                subject=f"Hidden mail {index}",
+                owner_user_id=actor.id,
+                related_book_id=book.id,
+            )
+        )
+    api_db.commit()
+    before = _snapshot(api_db)
+
+    data = _get(api_db, actor)
+
+    assert data["unread_mail"]["count"] == 1
+    assert {row["subject"] for row in data["unread_mail"]["latest"]} == {"Own mail"}
     assert _snapshot(api_db) == before

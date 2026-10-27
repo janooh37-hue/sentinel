@@ -16,12 +16,13 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from typing import Any, Final, cast
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
-from app.db.models import Employee
+from app.db.models import Employee, Leave, Violation
 from app.schemas.employee import (
     EMPLOYEE_STATUS_ACTIVE,
     EMPLOYEE_STATUS_RESIGNED,
@@ -39,6 +40,7 @@ from app.services.extraction_service import _MATCH_THRESHOLD, _name_scores
 
 LIST_MAX_LIMIT = 500
 LIST_DEFAULT_LIMIT = 100
+_ORGANIZATION_TIMEZONE = ZoneInfo("Asia/Dubai")
 
 
 def list_employees(
@@ -49,6 +51,10 @@ def list_employees(
     department: str | None = None,
     duty_unit: str | None = None,
     pending: bool = False,
+    open_violations: bool = False,
+    present: bool = False,
+    working: bool = False,
+    on_leave: bool = False,
     limit: int = LIST_DEFAULT_LIMIT,
     offset: int = 0,
 ) -> tuple[list[Employee], int]:
@@ -63,6 +69,10 @@ def list_employees(
     ``pending=True`` narrows to scheduled departures — working (Active/Loaned) employees with a
     ``pending_status`` and an ``end_date`` — ordered soonest-first, which is what
     the dashboard's Pending Departures widget reads.
+
+    ``working=True`` includes Active/Loaned; ``present=True`` is Active staff
+    without an Approved, nondeleted leave overlapping today in the organization timezone.
+    ``on_leave=True`` is its inverse among Active staff; both together match nobody.
     """
     limit = max(1, min(limit, LIST_MAX_LIMIT))
     offset = max(0, offset)
@@ -105,6 +115,34 @@ def list_employees(
             Employee.pending_status.is_not(None),
             Employee.end_date.is_not(None),
         )
+        stmt = stmt.where(clause)
+        count_stmt = count_stmt.where(clause)
+        non_q_clauses.append(clause)
+    if open_violations:
+        clause = Employee.violations.any(Violation.status == "Open")
+        stmt = stmt.where(clause)
+        count_stmt = count_stmt.where(clause)
+        non_q_clauses.append(clause)
+    if working:
+        clause = Employee.status.in_(WORKING_STATUSES)
+        stmt = stmt.where(clause)
+        count_stmt = count_stmt.where(clause)
+        non_q_clauses.append(clause)
+    if present or on_leave:
+        today = datetime.now(_ORGANIZATION_TIMEZONE).date()
+        absence = Employee.leaves.any(
+            and_(
+                Leave.deleted_at.is_(None),
+                Leave.status == "Approved",
+                Leave.start_date <= today,
+                Leave.end_date >= today,
+            )
+        )
+        clause = Employee.status == EMPLOYEE_STATUS_ACTIVE
+        if present:
+            clause = and_(clause, ~absence)
+        if on_leave:
+            clause = and_(clause, absence)
         stmt = stmt.where(clause)
         count_stmt = count_stmt.where(clause)
         non_q_clauses.append(clause)

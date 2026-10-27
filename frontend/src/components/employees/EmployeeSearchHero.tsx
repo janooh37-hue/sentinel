@@ -13,7 +13,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { api, type ListEmployeesParams } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { pickPosition } from '@/lib/employeePosition'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
@@ -29,6 +29,8 @@ interface Props {
   onCreate: () => void
   /** Employee ids that are currently on approved leave — drives warning pill. */
   onLeaveIds: ReadonlySet<string>
+  /** Dashboard links keep the lookup within their selected roster scope. */
+  filters?: ListEmployeesParams
   /** Optional content rendered below the search column (Task 6 info-cards). */
   children?: React.ReactNode
 }
@@ -38,6 +40,7 @@ export function EmployeeSearchHero({
   onSelect,
   onCreate,
   onLeaveIds,
+  filters = {},
   children,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -48,8 +51,8 @@ export function EmployeeSearchHero({
 
   // Fetch roster — enabled only when there is a non-empty debounced query.
   const { data, isPending } = useQuery({
-    queryKey: ['employee-search', debounced],
-    queryFn: () => api.listEmployees({ q: debounced, limit: 30 }),
+    queryKey: ['employee-search', debounced, filters],
+    queryFn: () => api.listEmployees({ ...filters, q: debounced, limit: 30 }),
     enabled: debounced.trim().length > 0,
     staleTime: 30_000,
   })
@@ -257,7 +260,7 @@ export function EmployeeSearchHero({
               {/* Footer */}
               {items.length > 0 && (
                 <div className="flex justify-between border-t border-hairline bg-surface-raised px-[18px] py-[9px] text-[12px] text-faint">
-                  <span>{t('employees.lookup.allStatusesShown')}</span>
+                  <span>{Object.values(filters).some(Boolean) ? t('dashboard.widgets.workspace.filteredSearch') : t('employees.lookup.allStatusesShown')}</span>
                 </div>
               )}
             </div>

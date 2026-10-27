@@ -1,248 +1,284 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import type * as ApiModule from '@/lib/api'
+import i18n from 'i18next'
 import { api } from '@/lib/api'
-import { DEFAULT_LAYOUT } from '@/lib/dashboardLayout'
+import type { DashboardSummary, WorkforceAccess } from '@/lib/api'
+import type * as ApiModule from '@/lib/api'
+import type { WidgetProps } from './widgets/types'
+import { DEFAULT_LAYOUT, packLayout } from '@/lib/dashboardLayout'
 import { DashboardPage } from './DashboardPage'
+import { widgetRegistry } from './widgetRegistry'
 
-const authState = vi.hoisted(() => ({
+const state = vi.hoisted(() => ({
   user: { id: 1 } as { id: number } | null,
+  denied: new Set<string>(),
+  received: ['approver'],
+  mobile: false,
 }))
-
-vi.mock('@/lib/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof ApiModule>()),
-  api: {
-    getDashboardSummary: vi.fn().mockResolvedValue({
-      totals: {
-        employees_active: null,
-        our_staff: null,
-        loaned: null,
-        on_leave_today: null,
-        present_today: null,
-        forms_this_month: 0,
-        open_violations_count: null,
-        draft_count: 0,
-        book_draft_count: 0,
-      },
-      on_leave_today: [],
-      upcoming_leave_ends: [],
-      recent_documents: [],
-      recent_ledger: [],
-      email_sync: {
-        last_synced_at: null,
-        enabled: false,
-        interval_minutes: 0,
-        incoming_today: 0,
-      },
-    }),
-    getDashboardLayout: vi.fn(),
-    updateDashboardLayout: vi.fn(),
-    getSettings: vi.fn(),
-    updateSettings: vi.fn(),
-  },
-}))
-
-vi.mock('@/lib/authContext', () => ({
-  useAuth: () => ({
-    status: authState.user ? 'authed' : 'anonymous',
-    user: authState.user,
-  }),
-}))
-
-vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({ has: () => true }),
-}))
-
-vi.mock('@/lib/useIdentity', () => ({
-  useIdentity: () => ({ identity: null }),
-}))
-
-vi.mock('@/components/dashboard/CustomizeWidgetsDialog', () => ({
-  CustomizeWidgetsDialog: (props: {
-    items: NonNullable<typeof DEFAULT_LAYOUT.widgets>
-    onSave: (items: NonNullable<typeof DEFAULT_LAYOUT.widgets>, width: 'compact' | 'wide') => void
-  }) => (
-    <>
-      <span data-testid="first-widget">{props.items[0]?.id}</span>
-      <button type="button" onClick={() => props.onSave(props.items, 'wide')}>
-        save-widget-layout-{props.items.length}
-      </button>
-    </>
-  ),
-}))
-
-vi.mock('@/components/dashboard/WidgetEditDialog', () => ({
-  WidgetEditDialog: (props: {
-    items: NonNullable<typeof DEFAULT_LAYOUT.quick_actions>
-    onSave: (items: NonNullable<typeof DEFAULT_LAYOUT.quick_actions>) => void
-  }) => (
-    <button type="button" onClick={() => props.onSave(props.items)}>
-      save-quick-layout-{props.items.length}
-    </button>
-  ),
-}))
-
-vi.mock('@/components/dashboard/widgets/EmailSyncStatusWidget', () => ({
-  EmailSyncStatusWidget: () => null,
-}))
-vi.mock('@/pages/dashboard/widgets/BooksAwaitingWidget', () => ({ BooksAwaitingWidget: () => null }))
-vi.mock('@/pages/dashboard/widgets/ExpiringSoonWidget', () => ({ ExpiringSoonWidget: () => null }))
-vi.mock('@/pages/dashboard/widgets/PendingDeparturesWidget', () => ({ PendingDeparturesWidget: () => null }))
-vi.mock('@/pages/dashboard/widgets/WaitingApprovalsCard', () => ({ WaitingApprovalsCard: () => null }))
-vi.mock('@/pages/dashboard/widgets/WorkforceCoverageSheet', () => ({ WorkforceCoverageSheet: () => null }))
-vi.mock('@/pages/dashboard/widgets/WorkforcePulseWidget', () => ({ WorkforcePulseWidget: () => null }))
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof ApiModule>()
+  return {
+    ...actual,
+    api: {
+      getDashboardSummary: vi.fn().mockResolvedValue({
+        totals: { employees_active: 0, our_staff: 0, loaned: 0, present_today: 0, on_leave_today: 0, forms_this_month: 0, open_violations_count: 0, book_draft_count: 0 },
+        on_leave_today: [], upcoming_leave_ends: [], my_records: null, unread_mail: null, open_violations: null,
+        email_sync: { enabled: false, interval_minutes: 0, last_synced_at: null, incoming_today: 0 },
+      } satisfies DashboardSummary),
+      getDashboardLayout: vi.fn(),
+      updateDashboardLayout: vi.fn(),
+      getWorkforceAccess: vi.fn(),
+    },
+  }
+})
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ status: state.user ? 'authed' : 'anonymous', user: state.user }) }))
+vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => !state.denied.has(cap), isLoading: false }) }))
+vi.mock('@/lib/useIdentity', () => ({ useIdentity: () => ({ identity: null }) }))
+vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => state.mobile }))
+vi.mock('@/lib/useApprovalSummary', () => ({ useApprovalSummary: () => ({ data: { available_received_kinds: state.received } }) }))
+vi.mock('./widgets/WorkforceWidget', () => ({ WorkforceWidget: (props: WidgetProps) => <div data-testid="body-workspace" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/OnLeaveTodayWidget', () => ({ OnLeaveTodayWidget: (props: WidgetProps) => <div data-testid="body-on_leave_today" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/ReturningWidget', () => ({ ReturningWidget: (props: WidgetProps) => <div data-testid="body-upcoming_leave" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/OpenViolationsWidget', () => ({ OpenViolationsWidget: (props: WidgetProps) => <div data-testid="body-violations" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/ExpiringSoonWidget', () => ({ ExpiringSoonWidget: (props: WidgetProps) => <div data-testid="body-expiring_soon" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/PendingDeparturesWidget', () => ({ PendingDeparturesWidget: (props: WidgetProps) => <div data-testid="body-pending_departures" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/ViolationMonthsWidget', () => ({ ViolationMonthsWidget: (props: WidgetProps) => <div data-testid="body-violation_months" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/PermitsWidget', () => ({ PermitsWidget: (props: WidgetProps) => <div data-testid="body-permits" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/WorkforcePulseWidget', () => ({ WorkforcePulseWidget: (props: WidgetProps) => <div data-testid="body-workforce_pulse" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/MyDocumentsWidget', () => ({ MyDocumentsWidget: (props: WidgetProps) => <div data-testid="body-pending" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/WaitingApprovalsWidget', () => ({ WaitingApprovalsWidget: (props: WidgetProps) => <div data-testid="body-waiting_approvals" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/SentApprovalsWidget', () => ({ SentApprovalsWidget: (props: WidgetProps) => <div data-testid="body-sent_approvals" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/InboxWidget', () => ({ InboxWidget: (props: WidgetProps) => <div data-testid="body-inbox" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/MyDraftsWidget', () => ({ MyDraftsWidget: (props: WidgetProps) => <div data-testid="body-drafts" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/UnreadMailWidget', () => ({ UnreadMailWidget: (props: WidgetProps) => <div data-testid="body-ledger" data-tier={props.tier} data-rows={props.rows} /> }))
+vi.mock('./widgets/WorkforceCoverageSheet', () => ({ WorkforceCoverageSheet: () => null }))
 vi.mock('@/components/refresh/PullToRefresh', () => ({ PullToRefresh: ({ children }: { children: React.ReactNode }) => children }))
 vi.mock('@/components/refresh/RefreshButton', () => ({ RefreshButton: () => null }))
 
 const mockedApi = vi.mocked(api)
-
-const DEFAULT_WIDGETS = DEFAULT_LAYOUT.widgets ?? []
-const DEFAULT_QUICK_ACTIONS = DEFAULT_LAYOUT.quick_actions ?? []
-
-function createQueryClient(): QueryClient {
-  return new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  })
+function renderPage() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  return { queryClient, ...render(<QueryClientProvider client={queryClient}><MemoryRouter><DashboardPage onNavigate={vi.fn()} /></MemoryRouter></QueryClientProvider>) }
+}
+async function customize() {
+  const button = await screen.findByRole('button', { name: 'Customize' })
+  await waitFor(() => expect(button).toBeEnabled())
+  fireEvent.click(button)
+}
+function widget(id: string): HTMLElement {
+  return screen.getByTestId('widget-grid').querySelector<HTMLElement>(`[data-widget-id="${id}"]`)!
+}
+function boardIds(): string[] {
+  return Array.from(screen.getByTestId('widget-grid').querySelectorAll('[data-widget-id]')).map((node) => node.getAttribute('data-widget-id')!)
+}
+async function openWidgetMenu(id: string): Promise<HTMLElement> {
+  const title = widget(id).getAttribute('aria-label')
+  await userEvent.click(within(widget(id)).getByRole('button', { name: `Edit widget: ${title}` }))
+  return screen.getByRole('menu')
 }
 
-function renderPage(queryClient = createQueryClient()) {
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
-        <DashboardPage onNavigate={vi.fn()} />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
-}
-
-describe('DashboardPage per-user layout', () => {
+describe('packed per-user dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    authState.user = { id: 1 }
+    state.user = { id: 1 }
+    state.denied.clear()
+    state.received = ['approver']
+    state.mobile = false
     mockedApi.getDashboardLayout.mockResolvedValue(null)
     mockedApi.updateDashboardLayout.mockImplementation(async (layout) => layout)
-    mockedApi.getSettings.mockResolvedValue({} as never)
-    mockedApi.updateSettings.mockResolvedValue({} as never)
-  })
-
-  it('loads the per-user route, falls back to defaults, and saves the full layout', async () => {
-    renderPage()
-
-    const save = await screen.findByRole('button', {
-      name: `save-widget-layout-${DEFAULT_WIDGETS.length}`,
+    mockedApi.getWorkforceAccess.mockResolvedValue({
+      workforce_access_tier: 'none',
+      scopes: [],
     })
-    expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(1)
-
-    fireEvent.click(save)
-
-    await waitFor(() => expect(mockedApi.updateDashboardLayout).toHaveBeenCalledTimes(1))
-    expect(mockedApi.updateDashboardLayout.mock.calls[0]?.[0]).toEqual(
-      expect.objectContaining({
-        canvas_width: 'wide',
-        widgets: expect.any(Array),
-        quick_actions: expect.any(Array),
-      }),
-    )
-    expect(mockedApi.getSettings).not.toHaveBeenCalled()
-    expect(mockedApi.updateSettings).not.toHaveBeenCalled()
   })
-
-  it('saves quick actions through the same full-layout API', async () => {
+  it.each([false, true])('renders one packed grid with explicit boxes on mobile=%s', async (mobile) => {
+    state.mobile = mobile
     renderPage()
-
-    const save = await screen.findByRole('button', {
-      name: `save-quick-layout-${DEFAULT_QUICK_ACTIONS.length}`,
-    })
-    fireEvent.click(save)
-
-    await waitFor(() => expect(mockedApi.updateDashboardLayout).toHaveBeenCalledTimes(1))
-    expect(mockedApi.updateDashboardLayout.mock.calls[0]?.[0]).toEqual(
-      expect.objectContaining({
-        canvas_width: DEFAULT_LAYOUT.canvas_width,
-        widgets: expect.any(Array),
-        quick_actions: expect.any(Array),
-      }),
-    )
-  })
-
-  it('isolates cached layouts across logout and a different authenticated user', async () => {
-    const firstDefaultWidget = DEFAULT_WIDGETS[0]
-    const firstPrivateWidget = DEFAULT_WIDGETS.at(-1)
-    expect(firstDefaultWidget).toBeDefined()
-    expect(firstPrivateWidget).toBeDefined()
-    expect(firstPrivateWidget?.id).not.toBe(firstDefaultWidget?.id)
-    const privateLayout = {
-      ...DEFAULT_LAYOUT,
-      widgets: [
-        { ...firstPrivateWidget!, order: 0 },
-        ...DEFAULT_WIDGETS
-          .slice(0, -1)
-          .map((widget, index) => ({ ...widget, order: index + 1 })),
-      ],
+    await waitFor(() => expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(1))
+    const cols = mobile ? 2 : 4
+    expect(screen.getByTestId('widget-grid')).toHaveAttribute('data-columns', String(cols))
+    const visible = DEFAULT_LAYOUT.widgets.filter((item) => item.visible)
+    expect(boardIds()).toEqual(visible.map((item) => item.id))
+    for (const box of packLayout(visible, cols).placed) {
+      expect(widget(box.id).style.gridColumn).toBe(`${box.c + 1} / span ${box.w}`)
+      expect(widget(box.id).style.gridRow).toBe(`${box.r + 1} / span ${box.h}`)
     }
-    mockedApi.getDashboardLayout.mockImplementation(async () => {
-      if (authState.user?.id === 1) return privateLayout
-      if (authState.user?.id === 2) return null
-      throw new Error('anonymous dashboard layout request')
+    expect(screen.getByTestId('body-waiting_approvals')).toHaveAttribute('data-tier', 'list')
+    expect(screen.getByTestId('body-waiting_approvals')).toHaveAttribute('data-rows', '4')
+  })
+  it('repacks a workforce widget when its access query resolves', async () => {
+    let resolveAccess!: (access: WorkforceAccess) => void
+    mockedApi.getWorkforceAccess.mockReturnValue(new Promise((resolve) => {
+      resolveAccess = resolve
+    }))
+    mockedApi.getDashboardLayout.mockResolvedValue({
+      ...DEFAULT_LAYOUT,
+      widgets: DEFAULT_LAYOUT.widgets.map((item) =>
+        item.id === 'workforce_pulse' ? { ...item, visible: true } : item,
+      ),
     })
-    const queryClient = createQueryClient()
-    const view = renderPage(queryClient)
+    // The registry is migrated independently; exercise an access-dependent gate here.
+    const available = vi.spyOn(widgetRegistry.workforce_pulse, 'available')
+      .mockImplementation(({ has, workforceAccess }) =>
+        has('workforce.dashboard.view') &&
+        workforceAccess?.workforce_access_tier === 'organization',
+      )
+    try {
+      renderPage()
+      await waitFor(() => expect(mockedApi.getWorkforceAccess).toHaveBeenCalledTimes(1))
+      await waitFor(() => expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(1))
+      expect(boardIds()).not.toContain('workforce_pulse')
 
-    await waitFor(() => {
-      expect(screen.getByTestId('first-widget')).toHaveTextContent(firstPrivateWidget!.id)
-    })
-    expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(1)
+      await act(async () => {
+        resolveAccess({ workforce_access_tier: 'organization', scopes: [] })
+      })
 
-    authState.user = null
-    view.rerender(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <DashboardPage onNavigate={vi.fn()} />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    )
-    await waitFor(() => {
-      expect(screen.getByTestId('first-widget')).toHaveTextContent(firstDefaultWidget!.id)
-    })
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: `save-widget-layout-${DEFAULT_WIDGETS.length}`,
-      }),
-    )
-    let finishMutationTick!: () => void
-    const mutationTick = new Promise<void>((resolve) => {
-      finishMutationTick = resolve
-    })
-    setTimeout(finishMutationTick, 25)
-    await mutationTick
-    expect(mockedApi.updateDashboardLayout).not.toHaveBeenCalled()
-    expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(1)
-
-    authState.user = { id: 2 }
-    view.rerender(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <DashboardPage onNavigate={vi.fn()} />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    )
-    await waitFor(() => {
-      expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(2)
-      expect(screen.getByTestId('first-widget')).toHaveTextContent(firstDefaultWidget!.id)
-    })
-    expect(screen.getByTestId('first-widget')).not.toHaveTextContent(firstPrivateWidget!.id)
-
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: `save-widget-layout-${DEFAULT_WIDGETS.length}`,
-      }),
-    )
+      await waitFor(() => expect(boardIds()).toContain('workforce_pulse'))
+      expect(screen.getByTestId('body-workforce_pulse')).toBeInTheDocument()
+    } finally {
+      available.mockRestore()
+    }
+  })
+  it('removes unavailable entries before packing and from the add catalog', async () => {
+    state.denied.add('books.view')
+    state.denied.add('leaves.view')
+    state.received = []
+    renderPage()
+    await customize()
+    expect(boardIds()).toEqual(['ledger', 'workspace', 'expiring_soon'])
+    const panel = screen.getByRole('complementary', { name: 'Add widgets' })
+    expect(within(panel).queryByText('My documents')).not.toBeInTheDocument()
+    expect(within(panel).queryByText('Needs your signature')).not.toBeInTheDocument()
+    expect(within(panel).queryByText('On leave today')).not.toBeInTheDocument()
+    expect(within(panel).getByText('Open violations')).toBeInTheDocument()
+    expect(screen.getByTestId('widget-grid').querySelectorAll('article')).toHaveLength(3)
+  })
+  it('shows the localised name visibly in every edited widget header', async () => {
+    renderPage()
+    await customize()
+    for (const id of boardIds()) {
+      expect(within(widget(id)).getByRole('heading', { name: i18n.t(widgetRegistry[id as keyof typeof widgetRegistry].titleKey) })).toBeVisible()
+    }
+  })
+  it('edits width, size, order and visibility in place, retaining focus after moves', async () => {
+    renderPage()
+    await customize()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    const trigger = within(widget('pending')).getByRole('button', { name: 'Edit widget: My documents' })
+    await openWidgetMenu('pending')
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Move My documents earlier' }))
+    expect(boardIds()[0]).toBe('pending')
+    expect(trigger).toHaveFocus()
+    await openWidgetMenu('pending')
+    expect(screen.getByRole('menuitem', { name: 'Move My documents earlier' })).toHaveAttribute('aria-disabled', 'true')
+    await userEvent.click(screen.getByRole('menuitemradio', { name: /^Large · .?2×2.?$/ }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Wide' }))
+    expect(screen.getByTestId('widget-grid')).toHaveAttribute('data-columns', '6')
+    fireEvent.click(within(widget('drafts')).getByRole('button', { name: 'Remove My drafts' }))
+    expect(boardIds()).not.toContain('drafts')
+    fireEvent.click(screen.getByRole('button', { name: 'Add Open violations' }))
+    expect(boardIds().at(-1)).toBe('violations')
+    fireEvent.click(screen.getByRole('button', { name: 'Save layout' }))
     await waitFor(() => expect(mockedApi.updateDashboardLayout).toHaveBeenCalledTimes(1))
-    expect(mockedApi.updateDashboardLayout.mock.calls[0]?.[0].widgets?.[0]?.id).toBe(
-      firstDefaultWidget!.id,
-    )
+    const saved = mockedApi.updateDashboardLayout.mock.calls[0]![0]
+    expect(saved.canvas_width).toBe('wide')
+    expect(saved.widgets?.[0]).toMatchObject({ id: 'pending', size: 'L' })
+    expect(saved.widgets?.find((item) => item.id === 'drafts')?.visible).toBe(false)
+    expect(saved.widgets?.at(-1)).toMatchObject({ id: 'violations', visible: true, size: 'S' })
+    expect(saved.widgets?.every((item) => !('zone' in item))).toBe(true)
+    await waitFor(() => expect(screen.queryByRole('complementary')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Customize' })).toHaveFocus()
+  })
+  it('moves keyboard focus to the removed widget Add button', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await customize()
+    const remove = within(widget('drafts')).getByRole('button', { name: 'Remove My drafts' })
+    remove.focus()
+    await user.keyboard('{Enter}')
+    expect(boardIds()).not.toContain('drafts')
+    const add = screen.getByRole('button', { name: 'Add My drafts' })
+    expect(add).toBeEnabled()
+    expect(add).toHaveFocus()
+    await user.keyboard('{Enter}')
+    expect(boardIds()).toContain('drafts')
+  })
+  it('falls back to Save when the removed widget is no longer available', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await customize()
+    within(widget('drafts')).getByRole('button', { name: 'Remove My drafts' }).focus()
+    state.denied.add('books.view')
+    await user.keyboard('{Enter}')
+    expect(screen.queryByRole('button', { name: 'Add My drafts' })).not.toBeInTheDocument()
+    const save = screen.getByRole('button', { name: 'Save layout' })
+    expect(save).toBeEnabled()
+    expect(save).toHaveFocus()
+  })
+  it('supports menu keyboard selection and native drag-handle moves', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await customize()
+    within(widget('pending')).getByRole('button', { name: 'Edit widget: My documents' }).focus()
+    await user.keyboard('{Enter}{Home}{Enter}')
+    await openWidgetMenu('pending')
+    expect(screen.getByRole('menuitemradio', { name: /^Small · .?1×1.?$/ })).toHaveAttribute('aria-checked', 'true')
+    await user.keyboard('{Escape}')
+    const dataTransfer = { getData: () => 'drafts', setData: vi.fn(), types: ['text/plain'], effectAllowed: '' }
+    fireEvent.dragStart(within(widget('drafts')).getByRole('button', { name: 'Drag My drafts to move it' }), { dataTransfer })
+    expect(dataTransfer.setData).toHaveBeenCalledWith('text/plain', 'drafts')
+    fireEvent.dragOver(widget('pending'), { dataTransfer })
+    fireEvent.drop(widget('pending'), { dataTransfer })
+    expect(boardIds().indexOf('drafts')).toBeLessThan(boardIds().indexOf('pending'))
+    expect(within(widget('drafts')).getByRole('button', { name: 'Drag My drafts to move it' })).toHaveFocus()
+  })
+  it('cancels all draft changes, including tile edits, without writing', async () => {
+    renderPage()
+    await customize()
+    fireEvent.click(screen.getByRole('radio', { name: 'Wide' }))
+    await openWidgetMenu('quick_actions')
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Edit tiles' }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('switch', { name: 'Hide General Book' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(mockedApi.updateDashboardLayout).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByTestId('widget-grid')).toHaveAttribute('data-columns', '4')
+    expect(mockedApi.updateDashboardLayout).not.toHaveBeenCalled()
+    await customize()
+    fireEvent.click(screen.getByRole('button', { name: 'Save layout' }))
+    await waitFor(() => expect(mockedApi.updateDashboardLayout).toHaveBeenCalledTimes(1))
+    expect(mockedApi.updateDashboardLayout.mock.calls[0]![0].quick_actions).toEqual(DEFAULT_LAYOUT.quick_actions)
+  })
+  it('resets both the board and width, and leaves failures editable', async () => {
+    mockedApi.getDashboardLayout.mockResolvedValue({ ...DEFAULT_LAYOUT, canvas_width: 'wide', widgets: DEFAULT_LAYOUT.widgets.map((item) => ({ ...item, visible: false })) })
+    mockedApi.updateDashboardLayout.mockRejectedValue(new Error('Save failed'))
+    renderPage()
+    await customize()
+    expect(boardIds()).toEqual([])
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
+    expect(boardIds()).toEqual(DEFAULT_LAYOUT.widgets.filter((item) => item.visible).map((item) => item.id))
+    expect(screen.getByTestId('widget-grid')).toHaveAttribute('data-columns', '4')
+    fireEvent.click(screen.getByRole('button', { name: 'Save layout' }))
+    await waitFor(() => expect(mockedApi.updateDashboardLayout).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save layout' })).toBeEnabled())
+    expect(screen.getByRole('complementary')).toBeInTheDocument()
+  })
+  it('does not carry a private draft or cached layout across user changes', async () => {
+    const privateLayout = { ...DEFAULT_LAYOUT, canvas_width: 'wide' as const }
+    mockedApi.getDashboardLayout.mockImplementation(async () => state.user?.id === 1 ? privateLayout : null)
+    const { queryClient, rerender } = renderPage()
+    await customize()
+    fireEvent.click(within(widget('pending')).getByRole('button', { name: 'Remove My documents' }))
+    state.user = { id: 2 }
+    rerender(<QueryClientProvider client={queryClient}><MemoryRouter><DashboardPage onNavigate={vi.fn()} /></MemoryRouter></QueryClientProvider>)
+    await waitFor(() => expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(2))
+    expect(boardIds()).toContain('pending')
+    expect(screen.getByTestId('widget-grid')).toHaveAttribute('data-columns', '4')
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    expect(mockedApi.updateDashboardLayout).not.toHaveBeenCalled()
   })
 })

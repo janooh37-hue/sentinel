@@ -654,6 +654,19 @@ def soft_delete_entry(db: Session, entry_id: int, *, owner_user_id: int | None =
 STAR_TAG = "starred"
 
 
+def unread_email_clause(owner_user_id: int | None = None) -> ColumnElement[bool]:
+    """The shared inbox-unread predicate, including caller ownership."""
+    clause = and_(
+        LedgerEntry.channel == "email",
+        LedgerEntry.direction.in_(("incoming", "internal")),
+        LedgerEntry.read_at.is_(None),
+        LedgerEntry.deleted_at.is_(None),
+    )
+    if owner_user_id is not None:
+        clause = and_(clause, LedgerEntry.owner_user_id == owner_user_id)
+    return clause
+
+
 def unread_email_count(db: Session, owner_user_id: int | None = None) -> int:
     """Count un-opened received emails — drives the numeric NavBell badge.
 
@@ -662,14 +675,7 @@ def unread_email_count(db: Session, owner_user_id: int | None = None) -> int:
     matching the Inbox (list_entries) — sent mail is born read (email_service),
     so this won't count internal-sent. Drafts are 'outgoing' so can't match.
     """
-    stmt = select(func.count(LedgerEntry.id)).where(
-        LedgerEntry.channel == "email",
-        LedgerEntry.direction.in_(("incoming", "internal")),
-        LedgerEntry.read_at.is_(None),
-        LedgerEntry.deleted_at.is_(None),
-    )
-    if owner_user_id is not None:
-        stmt = stmt.where(LedgerEntry.owner_user_id == owner_user_id)
+    stmt = select(func.count(LedgerEntry.id)).where(unread_email_clause(owner_user_id))
     return int(db.execute(stmt).scalar_one())
 
 
@@ -678,14 +684,7 @@ def unread_email_ids(db: Session, owner_user_id: int | None = None) -> list[int]
 
     Kept beside ``unread_email_count`` so the two never diverge.
     """
-    stmt = select(LedgerEntry.id).where(
-        LedgerEntry.channel == "email",
-        LedgerEntry.direction.in_(("incoming", "internal")),
-        LedgerEntry.read_at.is_(None),
-        LedgerEntry.deleted_at.is_(None),
-    )
-    if owner_user_id is not None:
-        stmt = stmt.where(LedgerEntry.owner_user_id == owner_user_id)
+    stmt = select(LedgerEntry.id).where(unread_email_clause(owner_user_id))
     return list(db.execute(stmt).scalars())
 
 
@@ -700,16 +699,9 @@ def unread_emails(
     """
     stmt = (
         select(LedgerEntry)
-        .where(
-            LedgerEntry.channel == "email",
-            LedgerEntry.direction.in_(("incoming", "internal")),
-            LedgerEntry.read_at.is_(None),
-            LedgerEntry.deleted_at.is_(None),
-        )
+        .where(unread_email_clause(owner_user_id))
         .order_by(LedgerEntry.entry_date.desc(), LedgerEntry.id.desc())
     )
-    if owner_user_id is not None:
-        stmt = stmt.where(LedgerEntry.owner_user_id == owner_user_id)
     if limit is not None:
         stmt = stmt.limit(limit)
     return list(db.execute(stmt).scalars())

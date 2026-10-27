@@ -5,27 +5,11 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas._base import ORMBase
 
-# Known widget / quick-action ids. Add to these lists when the Dashboard
-# component grows a new tile so the API validates instead of silently storing
-# stale ids. Frontend mirrors these in `lib/dashboardLayout.ts`.
-#
-# Widget IDs:
-#   - Top row (fixed, always visible): pending, workspace
-#   - Original bottom row: violations, drafts, ledger
-#   - Promoted section cards: on_leave_today, upcoming_leave
-#   - New widgets:           recent_docs, email_sync_status,
-#                            waiting_approvals, expiring_soon, recent_ledger,
-#                            pending_departures, violation_months, permits
-#
-# Quick-action IDs are services only: one entry per selectable ``template_id``
-# from `app.core.constants.TEMPLATE_FILES`, so every tile deep-links into a
-# pre-selected form. The section shortcuts (hr/violations/leaves/books) were
-# dropped — the nav owns wayfinding — and the tolerant read path prunes them
-# from layouts saved before the removal.
+# Stable widget and service ids, mirrored in frontend/lib/dashboardLayout.ts.
 DASHBOARD_WIDGET_IDS = (
     "pending",
     "workspace",
@@ -34,12 +18,10 @@ DASHBOARD_WIDGET_IDS = (
     "ledger",
     "on_leave_today",
     "upcoming_leave",
-    "recent_docs",
-    "email_sync_status",
+    "quick_actions",
     "waiting_approvals",
     "sent_approvals",
     "expiring_soon",
-    "recent_ledger",
     "pending_departures",
     "workforce_pulse",
     "violation_months",
@@ -75,12 +57,10 @@ DashboardWidgetId = Literal[
     "ledger",
     "on_leave_today",
     "upcoming_leave",
-    "recent_docs",
-    "email_sync_status",
+    "quick_actions",
     "waiting_approvals",
     "sent_approvals",
     "expiring_soon",
-    "recent_ledger",
     "pending_departures",
     "workforce_pulse",
     "violation_months",
@@ -121,7 +101,39 @@ class DashboardWidgetConfig(BaseModel):
     id: DashboardWidgetId
     visible: bool = True
     order: int
-    zone: DashboardWidgetZone = "under_workspace"
+    size: Literal["S", "M", "L", "W", "XL"] = "S"
+    zone: DashboardWidgetZone | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_size(cls, value: object) -> object:
+        if isinstance(value, dict) and "size" not in value:
+            widget_id = value.get("id")
+            if widget_id == "quick_actions":
+                size = "W"
+            elif value.get("zone") == "top" or (
+                "zone" not in value and widget_id in {"pending", "workspace"}
+            ):
+                size = "M"
+            elif widget_id == "permits":
+                size = "XL"
+            elif widget_id in {
+                "waiting_approvals",
+                "expiring_soon",
+                "on_leave_today",
+                "upcoming_leave",
+                "pending_departures",
+                "workforce_pulse",
+                "violation_months",
+            }:
+                size = "L"
+            else:
+                size = "S"
+            zone = value.get("zone") or (
+                "top" if widget_id in {"pending", "workspace"} else "under_workspace"
+            )
+            return {**value, "size": size, "zone": zone}
+        return value
 
 
 class DashboardQuickActionConfig(BaseModel):
@@ -135,6 +147,12 @@ class DashboardLayout(BaseModel):
     quick_actions: list[DashboardQuickActionConfig] = Field(default_factory=list)
     canvas_width: DashboardCanvasWidth = "compact"
 
+    @model_validator(mode="after")
+    def reject_duplicate_widgets(self) -> DashboardLayout:
+        if len({widget.id for widget in self.widgets}) != len(self.widgets):
+            raise ValueError("Duplicate dashboard widget ids")
+        return self
+
 
 class DashboardTotals(BaseModel):
     # Total working (our staff + loaned). on_leave_today / present_today are our staff only.
@@ -145,7 +163,6 @@ class DashboardTotals(BaseModel):
     present_today: int | None
     forms_this_month: int
     open_violations_count: int | None
-    draft_count: int = 0
     book_draft_count: int = 0
 
 
@@ -163,29 +180,57 @@ class DashboardUpcomingLeaveItem(DashboardLeaveItem):
     days_remaining: int
 
 
-class DashboardRecentDocument(ORMBase):
-    id: int
-    # Nullable: admin-category docs (e.g. General Book) have no employee.
+class DashboardApprovedRecord(ORMBase):
+    book_id: int
+    ref_number: str
+    subject: str | None
     employee_id: str | None
+    employee_name_en: str | None
+    employee_name_ar: str | None
+    created_at: datetime
+
+
+class DashboardMyRecords(BaseModel):
+    """Caller-owned records by creation day, matching the Records page filters."""
+
+    month: str
+    from_date: date
+    to_date: date
+    approved: int
+    pending: int
+    awaiting_scan: int
+    returned: int
+    rejected: int
+    not_submitted: int
+    drafts: int
+    latest_approved: list[DashboardApprovedRecord]
+
+
+class DashboardUnreadMailItem(ORMBase):
+    id: int
+    subject: str
+    counterparty: str
+    entry_date: date
+    created_at: datetime
+
+
+class DashboardUnreadMail(BaseModel):
+    count: int
+    latest: list[DashboardUnreadMailItem]
+
+
+class DashboardOpenViolation(BaseModel):
+    id: int
+    employee_id: str
     employee_name_en: str
     employee_name_ar: str | None
-    template_id: str
-    ref_number: str | None
-    role: str | None
-    created_at: datetime
+    title: str
+    date: date
 
 
-class DashboardRecentLedger(ORMBase):
-    id: int
-    entry_date: date
-    direction: str
-    channel: str
-    counterparty: str
-    subject: str
-    related_employee_id: str | None
-    related_employee_name_en: str | None
-    related_employee_name_ar: str | None
-    created_at: datetime
+class DashboardOpenViolations(BaseModel):
+    count: int
+    latest: list[DashboardOpenViolation]
 
 
 class DashboardSyncStatus(ORMBase):
@@ -206,24 +251,29 @@ class DashboardSummary(BaseModel):
     totals: DashboardTotals
     on_leave_today: list[DashboardLeaveItem]
     upcoming_leave_ends: list[DashboardUpcomingLeaveItem]
-    recent_documents: list[DashboardRecentDocument]
-    recent_ledger: list[DashboardRecentLedger]
+    my_records: DashboardMyRecords | None
+    unread_mail: DashboardUnreadMail | None
+    open_violations: DashboardOpenViolations | None
     email_sync: DashboardSyncStatus
 
 
 __all__ = [
     "DASHBOARD_QUICK_ACTION_IDS",
     "DASHBOARD_WIDGET_IDS",
+    "DashboardApprovedRecord",
     "DashboardCanvasWidth",
     "DashboardLayout",
     "DashboardLeaveItem",
+    "DashboardMyRecords",
+    "DashboardOpenViolation",
+    "DashboardOpenViolations",
     "DashboardQuickActionConfig",
     "DashboardQuickActionId",
-    "DashboardRecentDocument",
-    "DashboardRecentLedger",
     "DashboardSummary",
     "DashboardSyncStatus",
     "DashboardTotals",
+    "DashboardUnreadMail",
+    "DashboardUnreadMailItem",
     "DashboardUpcomingLeaveItem",
     "DashboardWidgetConfig",
     "DashboardWidgetId",

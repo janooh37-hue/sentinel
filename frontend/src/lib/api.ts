@@ -294,6 +294,7 @@ export type ItemPermitItem = components['schemas']['ItemPermitItem']
 export type ItemPermitCreate = components['schemas']['ItemPermitCreate']
 export type ItemPermitUpdate = components['schemas']['ItemPermitUpdate']
 export type ItemPermitListResponse = components['schemas']['ItemPermitListResponse']
+export type ItemPermitSummary = components['schemas']['ItemPermitSummary']
 export type ItemPermitZone = ItemPermitRead['zones'][number]
 
 // ─── Fleet vehicles ──────────────────────────────────────────────────────────
@@ -958,89 +959,11 @@ export type GenerateAttachmentSpec = components['schemas']['GenerateAttachmentSp
 export type StagedAttachmentRead = components['schemas']['StagedAttachmentRead']
 
 // Phase 12 — Dashboard
-// Hand-mirrored until backend lands and `npm run gen:api` picks it up.
-export interface DashboardOnLeaveItem {
-  employee_id: string
-  employee_name_en: string
-  employee_name_ar: string | null
-  leave_id: number
-  leave_type: string
-  start_date: string
-  end_date: string
-}
-
-export interface DashboardUpcomingItem {
-  employee_id: string
-  employee_name_en: string
-  employee_name_ar: string | null
-  leave_id: number
-  leave_type: string
-  end_date: string
-  days_remaining: number
-}
-
-export interface DashboardRecentDocument {
-  id: number
-  employee_id: string
-  employee_name_en: string
-  employee_name_ar: string | null
-  template_id: string
-  ref_number: string | null
-  role: string | null
-  created_at: string
-}
-
-export interface DashboardRecentLedger {
-  id: number
-  entry_date: string
-  direction: string
-  channel: string
-  counterparty: string
-  subject: string
-  related_employee_id: string | null
-  related_employee_name_en: string | null
-  related_employee_name_ar: string | null
-  created_at: string
-}
-
-/**
- * Email sync snapshot embedded in the dashboard summary. Drives the
- * `email_sync_status` widget. Hand-typed here until openapi-typescript
- * regenerates against the new backend response shape — keep in sync with
- * `backend/app/schemas/dashboard.py::EmailSyncSnapshot`.
- */
-export interface DashboardEmailSync {
-  /** ISO-8601 timestamp of the last successful sync, or `null` if never synced. */
-  last_synced_at: string | null
-  /** Whether email sync is configured (account exists + has credentials). */
-  enabled: boolean
-  /** Configured cadence in minutes. `0` means scheduled sync is off. */
-  interval_minutes: number
-  /** Count of emails imported today (per local calendar day). */
-  incoming_today: number
-}
-
-export interface DashboardSummary {
-  totals: {
-    /** Total working: our staff + loaned. */
-    employees_active: number | null
-    our_staff: number | null
-    loaned: number | null
-    /** Our staff only; a loaned employee counts only as loaned. */
-    on_leave_today: number | null
-    present_today: number | null
-    forms_this_month: number
-    open_violations_count: number | null
-    draft_count: number
-    book_draft_count: number
-  }
-  on_leave_today: DashboardOnLeaveItem[]
-  upcoming_leave_ends: DashboardUpcomingItem[]
-  recent_documents: DashboardRecentDocument[]
-  recent_ledger: DashboardRecentLedger[]
-  /** Phase 18 — email sync widget payload. Always present (backend always returns it). */
-  email_sync: DashboardEmailSync
-}
+// Dashboard responses come from the generated backend contract.
+export type DashboardOnLeaveItem = components['schemas']['DashboardLeaveItem']
+export type DashboardUpcomingItem = components['schemas']['DashboardUpcomingLeaveItem']
+export type DashboardSummary = components['schemas']['DashboardSummary']
+export type DashboardEmailSync = components['schemas']['DashboardSyncStatus']
 
 // Monthly time sheet (site JD 908) — one month of one workbook, plus the two
 // deliverables it produces. `sheet` on the response is the generated `string`,
@@ -1382,6 +1305,10 @@ export interface ListEmployeesParams {
   department?: string
   /** Only scheduled departures — Active or Loaned employees with a pending_status. */
   pending?: boolean
+  open_violations?: boolean
+  working?: boolean
+  present?: boolean
+  on_leave?: boolean
   limit?: number
   offset?: number
 }
@@ -1523,6 +1450,9 @@ export const api = {
     leave_type?: string
     from_date?: string
     to_date?: string
+    on_date?: string
+    end_from?: string
+    end_to?: string
     include_deleted?: boolean
     limit?: number
     offset?: number
@@ -1603,8 +1533,10 @@ export const api = {
     fetchPermitBlob(`/permits/${id}/document`),
 
   // --- item permits (إدخال مواد) ---
-  listItemPermits: (params: { q?: string; limit?: number; offset?: number } = {}) =>
+  listItemPermits: (params: { q?: string; zone?: ItemPermitZone; limit?: number; offset?: number } = {}) =>
     request<ItemPermitListResponse>('GET', `/item-permits${qs({ ...params })}`),
+  itemPermitsSummary: (zone?: ItemPermitZone) =>
+    request<ItemPermitSummary>('GET', `/item-permits/summary${qs({ zone })}`),
   getItemPermit: (id: number) => request<ItemPermitRead>('GET', `/item-permits/${id}`),
   createItemPermit: (body: ItemPermitCreate) =>
     request<ItemPermitRead>('POST', '/item-permits', body),
@@ -2138,7 +2070,7 @@ export const api = {
     category_id?: string
     service_id?: string
     direction?: 'incoming' | 'outgoing'
-    approval_state?: 'none' | 'pending' | 'approved' | 'returned' | 'rejected'
+    approval_state?: 'none' | 'pending' | 'awaiting_scan' | 'approved' | 'returned' | 'rejected'
     q?: string
     from_date?: string
     to_date?: string
@@ -2146,6 +2078,7 @@ export const api = {
     limit?: number
     offset?: number
     created_by_me?: boolean
+    drafts?: boolean
     inbox?: 'received' | 'done' | 'sent' | 'archived' | 'any'
     folder_id?: number
     sort?: BookSortKey

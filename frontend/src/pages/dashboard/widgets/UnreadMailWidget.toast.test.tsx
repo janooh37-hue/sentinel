@@ -9,26 +9,31 @@ import { api } from '@/lib/api'
 import type { DashboardSummary, EmailSyncResult } from '@/lib/api'
 import type * as ApiModule from '@/lib/api'
 import { toast } from '@/lib/toast'
-import { EmailSyncStatusWidget } from './EmailSyncStatusWidget'
+import { UnreadMailWidget } from '@/pages/dashboard/widgets/UnreadMailWidget'
 
 vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'pending-sync'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiModule>()),
-  api: { syncEmail: vi.fn() },
+  api: { syncEmail: vi.fn(), getDashboardSummary: vi.fn() },
 }))
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(api.getDashboardSummary).mockResolvedValue(summary)
+})
 
 const summary: DashboardSummary = {
   totals: {
     employees_active: 0, our_staff: 0, loaned: 0, on_leave_today: 0,
     present_today: 0, forms_this_month: 0, open_violations_count: 0,
-    draft_count: 0, book_draft_count: 0,
+    book_draft_count: 0,
   },
   on_leave_today: [],
   upcoming_leave_ends: [],
-  recent_documents: [],
-  recent_ledger: [],
+  my_records: null,
+  unread_mail: { count: 0, latest: [] },
+  open_violations: null,
   email_sync: { enabled: true, incoming_today: 0, interval_minutes: 10, last_synced_at: null },
 }
 
@@ -42,11 +47,11 @@ test.each([true, false])('resolves the pending email-sync toast (success: %s)', 
   }))
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}>
-      <MemoryRouter><EmailSyncStatusWidget summary={summary} /></MemoryRouter>
+      <MemoryRouter><UnreadMailWidget tier="summary" rows={0} /></MemoryRouter>
     </QueryClientProvider>,
   )
 
-  await userEvent.click(screen.getByRole('button', { name: i18n.t('dashboard.widgets.emailSync.header') }))
+  await userEvent.click(await screen.findByRole('button', { name: i18n.t('dashboard.widgets.ledger.syncNow') }))
 
   await waitFor(() => expect(toast.loading).toHaveBeenCalledWith(i18n.t('dashboard.widgets.emailSync.syncingToast')))
   expect(toast.success).not.toHaveBeenCalled()
@@ -55,7 +60,7 @@ test.each([true, false])('resolves the pending email-sync toast (success: %s)', 
 
   if (succeeds) {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith(
-      i18n.t('settings.email.syncOk', { imported: 3, skipped: 2 }), { id: 'pending-sync' },
+      i18n.t('dashboard.widgets.ledger.syncSuccess', { imported: 3, skipped: 2 }), { id: 'pending-sync' },
     ))
     expect(toast.error).not.toHaveBeenCalled()
   } else {

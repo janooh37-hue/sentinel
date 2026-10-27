@@ -1,32 +1,6 @@
-/**
- * Dashboard layout — zoned widget model.
- *
- * Each widget config carries `{ id, visible, order, zone }`. Zones:
- *   • top                 — exactly 2 big-card slots (only TOP_ELIGIBLE ids).
- *   • under_workspace     — grid below the top pair.
- *   • under_quick_actions — grid below the quick-action tiles.
- * Hidden = `visible: false` (zone is remembered so re-showing restores place).
- *
- * The backend stores a nullable private layout per user; this
- * module is the canonical catalog + resolver. Legacy (zone-less) layouts are
- * migrated by `resolveLayout`: pending/workspace → top, previously-visible
- * widgets → under_workspace, never-seen ids appended hidden.
- */
+import type { DashboardLayout, DashboardQuickActionConfig, DashboardWidgetConfig } from './api'
+import type { WidgetTier } from '@/pages/dashboard/widgets/types'
 
-import type {
-  DashboardLayout,
-  DashboardQuickActionConfig,
-  DashboardWidgetConfig,
-} from './api'
-
-export type WidgetZone = 'top' | 'under_workspace' | 'under_quick_actions'
-export type WidgetSize = 'metric' | 'panel'
-
-/**
- * Page measure. `compact` is the 1180px column every other page uses; `wide`
- * lets the grid span the window. Compact is the default — it is the incumbent
- * look, and a layout saved before the field existed must not change width.
- */
 export type CanvasWidth = 'compact' | 'wide'
 /** Normalized layouts always contain both collections, unlike partial API payloads. */
 export type ResolvedDashboardLayout = DashboardLayout & {
@@ -35,160 +9,34 @@ export type ResolvedDashboardLayout = DashboardLayout & {
 }
 export const CANVAS_WIDTHS = ['compact', 'wide'] as const
 export const DEFAULT_CANVAS_WIDTH: CanvasWidth = 'compact'
-
-/**
- * Destination each widget reports on, so the editor can be grouped by origin
- * ("which page does this come from?") instead of only by placement. Derived
- * from where the widget's own action navigates — see DashboardPage's
- * `renderWidget` and the widget components' links; keep in step with them.
- */
-export type WidgetSource = 'employees' | 'leaves' | 'records' | 'ledger' | 'workforce' | 'permits'
-export const WIDGET_SOURCES = ['employees', 'leaves', 'records', 'ledger', 'workforce', 'permits'] as const
-
-/** All canonical widget ids (order = catalog order in the editor). */
+export const WIDGET_SIZES = ['S', 'M', 'L', 'W', 'XL'] as const
+export type WidgetSize = (typeof WIDGET_SIZES)[number]
 export const WIDGET_IDS = [
-  'pending',
-  'workspace',
-  'waiting_approvals',
-  'sent_approvals',
-  'inbox',
-  'violations',
-  'drafts',
-  'ledger',
-  'email_sync_status',
-  'expiring_soon',
-  'on_leave_today',
-  'upcoming_leave',
-  'recent_docs',
-  'recent_ledger',
-  'pending_departures',
-  'workforce_pulse',
-  'violation_months',
-  'permits',
+  'waiting_approvals', 'pending', 'sent_approvals', 'inbox', 'ledger', 'workspace',
+  'quick_actions', 'on_leave_today', 'upcoming_leave', 'drafts', 'expiring_soon',
+  'violation_months', 'violations', 'pending_departures', 'workforce_pulse', 'permits',
 ] as const
-
 export type WidgetId = (typeof WIDGET_IDS)[number]
-
-/** Only these may occupy a Top slot (rendered as big cards). */
-export const TOP_ELIGIBLE_IDS = ['pending', 'workspace', 'waiting_approvals', 'inbox'] as const
-export const TOP_ELIGIBLE_SET = new Set<string>(TOP_ELIGIBLE_IDS)
-
-/** Grid sizing: metric = 1 column, panel = full row. */
-export const WIDGET_SIZE: Record<WidgetId, WidgetSize> = {
-  pending: 'metric',
-  workspace: 'metric',
-  // Adaptive at render time (glance card in top); panel in lower zones so it
-  // spans the full row when showing the BooksAwaitingWidget list.
-  waiting_approvals: 'panel',
-  sent_approvals: 'metric',
-  inbox: 'metric',
-  violations: 'metric',
-  drafts: 'metric',
-  ledger: 'metric',
-  email_sync_status: 'metric',
-  expiring_soon: 'panel',
-  on_leave_today: 'panel',
-  upcoming_leave: 'panel',
-  recent_docs: 'panel',
-  recent_ledger: 'panel',
-  pending_departures: 'panel',
-  workforce_pulse: 'panel',
-  violation_months: 'panel',
-  permits: 'panel',
-}
-
-/**
- * Which destination a widget draws from — the editor groups by this so a
- * widget can be found by the page it belongs to. Each entry follows the
- * widget's own action target, not a guess:
- *   • records  — pending/waiting_approvals/drafts open `/books…`; violation
- *                months opens the Inmate Conduct Violations application service
- *   • employees — workspace, violations, recent_docs, expiring_soon and
- *                 pending_departures all open an employee or `/employees`
- *   • leaves   — on_leave_today, upcoming_leave open a leave
- *   • ledger   — ledger, recent_ledger open a ledger entry; email sync is the
- *                inbound-mail feed behind the ledger inbox
- *   • workforce — workforce_pulse opens the Workforce Pulse drill-down
- *   • permits  — permits opens the permits register
- */
-export const WIDGET_SOURCE: Record<WidgetId, WidgetSource> = {
-  pending: 'records',
-  workspace: 'employees',
-  waiting_approvals: 'records',
-  sent_approvals: 'records',
-  inbox: 'records',
-  violations: 'employees',
-  drafts: 'records',
-  ledger: 'ledger',
-  email_sync_status: 'ledger',
-  expiring_soon: 'employees',
-  on_leave_today: 'leaves',
-  upcoming_leave: 'leaves',
-  recent_docs: 'employees',
-  recent_ledger: 'ledger',
-  pending_departures: 'employees',
-  workforce_pulse: 'workforce',
-  violation_months: 'records',
-  permits: 'permits',
-}
-
-export const LOWER_ZONES = ['under_workspace', 'under_quick_actions'] as const
-export const MAX_TOP = 2
-export const MAX_PER_LOWER_ZONE = 6
-
-/** Max quick-action tiles visible (unchanged — tiles keep their own editor). */
+export type WidgetSource = 'records' | 'approvals' | 'ledger' | 'employees' | 'leaves' | 'workforce' | 'permits' | 'services'
 export const MAX_VISIBLE_QUICK_ACTIONS = 8
-
-/**
- * Mirror of the backend `DashboardQuickActionId` Literal — keep in sync.
- *
- * Services only: one id per selectable form template, ordered most-used
- * first because `DEFAULT_LAYOUT` makes the leading four visible.
- */
 export const QUICK_ACTION_IDS = [
-  'General Book',
-  'Acknowledgment Form',
-  'Salary Transfer Request',
-  'Leave Permit Form',
-  'Violation Form',
-  'Leave Application Form',
-  'Duty Resumption Form',
-  'HR Request Form',
-  'Salary Deduction Form',
-  'Employee Clearance Form',
-  'Passport Release Form',
-  'Material Request Form',
-  'Resignation Letter',
-  'Administrative Leave Form',
-  'Warning Form',
-  'Passport Release List',
-  'Report',
-  'Inmate Conduct Violations',
+  'General Book', 'Acknowledgment Form', 'Salary Transfer Request', 'Leave Permit Form',
+  'Violation Form', 'Leave Application Form', 'Duty Resumption Form', 'HR Request Form',
+  'Salary Deduction Form', 'Employee Clearance Form', 'Passport Release Form',
+  'Material Request Form', 'Resignation Letter', 'Administrative Leave Form',
+  'Warning Form', 'Passport Release List', 'Report', 'Inmate Conduct Violations',
 ] as const
-
 export type QuickActionId = (typeof QUICK_ACTION_IDS)[number]
 
-export function hasServiceCap(
-  id: string,
-  has: (capability: string) => boolean,
-): boolean {
+export function hasServiceCap(id: string, has: (capability: string) => boolean): boolean {
   return has(`books.service.${id}`)
 }
-
-export function hasServiceRecordsCap(
-  id: string,
-  has: (capability: string) => boolean,
-): boolean {
+export function hasServiceRecordsCap(id: string, has: (capability: string) => boolean): boolean {
   return has(`books.servicerecords.${id}`)
 }
-
-export function isQuickActionAllowed(
-  id: string,
-  has: (capability: string) => boolean,
-): boolean {
+export function isQuickActionAllowed(id: string, has: (capability: string) => boolean): boolean {
   return has('documents.generate') && has('books.view') && hasServiceCap(id, has)
 }
-
 export function mergeQuickActionsPreservingDenied(
   original: readonly DashboardQuickActionConfig[],
   editedAllowed: readonly DashboardQuickActionConfig[],
@@ -197,229 +45,152 @@ export function mergeQuickActionsPreservingDenied(
   let editedIndex = 0
   return original.map((item, order) => {
     if (!allowedIds.has(item.id)) return { ...item, order }
-    const replacement = editedAllowed[editedIndex]
-    editedIndex += 1
-    return { ...(replacement ?? item), order }
+    return { ...(editedAllowed[editedIndex++] ?? item), order }
   })
 }
 
-const WIDGET_ID_SET = new Set<string>(WIDGET_IDS)
-const QUICK_ACTION_ID_SET = new Set<string>(QUICK_ACTION_IDS)
-
-/** Working widget shape with a guaranteed zone. */
-type Widget = DashboardWidgetConfig & { zone: WidgetZone }
-
-function zoneOf(w: DashboardWidgetConfig): WidgetZone {
-  const z = (w as Widget).zone
-  return z === 'top' || z === 'under_workspace' || z === 'under_quick_actions'
-    ? z
-    : 'under_workspace'
+const DEFAULT_SIZES: Record<WidgetId, WidgetSize> = {
+  waiting_approvals: 'L', pending: 'M', sent_approvals: 'S', inbox: 'S', ledger: 'M',
+  workspace: 'M', quick_actions: 'W', on_leave_today: 'L', upcoming_leave: 'S',
+  drafts: 'S', expiring_soon: 'S', violation_months: 'S', violations: 'S',
+  pending_departures: 'L', workforce_pulse: 'M', permits: 'XL',
 }
-
-/**
- * Canonical "no saved layout" default — reproduces the pre-rework dashboard,
- * plus the app-wide inmate-register reminder:
- *   • Top: pending + workspace (visible).
- *   • Under Workspace: violations, drafts, ledger and violation_months
- *     (visible); the rest of the catalog is present-but-hidden so the operator
- *     opts in via the editor.
- *   • Quick actions: the first 4 service tiles visible.
- *   • Canvas: compact (1180px), the incumbent measure.
- */
 export const DEFAULT_LAYOUT: ResolvedDashboardLayout = {
-  widgets: WIDGET_IDS.map((id, order) => {
-    if (id === 'pending' || id === 'workspace') {
-      return { id, visible: true, order, zone: 'top' as WidgetZone }
-    }
-    const visible =
-      id === 'waiting_approvals' ||
-      id === 'sent_approvals' ||
-      id === 'violations' ||
-      id === 'drafts' ||
-      id === 'ledger' ||
-      id === 'violation_months'
-    return { id, visible, order, zone: 'under_workspace' as WidgetZone }
-  }) as DashboardWidgetConfig[],
-  quick_actions: QUICK_ACTION_IDS.map((id, order) => ({
-    id,
-    visible: order < 4,
-    order,
-  })),
+  widgets: WIDGET_IDS.map((id, order) => ({ id, visible: order < 12, order, size: DEFAULT_SIZES[id] })),
+  quick_actions: QUICK_ACTION_IDS.map((id, order) => ({ id, visible: order < 4, order })),
   canvas_width: DEFAULT_CANVAS_WIDTH,
 }
 
-/**
- * Resolve a saved layout into a renderable, normalized one. Drops unknown ids,
- * migrates legacy entries into zones, appends never-seen ids hidden, then
- * clamps zone caps + top-eligibility.
- */
-export function resolveLayout(saved: DashboardLayout | null | undefined): ResolvedDashboardLayout {
-  if (!saved) return DEFAULT_LAYOUT
-
-  const seen = new Set<string>()
-  const kept: Widget[] = []
-
-  for (const raw of saved.widgets ?? []) {
-    if (!WIDGET_ID_SET.has(raw.id)) continue
-    if (seen.has(raw.id)) continue
-    seen.add(raw.id)
-
-    // Legacy migration: a saved entry with no `zone` predates the rework.
-    const hasZone = 'zone' in raw && (raw as Widget).zone != null
-    let zone: WidgetZone
-    let visible = raw.visible
-    if (hasZone) {
-      zone = zoneOf(raw)
-    } else if (raw.id === 'pending' || raw.id === 'workspace') {
-      zone = 'top'
-      visible = true // top pair was always visible (locked) pre-rework
-    } else {
-      zone = 'under_workspace'
-    }
-    kept.push({ id: raw.id, visible, order: raw.order, zone })
-  }
-
-  kept.sort((a, b) => a.order - b.order)
-
-  // Append any canonical id the saved layout never mentioned — hidden, in its
-  // default zone, so nobody's dashboard suddenly grows.
-  let next = kept.length ? Math.max(...kept.map((x) => x.order)) + 1 : 0
-  for (const id of WIDGET_IDS) {
-    if (seen.has(id)) continue
-    const zone: WidgetZone =
-      id === 'pending' || id === 'workspace' || id === 'waiting_approvals'
-        ? 'top'
-        : 'under_workspace'
-    kept.push({ id, visible: false, order: next, zone })
-    next += 1
-  }
-
-  const widgets = normalizeWidgets(kept as DashboardWidgetConfig[])
-
-  const quick_actions = mergeQuickActions(saved.quick_actions ?? [])
-  return { widgets, quick_actions, canvas_width: resolveCanvasWidth(saved.canvas_width) }
+const WIDGET_ID_LOOKUP: Record<string, true> = Object.fromEntries(WIDGET_IDS.map((id) => [id, true]))
+const QUICK_ACTION_ID_LOOKUP: Record<string, true> = Object.fromEntries(QUICK_ACTION_IDS.map((id) => [id, true]))
+const LEGACY_PANELS: Record<string, true> = {
+  waiting_approvals: true, expiring_soon: true, on_leave_today: true, upcoming_leave: true,
+  pending_departures: true, workforce_pulse: true, violation_months: true,
 }
+type SavedWidget = { id: string; visible: boolean; order: number; size?: string; zone?: string | null }
+type SavedLayout = { widgets?: SavedWidget[]; quick_actions?: { id: string; visible: boolean; order: number }[]; canvas_width?: string | null }
 
-/** Keep an unknown or absent measure on the incumbent compact column. */
+/** Read old zones once; all output (including API writes) is size-based. */
+export function resolveLayout(saved: SavedLayout | null | undefined): ResolvedDashboardLayout {
+  if (!saved) return DEFAULT_LAYOUT
+  const seen = new Set<string>()
+  const raw = [...(saved.widgets ?? [])].sort((a, b) => a.order - b.order)
+  // V2 saves include quick_actions even when hidden; legacy widgets may all be pruned on read.
+  const legacy = raw.length === 0 || raw.some((item) => !item.size || item.zone != null)
+  // Zone order was visual order, even when stored orders interleaved zones.
+  if (legacy) raw.sort((a, b) => {
+    const rank = (w: SavedWidget) => w.zone === 'top' || (!w.zone && ['pending', 'workspace'].includes(w.id)) ? 0 : w.zone === 'under_quick_actions' ? 2 : 1
+    return rank(a) - rank(b) || a.order - b.order
+  })
+  const kept: DashboardWidgetConfig[] = []
+  let bandAfter = 0
+  for (const item of raw) {
+    if (WIDGET_ID_LOOKUP[item.id] !== true || seen.has(item.id)) continue
+    seen.add(item.id)
+    const id = item.id as WidgetId
+    const size = WIDGET_SIZES.includes(item.size as WidgetSize) ? item.size as WidgetSize
+      : item.zone === 'top' || (!item.zone && ['pending', 'workspace'].includes(id)) ? 'M'
+      : id === 'permits' ? 'XL'
+      : LEGACY_PANELS[id] === true ? 'L' : 'S'
+    kept.push({ id, visible: item.visible, order: kept.length, size })
+    if (item.zone !== 'under_quick_actions') bandAfter = kept.length
+  }
+  if (legacy && !seen.has('quick_actions')) {
+    kept.splice(bandAfter, 0, { id: 'quick_actions', visible: true, size: 'W', order: bandAfter })
+    seen.add('quick_actions')
+  }
+  for (const id of WIDGET_IDS) {
+    if (!seen.has(id)) kept.push({ id, visible: false, order: kept.length, size: DEFAULT_SIZES[id] })
+  }
+  const actionSeen = new Set<string>()
+  const quick_actions: DashboardQuickActionConfig[] = []
+  for (const item of [...(saved.quick_actions ?? [])].sort((a, b) => a.order - b.order)) {
+    if (QUICK_ACTION_ID_LOOKUP[item.id] !== true || actionSeen.has(item.id)) continue
+    actionSeen.add(item.id)
+    quick_actions.push({ id: item.id as QuickActionId, visible: item.visible, order: quick_actions.length })
+  }
+  for (const id of QUICK_ACTION_IDS) {
+    if (!actionSeen.has(id)) quick_actions.push({ id, visible: false, order: quick_actions.length })
+  }
+  return { widgets: widgetsForApi(kept), quick_actions, canvas_width: resolveCanvasWidth(saved.canvas_width) }
+}
 export function resolveCanvasWidth(saved: string | null | undefined): CanvasWidth {
   return saved === 'wide' ? 'wide' : DEFAULT_CANVAS_WIDTH
 }
-
-function mergeQuickActions(
-  saved: DashboardQuickActionConfig[],
-): DashboardQuickActionConfig[] {
-  const seen = new Set<string>()
-  const kept: DashboardQuickActionConfig[] = []
-  for (const item of saved) {
-    if (!QUICK_ACTION_ID_SET.has(item.id)) continue
-    if (seen.has(item.id)) continue
-    seen.add(item.id)
-    kept.push(item)
-  }
-  kept.sort((a, b) => a.order - b.order)
-  let next = kept.length ? Math.max(...kept.map((x) => x.order)) + 1 : 0
-  for (const id of QUICK_ACTION_IDS) {
-    if (seen.has(id)) continue
-    kept.push({ id, visible: false, order: next })
-    next += 1
-  }
-  return kept
+export function widgetsForApi(widgets: readonly DashboardWidgetConfig[]): DashboardWidgetConfig[] {
+  return widgets.map(({ id, visible, size }, order) => ({ id, visible, size, order }))
 }
 
-/**
- * Enforce structural rules and reindex `order` globally:
- *   • Top zone holds at most MAX_TOP visible, top-eligible widgets. A
- *     non-eligible widget in `top` is moved to `under_workspace`. Overflow
- *     past MAX_TOP is moved to `under_workspace` (kept visible).
- *   • Each lower zone holds at most MAX_PER_LOWER_ZONE visible widgets;
- *     overflow is flipped to `visible: false`.
- * Operates in the widgets' current array order (which encodes within-zone
- * ordering), then rewrites `order` to the array index.
- */
-export function normalizeWidgets(
-  input: DashboardWidgetConfig[],
-): DashboardWidgetConfig[] {
-  const widgets: Widget[] = input.map((w) => ({ ...w, zone: zoneOf(w) }))
+export interface PackedWidget { id: string; size: WidgetSize; r: number; c: number; w: number; h: number; grown: boolean }
+export interface PackedLayout { placed: PackedWidget[]; holes: [number, number][]; cols: number }
 
-  let topCount = 0
-  const lowerCount: Record<string, number> = {
-    under_workspace: 0,
-    under_quick_actions: 0,
-  }
-
-  for (const w of widgets) {
-    if (w.zone === 'top') {
-      // Non-eligible OR overflow → demote to under_workspace (still visible).
-      if (!TOP_ELIGIBLE_SET.has(w.id) || (w.visible && topCount >= MAX_TOP)) {
-        w.zone = 'under_workspace'
-      } else if (w.visible) {
-        topCount += 1
-      }
+/** Logical columns: CSS grid mirrors inline-start in RTL without changing placement. */
+export function packLayout(items: readonly { id: string; size: WidgetSize }[], cols: number): PackedLayout {
+  if (!Number.isInteger(cols) || cols < 1) throw new RangeError('Grid columns must be a positive integer')
+  const grid: (PackedWidget | undefined)[][] = []
+  const free = (r: number, c: number, w: number, h: number) => {
+    for (let y = r; y < r + h; y++) for (let x = c; x < c + w; x++) {
+      if (x >= cols || grid[y]?.[x]) return false
     }
-    if (w.zone !== 'top' && w.visible) {
-      if (lowerCount[w.zone]! >= MAX_PER_LOWER_ZONE) {
-        w.visible = false
-      } else {
-        lowerCount[w.zone]! += 1
+    return true
+  }
+  const mark = (item: PackedWidget) => {
+    for (let y = item.r; y < item.r + item.h; y++) {
+      grid[y] ??= []
+      for (let x = item.c; x < item.c + item.w; x++) grid[y]![x] = item
+    }
+  }
+  const placed: PackedWidget[] = []
+  for (const { id, size } of items) {
+    const w = size === 'W' || size === 'XL' ? cols : Math.min(size === 'S' ? 1 : 2, cols)
+    const h = size === 'XL' ? 3 : size === 'L' || (cols === 2 && size === 'W') ? 2 : 1
+    let done = false
+    for (let r = 0; !done; r++) for (let c = 0; c <= cols - w && !done; c++) {
+      if (free(r, c, w, h)) {
+        const item = { id, size, r, c, w, h, grown: false }
+        mark(item)
+        placed.push(item)
+        done = true
       }
     }
   }
-
-  return widgets.map((w, i) => ({
-    id: w.id,
-    visible: w.visible,
-    order: i,
-    zone: w.zone,
-  })) as DashboardWidgetConfig[]
+  const rowsUsed = Math.max(0, ...placed.map((p) => p.r + p.h))
+  const holes = (): [number, number][] => {
+    const result: [number, number][] = []
+    for (let r = 0; r < rowsUsed; r++) for (let c = 0; c < cols; c++) if (!grid[r]?.[c]) result.push([r, c])
+    return result
+  }
+  // Each successful pass consumes at least one hole, so termination needs no arbitrary guard.
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const [r, c] of holes()) {
+      if (grid[r]?.[c]) continue
+      const start = grid[r]?.[c - 1]
+      const end = grid[r]?.[c + 1]
+      const above = grid[r - 1]?.[c]
+      if (start && start.c + start.w === c && start.r === r && free(r, c, 1, start.h)) {
+        start.w++
+        start.grown = true
+        mark(start)
+      } else if (end && end.c === c + 1 && end.r === r && free(r, c, 1, end.h)) {
+        end.c--
+        end.w++
+        end.grown = true
+        mark(end)
+      } else if (above && above.r + above.h === r && free(r, above.c, above.w, 1)) {
+        above.h++
+        above.grown = true
+        mark(above)
+      } else continue
+      changed = true
+    }
+  }
+  return { placed, holes: holes(), cols }
 }
-
-/** Visible widgets bucketed by zone, sorted by order, capped per zone. */
-export function visibleByZone(
-  widgets: DashboardWidgetConfig[],
-): Record<WidgetZone, DashboardWidgetConfig[]> {
-  const out: Record<WidgetZone, DashboardWidgetConfig[]> = {
-    top: [],
-    under_workspace: [],
-    under_quick_actions: [],
-  }
-  for (const w of [...widgets].sort((a, b) => a.order - b.order)) {
-    if (!w.visible) continue
-    out[zoneOf(w)].push(w)
-  }
-  out.top = out.top.slice(0, MAX_TOP)
-  out.under_workspace = out.under_workspace.slice(0, MAX_PER_LOWER_ZONE)
-  out.under_quick_actions = out.under_quick_actions.slice(0, MAX_PER_LOWER_ZONE)
-  return out
+export function tierOf(w: number, h: number): WidgetTier {
+  return h >= 2 ? w >= 2 ? 'list' : 'tall' : w >= 2 ? 'summary' : 'glance'
 }
-
-/** Group ALL widgets for the editor: visible→its zone, hidden→`hidden`. */
-export function groupForEditor(widgets: DashboardWidgetConfig[]): {
-  top: DashboardWidgetConfig[]
-  under_workspace: DashboardWidgetConfig[]
-  under_quick_actions: DashboardWidgetConfig[]
-  hidden: DashboardWidgetConfig[]
-} {
-  const out = {
-    top: [] as DashboardWidgetConfig[],
-    under_workspace: [] as DashboardWidgetConfig[],
-    under_quick_actions: [] as DashboardWidgetConfig[],
-    hidden: [] as DashboardWidgetConfig[],
-  }
-  for (const w of [...widgets].sort((a, b) => a.order - b.order)) {
-    if (!w.visible) out.hidden.push(w)
-    else out[zoneOf(w)].push(w)
-  }
-  return out
-}
-
-/** Structural pass-through to the API widget-config type (now incl. zone). */
-export function widgetsForApi(
-  widgets: DashboardWidgetConfig[],
-): DashboardWidgetConfig[] {
-  return widgets.map((w) => ({
-    id: w.id,
-    visible: w.visible,
-    order: w.order,
-    zone: zoneOf(w),
-  })) as DashboardWidgetConfig[]
+export function rowsPerHeight(h: number): number {
+  return h < 2 ? 0 : h >= 3 ? 7 : 4
 }

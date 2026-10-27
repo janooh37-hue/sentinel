@@ -193,12 +193,15 @@ def list_leaves(
     leave_type: str | None = None,
     from_date: date | None = None,
     to_date: date | None = None,
+    on_date: date | None = None,
+    end_from: date | None = None,
+    end_to: date | None = None,
     q: str | None = None,
     include_deleted: bool = False,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[Leave], int]:
-    """Paginated list; returns (rows, total)."""
+    """Paginated list: from/to filter start day; on_date overlaps; end bounds inclusive."""
     base = select(Leave)
     if not include_deleted:
         base = base.where(Leave.deleted_at.is_(None))
@@ -212,6 +215,12 @@ def list_leaves(
         base = base.where(Leave.start_date >= from_date)
     if to_date is not None:
         base = base.where(Leave.start_date <= to_date)
+    if on_date is not None:
+        base = base.where(Leave.start_date <= on_date, Leave.end_date >= on_date)
+    if end_from is not None:
+        base = base.where(Leave.end_date >= end_from)
+    if end_to is not None:
+        base = base.where(Leave.end_date <= end_to)
     if q and q.strip():
         needle = f"%{q.strip()}%"
         base = base.where(

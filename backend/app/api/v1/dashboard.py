@@ -16,7 +16,7 @@ from app.services import dashboard_service
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
-@router.get("/layout", response_model=DashboardLayout | None)
+@router.get("/layout", response_model=DashboardLayout | None, response_model_exclude_none=True)
 def get_layout(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
@@ -24,7 +24,7 @@ def get_layout(
     return dashboard_service.get_user_layout(db, current_user.id)
 
 
-@router.put("/layout", response_model=DashboardLayout)
+@router.put("/layout", response_model=DashboardLayout, response_model_exclude_none=True)
 def update_layout(
     layout: DashboardLayout,
     db: Annotated[Session, Depends(get_db)],

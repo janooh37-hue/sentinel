@@ -95,6 +95,54 @@ describe('Books URL state', () => {
     expect(api.getBookFacets).not.toHaveBeenCalledWith({})
   })
 
+  it.each(['approved', 'pending', 'awaiting_scan', 'returned', 'rejected', 'none', 'draft'])(
+    'forwards the dashboard %s state and inclusive dates to list and search',
+    async (status) => {
+      setup(`/books?mine=1&status=${status}&from=2026-10-01&to=2026-10-31&q=abc`)
+      const filters = {
+        created_by_me: true,
+        approval_state: status === 'draft' ? 'none' : status,
+        from_date: '2026-10-01',
+        to_date: '2026-10-31',
+      }
+      await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({ limit: 500, ...filters }))
+      await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({ q: 'abc', limit: 500, ...filters }))
+      expect(api.getBookFacets).toHaveBeenCalledWith({ created_by_me: true })
+    },
+  )
+
+  it.each([false, true])('forwards own drafts before the server page limit (mobile=%s)', async (mobile) => {
+    viewport.mobile = mobile
+    setup('/books?mine=1&drafts=1')
+    await waitFor(() =>
+      expect(api.listBooks).toHaveBeenCalledWith({ limit: 500, created_by_me: true, drafts: true }),
+    )
+  })
+
+  it('loads matching dashboard records beyond the first 500 rows', async () => {
+    const row = { id: 42, ref_number: 'GS-0042', approval_state: 'approved', created_at: '2026-10-01', is_draft: false }
+    vi.mocked(api.listBooks)
+      .mockResolvedValueOnce({
+        items: Array.from({ length: 500 }, (_, id) => ({ ...row, id: id + 1 })),
+        total: 501, limit: 500, offset: 0,
+      } as never)
+      .mockResolvedValueOnce({ items: [{ ...row, id: 501 }], total: 501, limit: 500, offset: 500 } as never)
+    setup('/books?mine=1&status=approved&from=2026-10-01&to=2026-10-31&open=501')
+    await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({
+      limit: 500, offset: 500, created_by_me: true, approval_state: 'approved',
+      from_date: '2026-10-01', to_date: '2026-10-31',
+    }))
+    await waitFor(() => expect(screen.getByTestId('record-pane')).toHaveTextContent('501'))
+  })
+
+  it('keeps non-mine dashboard-shaped filters client-side', async () => {
+    setup('/books?status=pending&from=2026-10-01&to=2026-10-31&drafts=1&q=abc')
+    await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({ q: 'abc', limit: 500 }))
+    expect(api.listBooks).toHaveBeenCalledWith({ limit: 500 })
+    expect(api.listBooks).not.toHaveBeenCalledWith(expect.objectContaining({ approval_state: expect.anything() }))
+    expect(api.listBooks).not.toHaveBeenCalledWith(expect.objectContaining({ drafts: true }))
+  })
+
   it('without mine, list and search stay unscoped and the badge query still runs', async () => {
     setup('/books?q=abc')
     await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({ q: 'abc', limit: 500 }))

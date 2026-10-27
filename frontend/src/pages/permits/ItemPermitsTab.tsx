@@ -12,7 +12,8 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { PackagePlus, Plus, X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 
-import { api, type ItemPermitRead } from '@/lib/api'
+import { api } from '@/lib/api'
+import type { ItemPermitRead, ItemPermitSummary, PermitZone } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -39,23 +40,23 @@ import {
   approvalTone,
   fmtLongDate,
   zoneTone,
-  type PermitApprovalState,
 } from './permitUtils'
 import { usePrefetchLetter, type PrefetchHandlers } from './usePrefetchLetter'
 
 const searchCls =
   'h-11 min-w-full rounded-md border border-input bg-surface px-2.5 text-sm text-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background motion-reduce:transition-none sm:min-w-[12rem] sm:flex-1 md:h-9'
 
-const APPROVAL_TILES: { key: PermitApprovalState; tone: FilterTile['tone'] }[] = [
+const APPROVAL_TILES: { key: keyof ItemPermitSummary; tone: FilterTile['tone'] }[] = [
   { key: 'none', tone: 'neutral' },
   { key: 'pending', tone: 'warning' },
+  { key: 'awaiting_scan', tone: 'warning' },
   { key: 'approved', tone: 'success' },
   { key: 'returned', tone: 'info' },
   { key: 'rejected', tone: 'destructive' },
 ]
 
-const approvalOf = (row: ItemPermitRead): PermitApprovalState =>
-  (row.approval_state ?? 'none') as PermitApprovalState
+const approvalOf = (row: ItemPermitRead): keyof ItemPermitSummary =>
+  (row.approval_state ?? 'none') as keyof ItemPermitSummary
 
 const employeeName = (row: ItemPermitRead, language: string): string =>
   language.startsWith('ar') ? row.employee_name : row.employee_name_en
@@ -71,6 +72,8 @@ export function ItemPermitsTab(): React.JSX.Element {
 
   const [q, setQ] = useSearchParam('iq')
   const [status, setStatus] = useSearchParam('istatus')
+  const [zoneParam, setZone] = useSearchParam('zone')
+  const zone: PermitZone | undefined = zoneParam === 'red' || zoneParam === 'green' || zoneParam === 'work_residence' ? zoneParam : undefined
   const previewOverlay = useUrlOverlay('itemPreview')
   const detailOverlay = useUrlOverlay('item')
   const actionOverlay = useUrlOverlay('itemAction')
@@ -83,7 +86,7 @@ export function ItemPermitsTab(): React.JSX.Element {
   const fallbackFor = useRef<number | null>(null)
 
   const debouncedQ = useDebouncedValue(q, 300)
-  const params = useMemo(() => ({ q: debouncedQ || undefined, limit: 500 }), [debouncedQ])
+  const params = useMemo(() => ({ q: debouncedQ || undefined, zone, limit: 500 }), [debouncedQ, zone])
   const detailId = detailOverlay.value === null ? null : Number(detailOverlay.value)
   const previewId = previewOverlay.value === null ? null : Number(previewOverlay.value)
   const formOpen = actionOverlay.value === 'new' || editing !== null
@@ -95,12 +98,22 @@ export function ItemPermitsTab(): React.JSX.Element {
 
   const listQuery = useQuery({
     queryKey: ['item-permits-list', params],
-    queryFn: () => api.listItemPermits(params),
+    queryFn: async () => {
+      const first = await api.listItemPermits(params)
+      const items = [...first.items]
+      let total = first.total
+      while (items.length < total) {
+        const next = await api.listItemPermits({ ...params, offset: items.length })
+        if (next.items.length === 0) break
+        items.push(...next.items)
+        total = next.total
+      }
+      return { ...first, items, total }
+    },
   })
   const rows = useMemo(() => listQuery.data?.items ?? [], [listQuery.data])
 
-  // ponytail: counts/filter are client-side over the ≤500-row list; move
-  // server-side if the register outgrows it.
+  // Approval filtering uses the complete zone-scoped register, not one capped page.
   const counts = useMemo(() => {
     const c: Record<string, number> = {}
     for (const row of rows) c[approvalOf(row)] = (c[approvalOf(row)] ?? 0) + 1
@@ -113,7 +126,7 @@ export function ItemPermitsTab(): React.JSX.Element {
   const tiles: FilterTile[] = APPROVAL_TILES.map(({ key, tone }) => ({
     key,
     tone,
-    label: t(`permits.approval.${key}`),
+    label: key === 'awaiting_scan' ? t('dashboard.widgets.permits.awaitingScan') : t(`permits.approval.${key}`),
     count: listQuery.isSuccess ? (counts[key] ?? 0) : null,
   }))
 
@@ -157,10 +170,10 @@ export function ItemPermitsTab(): React.JSX.Element {
     setEditing(null)
     actionOverlay.open('new')
   }
-  const clearFilters = (): void => replaceSearch(['iq', 'istatus'])
+  const clearFilters = (): void => replaceSearch(['iq', 'istatus', 'zone'])
   const letterPrefetch = usePrefetchLetter()
   const openPreview = (row: ItemPermitRead): void => previewOverlay.open(String(row.id))
-  const filtered = Boolean(q || status)
+  const filtered = Boolean(q || status || zone)
 
   return (
     <>
@@ -169,7 +182,7 @@ export function ItemPermitsTab(): React.JSX.Element {
         tiles={tiles}
         value={status}
         onSelect={setStatus}
-        className="mb-3 grid-cols-3 sm:grid-cols-5"
+        className="mb-3 grid-cols-3 sm:grid-cols-6"
       />
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -181,6 +194,17 @@ export function ItemPermitsTab(): React.JSX.Element {
           dir="auto"
           onChange={(e) => setQ(e.target.value || null)}
         />
+        <select
+          aria-label={t('permits.filters.zone')}
+          value={zone ?? ''}
+          onChange={(event) => setZone(event.target.value || null)}
+          className="h-11 rounded-md border border-input bg-surface px-2.5 text-sm text-foreground md:h-9"
+        >
+          <option value="">{t('permits.filters.all')}</option>
+          {(['red', 'green', 'work_residence'] as const).map((option) => (
+            <option key={option} value={option}>{t(`permits.zone.${option}`)}</option>
+          ))}
+        </select>
         {filtered && (
           <Button type="button" variant="ghost" size="sm" className="h-11 md:h-8" onClick={clearFilters}>
             <X className="me-1.5 h-4 w-4" aria-hidden />
@@ -362,7 +386,11 @@ function ItemZone({ row }: { row: ItemPermitRead }): React.JSX.Element {
 function ApprovalBadge({ row }: { row: ItemPermitRead }): React.JSX.Element {
   const { t } = useTranslation()
   const approval = approvalOf(row)
-  return <Badge tone={approvalTone(approval)}>{t(`permits.approval.${approval}`)}</Badge>
+  return (
+    <Badge tone={approval === 'awaiting_scan' ? 'warning' : approvalTone(approval)}>
+      {approval === 'awaiting_scan' ? t('dashboard.widgets.permits.awaitingScan') : t(`permits.approval.${approval}`)}
+    </Badge>
+  )
 }
 
 /** Item count + the first three names (row, card and quick view). */

@@ -63,6 +63,7 @@ export function ItemPermitDetailDialog({
   const invalidate = (): void => {
     void qc.invalidateQueries({ queryKey: ['item-permit', permitId] })
     void qc.invalidateQueries({ queryKey: ['item-permits-list'] })
+    void qc.invalidateQueries({ queryKey: ['item-permits-summary'] })
     void qc.invalidateQueries({ queryKey: ['books', 'permit'] })
   }
 
