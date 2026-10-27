@@ -28,6 +28,11 @@ export type WidgetSize = 'metric' | 'panel'
  * look, and a layout saved before the field existed must not change width.
  */
 export type CanvasWidth = 'compact' | 'wide'
+/** Normalized layouts always contain both collections, unlike partial API payloads. */
+export type ResolvedDashboardLayout = DashboardLayout & {
+  widgets: DashboardWidgetConfig[]
+  quick_actions: DashboardQuickActionConfig[]
+}
 export const CANVAS_WIDTHS = ['compact', 'wide'] as const
 export const DEFAULT_CANVAS_WIDTH: CanvasWidth = 'compact'
 
@@ -221,7 +226,7 @@ function zoneOf(w: DashboardWidgetConfig): WidgetZone {
  *   • Quick actions: the first 4 service tiles visible.
  *   • Canvas: compact (1180px), the incumbent measure.
  */
-export const DEFAULT_LAYOUT: DashboardLayout = {
+export const DEFAULT_LAYOUT: ResolvedDashboardLayout = {
   widgets: WIDGET_IDS.map((id, order) => {
     if (id === 'pending' || id === 'workspace') {
       return { id, visible: true, order, zone: 'top' as WidgetZone }
@@ -248,7 +253,7 @@ export const DEFAULT_LAYOUT: DashboardLayout = {
  * migrates legacy entries into zones, appends never-seen ids hidden, then
  * clamps zone caps + top-eligibility.
  */
-export function resolveLayout(saved: DashboardLayout | null | undefined): DashboardLayout {
+export function resolveLayout(saved: DashboardLayout | null | undefined): ResolvedDashboardLayout {
   if (!saved) return DEFAULT_LAYOUT
 
   const seen = new Set<string>()
