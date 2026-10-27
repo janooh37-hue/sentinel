@@ -910,7 +910,7 @@ def send_report_for_approval(
     book_service.submit_for_approval(
         db,
         result.book_id,
-        priority="Normal",
+        urgency="Normal",
         approver_user_id=approver.id,
         reviewer_user_ids=[],
         submitted_by_user_id=user.id,

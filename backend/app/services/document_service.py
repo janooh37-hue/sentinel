@@ -36,7 +36,7 @@ from sqlalchemy.orm import InstrumentedAttribute, Session, aliased
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
-from app.core import form_policy
+from app.core import form_policy, grades
 from app.core import signature as signature_core
 from app.core.book_text import build_search_text
 from app.core.book_text import html_to_text as book_html_to_text
@@ -75,7 +75,7 @@ from app.db.models import (
 from app.db.repos._locking import begin_immediate_if_idle
 from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
-from app.schemas.book import BookConfidentiality
+from app.schemas.book import BookGrade
 from app.schemas.employee import EMPLOYEE_STATUS_RESIGNED, WORKING_STATUSES
 from app.schemas.linked_document import LinkedDocumentRead
 from app.services import (
@@ -1891,7 +1891,7 @@ def generate_document(
     attachments: Sequence[GenerateAttachmentSpec] | None = None,
     return_for_leave_id: int | None = None,
     classification_code: str | None = None,
-    confidentiality: BookConfidentiality = "general",
+    grade: BookGrade = "unclassified",
     converter: artifact_service.PdfConverter | None = None,
     defer_commit: bool = False,
     notify_employee: bool = True,
@@ -1922,8 +1922,9 @@ def generate_document(
     callers separately pass ``record_access_user`` to enforce revision and source
     record authorization. Trusted system workflows leave that identity unset.
 
-    ``confidentiality`` sets the header level mark on primary and companion
-    DOCX files. Revisions retain the existing book's level instead.
+    ``grade`` sets the header grade mark on primary and companion DOCX files
+    and the new book's distribution follows the form kind. Revisions retain
+    the existing book's grade instead.
 
     Round 2 — Fix E: ``embed_signature`` replaces the old ``hand_sign`` kwarg
     with inverted semantics. ``embed_signature[entity]=True`` opts INTO
@@ -2323,7 +2324,7 @@ def generate_document(
         data=primary_data,
         destination=destination,
         stamps=artifact_service.StampPlan(
-            level=revise_book.confidentiality if revise_book is not None else confidentiality,
+            grade=revise_book.grade if revise_book is not None else grade,
             reference=raw_ref if commit else None,
             header_reference=commit
             and _classification is None
@@ -2501,7 +2502,8 @@ def generate_document(
                 ref_number=raw_ref,
                 classification_code=_classification.code if _classification else None,
                 subject=_subject,
-                confidentiality=confidentiality,
+                grade=grade,
+                distribution=grades.default_distribution(template_id, grade),
                 direction="outgoing",
                 stamp_style=STAMP_STYLE_HEADER,
                 employee_id=employee_id,
@@ -2882,9 +2884,7 @@ def generate_document(
                 data=data,
                 destination=out_dir / comp_filename,
                 stamps=artifact_service.StampPlan(
-                    level=(
-                        revise_book.confidentiality if revise_book is not None else confidentiality
-                    ),
+                    grade=revise_book.grade if revise_book is not None else grade,
                     reference=raw_ref if commit else None,
                     header_reference=commit and _classification is None,
                     aztec_corner=(aztec_corner_for(companion_template_id) if commit else None),
@@ -3095,7 +3095,7 @@ def _sign_authored_docx(
             source_path=source,
             destination=destination,
             stamps=artifact_service.StampPlan(
-                level=book.confidentiality,
+                grade=book.grade,
                 signature=artifact_service.SignatureStamp(
                     image_path=Path(signer_signature_path),
                     anchor_names=tuple(names),
@@ -3285,7 +3285,7 @@ def render_signed_artifact(
         data=data,
         destination=out_dir / docx_name.replace(".docx", "_signed.docx"),
         stamps=artifact_service.StampPlan(
-            level=book.confidentiality,
+            grade=book.grade,
             reference=book.ref_number,
             header_reference=template_id not in CLASSIFIED_BOOK_FORMS
             and template_id not in VEHICLE_LETTER_FORMS,

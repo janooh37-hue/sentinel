@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
 from app.config import get_settings
-from app.core import form_policy, manager_override
+from app.core import form_policy, grades, manager_override
 from app.core.book_template_retokenize import read_general_book_fields
 from app.core.book_text import build_search_text, docx_to_text
 from app.core.classifications import (
@@ -37,7 +37,7 @@ from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, Manager, User
 from app.db.repos import classified_refs_repo
 from app.db.repos._locking import begin_immediate_if_idle
-from app.schemas.book import BookConfidentiality, TemplateSessionRead, WordSessionDetailRead
+from app.schemas.book import BookGrade, TemplateSessionRead, WordSessionDetailRead
 from app.services import artifact_service, book_template_service, manager_service
 from app.services._pdf_executor import convert_docx_to_pdf
 from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
@@ -68,7 +68,7 @@ def create_word_book(
     manager_id: int | None,
     template_name: str | None = None,
     table_rows: list[dict[str, str]] | None = None,
-    confidentiality: BookConfidentiality = "general",
+    grade: BookGrade = "unclassified",
     recipient_name: str | None = None,
     body_html: str = "",
     body_docx: Path | None = None,
@@ -78,7 +78,7 @@ def create_word_book(
     """Create a General Book with a working docx for Word.
 
     Every book takes its ref from the classified register
-    (``1/{tab}/GSSG/{serial}``), so a classification is required — same rule as
+    (``1/{tab}/{serial}``), so a classification is required — same rule as
     the rich-editor path. Returns a WordSessionInfo with the ms-word: URL to
     hand to the browser.
     """
@@ -127,7 +127,8 @@ def create_word_book(
         category_id="GS",
         ref_number=ref,
         subject=subject,
-        confidentiality=confidentiality,
+        grade=grade,
+        distribution=grades.default_distribution(_TEMPLATE_ID, grade),
         classification_code=classification_code,
         approval_state="none",
         submitted_by_user_id=user.id,
@@ -195,7 +196,7 @@ def create_word_book(
             destination=output_path,
             template_path=library_template,
             stamps=artifact_service.StampPlan(
-                level=book.confidentiality,
+                grade=book.grade,
                 reference=ref,
                 aztec_corner=aztec_corner_for(_TEMPLATE_ID),
             ),
@@ -472,7 +473,7 @@ def create_template_session(db: Session, *, user: User, name: str) -> TemplateSe
         raise AppError("TEMPLATE_EXISTS", "يوجد قالب بهذا الاسم", http_status=409)
     output_path = get_settings().data_dir / "editing" / f"template-{uuid.uuid4().hex}" / name
     # Keep guarded fields non-empty so retokenization can recover every token.
-    placeholder_ref = "1/1/GSSG/1"
+    placeholder_ref = "1/1/1"
     artifact = artifact_service.produce_from_template(
         template_id=_TEMPLATE_ID,
         data={
@@ -557,7 +558,7 @@ def create_report_word_book(
     subject: str,
     date: str | None,
     sign: bool,
-    confidentiality: BookConfidentiality = "general",
+    grade: BookGrade = "unclassified",
 ) -> WordSessionInfo:
     """Create a no-ref Report on the report paper with an empty, Word-editable body.
 
@@ -580,7 +581,8 @@ def create_report_word_book(
         category_id="GS",
         ref_number=f"__pending_{uuid.uuid4().hex}__",
         subject=subject,
-        confidentiality=confidentiality,
+        grade=grade,
+        distribution=grades.default_distribution("Report", grade),
         classification_code=None,
         approval_state="none" if user.role == INMATE_REPORTER_ROLE else "approved",
         submitted_by_user_id=user.id,
@@ -615,7 +617,7 @@ def create_report_word_book(
         data=data,
         destination=output_path,
         stamps=artifact_service.StampPlan(
-            level=book.confidentiality, sync_general_book_footer=True
+            grade=book.grade, sync_general_book_footer=True
         ),
         convert_pdf=False,
         collision="exact",
@@ -774,7 +776,7 @@ def finish_word_session(
     artifact = artifact_service.produce_from_docx(
         source_path=src,
         destination=dest,
-        stamps=artifact_service.StampPlan(level=book.confidentiality),
+        stamps=artifact_service.StampPlan(grade=book.grade),
         converter=convert_or_reuse_preview,
     )
     dest = artifact.docx_path
@@ -1030,7 +1032,7 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
     reopened_artifact = artifact_service.produce_from_docx(
         source_path=source_path,
         destination=output_path,
-        stamps=artifact_service.StampPlan(level=book.confidentiality),
+        stamps=artifact_service.StampPlan(grade=book.grade),
         convert_pdf=False,
         collision="exact",
     )

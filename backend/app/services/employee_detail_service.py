@@ -7,7 +7,7 @@ Filter rules:
 - Approved leaves count toward ``leaves_taken_days``; other statuses don't.
 - ``LedgerEntry.deleted_at`` rows are excluded from counts and the recent list.
 - Document counts, lists and timeline entries use the canonical exact-revision
-  read policy, including confidentiality and retained access. A document whose
+  read policy, including record grade and retained access. A document whose
   owning Record is soft-deleted stays listed for callers who may still read it
   (``users.manage``), but carries no ``book_id`` or ``approval_state`` link.
 - An explicit ``violations.view`` deny empties ``recent_violations`` and omits

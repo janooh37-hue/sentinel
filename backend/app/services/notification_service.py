@@ -16,7 +16,7 @@ from datetime import UTC, date, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core import leave_lifecycle
+from app.core import grades, leave_lifecycle
 from app.db.models import Book, BookRecipient, Leave, User
 from app.schemas.notifications import NotificationCounts
 from app.services import (
@@ -51,8 +51,8 @@ def inbox_item(
     sender_name: str | None,
     sender_name_ar: str | None = None,
 ) -> ActionableItem:
-    """Direct-send push item, with record details only for general records."""
-    confidential = book.confidentiality != "general"
+    """Direct-send push item, with record details only for open records."""
+    confidential = not grades.is_open_record(book)
     return ActionableItem(
         kind="inbox",
         ref=f"send:{row.id}",
@@ -151,7 +151,7 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
         role = book_service.your_step_kind(book, user.id)
         # A Report's manager only reviews it — never "Signature needed".
         kind = "review" if role == "reviewer" or book_service.is_report(book) else "approval"
-        subject = book.subject if book.confidentiality == "general" else None
+        subject = book.subject if grades.is_open_record(book) else None
         label = book.ref_number or subject or f"#{book.id}"
         items.append(
             ActionableItem(
@@ -199,7 +199,7 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
                     f"book:{book.id}",
                     f"/books/{book.id}",
                     book.ref_number or f"#{book.id}",
-                    subject=book.subject if book.confidentiality == "general" else None,
+                    subject=book.subject if grades.is_open_record(book) else None,
                 )
             )
 
