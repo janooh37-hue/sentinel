@@ -1070,6 +1070,15 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   WORD_SESSION_NOT_OWNER: 'errors.forbidden.wordSessionNotOwner',
   INMATE_REPORTER_IDENTITY_MISMATCH: 'errors.forbidden.signerMismatch',
   APPROVED_IMPORT_TOKEN_FORBIDDEN: 'errors.forbidden.stagedImportOwner',
+  LEDGER_BOOK_CHAIN_ONLY: 'errors.ledger.chainOnly',
+  REVISION_LOCKED: 'errors.ledger.revisionLocked',
+  REVISION_NOT_SIGNED: 'errors.ledger.revisionNotSigned',
+  DRAFT_TAB_REQUIRED: 'errors.ledger.draftTabRequired',
+  DRAFT_SUBJECT_REQUIRED: 'errors.ledger.draftSubjectRequired',
+  DRAFT_BODY_REQUIRED: 'errors.ledger.draftBodyRequired',
+  IMAGE_EMPTY: 'errors.ledger.imageEmpty',
+  IMAGE_TOO_LARGE: 'errors.ledger.imageTooLarge',
+  IMAGE_TYPE_UNSUPPORTED: 'errors.ledger.imageTypeUnsupported',
 }
 
 /** Localized user-facing error text. A code in `CODE_MESSAGE_KEYS` uses its
