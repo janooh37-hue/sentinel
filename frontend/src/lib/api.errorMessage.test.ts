@@ -31,6 +31,7 @@ describe('apiErrorMessage', () => {
       'هذا المستند موقّع، لذا أصبح ملف Word القابل للتعديل مقفلاً.',
     ],
     ['SECRET_CLEARANCE_REQUIRED', 'Secret clearance is required for Secret records.', 'المعاملات السرية تتطلب تصريح الاطلاع على السري.'],
+    ['DISTRIBUTION_NOT_NAMED', 'Only an Unclassified record with named distribution can be restored.', 'لا يمكن الاستعادة إلا لمعاملة غير سرية موزعة على مسمّين.'],
     ['RECORD_TYPE_FORBIDDEN', "You don't have access to this record type.", 'لا تملك صلاحية الوصول إلى هذا النوع من المعاملات.'],
     [
       'INCLUDED_PAPERS_CREATOR_ONLY',

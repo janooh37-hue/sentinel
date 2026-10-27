@@ -2124,15 +2124,20 @@
         "addressee_only": "Addressee Only"
       },
       "hints": {
-        "unclassified": "People with access to this record type can open it.",
-        "secret": "Access requires Secret clearance or higher.",
-        "top_secret": "Access requires Top Secret clearance.",
-        "addressee_only": "Access is restricted to the writer and named addressees."
+        "unclassified": "No clearance is required.",
+        "secret": "Access requires Secret clearance.",
+        "top_secret": "Only people named on the record can open it.",
+        "addressee_only": "Only people named on the record can open it."
       },
-      "menu": "Change grade",
+      "menu": "Change grade…",
       "changeTitle": "Change grade",
       "save": "Save grade",
       "changed": "Grade changed to {{level}}"
+    },
+    "distribution": {
+      "errors": {
+        "notNamed": "Only an Unclassified record with named distribution can be restored."
+      }
     },
     "urgency": {
       "label": "Urgency",
@@ -2171,8 +2176,7 @@
       "errors": {
         "notCleared": "Some recipients don't have the required grade clearance.",
         "invalid": "Some recipients can't receive records.",
-        "writerOnly": "Only the writer can distribute this record.",
-        "distributionNotNamed": "Recipients must be named in this record's distribution."
+        "writerOnly": "Only the writer can distribute this record."
       },
       "sentTo_one": "Sent to {{count}} person",
       "sentTo_other": "Sent to {{count}} people",
@@ -2948,7 +2952,6 @@
       },
       "to": "To",
       "signer": "Signatory",
-      "urgent": "Urgent",
       "noteShort": "Note",
       "doneOn": "Done on",
       "openedOf": "Opened by {{count}} of {{total}}",

@@ -33,7 +33,6 @@ const SEND_ERROR_KEYS: Record<string, string | undefined> = {
   RECIPIENT_NOT_CLEARED: 'books.send.errors.notCleared',
   RECIPIENT_INVALID: 'books.send.errors.invalid',
   WRITER_ONLY_SEND: 'books.send.errors.writerOnly',
-  DISTRIBUTION_NOT_NAMED: 'books.send.errors.distributionNotNamed',
 }
 
 interface Props {

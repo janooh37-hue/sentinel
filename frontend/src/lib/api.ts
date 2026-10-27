@@ -1063,7 +1063,7 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   DOCX_LOCKED_AFTER_SIGNING: 'errors.forbidden.docxLockedAfterSigning',
   SECRET_CLEARANCE_REQUIRED: 'errors.forbidden.secretClearance',
   WRITER_ONLY_SEND: 'books.send.errors.writerOnly',
-  DISTRIBUTION_NOT_NAMED: 'books.send.errors.distributionNotNamed',
+  DISTRIBUTION_NOT_NAMED: 'books.distribution.errors.notNamed',
   GRADE_BELOW_FLOOR: 'books.thread.errors.levelFloor',
   RECORD_TYPE_FORBIDDEN: 'errors.forbidden.recordType',
   INCLUDED_PAPERS_CREATOR_ONLY: 'errors.forbidden.includedPapersCreatorOnly',
