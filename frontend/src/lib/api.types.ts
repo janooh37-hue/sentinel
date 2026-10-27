@@ -3835,6 +3835,213 @@ export interface paths {
         patch: operations["rename_smart_folder_api_v1_ledger_smart_folders__folder_id__patch"];
         trace?: never;
     };
+    "/api/v1/ledger/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Drafts */
+        get: operations["list_drafts_api_v1_ledger_drafts_get"];
+        put?: never;
+        /** Create Draft */
+        post: operations["create_draft_api_v1_ledger_drafts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/drafts/{draft_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Draft */
+        get: operations["get_draft_api_v1_ledger_drafts__draft_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Draft */
+        delete: operations["delete_draft_api_v1_ledger_drafts__draft_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Draft */
+        patch: operations["update_draft_api_v1_ledger_drafts__draft_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/ledger/drafts/{draft_id}/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Draft Image */
+        post: operations["upload_draft_image_api_v1_ledger_drafts__draft_id__images_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/drafts/{draft_id}/images/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Draft Image */
+        get: operations["get_draft_image_api_v1_ledger_drafts__draft_id__images__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/drafts/{draft_id}/paper": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Draft Paper */
+        get: operations["get_draft_paper_api_v1_ledger_drafts__draft_id__paper_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/drafts/{draft_id}/save-and-send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save And Send */
+        post: operations["save_and_send_api_v1_ledger_drafts__draft_id__save_and_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ledger Book */
+        get: operations["get_ledger_book_api_v1_ledger_books__book_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/paper": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ledger Book Paper */
+        get: operations["get_ledger_book_paper_api_v1_ledger_books__book_id__paper_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Ledger Content */
+        put: operations["save_ledger_content_api_v1_ledger_books__book_id__content_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/revisions/{version_id}/saves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Ledger Saves */
+        get: operations["list_ledger_saves_api_v1_ledger_books__book_id__revisions__version_id__saves_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Correction */
+        post: operations["start_correction_api_v1_ledger_books__book_id__corrections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/images/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Book Image */
+        get: operations["get_book_image_api_v1_ledger_books__book_id__images__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ledger": {
         parameters: {
             query?: never;
@@ -8332,6 +8539,14 @@ export interface components {
              */
             upload: string;
         };
+        /** Body_upload_draft_image_api_v1_ledger_drafts__draft_id__images_post */
+        Body_upload_draft_image_api_v1_ledger_drafts__draft_id__images_post: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+        };
         /** Body_upload_employee_photo_api_v1_employees__employee_id__photo_post */
         Body_upload_employee_photo_api_v1_employees__employee_id__photo_post: {
             /**
@@ -12336,6 +12551,132 @@ export interface components {
             /** Size */
             size: number;
         };
+        /** LedgerBookRead */
+        LedgerBookRead: {
+            /** Id */
+            id: number;
+            /** Ref Number */
+            ref_number: string;
+            /**
+             * Grade
+             * @enum {string}
+             */
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
+            /**
+             * Urgency
+             * @enum {string}
+             */
+            urgency: "Normal" | "High" | "Very High";
+            /** Tab */
+            tab: number | null;
+            /** Classification Code */
+            classification_code: string | null;
+            /** Paper Date */
+            paper_date: string | null;
+            /** Approval State */
+            approval_state: string;
+            /** Created By User Id */
+            created_by_user_id: number | null;
+            /** Voided */
+            voided: boolean;
+            /** Revisions */
+            revisions: components["schemas"]["LedgerRevisionRead"][];
+            /** Selected Version Id */
+            selected_version_id: number;
+            /** Subjects */
+            subjects: string[];
+            /** Body Html */
+            body_html: string;
+            /** Content Sha256 */
+            content_sha256: string;
+        };
+        /** LedgerContentUpdate */
+        LedgerContentUpdate: {
+            /** Subjects */
+            subjects: string[];
+            /** Body Html */
+            body_html: string;
+        };
+        /** LedgerDraftCreate */
+        LedgerDraftCreate: {
+            /** Tab */
+            tab?: number | null;
+            /**
+             * Grade
+             * @default unclassified
+             * @enum {string}
+             */
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
+            /**
+             * Urgency
+             * @default Normal
+             * @enum {string}
+             */
+            urgency: "Normal" | "High" | "Very High";
+            /** Subjects */
+            subjects?: string[];
+            /**
+             * Body Html
+             * @default
+             */
+            body_html: string;
+        };
+        /** LedgerDraftImageRead */
+        LedgerDraftImageRead: {
+            /** Name */
+            name: string;
+            /** Src */
+            src: string;
+        };
+        /** LedgerDraftRead */
+        LedgerDraftRead: {
+            /** Id */
+            id: number;
+            /** Draft Number */
+            draft_number: string;
+            /** Tab */
+            tab: number | null;
+            /**
+             * Grade
+             * @enum {string}
+             */
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
+            /**
+             * Urgency
+             * @enum {string}
+             */
+            urgency: "Normal" | "High" | "Very High";
+            /** Subjects */
+            subjects: string[];
+            /** Body Html */
+            body_html: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * LedgerDraftUpdate
+         * @description Partial update: only the fields sent change.
+         */
+        LedgerDraftUpdate: {
+            /** Tab */
+            tab?: number | null;
+            /** Grade */
+            grade?: ("unclassified" | "secret" | "top_secret" | "addressee_only") | null;
+            /** Urgency */
+            urgency?: ("Normal" | "High" | "Very High") | null;
+            /** Subjects */
+            subjects?: string[] | null;
+            /** Body Html */
+            body_html?: string | null;
+        };
         /**
          * LedgerEntryCreate
          * @description Fields accepted when creating a new ledger entry.
@@ -12543,6 +12884,42 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        };
+        /** LedgerRevisionRead */
+        LedgerRevisionRead: {
+            /** Version Id */
+            version_id: number;
+            /** Version No */
+            version_no: number;
+            /** Trigger */
+            trigger: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Signed At */
+            signed_at: string | null;
+            /** Superseded */
+            superseded: boolean;
+            /** Locked */
+            locked: boolean;
+        };
+        /** LedgerSaveRead */
+        LedgerSaveRead: {
+            /** Id */
+            id: number;
+            /** Saved By User Id */
+            saved_by_user_id: number;
+            /** Saved By Name */
+            saved_by_name: string | null;
+            /**
+             * Saved At
+             * Format: date-time
+             */
+            saved_at: string;
+            /** Content Sha256 */
+            content_sha256: string;
         };
         /** LegacyCandidateRead */
         LegacyCandidateRead: {
@@ -25551,6 +25928,520 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SmartFolderRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_drafts_api_v1_ledger_drafts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerDraftRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_draft_api_v1_ledger_drafts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerDraftCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerDraftRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_draft_api_v1_ledger_drafts__draft_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerDraftRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_draft_api_v1_ledger_drafts__draft_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_draft_api_v1_ledger_drafts__draft_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerDraftUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerDraftRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_draft_image_api_v1_ledger_drafts__draft_id__images_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_draft_image_api_v1_ledger_drafts__draft_id__images_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerDraftImageRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_draft_image_api_v1_ledger_drafts__draft_id__images__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: number;
+                name: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_draft_paper_api_v1_ledger_drafts__draft_id__paper_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_and_send_api_v1_ledger_drafts__draft_id__save_and_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ledger_book_api_v1_ledger_books__book_id__get: {
+        parameters: {
+            query?: {
+                /** @description Revision (version) id */
+                revision?: number | null;
+            };
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ledger_book_paper_api_v1_ledger_books__book_id__paper_get: {
+        parameters: {
+            query?: {
+                /** @description Revision (version) id */
+                revision?: number | null;
+            };
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_ledger_content_api_v1_ledger_books__book_id__content_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerContentUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_ledger_saves_api_v1_ledger_books__book_id__revisions__version_id__saves_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                version_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerSaveRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_correction_api_v1_ledger_books__book_id__corrections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_book_image_api_v1_ledger_books__book_id__images__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                name: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
