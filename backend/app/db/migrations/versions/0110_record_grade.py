@@ -9,14 +9,20 @@ ADR 0007. Upgrade maps each level to a fixed grade and a distribution:
 
 Each legacy Personal record gets a ``book_legacy_personal`` audit row, so the
 D5 review report (``scripts/report_legacy_personal.py``) can still find them.
+A Personal record opened for its creator only, even when it kept active
+``book_recipients`` rows (a sent record later set back to Personal). Named
+distribution opens for active recipients, so upgrade revokes those rows and
+lists their user ids in the audit row: nothing becomes more visible.
 
 ``books.priority`` becomes ``books.urgency`` with the same values, plus the new
 ``Very High``; the frozen ``book_versions.approval_context`` key ``priority``
 becomes ``urgency``.
 
-Downgrade LOSES INFORMATION: Top Secret and Addressee Only become ``secret``,
-``Very High`` becomes ``High``, and a named record becomes ``directed`` when it
-has any ``book_recipients`` row, otherwise ``personal``.
+Downgrade LOSES INFORMATION: Top Secret and Addressee Only become ``secret``
+(a Secret or Top Secret named record then opens for every Secret-cleared
+user), ``Very High`` becomes ``High``, a named record becomes ``directed`` when
+it has an active ``book_recipients`` row, otherwise ``personal``, and the
+recipient rows revoked on upgrade stay revoked.
 
 Revision ID: 0110_record_grade
 Revises: 0109_book_folder_shares
@@ -100,8 +106,22 @@ def upgrade() -> None:
         f"""
         INSERT INTO audit_log (actor, action, entity_type, entity_id, payload, ts)
         SELECT NULL, '{LEGACY_PERSONAL_ACTION}', 'book', CAST(id AS TEXT),
-               json_object('ref_number', ref_number), CURRENT_TIMESTAMP
+               json_object(
+                 'ref_number', ref_number,
+                 'revoked_recipient_user_ids', json((
+                   SELECT json_group_array(r.user_id) FROM book_recipients r
+                   WHERE r.book_id = books.id AND r.revoked_at IS NULL
+                 ))
+               ),
+               CURRENT_TIMESTAMP
         FROM books WHERE confidentiality = 'personal'
+        """
+    )
+    op.execute(
+        """
+        UPDATE book_recipients SET revoked_at = CURRENT_TIMESTAMP
+        WHERE revoked_at IS NULL
+          AND book_id IN (SELECT id FROM books WHERE confidentiality = 'personal')
         """
     )
     op.execute(
@@ -144,8 +164,9 @@ def downgrade() -> None:
         UPDATE books SET confidentiality = CASE
           WHEN grade != 'unclassified' THEN 'secret'
           WHEN distribution = 'organization' THEN 'general'
-          WHEN EXISTS (SELECT 1 FROM book_recipients r WHERE r.book_id = books.id)
-            THEN 'directed'
+          WHEN EXISTS (
+            SELECT 1 FROM book_recipients r WHERE r.book_id = books.id AND r.revoked_at IS NULL
+          ) THEN 'directed'
           ELSE 'personal'
         END
         """
