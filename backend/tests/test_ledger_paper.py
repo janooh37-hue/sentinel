@@ -17,7 +17,6 @@ ISSUED = PaperContext(
     subjects=("طلب صيانة",),
     grade="unclassified",
     urgency="High",
-    tab=11,
     ref="1/11/42",
     paper_date=date(2026, 10, 28),
     draft_number=None,
@@ -46,6 +45,19 @@ def test_issued_paper_has_ref_date_and_barcode_payload() -> None:
     assert barcode_payload("1/11/42", date(2026, 10, 28)) in html
     assert "DRAFT" not in html
     assert "G1234" in html
+
+
+@pytest.mark.parametrize(
+    ("urgency", "label"), [("Normal", None), ("High", "عاجل"), ("Very High", "عاجل جداً")]
+)
+def test_urgency_prints_once_only_when_not_normal(urgency: str, label: str | None) -> None:
+    html = render_paper(replace(ISSUED, urgency=urgency))
+
+    if label is None:
+        assert "الاستعجال" not in html
+    else:
+        assert html.count("الاستعجال") == 1
+        assert f"الاستعجال: {label}<" in html
 
 
 @pytest.mark.parametrize("grade", GRADE_CODES)
