@@ -3274,7 +3274,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/books/{book_id}/confidentiality": {
+    "/api/v1/books/{book_id}/grade": {
         parameters: {
             query?: never;
             header?: never;
@@ -3282,9 +3282,29 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Set Book Confidentiality */
-        put: operations["set_book_confidentiality_api_v1_books__book_id__confidentiality_put"];
+        /** Set Book Grade */
+        put: operations["set_book_grade_api_v1_books__book_id__grade_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/restore-distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Book Distribution
+         * @description Admin: give a legacy Personal record organization distribution again.
+         */
+        post: operations["restore_book_distribution_api_v1_books__book_id__restore_distribution_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7578,10 +7598,10 @@ export interface components {
             /** Record Status */
             record_status?: string | null;
             /**
-             * Priority
+             * Urgency
              * @default Normal
              */
-            priority: string | null;
+            urgency: string | null;
             /** Submitted By User Id */
             submitted_by_user_id?: number | null;
             /** Submitted By Name */
@@ -8509,14 +8529,6 @@ export interface components {
             /** Requires Approval */
             requires_approval: boolean;
         };
-        /** BookConfidentialityUpdate */
-        BookConfidentialityUpdate: {
-            /**
-             * Confidentiality
-             * @enum {string}
-             */
-            confidentiality: "general" | "personal" | "secret" | "directed";
-        };
         /**
          * BookCreate
          * @description Caller-supplied fields for a new book entry.
@@ -8543,11 +8555,11 @@ export interface components {
             /** Doc Id */
             doc_id?: number | null;
             /**
-             * Confidentiality
-             * @default general
+             * Grade
+             * @default unclassified
              * @enum {string}
              */
-            confidentiality: "general" | "personal" | "secret" | "directed";
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
         };
         /** BookDecisionRequest */
         BookDecisionRequest: {
@@ -8563,8 +8575,8 @@ export interface components {
              * @enum {string}
              */
             kind: "reply" | "based_on";
-            /** Confidentiality */
-            confidentiality?: ("general" | "personal" | "secret" | "directed") | null;
+            /** Grade */
+            grade?: ("unclassified" | "secret" | "top_secret" | "addressee_only") | null;
             /**
              * Attach Reference
              * @default true
@@ -8572,6 +8584,14 @@ export interface components {
             attach_reference: boolean;
             /** Classification Code */
             classification_code?: string | null;
+        };
+        /**
+         * BookDistributionRestore
+         * @description Admin correction of a legacy Personal record (ADR 0007, D5).
+         */
+        BookDistributionRestore: {
+            /** Reason */
+            reason: string;
         };
         /**
          * BookEditSessionRead
@@ -8695,6 +8715,14 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** BookGradeUpdate */
+        BookGradeUpdate: {
+            /**
+             * Grade
+             * @enum {string}
+             */
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
+        };
         /**
          * BookInboxRead
          * @description The caller's own received send of a record (BookRead.my_inbox).
@@ -8776,8 +8804,8 @@ export interface components {
             created_at: string;
             /** Deleted At */
             deleted_at: string | null;
-            /** Priority */
-            priority: string | null;
+            /** Urgency */
+            urgency: string | null;
             /** Approval State */
             approval_state: string;
             /**
@@ -8787,11 +8815,22 @@ export interface components {
              */
             access_scope: "full" | "assigned_revision";
             /**
-             * Confidentiality
-             * @default general
+             * Grade
+             * @default unclassified
              * @enum {string}
              */
-            confidentiality: "general" | "personal" | "secret" | "directed";
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
+            /**
+             * Distribution
+             * @default organization
+             * @enum {string}
+             */
+            distribution: "organization" | "named";
+            /**
+             * Metadata Only
+             * @default false
+             */
+            metadata_only: boolean;
             /**
              * Can Write
              * @default false
@@ -8803,10 +8842,10 @@ export interface components {
              */
             can_send: boolean;
             /**
-             * Can Change Confidentiality
+             * Can Change Grade
              * @default false
              */
-            can_change_confidentiality: boolean;
+            can_change_grade: boolean;
             my_inbox?: components["schemas"]["BookInboxRead"] | null;
             /** Selected Version Id */
             selected_version_id?: number | null;
@@ -8995,7 +9034,7 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "not_cleared" | "personal" | "already_recipient" | "self";
+            reason: "not_cleared" | "writer_only" | "already_recipient" | "self";
         };
         /** BookRevisionAccessRead */
         BookRevisionAccessRead: {
@@ -9042,11 +9081,6 @@ export interface components {
             purpose: "info" | "action" | "reply" | "circulate";
             /** Note */
             note?: string | null;
-            /**
-             * Make Directed
-             * @default false
-             */
-            make_directed: boolean;
             /**
              * Include References
              * @default true
@@ -9096,11 +9130,11 @@ export interface components {
         /** BookSubmitRequest */
         BookSubmitRequest: {
             /**
-             * Priority
+             * Urgency
              * @default Normal
              * @enum {string}
              */
-            priority: "Normal" | "High";
+            urgency: "Normal" | "High" | "Very High";
             /** Approver User Id */
             approver_user_id?: number | null;
             /** Reviewer User Ids */
@@ -9115,10 +9149,15 @@ export interface components {
             /** Subject */
             subject: string | null;
             /**
-             * Confidentiality
+             * Grade
              * @enum {string}
              */
-            confidentiality: "general" | "personal" | "secret" | "directed";
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
+            /**
+             * Distribution
+             * @enum {string}
+             */
+            distribution: "organization" | "named";
             /**
              * Created At
              * Format: date-time
@@ -10214,11 +10253,11 @@ export interface components {
             /** Classification Code */
             classification_code?: string | null;
             /**
-             * Confidentiality
-             * @default general
+             * Grade
+             * @default unclassified
              * @enum {string}
              */
-            confidentiality: "general" | "personal" | "secret" | "directed";
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
             /**
              * Notify Employee
              * @default true
@@ -16551,11 +16590,11 @@ export interface components {
                 [key: string]: string;
             }[] | null;
             /**
-             * Confidentiality
-             * @default general
+             * Grade
+             * @default unclassified
              * @enum {string}
              */
-            confidentiality: "general" | "personal" | "secret" | "directed";
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
             /** Signer Employee Id */
             signer_employee_id?: string | null;
             /**
@@ -23854,7 +23893,7 @@ export interface operations {
     list_recipient_candidates_api_v1_books_recipient_candidates_get: {
         parameters: {
             query?: {
-                confidentiality?: ("general" | "personal" | "secret" | "directed") | null;
+                grade?: ("unclassified" | "secret" | "top_secret" | "addressee_only") | null;
             };
             header?: never;
             path?: never;
@@ -24367,7 +24406,7 @@ export interface operations {
             };
         };
     };
-    set_book_confidentiality_api_v1_books__book_id__confidentiality_put: {
+    set_book_grade_api_v1_books__book_id__grade_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -24380,7 +24419,44 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["BookConfidentialityUpdate"];
+                "application/json": components["schemas"]["BookGradeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_book_distribution_api_v1_books__book_id__restore_distribution_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookDistributionRestore"];
             };
         };
         responses: {
