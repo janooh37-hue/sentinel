@@ -241,7 +241,7 @@ def test_admin_restricted_content_is_not_found(
 
 
 # ---------------------------------------------------------------------------
-# Legacy block: migrated levels keep their outcomes (test_book_confidentiality).
+# Legacy block: migrated levels keep their outcomes (formerly test_book_confidentiality, now test_book_grade).
 # ---------------------------------------------------------------------------
 
 LEGACY = {

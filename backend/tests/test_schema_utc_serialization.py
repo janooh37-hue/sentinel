@@ -52,7 +52,7 @@ def _book(**kw: object) -> BookRead:
         stamp_style="header",
         created_at=NAIVE,
         deleted_at=NAIVE,
-        priority="normal",
+        urgency="Normal",
         approval_state="none",
     )
     base.update(kw)

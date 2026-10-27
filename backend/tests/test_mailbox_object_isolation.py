@@ -240,7 +240,7 @@ def test_employee_detail_keeps_private_mail_owned_and_shared_correspondence_visi
 
 
 @pytest.mark.parametrize("surface", ("suggestions", "create-count", "list-count"))
-def test_smart_folder_metadata_excludes_mail_linked_to_inaccessible_personal_books(
+def test_smart_folder_metadata_excludes_mail_linked_to_inaccessible_named_books(
     api_db: Session, data_dir: Path, surface: str
 ) -> None:
     a, b = _user(api_db, "a"), _user(api_db, "b")
@@ -251,7 +251,8 @@ def test_smart_folder_metadata_excludes_mail_linked_to_inaccessible_personal_boo
             category_id="MAIL",
             ref_number=f"MAIL-{index}",
             subject="Synthetic",
-            confidentiality="personal",
+            grade="unclassified",
+            distribution="named",
             created_by_user_id=owner.id,
         )
         for index, owner in enumerate((b, a))

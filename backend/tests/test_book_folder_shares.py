@@ -9,8 +9,8 @@ from sqlalchemy import func, select
 
 from app.db.models import BookFolderItem, BookFolderShare, Employee
 from tests.conftest import make_user
-from tests.test_book_confidentiality import API, ApiHarness, _error
-from tests.test_book_confidentiality import confidentiality_api as confidentiality_api
+from tests.test_book_grade import API, ApiHarness, _error
+from tests.test_book_grade import grade_api as grade_api
 from tests.test_books_desk_list import _create_folder, _folders, _rows
 
 
@@ -33,8 +33,8 @@ def _share(api: ApiHarness, folder_id: int, **body: object):
     return api.client.put(f"{API}/books/folders/{folder_id}/shares", json=body)
 
 
-def test_restricted_team_visibility_filing_and_everyone(confidentiality_api: ApiHarness) -> None:
-    api = confidentiality_api
+def test_restricted_team_visibility_filing_and_everyone(grade_api: ApiHarness) -> None:
+    api = grade_api
     _employee(api, "M", "Management")
     _employee(api, "B", "Stores")
     _employee(api, "C", "  fINance ")
@@ -98,8 +98,8 @@ def test_restricted_team_visibility_filing_and_everyone(confidentiality_api: Api
     assert _rows(api, folder_id=folder_id)[0]["id"] == book_id
 
 
-def test_share_validation_and_atomic_replacement(confidentiality_api: ApiHarness) -> None:
-    api = confidentiality_api
+def test_share_validation_and_atomic_replacement(grade_api: ApiHarness) -> None:
+    api = grade_api
     api.as_user("M")
     personal = _create_folder(api, "Personal")
     _error(_share(api, personal["id"], everyone=True), 422, "FOLDER_NOT_TEAM")
@@ -144,8 +144,8 @@ def test_share_validation_and_atomic_replacement(confidentiality_api: ApiHarness
         )
 
 
-def test_share_options_shape_and_active_directory(confidentiality_api: ApiHarness) -> None:
-    api = confidentiality_api
+def test_share_options_shape_and_active_directory(grade_api: ApiHarness) -> None:
+    api = grade_api
     _employee(api, "A", " Finance ")
     _employee(api, "B", "Finance")
     _employee(api, "C", "   ")
@@ -176,10 +176,8 @@ def test_share_options_shape_and_active_directory(confidentiality_api: ApiHarnes
 
 
 @pytest.mark.parametrize("actor", ["M", "D"])
-def test_manager_always_sees_restricted_team_folder(
-    confidentiality_api: ApiHarness, actor: str
-) -> None:
-    api = confidentiality_api
+def test_manager_always_sees_restricted_team_folder(grade_api: ApiHarness, actor: str) -> None:
+    api = grade_api
     api.as_user("D")
     folder = _create_folder(api, "Chosen people", team=True)
     assert (

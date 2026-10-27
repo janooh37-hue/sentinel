@@ -300,10 +300,10 @@ def test_summary_and_list_match_zone_membership_and_visible_approval_states(env:
 
 
 @pytest.mark.parametrize("caller", ["manager", "permit_operator"])
-@pytest.mark.parametrize("level", ["personal", "directed", "secret"])
+@pytest.mark.parametrize("grade", ["unclassified", "top_secret", "secret"])
 @pytest.mark.parametrize("operation", ["update", "submit", "delete"])
 def test_item_permit_mutations_require_linked_letter_write_access(
-    env: Session, level: str, operation: str, caller: str
+    env: Session, grade: str, operation: str, caller: str
 ) -> None:
     creator = env.query(User).filter_by(email="op@x.ae").one()
     if caller == "manager":
@@ -311,15 +311,16 @@ def test_item_permit_mutations_require_linked_letter_write_access(
         env.add(editor)
         env.commit()
     else:
-        # Delegated permit grants never widen the letter's level policy.
+        # Delegated permit grants never widen the letter's grade policy.
         editor = _permit_operator(env)
     manager = _linked_manager(env)
     row = item_permit_service.create_item_permit(
         env, _payload(manager_id=manager.id, send_for_approval=operation == "update"), user=creator
     )
     book = env.get_one(Book, row.book_id)
-    book.confidentiality = level
-    if level == "directed":
+    book.grade = grade
+    book.distribution = "named"
+    if grade == "top_secret":
         env.add(
             BookRecipient(
                 book_id=book.id,
@@ -406,6 +407,8 @@ def test_permit_grants_carry_linked_letter_edits_without_books_edit(
         user=creator,
     )
     book = env.get_one(Book, row.book_id)
+    book.distribution = "organization"
+    env.commit()
     client = _client(env, operator)
     path = f"/api/v1/item-permits/{row.id}"
     if operation in ("update", "regenerate"):

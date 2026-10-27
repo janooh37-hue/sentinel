@@ -99,7 +99,7 @@ def test_chain_generation_ignores_manager_embed_request(
         submitted = book_service.submit_for_approval(
             db_session,
             book.id,
-            priority="Normal",
+            urgency="Normal",
             approver_user_id=None,
             reviewer_user_ids=[],
             submitted_by_user_id=submitter.id,

@@ -189,11 +189,16 @@ def test_reopen_creates_active_session_and_working_file(db_session, tmp_path, mo
 
 
 @pytest.mark.parametrize(
-    "level, expected",
-    [("secret", ["سري"]), ("personal", ["شخصي"]), ("general", []), ("directed", [])],
+    "grade, expected",
+    [
+        ("secret", ["سري"]),
+        ("top_secret", ["سري للغاية"]),
+        ("addressee_only", ["سري للغاية — لعنايته فقط"]),
+        ("unclassified", []),
+    ],
 )
-def test_reopen_restores_current_level_without_changing_finished_source(
-    db_session, tmp_path, level, expected
+def test_reopen_restores_current_grade_without_changing_finished_source(
+    db_session, tmp_path, grade, expected
 ):
     from app.core.level_mark import apply_level_mark
     from app.services import word_book_service
@@ -207,7 +212,7 @@ def test_reopen_restores_current_level_without_changing_finished_source(
     assert apply_level_mark(source, "secret")
     original = source.read_bytes()
     footer = DocxFile(source).sections[0].footer.part.element.xml
-    book.confidentiality = level
+    book.grade = grade
     db_session.commit()
 
     info = word_book_service.reopen_word_session(db_session, user=user, book_id=book.id)
@@ -376,7 +381,7 @@ def test_approved_revision_becomes_resubmittable_and_report_stays_approved(
     book_service.submit_for_approval(
         db_session,
         book.id,
-        priority="Normal",
+        urgency="Normal",
         approver_user_id=approver.id,
         reviewer_user_ids=[],
         submitted_by_user_id=submitter.id,

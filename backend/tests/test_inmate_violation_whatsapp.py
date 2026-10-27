@@ -129,7 +129,7 @@ def _generate(db: Session, mgr: Manager, *, approve: bool) -> Book:
         book_service.submit_for_approval(
             db,
             book.id,
-            priority="Normal",
+            urgency="Normal",
             approver_user_id=None,
             reviewer_user_ids=[],
             submitted_by_user_id=mgr.user_id,
@@ -222,7 +222,7 @@ def test_manager_signing_sends_once(env: Any) -> None:
     book_service.submit_for_approval(
         env.db,
         book.id,
-        priority="Normal",
+        urgency="Normal",
         approver_user_id=mgr_user.id,
         reviewer_user_ids=[],
         submitted_by_user_id=operator.id,
