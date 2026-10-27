@@ -25,7 +25,7 @@ void i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false },
 })
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 const BOOK: BookRead = {
   id: 7,

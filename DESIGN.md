@@ -52,6 +52,7 @@ Other pages will be appended under §4 as they're documented.
    3.5  NavBell + NavBellPopover
    3.6  AccountMenu
    3.7  LockOverlay
+   3.8  Toasts (AppToaster)
 4. Dashboard page
    4.1  Page shell
    4.2  Hero
@@ -300,7 +301,7 @@ on the packed box and tier, not a separate page-level four-column grid.
 uses `mb-3.5`. The board and Add widgets panel sit in
 `flex flex-col items-start gap-4 lg:flex-row`.
 
-**Chrome (TopNav):** `px-8 py-3.5` with `gap-7` between the logo block and
+**Chrome (TopNav):** `px-8 pb-3.5 pt-[max(0.875rem, safe-top + 0.75rem)]` with `gap-7` between the logo block and
 the nav, and `ms-5` extra start margin on the nav itself. Right cluster
 uses `ms-auto` + `gap-3.5`.
 
@@ -869,7 +870,7 @@ once so the Dashboard sections (§4) don't repeat the chrome description.
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────┐
-│ <header bg-surface border-b border-border px-8 py-3.5                       │
+│ <header bg-surface border-b border-border px-8 pb-3.5 pt-(see Container)    │
 │         flex items-center gap-7>                                            │
 │                                                                             │
 │   [Logo block]   [Nav]                       [Right cluster]                │
@@ -887,12 +888,15 @@ once so the Dashboard sections (§4) don't repeat the chrome description.
 ```
 flex items-center gap-7
 border-b border-border bg-surface
-px-8 py-3.5
+px-8 pb-3.5 pt-[max(0.875rem, safe-top + 0.75rem)]
 ```
 
-- Total height scales with `[data-font-scale]` — `py-3.5` (0.875rem each
-  side) + the wordmark block's line-box determines it. Approximately
-  64px at root 16px; ~76px at root 19px.
+- Total height scales with `[data-font-scale]` — the 0.875rem bottom padding, the top padding and the tallest
+  control (the avatar trigger) determine it. Approximately 64px at root 16px; ~76px at root 19px.
+- The top padding is `max(0.875rem, --safe-top + 0.75rem)`: with no inset (a desktop, a landscape phone) it is
+  the unchanged 0.875rem; under a status bar / notch inset (a standalone iPad, any >= 768px touch window with a
+  top inset) the controls start >= 12px below it, like the phone bar. `[data-topnav]` side padding already
+  follows the side insets.
 - `gap-7` (1.75rem) between the logo block and the nav.
 
 **Logo block:**
@@ -1099,8 +1103,12 @@ metaphor. Don't tokenize them.
 relative rounded-lg p-2
 transition-colors
 hover:bg-surface-tinted
+pointer-coarse: inline-flex min-h-[44px] min-w-[44px] items-center justify-center
 ```
 
+- On a coarse pointer (touch) the button is a real 44 x 44 CSS px target (px, not rem, so it stays 44px
+  at any text size); a mouse keeps the compact box. In the phone bar (`MobileTopBar`) the trigger also
+  drops its padding and line-height so the box is exactly 44px at every text size.
 - 🔔 emoji at `text-[1.05em]`, `aria-hidden`.
 - Badge (when `count > 0`):
 
@@ -1119,18 +1127,21 @@ ring-2 ring-surface
   place red is allowed to glow brightly.
 - `ring-2 ring-surface` provides the "punched-out of the chrome" look.
 
-**`aria-label`:** `"Notifications, ${count} unread"` or `"Notifications"`.
+**Accessibility:** `aria-label` is localised (`appBar.notifications` / `appBar.notificationsUnread`:
+`"Notifications, N unread"` in English, `"الإشعارات، N غير مقروءة"` in Arabic); `aria-haspopup="dialog"`,
+`aria-expanded` reflects the panel.
 
 #### NavBellPopover (panel)
 
 ```
 absolute end-0 top-full z-50 mt-2 w-[380px]
-overflow-hidden rounded-2xl
+rounded-2xl
 border border-hairline bg-surface
 shadow-xl
 ```
 
-- 380px wide, anchored to the inline-end of the bell.
+- 380px wide, anchored to the inline-end of the bell on the TopNav. On the phone bar it uses the shared header
+  placement (see §3.6 Panel), and the PANEL is the only scroller on a phone/touch screen.
 - `shadow-xl` — heaviest shadow on the page; the panel needs to read
   clearly over arbitrary content beneath it.
 
@@ -1140,7 +1151,7 @@ shadow-xl
 flex items-center justify-between
 border-b border-hairline px-4 py-3
   ├ <h3 text-sm font-semibold text-foreground>Notifications</h3>
-  └ "Mark all read" button (§2.4 pattern) — hidden when count = 0
+  └ "Mark all read" button (§2.4 pattern) — hidden when count = 0; 44 x 44 minimum on touch
 ```
 
 **Body (3 states):**
@@ -1149,7 +1160,7 @@ border-b border-hairline px-4 py-3
 | ------------------ | ------------------------------------------------------------- |
 | Loading            | 3 fake rows: animated `bg-border` rounds + bars, gap-2, py-6  |
 | Empty              | `<EmptyState icon={Inbox}>` with i18n message, `py-10`        |
-| Has items          | `<ul max-h-[360px] overflow-auto>` with row-as-button entries (§2.3) |
+| Has items          | `<ul>` of row-as-button entries (§2.3). Desktop mouse: `md:max-h-[360px] md:overflow-auto`. Phone and any touch screen: no list scroller — the capped panel scrolls, so the footer link is one drag away |
 
 **Row layout:**
 
@@ -1166,7 +1177,7 @@ border-b border-hairline px-4 py-3
 
 - Optional `"+ N more unread"` line when `total_unread > items.length`.
 - `<Link to="/ledger?tab=email">` styled like the inline-button-link pattern, with
-  an `ArrowRight` icon. The arrow rotates 180° in RTL.
+  an `ArrowRight` icon (`min-h-[44px]` on touch). The arrow rotates 180° in RTL.
 
 **Open/close:**
 
@@ -1187,9 +1198,10 @@ available; falls back to initials from `identity.name_en[0]` or the
 configured email's local-part initials.
 
 ```
-<button class="flex items-center gap-2 rounded-full p-0.5
-               transition-colors hover:bg-surface-tinted">
-  <Avatar h-9 w-9 bg-primary-soft text-primary ring-1 ring-border>
+<button class="flex items-center justify-center gap-2 rounded-full p-0.5
+               transition-colors hover:bg-surface-tinted
+               pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px]">
+  <Avatar h-9 w-9 (phone bar: 36px) bg-primary-soft text-primary ring-1 ring-border>
     [AvatarImage from identity.photo_url] OR
     [AvatarFallback (initials)]
   </Avatar>
@@ -1199,14 +1211,43 @@ configured email's local-part initials.
 #### Panel
 
 ```
-absolute end-0 top-full z-50 mt-2 w-80
-overflow-hidden rounded-2xl
-border border-hairline bg-surface
-shadow-xl
+absolute z-50 mt-2 top-full
+rounded-2xl border border-hairline bg-surface shadow-xl
+focus-visible:outline-none
+TopNav:     end-0 w-80   max-h-[calc(100dvh - safe-bottom - max(0.875rem, safe-top + 0.75rem)
+                                    - max(2.5rem, 44px) - 0.5rem - 0.75rem)]
+phone bar:  inset-x-[max(0.75rem, safe-left, safe-right)] ms-auto max-w-80
+            max-h-[calc(100dvh - safe-top - safe-bottom - 2.75rem - 45px)]
+overflow-y-auto overflow-x-hidden overscroll-contain
 ```
 
-- 20rem wide (`w-80`) — scales with font-scale.
-- `role="dialog"` + `aria-label="Account"`.
+Placement is shared with the notifications popover (`components/shell/headerPopover.ts`) and is chosen by the BAR
+THAT RENDERS, not by a breakpoint: `MobileTopBar` passes `phone` to `AccountMenu` / `NavBellPopover`, the TopNav
+passes nothing, and no placement class is an `md:` variant. Which bar renders is a JS px query (`useIsMobile`,
+767px) while Tailwind's `md` is 48rem, which follows the BROWSER's default font size (864 / 960 / 1152px at
+18 / 20 / 24px, 576px at 12px), so a placement keyed on `md` hung the panels off the wrong anchor whenever the
+two disagreed. The phone cap mirrors the phone header's real height exactly (`safe-top + 0.75rem + 44px +
+0.75rem + 1px` border, then the `mt-2` gap, then 0.75rem of margin above the bottom inset); change `MobileTopBar`
+and the cap together. The TopNav cap is the same arithmetic from the TopNav row (`max(0.875rem, safe-top +
+0.75rem)` top padding + the `max(2.5rem, 44px)` avatar trigger that sets the row height + `mt-2` + 0.75rem), not
+a flat guess, so it grows with the text size and the top inset. At 1024x768 and Aa22 the panel's content
+(687px) is taller than the 682px under the header even with no margin, so it scrolls inside itself there (about
+20px; every control reachable, nothing clipped): that is the content's height, not the cap's.
+
+- 20rem wide (`w-80`) on the TopNav — scales with font-scale.
+- **Phone bar:** the trigger wrapper is `static`, so the panel is positioned against the phone
+  `<header>` (`relative`) instead of the 44px avatar. It hangs under the header, spans the width between
+  the safe insets (capped at 20rem, flush with the inline-end edge via `ms-auto`, so it mirrors in RTL
+  without a variant), is capped to the dynamic viewport and scrolls inside itself. No row can end up
+  off-screen at 320px, landscape, or the largest Aa size.
+- **Touch targets:** on a coarse pointer every control in the panel is >= 44 x 44 CSS px: the lock-timer
+  steppers (`44px` columns), the lock-screen layout segments, the "Link this account" row and all full-width
+  rows. The timer and layout rows wrap their stepper under the label instead of overflowing at large text.
+  A mouse keeps the compact 28x30 / 36x30 widgets (pinned by the desktop assertion in `mobile-header.spec.ts`).
+- `role="dialog"` + `aria-label="Account"`, `tabindex="-1"`. Focus moves into the dialog on open and returns
+  to the avatar on Escape, an outside tap or an item (`usePopoverFocus` finds the trigger in the DOM, so it
+  works when a tap — as in Safari — never focused the button); a tap that lands on another focusable control
+  keeps its focus.
 
 **Identity strip (linked variant):**
 
@@ -1295,7 +1336,7 @@ unlocking re-verifies the signed-in user's password through
 `/auth/verify-password`. Only a successful verification closes it — Escape,
 outside pointer/focus interaction, and any background dialog's own close
 control are all suppressed on the lock's root. Toasts are hidden while the
-lock is open (`body:has([data-lock-overlay]) [data-sonner-toaster]`).
+lock is open (`body:has([data-lock-overlay]) [data-sileo-viewport]`).
 
 **Modal focus ownership:** the lock is a real Radix `Dialog.Root`/`Portal`/
 `Content`, not a plain `<div>` with dialog ARIA attributes — visual stacking
@@ -1399,6 +1440,131 @@ Command band.
   keyboard focus rings; the layout switcher is a named `role="group"`.
 - English and Arabic keys are peers under `lockScreen`; no inline language
   ternaries or `defaultValue` fallbacks remain.
+
+### 3.8 Toasts (AppToaster)
+
+**Sources:** `lib/toast.ts` (the API), `lib/toastFit.ts` (pill measuring and
+clause split), `lib/toastHold.ts` (hover/focus hold), `components/shell/AppToaster.tsx` +
+`AppToaster.css` (the Sileo host), `components/shell/toastParts.tsx` (badge
+glyphs, countdown, reference chip, server text), `lib/toastAnnouncements.ts`
+(screen-reader channel). Notices come from [Sileo](https://sileo.aaryan.design)
+`0.1.6`, pinned and patched (`frontend/patches/sileo@0.1.6.patch`, see Hover),
+mounted once in `App.tsx` for both the signed-out and signed-in shells.
+**Never import `sileo` outside `lib/toast.ts` / `AppToaster.tsx`.**
+
+**API.** `toast`, `toast.success|error|warning|info|loading`, `toast.promise`
+and `toast.dismiss(id?)` from `@/lib/toast`; options `id`, `description`,
+`reference`, `duration`, `action: { label, onClick }`, `icon`. Behaviour the
+adapter owns:
+
+| Concern | Rule |
+| ------- | ---- |
+| Identity | Every call gets a unique id, so notices stack, and every id a call returns can be passed back as `id` to update that toast in place (`const id = toast.loading(…)` then `toast.success(…, { id })`; `timesheet-cell-locked`). A fixed id raised again after its toast closed is a fresh toast. Sileo's own default shares one id and would replace every notice. |
+| Duration | 4 s default (Sonner's, unchanged by the Sileo migration; Sileo's own is 6 s). An explicit `duration` overrides it. `Infinity` stays until dismissed; `loading` always does. A deferred-delete Undo passes its own commit window as `duration`. The body stays open until the toast closes. |
+| Pill vs body | The collapsed pill holds one line, measured in the page's font (about 284px of title; 36 characters where nothing can be measured). A message too wide for it leads with its first clause (split after `.` `:` `;` `؛`, after `?` `!` `؟`, or at a spaced dash) and the rest moves into the body; with no clause that fits, the whole message moves into the body under a localized state title (`common.toastState.*`). A short message with a `description` keeps the message as the title. The newest toast opens its body by itself; any toast opens on hover or keyboard focus. |
+| Server text | In the Arabic UI, a message with Latin letters and no Arabic (the server's English error detail, a file name, a status) is not used as the title: an error is titled `common.toastServerError` ("تعذّر إكمال الطلب") and the text sits in the body as `lang="en" dir="ltr"`, aligned to the body's start edge. Loading toasts are exempt: Sileo never opens their body, so the text stays in the pill. A 403 never reaches a toast as server text: `apiErrorMessage` (`lib/api.ts`) first maps refusal codes that say more than "no permission" (`ACCOUNT_REJECTED`, `DOCX_LOCKED_AFTER_SIGNING`, … in `CODE_MESSAGE_KEYS`) to their own translated message, and turns any other 403 into `common.forbiddenError` ("لا تملك صلاحية لهذا الإجراء" / "You don't have permission for this") in both languages. A new 403 code with a specific meaning gets a `CODE_MESSAGE_KEYS` entry and EN/AR keys. Error toasts take their text from `apiErrorMessage`, never `err.message`. |
+| Reference | `reference` (a record number) rides in the pill as `message · REF`, direction-isolated with U+2068/U+2069, when the toast has no other body and it fits; otherwise it is a mono chip (`.toast-ref`) in the body. Announced either way. |
+| Repeats | An id-less, action-less notice raised again while its toast is up updates that toast in place with a count (`Network error ×3`) and restarts its timer. A fixed id or an action is never merged. |
+| Neutral | `toast(msg)` is `info`, or `action` when it carries an action. |
+| Action | Runs `onClick`, then closes the toast (Sileo does not). The button is sized to its label on its own row at the start of the body; with no body text it is centred in the body (`toast-action-only`). A timed action toast (an Undo) wraps its badge glyph in a countdown ring that drains over the toast's window, pauses while the stack is held by pointer or focus, and restarts with Sileo's timers on release (they restart from the full duration). A follow-up action (open the record, open the Scan Inbox, continue editing, an Undo that is not a deferred delete) passes `duration: 8000`; a deferred-delete Undo passes its commit window and returns `() => toast.dismiss(id)` so the toast never outlives the commit. |
+| Glyphs | The badge carries the app's lucide set: Check, X, TriangleAlert, Info, LoaderCircle (spinning), and ArrowRight for actions, mirrored in Arabic (`rtl:-scale-x-100`). `icon` replaces it. |
+| Dismiss | Swipe, click (not on a loading toast), or Escape while focused. `dismiss()` with no id clears all. |
+
+**Scan inbox.** Only `auto_filed` scans can be undone. Operator-filed (`filed`)
+and dismissed scans are terminal: their success toasts carry no Undo action
+and use the default duration. Keep destination references/descriptions and
+per-call toast ids; the auto-file follow-up to open the record keeps its 8 s window.
+
+**Save monitoring.** The application preview owns its save loading toast. A
+terminal job result updates that same id; five consecutive polling errors
+replace it with the localized network warning, not a claim that saving failed.
+Leaving the preview or page, replacing the tracked job, or starting another
+generation dismisses any unresolved save notice.
+
+**Theme and colour.** The host passes the app theme (`<html data-theme>`) to
+Sileo, which draws the *inverse* pill. The pill is filled from the app, not
+Sileo's neutrals: the navy `--rail` on the cream page, the light theme's raised
+cream `#fafaf6` on the near-black page; the light pill's body text is
+`--rail-text`. State tones in `AppToaster.css` are the inverse
+theme's `--success`/`--accent`/`--warning`/`--info` values, tuned for ≥ 4.5:1
+against the pill (warning on the light pill is `#9a4507`, a shade darker than
+`--warning`). A theme change flips live toasts.
+
+**Position and scale.** Placement is the same in both languages. Desktop uses
+`bottom-center`, 90px above the bottom edge, at 110% zoom; bodies expand upward.
+Phones use `top-center`, 12px plus `env(safe-area-inset-top)` below the top edge,
+at 105% zoom; bodies expand downward and may briefly overlay the header. The
+existing `useIsMobile` breakpoint (below 768px) chooses the placement. Phone
+zoom is capped to `viewport width / 350px` so even a narrow screen holds the
+whole toast. Sileo's viewport padding is removed and offsets are divided by
+zoom, so the requested distances are rendered pixels. Zoom covers only the
+viewport; title-fit probing and Sileo's width/height measurements stay in CSS
+pixels. A resize updates the placement for new toasts; Sileo pins existing
+toasts to the edge where they were raised until they close.
+
+**RTL.** Position does not change with language. Text, the badge and the
+action follow `<html dir>`; the body uses `text-align: start` and Arabic body
+text a 1.6 line height. Titles are not title-cased. Sileo positions the pill
+header by physical `left` and leaves its 10px of spare room on the right, so in
+Arabic the host shifts the header right by that room: the badge sits 8px from the
+pill's right edge and the room trails the title, mirroring English.
+
+**Scan-back dock.** `ScanBackDock` (`pages/scanBack/ScanBackDock.tsx` +
+`ScanBackDock.css`) is drawn as a toast, collapsed or open, in its own bottom
+inline-end corner. Its collapsed pill uses the toast pill's fill (navy `--rail`
+on the cream page, `#fafaf6` on the dark page), 40px height, a 24px round badge
+(Printer, warning tone at 20% behind it) and the toast title type (0.825em,
+500) in the warning tone (`#fbbf24` / `#9a4507`); all Arabic dock text is 5%
+smaller than English, in both the collapsed pill and the open body, without
+shrinking thumbnails, icons or hit targets. The chevron and dismiss are
+the toast description colour. Open, it is an expanded toast: the body grows up
+out of the pill in the same fill with Sileo's 16px radius, square at its
+inline-end bottom corner where the pill continues it; the pill's top corners go
+square and a 16px concave fillet fills the inside corner beside it (the join
+Sileo's gooey filter draws). The body re-points the app's colour tokens
+(`--text`, `--text-muted`, `--surface-tinted`, `--hairline`, `--border`,
+`--border-strong`, `--info`, `--info-soft`, `--primary`) to the toast palette,
+so rows, mono ref chips, dashed drop targets and focus rings follow the
+toasts: description colour for text, `--rail-faint` / 72% ink for muted text,
+the info tone for hover and drop, and "View all" as Sileo's action button
+(action tone on a 15% wash). Thumbnails keep their white paper. The body opens
+with the toasts' spring (none under reduced motion). `items-end` is logical, so
+the pill sits in the corner in both directions; never add an `rtl:` alignment
+override. The dock rests 1.5rem from the bottom on desktop and 5.5rem plus the
+safe area on mobile (above the BottomTabBar), independently of the toast stack.
+The open body is capped to `50dvh` and the available room above the dock; its
+rows scroll.
+
+**Hover.** Sileo 0.1.6 gave the hovered toast the single "open" slot, collapsing
+the newest under it; when their bodies differed in height the stack shifted, slid
+the hovered pill from under the pointer and closed it again. The patch removes
+that hand-off: a hovered toast opens on its own and the newest stays open, so
+nothing below the pointer moves. On a Sileo upgrade, re-check the patch applies and
+`AppToaster.test.tsx` "keeps the newest toast open…" still passes (it fails without it).
+
+**Motion.** Sileo's CSS honours `prefers-reduced-motion`; its pill is animated
+by motion's JS springs, which the host switches off with
+`MotionGlobalConfig.skipAnimations` when the preference is `reduce`. Two
+animations stay under `reduce`: the loading spinner and the Undo countdown, a
+slow in-place drain that says how long Undo is on offer.
+
+**Accessibility.** Sileo's viewport is `aria-live` only while a toast exists and
+its SVG titles would name the toast, so the host (1) silences the viewport and
+hides the canvas and state icon, and (2) announces every notice through two
+always-mounted regions — `role="status"` (polite) and `role="alert"` (errors).
+Focusing a toast replays Sileo's hover path, so the body opens and the timer
+pauses for keyboard users. A collapsed body is `visibility: hidden`, so its
+action is neither visible nor tabbable until the toast opens.
+
+**Stacking, lock, print.** `z-index: 999999999` (above dialogs and the document
+viewer). The lock overlay hides the viewport and the announcers
+(`LockOverlay.css`); print hides both and the wrapper carries `data-print-hide`.
+
+**Known limits (Sileo 0.1.6).** Only the newest toast shows its body without
+hover, so in a stack older toasts read as their title until hovered (the
+announcers still carry their full text).
+`Infinity`-duration toasts with a description open on hover/focus only. Sileo's
+body is always its full 350px wide, which is why a lone reference goes in the pill.
 
 ## 4. Dashboard page
 
@@ -1587,7 +1753,9 @@ Frame titles also stay on one line while preserving the full accessible name.
   `/books?mine=1&drafts=1`. All sizes intentionally remain summary-only: the
   existing Books list API has no exact drafts filter, so an arbitrary page
   must not be presented as a complete drafts preview.
-- **Unread mail:** count and rows come from owner-scoped `unread_mail`.
+- **Unread mail:** count and rows come from owner-scoped `unread_mail`, gated
+  by `ledger.view`; linked Records the caller cannot read are excluded from
+  both the count and preview before the row limit.
   View all opens `/ledger?tab=email`; rows open `/ledger?mail=<id>`.
   Email sync is the footer, not a separate widget. Its received-today value
   is explicitly separate from unread. Sync now requires `ledger.view` and
@@ -1628,8 +1796,9 @@ empty states stay inside the same clipped frame.
   count. View all keeps `pending=1`. Cancel is offered only with
   `employees.edit` and clears only `end_date`, never reactivating an employee.
 - **Open violations:** use `open_violations.count/latest`, not fabricated
-  breakdown states. Rows open the exact employee violation; View all selects
-  employees with an open violation.
+  breakdown states. `violations.view` gates this projection and its legacy
+  total independently of employee access; denied totals remain `null`, not zero.
+  Rows open the exact employee violation; View all selects employees with an open violation.
   Employee destinations require `employees.view`; otherwise counts, labels,
   and violation previews remain informational.
 - **Monthly inmate reports:** real awaiting-close months, workflow stage,
@@ -1990,9 +2159,59 @@ documented.
 
 ### Out of scope for this pass
 
-- **Chrome narrow-viewport detail.** Dashboard compact/wide packing and
-  phone sizes are covered in §4.1, and Hero uses responsive padding and
-  layout. Full narrow-viewport chrome behavior is not catalogued here.
+- **Mobile / narrow-viewport chrome.** Dashboard compact/wide packing and phone sizes are covered
+  in §4.1, and Hero uses responsive padding and layout. The phone chrome — `MobileTopBar`, the
+  account / notifications popovers, `NavDrawer` and, for landscape phones >= 768px, the desktop
+  `TopNav` — follows these rules (asserted in Chromium by `frontend/e2e/mobile-header.spec.ts`;
+  see "Not verified" below for what that cannot show):
+  - The header is a non-scrolling sibling above the page scroller (`[data-ptr-scroller]`); nothing is
+    `position: fixed` to it. The shell root is `h-dvh` (not `h-screen`), so on a browser whose dynamic toolbars
+    make 100vh taller than the visible area the shell still matches the visible viewport.
+  - Phone bar padding: inline `max(1rem, --safe-left, --safe-right)`, top `--safe-top + 0.75rem`, bottom
+    `0.75rem` — i.e. >= 12px of breathing room above the 44px controls beyond the safe inset (also with no inset,
+    e.g. Android or landscape). The `env()` insets are physical, so the larger side is used on both — no LTR/RTL
+    variants (`viewport-fit=cover` is set in `index.html`). Pinch zoom stays enabled.
+  - Targets are 44 CSS px (px, not rem, so they stay 44px at any text size). Menu, bell and avatar are 44px; the
+    brand takes the remaining width and sheds first the wordmark (container query) and then the 32px logo
+    (never squeezed: it is a fixed, `max-w-none` circle) before a control would leave the screen. Below 180 CSS px
+    (a 360px phone at 200% zoom) gaps and side padding collapse so three 44px targets still fit. The wordmark is
+    `leading-none` like the bell glyph: at 200% text its inherited 1.5 line box (50px) would otherwise stretch the
+    header past the height arithmetic the popover cap mirrors (99px instead of 93 at 667x375, root 32px).
+  - On a coarse pointer (`pointer-coarse:`), EVERY control in the header, the account / notifications panels
+    and the drawer is >= 44 x 44: the Aa A / slider / A, language toggle, theme switch, lock-timer steppers,
+    layout segments, "Mark all read", "View all in inbox", the nav links and the TopNav utilities. A mouse keeps
+    the compact desktop widgets (asserted at 1280 x 800).
+  - Narrow panels reflow instead of clipping (a 320 / 390px phone at 200% zoom is a 160 / 195 CSS px viewport, so
+    a 136 / 171px panel; root text 32px at 320px is the same problem in rem). The account, notifications and
+    drawer panels are `@container`s: below 200 CSS px the lock-timer stepper, the layout segments and the Aa
+    A / slider / A stack at the row's full width (every part still 44px); below 11rem the account identity
+    strip stacks (avatar, then name, role chip, e-mail) and below 13rem each notification row puts its icon and
+    chevron on one line and the text under them. The thresholds are in rem where the cause is rem-sized padding
+    and icons (so they follow the text size) and in px where it is the fixed 44px targets. Every label, name,
+    role chip and count wraps (`[overflow-wrap:anywhere]`); the only intentional single-line ellipsis is
+    message text (e-mail subject / sender / preview, `data-message-text`), which opens in full from the row.
+    No panel adds horizontal page overflow at any of these sizes, and zoom is never disabled.
+  - Landscape phones (844x390, 932x430) and tablets get `TopNav`: its side padding is `max(1rem, --safe-left/--safe-right)`
+    per side, its top padding clears the top inset (see §3.1), and the destination strip scrolls sideways on touch
+    when 44px targets do not all fit. A strip with destinations hidden past one physical edge paints a soft
+    scroll-shadow on that edge only (`index.css`, `@media (pointer: coarse)`): nothing shows when it fits and the
+    shadow moves to the other edge once scrolled, in RTL too.
+  - Popover panels are anchored to the header, height-capped to the exact header height and scroll inside
+    themselves (see §3.6); the placement follows the bar that renders (`phone` prop), never an `md:` variant,
+    so a larger or smaller BROWSER default font size (which moves Tailwind's rem-based `md`, not the px query that
+    picks the bar) cannot detach them. On a phone/touch screen the panel is the only scroller (no nested
+    notification list scroller). The drawer is capped at `100% − 48px`, scrolls, clears the notch on its
+    inline-start side, keeps scrolled-to controls clear of the status bar / home indicator (`scroll-pt/pb`),
+    reveals whatever the focus trap focuses (Radix wraps Tab with `preventScroll`), and returns focus to
+    the menu button BY REFERENCE (`returnFocusRef`), not by remembering `document.activeElement`. The phone bar is
+    not `md:hidden` either. Still keyed on `md` (unchanged, out of this pass): the bottom tab bar and the main
+    area's bottom padding, which at a browser font under 16px stop applying between 48rem and 768px.
+  - Not verified without a device: real iOS Safari (toolbar/notch/home indicator, whether `100vh` vs `dvh`
+    matters, tap-focus and mouse-event synthesis, whether an outside tap on plain content closes the popovers
+    — they close on `window` `mousedown`) and real Android Chrome. The e2e emulates `env()` insets with CDP and
+    emulates "taps do not focus buttons" by cancelling `mousedown`; both are Chromium models, not WebKit.
+    The `h-dvh` change is a spec-based expectation, unverified on a phone. At 1240–1400px with all eight destinations on a mouse desktop the existing TopNav row already
+    overflows (unrelated, unchanged).
 - **Pages other than Dashboard.** Employees / Application / Ledger /
   Books / Settings each get their own §4.x section in a follow-up pass.
 - **AccountMenu when on Settings page.** AccountMenu hides the "Email

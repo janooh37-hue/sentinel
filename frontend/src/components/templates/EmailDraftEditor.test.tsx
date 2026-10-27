@@ -13,7 +13,7 @@ import { EmailDraftEditor } from './EmailDraftEditor'
 
 const { has, sample } = vi.hoisted(() => ({ has: vi.fn(), sample: vi.fn() }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has }) }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn() } }))
 vi.mock('@/lib/draftTemplates', () => ({
   defaultDraftText: () => ({ subject: 'الموضوع الافتراضي', intro: 'المقدمة الافتراضية', closing: 'الخاتمة الافتراضية' }),
   renderDraftSample: sample,

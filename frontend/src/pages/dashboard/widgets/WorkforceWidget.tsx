@@ -20,7 +20,8 @@ export function WorkforceWidget({ tier }: WidgetProps): React.JSX.Element {
     { count: totals.loaned, key: 'loaned', to: canViewEmployees ? '/employees?status=Loaned' : undefined, tone: 'bg-info' },
     { count: totals.on_leave_today, key: 'onLeave', to: canViewLeaves ? `/leaves?status=Approved&on=${siteToday()}` : undefined, tone: 'bg-warning' },
   ] : []
-  const working = <><span className={PEOPLE_BIG}>{totals?.employees_active}</span><span className="text-[0.7em] text-muted-foreground">{t('dashboard.widgets.workspace.working')}</span></>
+  const unavailable = <><span aria-hidden>—</span><span className="sr-only">{t('dashboard.workspace.unavailable')}</span></>
+  const working = <><span className={PEOPLE_BIG}>{totals?.employees_active ?? unavailable}</span><span className="text-[0.7em] text-muted-foreground">{t('dashboard.widgets.workspace.working')}</span></>
   return (
     <WidgetFrame title={t('dashboard.widgets.workspace.title')} viewAllTo={canViewEmployees ? '/employees?working=true' : undefined}>
       {query.isPending || query.isError || !totals ? <PeopleFeedback pending={query.isPending} retry={query.refetch} /> : (
@@ -29,7 +30,7 @@ export function WorkforceWidget({ tier }: WidgetProps): React.JSX.Element {
           {totals.employees_active === 0 ? <p className="pt-2 text-[0.72em] text-muted-foreground">{t('dashboard.widgets.workspace.empty')}</p> : (
             <div className={`flex gap-x-3 gap-y-1 pt-2 text-[0.68em] ${tier === 'tall' || tier === 'list' ? 'flex-col' : 'flex-wrap'}`}>
               {(tier === 'glance' ? chips.filter((chip) => chip.key === 'onSite') : chips).map((chip) => {
-                const content = <><span aria-hidden className={`size-1.5 rounded-full ${chip.tone}`} /><b className="font-mono tabular-nums">{chip.count}</b>{t(`dashboard.widgets.workspace.${chip.key}`)}</>
+                const content = <><span aria-hidden className={`size-1.5 rounded-full ${chip.tone}`} /><b className="font-mono tabular-nums">{chip.count ?? unavailable}</b>{t(`dashboard.widgets.workspace.${chip.key}`)}</>
                 return chip.to ? <Link key={chip.key} to={chip.to} className={`${PEOPLE_LINK} inline-flex items-center gap-1`}>{content}</Link> : <span key={chip.key} className="inline-flex items-center gap-1">{content}</span>
               })}
             </div>

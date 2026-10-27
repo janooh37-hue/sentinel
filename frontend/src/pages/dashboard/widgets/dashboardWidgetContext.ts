@@ -1,8 +1,8 @@
 import { createContext, useContext } from 'react'
-import type { DashboardLayout } from '@/lib/api'
+import type { ResolvedDashboardLayout } from '@/lib/dashboardLayout'
 
 interface DashboardRuntime {
-  layout: DashboardLayout
+  layout: ResolvedDashboardLayout
   has: (capability: string) => boolean
   onNavigate: (page: 'books' | 'employees' | 'ledger') => void
   onOpenCoverage: () => void

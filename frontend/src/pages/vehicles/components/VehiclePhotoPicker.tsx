@@ -111,10 +111,7 @@ function VehiclePhotoPickerForm({
     : t('vehicles.mainPhoto')
 
   const upload = useMutation({
-    mutationFn: () => {
-      if (!file || !labelAr.trim() || !labelEn.trim()) {
-        throw new Error(t('vehicles.photoLibrary.completeUpload'))
-      }
+    mutationFn: (file: File) => {
       return api.uploadVehiclePhoto(file, {
         label_ar: labelAr.trim(),
         label_en: labelEn.trim(),
@@ -139,11 +136,7 @@ function VehiclePhotoPickerForm({
   })
 
   const save = useMutation({
-    mutationFn: async () => {
-      if (!selectionChanged) return
-      if (draftId != null && !selectedAsset) throw new Error(t('vehicles.photoLibrary.selectionUnavailable'))
-      await onSave(selectedAsset)
-    },
+    mutationFn: onSave,
     onMutate: () => {
       setError(null)
       onBusyChange(true)
@@ -272,7 +265,13 @@ function VehiclePhotoPickerForm({
               type="button"
               variant="secondary"
               disabled={busy || !file || !labelAr.trim() || !labelEn.trim()}
-              onClick={() => upload.mutate()}
+              onClick={() => {
+                if (!file || !labelAr.trim() || !labelEn.trim()) {
+                  setError(t('vehicles.photoLibrary.completeUpload'))
+                  return
+                }
+                upload.mutate(file)
+              }}
             >
               {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <ImagePlus className="h-4 w-4" aria-hidden />}
               {upload.isPending ? t('vehicles.photoLibrary.uploading') : t('vehicles.photoLibrary.upload')}
@@ -293,7 +292,11 @@ function VehiclePhotoPickerForm({
               onCancel()
               return
             }
-            save.mutate()
+            if (draftId != null && !selectedAsset) {
+              setError(t('vehicles.photoLibrary.selectionUnavailable'))
+              return
+            }
+            save.mutate(selectedAsset)
           }}
         >
           {save.isPending ? t('common.saving') : t('vehicles.photoLibrary.saveSelection')}

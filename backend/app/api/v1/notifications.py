@@ -33,11 +33,13 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker as _make_sm
 
-from app.api.deps import get_current_user
+from app.api.deps import COOKIE_NAME, get_current_user
+from app.api.errors import AppError
+from app.core.security import hash_token
 from app.db.models import User
 from app.db.session import SessionLocal, get_db
 from app.schemas.notifications import NotificationCounts
-from app.services import notification_service
+from app.services import auth_service, notification_service
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -49,26 +51,28 @@ HEARTBEAT_SECONDS = 15.0
 _counts_cache: dict[int, tuple[float, NotificationCounts]] = {}
 
 
-def _shared_counts(open_session: Callable[[], Session], user_id: int) -> NotificationCounts | None:
-    """This user's counts, computed at most once per POLL_SECONDS across tabs.
-
-    ``None`` when the user row is gone. Runs in a worker thread; two tabs racing
-    past an expired entry both compute, which is harmless.
-    """
+def _shared_counts(session: Session, user: User) -> NotificationCounts:
+    """Cache counts per user, independently of the caller's session authorization."""
     now = time.monotonic()
-    hit = _counts_cache.get(user_id)
+    hit = _counts_cache.get(user.id)
     if hit is not None and now - hit[0] < POLL_SECONDS:
         return hit[1]
-    session = open_session()
-    try:
-        user = session.get(User, user_id)
-        if user is None:
-            return None
-        counts = notification_service.relevant_counts(session, user)
-    finally:
-        session.close()
-    _counts_cache[user_id] = (now, counts)
+    counts = notification_service.relevant_counts(session, user)
+    _counts_cache[user.id] = (now, counts)
     return counts
+
+
+def _session_counts(
+    open_session: Callable[[], Session], token_hash: str, request: Request
+) -> NotificationCounts | None:
+    """Authorize the originating session before every cache read or computation."""
+    with open_session() as session:
+        user = auth_service.resolve_session_hash(session, token_hash)
+        try:
+            user = get_current_user(request, user)
+        except AppError:
+            return None
+        return _shared_counts(session, user)
 
 
 @router.get("/counts", response_model=NotificationCounts)
@@ -124,7 +128,7 @@ async def stream(
     captured, and every counts computation opens its own session from that
     same engine, so test-fixture engine overrides still apply.
     """
-    user_id = user.id
+    token_hash = hash_token(request.cookies.get(COOKIE_NAME, ""))
     # Capture the engine from the injected session so that test overrides
     # (which replace the session factory via dependency_overrides) also apply
     # inside the generator. get_bind() is the SA 2.x idiom (db.bind is removed
@@ -145,9 +149,9 @@ async def stream(
     db.close()
 
     async def gen() -> AsyncIterator[str]:
-        last = await anyio.to_thread.run_sync(_shared_counts, _tick_session, user_id)
+        last = await anyio.to_thread.run_sync(_session_counts, _tick_session, token_hash, request)
         if last is None:
-            return  # user row inaccessible — exit the stream cleanly
+            return  # originating session no longer authorized
         yield _frame(last)
         emitted = 1
         if max_events is not None and emitted >= max_events:
@@ -158,9 +162,11 @@ async def stream(
             await anyio.sleep(POLL_SECONDS)
             if await request.is_disconnected():
                 return
-            current = await anyio.to_thread.run_sync(_shared_counts, _tick_session, user_id)
+            current = await anyio.to_thread.run_sync(
+                _session_counts, _tick_session, token_hash, request
+            )
             if current is None:
-                return  # user row inaccessible — exit the stream cleanly
+                return  # originating session no longer authorized
             if current != last:
                 last = current
                 since_emit = 0.0

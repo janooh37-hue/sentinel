@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, X } from 'lucide-react'
 
-import { api, ApiError } from '@/lib/api'
+import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import type { RecipientListMember, RecipientListRead } from '@/lib/api'
 import {
   DialogRoot,
@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 type DraftMember = { id: string; field: 'to' | 'cc'; address: string; display_name: string }
@@ -103,7 +103,7 @@ export function RecipientListDialog({
         setNameError(t('ledger.lists.nameTaken', { defaultValue: 'A list with this name already exists' }))
         return
       }
-      toast.error(err instanceof ApiError ? err.message : (err as Error).message)
+      toast.error(apiErrorMessage(err))
     },
   })
 
@@ -113,8 +113,7 @@ export function RecipientListDialog({
       void qc.invalidateQueries({ queryKey: ['ledger-recipient-lists'] })
       if (editingId === id) startNew()
     },
-    onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : (err as Error).message),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const canSave = name.trim().length > 0 && !saveMutation.isPending

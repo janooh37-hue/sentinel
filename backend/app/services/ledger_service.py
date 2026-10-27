@@ -179,6 +179,11 @@ def _tags_contain(tag: str, *, negate: bool = False) -> Any:
     ).bindparams(**{param: tag})
 
 
+def email_owned_by(owner_user_id: int) -> ColumnElement[bool]:
+    """SQL: private email belongs to the caller; non-email correspondence stays shared."""
+    return or_(LedgerEntry.channel != "email", LedgerEntry.owner_user_id == owner_user_id)
+
+
 def related_book_visible(db: Session, user: User | None) -> ColumnElement[bool] | None:
     """SQL: the entry links no Record, or one ``user`` can open.
 
@@ -286,10 +291,7 @@ def list_entries(
         # which passes owner_user_id=None here). Non-email rows (the shared
         # correspondence log) stay visible to everyone. Drafts are a subset of
         # the email rule (always owned), so the email clause already covers them.
-        owner_clause = or_(
-            LedgerEntry.channel != "email",
-            LedgerEntry.owner_user_id == owner_user_id,
-        )
+        owner_clause = email_owned_by(owner_user_id)
         stmt = stmt.where(owner_clause)
         count_stmt = count_stmt.where(owner_clause)
         # Correspondence-Log removal (ledger smart-folders port): the old
@@ -489,16 +491,12 @@ def get_entry(
             id=entry_id,
         )
     if owner_user_id is not None and (
-        (
-            row.channel == "email"
-            and DRAFT_TAG in (row.tags or [])
-            and row.owner_user_id != owner_user_id
-        )
+        (row.channel == "email" and row.owner_user_id != owner_user_id)
         or not _related_book_visible_to(db, row, owner_user_id)
     ):
-        # Shared mailbox: synced/sent email opens for any signed-in user; only a
-        # cross-owner DRAFT is a 404 (don't leak existence), not a 403. A row
-        # about a Record the caller cannot open is a 404 for the same reason.
+        # Mailboxes are private, including drafts and legacy null-owner mail.
+        # Hide foreign email and inaccessible linked Records with the same 404
+        # so neither lookup discloses that the entry exists.
         raise NotFoundError(
             "LEDGER_ENTRY_NOT_FOUND",
             f"Ledger entry {entry_id} does not exist",

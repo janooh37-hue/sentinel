@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import type { DashboardSummary, WorkforceAccess } from '@/lib/api'
+import type * as ApiModule from '@/lib/api'
 import type { WidgetProps } from './widgets/types'
 import { DEFAULT_LAYOUT, packLayout } from '@/lib/dashboardLayout'
 import { DashboardPage } from './DashboardPage'
@@ -16,16 +17,22 @@ const state = vi.hoisted(() => ({
   received: ['approver'],
   mobile: false,
 }))
-vi.mock('@/lib/api', () => ({ api: {
-  getDashboardSummary: vi.fn().mockResolvedValue({
-    totals: { employees_active: 0, our_staff: 0, loaned: 0, present_today: 0, on_leave_today: 0, forms_this_month: 0, open_violations_count: 0, book_draft_count: 0 },
-    on_leave_today: [], upcoming_leave_ends: [], my_records: null, unread_mail: null, open_violations: null,
-    email_sync: { enabled: false, interval_minutes: 0, last_synced_at: null, incoming_today: 0 },
-  } satisfies DashboardSummary),
-  getDashboardLayout: vi.fn(),
-  updateDashboardLayout: vi.fn(),
-  getWorkforceAccess: vi.fn(),
-} }))
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof ApiModule>()
+  return {
+    ...actual,
+    api: {
+      getDashboardSummary: vi.fn().mockResolvedValue({
+        totals: { employees_active: 0, our_staff: 0, loaned: 0, present_today: 0, on_leave_today: 0, forms_this_month: 0, open_violations_count: 0, book_draft_count: 0 },
+        on_leave_today: [], upcoming_leave_ends: [], my_records: null, unread_mail: null, open_violations: null,
+        email_sync: { enabled: false, interval_minutes: 0, last_synced_at: null, incoming_today: 0 },
+      } satisfies DashboardSummary),
+      getDashboardLayout: vi.fn(),
+      updateDashboardLayout: vi.fn(),
+      getWorkforceAccess: vi.fn(),
+    },
+  }
+})
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ status: state.user ? 'authed' : 'anonymous', user: state.user }) }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => !state.denied.has(cap), isLoading: false }) }))
 vi.mock('@/lib/useIdentity', () => ({ useIdentity: () => ({ identity: null }) }))
@@ -164,10 +171,10 @@ describe('packed per-user dashboard', () => {
     await waitFor(() => expect(mockedApi.updateDashboardLayout).toHaveBeenCalledTimes(1))
     const saved = mockedApi.updateDashboardLayout.mock.calls[0]![0]
     expect(saved.canvas_width).toBe('wide')
-    expect(saved.widgets[0]).toMatchObject({ id: 'pending', size: 'L' })
-    expect(saved.widgets.find((item) => item.id === 'drafts')?.visible).toBe(false)
-    expect(saved.widgets.at(-1)).toMatchObject({ id: 'violations', visible: true, size: 'S' })
-    expect(saved.widgets.every((item) => !('zone' in item))).toBe(true)
+    expect(saved.widgets?.[0]).toMatchObject({ id: 'pending', size: 'L' })
+    expect(saved.widgets?.find((item) => item.id === 'drafts')?.visible).toBe(false)
+    expect(saved.widgets?.at(-1)).toMatchObject({ id: 'violations', visible: true, size: 'S' })
+    expect(saved.widgets?.every((item) => !('zone' in item))).toBe(true)
     await waitFor(() => expect(screen.queryByRole('complementary')).not.toBeInTheDocument())
     expect(screen.getByRole('button', { name: 'Customize' })).toHaveFocus()
   })

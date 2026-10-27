@@ -74,7 +74,7 @@ export function permitWindow(
   row: PermitListItem,
 ): { validity: string; remaining: string | null } {
   const remaining =
-    row.derived_status === 'revoked' || row.days_remaining === null
+    row.derived_status === 'revoked' || row.days_remaining == null
       ? null
       : row.days_remaining < 0
         ? t('permits.expired')

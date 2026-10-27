@@ -7,7 +7,7 @@ import { api } from '@/lib/api'
 import type { VehicleFineRead, VehicleRead } from '@/lib/api'
 import { FineDialog } from './FineDialog'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<{ api: typeof api }>()

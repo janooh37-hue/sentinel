@@ -1,9 +1,9 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { Toaster } from 'sonner'
 
+import { AppToaster } from '@/components/shell/AppToaster'
 import { BottomTabBar } from '@/components/shell/BottomTabBar'
 import { LockOverlay } from '@/components/shell/LockOverlay'
 import { MobileTopBar } from '@/components/shell/MobileTopBar'
@@ -182,6 +182,8 @@ function Shell(): React.JSX.Element {
   const location = useLocation()
   const isMobile = useIsMobile()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  // The phone bar's menu button: the drawer hands focus back to it on close (see NavDrawer.returnFocusRef).
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
   const isInmateReporter = user?.role === 'inmate_reporter'
   const normalizedPath = location.pathname.replace(/\/+$/, '') || '/'
   const inmateReporterRouteAllowed =
@@ -214,7 +216,7 @@ function Shell(): React.JSX.Element {
   // Auth gate: resolve the session before showing the app chrome.
   if (status === 'loading') {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-dvh items-center justify-center bg-background">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-foreground" />
       </div>
     )
@@ -223,14 +225,18 @@ function Shell(): React.JSX.Element {
     return (
       <>
         <LoginPage />
-        <Toaster position="bottom-right" richColors closeButton />
+        <AppToaster />
       </>
     )
   }
 
   return (
     <AppLockContext.Provider value={locked}>
-      <div className="flex h-screen flex-col bg-background">
+      {/* h-dvh, not h-screen: per the CSS spec 100vh is the LARGE viewport (iOS Safari with retracted toolbars),
+          taller than the visible area while the toolbars show, so the shell could out-grow the screen and give the
+          document a scroll range. dvh follows the visible viewport and equals vh on desktop. Not verified on a
+          real iPhone (see DESIGN.md). */}
+      <div className="flex h-dvh flex-col bg-background">
         <TopProgressBar />
         <a
           href="#main-content"
@@ -243,11 +249,12 @@ function Shell(): React.JSX.Element {
           <>
             <MobileTopBar
               onBurger={() => setDrawerOpen(true)}
+              menuButtonRef={menuButtonRef}
               onLock={lock}
               onOpenSettings={() => navigate(PAGE_PATHS.settings)}
               onSignOut={() => void logout()}
             />
-            <NavDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
+            <NavDrawer open={drawerOpen} onOpenChange={setDrawerOpen} returnFocusRef={menuButtonRef} />
           </>
         ) : (
           <TopNav
@@ -591,12 +598,7 @@ function Shell(): React.JSX.Element {
           <ScanBackGate />
         </>
       ) : null}
-      {/* Wrapped so print can hide it: sonner renders an empty <section> in
-          normal flow here, and a trailing in-flow box after a named-@page
-          element (the permits register) costs a blank sheet. */}
-      <div data-print-hide>
-        <Toaster position="bottom-right" richColors closeButton />
-      </div>
+      <AppToaster />
       <ShortcutsHelpDialog />
       {locked && (
         <LockOverlay

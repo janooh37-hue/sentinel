@@ -1,0 +1,243 @@
+/* Sileo host styling. Sileo injects its own base CSS; everything here adapts it
+   to the app's themes, RTL, stacking and print rules. The viewport's
+   data-theme is the APP theme (light | dark): Sileo draws a dark pill on a
+   light page and a light pill on a dark page, so each state tone below is the
+   inverse theme's token, picked for >=4.5:1 against its pill. */
+
+/* Above dialogs (z-50) and the document viewer (z-90); the lock overlay hides
+   the viewport instead (LockOverlay.css). */
+[data-sileo-viewport][data-position] {
+  z-index: 999999999;
+  /* Match the gallery: edge offsets address the pill, without Sileo's 12px pad.
+     Zoom only the viewport: toastFit's probe and Sileo's scrollWidth/scrollHeight
+     measurements stay in unscaled CSS px; pointer targets zoom with the toast. */
+  width: 350px;
+  max-width: none;
+  padding: 0;
+  zoom: var(--app-toast-scale);
+}
+
+[data-sileo-viewport][data-theme='light'] {
+  --sileo-state-success: #34d399;
+  --sileo-state-loading: #a3aab8;
+  --sileo-state-error: #ff7a86;
+  --sileo-state-warning: #fbbf24;
+  --sileo-state-info: #60a5fa;
+  --sileo-state-action: #8da6e8;
+}
+
+[data-sileo-viewport][data-theme='dark'] {
+  --sileo-state-success: #047857;
+  --sileo-state-loading: #5a6068;
+  --sileo-state-error: #c8102e;
+  --sileo-state-warning: #9a4507;
+  --sileo-state-info: #1d4ed8;
+  --sileo-state-action: #0d2845;
+}
+
+/* Rules below carry the viewport selector so they beat Sileo's equal-weight
+   rules whatever order the two stylesheets load in (dev and build differ). */
+
+/* The pill is the app's navy rail on the light page and the light theme's
+   raised cream on the dark page, not Sileo's neutral #1a1a1a / #f2f2f2. CSS
+   outranks the SVG `fill` attribute, so a theme flip repaints live toasts. */
+[data-sileo-viewport][data-theme='light'] :is([data-sileo-pill], [data-sileo-body]) {
+  fill: var(--rail);
+}
+
+[data-sileo-viewport][data-theme='dark'] :is([data-sileo-pill], [data-sileo-body]) {
+  fill: #fafaf6;
+}
+
+/* Sileo capitalizes every word of a title; ours are sentences. */
+[data-sileo-viewport] [data-sileo-title] {
+  text-transform: none;
+}
+
+/* Sileo hard-codes `text-align: left`. Messages can carry a second line ("\n"). */
+[data-sileo-viewport] [data-sileo-description] {
+  text-align: start;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  content-visibility: visible;
+}
+
+/* Naskh needs more leading than Latin to keep its marks off the next line. */
+[data-sileo-viewport] [data-sileo-description]:lang(ar) {
+  line-height: 1.6;
+}
+
+/* Sileo hides a collapsed body with `content-visibility: hidden`, which skips
+   its layout, so the height it measures for the open pill is stale and a long
+   message (two Arabic lines, three English) is clipped. `visibility: hidden`
+   keeps layout live and still removes the body, and its Undo link, from the
+   accessibility tree and the tab order until the toast opens. */
+[data-sileo-viewport] [data-sileo-content]:not([data-visible='true']) {
+  content-visibility: visible;
+  visibility: hidden;
+}
+
+[data-sileo-viewport][data-theme='light'] [data-sileo-toast] [data-sileo-description] {
+  color: var(--rail-text);
+}
+
+[data-sileo-viewport][data-theme='dark'] [data-sileo-toast] [data-sileo-description] {
+  color: rgb(28 31 36 / 0.86);
+}
+
+/* Sileo anchors the header at the pill's physical left and sizes the pill 10px
+   (its PILL_PADDING) wider than the header, so that room trails the title in
+   English. In Arabic the badge leads from the right, so the room landed beside
+   the badge and the title sat against the pill's edge. Shift the header right
+   by that room; the room trails the title again, mirroring English. */
+[dir='rtl'] [data-sileo-viewport] [data-sileo-header] {
+  left: calc(var(--_px, 0px) + 10px);
+}
+
+/* The outgoing title of a morph is pinned to the stack's left; in Arabic the
+   incoming one starts at the right, so pin the outgoing one there too. */
+[dir='rtl'] [data-sileo-viewport] [data-sileo-header-inner][data-layer='prev'] {
+  left: auto;
+  right: 0;
+}
+
+/* Sileo's action is a full-width bar. Size it to its label, like the Undo of a
+   snackbar, on its own row at the start of the body (a block, so it never
+   follows the last word of a message). */
+[data-sileo-viewport] [data-sileo-button] {
+  width: fit-content;
+  padding-inline: 0.875rem;
+}
+
+/* An action with no body text (lib/toast.ts adds the class): centre the button
+   in the body instead of under an empty text line. */
+[data-sileo-viewport] .toast-action-only {
+  padding-block: 0.75rem;
+}
+
+[data-sileo-viewport] .toast-action-only [data-sileo-button] {
+  margin-top: 0;
+}
+
+/* Body pieces lib/toast.ts builds from toastParts.tsx. Each is a block, so a
+   reference chip or a line of server text sits on its own row. */
+[data-sileo-viewport] :is(.toast-text, .toast-foreign) {
+  display: block;
+}
+
+/* Server English under an Arabic title (only raised in an Arabic UI): its own
+   direction, aligned to the Arabic body's start edge, which is its own end. */
+[data-sileo-viewport] .toast-foreign {
+  text-align: end;
+  unicode-bidi: isolate;
+}
+
+/* A record number in the app's mono face, like the ref chips on record rows. */
+[data-sileo-viewport] .toast-ref {
+  display: block;
+  width: fit-content;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+[data-sileo-viewport] :is(.toast-text, .toast-foreign) + .toast-ref {
+  margin-top: 0.5rem;
+}
+
+[data-sileo-viewport][data-theme='light'] .toast-ref {
+  background: rgb(255 255 255 / 0.1);
+  color: var(--rail-text);
+}
+
+[data-sileo-viewport][data-theme='dark'] .toast-ref {
+  background: rgb(13 40 69 / 0.08);
+  color: #0d2845;
+}
+
+/* The Undo countdown: a ring around the badge glyph that drains over the close
+   window. Drawn from 12 o'clock; the svg mirrors in Arabic (rtl:-scale-x-100),
+   so it drains the other way there. */
+[data-sileo-viewport] .toast-countdown {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+[data-sileo-viewport] .toast-countdown-ring {
+  position: absolute;
+  inset: -2px;
+  width: 24px;
+  height: 24px;
+  overflow: visible;
+}
+
+[data-sileo-viewport] .toast-countdown-ring circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+[data-sileo-viewport] .toast-countdown-track {
+  opacity: 0.25;
+}
+
+[data-sileo-viewport] .toast-countdown-fill {
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  animation-name: toast-countdown-drain;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes toast-countdown-drain {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 100;
+  }
+}
+
+/* The toast sits on the page (ring in the app's primary); its action sits on the
+   pill (ring in the action's own tone). */
+[data-sileo-toast]:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+[data-sileo-button]:focus-visible {
+  outline: 2px solid var(--_c, currentColor);
+  outline-offset: 2px;
+}
+
+/* Sileo's own reduced-motion rule is `[data-sileo-viewport] *` (specificity
+   0,1,0), which every `[data-sileo-toast][data-ready]` transition outranks, so it
+   changes nothing. Re-state it so it wins. Exempt: the loading spinner, the only
+   cue that work is in progress, and the Undo countdown, a slow in-place drain
+   that says how long Undo is still on offer. The pill's JS springs are switched
+   off in AppToaster.tsx. */
+@media (prefers-reduced-motion: reduce) {
+  [data-sileo-viewport]
+    :is([data-sileo-toast], [data-sileo-toast] *):not([data-sileo-icon='spin'], .toast-countdown-fill) {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+}
+
+@media print {
+  [data-sileo-viewport],
+  [data-toast-announcer] {
+    display: none !important;
+  }
+}

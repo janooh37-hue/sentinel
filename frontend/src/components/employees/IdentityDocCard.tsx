@@ -9,7 +9,7 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { RefreshCw, Trash2 } from 'lucide-react'
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -49,6 +49,7 @@ export function IdentityDocCard({
   const art = kind === 'uae_id' ? <EmiratesIdArt /> : <PassportArt />
 
   const save = useMutation({
+    onMutate: () => toast.loading(t('application.attachments.uploading')),
     mutationFn: async (file: File) => {
       const saved = await api.uploadVaultFile(employeeId, kind, file)
       if (entry && entry.filename !== saved.filename) {
@@ -60,11 +61,11 @@ export function IdentityDocCard({
       }
       return saved
     },
-    onSuccess: () => {
+    onSuccess: (_data, _vars, toastId) => {
       onChanged()
-      toast.success(t('vault.toast.uploaded'))
+      toast.success(t('vault.toast.uploaded'), { id: toastId })
     },
-    onError: (e) => toast.error(apiErrorMessage(e)),
+    onError: (e, _vars, toastId) => toast.error(apiErrorMessage(e), { id: toastId }),
   })
 
   const remove = useMutation({

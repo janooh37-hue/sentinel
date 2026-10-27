@@ -2,7 +2,7 @@
  * SendToGroupPage tests — group listing flow + gateway status banner.
  *
  * Mirrors the harness in SupervisorDesignations.test.tsx:
- *   QueryClientProvider + i18n stub + vi.mock('../../lib/api') + sonner mock.
+ *   QueryClientProvider + i18n stub + vi.mock('../../lib/api') + toast mock.
  */
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -15,7 +15,7 @@ vi.mock('react-i18next', () => ({
     return k
   }, i18n: { language: 'ar' } }),
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'pending-send'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 const mockHas = vi.fn((cap: string) => cap === 'messages.broadcast')
 vi.mock('../../lib/useCapabilities', () => ({
   useCapabilities: () => ({ has: mockHas }),

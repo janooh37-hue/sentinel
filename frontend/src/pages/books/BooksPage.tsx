@@ -29,11 +29,10 @@ import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-route
 import { useQuery } from '@tanstack/react-query'
 import { BookOpen, ChevronRight, Stamp, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api } from '@/lib/api'
 import type { BookRead } from '@/lib/api'
-import { bidi } from '@/lib/bidi'
 import { copyToClipboard } from '@/lib/clipboard'
 import { addToBasket } from '@/lib/emailBasket'
 import { buildRecordBasketItem } from './recordsBasket'
@@ -76,7 +75,6 @@ import { useRecordDelete } from './RecordDeleteProvider'
 import { openRecord, useListReturnFocus, type RecordNavState } from './useRecordNavContext'
 import { useListTier } from './useListTier'
 import { ScanBackEntry } from '@/pages/scanBack/ScanBackEntry'
-import { ApiError } from '@/lib/api'
 import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
 import { serviceHref } from '@/lib/quickActions'
 import { newRecordHref } from './newRecordHref'
@@ -205,19 +203,7 @@ function BooksRegister(): React.JSX.Element {
   const [previewBookId, setPreviewBookId] = useState<number | null>(null)
   const reporterSubmitMutation = useInmateReportSubmit({
     onSuccess: () => toast.success(t('books.approval.submitted')),
-    onError: (err, message, bookId) => {
-      if (err instanceof ApiError && err.code === 'INMATE_REPORT_INCOMPLETE') {
-        toast.error(message, {
-          action: {
-            label: t('books.pane.continueDraft'),
-            onClick: () =>
-              navigate(`${serviceHref('Inmate Conduct Violations')}?revise=${bookId}`),
-          },
-        })
-      } else {
-        toast.error(message)
-      }
-    },
+    onRevise: (bookId) => navigate(`${serviceHref('Inmate Conduct Violations')}?revise=${bookId}`),
   })
   const submitBook = (bookId: number): void => {
     if (isInmateReporter) reporterSubmitMutation.mutate(bookId)
@@ -655,7 +641,7 @@ function BooksRegister(): React.JSX.Element {
     if (!keysActive || selectedBook === null) return false
     const { ref_number: ref } = selectedBook
     void copyToClipboard(ref).then((ok) => {
-      if (ok) toast.success(t('books.record.copiedRef', { ref: bidi(ref) }))
+      if (ok) toast.success(t('books.record.copiedRef'), { reference: ref })
       else toast.error(t('common.copyFailed'))
     })
   })

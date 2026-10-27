@@ -2,8 +2,8 @@
 
 ``sync_now()`` connects to one owner's configured IMAP server, fetches inbox
 and sent-folder messages since the last successful sync, and inserts one
-``LedgerEntry`` per message. Message-Id is appended as a tag (prefixed
-``msgid:``) so re-running sync is idempotent.
+``LedgerEntry`` per message. The full canonical Message-ID (or its SHA-256 digest
+for long IDs) is owner-scoped so re-running sync is idempotent.
 
 Direction inference:
     INBOX folder      → incoming
@@ -18,6 +18,7 @@ emails get ``<pre>`` wrapping; HTML emails are inserted as-is).
 from __future__ import annotations
 
 import email as stdlib_email
+import hashlib
 import imaplib
 import logging
 import re
@@ -34,7 +35,7 @@ from pathlib import Path
 from typing import Final, Protocol
 
 import nh3
-from sqlalchemy import select, text
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import TextClause
 
@@ -763,6 +764,7 @@ def _find_pending_match(
     raw_message_id = msg.get("Message-ID")
     if raw_message_id:
         message_id_tag = _msgid_tag(str(raw_message_id))
+        canonical_id = str(raw_message_id).strip().strip("<>")
         pending = (
             db.execute(
                 select(LedgerEntry)
@@ -771,7 +773,13 @@ def _find_pending_match(
                     LedgerEntry.channel == "email",
                     LedgerEntry.deleted_at.is_(None),
                     _tag_filter(HANDOFF_TAG, "handoff_exact_tag"),
-                    _tag_filter(message_id_tag, "handoff_msgid_tag"),
+                    or_(
+                        LedgerEntry.message_id.in_((canonical_id, f"<{canonical_id}>")),
+                        and_(
+                            LedgerEntry.message_id.is_(None),
+                            _tag_filter(message_id_tag, "handoff_msgid_tag"),
+                        ),
+                    ),
                 )
                 .order_by(LedgerEntry.created_at.asc(), LedgerEntry.id.asc())
                 .limit(1)
@@ -920,11 +928,18 @@ def _parent_message_ids(entry: LedgerEntry) -> list[str]:
 
 
 def _thread_matched_book(db: Session, entry: LedgerEntry) -> Book | None:
-    """The Book whose own outgoing handoff Message-ID this reply's thread names.
+    """The Book named by a live outgoing email in this reply owner's mailbox.
 
+    Thread headers are correlation evidence only inside that owner's namespace.
     Subject/ref-number heuristics are deliberately NOT consulted — see
     docs/adr/0005-send-state-confirms-only-on-thread-match.md.
     """
+    if (
+        entry.channel != "email"
+        or entry.direction not in {"incoming", "internal"}
+        or entry.deleted_at is not None
+    ):
+        return None
     parents = _parent_message_ids(entry)
     if not parents:
         return None
@@ -933,6 +948,9 @@ def _thread_matched_book(db: Session, entry: LedgerEntry) -> Book | None:
             select(LedgerEntry)
             .where(
                 LedgerEntry.message_id.in_(parents),
+                LedgerEntry.owner_user_id == entry.owner_user_id,
+                LedgerEntry.channel == "email",
+                LedgerEntry.deleted_at.is_(None),
                 LedgerEntry.direction.in_(("outgoing", "internal")),
                 LedgerEntry.related_book_id.is_not(None),
             )
@@ -974,11 +992,7 @@ def reconcile_incoming_reply(
     ref-number only, or a thread match with no attachment) is left to the ordinary
     Scan Inbox triage, which parks it for a person.
     """
-    if (
-        entry.channel != "email"
-        or entry.direction not in {"incoming", "internal"}
-        or entry.deleted_at is not None
-    ):
+    if entry.owner_user_id != account.owner_user_id:
         return
     book = _thread_matched_book(db, entry)
     if book is None or not _has_real_attachment(msg):
@@ -1150,40 +1164,43 @@ def _extract_body(msg: Message) -> tuple[str, bool]:
 
 
 _MSG_ID_TAG_PREFIX = "msgid:"
+_MSG_ID_DIGEST_TAG_PREFIX = "msgid-sha256:"
 
 
 def _msgid_tag(msg_id: str) -> str:
-    # Strip surrounding <...> if present and limit length.
-    cleaned = msg_id.strip().strip("<>")[:160]
+    cleaned = msg_id.strip().strip("<>")
+    if len(cleaned) >= 160:
+        return f"{_MSG_ID_DIGEST_TAG_PREFIX}{hashlib.sha256(cleaned.encode()).hexdigest()}"
     return f"{_MSG_ID_TAG_PREFIX}{cleaned}"
 
 
-def _existing_msgids(db: Session) -> dict[str, tuple[int, int]]:
-    """Map confirmed ``msgid_tag → (entry_id, attachment_count)``.
+def _existing_msgids(db: Session, owner_user_id: int | None) -> dict[str, int]:
+    """Map verified message identities to live entries in this owner's mailbox.
 
-    Pending Outlook drafts are deliberately excluded: Outlook may preserve the
-    draft Message-ID when sending, and that Sent-folder copy still has to be
-    imported before reconciliation can replace the pending row.
+    Pending Outlook drafts must still be imported from Sent before reconciliation.
+    Prefer the full stored header; a legacy 160-character tag may be truncated
+    and cannot authorize deduplication or backfill without that header.
     """
     rows = db.execute(
-        select(LedgerEntry.id, LedgerEntry.tags, LedgerEntry.attachment_paths)
+        select(LedgerEntry.id, LedgerEntry.message_id, LedgerEntry.tags)
+        .where(LedgerEntry.owner_user_id == owner_user_id)
         .where(LedgerEntry.channel == "email")
         .where(LedgerEntry.deleted_at.is_(None))
-        .where(
-            text(
-                "NOT EXISTS (SELECT 1 FROM json_each(ledger_entries.tags) "
-                "WHERE json_each.value = :pending_handoff_tag)"
-            ).bindparams(pending_handoff_tag=HANDOFF_TAG)
-        )
+        .where(_tag_filter(HANDOFF_TAG, "pending_handoff_tag", negate=True))
     ).all()
-    out: dict[str, tuple[int, int]] = {}
-    for entry_id, tags, paths in rows:
-        if not tags:
+    out: dict[str, int] = {}
+    for entry_id, message_id, tags in rows:
+        if message_id:
+            out[_msgid_tag(message_id)] = entry_id
             continue
-        att_count = len(paths or [])
-        for tag in tags:
-            if isinstance(tag, str) and tag.startswith(_MSG_ID_TAG_PREFIX):
-                out[tag] = (entry_id, att_count)
+        for tag in tags or []:
+            if not isinstance(tag, str):
+                continue
+            if tag.startswith(_MSG_ID_DIGEST_TAG_PREFIX) or (
+                tag.startswith(_MSG_ID_TAG_PREFIX)
+                and len(tag.removeprefix(_MSG_ID_TAG_PREFIX)) < 160
+            ):
+                out[tag] = entry_id
     return out
 
 
@@ -1480,7 +1497,7 @@ def _sync_account_locked(
     imported = 0
     skipped = 0
     errors: list[str] = []
-    existing_msgids = _existing_msgids(db)
+    existing_msgids = _existing_msgids(db, account.owner_user_id)
 
     try:
         conn = connector(account)
@@ -1532,37 +1549,37 @@ def _sync_account_locked(
                         f"{msg.get('From', '')}-{msg.get('Subject', '')}>"
                     )
                 tag = _msgid_tag(msg_id)
-                if tag in existing_msgids:
-                    entry_id, att_count = existing_msgids[tag]
-                    if att_count == 0:
-                        backfill_paths, backfill_cid_map = _save_and_enqueue_attachments(
-                            db,
-                            entry_id=entry_id,
-                            msg=msg,
-                            direction=direction,
-                            owner_user_id=account.owner_user_id,
-                        )
-                        if backfill_paths:
-                            existing_row = db.get(LedgerEntry, entry_id)
-                            if existing_row is not None:
-                                merged = list(existing_row.attachment_paths or [])
-                                for p in backfill_paths:
-                                    if p not in merged:
-                                        merged.append(p)
-                                existing_row.attachment_paths = merged
+                entry_id = existing_msgids.get(tag)
+                if entry_id is not None:
+                    # Refresh before any file or metadata write: the map is only
+                    # a candidate lookup, never authority over another mailbox.
+                    existing_row = db.get(LedgerEntry, entry_id, populate_existing=True)
+                    if (
+                        existing_row is not None
+                        and existing_row.owner_user_id == account.owner_user_id
+                        and existing_row.channel == "email"
+                        and existing_row.deleted_at is None
+                        and HANDOFF_TAG not in (existing_row.tags or [])
+                    ):
+                        if not existing_row.attachment_paths:
+                            backfill_paths, backfill_cid_map = _save_and_enqueue_attachments(
+                                db,
+                                entry_id=entry_id,
+                                msg=msg,
+                                direction=direction,
+                                owner_user_id=account.owner_user_id,
+                            )
+                            if backfill_paths:
+                                existing_row.attachment_paths = backfill_paths
                                 if backfill_cid_map:
                                     merged_cid = dict(existing_row.inline_images or {})
                                     merged_cid.update(backfill_cid_map)
                                     existing_row.inline_images = merged_cid
                                 db.commit()
-                                existing_msgids[tag] = (entry_id, len(merged))
-                    # Back-fill empty recipient/message-id columns on historical
-                    # rows so a single re-sync repopulates them (idempotent).
-                    existing_row = db.get(LedgerEntry, entry_id)
-                    if existing_row is not None and _apply_recipient_backfill(existing_row, msg):
-                        db.commit()
-                    skipped += 1
-                    continue
+                        if _apply_recipient_backfill(existing_row, msg):
+                            db.commit()
+                        skipped += 1
+                        continue
                 try:
                     entry = _build_entry(
                         msg,
@@ -1593,7 +1610,7 @@ def _sync_account_locked(
                     # correlation failure cannot roll back or duplicate real
                     # Sent-folder mail.
                     db.commit()
-                    existing_msgids[tag] = (entry.id, len(saved_paths))
+                    existing_msgids[tag] = entry.id
                     imported += 1
 
                     if direction != "incoming":
@@ -1635,10 +1652,11 @@ def _sync_account_locked(
                 "UPDATE ledger_entries "
                 "SET direction = 'internal' "
                 "WHERE channel = 'email' "
+                "AND owner_user_id IS :owner_user_id "
                 "AND direction IN ('incoming', 'outgoing') "
                 "AND lower(counterparty) LIKE :pat"
             ),
-            {"pat": domain_pattern},
+            {"pat": domain_pattern, "owner_user_id": account.owner_user_id},
         )
 
     # Only advance the high-water mark on a CLEAN run. On a partial failure

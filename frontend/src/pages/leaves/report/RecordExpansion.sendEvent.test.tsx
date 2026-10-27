@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { RecordExpansion } from './RecordExpansion'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@/lib/api')>()

@@ -3,8 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
-import { toast } from 'sonner'
+vi.mock('@/lib/toast', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+import { toast } from '@/lib/toast'
 
 import { api, ApiError } from '@/lib/api'
 import type { TimesheetGridResponse } from '@/lib/api'

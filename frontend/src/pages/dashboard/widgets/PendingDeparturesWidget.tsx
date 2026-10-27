@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
 import { useFitCount } from '@/components/dashboard/useFitCount'
 import { siteToday } from '@/components/employees/useAttendanceAttention'

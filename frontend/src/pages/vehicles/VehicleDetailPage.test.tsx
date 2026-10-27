@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/lib/api'
@@ -12,7 +12,7 @@ import i18n from '@/lib/i18n'
 
 import { VehicleDetailPage } from './VehicleDetailPage'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'pending-photo'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
 const mobileViewport = vi.hoisted(() => ({ value: false }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => mobileViewport.value }))

@@ -13,6 +13,8 @@
  *    only place we POST FormData).
  */
 
+import i18n from 'i18next'
+
 import type { components, paths } from './api.types'
 import type { ExtractedFieldOut } from './extraction'
 import type { LockLayout } from './useLockState'
@@ -1050,11 +1052,40 @@ export class ApiError extends Error {
   }
 }
 
-/** Human-readable message for any thrown value — the ApiError message when it is
- * one, else the stringified error. Replaces the `x instanceof ApiError ?
- * x.message : String(x)` idiom that was copy-pasted across the app. */
+const ARABIC_LETTER = /(?=\p{L})\p{Script=Arabic}/u
+
+/** Refusals whose code says more than "no permission": translated text that
+ * replaces the server detail, so they stay specific in both languages. */
+const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
+  ACCOUNT_PENDING: 'auth.errPending',
+  ACCOUNT_REJECTED: 'auth.errRejected',
+  ACCOUNT_DISABLED: 'auth.errDisabled',
+  ACCOUNT_LOCKED: 'auth.errLocked',
+  DOCX_LOCKED_AFTER_SIGNING: 'errors.forbidden.docxLockedAfterSigning',
+  SECRET_CLEARANCE_REQUIRED: 'errors.forbidden.secretClearance',
+  RECORD_TYPE_FORBIDDEN: 'errors.forbidden.recordType',
+  INCLUDED_PAPERS_CREATOR_ONLY: 'errors.forbidden.includedPapersCreatorOnly',
+  WORD_SESSION_NOT_OWNER: 'errors.forbidden.wordSessionNotOwner',
+  INMATE_REPORTER_IDENTITY_MISMATCH: 'errors.forbidden.signerMismatch',
+  APPROVED_IMPORT_TOKEN_FORBIDDEN: 'errors.forbidden.stagedImportOwner',
+}
+
+/** Localized user-facing error text. A code in `CODE_MESSAGE_KEYS` uses its
+ * translated message; any other 403 uses the shared permission message; other
+ * server details pass through unless an Arabic UI receives text without Arabic
+ * letters. Network TypeErrors and unexpected thrown values use localized
+ * network and generic messages respectively. */
 export function apiErrorMessage(err: unknown): string {
-  return err instanceof ApiError ? err.message : String(err)
+  if (!(err instanceof ApiError)) {
+    return i18n.t(err instanceof TypeError ? 'errors.network' : 'errors.generic')
+  }
+  if (Object.hasOwn(CODE_MESSAGE_KEYS, err.code)) return i18n.t(CODE_MESSAGE_KEYS[err.code])
+  if (err.status === 403) return i18n.t('common.forbiddenError')
+  // ponytail: Arabic users lose specific server detail until err.code maps to locale keys.
+  if (i18n.language.startsWith('ar') && !ARABIC_LETTER.test(err.message)) {
+    return i18n.t('common.toastServerError')
+  }
+  return err.message
 }
 
 const BASE = '/api/v1'
@@ -2377,7 +2408,7 @@ export const api = {
   /** Dismiss an item (mark as not actionable). */
   dismissScanItem: (id: number) =>
     request<ScanInboxItem>('POST', `/scan-inbox/${id}/dismiss`),
-  /** Undo a dismiss or confirm — returns item to its previous state. */
+  /** Undo only an auto_filed attach, returning it to awaiting_confirmation. */
   undoScanItem: (id: number) =>
     request<ScanInboxItem>('POST', `/scan-inbox/${id}/undo`),
 
@@ -2412,9 +2443,10 @@ export const api = {
     limit?: number
     offset?: number
   } = {}) => request<LedgerListResponse>('GET', `/ledger${qs({ ...params })}`),
-  getLedgerEntry: (id: number) => request<LedgerEntryRead>('GET', `/ledger/${id}`),
-  listLedgerThread: (id: number, limit = 50) =>
-    request<LedgerListItem[]>('GET', `/ledger/${id}/thread${qs({ limit })}`),
+  getLedgerEntry: (id: number, scope?: 'mine' | 'all') =>
+    request<LedgerEntryRead>('GET', `/ledger/${id}${qs({ scope })}`),
+  listLedgerThread: (id: number, limit = 50, scope?: 'mine' | 'all') =>
+    request<LedgerListItem[]>('GET', `/ledger/${id}/thread${qs({ limit, scope })}`),
   createLedgerEntry: (body: LedgerEntryCreate) =>
     request<LedgerEntryRead>('POST', '/ledger', body),
   updateLedgerEntry: (id: number, body: LedgerEntryUpdate) =>
@@ -2465,22 +2497,22 @@ export const api = {
   /** Soft-delete a smart folder. */
   deleteSmartFolder: (id: number) =>
     request<void>('DELETE', `/ledger/smart-folders/${id}`),
-  ledgerAttachmentsZipUrl: (id: number) =>
-    `${BASE}/ledger/entries/${id}/attachments.zip`,
+  ledgerAttachmentsZipUrl: (id: number, scope?: 'mine' | 'all') =>
+    `${BASE}/ledger/entries/${id}/attachments.zip${qs({ scope })}`,
   /** URL for a single attachment, addressed by its `attachment_paths` index
    * (keeps non-ASCII/spaced filenames out of the path). `inline: true` asks the
    * backend to serve it `Content-Disposition: inline` so preview can render it. */
   ledgerAttachmentUrl: (
     id: number,
     index: number,
-    opts?: { inline?: boolean; base64?: boolean },
+    opts?: { inline?: boolean; base64?: boolean; scope?: 'mine' | 'all' },
   ) => {
-    const qs = opts?.base64
-      ? '?encoding=base64'
-      : opts?.inline
-        ? '?disposition=inline'
-        : ''
-    return `${BASE}/ledger/${id}/attachments/by-index/${index}${qs}`
+    const query = qs({
+      encoding: opts?.base64 ? 'base64' : undefined,
+      disposition: !opts?.base64 && opts?.inline ? 'inline' : undefined,
+      scope: opts?.scope,
+    })
+    return `${BASE}/ledger/${id}/attachments/by-index/${index}${query}`
   },
 
   // --- Phase 16: FTS5 search ---
@@ -2687,11 +2719,6 @@ export const api = {
     request<SessionUser>('PATCH', '/auth/me/lock-layout', {
       lock_layout: lockLayout,
     }),
-  /** Link the signed-in user to their own employee record (G-number). Sets
-   * `User.employee_id` — the authoritative identity source — so the link
-   * picker actually flips `identity.linked`. Pass `null` to clear (admin). */
-  linkMyEmployee: (employee_id: string | null) =>
-    request<SessionUser>('POST', '/auth/me/link', { employee_id }),
   listAuthUsers: () => request<AdminUserRead[]>('GET', '/auth/users'),
   /** Admin-issued account. Response carries a one-time temporary password —
    * it is never retained or shown again after this call returns. */
@@ -2705,9 +2732,7 @@ export const api = {
     request<AdminUserRead>('POST', `/auth/users/${id}/reset-password`, { password }),
   setAuthUserRole: (id: number, role: string) =>
     request<AdminUserRead>('PATCH', `/auth/users/${id}/role`, { role }),
-  /** Admin-set/clear a target account's employee link (G number) — how an
-   * admin binds/rebinds inmate_reporter's fixed G number, or repairs any
-   * account's link. Distinct from `linkMyEmployee` (self-service). */
+  /** Administrator-reviewed assignment or clearing of an account's employee identity. */
   setAuthUserLink: (id: number, employee_id: string | null) =>
     request<AdminUserRead>('PATCH', `/auth/users/${id}/link`, { employee_id }),
   disableAuthUser: (id: number) => request<AdminUserRead>('POST', `/auth/users/${id}/disable`),

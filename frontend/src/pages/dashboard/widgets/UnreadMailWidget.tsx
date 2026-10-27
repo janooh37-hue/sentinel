@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
 import { useFitCount } from '@/components/dashboard/useFitCount'
-import { api } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { BIG_NUMBER, INLINE_LINK, MoreRecords, RECORD_ROW, WidgetFeedback } from './recordWidgetParts'
 import { recordAge } from './recordWidgetTime'
@@ -21,13 +21,14 @@ export function UnreadMailWidget({ tier, rows }: WidgetProps): React.JSX.Element
   const qc = useQueryClient()
   const sync = useMutation({
     mutationFn: () => api.syncEmail(),
-    onSuccess: (result) => {
-      toast.success(t('dashboard.widgets.ledger.syncSuccess', { imported: result.imported, skipped: result.skipped_duplicate }))
+    onMutate: () => toast.loading(t('dashboard.widgets.emailSync.syncingToast')),
+    onSuccess: (result, _vars, toastId) => {
+      toast.success(t('dashboard.widgets.ledger.syncSuccess', { imported: result.imported, skipped: result.skipped_duplicate }), { id: toastId })
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
       void qc.invalidateQueries({ queryKey: ['email-account'] })
       void qc.invalidateQueries({ queryKey: ['ledger'] })
     },
-    onError: () => toast.error(t('dashboard.widgets.ledger.syncError')),
+    onError: (err, _vars, toastId) => toast.error(apiErrorMessage(err), { id: toastId }),
   })
   const mail = query.data?.unread_mail
   const emailSync = query.data?.email_sync

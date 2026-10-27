@@ -23,7 +23,7 @@ from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.extraction import ocr
 from app.core.extraction.dates import parse_date
-from app.db.models import Employee, ScanInbox, User
+from app.db.models import Employee, LedgerEntry, ScanInbox, User
 from app.services import book_service, perm_service, scan_triage_service, vault_service
 from app.services.document_reader import DocumentReader, read_document
 
@@ -242,11 +242,20 @@ def auto_file_email_reply(db: Session, *, ledger_entry_id: int, book_id: int) ->
     bytes were already queued under another row never reached this queue
     (``content_hash`` dedup in ``enqueue_email_attachment``), so nothing double-files.
     """
+    from app.services import email_service
+
+    entry = db.get(LedgerEntry, ledger_entry_id, populate_existing=True)
+    if entry is None:
+        return []
+    matched_book = email_service._thread_matched_book(db, entry)
+    if matched_book is None or matched_book.id != book_id:
+        return []
     rows = list(
         db.execute(
             select(ScanInbox).where(
                 ScanInbox.ledger_entry_id == ledger_entry_id,
                 ScanInbox.state == "pending_ocr",
+                ScanInbox.owner_user_id == entry.owner_user_id,
             )
         ).scalars()
     )

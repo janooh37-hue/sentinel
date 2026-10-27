@@ -12,15 +12,25 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import i18n from 'i18next'
+import type * as ReactRouter from 'react-router-dom'
+import { toast } from '@/lib/toast'
+
+const navigate = vi.hoisted(() => vi.fn())
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactRouter>()),
+  useNavigate: () => navigate,
+}))
 
 import { api } from '@/lib/api'
+import type * as ApiModule from '@/lib/api'
 import { TransferDialog } from './TransferDialog'
 
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: { transferDuty: vi.fn() },
-  apiErrorMessage: (e: unknown) => String(e),
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'loading-toast-id'), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('./transferDefaults', () => ({
   loadTransferDefaults: () => ({ recipientId: null, managerId: null, cc: [] }),
   saveTransferDefaults: vi.fn(),
@@ -103,6 +113,18 @@ test('apply to all fills every row and a per-row edit overrides it', async () =>
     manager_id: null,
     cc: null,
   })
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith(
+    i18n.t('dutyLocations.transfer.success'),
+    {
+      id: 'loading-toast-id',
+      duration: 8000,
+      reference: 'GB-1',
+      action: { label: i18n.t('dutyLocations.transfer.viewRecord'), onClick: expect.any(Function) },
+    },
+  ))
+  expect(toast.loading).toHaveBeenCalledWith(i18n.t('dutyLocations.transfer.generating'))
+  vi.mocked(toast.success).mock.calls[0][1]?.action?.onClick()
+  expect(navigate).toHaveBeenCalledWith('/books/7')
 })
 
 test('changing a row unit clears that row post', async () => {
@@ -116,4 +138,33 @@ test('changing a row unit clears that row post', async () => {
   expect(
     (screen.getByLabelText('Destination post for Mohammed Saeed') as HTMLInputElement).value,
   ).toBe('')
+})
+
+test('a move without a book resolves the loading toast without a reference or action', async () => {
+  vi.mocked(api.transferDuty).mockResolvedValue({
+    moved: ['G3309', 'G4030'], book_id: null, ref: null, document_id: null,
+  })
+  const user = userEvent.setup()
+  renderDialog()
+  await user.type(screen.getByLabelText('Destination unit'), 'السرية الرابعة')
+  await user.click(screen.getByRole('button', { name: 'Apply to all' }))
+  await user.click(generateBtn())
+
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith(
+    i18n.t('dutyLocations.transfer.movedNoBook', { count: 2 }), { id: 'loading-toast-id' },
+  ))
+  expect(toast.loading).toHaveBeenCalledWith(i18n.t('dutyLocations.transfer.generating'))
+})
+
+test('a rejected transfer resolves the loading toast with an error', async () => {
+  vi.mocked(api.transferDuty).mockRejectedValue(new Error('Transfer failed'))
+  const user = userEvent.setup()
+  renderDialog()
+  await user.type(screen.getByLabelText('Destination unit'), 'السرية الرابعة')
+  await user.click(screen.getByRole('button', { name: 'Apply to all' }))
+  await user.click(generateBtn())
+
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Something went wrong', { id: 'loading-toast-id' }))
+  expect(toast.loading).toHaveBeenCalledWith(i18n.t('dutyLocations.transfer.generating'))
+  expect(toast.success).not.toHaveBeenCalled()
 })

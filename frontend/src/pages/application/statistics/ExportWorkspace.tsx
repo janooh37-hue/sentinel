@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { ClipboardCopy, FileSpreadsheet, Printer, ScanSearch } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { Button } from '@/components/ui/button'
 import { usePrintFilename } from '@/hooks/usePrintFilename'
@@ -169,11 +169,12 @@ export function ExportWorkspace({ month }: { month: InmateRegisterMonth }): Reac
         { year: month.year, month: month.month, language: 'ar', populations },
         `inmate-violations-${month.year}-${String(month.month).padStart(2, '0')}.xlsx`,
       ),
-    onSuccess: (file) => {
+    onMutate: () => toast.loading(t('inmateStats.export.downloading')),
+    onSuccess: (file, _vars, toastId) => {
       saveBlob(file)
-      toast.success(t('inmateStats.export.downloaded'))
+      toast.success(t('inmateStats.export.downloaded'), { id: toastId })
     },
-    onError: (error) => toast.error(apiErrorMessage(error)),
+    onError: (error, _vars, toastId) => toast.error(apiErrorMessage(error), { id: toastId }),
   })
 
   useEffect(() => {

@@ -18,7 +18,7 @@ export function LanguageToggle(): React.JSX.Element {
     <button
       type="button"
       onClick={toggle}
-      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[0.9em] transition-colors hover:bg-surface-tinted"
+      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[0.9em] transition-colors hover:bg-surface-tinted pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:justify-center"
       aria-label={isAr ? 'Switch to English' : 'Switch to Arabic'}
     >
       <span aria-hidden>🌐</span>

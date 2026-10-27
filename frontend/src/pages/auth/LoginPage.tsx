@@ -25,7 +25,7 @@ import {
   Phone,
 } from 'lucide-react'
 
-import { api, ApiError } from '@/lib/api'
+import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import { setLanguage } from '@/lib/i18n'
 import { useAuth } from '@/lib/authContext'
 import { copyToClipboard } from '@/lib/clipboard'
@@ -185,9 +185,9 @@ export function LoginPage(): React.JSX.Element {
           const left = err.details?.attempts_left
           const suffix =
             typeof left === 'number' ? ` ${t('auth.attemptsLeft', { count: left })}` : ''
-          setError({ field: 'password', msg: `${err.message}${suffix}` })
+          setError({ field: 'password', msg: `${apiErrorMessage(err)}${suffix}` })
         } else {
-          setError({ msg: err.message || t('auth.errGeneric') })
+          setError({ msg: apiErrorMessage(err) })
         }
       } else {
         setError({ msg: t('auth.errGeneric') })
@@ -238,7 +238,7 @@ export function LoginPage(): React.JSX.Element {
         if (err.code === 'RATE_LIMITED' || err.code === 'VALIDATION_ERROR') {
           // Stays on setup: these are about the request itself, not the
           // temporary credential's validity.
-          setError({ msg: err.message || t('auth.errGeneric') })
+          setError({ msg: apiErrorMessage(err) })
           return
         }
         if (err.code === 'ACCOUNT_LOCKED') {
@@ -264,7 +264,7 @@ export function LoginPage(): React.JSX.Element {
                   ? t('auth.errDisabled')
                   : err.code === 'ACCOUNT_PENDING'
                     ? t('auth.errPending')
-                    : err.message || t('auth.errGeneric')
+                    : apiErrorMessage(err)
         setSetupTempPassword('')
         setNewPwd('')
         setNewPwd2('')
@@ -340,7 +340,7 @@ export function LoginPage(): React.JSX.Element {
       setScreen('requestSent')
       setSubmitting(false)
     } catch (err) {
-      setError({ msg: err instanceof ApiError ? err.message : t('auth.errGeneric') })
+      setError({ msg: apiErrorMessage(err) })
       setSubmitting(false)
     }
   }

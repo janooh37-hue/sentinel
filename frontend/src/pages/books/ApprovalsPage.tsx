@@ -156,13 +156,14 @@ function ApprovalRow({ item, tab, dfLocale, onOpen, onPreview }: RowProps): Reac
   const { t, i18n } = useTranslation()
   const late = isLateAdvisory(item)
   const restricted = item.access_scope === 'assigned_revision'
-  const reviewOnly = !item.approver_name && !item.approver_name_ar && item.reviewer_names.length > 0
+  const reviewerNames = item.reviewer_names ?? []
+  const reviewOnly = !item.approver_name && !item.approver_name_ar && reviewerNames.length > 0
   const counterpartyLabel = tab === 'sent'
     ? t(reviewOnly ? 'books.approval.reviewManager' : 'books.approvals.assignedSigner')
     : t('books.approval.submitter')
   const counterpartyName = tab === 'sent'
     ? pickEmployeeName({ name_en: item.approver_name ?? '', name_ar: item.approver_name_ar }, i18n.language) ||
-      item.reviewer_names.map((name, index) => pickEmployeeName({ name_en: name, name_ar: item.reviewer_names_ar?.[index] }, i18n.language)).join(i18n.language.startsWith('ar') ? '، ' : ', ')
+      reviewerNames.map((name, index) => pickEmployeeName({ name_en: name, name_ar: item.reviewer_names_ar?.[index] }, i18n.language)).join(i18n.language.startsWith('ar') ? '، ' : ', ')
     : pickEmployeeName({ name_en: item.submitted_by_name ?? '', name_ar: item.submitted_by_name_ar }, i18n.language)
 
   return (
@@ -342,7 +343,7 @@ export function ApprovalsPage(): React.JSX.Element {
       queue: rows.map((row) => row.book_id),
       scrollY,
     }
-    navigate(approvalRecordUrl(item.book_id, item.version_id, context), { state: nav })
+    navigate(approvalRecordUrl(item.book_id, item.version_id ?? null, context), { state: nav })
   }
 
   if (summaryQuery.isPending) {
@@ -388,9 +389,8 @@ export function ApprovalsPage(): React.JSX.Element {
     )
   }
 
-  const showBothKinds =
-    summary.available_received_kinds.includes('approver') &&
-    summary.available_received_kinds.includes('reviewer')
+  const receivedKinds = summary.available_received_kinds ?? []
+  const showBothKinds = receivedKinds.includes('approver') && receivedKinds.includes('reviewer')
   const heading =
     context.tab === 'sent'
       ? t('books.approvals.headingSent')
@@ -423,7 +423,7 @@ export function ApprovalsPage(): React.JSX.Element {
         >
           {(
             [
-              { id: 'received' as const, label: t('books.approvals.tabReceived'), show: summary.available_received_kinds.length > 0 },
+              { id: 'received' as const, label: t('books.approvals.tabReceived'), show: receivedKinds.length > 0 },
               { id: 'sent' as const, label: t('books.approvals.tabSent'), show: summary.can_view_sent },
             ]
           )
@@ -442,7 +442,7 @@ export function ApprovalsPage(): React.JSX.Element {
                         ? { tab: 'sent', status: 'all', sort: context.sort, page: 1 }
                         : {
                             tab: 'received',
-                            kind: summary.available_received_kinds.includes('approver') ? 'sign' : 'review',
+                            kind: receivedKinds.includes('approver') ? 'sign' : 'review',
                             status: 'pending',
                             sort: context.sort,
                             page: 1,

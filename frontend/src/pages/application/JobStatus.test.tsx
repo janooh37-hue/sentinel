@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import i18n from 'i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -28,6 +28,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   cleanup()
+  vi.useRealTimers()
   vi.clearAllMocks()
   await i18n.changeLanguage('en')
 })
@@ -54,5 +55,39 @@ describe('JobStatus failed job messages', () => {
     render(<JobStatus jobId="j1" />)
 
     expect(await screen.findByText('boom')).toBeInTheDocument()
+  })
+
+  it('reports a failed job once without invoking the success callback', async () => {
+    const onDone = vi.fn()
+    const onFailed = vi.fn()
+    render(<JobStatus jobId="j1" onDone={onDone} onFailed={onFailed} />)
+    await screen.findByText(en.application.leaveAlreadyIssuedNoRef)
+    expect(onFailed).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ status: 'failed' }))
+    expect(onDone).not.toHaveBeenCalled()
+  })
+
+  it('keeps successful jobs on the success callback only', async () => {
+    vi.mocked(api.getJob).mockResolvedValue({ job_id: 'j1', status: 'done', documents: [] })
+    const onDone = vi.fn()
+    const onFailed = vi.fn()
+    render(<JobStatus jobId="j1" onDone={onDone} onFailed={onFailed} />)
+    await vi.waitFor(() => expect(onDone).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ status: 'done' })))
+    expect(onFailed).not.toHaveBeenCalled()
+  })
+
+  it('reports abandoned polling once after five network errors without claiming the job failed', async () => {
+    vi.useFakeTimers()
+    vi.mocked(api.getJob).mockRejectedValue(new Error('offline'))
+    const onDone = vi.fn()
+    const onFailed = vi.fn()
+    const onPollingStopped = vi.fn()
+    render(<JobStatus jobId="j1" onDone={onDone} onFailed={onFailed} onPollingStopped={onPollingStopped} />)
+
+    await act(async () => vi.advanceTimersByTimeAsync(10_000))
+
+    expect(api.getJob).toHaveBeenCalledTimes(5)
+    expect(onPollingStopped).toHaveBeenCalledExactlyOnceWith()
+    expect(onFailed).not.toHaveBeenCalled()
+    expect(onDone).not.toHaveBeenCalled()
   })
 })

@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, type OdometerMonthRead } from '@/lib/api'
 import i18n from '@/lib/i18n'
@@ -15,7 +15,7 @@ vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => state.mobile }))
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ has: (cap: string) => cap === 'vehicles.view' || state.editable }),
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 const MONTH: OdometerMonthRead = {
   month: '2026-10',

@@ -24,7 +24,7 @@ import {
   UserRound,
   KeyRound,
 } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api } from '@/lib/api'
 import { LockTimerControl } from '@/components/shell/LockTimerControl'
@@ -37,6 +37,8 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useMyRecordsCount } from '@/pages/books/useMyRecordsCount'
 import { DEFAULT_IDLE_LOCK_SECONDS } from '@/lib/useLockState'
 import type { LockLayout, LockTimerSeconds } from '@/lib/useLockState'
+import { headerPopoverStyle } from '@/components/shell/headerPopover'
+import { usePopoverFocus } from '@/components/shell/usePopoverFocus'
 
 function initialsOf(email: string | undefined): string {
   if (!email) return '?'
@@ -70,7 +72,8 @@ function RoleChip({
         : 'bg-surface-tinted text-muted-foreground'
   return (
     <span
-      className={`inline-flex items-center rounded-md px-2.5 py-[3px] text-[0.65em] font-semibold uppercase tracking-[0.06em] ${cls}`}
+      data-role-chip
+      className={`inline-flex max-w-full items-center rounded-md px-2.5 py-[3px] [overflow-wrap:anywhere] text-[0.65em] font-semibold uppercase tracking-[0.06em] ${cls}`}
     >
       {label}
     </span>
@@ -81,17 +84,22 @@ interface AccountMenuProps {
   onLock: () => void
   onOpenSettings?: () => void
   onSignOut?: () => void
+  /** Rendered by the phone bar (MobileTopBar): the panel hangs from that header, not from this trigger. */
+  phone?: boolean
 }
 
 export function AccountMenu({
   onLock,
   onOpenSettings,
   onSignOut,
+  phone = false,
 }: AccountMenuProps): React.JSX.Element {
+  const place = headerPopoverStyle(phone)
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
@@ -212,6 +220,9 @@ export function AccountMenu({
     }
   }, [open])
 
+  // Focus into the dialog on open, back to the avatar on close.
+  usePopoverFocus(open, ref, panelRef)
+
   // Tick every minute so "Synced 5 min ago" rolls forward in the popover.
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -235,16 +246,17 @@ export function AccountMenu({
   })()
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className={place.root}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-full p-0.5 transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="flex items-center justify-center gap-2 rounded-full p-0.5 transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px]"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={user?.email ?? account?.email ?? t('appBar.account', { defaultValue: 'Account' })}
       >
-        <Avatar className="h-9 w-9 bg-primary-soft text-primary ring-1 ring-border">
+        {/* The phone bar pins the avatar to 36px so its 44px trigger never grows with the text size. */}
+        <Avatar className={`${place.avatar} bg-primary-soft text-primary ring-1 ring-border`}>
           {photoUrl && <AvatarImage src={photoUrl} alt="" />}
           <AvatarFallback>
             {user?.name_en ? user.name_en[0]?.toUpperCase() : initials}
@@ -254,44 +266,46 @@ export function AccountMenu({
 
       {open && (
         <div
+          ref={panelRef}
           role="dialog"
+          tabIndex={-1}
           data-state="open"
           aria-label={t('appBar.account', { defaultValue: 'Account' })}
-          className="absolute end-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-hairline bg-surface shadow-xl"
+          className={`${place.panel} @container ${place.accountWidth} rounded-2xl border border-hairline bg-surface shadow-xl focus-visible:outline-none`}
         >
           {/* Identity strip — name/photo/role/email all from the signed-in
               user (SessionUser), never the shared mailbox. */}
-          <div className="flex items-center gap-3 border-b border-hairline px-4 py-4">
-            <Avatar className="h-14 w-14 bg-primary-soft text-primary ring-1 ring-border">
+          <div data-account-identity className="flex items-center gap-3 border-b border-hairline px-4 py-4 @max-[11rem]:flex-col @max-[11rem]:items-start @max-[11rem]:gap-2 @max-[11rem]:px-3">
+            <Avatar className={`${place.identityAvatar} shrink-0 bg-primary-soft text-primary ring-1 ring-border`}>
               {photoUrl && <AvatarImage src={photoUrl} alt="" />}
               <AvatarFallback className="text-base">
                 {user?.name_en ? user.name_en[0]?.toUpperCase() : initials}
               </AvatarFallback>
             </Avatar>
-            <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex items-center gap-1.5">
-                <span className="truncate text-[0.95em] font-semibold text-foreground">
+            <div className="flex min-w-0 flex-1 flex-col @max-[11rem]:w-full">
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                <span data-account-name className="min-w-0 text-[0.95em] font-semibold text-foreground [overflow-wrap:anywhere]">
                   {displayName ?? user?.email ?? (isAr ? 'لا يوجد حساب' : 'No account')}
                 </span>
                 {user && <RoleChip role={user.role} label={roleLabel} />}
               </div>
               {user?.position && (
-                <span className="text-[0.78em] text-muted-foreground">
+                <span className="text-[0.78em] text-muted-foreground [overflow-wrap:anywhere]">
                   {user.position}
                 </span>
               )}
-              <span className="mt-0.5 text-[0.78em] text-muted-foreground">
+              <span className="mt-0.5 text-[0.78em] text-muted-foreground [overflow-wrap:anywhere]">
                 {user?.employee_id && (
                   <>
                     <span className="font-mono">{user.employee_id}</span>
                     {' · '}
                   </>
                 )}
-                {user?.email && <span className="truncate">{user.email}</span>}
+                {user?.email && <span>{user.email}</span>}
               </span>
-              <span className="mt-1 flex items-center gap-1.5 text-[0.78em] text-muted-foreground">
-                <Mail className="h-3 w-3" strokeWidth={1.7} />
-                {lastSyncLabel}
+              <span className="mt-1 flex items-start gap-1.5 text-[0.78em] text-muted-foreground">
+                <Mail className="h-3 w-3 shrink-0" strokeWidth={1.7} />
+                <span className="min-w-0 [overflow-wrap:anywhere]">{lastSyncLabel}</span>
               </span>
             </div>
           </div>
@@ -304,9 +318,9 @@ export function AccountMenu({
                 setOpen(false)
                 onOpenSettings()
               }}
-              className="flex w-full items-center gap-2 border-b border-hairline bg-warning-soft px-4 py-2.5 text-start text-[0.82em] font-medium text-warning transition-colors hover:bg-warning-soft/80"
+              className="flex w-full items-center gap-2 border-b border-hairline bg-warning-soft px-4 py-2.5 text-start text-[0.82em] font-medium text-warning transition-colors hover:bg-warning-soft/80 pointer-coarse:min-h-[44px]"
             >
-              <LinkIcon className="h-3.5 w-3.5" strokeWidth={1.7} />
+              <LinkIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.7} />
               {t('appBar.linkAccountCta')}
             </button>
           )}
@@ -323,8 +337,8 @@ export function AccountMenu({
                 }}
                 className="flex min-h-11 w-full items-center gap-2.5 px-4 py-2.5 text-start text-[0.9em] text-foreground transition-colors motion-reduce:transition-none hover:bg-surface-tinted"
               >
-                <UserRound className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} aria-hidden />
-                <span className="flex-1">{t('books.list.myRecords')}</span>
+                <UserRound className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} aria-hidden />
+                <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{t('books.list.myRecords')}</span>
                 {myRecordsCount !== null && (
                   <bdi
                     dir="ltr"
@@ -344,8 +358,8 @@ export function AccountMenu({
                 }}
                 className="flex min-h-11 w-full items-center gap-2.5 px-4 py-2.5 text-start text-[0.9em] text-foreground transition-colors hover:bg-surface-tinted"
               >
-                <ShieldCheck className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} />
-                <span className="flex-1">{t('access.title')}</span>
+                <ShieldCheck className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
+                <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{t('access.title')}</span>
                 {pendingCount > 0 && (
                   <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[0.7em] font-bold text-white">
                     {pendingCount}
@@ -363,8 +377,8 @@ export function AccountMenu({
                 }}
                 className="flex min-h-11 w-full items-center gap-2.5 px-4 py-2.5 text-start text-[0.9em] text-foreground transition-colors hover:bg-surface-tinted"
               >
-                <KeyRound className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} aria-hidden />
-                <span className="flex-1">{t('access.secretClearance.title')}</span>
+                <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} aria-hidden />
+                <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{t('access.secretClearance.title')}</span>
               </button>
             )}
             <button
@@ -373,9 +387,9 @@ export function AccountMenu({
                 setOpen(false)
                 onLock()
               }}
-              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-start text-[0.9em] text-foreground transition-colors hover:bg-surface-tinted"
+              className="flex min-h-11 w-full items-center gap-2.5 px-4 py-2.5 text-start text-[0.9em] text-foreground transition-colors hover:bg-surface-tinted"
             >
-              <Lock className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} />
+              <Lock className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
               {t('appBar.lockApp', { defaultValue: 'Lock app' })}
             </button>
             <LockTimerControl
@@ -398,7 +412,7 @@ export function AccountMenu({
                 className="flex min-h-11 w-full items-center gap-2.5 px-4 py-2.5 text-start text-[0.9em] text-foreground transition-colors hover:bg-surface-tinted"
               >
                 <SettingsIcon
-                  className="h-4 w-4 text-muted-foreground"
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
                   strokeWidth={1.7}
                 />
                 {t('nav.settings', { defaultValue: 'Settings' })}
@@ -413,7 +427,7 @@ export function AccountMenu({
                 }}
                 className="flex min-h-11 w-full items-center gap-2.5 border-t border-hairline px-4 py-2.5 text-start text-[0.9em] text-foreground transition-colors hover:bg-surface-tinted"
               >
-                <LogOut className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} />
+                <LogOut className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
                 {t('auth.signOut', { defaultValue: 'Sign out' })}
               </button>
             )}

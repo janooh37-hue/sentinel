@@ -2,6 +2,11 @@ import type { DashboardLayout, DashboardQuickActionConfig, DashboardWidgetConfig
 import type { WidgetTier } from '@/pages/dashboard/widgets/types'
 
 export type CanvasWidth = 'compact' | 'wide'
+/** Normalized layouts always contain both collections, unlike partial API payloads. */
+export type ResolvedDashboardLayout = DashboardLayout & {
+  widgets: DashboardWidgetConfig[]
+  quick_actions: DashboardQuickActionConfig[]
+}
 export const CANVAS_WIDTHS = ['compact', 'wide'] as const
 export const DEFAULT_CANVAS_WIDTH: CanvasWidth = 'compact'
 export const WIDGET_SIZES = ['S', 'M', 'L', 'W', 'XL'] as const
@@ -50,7 +55,7 @@ const DEFAULT_SIZES: Record<WidgetId, WidgetSize> = {
   drafts: 'S', expiring_soon: 'S', violation_months: 'S', violations: 'S',
   pending_departures: 'L', workforce_pulse: 'M', permits: 'XL',
 }
-export const DEFAULT_LAYOUT: DashboardLayout = {
+export const DEFAULT_LAYOUT: ResolvedDashboardLayout = {
   widgets: WIDGET_IDS.map((id, order) => ({ id, visible: order < 12, order, size: DEFAULT_SIZES[id] })),
   quick_actions: QUICK_ACTION_IDS.map((id, order) => ({ id, visible: order < 4, order })),
   canvas_width: DEFAULT_CANVAS_WIDTH,
@@ -66,7 +71,7 @@ type SavedWidget = { id: string; visible: boolean; order: number; size?: string;
 type SavedLayout = { widgets?: SavedWidget[]; quick_actions?: { id: string; visible: boolean; order: number }[]; canvas_width?: string | null }
 
 /** Read old zones once; all output (including API writes) is size-based. */
-export function resolveLayout(saved: SavedLayout | null | undefined): DashboardLayout {
+export function resolveLayout(saved: SavedLayout | null | undefined): ResolvedDashboardLayout {
   if (!saved) return DEFAULT_LAYOUT
   const seen = new Set<string>()
   const raw = [...(saved.widgets ?? [])].sort((a, b) => a.order - b.order)

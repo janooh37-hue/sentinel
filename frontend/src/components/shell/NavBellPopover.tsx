@@ -20,7 +20,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, CalendarClock, ClipboardCheck, FileInput, Flag, Inbox, Paperclip, Printer, ScanLine, ShieldCheck, Stamp } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
@@ -43,6 +43,8 @@ import { useInmateAwaitingClose } from '@/pages/application/statistics/useInmate
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { EmptyState } from '@/components/ui/empty-state'
 import { NavBell } from './NavBell'
+import { headerPopoverStyle } from './headerPopover'
+import { usePopoverFocus } from './usePopoverFocus'
 
 function initialsOf(name: string | null | undefined, fallback: string): string {
   const source = (name ?? '').trim() || fallback
@@ -72,21 +74,25 @@ function shortDateLabel(iso: string): string {
   }
 }
 
-export function NavBellPopover(): React.JSX.Element | null {
-  const { user } = useAuth()
-  if (user?.role === 'inmate_reporter') return null
-  return <DefaultNavBellPopover />
+interface NavBellPopoverProps {
+  /** Rendered by the phone bar (MobileTopBar): the panel hangs from that header, not from this trigger. */
+  phone?: boolean
 }
 
-function DefaultNavBellPopover(): React.JSX.Element {
+export function NavBellPopover({ phone = false }: NavBellPopoverProps): React.JSX.Element | null {
+  const { user } = useAuth()
+  if (user?.role === 'inmate_reporter') return null
+  return <DefaultNavBellPopover phone={phone} />
+}
+
+function DefaultNavBellPopover({ phone }: { phone: boolean }): React.JSX.Element {
+  const place = headerPopoverStyle(phone)
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
-  // Element focused when the popover opened, so we can restore focus on close.
-  const triggerRef = useRef<HTMLElement | null>(null)
 
   const { isAdmin } = useIdentity()
   const { has } = useCapabilities()
@@ -174,18 +180,8 @@ function DefaultNavBellPopover(): React.JSX.Element {
     }
   }, [open])
 
-  // Focus management: move focus into the dialog panel on open, and return it
-  // to the trigger on close — matches the app's other dialogs/popovers.
-  useEffect(() => {
-    if (open) {
-      // Remember the trigger so we can restore focus when the popover closes.
-      triggerRef.current = document.activeElement as HTMLElement | null
-      panelRef.current?.focus()
-    } else if (triggerRef.current) {
-      triggerRef.current.focus()
-      triggerRef.current = null
-    }
-  }, [open])
+  // Focus into the dialog on open, back to the bell on close.
+  usePopoverFocus(open, rootRef, panelRef)
 
   const items = canViewLedger ? (recentQuery.data?.items ?? []) : []
   const totalUnread = canViewLedger ? (recentQuery.data?.total_unread ?? 0) : 0
@@ -203,7 +199,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
     inboxUnread === 0
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className={place.root}>
       <NavBell
         count={
           totalUnread +
@@ -218,6 +214,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
           inboxUnread
         }
         onClick={() => setOpen((v) => !v)}
+        expanded={open}
       />
 
       {open && (
@@ -227,11 +224,11 @@ function DefaultNavBellPopover(): React.JSX.Element {
           data-state="open"
           tabIndex={-1}
           aria-label={t('appBar.notifications', { defaultValue: 'Notifications' })}
-          className="anim-pop-in anim-pop-in-end absolute end-0 top-full z-50 mt-2 w-[calc(100vw-2rem)] max-w-[380px] overflow-hidden rounded-2xl border border-hairline bg-surface shadow-xl focus-visible:outline-none"
+          className={`@container anim-pop-in anim-pop-in-end ${place.panel} ${place.bellWidth} rounded-2xl border border-hairline bg-surface shadow-xl focus-visible:outline-none`}
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-hairline px-4 py-3">
-            <h3 className="text-sm font-semibold text-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 border-b border-hairline px-4 py-3 pointer-coarse:py-1">
+            <h3 className="min-w-0 text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
               {t('appBar.notifications', { defaultValue: 'Notifications' })}
             </h3>
             {totalUnread > 0 && (
@@ -239,7 +236,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
                 type="button"
                 onClick={() => markAllMutation.mutate()}
                 disabled={markAllMutation.isPending}
-                className="text-xs font-medium text-primary transition-colors hover:underline disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:rounded-sm"
+                className="text-xs font-medium text-primary transition-colors hover:underline disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:rounded-sm pointer-coarse:inline-flex pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:items-center pointer-coarse:justify-end"
               >
                 {t('appBar.markAllRead', { defaultValue: 'Mark all read' })}
               </button>
@@ -254,22 +251,22 @@ function DefaultNavBellPopover(): React.JSX.Element {
                 setOpen(false)
                 navigate('/access-requests')
               }}
-              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 @max-[13rem]:flex-wrap @max-[13rem]:px-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <Avatar className="h-8 w-8 bg-accent-soft text-accent">
                 <AvatarFallback className="bg-transparent">
                   <ShieldCheck className="h-4 w-4" strokeWidth={1.8} />
                 </AvatarFallback>
               </Avatar>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="text-[0.7em] font-semibold uppercase tracking-wider text-accent">
+              <div className="flex min-w-0 flex-1 flex-col @max-[13rem]:order-last @max-[13rem]:basis-full">
+                <span className="text-[0.7em] font-semibold uppercase tracking-wider text-accent [overflow-wrap:anywhere]">
                   {t('access.bell.requestPrefix')}
                 </span>
-                <span className="truncate text-[0.9em] font-semibold text-foreground">
+                <span className="text-[0.9em] font-semibold text-foreground [overflow-wrap:anywhere]">
                   {t('access.settingsCard.pending', { count: pendingRequests })}
                 </span>
               </div>
-              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180 @max-[13rem]:ms-auto" strokeWidth={1.8} />
             </button>
           )}
 
@@ -281,22 +278,22 @@ function DefaultNavBellPopover(): React.JSX.Element {
                 setOpen(false)
                 navigate(inmateRegisterHref(newestViolationMonth.year, newestViolationMonth.month))
               }}
-              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 @max-[13rem]:flex-wrap @max-[13rem]:px-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <Avatar className="h-8 w-8 bg-warning-soft text-warning">
                 <AvatarFallback className="bg-transparent">
                   <CalendarClock className="h-4 w-4" strokeWidth={1.8} />
                 </AvatarFallback>
               </Avatar>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[0.9em] font-semibold text-foreground">
+              <div className="flex min-w-0 flex-1 flex-col @max-[13rem]:order-last @max-[13rem]:basis-full">
+                <span className="text-[0.9em] font-semibold text-foreground [overflow-wrap:anywhere]">
                   {formatRegisterMonth(
                     newestViolationMonth.year,
                     newestViolationMonth.month,
                     i18n.language,
                   )}
                 </span>
-                <span className="text-[0.78em] text-muted-foreground">
+                <span className="text-[0.78em] text-muted-foreground [overflow-wrap:anywhere]">
                   {t(`inmateStats.workflow.${newestViolationMonth.stage}`)}
                 </span>
               </div>
@@ -306,7 +303,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
               >
                 {awaitingViolationMonths}
               </span>
-              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180 @max-[13rem]:ms-auto" strokeWidth={1.8} />
             </button>
           )}
 
@@ -318,22 +315,22 @@ function DefaultNavBellPopover(): React.JSX.Element {
                 setOpen(false)
                 navigate('/ledger?tab=books&scope=incoming')
               }}
-              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 @max-[13rem]:flex-wrap @max-[13rem]:px-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <Avatar className="h-8 w-8 bg-primary-soft text-primary">
                 <AvatarFallback className="bg-transparent">
                   <FileInput className="h-4 w-4" strokeWidth={1.8} />
                 </AvatarFallback>
               </Avatar>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[0.9em] font-semibold text-foreground">
+              <div className="flex min-w-0 flex-1 flex-col @max-[13rem]:order-last @max-[13rem]:basis-full">
+                <span className="text-[0.9em] font-semibold text-foreground [overflow-wrap:anywhere]">
                   {t('books.inbox.sentToMe')}
                 </span>
-                <span className="text-[0.78em] text-muted-foreground">
+                <span className="text-[0.78em] text-muted-foreground [overflow-wrap:anywhere]">
                   {t('books.inbox.unread', { count: inboxUnread })}
                 </span>
               </div>
-              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180 @max-[13rem]:ms-auto" strokeWidth={1.8} />
             </button>
           )}
 
@@ -347,22 +344,22 @@ function DefaultNavBellPopover(): React.JSX.Element {
                 const context = approvalSummary ? defaultApprovalContext(approvalSummary) : null
                 navigate(context ? approvalQueueUrl(context) : '/books/approvals')
               }}
-              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 @max-[13rem]:flex-wrap @max-[13rem]:px-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <Avatar className="h-8 w-8 bg-primary-soft text-primary">
                 <AvatarFallback className="bg-transparent">
                   <Stamp className="h-4 w-4" strokeWidth={1.8} />
                 </AvatarFallback>
               </Avatar>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[0.9em] font-semibold text-foreground">
+              <div className="flex min-w-0 flex-1 flex-col @max-[13rem]:order-last @max-[13rem]:basis-full">
+                <span className="text-[0.9em] font-semibold text-foreground [overflow-wrap:anywhere]">
                   {t('nav.bell.awaitingApprovalTitle')}
                 </span>
-                <span className="text-[0.78em] text-muted-foreground">
+                <span className="text-[0.78em] text-muted-foreground [overflow-wrap:anywhere]">
                   {t('nav.bell.awaitingApproval', { count: awaitingApproval })}
                 </span>
               </div>
-              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180 @max-[13rem]:ms-auto" strokeWidth={1.8} />
             </button>
           )}
 
@@ -374,22 +371,22 @@ function DefaultNavBellPopover(): React.JSX.Element {
                 setOpen(false)
                 navigate('/scan-back')
               }}
-              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 @max-[13rem]:flex-wrap @max-[13rem]:px-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <Avatar className="h-8 w-8 bg-warning-soft text-warning">
                 <AvatarFallback className="bg-transparent">
                   <Printer className="h-4 w-4" strokeWidth={1.8} />
                 </AvatarFallback>
               </Avatar>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[0.9em] font-semibold text-foreground">
+              <div className="flex min-w-0 flex-1 flex-col @max-[13rem]:order-last @max-[13rem]:basis-full">
+                <span className="text-[0.9em] font-semibold text-foreground [overflow-wrap:anywhere]">
                   {t('nav.bell.scanBackTitle')}
                 </span>
-                <span className="text-[0.78em] text-muted-foreground">
+                <span className="text-[0.78em] text-muted-foreground [overflow-wrap:anywhere]">
                   {t('nav.bell.scanBack', { count: scanBackCount })}
                 </span>
               </div>
-              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180 @max-[13rem]:ms-auto" strokeWidth={1.8} />
             </button>
           )}
 
@@ -401,22 +398,22 @@ function DefaultNavBellPopover(): React.JSX.Element {
                 setOpen(false)
                 navigate('/ledger?tab=email', { state: { ledgerView: 'followups' } })
               }}
-              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 @max-[13rem]:flex-wrap @max-[13rem]:px-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <Avatar className="h-8 w-8 bg-accent-soft text-accent">
                 <AvatarFallback className="bg-transparent">
                   <Flag className="h-4 w-4" strokeWidth={1.8} />
                 </AvatarFallback>
               </Avatar>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[0.9em] font-semibold text-foreground">
+              <div className="flex min-w-0 flex-1 flex-col @max-[13rem]:order-last @max-[13rem]:basis-full">
+                <span className="text-[0.9em] font-semibold text-foreground [overflow-wrap:anywhere]">
                   {t('nav.bell.followUpsTitle')}
                 </span>
-                <span className="text-[0.78em] text-muted-foreground">
+                <span className="text-[0.78em] text-muted-foreground [overflow-wrap:anywhere]">
                   {t('nav.bell.followUps', { count: followUps })}
                 </span>
               </div>
-              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180 @max-[13rem]:ms-auto" strokeWidth={1.8} />
             </button>
           )}
 
@@ -428,22 +425,22 @@ function DefaultNavBellPopover(): React.JSX.Element {
                 setOpen(false)
                 navigate('/expiry')
               }}
-              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 @max-[13rem]:flex-wrap @max-[13rem]:px-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <Avatar className="h-8 w-8 bg-warning-soft text-warning">
                 <AvatarFallback className="bg-transparent">
                   <CalendarClock className="h-4 w-4" strokeWidth={1.8} />
                 </AvatarFallback>
               </Avatar>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[0.9em] font-semibold text-foreground">
+              <div className="flex min-w-0 flex-1 flex-col @max-[13rem]:order-last @max-[13rem]:basis-full">
+                <span className="text-[0.9em] font-semibold text-foreground [overflow-wrap:anywhere]">
                   {t('expiry.bellTitle')}
                 </span>
-                <span className="text-[0.78em] text-muted-foreground">
+                <span className="text-[0.78em] text-muted-foreground [overflow-wrap:anywhere]">
                   {t('expiry.bellCount', { count: expiryUrgent })}
                 </span>
               </div>
-              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180 @max-[13rem]:ms-auto" strokeWidth={1.8} />
             </button>
           )}
 
@@ -455,22 +452,22 @@ function DefaultNavBellPopover(): React.JSX.Element {
                 setOpen(false)
                 navigate('/leaves', { state: { awaitingReturn: true } })
               }}
-              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 @max-[13rem]:flex-wrap @max-[13rem]:px-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <Avatar className="h-8 w-8 bg-info-soft text-info">
                 <AvatarFallback className="bg-transparent">
                   <ClipboardCheck className="h-4 w-4" strokeWidth={1.8} />
                 </AvatarFallback>
               </Avatar>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[0.9em] font-semibold text-foreground">
+              <div className="flex min-w-0 flex-1 flex-col @max-[13rem]:order-last @max-[13rem]:basis-full">
+                <span className="text-[0.9em] font-semibold text-foreground [overflow-wrap:anywhere]">
                   {t('nav.bell.awaitingReturnTitle')}
                 </span>
-                <span className="text-[0.78em] text-muted-foreground">
+                <span className="text-[0.78em] text-muted-foreground [overflow-wrap:anywhere]">
                   {t('nav.bell.awaitingReturn', { count: awaitingReturn })}
                 </span>
               </div>
-              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180 @max-[13rem]:ms-auto" strokeWidth={1.8} />
             </button>
           )}
 
@@ -479,22 +476,22 @@ function DefaultNavBellPopover(): React.JSX.Element {
             <button
               type="button"
               onClick={() => { setOpen(false); navigate('/scan-inbox') }}
-              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 @max-[13rem]:flex-wrap @max-[13rem]:px-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <Avatar className="h-8 w-8 bg-info-soft text-info">
                 <AvatarFallback className="bg-transparent">
                   <ScanLine className="h-4 w-4" strokeWidth={1.8} />
                 </AvatarFallback>
               </Avatar>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[0.9em] font-semibold text-foreground">
+              <div className="flex min-w-0 flex-1 flex-col @max-[13rem]:order-last @max-[13rem]:basis-full">
+                <span className="text-[0.9em] font-semibold text-foreground [overflow-wrap:anywhere]">
                   {t('scanInbox.bellTitle')}
                 </span>
-                <span className="text-[0.78em] text-muted-foreground">
+                <span className="text-[0.78em] text-muted-foreground [overflow-wrap:anywhere]">
                   {t('scanInbox.bellCount', { count: scanInbox })}
                 </span>
               </div>
-              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180 @max-[13rem]:ms-auto" strokeWidth={1.8} />
             </button>
           )}
 
@@ -524,7 +521,10 @@ function DefaultNavBellPopover(): React.JSX.Element {
               className="py-10"
             />
           ) : (
-            <ul className="max-h-[360px] overflow-auto">
+            // Phone bar and touch: only the panel scrolls. A second 360px scroller inside a panel that is already
+            // capped to the viewport turns the lower rows and the footer link into a two-stage drag. A mouse on
+            // the TopNav keeps the capped list.
+            <ul className={place.list}>
               {items.map((item) => {
                 const displayName =
                   item.counterparty_name?.trim() ||
@@ -539,17 +539,18 @@ function DefaultNavBellPopover(): React.JSX.Element {
                         setOpen(false)
                         navigate(`/ledger?mail=${item.id}`)
                       }}
-                      className="flex w-full items-start gap-3 px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                      className="flex w-full items-start gap-3 px-4 py-3 @max-[13rem]:flex-wrap @max-[13rem]:px-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     >
                       <Avatar className="h-8 w-8 bg-primary-soft text-primary">
                         <AvatarFallback className="text-[0.72em] font-semibold">
                           {initials}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="flex min-w-0 flex-1 flex-col">
-                        <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 flex-1 flex-col @max-[13rem]:order-last @max-[13rem]:basis-full">
+                        <div className="flex items-center justify-between gap-2 @max-[13rem]:flex-wrap">
                           <div className="flex min-w-0 flex-1 items-center gap-1.5">
                             <span
+                              data-message-text
                               className="truncate text-[0.9em] font-semibold text-foreground"
                               dir="auto"
                             >
@@ -570,6 +571,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
                           </span>
                         </div>
                         <span
+                          data-message-text
                           className="mt-0.5 truncate text-xs text-muted-foreground"
                           dir="auto"
                         >
@@ -577,6 +579,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
                         </span>
                         {item.preview && (
                           <span
+                            data-message-text
                             className="mt-0.5 truncate text-xs text-muted-foreground/80"
                             dir="auto"
                           >
@@ -605,12 +608,12 @@ function DefaultNavBellPopover(): React.JSX.Element {
               <Link
                 to="/ledger?tab=email"
                 onClick={() => setOpen(false)}
-                className="flex items-center justify-between px-4 py-2.5 text-sm text-primary transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none"
+                className="flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-primary transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none pointer-coarse:min-h-[44px]"
               >
-                <span>
+                <span className="min-w-0 [overflow-wrap:anywhere]">
                   {t('appBar.viewAllInbox', { defaultValue: 'View all in inbox' })}
                 </span>
-                <ArrowRight className="h-3.5 w-3.5 rtl:rotate-180" strokeWidth={1.8} />
+                <ArrowRight className="h-3.5 w-3.5 shrink-0 rtl:rotate-180" strokeWidth={1.8} />
               </Link>
             ) : null}
           </div>

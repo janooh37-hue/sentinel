@@ -9,7 +9,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeftRight } from 'lucide-react'
 import { differenceInDays, parseISO } from 'date-fns'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { IdentityDocCard } from '@/components/employees/IdentityDocCard'
 import { SignaturePad } from '@/components/employees/SignaturePad'

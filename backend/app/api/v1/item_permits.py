@@ -59,7 +59,7 @@ def create_item_permit(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("permits.create"))],
 ) -> ItemPermitRead:
-    row = item_permit_service.create_item_permit(db, payload, actor=user.email)
+    row = item_permit_service.create_item_permit(db, payload, user=user)
     return item_permit_service.to_read(row, db=db, user=user)
 
 
@@ -81,7 +81,7 @@ def update_item_permit(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("permits.edit"))],
 ) -> ItemPermitRead:
-    row = item_permit_service.update_item_permit(db, permit_id, payload, actor=user.email)
+    row = item_permit_service.update_item_permit(db, permit_id, payload, user=user)
     return item_permit_service.to_read(row, db=db, user=user)
 
 
@@ -92,7 +92,7 @@ def submit_item_permit_approval(
     user: Annotated[User, Depends(require_capability("permits.edit"))],
 ) -> ItemPermitRead:
     """Send the permit's 1/5 letter into the book approval chain."""
-    row = item_permit_service.submit_item_permit_book(db, permit_id, actor=user.email)
+    row = item_permit_service.submit_item_permit_book(db, permit_id, user=user)
     return item_permit_service.to_read(row, db=db, user=user)
 
 
@@ -102,7 +102,7 @@ def delete_item_permit(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("permits.delete"))],
 ) -> Response:
-    item_permit_service.soft_delete_item_permit(db, permit_id, actor=user.email)
+    item_permit_service.soft_delete_item_permit(db, permit_id, user=user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

@@ -25,7 +25,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Car, ClipboardCopy, DownloadCloud, Printer, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { Button } from '@/components/ui/button'

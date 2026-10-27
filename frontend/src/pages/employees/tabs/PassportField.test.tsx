@@ -14,17 +14,18 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { vi, test, expect } from 'vitest'
 import { PassportField } from './PassportField'
 import { api } from '@/lib/api'
+import type * as ApiModule from '@/lib/api'
 
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: {
     extractPassport: vi.fn(),
     updateEmployee: vi.fn(),
   },
-  ApiError: class ApiError extends Error {},
 }))
 
-vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+vi.mock('@/lib/toast', () => ({
+  toast: { loading: vi.fn(), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() },
 }))
 
 test('shows Missing when no value and no scan', () => {

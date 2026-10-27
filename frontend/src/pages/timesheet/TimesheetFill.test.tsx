@@ -9,7 +9,7 @@
  * operator hears about it once.
  *
  * Its own file, not a thirteenth case in `TimesheetPage.test.tsx`: that file
- * holds the twelve Task 7 settled and its sonner stub carries no `warning`,
+ * holds the twelve Task 7 settled and its toast stub carries no `warning`,
  * which the grid's own client-side refusal needs. Splitting keeps both mock
  * surfaces honest instead of widening one to cover two jobs.
  */
@@ -17,15 +17,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ApiModule from '@/lib/api'
 
-vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+vi.mock('@/lib/toast', () => ({
+  toast: { loading: vi.fn(), dismiss: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: { getTimesheet: vi.fn(), setTimesheetCell: vi.fn() },
-  apiErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: vi.fn() }))
 
@@ -132,7 +133,7 @@ beforeEach(() => {
 describe('drag to fill, through the page', () => {
   it('commits one write per swept cell and confirms the run once', async () => {
     setTimesheetCell.mockImplementation((_p, body) =>
-      Promise.resolve(accept(body.employee_id, body.day, body.code)),
+      Promise.resolve(accept(body.employee_id, body.day, body.code ?? null)),
     )
     renderPage()
     await screen.findByRole('table')
@@ -163,7 +164,7 @@ describe('drag to fill, through the page', () => {
     // would name a span that only half the writes belong to.
     month = { ...MONTH, rows: [ROW, { ...ROW, employee_id: 'G1002', row_no: 2 }] }
     setTimesheetCell.mockImplementation((_p, body) =>
-      Promise.resolve(accept(body.employee_id, body.day, body.code)),
+      Promise.resolve(accept(body.employee_id, body.day, body.code ?? null)),
     )
     renderPage()
     await screen.findByRole('table')
@@ -189,7 +190,7 @@ describe('drag to fill, through the page', () => {
     setTimesheetCell.mockImplementation((_p, body) =>
       body.day <= 4
         ? Promise.reject(new Error(OFF_ROSTER))
-        : Promise.resolve(accept(body.employee_id, body.day, body.code)),
+        : Promise.resolve(accept(body.employee_id, body.day, body.code ?? null)),
     )
     renderPage()
     await screen.findByRole('table')
@@ -212,10 +213,10 @@ describe('drag to fill, through the page', () => {
 
     await waitFor(() => expect(setTimesheetCell).toHaveBeenCalledTimes(4))
 
-    // ONE message, carrying the count refused and the server's own sentence.
+    // ONE message, carrying the count refused and the localized error.
     // Four per-cell toasts is what `quiet` exists to prevent.
     await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
-    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining(OFF_ROSTER))
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Something went wrong'))
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('2'))
     // A partial refusal is not a success, so the run is not also confirmed.
     expect(toast.success).not.toHaveBeenCalled()
@@ -259,7 +260,7 @@ describe('drag to fill, through the page', () => {
 
     await waitFor(() => expect(setTimesheetCell).toHaveBeenCalledTimes(3))
     await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
-    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('The month is closed.'))
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Something went wrong'))
   })
 
   it('removes a refused picker correction from the undo stack', async () => {
@@ -269,7 +270,7 @@ describe('drag to fill, through the page', () => {
 
     await userEvent.click(cellOf(3))
     await userEvent.click(screen.getByRole('menuitem', { name: /annual leave/i }))
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('The month is closed.'))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Something went wrong'))
     expect(screen.getByText('No corrections yet')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /undo last change/i })).toBeDisabled()
   })

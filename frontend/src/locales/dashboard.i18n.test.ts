@@ -29,7 +29,12 @@ it.each([
   expect(i18n.t(changes, { lng: 'ar', count })).toBe(changeLabel)
 })
 
-it('removes unused quick-action descriptions in both locales', () => {
-  expect(en.dashboard).not.toHaveProperty('quickActionDesc')
-  expect(ar.dashboard).not.toHaveProperty('quickActionDesc')
+it('preserves both branches’ dashboard keys with English/Arabic parity', () => {
+  expect(Object.keys(en.dashboard.quickActionDesc).sort()).toEqual(Object.keys(ar.dashboard.quickActionDesc).sort())
+  expect(en.dashboard.workspace.unavailable).toBe('Not available')
+  expect(ar.dashboard.workspace.unavailable).toBe('غير متاح')
+  for (const key of ['title', 'syncing', 'syncSuccess', 'syncError'] as const) {
+    expect(en.dashboard.widgets.ledger[key]).toBeTruthy()
+    expect(ar.dashboard.widgets.ledger[key]).toBeTruthy()
+  }
 })

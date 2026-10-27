@@ -17,10 +17,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { RefreshCw } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import type { TFunction } from 'i18next'
 
-import { ApiError, api, type EmailSyncStatus } from '@/lib/api'
+import { ApiError, api, apiErrorMessage, type EmailSyncStatus } from '@/lib/api'
 import { parseUtcMs } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -67,7 +67,7 @@ export function SyncStatusStrip({ status }: SyncStatusStripProps): React.JSX.Ele
         void queryClient.invalidateQueries({ queryKey: ['email-sync-status'] })
         return
       }
-      toast.error(err instanceof Error ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     },
   })
 

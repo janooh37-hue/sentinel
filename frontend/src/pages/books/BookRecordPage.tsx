@@ -19,7 +19,7 @@ import {
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import {
   Check,
   ChevronRight,
@@ -174,9 +174,10 @@ function buildTimeline(
         tone: 'blue',
       })
     }
-    const note = [...v.approval_steps].reverse().find((s) => s.note)?.note ?? null
+    const steps = v.approval_steps ?? []
+    const note = [...steps].reverse().find((s) => s.note)?.note ?? null
     // A Report's version status stays its author's signature; the verdict lives on the step.
-    const verdict = v.approval_steps.find((s) => s.kind !== 'reviewer' && s.state !== 'pending')?.state
+    const verdict = steps.find((s) => s.kind !== 'reviewer' && s.state !== 'pending')?.state
     if (v.status === 'returned' || verdict === 'returned') {
       out.push({
         key: `ret-${v.id}`,
@@ -394,23 +395,8 @@ function BookRecordPageBody(): React.JSX.Element {
   // Revise regenerates via POST /documents/generate.
   const canGenerate = has('documents.generate') && !!book?.can_write
   const canOverrideState = has('books.override_state') && !!book?.can_write
-  const reporterSubmitMutation = useInmateReportSubmit({
-    onSuccess: () => toast.success(t('books.approval.submitted')),
-    onError: (err, message) => {
-      if (err instanceof ApiError && err.code === 'INMATE_REPORT_INCOMPLETE') {
-        toast.error(message, {
-          action: {
-            label: t('books.pane.continueDraft'),
-            onClick: handleRevise,
-          },
-        })
-      } else {
-        toast.error(message)
-      }
-    },
-  })
 
-  const manage = useManagePaper(book?.id ?? null)
+  const manage = useManagePaper(book?.id ?? null, book?.ref_number ?? undefined)
 
   const versions = useMemo(() => book?.versions ?? [], [book?.versions])
   const liveVersion = versions.length ? versions[versions.length - 1] : undefined
@@ -696,6 +682,10 @@ function BookRecordPageBody(): React.JSX.Element {
     if (!book || !current?.template_id) return
     navigate(`${serviceHref(current.template_id)}?revise=${book.id}`)
   }, [book, current, navigate])
+  const reporterSubmitMutation = useInmateReportSubmit({
+    onSuccess: () => toast.success(t('books.approval.submitted')),
+    onRevise: handleRevise,
+  })
 
   // "Email via Outlook" — the record's own handoff entry point. It builds the
   // SAME one-item basket prefill the tray builds (subject/body templates,
@@ -723,8 +713,12 @@ function BookRecordPageBody(): React.JSX.Element {
       // dropped: this is not a basket send, and carrying it would let a
       // successful handoff clear a same-kind basket the operator is still
       // filling. Clear only the persisted-basket identity, not the prefill.
-      const prefill = buildBasketPrefill([item], getRecentRecipientsForForm(key), draftOverrides)
-      prefill.basketKey = undefined
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { basketKey: _droppedBasketKey, ...prefill } = buildBasketPrefill(
+        [item],
+        getRecentRecipientsForForm(key),
+        draftOverrides,
+      )
       navigate('/ledger?tab=email', { state: { composePrefill: prefill } })
     } catch (err) {
       toast.error(apiErrorMessage(err))
@@ -878,7 +872,7 @@ function BookRecordPageBody(): React.JSX.Element {
     if (!book) return
     const refNumber = book.ref_number
     void copyToClipboard(refNumber).then((ok) => {
-      if (ok) toast.success(t('books.record.copiedRef', { ref: bidi(refNumber) }))
+      if (ok) toast.success(t('books.record.copiedRef'), { reference: refNumber })
       else toast.error(t('common.copyFailed'))
     })
   }, [book, t])
@@ -1265,7 +1259,7 @@ function BookRecordPageBody(): React.JSX.Element {
       )}
 
       {book && <RecordInboxStrip book={book} />}
-      {book && <RecordRecipientsPanel bookId={book.id} />}
+      {book && <RecordRecipientsPanel bookId={book.id} bookRef={book.ref_number} />}
       {book && <RecordThreadSection book={book} />}
 
       <RecordPhoneProgress book={book} view={view} />

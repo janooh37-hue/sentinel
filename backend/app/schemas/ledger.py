@@ -14,6 +14,7 @@ class LedgerAddress(BaseModel):
     name: str = ""
     address: str
 
+
 # ---------------------------------------------------------------------------
 # Enum literals
 # ---------------------------------------------------------------------------
@@ -84,6 +85,7 @@ class LedgerEntryRead(ORMBase):
     entry_date: date
     direction: str
     channel: str
+    owner_user_id: int | None = None
     counterparty: str
     subject: str
     notes_html: str | None
@@ -147,8 +149,6 @@ class LedgerListResponse(BaseModel):
     total: int
     limit: int
     offset: int
-
-
 
 
 __all__ = [

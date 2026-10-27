@@ -1,7 +1,7 @@
 """Item-permit (إدخال مواد) service — register CRUD + letter generation.
 
-Same shape as ``permit_service``: module-level functions, ``db`` first, an
-``actor`` string, services return ORM rows and the router maps them to schemas.
+Same shape as ``permit_service``: module-level functions, ``db`` first, services
+return ORM rows and the router maps them to schemas.
 The 1/5 letter is regenerated on create and every update through the shared
 ``permit_service.regenerate_letter_book`` / ``submit_letter_book`` helpers.
 """
@@ -164,14 +164,15 @@ def to_read(row: ItemPermit, *, db: Session, user: User | None = None) -> ItemPe
 # ─── letter ────────────────────────────────────────────────────────────────────
 
 
-def _submit_book(db: Session, row: ItemPermit, *, actor: str | None) -> None:
+def _submit_book(db: Session, row: ItemPermit, *, user: User) -> None:
     """Best-effort submit (auto paths): a failure leaves the book a draft and
     audits why — the permit mutation itself stands."""
+    actor = user.email
     if row.book_id is None:
         _audit(db, "item_permit.book_submit_failed", row.id, actor, {"error": "NO_BOOK"})
         return
     try:
-        permit_service.submit_letter_book(db, row.book_id, actor=actor)
+        permit_service.submit_letter_book(db, row.book_id, actor=actor, record_access_user=user)
     except ValidationFailedError as exc:
         log.warning("item permit %s: book submit failed: %s", row.id, exc.message)
         _audit(db, "item_permit.book_submit_failed", row.id, actor, {"error": exc.code})
@@ -179,9 +180,8 @@ def _submit_book(db: Session, row: ItemPermit, *, actor: str | None) -> None:
     _audit(db, "item_permit.book_submitted", row.id, actor, {"book_id": row.book_id})
 
 
-def _regenerate_book(
-    db: Session, row: ItemPermit, *, actor: str | None, submit: bool = False
-) -> None:
+def _regenerate_book(db: Session, row: ItemPermit, *, user: User, submit: bool = False) -> None:
+    actor = user.email
     emp = row.employee
     body = build_item_permit_letter_html(
         zones=row.zones,
@@ -201,21 +201,35 @@ def _regenerate_book(
         body=body,
         recipient=row.recipient,
         actor=actor,
+        record_access_user=user,
     )
     if row.book_id is None:
         row.book_id = book_id
         db.commit()
     _audit(db, "item_permit.book_generated", row.id, actor, {"book_id": row.book_id})
     if submit or prior_state in ("pending", "approved"):
-        _submit_book(db, row, actor=actor)
+        _submit_book(db, row, user=user)
+
+
+def _authorize_live_letter(db: Session, row: ItemPermit, user: User) -> bool:
+    """Authorize the permit's linked letter before any permit write (WP2).
+
+    Permit grants delegate the letter's edits without ``books.edit``; the
+    letter's level and write policy still apply. A letter already deleted from
+    Records gates nothing; returns whether a live letter is linked.
+    """
+    book = db.get(Book, row.book_id) if row.book_id is not None else None
+    if book is None or book.deleted_at is not None:
+        return False
+    book_service.require_full_book_access(db, user, book, write=True)
+    return True
 
 
 # ─── mutations ─────────────────────────────────────────────────────────────────
 
 
-def create_item_permit(
-    db: Session, payload: ItemPermitCreate, *, actor: str | None = None
-) -> ItemPermit:
+def create_item_permit(db: Session, payload: ItemPermitCreate, *, user: User) -> ItemPermit:
+    actor = user.email
     _require_employee(db, payload.employee_id)
     row = ItemPermit(
         employee_id=payload.employee_id,
@@ -229,14 +243,16 @@ def create_item_permit(
     db.commit()
     db.refresh(row)
     _audit(db, "item_permit.created", row.id, actor, {"employee_id": row.employee_id})
-    _regenerate_book(db, get_item_permit(db, row.id), actor=actor, submit=payload.send_for_approval)
+    _regenerate_book(db, get_item_permit(db, row.id), user=user, submit=payload.send_for_approval)
     return get_item_permit(db, row.id)
 
 
 def update_item_permit(
-    db: Session, permit_id: int, payload: ItemPermitUpdate, *, actor: str | None = None
+    db: Session, permit_id: int, payload: ItemPermitUpdate, *, user: User
 ) -> ItemPermit:
+    actor = user.email
     row = get_item_permit(db, permit_id)
+    regenerate = row.book_id is None or _authorize_live_letter(db, row, user)
     data = payload.model_dump(exclude_unset=True)
     # Omitted = unchanged; an explicit null only means something for manager_id.
     data = {k: v for k, v in data.items() if v is not None or k == "manager_id"}
@@ -248,25 +264,29 @@ def update_item_permit(
     db.commit()
     db.refresh(row)  # reload `employee` after an employee_id change
     _audit(db, "item_permit.updated", permit_id, actor, {"fields": sorted(data)})
-    _regenerate_book(db, row, actor=actor)
+    if regenerate:
+        _regenerate_book(db, row, user=user)
     return get_item_permit(db, permit_id)
 
 
-def submit_item_permit_book(db: Session, permit_id: int, *, actor: str | None = None) -> ItemPermit:
+def submit_item_permit_book(db: Session, permit_id: int, *, user: User) -> ItemPermit:
     """Manual "Send for approval". Unlike the auto paths this does NOT swallow
     chain errors — the operator sees exactly why it can't be sent."""
+    actor = user.email
     row = get_item_permit(db, permit_id)
     if row.book_id is None:
         raise ValidationFailedError(
             "ITEM_PERMIT_NO_BOOK", "This permit has no generated letter to submit.", id=permit_id
         )
-    permit_service.submit_letter_book(db, row.book_id, actor=actor)
+    permit_service.submit_letter_book(db, row.book_id, actor=actor, record_access_user=user)
     _audit(db, "item_permit.book_submitted", permit_id, actor, {"book_id": row.book_id})
     return get_item_permit(db, permit_id)
 
 
-def soft_delete_item_permit(db: Session, permit_id: int, *, actor: str | None = None) -> None:
+def soft_delete_item_permit(db: Session, permit_id: int, *, user: User) -> None:
+    actor = user.email
     row = get_item_permit(db, permit_id)
+    _authorize_live_letter(db, row, user)
     row.deleted_at = _utcnow()
     db.commit()
     _audit(db, "item_permit.deleted", permit_id, actor, {})

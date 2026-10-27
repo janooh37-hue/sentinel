@@ -1163,13 +1163,15 @@ test.describe('6: delete with Undo and the 6 s commit', () => {
       await expect(page).toHaveURL(/\/books(\?|$)/)
       await expect(page.locator('[data-records-scroller], [data-ptr-scroller]').first()).toBeVisible()
       await expect(rowOf(page, 48)).toHaveCount(0)
-      await expect(page.getByText(rx(lang, 'books.record.deleted', { ref: specOf(48).ref })).first()).toBeVisible()
+      await expect(page.getByText(rx(lang, 'books.record.deleted')).first()).toBeVisible()
+      await expect(page.locator('[data-sileo-toast]').filter({ hasText: specOf(48).ref }).first()).toBeVisible()
       // a menu → confirm dialog → navigate flow must not leave Radix's body pointer-events lock behind
       await expect(page.locator('body')).not.toHaveCSS('pointer-events', 'none')
 
       await page.getByRole('button', { name: rx(lang, 'common.undo', {}, true) }).first().click()
       await settleUi(page)
-      await expect(page.getByText(rx(lang, 'books.record.restored', { ref: specOf(48).ref })).first()).toBeVisible()
+      await expect(page.getByText(rx(lang, 'books.record.restored')).first()).toBeVisible()
+      await expect(page.locator('[data-sileo-toast]').filter({ hasText: specOf(48).ref }).first()).toBeVisible()
       await expect(rowOf(page, 48)).toBeVisible()
       expect(backend.deleteRequests, 'no DELETE right after Undo').toEqual([])
 
@@ -1509,7 +1511,8 @@ test.describe('12: keys (1440 en)', () => {
 
     // C → "Copied"
     await page.keyboard.press('KeyC')
-    await expect(page.getByText(rx('en', 'books.record.copiedRef', { ref: spec.ref })).first()).toBeVisible()
+    await expect(page.getByText(rx('en', 'books.record.copiedRef')).first()).toBeVisible()
+    await expect(page.locator('[data-sileo-toast]').filter({ hasText: spec.ref }).first()).toBeVisible()
 
     // 0 → Fit (after zooming in with =)
     const fit = await paperWidth(page)
@@ -1635,9 +1638,11 @@ test.describe('13b: bulk delete', () => {
 
     await expect(rowOf(page, draft.id)).toHaveCount(0)
     await expect(rowOf(page, signed.id), 'the signed row is kept').toBeVisible()
-    await expect(page.getByText(rx(lang, 'books.record.deleted', { ref: draft.ref })).first()).toBeVisible()
+    await expect(page.getByText(rx(lang, 'books.record.deleted')).first()).toBeVisible()
+    await expect(page.locator('[data-sileo-toast]').filter({ hasText: draft.ref }).first()).toBeVisible()
     await page.getByRole('button', { name: rx(lang, 'common.undo', {}, true) }).first().click()
-    await expect(page.getByText(rx(lang, 'books.record.restored', { ref: draft.ref })).first()).toBeVisible()
+    await expect(page.getByText(rx(lang, 'books.record.restored')).first()).toBeVisible()
+    await expect(page.locator('[data-sileo-toast]').filter({ hasText: draft.ref }).first()).toBeVisible()
     await expect(rowOf(page, draft.id)).toBeVisible()
     await elapse(page, COMMIT_MS + 500)
     await flushRequests(page)
@@ -1667,9 +1672,11 @@ test.describe('13b: bulk delete', () => {
 
     await expect(rowOf(page, draft.id)).toHaveCount(0)
     await expect(rowOf(page, signed.id), 'the signed row is kept').toBeVisible()
-    await expect(page.getByText(rx(lang, 'books.record.deleted', { ref: draft.ref })).first()).toBeVisible()
+    await expect(page.getByText(rx(lang, 'books.record.deleted')).first()).toBeVisible()
+    await expect(page.locator('[data-sileo-toast]').filter({ hasText: draft.ref }).first()).toBeVisible()
     await page.getByRole('button', { name: rx(lang, 'common.undo', {}, true) }).first().click()
-    await expect(page.getByText(rx(lang, 'books.record.restored', { ref: draft.ref })).first()).toBeVisible()
+    await expect(page.getByText(rx(lang, 'books.record.restored')).first()).toBeVisible()
+    await expect(page.locator('[data-sileo-toast]').filter({ hasText: draft.ref }).first()).toBeVisible()
     await expect(rowOf(page, draft.id)).toBeVisible()
     await elapse(page, COMMIT_MS + 500)
     await flushRequests(page)

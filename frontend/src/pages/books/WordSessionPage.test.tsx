@@ -7,13 +7,14 @@ import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import ar from '@/locales/ar.json'
 import { api, ApiError } from '@/lib/api'
+import { toast } from '@/lib/toast'
 import type { BookRead, WordSessionDetailRead } from '@/lib/api'
 import { WordSessionPage } from './WordSessionPage'
 
 void i18n.use(initReactI18next).init({ lng: 'ar', resources: { ar: { translation: ar } }, interpolation: { escapeValue: false } })
 const capabilities = vi.hoisted(() => ({ templates: true }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => cap !== 'books.templates' || capabilities.templates }) }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'loading-toast'), dismiss: vi.fn() } }))
 vi.mock('@/pages/application/DocPdfCanvas', () => ({ default: ({ pdfUrl }: { pdfUrl: string }) => <div data-testid="paper" data-url={pdfUrl} /> }))
 vi.mock('@/components/books/SavedRecordActions', () => ({ SavedRecordActions: ({ bookId }: { bookId: number }) => <div>saved:{bookId}</div> }))
 
@@ -23,10 +24,18 @@ const session: WordSessionDetailRead = {
   created_at: '2026-10-12T10:00:00Z', last_put_at: null, template_name: 'نموذج.docx',
   subject: 'التصاريح الأمنية', recipient_name: 'مدير الموارد البشرية', cc: ['الإدارة'],
 }
-const book = {
-  id: 42, ref_number: session.ref_number, subject: session.subject, service_id: 'General Book',
-  created_at: session.created_at, submitted_by_name: 'SAEED ALHARBI', submitted_by_g: 'G1234', classification_code: '1/5', versions: [],
-} as BookRead
+const book: BookRead = {
+  id: 42, ref_number: session.ref_number, category_id: 'GS',
+  category: { id: 'GS', name_ar: 'عام', name_en: 'General', requires_approval: false, prefix: 'G' },
+  subject: session.subject, direction: null, stamp_style: null, approval_state: 'none',
+  created_at: session.created_at, deleted_at: null, priority: 'Normal', is_draft: false,
+  voided_at: null, edit_session: null, classification_code: '1/5', is_word_book: true,
+  service_id: 'General Book', versions: [], doc_manager_has_signature: false, current_template_id: null,
+  included_papers_revision: 0, included_papers_fixed_page_count: 0, included_papers_total_page_count: 0,
+  access_scope: 'full', can_write: true, can_sign: false, can_review: false,
+  confidentiality: 'general', can_send: true, can_change_confidentiality: true,
+  submitted_by_name: 'SAEED ALHARBI', submitted_by_g: 'G1234',
+}
 
 function setup() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -36,6 +45,7 @@ function setup() {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  vi.clearAllMocks()
   capabilities.templates = true
   vi.spyOn(api, 'getBook').mockResolvedValue(book)
   vi.spyOn(api, 'getWordSession').mockResolvedValue(session)
@@ -117,6 +127,19 @@ describe('WordSessionPage in Arabic', () => {
     expect(await screen.findByText('saved:42')).toBeVisible()
     await waitFor(() => expect(screen.getByTestId('paper')).toHaveAttribute('data-url', '/final.pdf'))
     expect(screen.getByRole('button', { name: 'حفظ كقالب' })).toBeVisible()
+    expect(toast.loading).toHaveBeenCalledWith(ar.books.word.finishing)
+    expect(toast.success).toHaveBeenCalledWith(ar.books.word.finished, { id: 'loading-toast', reference: session.ref_number })
+  })
+
+  it('morphs finish loading into an error when saving fails', async () => {
+    vi.mocked(api.getWordSession).mockResolvedValue({ ...session, last_put_at: '2026-10-12T10:05:00Z' })
+    vi.spyOn(api, 'finishWordSession').mockRejectedValue(new Error('failed'))
+    setup()
+    const finish = await screen.findByRole('button', { name: 'حفظ الكتاب' })
+    await waitFor(() => expect(finish).toBeEnabled())
+    await userEvent.click(finish)
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.any(String), { id: 'loading-toast', reference: session.ref_number }))
+    expect(toast.loading).toHaveBeenCalledWith(ar.books.word.finishing)
   })
 
   it('creates a new template Word session and navigates to it', async () => {

@@ -94,6 +94,8 @@
 :root {
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
   --bg: #f5f4f1;
   --surface: #ffffff;
   --surface-raised: #fafaf6;
@@ -816,8 +818,9 @@
 @media (max-width: 1559px) {
   [data-topnav] {
     gap: 0.5rem;
-    padding-left: 1rem;
-    padding-right: 1rem;
+    /* Physical env() insets: a landscape phone's notch/island sits on a physical side whatever the direction. */
+    padding-left: max(1rem, var(--safe-left));
+    padding-right: max(1rem, var(--safe-right));
   }
 
   [data-topnav] .topnav-brand-copy {
@@ -856,6 +859,36 @@
   }
 }
 
+/* Touch screens (a phone or tablet in landscape lands in this row, not the phone bar): every control is a real
+   44px target. The fixed row cannot always hold that many 44px targets (a landscape phone is 844px wide, minus
+   notch insets, with up to 17 controls), so the destinations strip scrolls sideways instead of squeezing a link
+   below 44px or pushing a utility off-screen. The strip's bottom padding/negative margin keep the 3px active
+   underline (which hangs below its link) inside the scrolling box.
+
+   The strip says that it scrolls: a soft shadow on the physical edge that has destinations hidden past it, and
+   only there (the classic scroll-shadow: two `local` covers in the surface colour travel with the content and
+   hide the two `scroll` shadows once that end is reached, so nothing shows when the strip fits). Physical
+   left/right is right for RTL too: the clipped links are on whichever side the strip has not scrolled to. */
+@media (pointer: coarse) {
+  [data-topnav] .topnav-link {
+    min-width: 44px;
+    min-height: 44px;
+    flex-shrink: 0;
+  }
+
+  [data-topnav] .topnav-destinations {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 14px;
+    margin-bottom: -14px;
+    background:
+      linear-gradient(to right, var(--surface) 30%, transparent) 0 0 / 28px calc(100% - 14px) no-repeat local,
+      linear-gradient(to left, var(--surface) 30%, transparent) 100% 0 / 28px calc(100% - 14px) no-repeat local,
+      linear-gradient(to right, color-mix(in srgb, var(--text) 22%, transparent), transparent) 0 0 / 14px calc(100% - 14px) no-repeat scroll,
+      linear-gradient(to left, color-mix(in srgb, var(--text) 22%, transparent), transparent) 100% 0 / 14px calc(100% - 14px) no-repeat scroll;
+  }
+}
+
 :is(
   [data-font-scale="20"],
   [data-font-scale="21"],
@@ -865,8 +898,8 @@
 ) [data-topnav] {
   font-size: 18px;
   gap: 0.5rem;
-  padding-left: 1rem;
-  padding-right: 1rem;
+  padding-left: max(1rem, var(--safe-left));
+  padding-right: max(1rem, var(--safe-right));
 }
 :is(
   [data-font-scale="20"],
@@ -1032,6 +1065,28 @@ body {
   background: var(--primary);
   border: 2px solid var(--surface);
   cursor: pointer;
+}
+
+/* Touch: the range's own box is the hit area, so make it a 44px-tall box and draw the 4px track inside it
+   (a transparent 44px box over a thin track and the same 16px thumb, centred on the track). */
+@media (pointer: coarse) {
+  .aa-slider {
+    height: 44px;
+    background: transparent;
+  }
+  .aa-slider::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 9999px;
+    background: var(--border);
+  }
+  .aa-slider::-webkit-slider-thumb {
+    margin-top: -6px;
+  }
+  .aa-slider::-moz-range-track {
+    height: 4px;
+    border-radius: 9999px;
+    background: var(--border);
+  }
 }
 
 
@@ -1792,7 +1847,7 @@ body {
 /* --- Print: an A4 sheet of the document only -------------------------------
    The record screen (BookRecordPage) prints to be physically signed. Two
    things otherwise break the output: window.print() dumps the whole app
-   shell, and the shell's `h-screen` + `overflow-hidden` cage pins everything
+   shell, and the shell's `h-dvh` + `overflow-hidden` cage pins everything
    to a single viewport so a multi-page document is cropped to page 1. So we
    (1) release that height/scroll cage up the ancestor chain so the document
    flows onto as many A4 sheets as it needs; (2) hide every chrome element
@@ -1807,11 +1862,11 @@ body {
      page (12mm cost ~11% of the width and the letterhead's bleed).
 
      A page-NAME change forces a page break, so any in-flow box outside the
-     named element emits a blank sheet — sonner's <Toaster> renders an empty
+     named element emits a blank sheet — the previous toast host rendered an empty
      <section> right after the shell and did exactly that. The record sheet is
      the daily path, so it takes the UNNAMED page and can never regress that
      way; only the permits register (rare, bulk) carries a name, and the one
-     known trailing box is print-hidden in App.tsx. */
+     known trailing box is print-hidden in AppToaster. */
   @page {
     size: A4;
     margin: 0;
@@ -2051,7 +2106,7 @@ body {
     background: #fff !important;
     font-size: 16px !important;
   }
-  /* Uncage the shell: h-screen / flex-1 / overflow-hidden / min-h-0 otherwise
+  /* Uncage the shell: h-dvh / flex-1 / overflow-hidden / min-h-0 otherwise
      clamp the content to one screen and clip the rest. */
   #root {
     height: auto !important;

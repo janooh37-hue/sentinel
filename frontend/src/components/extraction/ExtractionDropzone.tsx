@@ -11,7 +11,7 @@
  *   - Gated behind <CapabilityGate cap="documents.scan"> — renders nothing if
  *     the user lacks the cap or while caps are loading.
  *   - Shows a loading spinner while the POST is in flight.
- *   - Surfaces errors via sonner toast and does not call onExtracted on error.
+ *   - Surfaces errors via toast and does not call onExtracted on error.
  *   - Accepts click-to-browse and drag-and-drop (image/* + application/pdf).
  *   - Honors prefers-reduced-motion (no CSS animations, transitions only).
  */
@@ -19,7 +19,7 @@
 import { useRef, useState } from 'react'
 import { Loader2, ScanLine } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { CapabilityGate } from '@/components/shell/CapabilityGate'
 import { extractDocument, type ExtractionResponse } from '@/lib/extraction'
@@ -43,15 +43,17 @@ function Dropzone({
 
   async function runExtraction(file: File): Promise<void> {
     setScanning(true)
+    const id = toast.loading(t('books.pane.scanReading'))
     try {
       const result = await extractDocument(file)
       onExtracted(result)
+      toast.dismiss(id)
     } catch (err) {
       const message =
         err instanceof Error && err.message.includes('OCR is not available')
           ? t('extraction.dropzone.errorUnavailable')
           : t('extraction.dropzone.errorGeneric')
-      toast.error(message)
+      toast.error(message, { id })
     } finally {
       setScanning(false)
     }

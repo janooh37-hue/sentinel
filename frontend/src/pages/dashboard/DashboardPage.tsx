@@ -1,12 +1,13 @@
 import { useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { useTranslation } from 'react-i18next'
 import { format } from 'date-fns'
 import { ar as arLocale } from 'date-fns/locale'
 import { Pencil } from 'lucide-react'
 import {
   api,
+  apiErrorMessage,
   type DashboardLayout,
   type DashboardQuickActionConfig,
   type WorkforceSnapshot,
@@ -33,6 +34,7 @@ import {
   type QuickActionId,
   type WidgetId,
   type WidgetSize,
+  type ResolvedDashboardLayout,
 } from '@/lib/dashboardLayout'
 import { hijriToday } from '@/lib/hijri'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
@@ -136,7 +138,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
     enabled: Boolean(user),
   })
   const layout = useMemo(() => resolveLayout(layoutQuery.data), [layoutQuery.data])
-  const [draft, setDraft] = useState<DashboardLayout | null>(null)
+  const [draft, setDraft] = useState<ResolvedDashboardLayout | null>(null)
   const editing = draft !== null
   const activeLayout = draft ?? layout
   const [quickActionsDialogOpen, setQuickActionsDialogOpen] = useState(false)
@@ -181,7 +183,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       qc.setQueryData(['dashboard-layout', user?.id], saved)
       toast.success(t('dashboard.customize.saved'))
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(apiErrorMessage(err)),
   })
   const availableIds = WIDGET_IDS.filter((id) =>
     widgetRegistry[id].available({
@@ -222,10 +224,10 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   }, [identity, isAr])
   const heroReturners = useMemo<HeroReturner[]>(
     () =>
-      (summary?.upcoming_leave_ends ?? [])
+      has('leaves.view') ? (summary?.upcoming_leave_ends ?? [])
         .filter((row) => row.days_remaining <= 0)
-        .map((row) => ({ name: pickName(row, isAr), employee_id: row.employee_id })),
-    [summary, isAr],
+        .map((row) => ({ name: pickName(row, isAr), employee_id: row.employee_id })) : [],
+    [summary, isAr, has],
   )
 
   const changeSize = (id: WidgetId, size: WidgetSize) => {
@@ -316,10 +318,10 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
               isAr={isAr}
               isLoading={summaryQuery.isPending}
               welcomeGuest={t('dashboard.welcomeBackGuest')}
-              staffOnSite={summary?.totals.present_today ?? 0}
-              onLeaveToday={summary?.totals.on_leave_today ?? 0}
+              staffOnSite={summary?.totals.present_today ?? null}
+              onLeaveToday={has('leaves.view') ? summary?.totals.on_leave_today ?? null : null}
               returnersToday={heroReturners}
-              upcomingThisWeek={summary?.upcoming_leave_ends.length ?? 0}
+              upcomingThisWeek={has('leaves.view') ? summary?.upcoming_leave_ends.length ?? 0 : 0}
               onReviewLeaves={() => onNavigate('leaves')}
             />
             <div className="mb-3.5 flex items-center justify-between gap-2">
@@ -466,8 +468,8 @@ interface DashboardHeroProps {
   isAr: boolean
   isLoading: boolean
   welcomeGuest: string
-  staffOnSite: number
-  onLeaveToday: number
+  staffOnSite: number | null
+  onLeaveToday: number | null
   returnersToday: HeroReturner[]
   upcomingThisWeek: number
   onReviewLeaves: () => void
@@ -511,7 +513,9 @@ function DashboardHero({
   )
 
   let insight: React.ReactNode
-  if (returnersToday.length === 0) {
+  if (onLeaveToday == null || staffOnSite == null) {
+    insight = null
+  } else if (returnersToday.length === 0) {
     insight = (
       <span>
         {t('dashboard.hero.calm', { n: staffOnSite })}
@@ -586,6 +590,7 @@ function DashboardHero({
               </>
             )}
           </span>
+          {onLeaveToday != null && <>
           <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-white/35" />
           {onLeaveToday > 0 ? (
             <button
@@ -603,6 +608,7 @@ function DashboardHero({
               {t('dashboard.hero.allPresent')}
             </span>
           )}
+          </>}
         </div>
 
         {/* Insight line — verbose secondary context; hidden on phones to keep

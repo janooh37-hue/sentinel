@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { api, ApiError, apiErrorMessage, type BookRead, type Confidentiality } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
@@ -54,14 +54,16 @@ function Body({ book, kind, close }: Pick<Props, 'book' | 'kind'> & { close: () 
       attach_reference: attached,
       classification_code: classification,
     }),
-    onSuccess: (res) => {
+    onMutate: () => toast.loading(t('books.word.opening')),
+    onSuccess: (res, _vars, toastId) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
+      toast.dismiss(toastId)
       close()
       navigate(`/books/${res.book_id}/word`)
     },
-    onError: (err) => {
+    onError: (err, _vars, toastId) => {
       const key = err instanceof ApiError ? ERROR_KEYS[err.code] : undefined
-      toast.error(key ? t(key) : apiErrorMessage(err))
+      toast.error(key ? t(key) : apiErrorMessage(err), { id: toastId, reference: book.ref_number })
     },
   })
   return (

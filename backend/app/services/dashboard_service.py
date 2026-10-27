@@ -132,13 +132,14 @@ def get_summary(
     parity-data scale (< 10k employees, < 100k documents) and keeping the
     queries separate makes the test surface small.
 
-    New sections require the source-page capability; mail is always caller-owned.
+    Source-page capabilities govern each protected section independently; a denied
+    section never denies the dashboard itself. Mail is always caller-owned.
     The month is chosen in the organization timezone, while its date boundaries
     use the Records page's UTC creation-day semantics, including voided rows.
     """
     if today is None:
         today = datetime.now(book_service._ORGANIZATION_TIMEZONE).date()
-    can_view_leaves = user is not None and perm_service.has_capability(db, user, "leaves.view")
+    can_view_leaves = user is None or perm_service.has_capability(db, user, "leaves.view")
     if user is not None:
         owner_user_id = user.id
 
@@ -164,7 +165,15 @@ def get_summary(
 # ---------------------------------------------------------------------------
 
 
-def _compute_totals(db: Session, *, today: date, user: User | None = None) -> DashboardTotals:
+def _compute_totals(
+    db: Session,
+    *,
+    today: date,
+    user: User | None = None,
+) -> DashboardTotals:
+    can_view_employees = user is None or perm_service.has_capability(db, user, "employees.view")
+    can_view_leaves = user is None or perm_service.has_capability(db, user, "leaves.view")
+    can_view_violations = user is None or perm_service.has_capability(db, user, "violations.view")
     by_status: dict[str, int] = {
         status: count
         for status, count in db.execute(
@@ -209,10 +218,14 @@ def _compute_totals(db: Session, *, today: date, user: User | None = None) -> Da
             forms_stmt = forms_stmt.where(document_visibility)
     forms_this_month = int(db.execute(forms_stmt).scalar_one())
 
-    open_violations_count = int(
-        db.execute(
-            select(func.count()).select_from(Violation).where(Violation.status == "Open")
-        ).scalar_one()
+    open_violations_count = (
+        int(
+            db.execute(
+                select(func.count()).select_from(Violation).where(Violation.status == "Open")
+            ).scalar_one()
+        )
+        if can_view_violations
+        else None
     )
 
     book_draft_stmt = (
@@ -227,11 +240,11 @@ def _compute_totals(db: Session, *, today: date, user: User | None = None) -> Da
     book_draft_count = int(db.execute(book_draft_stmt).scalar_one())
 
     return DashboardTotals(
-        employees_active=our_staff + loaned,
-        our_staff=our_staff,
-        loaned=loaned,
-        on_leave_today=on_leave_count,
-        present_today=present_today,
+        employees_active=our_staff + loaned if can_view_employees else None,
+        our_staff=our_staff if can_view_employees else None,
+        loaned=loaned if can_view_employees else None,
+        on_leave_today=on_leave_count if can_view_leaves else None,
+        present_today=present_today if can_view_employees and can_view_leaves else None,
         forms_this_month=forms_this_month,
         open_violations_count=open_violations_count,
         book_draft_count=book_draft_count,
@@ -372,14 +385,16 @@ def _my_records(db: Session, *, user: User, today: date) -> DashboardMyRecords:
 
 
 def _unread_mail(db: Session, *, user: User) -> DashboardUnreadMail:
+    stmt = select(LedgerEntry).where(ledger_service.unread_email_clause(user.id))
+    visible = ledger_service.related_book_visible(db, user)
+    if visible is not None:
+        stmt = stmt.where(visible)
+    count = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     latest = db.scalars(
-        select(LedgerEntry)
-        .where(ledger_service.unread_email_clause(user.id))
-        .order_by(LedgerEntry.created_at.desc(), LedgerEntry.id.desc())
-        .limit(RECENT_LIMIT)
+        stmt.order_by(LedgerEntry.created_at.desc(), LedgerEntry.id.desc()).limit(RECENT_LIMIT)
     )
     return DashboardUnreadMail(
-        count=ledger_service.unread_email_count(db, user.id),
+        count=count,
         latest=[DashboardUnreadMailItem.model_validate(row) for row in latest],
     )
 

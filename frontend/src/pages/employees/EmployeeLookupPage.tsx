@@ -13,7 +13,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { AttendanceHeroCard } from '@/components/employees/AttendanceHeroCard'
 import { useAttendanceAttention } from '@/components/employees/useAttendanceAttention'
@@ -26,7 +26,7 @@ import type { EmployeeFormOutput } from '@/components/employees/schema'
 import { EMPLOYEE_STATUSES } from '@/components/employees/schema'
 import { Button } from '@/components/ui/button'
 import { pickEmployeeName } from '@/lib/employeeName'
-import { ApiError, api, apiErrorMessage } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { EmployeeCreate, ListEmployeesParams } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
@@ -112,7 +112,7 @@ export function EmployeeLookupPage(): React.JSX.Element {
       navigate(`/employees/${encodeURIComponent(row.id)}`, { replace: true })
     },
     onError: (err) => {
-      setCreateError(humanError(err))
+      setCreateError(apiErrorMessage(err))
       toast.error(apiErrorMessage(err))
     },
   })
@@ -211,14 +211,4 @@ export function EmployeeLookupPage(): React.JSX.Element {
       )}
     </div>
   )
-}
-
-function humanError(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.code === 'EMPLOYEE_INVALID_STATUS_END_DATE') {
-      return err.message
-    }
-    return `${err.code}: ${err.message}`
-  }
-  return err instanceof Error ? err.message : String(err)
 }

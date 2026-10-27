@@ -10,7 +10,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 import { ViolationsTable } from '@/components/employees/ViolationsTable'
 import { api, apiErrorMessage } from '@/lib/api'
@@ -324,7 +324,7 @@ export function ViolationsTab({
   const targetReady =
     !shouldLoadFull ||
     (!fullQuery.isError &&
-      (fullQuery.data !== undefined || (!fullQuery.isPending && !fullQuery.isError)))
+      (fullQuery.data !== undefined || !fullQuery.isPending))
   const targetPresent = openId != null && rows.some((row) => row.id === openId)
   const { highlightedId, targetNotFoundId } = useViolationTarget({
     openId,
