@@ -26,7 +26,6 @@ from typing import Final
 
 from fastapi.responses import HTMLResponse
 
-from app.core.classifications import CLASSIFICATIONS
 from app.core.grades import GRADE_RANK, SECRET, paper_mark
 from app.core.qr import barcode_payload
 
@@ -44,7 +43,6 @@ URGENCY_LABEL_AR: Final[dict[str, str]] = {
 
 # The General Book's office line (header3.xml), printed as-is.
 _OFFICE_AR: Final = "مكتب ادارة الوثبة"
-_UNIT_BY_TAB: Final[dict[int, str]] = {c.tab: c.unit_ar for c in CLASSIFICATIONS}
 
 
 @dataclass(frozen=True)
@@ -53,7 +51,6 @@ class PaperContext:
     subjects: tuple[str, ...]  # ordered; escape every one
     grade: str  # core.grades code
     urgency: str  # stored value: Normal | High | Very High
-    tab: int | None  # classification tab 1..15 (core.classifications)
     ref: str | None  # None for a Draft
     paper_date: date | None  # None for a Draft
     draft_number: str | None  # "000123" for a Draft, else None
@@ -85,6 +82,8 @@ body {
 }
 @media screen {
   body { inline-size: 210mm; margin-inline: auto; box-shadow: 0 0 4mm rgb(0 0 0 / 0.2); }
+  /* On screen, pin the per-page furniture to the sheet, not the window. */
+  .paper > .rule, .paper > .mark, .paper > .footer, .paper > .watermark { position: absolute; }
 }
 .paper { position: relative; inline-size: 210mm; min-block-size: 297mm; }
 .frame td { padding-block: 0; padding-inline: 13.2mm 14.3mm; vertical-align: top; }
@@ -142,6 +141,7 @@ body {
 .watermark .draft { font-size: 64pt; font-weight: bold; font-family: "GSSG Naskh", sans-serif; }
 .watermark .draft-number { font-size: 28pt; direction: ltr; unicode-bidi: isolate; }
 .watermark .viewer { font-size: 34pt; }
+.urgency { margin: 0 0 2mm; font-weight: bold; }
 .subjects { margin: 0 0 4mm; padding: 0; list-style: none; font-weight: bold; }
 .subjects li { margin: 0; }
 .body { overflow-wrap: anywhere; }
@@ -173,11 +173,6 @@ def _office_block(ctx: PaperContext) -> str:
         lines.append(f'<p>الرقم: <span class="ref">{_e(ctx.ref)}</span></p>')
         lines.append(f'<p>التاريخ: <span class="ref">{ctx.paper_date:%d-%m-%Y}</span></p>')
     lines.append(f"<p>{_e(_OFFICE_AR)}</p>")
-    unit = _UNIT_BY_TAB.get(ctx.tab) if ctx.tab is not None else None
-    if unit:
-        lines.append(f"<p>{_e(unit)}</p>")
-    urgency = URGENCY_LABEL_AR.get(ctx.urgency, ctx.urgency)
-    lines.append(f"<p>الاستعجال: {_e(urgency)}</p>")
     if not is_draft:
         assert ctx.ref is not None and ctx.paper_date is not None
         payload = _e(barcode_payload(ctx.ref, ctx.paper_date))
@@ -223,6 +218,12 @@ def render_paper(ctx: PaperContext) -> str:
     mark_html = f'<div class="mark">{_e(mark)}</div>' if mark else ""
     subjects = "".join(f"<li>الموضوع: {_e(subject)}</li>" for subject in ctx.subjects)
     subjects_html = f'<ul class="subjects">{subjects}</ul>' if subjects else ""
+    # The Word letterhead has no urgency; print it once, above the subjects,
+    # only when it is not Normal (as Unclassified prints no grade mark).
+    urgency = URGENCY_LABEL_AR.get(ctx.urgency, ctx.urgency)
+    urgency_html = (
+        f'<p class="urgency">الاستعجال: {_e(urgency)}</p>' if ctx.urgency != "Normal" else ""
+    )
     title = ctx.ref or (f"مسودة {ctx.draft_number}" if ctx.draft_number else "مسودة")
     return (
         '<!DOCTYPE html>\n<html lang="ar" dir="rtl"><head><meta charset="utf-8">'
@@ -237,7 +238,8 @@ def render_paper(ctx: PaperContext) -> str:
         '<table class="frame" role="presentation">'
         '<thead><tr><td><div class="head-space"></div></td></tr></thead>'
         '<tfoot><tr><td><div class="foot-space"></div></td></tr></tfoot>'
-        f'<tbody><tr><td><main>{subjects_html}<div class="body">{ctx.body_html}</div></main>'
+        f"<tbody><tr><td><main>{urgency_html}{subjects_html}"
+        f'<div class="body">{ctx.body_html}</div></main>'
         "</td></tr></tbody></table></div></body></html>"
     )
 
