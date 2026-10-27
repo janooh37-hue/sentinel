@@ -298,6 +298,9 @@ class Book(Base):
     # Normalised search corpus (migration 0057) — populated by Task 15.
     # FTS5 external-content table books_fts indexes this column.
     search_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The Ledger Book draft this record was Saved & Sent from (ADR 0007). No FK:
+    # the draft row is deleted at Save & Send, so the id is provenance only.
+    source_draft_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     category: Mapped[BookCategory] = relationship(back_populates="books")
     approval_steps: Mapped[list[BookApprovalStep]] = relationship(
@@ -437,6 +440,63 @@ class BookVersion(Base):
         UniqueConstraint("book_id", "version_no", name="uq_book_versions_book_version"),
         Index("ix_book_versions_book", "book_id"),
     )
+
+
+class BookDraft(Base):
+    """A private Ledger Book draft (ADR 0007): no number until Save & Send.
+
+    Only ``owner_user_id`` sees it. No FK on the owner, same SQLite batch-ALTER
+    reason as ``Book.created_by_user_id``.
+    """
+
+    __tablename__ = "book_drafts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    owner_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The التبويب tab (1..15) the number will be allocated under.
+    tab: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    grade: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="unclassified", server_default="unclassified"
+    )
+    urgency: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="Normal", server_default="Normal"
+    )
+    subjects: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    body_html: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    __table_args__ = (
+        Index("ix_book_drafts_owner_user_id", "owner_user_id"),
+        CheckConstraint("tab IS NULL OR (tab BETWEEN 1 AND 15)", name="ck_book_drafts_tab"),
+        CheckConstraint(grades.GRADE_CHECK, name="ck_book_drafts_grade"),
+        CheckConstraint(grades.URGENCY_CHECK, name="ck_book_drafts_urgency"),
+    )
+
+
+class LedgerBookSave(Base):
+    """One tracked edit of a Ledger Book Revision (ADR 0008): append-only.
+
+    The Revision's current content is its newest save.
+    """
+
+    __tablename__ = "ledger_book_saves"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    version_id: Mapped[int] = mapped_column(
+        ForeignKey("book_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    saved_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    saved_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+    )
+    subjects: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    body_html: Mapped[str] = mapped_column(Text, nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    __table_args__ = (Index("ix_ledger_book_saves_version_id", "version_id"),)
 
 
 class BookRevisionAccess(Base):

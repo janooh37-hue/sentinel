@@ -102,7 +102,9 @@ def _contexts(engine: Engine) -> dict[int, dict[str, object]]:
 
 def test_single_head_follows_parent() -> None:
     script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
-    assert script.get_heads() == [HEAD]
+    heads = script.get_heads()
+    assert len(heads) == 1
+    assert HEAD in {revision.revision for revision in script.walk_revisions("base", heads[0])}
     assert script.get_revision(HEAD).down_revision == PARENT
 
 
