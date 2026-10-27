@@ -7,6 +7,9 @@ ADR 0007. Upgrade maps each level to a fixed grade and a distribution:
     personal -> unclassified / named (no recipients: only the creator opens it)
     secret   -> secret / organization
 
+Each legacy Personal record gets a ``book_legacy_personal`` audit row, so the
+D5 review report (``scripts/report_legacy_personal.py``) can still find them.
+
 ``books.priority`` becomes ``books.urgency`` with the same values, plus the new
 ``Very High``; the frozen ``book_versions.approval_context`` key ``priority``
 becomes ``urgency``.
@@ -58,6 +61,7 @@ BOOKS_FTS_TRIGGER_SQL = (
 GRADE_CHECK = "grade IN ('unclassified', 'secret', 'top_secret', 'addressee_only')"
 DISTRIBUTION_CHECK = "distribution IN ('organization', 'named')"
 URGENCY_CHECK = "urgency IN ('Normal', 'High', 'Very High')"
+LEGACY_PERSONAL_ACTION = "book_legacy_personal"
 LEVEL_CHECK = "confidentiality IN ('general', 'personal', 'secret', 'directed')"
 
 
@@ -92,6 +96,14 @@ def upgrade() -> None:
                 "distribution", sa.String(length=16), nullable=False, server_default="organization"
             )
         )
+    op.execute(
+        f"""
+        INSERT INTO audit_log (actor, action, entity_type, entity_id, payload, ts)
+        SELECT NULL, '{LEGACY_PERSONAL_ACTION}', 'book', CAST(id AS TEXT),
+               json_object('ref_number', ref_number), CURRENT_TIMESTAMP
+        FROM books WHERE confidentiality = 'personal'
+        """
+    )
     op.execute(
         """
         UPDATE books SET
@@ -138,6 +150,7 @@ def downgrade() -> None:
         END
         """
     )
+    op.execute(f"DELETE FROM audit_log WHERE action = '{LEGACY_PERSONAL_ACTION}'")
     op.execute("UPDATE books SET urgency = 'High' WHERE urgency = 'Very High'")
     op.execute(
         """

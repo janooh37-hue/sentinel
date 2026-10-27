@@ -115,6 +115,11 @@ def test_upgrade_backfills_grade_distribution_and_urgency(tmp_path: Path) -> Non
         book_id: (grade, distribution, priority)
         for book_id, (_level, priority, grade, distribution) in LEGACY.items()
     }
+    with engine.connect() as c:
+        legacy = c.execute(
+            text("SELECT entity_id, payload FROM audit_log WHERE action = 'book_legacy_personal'")
+        ).all()
+    assert [(row[0], json.loads(row[1])) for row in legacy] == [("3", {"ref_number": "HR-0003"})]
     assert _contexts(engine) == {
         book_id: {"urgency": priority, "note": "keep"}
         for book_id, (_level, priority, _grade, _distribution) in LEGACY.items()
@@ -163,6 +168,10 @@ def test_downgrade_restores_levels_and_priority(tmp_path: Path) -> None:
         4: ("secret", "High"),
     }
     assert _contexts(engine)[2] == {"priority": "High", "note": "keep"}
+    with engine.connect() as c:
+        assert not c.execute(
+            text("SELECT 1 FROM audit_log WHERE action = 'book_legacy_personal'")
+        ).all()
     assert _triggers(engine) == {"books_ai", "books_ad", "books_au"}
     assert _fts_hits(engine, "zebra3") == [3]
 
