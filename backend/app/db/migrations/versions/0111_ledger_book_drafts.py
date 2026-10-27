@@ -47,6 +47,8 @@ def upgrade() -> None:
         sa.CheckConstraint(TAB_CHECK, name="ck_book_drafts_tab"),
         sa.CheckConstraint(GRADE_CHECK, name="ck_book_drafts_grade"),
         sa.CheckConstraint(URGENCY_CHECK, name="ck_book_drafts_urgency"),
+        # Never reuse a deleted draft's id: draft numbers and image URLs carry it.
+        sqlite_autoincrement=True,
     )
     op.create_index("ix_book_drafts_owner_user_id", "book_drafts", ["owner_user_id"])
 

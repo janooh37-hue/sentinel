@@ -95,3 +95,26 @@ def test_hugerte_rtl_lists_and_tables_preserve_editor_formatting() -> None:
 def test_image_prefix_must_be_same_origin(prefix: str) -> None:
     with pytest.raises(ValueError, match="same-origin"):
         sanitize_body("<p>text</p>", image_src_prefixes=(prefix,))
+
+
+ATTRIBUTE_BREAKOUT = '<img alt="><svg onload=alert(1)>">'
+
+
+def test_srcless_img_with_markup_in_alt_never_exposes_live_tags() -> None:
+    assert clean(ATTRIBUTE_BREAKOUT) == ""
+    assert clean(f"<p>x{ATTRIBUTE_BREAKOUT}y</p>") == "<p>xy</p>"
+
+
+def test_img_with_markup_in_alt_keeps_it_as_escaped_attribute_text() -> None:
+    out = clean(f'<img src="{PREFIX}{IMAGE}" alt="><svg onload=alert(1)>">')
+
+    assert "<svg" not in out
+    assert out == f'<img src="{PREFIX}{IMAGE}" alt="&gt;&lt;svg onload=alert(1)&gt;">'
+
+
+def test_image_pass_handles_nh3_0_3_6_unescaped_attribute_output() -> None:
+    # nh3 0.3.6 emits this payload verbatim (a raw '>' inside the quoted alt);
+    # the src-less-image pass must parse it as one attribute, not cut it.
+    from app.core.ledger_html import _drop_srcless_images
+
+    assert _drop_srcless_images('<p><img alt="><svg onload=alert(1)>"></p>') == "<p></p>"

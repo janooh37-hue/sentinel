@@ -10,6 +10,8 @@ survives only when its ``src`` is one of our same-origin image paths.
 from __future__ import annotations
 
 import re
+from html import escape
+from html.parser import HTMLParser
 from typing import Final
 
 import nh3
@@ -95,9 +97,7 @@ STYLE_PROPERTIES: Final[frozenset[str]] = frozenset(
 )
 
 _STYLE_FORBIDDEN = re.compile(r"url\s*\(|expression\s*\(|\\|/\*|@import|javascript:", re.I)
-_IMG_TAG = re.compile(r"<img\b[^>]*>")
-# nh3 serialises attributes as name="value" with any quote in the value escaped.
-_ATTRIBUTE_NAME = re.compile(r'\s([\w:-]+)="[^"]*"')
+_VOID_TAGS: Final[frozenset[str]] = frozenset({"br", "hr", "img", "col"})
 _IMAGE_NAME = re.compile(r"[A-Za-z0-9_-]{1,64}\.(?:png|jpe?g|gif|webp)")
 
 
@@ -137,8 +137,47 @@ def sanitize_body(html: str, *, image_src_prefixes: tuple[str, ...]) -> str:
         url_schemes=set(),
         filter_style_properties=set(STYLE_PROPERTIES),
     )
-    # nh3 serialises every surviving tag canonically, so an img whose src was
-    # filtered out has no ``src`` attribute left: drop the whole element.
-    return _IMG_TAG.sub(
-        lambda tag: tag[0] if "src" in _ATTRIBUTE_NAME.findall(tag[0]) else "", cleaned
-    )
+    return _drop_srcless_images(cleaned)
+
+
+class _Reserializer(HTMLParser):
+    """Re-emit already-sanitized HTML from parsed tokens, dropping src-less imgs.
+
+    A real parser, never a regex over markup: quoted attribute values such as
+    ``alt="><svg onload=…>"`` stay attribute text, and every value and text
+    node is re-escaped on output.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+
+    def _start(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag not in TAGS:
+            return
+        if tag == "img" and not any(name == "src" and value for name, value in attrs):
+            return
+        rendered = "".join(f' {name}="{escape(value or "", quote=True)}"' for name, value in attrs)
+        self.parts.append(f"<{tag}{rendered}>")
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._start(tag, attrs)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._start(tag, attrs)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in TAGS and tag not in _VOID_TAGS:
+            self.parts.append(f"</{tag}>")
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(escape(data, quote=False))
+
+
+def _drop_srcless_images(cleaned: str) -> str:
+    # nh3 removed any disallowed src via attribute_filter; an img left without
+    # src is dropped whole here.
+    parser = _Reserializer()
+    parser.feed(cleaned)
+    parser.close()
+    return "".join(parser.parts)

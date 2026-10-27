@@ -2416,6 +2416,9 @@ def generate_document(
     if commit:
         if revise_book is not None:
             _logged_book = revise_book
+            # Re-checked in the (background) execution session: never rewrite or
+            # extend a Ledger Book's Revisions from the DOCX pipeline.
+            book_service.require_not_ledger_book(revise_book)
             latest = revise_book.versions[-1] if revise_book.versions else None
             has_approval_assignments = bool(latest and latest.approval_steps)
             has_retained_provenance = (

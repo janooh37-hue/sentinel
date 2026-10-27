@@ -445,3 +445,55 @@ def test_included_papers_is_unavailable_before_the_lock_guard(ledger_api):
     assert response.status_code == 422, response.text
     assert response.json()["error"]["code"] == "INCLUDED_PAPERS_UNAVAILABLE"
     assert _snapshot(api) == before
+
+
+@pytest.mark.parametrize("signed", [False, True], ids=["unsigned", "signed"])
+def test_docx_regeneration_never_rewrites_a_ledger_revision(ledger_api, signed):
+    api = ledger_api
+    if signed:
+        api.sign()
+    before = _snapshot(api)
+    api.actor[0] = api.admin
+
+    response = api.client.post(
+        "/api/v1/documents/generate",
+        json={
+            "template_id": "General Book",
+            "fields": {"subject": "Hijack", "body": "x"},
+            "commit": True,
+            "revise_of_book_id": api.book_id,
+            "classification_code": "5/1",
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "LEDGER_BOOK_CHAIN_ONLY"
+    assert _snapshot(api) == before
+
+
+def test_background_regeneration_rechecks_ledger_books(ledger_api):
+    # The job runs generate_document in its own session; it must refuse even
+    # without the request-time access check (record_access_user=None).
+    from app.api.errors import AppError
+    from app.services import document_service
+
+    api = ledger_api
+    before = _snapshot(api)
+
+    with pytest.raises(AppError) as raised:
+        document_service.generate_document(
+            api.db,
+            employee_id=None,
+            template_id="General Book",
+            fields={"subject": "Hijack", "body": "x"},
+            commit=True,
+            current_user=api.admin,
+            revise_of_book_id=api.book_id,
+            classification_code="5/1",
+        )
+
+    assert raised.value.code == "LEDGER_BOOK_CHAIN_ONLY"
+    api.db.rollback()
+    assert _snapshot(api) == before
+    version = api.db.get(BookVersion, api.version_id)
+    assert version.template_id == "Ledger Book"

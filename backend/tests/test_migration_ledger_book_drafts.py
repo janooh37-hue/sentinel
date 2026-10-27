@@ -205,3 +205,17 @@ def test_downgrade_and_reupgrade_preserve_books_and_fts(at_parent: tuple[Engine,
         c.execute(text(DRAFT_INSERT.format(columns="", values="")))
         assert c.execute(text("SELECT grade FROM book_drafts")).scalar_one() == "unclassified"
     assert_seed_and_fts_survive(engine)
+
+
+def test_deleted_draft_ids_are_not_reused(at_parent: tuple[Engine, Config]) -> None:
+    engine, config = at_parent
+    command.upgrade(config, HEAD)
+    insert = text(
+        "INSERT INTO book_drafts (owner_user_id, created_at, updated_at) "
+        "VALUES (1, '2026-10-01 00:00:00', '2026-10-01 00:00:00')"
+    )
+    with engine.begin() as c:
+        first = c.execute(insert).lastrowid
+        c.execute(text("DELETE FROM book_drafts WHERE id = :id"), {"id": first})
+        second = c.execute(insert).lastrowid
+    assert second > first

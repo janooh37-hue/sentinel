@@ -473,6 +473,8 @@ class BookDraft(Base):
         CheckConstraint("tab IS NULL OR (tab BETWEEN 1 AND 15)", name="ck_book_drafts_tab"),
         CheckConstraint(grades.GRADE_CHECK, name="ck_book_drafts_grade"),
         CheckConstraint(grades.URGENCY_CHECK, name="ck_book_drafts_urgency"),
+        # Never reuse a deleted draft's id: draft numbers and image URLs carry it.
+        {"sqlite_autoincrement": True},
     )
 
 
