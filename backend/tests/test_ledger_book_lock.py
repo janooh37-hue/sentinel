@@ -187,11 +187,12 @@ def _mutate(api: LedgerBookAPI, method: str, route: str, payload: str | None = N
         },
         "annotation": _ANNOTATION,
     }
-    if payload == "upload":
+    if payload in ("upload", "upload_signed"):
         return api.client.request(
             method,
             f"/api/v1{path}",
             files={"file": ("replacement.pdf", b"%PDF-1.4\nreplacement\n%%EOF", "application/pdf")},
+            data={"as_signed": "true"} if payload == "upload_signed" else None,
         )
     kwargs = {"json": payloads[payload]} if payload else {}
     return api.client.request(method, f"/api/v1{path}", **kwargs)
@@ -235,53 +236,77 @@ def _prepare_mutation(api: LedgerBookAPI, method: str, route: str) -> None:
         api.db.commit()
 
 
+# Generic approval-flow entries refuse every Ledger Book, signed or not, with
+# LEDGER_BOOK_CHAIN_ONLY (ADR 0008: signing authority is the Branch chain only).
+# That check runs before the signature lock, so signed books answer it too.
+_CHAIN_ONLY = {
+    "unfile-signed-copy",
+    "add-reviewer",
+    "remove-reviewer",
+    "override-state",
+    "submit",
+    "sign",
+    "reject",
+    "return",
+    "finish-word",
+    "add-note",
+    "review",
+}
+
+
+def _expected_code(case_id: str) -> str:
+    return "LEDGER_BOOK_CHAIN_ONLY" if case_id in _CHAIN_ONLY else "REVISION_LOCKED"
+
+
 # PUT included-papers is intentionally excluded: a real Ledger Revision has no
 # Document, so _editable_context raises INCLUDED_PAPERS_UNAVAILABLE before the
 # lock guard (included_papers_service.py). Do not fabricate a DOCX/PDF-backed
 # Ledger Revision merely to reach a guard that its real API cannot reach.
-@pytest.mark.parametrize(
-    ("method", "route", "payload"),
-    [
-        pytest.param("PATCH", "/books/{book_id}", "metadata", id="metadata"),
-        pytest.param("DELETE", "/books/{book_id}", None, id="delete-book"),
-        pytest.param("POST", "/books/{book_id}/attachments", "upload", id="add-attachment"),
-        pytest.param("DELETE", "/books/{book_id}/attachments/0", None, id="delete-attachment"),
-        pytest.param("PUT", "/books/{book_id}/attachments/0", "upload", id="replace-attachment"),
-        pytest.param("PUT", "/books/{book_id}/signed-copy", "upload", id="replace-signed-copy"),
-        pytest.param("DELETE", "/books/{book_id}/signed-copy", None, id="unfile-signed-copy"),
-        pytest.param("POST", "/books/{book_id}/reviewers", "reviewers", id="add-reviewer"),
-        pytest.param("DELETE", "/books/{book_id}/reviewers/{user_id}", None, id="remove-reviewer"),
-        pytest.param("PUT", "/books/{book_id}/grade", "grade", id="grade"),
-        pytest.param("POST", "/books/{book_id}/restore-distribution", "restore", id="distribution"),
-        pytest.param("POST", "/books/{book_id}/send", "send", id="send"),
-        pytest.param("DELETE", "/books/{book_id}/recipients/{recipient_id}", None, id="recall"),
-        pytest.param("PUT", "/books/{book_id}/state", "state", id="override-state"),
-        pytest.param("POST", "/books/{book_id}/submit", "submit", id="submit"),
-        pytest.param("POST", "/books/{book_id}/sign", "sign", id="sign"),
-        pytest.param("POST", "/books/{book_id}/reject", "decision", id="reject"),
-        pytest.param("POST", "/books/{book_id}/return", "decision", id="return"),
-        pytest.param("POST", "/books/{book_id}/word-sessions", None, id="reopen-word"),
-        pytest.param("POST", "/books/{book_id}/word-sessions/finish", None, id="finish-word"),
-        pytest.param("PUT", "/ledger/books/{book_id}/content", "content", id="ledger-content"),
-        pytest.param("POST", "/books/{book_id}/links", "link", id="add-link"),
-        pytest.param("DELETE", "/books/{book_id}/links/{target_book_id}", None, id="remove-link"),
-        pytest.param("POST", "/books/{book_id}/note", "decision", id="add-note"),
-        pytest.param("POST", "/books/{book_id}/review", "review", id="review"),
-        pytest.param(
-            "POST",
-            "/books/{book_id}/versions/{version_id}/annotations",
-            "annotation",
-            id="add-annotation",
-        ),
-        pytest.param(
-            "DELETE",
-            "/books/{book_id}/versions/{version_id}/annotations/{annotation_id}",
-            None,
-            id="remove-annotation",
-        ),
-    ],
-)
-def test_signed_revision_rejects_mutation_without_changes(ledger_api, method, route, payload):
+_GUARDED = [
+    pytest.param("PATCH", "/books/{book_id}", "metadata", id="metadata"),
+    pytest.param("DELETE", "/books/{book_id}", None, id="delete-book"),
+    pytest.param("POST", "/books/{book_id}/attachments", "upload", id="add-attachment"),
+    pytest.param("DELETE", "/books/{book_id}/attachments/0", None, id="delete-attachment"),
+    pytest.param("PUT", "/books/{book_id}/attachments/0", "upload", id="replace-attachment"),
+    pytest.param("PUT", "/books/{book_id}/signed-copy", "upload", id="replace-signed-copy"),
+    pytest.param("DELETE", "/books/{book_id}/signed-copy", None, id="unfile-signed-copy"),
+    pytest.param("POST", "/books/{book_id}/reviewers", "reviewers", id="add-reviewer"),
+    pytest.param("DELETE", "/books/{book_id}/reviewers/{user_id}", None, id="remove-reviewer"),
+    pytest.param("PUT", "/books/{book_id}/grade", "grade", id="grade"),
+    pytest.param("POST", "/books/{book_id}/restore-distribution", "restore", id="distribution"),
+    pytest.param("POST", "/books/{book_id}/send", "send", id="send"),
+    pytest.param("DELETE", "/books/{book_id}/recipients/{recipient_id}", None, id="recall"),
+    pytest.param("PUT", "/books/{book_id}/state", "state", id="override-state"),
+    pytest.param("POST", "/books/{book_id}/submit", "submit", id="submit"),
+    pytest.param("POST", "/books/{book_id}/sign", "sign", id="sign"),
+    pytest.param("POST", "/books/{book_id}/reject", "decision", id="reject"),
+    pytest.param("POST", "/books/{book_id}/return", "decision", id="return"),
+    pytest.param("POST", "/books/{book_id}/word-sessions", None, id="reopen-word"),
+    pytest.param("POST", "/books/{book_id}/word-sessions/finish", None, id="finish-word"),
+    pytest.param("PUT", "/ledger/books/{book_id}/content", "content", id="ledger-content"),
+    pytest.param("POST", "/books/{book_id}/links", "link", id="add-link"),
+    pytest.param("DELETE", "/books/{book_id}/links/{target_book_id}", None, id="remove-link"),
+    pytest.param("POST", "/books/{book_id}/note", "decision", id="add-note"),
+    pytest.param("POST", "/books/{book_id}/review", "review", id="review"),
+    pytest.param(
+        "POST",
+        "/books/{book_id}/versions/{version_id}/annotations",
+        "annotation",
+        id="add-annotation",
+    ),
+    pytest.param(
+        "DELETE",
+        "/books/{book_id}/versions/{version_id}/annotations/{annotation_id}",
+        None,
+        id="remove-annotation",
+    ),
+]
+
+
+@pytest.mark.parametrize(("method", "route", "payload"), _GUARDED)
+def test_signed_revision_rejects_mutation_without_changes(
+    request, ledger_api, method, route, payload
+):
     _prepare_mutation(ledger_api, method, route)
     ledger_api.sign()
     before = _snapshot(ledger_api)
@@ -289,7 +314,34 @@ def test_signed_revision_rejects_mutation_without_changes(ledger_api, method, ro
     response = _mutate(ledger_api, method, route, payload)
 
     assert response.status_code == 409, response.text
-    assert response.json()["error"]["code"] == "REVISION_LOCKED"
+    case_id = request.node.callspec.id
+    assert response.json()["error"]["code"] == _expected_code(case_id)
+    assert _snapshot(ledger_api) == before
+
+
+@pytest.mark.parametrize(
+    ("method", "route", "payload"),
+    [param for param in _GUARDED if param.id in _CHAIN_ONLY]
+    + [
+        pytest.param(
+            "POST", "/books/{book_id}/attachments", "upload_signed", id="record-signed-scan"
+        )
+    ],
+)
+def test_unsigned_ledger_book_refuses_generic_approval_flow(ledger_api, method, route, payload):
+    _prepare_mutation(ledger_api, method, route)
+    before = _snapshot(ledger_api)
+    book = ledger_api.db.get(Book, ledger_api.book_id)
+    state_before = book.approval_state
+    steps_before = ledger_api.db.scalars(select(BookApprovalStep.id)).all()
+
+    response = _mutate(ledger_api, method, route, payload)
+
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "LEDGER_BOOK_CHAIN_ONLY"
+    ledger_api.db.expire_all()
+    assert ledger_api.db.get(Book, ledger_api.book_id).approval_state == state_before
+    assert ledger_api.db.scalars(select(BookApprovalStep.id)).all() == steps_before
     assert _snapshot(ledger_api) == before
 
 
