@@ -20,14 +20,24 @@ flow.
 
 ## Organization
 
-- Admins maintain **Projects** and their **Branches**. Each Branch has one
-  manager; each Project has one Project Manager. The Project Manager is the
-  top of the hierarchy for now; no Director level takes part.
-- A user is a member of at most **one** Branch. Membership is what lets a user
-  write Ledger Books, and the Branch decides who audits and who signs.
-- Today there is one Project. Nothing in the model assumes that.
-- The free-text `Employee.department` / `duty_unit`, the supervisor tree and
-  the timesheet designations are not used for routing.
+The hierarchy reuses the **Departments** of PR #258 (its ADR "Departments
+scope what users see, and a book sent to a department lands with its head");
+there is no second org model.
+
+- A **Project** is a top-level Department; its head is the Project Manager.
+- A **Branch** is a sub-department of a Project; its head is the Branch
+  Manager.
+- A user's Branch is their linked employee's derived Department: supervisor
+  links place them, and an admin Department exception overrides that. Each
+  employee has exactly one derived Department, so a user is in at most one
+  Branch. Membership is what lets a user write Ledger Books, and the Branch
+  decides who audits and who signs.
+- The Project Manager is the top of the hierarchy for now; no Director level
+  takes part. Today there is one Project; nothing assumes that.
+- Auditor pools, Clerk links and Acting appointments are new grants beside
+  #258's deputy and viewer grants.
+- The free-text `Employee.department` / `duty_unit` and the timesheet
+  designations are not used for routing.
 
 ## Roles
 
@@ -136,18 +146,26 @@ Incoming, Outgoing. Desktop and mobile behave the same.
   under the same reference, as the app already does for Records.
 - **Restart the chain on every edit.** Rejected: edits are tracked and the
   chain continues.
-- **Derive Branches from employee free text or the supervisor tree.**
-  Rejected: typos create Branches, and the manager is not explicit.
+- **Separate Projects and Branches tables with explicit member lists.**
+  Rejected after review: PR #258 already models head-anchored Departments,
+  sub-departments and a department inbox; a second org model would need
+  admins to keep both in sync. Free-text department and duty unit are rejected
+  for the reasons #258 gives.
 - **A clerk mirrors the manager.** Rejected: it would open Addressee Only
   letters and blur who acted.
 
 ## Consequences
 
-- New tables for Projects, Branches, memberships, Auditor pools, Acting
-  appointments and Clerk links, plus the Ledger Book chain tables from ADR
-  0007 phase 2. `BookApprovalStep` is not reused for the Ledger Book chain
-  unless its semantics fit unchanged.
-- Users who are not Branch members cannot write Ledger Books until an admin
-  places them.
+- New grants for Auditor pools, Acting appointments and Clerk links on
+  #258's Departments, plus the Ledger Book chain tables from ADR 0007 phase 2.
+  `BookApprovalStep` is not reused for the Ledger Book chain unless its
+  semantics fit unchanged.
+- The hierarchy half of this ADR depends on PR #258. Drafts, Save & Send,
+  the sanitizer, tracked edits, the signature lock and correction Revisions do
+  not, and come first.
+- Users with no derived Department cannot write Ledger Books until an admin
+  places them in the org tree or adds an exception.
+- Receiving a letter reuses #258's department send: it lands with the Branch
+  head and deputies, and referral to staff is #258's hand-down.
 - The Ledger Book access rule adds clerk visibility under the limits above;
   the access matrix test pins it.

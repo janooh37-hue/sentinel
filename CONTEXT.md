@@ -307,15 +307,15 @@ populations; request filters may only narrow it.
 _Avoid_: Capability, role, filter
 
 **Project**:
-An admin-maintained top unit of the hierarchy, led by its Project Manager
-(مدير مركز الإصلاح والتأهيل). It contains Branches.
-_Avoid_: Site, department
+A top-level Department (PR #258) whose head is the Project Manager (مدير مركز
+الإصلاح والتأهيل). Its sub-departments are Branches.
+_Avoid_: Site, a separate project table
 
 **Branch**:
-An admin-maintained unit of a Project with one manager (مدير فرع) and its
-members. A user belongs to at most one Branch; membership lets them write
-Ledger Books.
-_Avoid_: Department, duty unit
+A sub-department of a Project whose head is the Branch Manager (مدير فرع). A
+user's Branch is their derived Department; membership lets them write Ledger
+Books.
+_Avoid_: Duty unit, free-text department
 
 **Auditor pool**:
 The users an admin assigns to check a Branch's Ledger Books for mistakes and
