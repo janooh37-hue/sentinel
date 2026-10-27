@@ -2,7 +2,7 @@
  * Dashboard landing page — Task 5 (TAMM redesign).
  *
  * Sections (top-to-bottom):
- *   1. Hero card with rotating GSSG crest + welcome message
+ *   1. Hero: the signed-in person's staff-file folder (DashboardHero.tsx)
  *   2. "My Widgets" header + edit affordance
  *   3. 2-up grid: Pending Documents (red progress bar) + Workspace (mountain SVG)
  *   4. 3-up grid: Open Violations · Drafts · Ledger unread (WidgetCard)
@@ -79,7 +79,6 @@ import {
   type WidgetId,
   type WidgetZone,
 } from '@/lib/dashboardLayout'
-import { hijriToday } from '@/lib/hijri'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
@@ -89,6 +88,7 @@ import { cn } from '@/lib/utils'
 import { PullToRefresh } from '@/components/refresh/PullToRefresh'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { InmateReporterDashboard } from './InmateReporterDashboard'
+import { DashboardHero } from './DashboardHero'
 
 export type DashboardPage =
   | 'employees'
@@ -137,22 +137,6 @@ function firstSecondFamilyName(full: string): string {
   const family = parts.slice(famStart).join(' ')
   const given = parts.slice(0, Math.min(2, famStart)).join(' ')
   return given ? `${given} ${family}` : family
-}
-
-/** Time-of-day greeting bucket from the local clock. */
-function heroGreetingKey(): 'morning' | 'afternoon' | 'evening' {
-  const h = new Date().getHours()
-  if (h < 12) return 'morning'
-  if (h < 17) return 'afternoon'
-  return 'evening'
-}
-
-/** Join names with a locale-aware list conjunction ("A, B and C" / "A، B و C"). */
-function joinNames(names: string[], isAr: boolean): string {
-  if (names.length <= 1) return names[0] ?? ''
-  const sep = isAr ? '، ' : ', '
-  const and = isAr ? ' و ' : ' and '
-  return names.slice(0, -1).join(sep) + and + names[names.length - 1]
 }
 
 export function DashboardPage(props: DashboardPageProps): React.JSX.Element {
@@ -273,16 +257,6 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
     const full = isAr && identity.name_ar ? identity.name_ar : identity.name_en
     return full ? firstSecondFamilyName(full) : null
   }, [identity, isAr])
-
-  // Returners-from-leave whose leave ends today (days_remaining <= 0) — the
-  // honest signal behind the hero insight line. Names are language-aware.
-  const heroReturners = useMemo<HeroReturner[]>(() => {
-    if (!has('leaves.view')) return []
-    const rows = summary?.upcoming_leave_ends ?? []
-    return rows
-      .filter((r) => r.days_remaining <= 0)
-      .map((r) => ({ name: pickName(r, isAr), employee_id: r.employee_id }))
-  }, [summary, isAr, has])
 
   // Ledger unread counts — derived from the `recent_ledger` snapshot (latest
   // entries in the summary payload). The summary doesn't carry a strict
@@ -564,15 +538,10 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       >
         {/* ============ HERO ============ */}
         <DashboardHero
+          identity={identity}
           name={welcomeName}
+          initials={welcomeName ? initialsFor(welcomeName) : ''}
           isAr={isAr}
-          isLoading={summaryQuery.isPending}
-          welcomeGuest={t('dashboard.welcomeBackGuest')}
-          staffOnSite={summary?.totals.present_today ?? null}
-          onLeaveToday={has('leaves.view') ? summary?.totals.on_leave_today ?? null : null}
-          returnersToday={heroReturners}
-          upcomingThisWeek={summary?.upcoming_leave_ends.length ?? 0}
-          onReviewLeaves={() => onNavigate('leaves')}
         />
 
         {/* ============ MY WIDGETS HEADER ============ */}
@@ -721,225 +690,6 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       />
 
     </div>
-  )
-}
-
-/* =========================================================================
- * HERO
- * ========================================================================= */
-
-interface HeroReturner {
-  name: string
-  employee_id: string
-}
-
-interface DashboardHeroProps {
-  name: string | null
-  isAr: boolean
-  isLoading: boolean
-  welcomeGuest: string
-  staffOnSite: number | null
-  onLeaveToday: number | null
-  returnersToday: HeroReturner[]
-  upcomingThisWeek: number
-  onReviewLeaves: () => void
-}
-
-/**
- * Event-led dashboard hero. Beyond the greeting + name it surfaces the single
- * most relevant "today" signal in an insight line. The priority order in the
- * design spec is overdue forms → new joiners → returners → exits → calm; only
- * the **returners-from-leave** branch and the **calm fallback** are wired here
- * because they're the events the existing summary endpoint actually carries.
- * Joiner / overdue / pending-approval events are deferred until the backend
- * exposes them, rather than inventing API fields the dashboard doesn't have.
- */
-function DashboardHero({
-  name,
-  isAr,
-  isLoading,
-  welcomeGuest,
-  staffOnSite,
-  onLeaveToday,
-  returnersToday,
-  upcomingThisWeek,
-  onReviewLeaves,
-}: DashboardHeroProps): React.JSX.Element {
-  const { t } = useTranslation()
-
-  const headline = name ? t('dashboard.welcomeBack', { name }) : welcomeGuest
-  const greeting = t(`dashboard.greeting.${heroGreetingKey()}`)
-  const gregorian = format(new Date(), 'EEE, dd MMM', { locale: isAr ? arLocale : undefined })
-  const hijri = hijriToday()
-
-  const link = (label: string) => (
-    <button
-      type="button"
-      onClick={onReviewLeaves}
-      className="cursor-pointer rounded-sm font-medium text-white/95 underline decoration-white/40 underline-offset-2 transition-colors hover:decoration-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-    >
-      {label}
-    </button>
-  )
-
-  let insight: React.ReactNode
-  if (onLeaveToday == null || staffOnSite == null) {
-    insight = null
-  } else if (returnersToday.length === 0) {
-    insight = (
-      <span>
-        {t('dashboard.hero.calm', { n: staffOnSite })}
-        {upcomingThisWeek > 0 && ` ${t('dashboard.hero.calmUpcoming', { n: upcomingThisWeek })}`}
-      </span>
-    )
-  } else {
-    const n = returnersToday.length
-    const verb = n === 1 ? t('dashboard.hero.returnsSingle') : t('dashboard.hero.returnPlural')
-    let lead: React.ReactNode
-    if (n === 1) {
-      lead = <b className="font-medium text-white/95">{returnersToday[0]!.name}</b>
-    } else if (n <= 3) {
-      const firsts = returnersToday.map((r) => r.name.split(/\s+/)[0]!)
-      lead = <b className="font-medium text-white/95">{joinNames(firsts, isAr)}</b>
-    } else {
-      lead = (
-        <b className="font-medium text-white/95">{t('dashboard.hero.peopleCount', { n })}</b>
-      )
-    }
-    insight = (
-      <>
-        <HeroAvatars returners={returnersToday} />
-        <span>
-          {lead} {verb}.{' '}
-          {n >= 4 ? link(t('dashboard.hero.seeAll')) : link(t('dashboard.hero.reviewLeave'))}
-        </span>
-      </>
-    )
-  }
-
-  return (
-    <div
-      className="anim-fade-up relative mb-4 flex min-h-0 flex-col gap-4 overflow-hidden rounded-2xl px-4 py-4 md:mb-6 md:min-h-[150px] md:flex-row md:items-stretch md:gap-5 md:px-8 md:py-6"
-      style={{ background: 'var(--hero-grad)', animationDelay: '0ms' }}
-    >
-      {/* Soft white circle highlight (upper-right) */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -top-20 end-[-80px] h-[280px] w-[280px] rounded-full bg-white/[0.06]"
-      />
-      {/* Bottom depth gradient */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-b from-transparent to-black/[0.18]"
-      />
-
-      <div className="relative z-[1] flex min-w-0 flex-1 flex-col gap-2 text-white max-md:pe-14">
-        <span className="text-[0.68em] font-medium uppercase tracking-[0.08em] text-white/60">
-          {greeting}
-        </span>
-        {isLoading && !name ? (
-          <Skeleton className="h-7 w-72 bg-white/20" />
-        ) : (
-          <h2 className="m-0 text-[1.2em] font-semibold leading-tight tracking-tight [hyphens:none] [word-break:keep-all] md:text-[1.5em]">{headline}</h2>
-        )}
-
-        {/* Date + status strip */}
-        <div className="flex flex-wrap items-center gap-2.5 text-[0.72em] text-white/85">
-          <span className="inline-flex items-center gap-2 font-mono text-white/90">
-            {gregorian}
-            {hijri && (
-              <>
-                <span aria-hidden className="text-white/30">·</span>
-                <span
-                  dir="rtl"
-                  className="text-white/55"
-                  style={{ fontFamily: 'var(--font-arabic)' }}
-                >
-                  {hijri}
-                </span>
-              </>
-            )}
-          </span>
-          {onLeaveToday != null && (
-            <>
-              <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-white/35" />
-              {onLeaveToday > 0 ? (
-                <button
-                  type="button"
-                  onClick={onReviewLeaves}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.08] px-2.5 py-1 font-medium text-white/90 transition-colors hover:bg-white/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-                >
-                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-300" />
-                  <span className="font-mono font-semibold tabular-nums text-white">{onLeaveToday}</span>
-                  {t('dashboard.hero.onLeaveChip')}
-                </button>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.08] px-2.5 py-1 font-medium text-white/90">
-                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
-                  {t('dashboard.hero.allPresent')}
-                </span>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Insight line — verbose secondary context; hidden on phones to keep
-            the hero compact (the on-leave chip + leave section cards below
-            carry the same signal). */}
-        <div className="hidden flex-wrap items-center gap-2 text-[0.78em] leading-relaxed text-white/80 md:flex">
-          {insight}
-        </div>
-      </div>
-
-      {/* Mobile: small rounded-square crest wrap (44×44, matches .m-hero__crest-wrap),
-           absolutely pinned to the top inline-end corner (text column reserves
-           space for it via max-md:pe-14 above) so it never overlaps the headline.
-           Desktop (md+): transparent passthrough — the img itself carries the 80×80 circle style. */}
-      <div className="relative z-[1] flex h-11 w-11 shrink-0 items-center justify-center self-start rounded-xl bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.18)] max-md:absolute max-md:top-4 max-md:end-4 md:h-auto md:w-auto md:self-center md:rounded-none md:bg-transparent md:shadow-none">
-        <img
-          src="/brand/gssg-logo.png"
-          alt=""
-          aria-hidden
-          className="dashboard-crest relative h-8 w-8 rounded-full object-cover opacity-90 md:h-[80px] md:w-[80px] md:shadow-[0_0_0_1px_rgba(255,255,255,0.18)]"
-        />
-      </div>
-
-      {/* Crest rotation keyframes — scoped to this element's animation name. */}
-      <style>{`
-        .dashboard-crest { animation: gssg-crest-spin 90s linear infinite; }
-        @keyframes gssg-crest-spin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .dashboard-crest { animation: none; }
-        }
-      `}</style>
-    </div>
-  )
-}
-
-/** Overlapping initials avatars for the hero insight cluster. Shows up to 3
- *  then collapses the rest into a "+N" chip. Decorative (aria-hidden). */
-function HeroAvatars({ returners }: { returners: HeroReturner[] }): React.JSX.Element {
-  const shown = returners.slice(0, 3)
-  const extra = returners.length - shown.length
-  return (
-    <span aria-hidden className="me-1 inline-flex shrink-0 items-center">
-      {shown.map((r) => (
-        <span
-          key={r.employee_id}
-          className="-ms-2.5 inline-flex h-[26px] w-[26px] items-center justify-center rounded-full border-2 border-[#0d2845] bg-white/[0.18] font-mono text-[0.62em] font-semibold text-white shadow-sm first:ms-0"
-        >
-          {initialsFor(r.name)}
-        </span>
-      ))}
-      {extra > 0 && (
-        <span className="-ms-2.5 inline-flex h-[26px] w-[26px] items-center justify-center rounded-full border-2 border-[#0d2845] bg-white/[0.05] font-mono text-[0.62em] font-semibold text-white/85 shadow-sm">
-          +{extra}
-        </span>
-      )}
-    </span>
   )
 }
 

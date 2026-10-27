@@ -11552,6 +11552,8 @@ export interface components {
             name_ar?: string | null;
             /** Position */
             position?: string | null;
+            /** Position Ar */
+            position_ar?: string | null;
             /** Department */
             department?: string | null;
             /** Photo Url */
@@ -14228,6 +14230,8 @@ export interface components {
             name_ar?: string | null;
             /** Position */
             position?: string | null;
+            /** Position Ar */
+            position_ar?: string | null;
             /** Department */
             department?: string | null;
             /** Photo Url */

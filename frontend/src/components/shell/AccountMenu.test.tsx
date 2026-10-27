@@ -23,6 +23,7 @@ const USER: SessionUser = {
   name_en: 'Abdulla Aldhaheri',
   name_ar: 'عبدالله الظاهري',
   position: 'Officer',
+  position_ar: null,
   department: 'Operations',
   photo_url: null,
   role: 'operator',

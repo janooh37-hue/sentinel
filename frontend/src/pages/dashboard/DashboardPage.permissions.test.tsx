@@ -114,7 +114,7 @@ describe.each([
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
   })
 
-  it('preserves all cards and hero returners for authorized readers', () => {
+  it('preserves all cards for authorized readers', () => {
     renderPage()
     expect(screen.getByRole('button', { name: i18n.t('dashboard.widgets.violations.header') })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: i18n.t('dashboard.widgets.ledger.header') })).toBeInTheDocument()
@@ -122,7 +122,6 @@ describe.each([
     expect(screen.getByRole('region', { name: i18n.t('dashboard.onLeave.title') })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: i18n.t('dashboard.upcoming.title') })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: i18n.t('dashboard.recent.ledger') })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: i18n.t('dashboard.hero.reviewLeave') })).toBeInTheDocument()
   })
 
   it('hides violations when violations.view is denied', () => {
@@ -132,15 +131,12 @@ describe.each([
     expect(screen.getByText(i18n.t('dashboard.workspace.title'))).toBeInTheDocument()
   })
 
-  it('hides leave sections, hero names and mobile leave chip when leaves.view is denied', () => {
+  it('hides leave sections and names when leaves.view is denied', () => {
     capabilityState.allowed.delete('leaves.view')
     renderPage()
     expect(screen.queryByRole('region', { name: i18n.t('dashboard.onLeave.title') })).not.toBeInTheDocument()
     expect(screen.queryByRole('region', { name: i18n.t('dashboard.upcoming.title') })).not.toBeInTheDocument()
     expect(screen.queryByText(language === 'ar' ? 'عائشة نور' : 'Aisha Noor')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: i18n.t('dashboard.hero.reviewLeave') })).not.toBeInTheDocument()
-    expect(screen.queryByText(i18n.t('dashboard.hero.onLeaveChip'))).not.toBeInTheDocument()
-    expect(screen.queryByText(i18n.t('dashboard.hero.allPresent'))).not.toBeInTheDocument()
   })
 
   it('hides ledger metric and recent correspondence when ledger.view is denied', () => {
@@ -170,17 +166,6 @@ describe.each([
     expect(within(workspace).queryByText('0')).not.toBeInTheDocument()
     expect(within(workspace).getAllByText(language === 'ar' ? 'غير متاح' : 'Not available')).toHaveLength(2)
     expect(within(workspace).getAllByText('—').every((node) => node.getAttribute('aria-hidden') === 'true')).toBe(true)
-    expect(screen.queryByText(i18n.t('dashboard.hero.allPresent'))).not.toBeInTheDocument()
-    expect(screen.queryByText(i18n.t('dashboard.hero.calm', { n: 0 }))).not.toBeInTheDocument()
-  })
-
-  it('omits calm insight when employee counts are unavailable', () => {
-    capabilityState.allowed.delete('employees.view')
-    const data = summary()
-    data.totals.present_today = null
-    data.upcoming_leave_ends = []
-    renderPage(data)
-    expect(screen.queryByText(i18n.t('dashboard.hero.calm', { n: '—' }))).not.toBeInTheDocument()
   })
 
   it('lets the sole rendered top card fill the row', () => {

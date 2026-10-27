@@ -34,6 +34,7 @@ export function useIdentity(): UseIdentityResult {
         name_en: user.name_en,
         name_ar: user.name_ar,
         position: user.position,
+        position_ar: user.position_ar,
         department: user.department,
         photo_url: user.photo_url,
         role: user.role,

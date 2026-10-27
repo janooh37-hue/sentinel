@@ -4562,7 +4562,6 @@
       "next": "التالي",
       "pageRange": "{{from}}–{{to}} من {{total}}"
     },
-    "welcomeBack": "مرحبًا بعودتك، {{name}}",
     "welcomeBackGuest": "مرحبًا بعودتك",
     "greeting": {
       "morning": "صباح الخير",
@@ -4570,15 +4569,15 @@
       "evening": "مساء الخير"
     },
     "hero": {
-      "onLeaveChip": "في إجازة اليوم",
-      "allPresent": "الجميع حاضر اليوم",
-      "returnsSingle": "يعود من الإجازة اليوم",
-      "returnPlural": "يعودون من الإجازة اليوم",
-      "peopleCount": "{{n}} موظفين",
-      "reviewLeave": "مراجعة سجلات الإجازات",
-      "seeAll": "عرض الكل",
-      "calm": "يوم هادئ. {{n}} في الموقع، لا عودة من الإجازات اليوم.",
-      "calmUpcoming": "{{n}} يعودون لاحقًا هذا الأسبوع."
+      "staffFile": "ملف الموظف",
+      "idLabel": "الرقم الوظيفي",
+      "week": "الأسبوع {{n}}",
+      "desk": {
+        "sign": "للتوقيع",
+        "review": "للمراجعة",
+        "returned": "تحتاج إلى تعديل",
+        "sent": "المرسل قيد الاعتماد"
+      }
     },
     "heroSubtitle_zero": "لا توجد مستندات بانتظار اهتمامك",
     "heroSubtitle_one": "مستند واحد بانتظار اهتمامك",
