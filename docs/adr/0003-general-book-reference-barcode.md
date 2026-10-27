@@ -4,7 +4,7 @@ status: proposed
 
 # General Book reference barcode is a template font glyph, not a stamped image
 
-Superseded in part by ADR 0007: the barcode payload is `*GSSG+DD/MM/YYYY+REF*`, not `<REF>+<YYYYMMDD>`.
+Superseded in part by ADR 0007: the barcode payload is `*GSSG+DD/MM/YYYY+REF*`, not `<REF>+<YYYYMMDD>`, and the barcode is a decorative 8 pt run, not a scan-decoded code.
 
 The General Book paper was redesigned with an in-header Code 39 barcode set in the
 embedded Libre Barcode 39 font, replacing the Aztec image the code stamped onto
