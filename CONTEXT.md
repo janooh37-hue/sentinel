@@ -119,15 +119,22 @@ into its approval chain.
 _Avoid_: Reserve, publish, submit (alone)
 
 **Addressee**:
-A person a Ledger Book is addressed to, as To or CC. Addressees receive the
-Record after the final approval.
+A unit (a Branch, the Project Manager), an external party from the address
+book, or a member of the writer's own Branch that a Ledger Book is addressed to,
+as To or CC. Addressees receive the Record after the Branch Manager signs.
 _Avoid_: Direct send recipient, approver
 
 **Chain role**:
-The role an ordered step holds in a Ledger Book's approval chain: the auditor
-(required), then the branch manager and the project manager (optional). Each
-step's assignee acts in turn.
+The role an ordered step holds in a Ledger Book's chain: the Auditor, then the
+Branch Manager, who signs; the Project Manager routes letters leaving the
+Project. Each step's assignee acts in turn.
 _Avoid_: Reviewer list, approver group
+
+**Signature lock**:
+The Branch Manager's signature makes a Ledger Book Revision immutable. A
+correction is a new Revision under the same reference that runs the full chain
+again; the earlier Revision stays readable, marked superseded.
+_Avoid_: Void and reissue, reopen
 
 **Break-glass**:
 An admin's audited emergency access to a Top Secret or Addressee Only Record:
@@ -298,6 +305,35 @@ The union of employee populations a user may see or change in workforce features
 including self and assigned organization, department, duty-unit, or duty-post
 populations; request filters may only narrow it.
 _Avoid_: Capability, role, filter
+
+**Project**:
+An admin-maintained top unit of the hierarchy, led by its Project Manager
+(مدير مركز الإصلاح والتأهيل). It contains Branches.
+_Avoid_: Site, department
+
+**Branch**:
+An admin-maintained unit of a Project with one manager (مدير فرع) and its
+members. A user belongs to at most one Branch; membership lets them write
+Ledger Books.
+_Avoid_: Department, duty unit
+
+**Auditor pool**:
+The users an admin assigns to check a Branch's Ledger Books for mistakes and
+typos. The first to claim a letter owns its audit; nobody audits their own
+letter.
+_Avoid_: Reviewer, approver
+
+**Clerk link**:
+A grant joining a correspondence clerk to one manager with separately granted
+powers (see queues, forward, dispatch, register incoming, return, draft). The
+clerk acts as themselves on the manager's behalf and can never sign; Addressee
+Only letters stay closed to them.
+_Avoid_: Delegate signer, shared login, proxy
+
+**Acting manager** (قائم بالأعمال):
+A user appointed for a date range to sign for an absent Branch Manager with
+their own signature; the paper prints «عن» before the absent manager's name.
+_Avoid_: Delegate, deputy signature
 
 ### Correspondence and intake
 
