@@ -286,6 +286,54 @@ def restore_organization_distribution(db: Session, user: User, book: Book, reaso
     return book
 
 
+class LegacyPersonalRow(NamedTuple):
+    book_id: int
+    ref_number: str
+    creator: str | None
+    set_by: str | None
+    set_by_not_creator: bool
+
+
+def legacy_personal_report(db: Session) -> list[LegacyPersonalRow]:
+    """Every record migration 0110 converted from Personal (ADR 0007, D5).
+
+    ``set_by`` is the actor of the newest ``book_confidentiality_changed`` row
+    that set Personal; a record created as Personal has none, so its creator
+    set it. People are their G-numbers (the audit actor), else the user email.
+    """
+    book_ids = [
+        int(entity_id)
+        for entity_id in db.scalars(
+            select(AuditLog.entity_id).where(AuditLog.action == "book_legacy_personal")
+        )
+        if entity_id is not None and entity_id.isdigit()
+    ]
+    books = db.scalars(select(Book).where(Book.id.in_(book_ids)).order_by(Book.id)).all()
+    creators = {
+        user.id: user.employee_id or user.email
+        for user in db.scalars(
+            select(User).where(User.id.in_({b.created_by_user_id for b in books} - {None}))
+        )
+    }
+    setters: dict[str, str | None] = {}
+    for audit in db.scalars(
+        select(AuditLog)
+        .where(
+            AuditLog.action == "book_confidentiality_changed",
+            AuditLog.entity_id.in_([str(book.id) for book in books]),
+        )
+        .order_by(AuditLog.ts, AuditLog.id)
+    ):
+        if json.loads(audit.payload or "{}").get("new") == "personal":
+            setters[audit.entity_id or ""] = audit.actor
+    rows = []
+    for book in books:
+        creator = creators.get(book.created_by_user_id or 0)
+        set_by = setters.get(str(book.id), creator)
+        rows.append(LegacyPersonalRow(book.id, book.ref_number, creator, set_by, set_by != creator))
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # Users (recipient picker + clearance list)
 # ---------------------------------------------------------------------------
