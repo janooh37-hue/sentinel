@@ -224,7 +224,10 @@ def test_0099_separates_inmate_violations_and_registers_classifications(tmp_path
                 expected = {**original_books[row.id]}
                 expected["urgency"] = expected.pop("priority")
                 expected.update(
-                    grade="unclassified", distribution="organization", send_state="unsent"
+                    grade="unclassified",
+                    distribution="organization",
+                    send_state="unsent",
+                    source_draft_id=None,
                 )
                 if row.id in moved_ids:
                     expected["category_id"] = "INV"
