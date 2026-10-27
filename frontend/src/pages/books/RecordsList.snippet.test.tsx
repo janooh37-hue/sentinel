@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
@@ -59,7 +59,7 @@ function makeBook(overrides: Partial<BookRead> & { search_snippet?: string | nul
     imported_doc: null,
     created_at: '2026-07-17T10:00:00',
     deleted_at: null,
-    priority: 'Normal',
+    urgency: 'Normal',
     approval_state: 'none',
     classification_code: null,
     voided_at: null,
@@ -89,14 +89,49 @@ function makeBook(overrides: Partial<BookRead> & { search_snippet?: string | nul
     can_write: true,
     can_sign: false,
     can_review: false,
-    confidentiality: 'general',
+    grade: 'unclassified',
+    distribution: 'named',
+    metadata_only: false,
     can_send: false,
-    can_change_confidentiality: false,
+    can_change_grade: false,
     ...overrides,
   }
 }
 
 describe('RecordsList snippet rendering (lng=ar)', () => {
+  it('keeps metadata-only rows inert and exposes only register metadata', () => {
+    const onSelect = vi.fn()
+    const rowMenu = vi.fn(() => [])
+    const onToggleSelect = vi.fn()
+    const book = makeBook({
+      metadata_only: true,
+      grade: 'top_secret',
+      classification_code: '7/2',
+      subject: 'Hidden subject',
+      created_by_name: 'Hidden creator',
+      search_snippet: 'Hidden body',
+      can_send: true,
+      can_change_grade: true,
+    })
+    const { container } = renderWithClient(createElement(RecordsList, {
+      rows: [book], selectedId: null, nav: () => NAV, onSelect,
+      selected: new Set<number>(), onToggleSelect, rowMenu, isInmateReporter: false,
+    }))
+    const row = container.querySelector('[data-book-id="1"]')!
+    expect(screen.getByText('GS-0001')).toBeInTheDocument()
+    expect(screen.getByText('7/2')).toBeInTheDocument()
+    expect(screen.getByText('2026-07-17')).toBeInTheDocument()
+    expect(screen.queryByText(/Hidden/)).not.toBeInTheDocument()
+    expect(row.querySelector('a,button,input')).toBeNull()
+    fireEvent.click(row)
+    fireEvent.doubleClick(row)
+    fireEvent.contextMenu(row)
+    fireEvent.keyDown(row, { key: 'Enter' })
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(onToggleSelect).not.toHaveBeenCalled()
+    expect(rowMenu).not.toHaveBeenCalled()
+  })
+
   it('renders Arabic bodyMatch label + highlighted snippet on a body-hit row', () => {
     const book = makeBook({ search_snippet: 'نص الكتاب يحتوي على [تصريح] أمني' })
 

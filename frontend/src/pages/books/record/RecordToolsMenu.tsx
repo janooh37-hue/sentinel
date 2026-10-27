@@ -138,7 +138,7 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
             {t('books.includedPapers.addToPdf')}
           </DropdownMenuItem>
         )}
-        {book.can_send && (
+        {book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (view.userId !== undefined && book.created_by_user_id === view.userId)) && (
           <DropdownMenuItem data-testid="record-send-trigger" onSelect={() => openOverlay('send')}>
             <Send className="h-3.5 w-3.5" aria-hidden="true" />
             {t('books.send.menu')}
@@ -160,10 +160,10 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
             {t('books.thread.linkRecord')}
           </DropdownMenuItem>
         )}
-        {book.can_change_confidentiality && (
+        {book.can_change_grade && (
           <DropdownMenuItem data-testid="record-level-trigger" onSelect={() => openOverlay('level')}>
             <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-            {t('books.confidentiality.menu')}
+            {t('books.grade.menu')}
           </DropdownMenuItem>
         )}
         {state === 'approved' && current?.signed_pdf_url && (

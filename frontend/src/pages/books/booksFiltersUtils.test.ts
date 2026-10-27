@@ -29,7 +29,7 @@ function makeBook(overrides: Partial<BookRead>): BookRead {
     imported_doc: null,
     created_at: '2026-07-17T10:00:00',
     deleted_at: null,
-    priority: 'Normal',
+    urgency: 'Normal',
     approval_state: 'none',
     classification_code: null,
     voided_at: null,
@@ -59,9 +59,11 @@ function makeBook(overrides: Partial<BookRead>): BookRead {
     can_write: true,
     can_sign: false,
     can_review: false,
-    confidentiality: 'general',
+    grade: 'unclassified',
+    distribution: 'named',
+    metadata_only: false,
     can_send: false,
-    can_change_confidentiality: false,
+    can_change_grade: false,
     ...overrides,
   }
 }

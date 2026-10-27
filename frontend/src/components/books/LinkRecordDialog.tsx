@@ -15,12 +15,12 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ConfidentialityChip } from './ConfidentialityChip'
+import { GradeChip } from './GradeChip'
 
 const LINK_ERROR_KEYS: Record<string, string | undefined> = {
   LINK_EXISTS: 'books.thread.errors.linkExists',
   LINK_SELF: 'books.thread.errors.linkSelf',
-  LEVEL_BELOW_FLOOR: 'books.thread.errors.levelBelowFloor',
+  GRADE_BELOW_FLOOR: 'books.thread.errors.levelBelowFloor',
   BOOK_NOT_FOUND: 'books.thread.errors.bookNotFound',
 }
 
@@ -140,7 +140,7 @@ function LinkBody({ book, close }: { book: BookRead; close: () => void }): React
                         {candidate.subject ?? '—'}
                       </span>
                     </span>
-                    <ConfidentialityChip level={candidate.confidentiality} className="shrink-0" />
+                    <GradeChip level={candidate.grade} className="shrink-0" />
                   </button>
                 </li>
               ))}

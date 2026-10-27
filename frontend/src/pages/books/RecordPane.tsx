@@ -78,7 +78,7 @@ import { cn } from '@/lib/utils'
 import { inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
 import { isApproverAssignee, myPendingReviewerStep } from '@/components/books/reviewers'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
-import { ChangeConfidentialityDialog } from '@/components/books/ChangeConfidentialityDialog'
+import { ChangeGradeDialog } from '@/components/books/ChangeGradeDialog'
 import { RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
 import { SendRecordDialog } from '@/components/books/SendRecordDialog'
 import { useReplyActions } from '@/components/books/useReplyActions'
@@ -386,6 +386,7 @@ export function RecordPane({
       : undefined) ?? liveVersion
   const isLiveCurrent = currentVersion != null && currentVersion.version_no === liveVersion?.version_no
   const canMutateCurrent = book.can_write && book.access_scope !== 'assigned_revision' && isLiveCurrent
+  const canSend = book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (user?.id !== undefined && book.created_by_user_id === user.id))
   const reporterAction = inmateReporterActionFor(book, user?.id)
   const isInmateReport =
     isInmateReporter && book.ref_number.startsWith('REPORT-') && reporterAction !== 'read-only'
@@ -472,7 +473,7 @@ export function RecordPane({
   const deleteReason = deleteId ? reasonOf(deleteId) : undefined
   const deleteLabel = state === 'none' ? t('books.record.deleteDraft') : t('books.record.delete')
   const hasOtherMoreItems =
-    reply.actions.length > 0 || (canEdit && book.access_scope === 'full') || book.can_send || book.can_change_confidentiality ||
+    reply.actions.length > 0 || (canEdit && book.access_scope === 'full') || canSend || book.can_change_grade ||
     wordTrigger !== null || showScanSignedInMenu || showAddToPdf || showEmail || showDelete
   const hasMoreItems = inboxActions.length > 0 || hasOtherMoreItems
 
@@ -661,8 +662,8 @@ export function RecordPane({
             )}
           </p>
         </div>
-        {/* Chips row: confidentiality / classification / draft / editing / voided */}
-        {(book.confidentiality !== 'general' || book.classification_code || book.is_draft || book.edit_session?.state === 'active' || book.voided_at) && (
+        {/* Chips row: grade / classification / draft / editing / voided */}
+        {(book.grade !== 'unclassified' || book.classification_code || book.is_draft || book.edit_session?.state === 'active' || book.voided_at) && (
           <div className="flex flex-wrap gap-1.5 px-3.5 pt-2">
             <BookStatusChips book={book} />
           </div>
@@ -752,7 +753,7 @@ export function RecordPane({
                     {hasOtherMoreItems && <DropdownMenuSeparator />}
                   </>
                 )}
-                {book.can_send && (
+                {canSend && (
                   <DropdownMenuItem onSelect={() => setSendOpen(true)}>
                     <Send className="h-3.5 w-3.5" aria-hidden />
                     {t('books.send.menu')}
@@ -766,10 +767,10 @@ export function RecordPane({
                     <Link2 className="h-3.5 w-3.5" aria-hidden />{t('books.thread.linkRecord')}
                   </DropdownMenuItem>
                 )}
-                {book.can_change_confidentiality && (
+                {book.can_change_grade && (
                   <DropdownMenuItem onSelect={() => setLevelOpen(true)}>
                     <Lock className="h-3.5 w-3.5" aria-hidden />
-                    {t('books.confidentiality.menu')}
+                    {t('books.grade.menu')}
                   </DropdownMenuItem>
                 )}
                 {wordTrigger && (
@@ -818,10 +819,10 @@ export function RecordPane({
         )}
       </div>
 
-      <SendRecordDialog book={book} open={sendOpen} onOpenChange={setSendOpen} />
+      <SendRecordDialog book={book} open={sendOpen && canSend} onOpenChange={setSendOpen} />
       {reply.dialog}
       <LinkRecordDialog book={book} open={linkOpen && canEdit && book.access_scope === 'full'} onOpenChange={setLinkOpen} />
-      <ChangeConfidentialityDialog book={book} open={levelOpen} onOpenChange={setLevelOpen} />
+      <ChangeGradeDialog book={book} open={levelOpen && book.can_change_grade} onOpenChange={setLevelOpen} />
 
       {/* Owns the "Edit in Word" mutation + inmate-reporter handoff dialog; the trigger renders in More. */}
       {hasWordReopen && (

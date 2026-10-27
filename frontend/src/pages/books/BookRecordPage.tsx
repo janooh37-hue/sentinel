@@ -50,7 +50,7 @@ import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDia
 import { RecordStateOverrideDialog } from '@/components/books/RecordStateOverrideDialog'
 import { RevisionAccessPanel } from '@/components/books/RevisionAccessPanel'
 import { SendRecordDialog } from '@/components/books/SendRecordDialog'
-import { ChangeConfidentialityDialog } from '@/components/books/ChangeConfidentialityDialog'
+import { ChangeGradeDialog } from '@/components/books/ChangeGradeDialog'
 import { RecordInboxStrip, RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
 import { DeriveRecordDialog } from '@/components/books/DeriveRecordDialog'
 import { LinkRecordDialog } from '@/components/books/LinkRecordDialog'
@@ -513,8 +513,8 @@ function BookRecordPageBody(): React.JSX.Element {
         canOverrideState &&
         canMutateCurrent) ||
       (value === 'decision' && action === 'decide') ||
-      (value === 'send' && book.can_send) ||
-      (value === 'level' && book.can_change_confidentiality) ||
+      (value === 'send' && book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (user?.id !== undefined && book.created_by_user_id === user.id))) ||
+      (value === 'level' && book.can_change_grade) ||
       ((value === 'reply' || value === 'createFrom') && canDerive) ||
       (value === 'link' && canEdit && book.access_scope === 'full')
     if (!allowed) closeOverlay()
@@ -533,6 +533,7 @@ function BookRecordPageBody(): React.JSX.Element {
     overlayValue,
     closeOverlay,
     showSendForApproval,
+    user?.id,
   ])
 
   useEffect(() => {
@@ -1293,15 +1294,15 @@ function BookRecordPageBody(): React.JSX.Element {
       {book && (
         <SendRecordDialog
           book={book}
-          open={overlay.value === 'send' && book.can_send}
+          open={overlay.value === 'send' && book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (user?.id !== undefined && book.created_by_user_id === user.id))}
           onOpenChange={(open) => { if (!open) overlay.close() }}
         />
       )}
 
       {book && (
-        <ChangeConfidentialityDialog
+        <ChangeGradeDialog
           book={book}
-          open={overlay.value === 'level' && book.can_change_confidentiality}
+          open={overlay.value === 'level' && book.can_change_grade}
           onOpenChange={(open) => { if (!open) overlay.close() }}
         />
       )}

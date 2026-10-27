@@ -823,7 +823,7 @@ export type BookFolderShareUser = components['schemas']['BookFolderShareUser']
 export type BookFolderShareOption = components['schemas']['BookFolderShareOption']
 export type BookFolderShareOptions = components['schemas']['BookFolderShareOptions']
 export type BookFolderSharesUpdate = components['schemas']['BookFolderSharesUpdate']
-export type BookSortKey = `${'' | '-'}${'date' | 'ref' | 'subject' | 'purpose' | 'confidentiality' | 'status'}`
+export type BookSortKey = `${'' | '-'}${'date' | 'ref' | 'subject' | 'purpose' | 'grade' | 'status'}`
 export type IncludedPaperProposal = components['schemas']['IncludedPaperProposal']
 export type IncludedPaperRead = components['schemas']['IncludedPaperRead']
 export type IncludedPaperReplacementRead = components['schemas']['IncludedPaperReplacementRead']
@@ -844,9 +844,8 @@ export type ApprovalStatusParam = 'pending' | 'returned' | 'approved' | 'rejecte
 export type ApprovalSortParam = 'oldest' | 'newest'
 export type RetainedDecisionRead = components['schemas']['RetainedDecisionRead']
 export type BookRevisionAccessRead = components['schemas']['BookRevisionAccessRead']
-// Record levels + direct send (record classification, Phase 1).
-export type Confidentiality = components['schemas']['BookConfidentialityUpdate']['confidentiality']
-export const CONFIDENTIALITY_LEVELS = ['general', 'personal', 'secret', 'directed'] as const satisfies readonly Confidentiality[]
+// Fixed record grades and direct sends.
+export type Grade = components['schemas']['BookGradeUpdate']['grade']
 export type BookSendRequest = components['schemas']['BookSendRequest']
 export type SendPurpose = BookSendRequest['purpose']
 export const SEND_PURPOSES = ['info', 'action', 'reply', 'circulate'] as const satisfies readonly SendPurpose[]
@@ -878,7 +877,7 @@ export interface BookAnnotationRead {
 // Approval — hand-mirrored from backend/app/schemas/books.py (submit request).
 // BookApproverSpec deleted (Task 10): single approver_user_id + reviewer_user_ids replaces the array.
 export interface BookSubmitRequest {
-  priority: 'Normal' | 'High'
+  urgency: 'Normal' | 'High' | 'Very High'
   approver_user_id?: number | null
   reviewer_user_ids?: number[]
 }
@@ -1063,6 +1062,9 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   ACCOUNT_LOCKED: 'auth.errLocked',
   DOCX_LOCKED_AFTER_SIGNING: 'errors.forbidden.docxLockedAfterSigning',
   SECRET_CLEARANCE_REQUIRED: 'errors.forbidden.secretClearance',
+  WRITER_ONLY_SEND: 'books.send.errors.writerOnly',
+  DISTRIBUTION_NOT_NAMED: 'books.send.errors.distributionNotNamed',
+  GRADE_BELOW_FLOOR: 'books.thread.errors.levelFloor',
   RECORD_TYPE_FORBIDDEN: 'errors.forbidden.recordType',
   INCLUDED_PAPERS_CREATOR_ONLY: 'errors.forbidden.includedPapersCreatorOnly',
   WORD_SESSION_NOT_OWNER: 'errors.forbidden.wordSessionNotOwner',
@@ -2303,13 +2305,10 @@ export const api = {
       'DELETE',
       `/books/${bookId}/versions/${versionId}/annotations/${annotationId}`,
     ),
-  /** PUT /books/{id}/confidentiality — relabel the record's level (creator,
-   *  manager, or admin). Secret needs `books.secret` (SECRET_CLEARANCE_REQUIRED). */
-  setBookConfidentiality: (id: number, confidentiality: Confidentiality) =>
-    request<BookRead>('PUT', `/books/${id}/confidentiality`, { confidentiality }),
-  /** POST /books/{id}/send — send or forward the record. Repeat or self
-   *  recipients come back in `skipped`. Errors: PERSONAL_REQUIRES_DIRECTED (409),
-   *  RECIPIENT_NOT_CLEARED / RECIPIENT_INVALID (422). */
+  /** Relabel a record's grade (creator or admin); Secret needs clearance. */
+  setBookGrade: (id: number, grade: Grade) =>
+    request<BookRead>('PUT', `/books/${id}/grade`, { grade }),
+  /** Send or forward a record. Restricted grades are writer-only. */
   sendBook: (id: number, body: BookSendRequest) =>
     request<BookSendResult>('POST', `/books/${id}/send`, body),
   /** GET /books/{id}/recipients — the send rows the caller may see. */
@@ -2327,8 +2326,8 @@ export const api = {
   unarchiveBookInbox: (id: number) =>
     request<BookInboxRead>('DELETE', `/books/${id}/inbox/archive`),
   /** GET /books/recipient-candidates — active users to send to; Secret → cleared only. */
-  listRecipientCandidates: (confidentiality?: Confidentiality) =>
-    request<RecipientCandidateRead[]>('GET', `/books/recipient-candidates${qs({ confidentiality })}`),
+  listRecipientCandidates: (grade?: Grade) =>
+    request<RecipientCandidateRead[]>('GET', `/books/recipient-candidates${qs({ grade })}`),
   /** GET /books/inbox/summary — my received sends (unread, by purpose) and my sent count (B2). */
   getInboxSummary: () =>
     request<components['schemas']['InboxSummaryRead']>('GET', '/books/inbox/summary'),

@@ -1,11 +1,11 @@
 import { FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { ConfidentialitySelect } from '@/components/books/ConfidentialitySelect'
+import { GradeSelect } from '@/components/books/GradeSelect'
 import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
 import { NotifyMessagePreview } from '@/components/notify/NotifyMessagePreview'
 import { Button } from '@/components/ui/button'
-import type { Confidentiality, SigningPath } from '@/lib/api'
+import type { Grade, SigningPath } from '@/lib/api'
 import type { NotifyPreviewRequest } from '@/lib/messageTemplates'
 
 export interface GeneratedSaveActionsProps {
@@ -19,9 +19,9 @@ export interface GeneratedSaveActionsProps {
   previewBody: NotifyPreviewRequest | null
   onNotifyChange: (checked: boolean) => void
   onSave: () => void
-  /** Record level picker; omitted (e.g. revise mode) when the level is fixed. */
-  confidentiality?: Confidentiality
-  onConfidentialityChange?: (level: Confidentiality) => void
+  /** Record grade picker; omitted (e.g. revise mode) when the grade is fixed. */
+  grade?: Grade
+  onGradeChange?: (grade: Grade) => void
 }
 
 export function GeneratedSaveActions({
@@ -35,8 +35,8 @@ export function GeneratedSaveActions({
   previewBody,
   onNotifyChange,
   onSave,
-  confidentiality,
-  onConfidentialityChange,
+  grade,
+  onGradeChange,
 }: GeneratedSaveActionsProps): React.JSX.Element {
   const { t } = useTranslation()
   const hintOn =
@@ -75,9 +75,9 @@ export function GeneratedSaveActions({
               notifyEmployee={notifyEmployee}
             />
           )}
-          {confidentiality && onConfidentialityChange && (
+          {grade && onGradeChange && (
             <div className="mt-3">
-              <ConfidentialitySelect value={confidentiality} onChange={onConfidentialityChange} />
+              <GradeSelect value={grade} onChange={onGradeChange} />
             </div>
           )}
         </div>

@@ -32,7 +32,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { reportReviewOf, sealDescriptor, signedSourceOf, type ReportReview } from './bookStateLabel'
 import { InboxUnreadDot } from './InboxUnreadDot'
-import { ConfidentialityChip } from '@/components/books/ConfidentialityChip'
+import { GradeChip } from '@/components/books/GradeChip'
 import { newRecordHref } from './newRecordHref'
 import { deleteBlockReason } from './recordDelete'
 import { useRecordDelete } from './RecordDeleteProvider'
@@ -85,7 +85,7 @@ export function BooksMobileList({
   // BooksPage already hides rows whose delete is pending (Undo brings them back).
   const { scheduleDelete } = useRecordDelete()
   const mobileRows = rows
-  const queue = useMemo(() => mobileRows.map((row) => row.id), [mobileRows])
+  const queue = useMemo(() => mobileRows.filter((row) => !row.metadata_only).map((row) => row.id), [mobileRows])
 
   // ── Select mode ───────────────────────────────────────────────────────────
   const [selectMode, setSelectMode] = useState(false)
@@ -97,7 +97,7 @@ export function BooksMobileList({
   if ([...picked].some((id) => !mobileRows.some((row) => row.id === id))) {
     setPicked(new Set([...picked].filter((id) => mobileRows.some((row) => row.id === id))))
   }
-  const pickedRows = mobileRows.filter((row) => picked.has(row.id))
+  const pickedRows = mobileRows.filter((row) => !row.metadata_only && picked.has(row.id))
   const deletableRows = canDelete
     ? pickedRows.filter(
         (row) => deleteBlockReason(row, { has, isInmateReporter }) === null,
@@ -171,7 +171,7 @@ export function BooksMobileList({
     openRecord(navigate, id, navFor())
   }
 
-  const showSelectToggle = canBulk && !isPending && !isError && mobileRows.length > 0
+  const showSelectToggle = canBulk && !isPending && !isError && mobileRows.some((row) => !row.metadata_only)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -420,6 +420,16 @@ function BookMobileCard({
   const catLabel = isAr
     ? (category?.name_ar ?? category?.name_en)
     : (category?.name_en ?? category?.name_ar)
+  if (row.metadata_only) {
+    return (
+      <div data-id={row.id} data-book-id={row.id} className="flex flex-wrap items-center gap-2 rounded-2xl border border-hairline bg-surface p-3.5 text-[0.85em]">
+        <bdi dir="ltr" className="font-mono font-semibold tabular-nums">{row.ref_number}</bdi>
+        {row.classification_code && <bdi dir="ltr" className="text-muted-foreground">{row.classification_code}</bdi>}
+        {row.grade === 'unclassified' ? <span>{t('books.grade.levels.unclassified')}</span> : <GradeChip level={row.grade} />}
+        <bdi dir="ltr" className="font-mono text-muted-foreground tabular-nums">{formatDate(row.created_at)}</bdi>
+      </div>
+    )
+  }
   const Wrapper = selectMode ? 'label' : 'div'
   return (
     <Wrapper
@@ -504,7 +514,7 @@ function BookMobileCard({
             </span>
           ) : null}
           {row.direction && <DirectionPill direction={row.direction} t={t} />}
-          <ConfidentialityChip level={row.confidentiality} />
+          <GradeChip level={row.grade} />
         </div>
 
         {/* creator · date · papers */}

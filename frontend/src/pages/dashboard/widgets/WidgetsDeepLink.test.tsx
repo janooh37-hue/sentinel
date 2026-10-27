@@ -29,7 +29,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 
 const APPROVAL_ROW: ApprovalLogItem = {
   book_id: 10, version_id: 81, ref_number: 'HR-0010', subject: 'Transfer letter',
-  priority: 'High', status: 'pending', record_status: 'pending', access_scope: 'assigned_revision',
+  urgency: 'High', status: 'pending', record_status: 'pending', access_scope: 'assigned_revision',
   submitted_by_name: 'Ahmed', submitted_by_name_ar: 'أحمد', approver_name: 'Khalid', approver_name_ar: 'خالد',
   submitted_at: '2026-10-20T08:00:00',
 }
@@ -41,9 +41,9 @@ const APPROVALS: ApprovalSummaryResponse = {
 const APPROVAL_ROWS = Array.from({ length: 5 }, (_, i) => ({ ...APPROVAL_ROW, book_id: 10 + i, ref_number: `HR-00${10 + i}`, subject: `Approval ${i}` }))
 const BOOK: BookRead = {
   id: 50, ref_number: 'HR-0050', category_id: null, subject: 'Received letter', direction: 'incoming',
-  stamp_style: null, created_at: '2026-10-20T08:00:00', deleted_at: null, priority: 'Normal',
-  approval_state: 'approved', access_scope: 'full', confidentiality: 'general', can_write: false,
-  can_send: false, can_change_confidentiality: false, can_sign: false, can_review: false,
+  stamp_style: null, created_at: '2026-10-20T08:00:00', deleted_at: null, urgency: 'Normal',
+  approval_state: 'approved', access_scope: 'full', grade: 'unclassified', distribution: 'named', metadata_only: false, can_write: false,
+  can_send: false, can_change_grade: false, can_sign: false, can_review: false,
   is_draft: false, doc_manager_has_signature: false, is_word_book: false,
   included_papers_revision: 0, included_papers_fixed_page_count: 0, included_papers_total_page_count: 0,
   current_template_id: null, service_id: 'General Book',
@@ -107,6 +107,22 @@ for (const widget of WIDGETS) {
     })
   })
 }
+
+it.each([
+  ['High', 'books.urgency.high'],
+  ['Very High', 'books.urgency.veryHigh'],
+] as const)('shows the distinct %s urgency in waiting approvals', async (urgency, labelKey) => {
+  vi.mocked(api.listApprovalLog).mockResolvedValue({
+    items: [{ ...APPROVAL_ROW, urgency }],
+    total: 1,
+    limit: 5,
+    offset: 0,
+  })
+  mount(<WaitingApprovalsWidget tier="list" rows={3} />)
+  expect(await screen.findByText(i18n.t(labelKey))).toBeInTheDocument()
+  const otherLabel = urgency === 'High' ? 'books.urgency.veryHigh' : 'books.urgency.high'
+  expect(screen.queryByText(i18n.t(otherLabel))).not.toBeInTheDocument()
+})
 
 it('links every nonzero monthly state and approved row to matching Records filters', async () => {
   mount(<MyDocumentsWidget tier="list" rows={2} />)

@@ -1,6 +1,6 @@
 /**
  * PurposeMark — why a book was sent to you (info / action / reply / circulate).
- * Bare glyph + label, never a chip, so it never reads as ConfidentialityChip.
+ * Bare glyph + label, never a chip, so it never reads as GradeChip.
  * The glyph shape and the label carry the meaning; the tone only helps scanning.
  */
 import { ClipboardCheck, Eye, Megaphone, MessageSquareReply } from 'lucide-react'
