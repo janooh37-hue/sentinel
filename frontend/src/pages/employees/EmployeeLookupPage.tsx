@@ -178,7 +178,7 @@ export function EmployeeLookupPage(): React.JSX.Element {
           )}
           {filteredQuery.data && filteredQuery.data.total > 30 && <nav className="flex items-center justify-between gap-2 pt-3" aria-label={t('dashboard.widgets.workspace.pages')}>
             <Button variant="ghost" disabled={page === 1} onClick={() => changePage(page - 1)}>{t('dashboard.widgets.workspace.previous')}</Button>
-            <span className="font-mono text-[0.78em]">{page} / {Math.ceil(filteredQuery.data.total / 30)}</span>
+            <bdi dir="ltr" className="font-mono text-[0.78em]">{page} / {Math.ceil(filteredQuery.data.total / 30)}</bdi>
             <Button variant="ghost" disabled={page * 30 >= filteredQuery.data.total} onClick={() => changePage(page + 1)}>{t('dashboard.widgets.workspace.next')}</Button>
           </nav>}
         </section>
