@@ -26,7 +26,7 @@ vi.mock('react-router-dom', async (original) => ({
   ...await original<typeof RouterModule>(),
   useNavigate: () => navigate,
 }))
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: auth.authenticated ? { role: auth.role } : null }) }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: auth.authenticated ? { id: 1, role: auth.role } : null }) }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => !auth.denied.has(cap) }) }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() } }))
 
@@ -34,15 +34,15 @@ const BOOK: BookRead = {
   id: 7, ref_number: '1/1/196', category_id: 'GS',
   category: { id: 'GS', name_ar: 'عام', name_en: 'General', requires_approval: false, prefix: 'G' },
   subject: 'Original subject', direction: null, stamp_style: null, approval_state: 'none',
-  created_at: '2026-07-01T00:00:00Z', deleted_at: null, priority: 'Normal', is_draft: false,
+  created_at: '2026-07-01T00:00:00Z', deleted_at: null, urgency: 'Normal', is_draft: false,
   voided_at: null, edit_session: null, classification_code: '1/1', is_word_book: false,
   service_id: 'General Book', versions: [], doc_manager_has_signature: false, current_template_id: null,
   included_papers_revision: 0, included_papers_fixed_page_count: 0, included_papers_total_page_count: 0,
   access_scope: 'full', can_write: true, can_sign: false, can_review: false,
-  confidentiality: 'general', can_send: true, can_change_confidentiality: true,
+  grade: 'unclassified', distribution: 'named', metadata_only: false, can_send: true, can_change_grade: true,
 }
 const REFERENCE: BookThreadItem = {
-  book_id: 8, ref_number: 'REF-8', subject: 'Reference subject', confidentiality: 'secret',
+  book_id: 8, ref_number: 'REF-8', subject: 'Reference subject', grade: 'secret', distribution: 'named',
   created_at: '2026-07-01T00:00:00Z', approval_state: 'none', direction: 'outgoing',
   kind: 'reply', attached: true, can_unlink: true, addressee_user_id: 12, current_document_id: 80,
 }
@@ -71,25 +71,17 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('derive and reply actions', () => {
-  it('defaults to the original level, obeys the attachment floor and opens the created Word draft', async () => {
+  it('inherits the original grade for replies without a grade picker and opens the created Word draft', async () => {
     const derive = vi.spyOn(api, 'deriveBook').mockResolvedValue({
       book_id: 99, ref_number: 'NEW-99', token: 'token', filename: 'reply.docx', word_url: '/word', dav_url: '/dav',
     })
-    const { qc } = mount(<DeriveRecordDialog book={{ ...BOOK, confidentiality: 'secret' }} kind="reply" open onOpenChange={vi.fn()} />)
+    const { qc } = mount(<DeriveRecordDialog book={{ ...BOOK, grade: 'secret' }} kind="reply" open onOpenChange={vi.fn()} />)
     const invalidate = vi.spyOn(qc, 'invalidateQueries')
-    const level = screen.getByRole('combobox', { name: 'Level' })
-    expect(level).toHaveValue('secret')
-    expect(within(level).getAllByRole('option').map((option) => option.getAttribute('value'))).toEqual(['secret'])
-    const attached = screen.getByRole('checkbox', { name: 'Attach the original as reference' })
-    expect(attached).toBeChecked()
-    await userEvent.click(attached)
-    expect(within(level).queryByRole('option', { name: 'General' })).toBeNull()
-    await userEvent.selectOptions(level, 'directed')
-    await userEvent.click(attached)
-    expect(level).toHaveValue('secret')
+    expect(screen.queryByRole('combobox', { name: 'Grade' })).toBeNull()
+    expect(screen.getByRole('checkbox', { name: 'Attach the original as reference' })).toBeChecked()
     await userEvent.click(screen.getByRole('button', { name: 'Reply' }))
     await waitFor(() => expect(derive).toHaveBeenCalledWith(7, {
-      kind: 'reply', confidentiality: 'secret', attach_reference: true, classification_code: '1/1',
+      kind: 'reply', attach_reference: true, classification_code: '1/1',
     }))
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/books/99/word'))
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] })
@@ -109,12 +101,12 @@ describe('derive and reply actions', () => {
     await userEvent.click(await screen.findByRole('option', { name: /2\/1/ }))
     await userEvent.click(submit)
     await waitFor(() => expect(derive).toHaveBeenCalledWith(7, {
-      kind: 'based_on', confidentiality: 'general', attach_reference: true, classification_code: '2/1',
+      kind: 'based_on', grade: 'unclassified', attach_reference: true, classification_code: '2/1',
     }))
   })
 
   it.each([
-    ['LEVEL_BELOW_FLOOR', en.books.thread.errors.levelFloor],
+    ['GRADE_BELOW_FLOOR', en.books.thread.errors.levelFloor],
     ['CLASSIFICATION_REQUIRED', en.books.thread.errors.classificationRequired],
     ['SECRET_CLEARANCE_REQUIRED', en.books.thread.errors.secretClearance],
     ['FORBIDDEN', en.books.thread.errors.forbidden],
@@ -163,23 +155,23 @@ describe('derive and reply actions', () => {
     expect(screen.queryByRole('button', { name: 'Create from' })).toBeNull()
   })
 
-  it('resets level and attachment choices when reopening, and obeys a changed original floor', async () => {
+  it('resets grade and attachment choices when reopening, and obeys a changed original floor', async () => {
     const derive = vi.spyOn(api, 'deriveBook').mockResolvedValue({
       book_id: 99, ref_number: 'NEW-99', token: 'token', filename: 'copy.docx', word_url: '/word', dav_url: '/dav',
     })
     const close = vi.fn()
     const { view } = mount(<DeriveRecordDialog book={BOOK} kind="based_on" open onOpenChange={close} />)
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Level' }), 'personal')
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Grade' }), 'addressee_only')
     await userEvent.click(screen.getByRole('checkbox', { name: 'Attach the original as reference' }))
     view.rerender(<DeriveRecordDialog book={BOOK} kind="based_on" open={false} onOpenChange={close} />)
     view.rerender(<DeriveRecordDialog book={BOOK} kind="based_on" open onOpenChange={close} />)
-    expect(screen.getByRole('combobox', { name: 'Level' })).toHaveValue('general')
+    expect(screen.getByRole('combobox', { name: 'Grade' })).toHaveValue('unclassified')
     expect(screen.getByRole('checkbox', { name: 'Attach the original as reference' })).toBeChecked()
-    view.rerender(<DeriveRecordDialog book={{ ...BOOK, confidentiality: 'secret' }} kind="based_on" open onOpenChange={close} />)
-    expect(screen.getByRole('combobox', { name: 'Level' })).toHaveValue('secret')
+    view.rerender(<DeriveRecordDialog book={{ ...BOOK, grade: 'secret' }} kind="based_on" open onOpenChange={close} />)
+    expect(screen.getByRole('combobox', { name: 'Grade' })).toHaveValue('secret')
     await userEvent.click(screen.getByRole('button', { name: 'Create from' }))
     await waitFor(() => expect(derive).toHaveBeenCalledWith(7, {
-      kind: 'based_on', confidentiality: 'secret', attach_reference: true, classification_code: '1/1',
+      kind: 'based_on', grade: 'secret', attach_reference: true, classification_code: '1/1',
     }))
   })
 
@@ -229,7 +221,7 @@ describe('reference picker and thread', () => {
   it.each([
     ['LINK_EXISTS', en.books.thread.errors.linkExists],
     ['LINK_SELF', en.books.thread.errors.linkSelf],
-    ['LEVEL_BELOW_FLOOR', en.books.thread.errors.levelBelowFloor],
+    ['GRADE_BELOW_FLOOR', en.books.thread.errors.levelBelowFloor],
     ['BOOK_NOT_FOUND', en.books.thread.errors.bookNotFound],
   ])('maps link error %s', async (code, message) => {
     vi.spyOn(api, 'listBooks').mockResolvedValue({ items: [{ ...BOOK, id: 8, ref_number: 'REF-8' }], total: 1, limit: 20, offset: 0 })
@@ -335,6 +327,28 @@ describe('reference picker and thread', () => {
 })
 
 describe('send with references', () => {
+
+  it.each(['top_secret', 'addressee_only'] as const)(
+    'hides %s distribution and disables queries for a non-writer',
+    (grade) => {
+      const candidates = vi.spyOn(api, 'listRecipientCandidates').mockResolvedValue([])
+      const { view } = mount(<SendRecordDialog book={{ ...BOOK, grade, created_by_user_id: 2 }} open onOpenChange={vi.fn()} />)
+      expect(view.container).toBeEmptyDOMElement()
+      expect(candidates).not.toHaveBeenCalled()
+      expect(api.getBookThread).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each(['top_secret', 'addressee_only'] as const)(
+    'allows the writer to distribute a %s record',
+    async (grade) => {
+      vi.spyOn(api, 'listRecipientCandidates').mockResolvedValue([
+        { id: 12, name: 'Recipient', role: 'operator', has_secret_clearance: false },
+      ])
+      mount(<SendRecordDialog book={{ ...BOOK, grade, created_by_user_id: 1 }} open onOpenChange={vi.fn()} />)
+      expect(await screen.findByRole('checkbox', { name: 'Recipient' })).toBeVisible()
+    },
+  )
   it('initializes reply defaults on opening, defaults references on, sends opt-out and reports skip reasons', async () => {
     vi.mocked(toast.loading).mockReturnValueOnce('send-toast')
     vi.mocked(api.getBookThread).mockResolvedValue([REFERENCE])
@@ -343,7 +357,7 @@ describe('send with references', () => {
     ])
     const send = vi.spyOn(api, 'sendBook').mockResolvedValue({
       sent: [], skipped: [], references: [{ book_id: 8, ref_number: 'REF-8', sent_user_ids: [12], skipped: [
-        { user_id: 12, reason: 'not_cleared' }, { user_id: 12, reason: 'personal' },
+        { user_id: 12, reason: 'not_cleared' }, { user_id: 12, reason: 'writer_only' },
       ] }],
     })
     const { view } = mount(<SendRecordDialog book={BOOK} open onOpenChange={vi.fn()} />)
@@ -354,7 +368,7 @@ describe('send with references', () => {
     await userEvent.click(references)
     await userEvent.click(screen.getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(send).toHaveBeenCalledWith(7, {
-      user_ids: [12], purpose: 'reply', note: null, make_directed: false, include_references: false,
+      user_ids: [12], purpose: 'reply', note: null, include_references: false,
     }))
     expect(toast.loading).toHaveBeenCalledWith('Sending record…')
     await waitFor(() => expect(toast.info).toHaveBeenCalledWith('Nothing new was sent', {
@@ -363,8 +377,8 @@ describe('send with references', () => {
       description: expect.stringContaining('Reference deliveries: 1 sent, 2 skipped.'),
     }))
     const description = vi.mocked(toast.info).mock.calls[0]?.[1]?.description
-    expect(description).toEqual(expect.stringContaining('does not have Secret clearance'))
-    expect(description).toEqual(expect.stringContaining('Personal records cannot be sent'))
+    expect(description).toEqual(expect.stringContaining('does not have the required grade clearance'))
+    expect(description).toEqual(expect.stringContaining('Only the writer can distribute this record'))
     view.rerender(<SendRecordDialog book={BOOK} open={false} onOpenChange={vi.fn()} />)
     vi.mocked(api.getBookThread).mockResolvedValue([])
     view.rerender(<SendRecordDialog book={{ ...BOOK, id: 9 }} open onOpenChange={vi.fn()} />)
@@ -386,7 +400,7 @@ describe('send with references', () => {
     await userEvent.click(recipient)
     await userEvent.click(screen.getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(send).toHaveBeenCalledWith(7, {
-      user_ids: [12], purpose: 'info', note: null, make_directed: false, include_references: true,
+      user_ids: [12], purpose: 'info', note: null, include_references: true,
     }))
   })
 
@@ -397,7 +411,7 @@ describe('send with references', () => {
       ? [{ id: 12, name: 'Original sender', role: 'operator', has_secret_clearance: false }, eligible]
       : [eligible])
     const send = vi.spyOn(api, 'sendBook').mockResolvedValue({ sent: [], skipped: [], references: [] })
-    mount(<SendRecordDialog book={{ ...BOOK, confidentiality: kind === 'uncleared' ? 'secret' : 'general' }} open onOpenChange={vi.fn()} />)
+    mount(<SendRecordDialog book={{ ...BOOK, grade: kind === 'uncleared' ? 'secret' : 'unclassified' }} open onOpenChange={vi.fn()} />)
     const recipient = await screen.findByRole('checkbox', { name: 'Eligible recipient' })
     expect(recipient).not.toBeChecked()
     expect(screen.queryByRole('checkbox', { name: 'Original sender' })).toBeNull()
@@ -406,7 +420,7 @@ describe('send with references', () => {
     await userEvent.click(recipient)
     await userEvent.click(screen.getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(send).toHaveBeenCalledWith(7, {
-      user_ids: [13], purpose: 'reply', note: null, make_directed: false, include_references: true,
+      user_ids: [13], purpose: 'reply', note: null, include_references: true,
     }))
   })
 })

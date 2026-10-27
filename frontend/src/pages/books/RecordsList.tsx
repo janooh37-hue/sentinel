@@ -28,6 +28,7 @@ type BookReadWithSnippet = BookRead & { search_snippet?: string | null }
 import { cn } from '@/lib/utils'
 
 import { BookStatusChips } from '@/components/books/BookStatusChips'
+import { GradeChip } from '@/components/books/GradeChip'
 import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
@@ -131,6 +132,16 @@ export function RecordsList({
             </span>
           </div>
           {items.map((row) => {
+            if (row.metadata_only) {
+              return (
+                <div key={row.id} data-book-id={row.id} className="flex flex-wrap items-center gap-2.5 border-b border-hairline px-3.5 py-2 text-[0.78em]">
+                  <bdi dir="ltr" className="font-mono font-bold tabular-nums">{row.ref_number}</bdi>
+                  {row.classification_code && <bdi dir="ltr" className="text-muted-foreground">{row.classification_code}</bdi>}
+                  {row.grade === 'unclassified' ? <span>{t('books.grade.levels.unclassified')}</span> : <GradeChip level={row.grade} />}
+                  <bdi dir="ltr" className="font-mono text-muted-foreground tabular-nums">{row.created_at.slice(0, 10)}</bdi>
+                </div>
+              )
+            }
             const classified = { classified: !!row.classification_code }
             const glyph = serviceGlyph(row.service_id)
             const artwork = serviceArtwork(row.service_id)
@@ -272,7 +283,7 @@ export function RecordsList({
                       </span>
                     )}
                     {/* Level / draft / editing / voided / classification chips */}
-                    {(row.confidentiality !== 'general' ||
+                    {(row.grade !== 'unclassified' ||
                       row.is_draft ||
                       row.edit_session?.state === 'active' ||
                       row.voided_at ||

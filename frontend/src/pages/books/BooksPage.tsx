@@ -429,7 +429,7 @@ function BooksRegister(): React.JSX.Element {
 
   // Draft books (is_draft && !voided_at) — shown in the group card above the list
   const draftBooks: BookRead[] = useMemo(
-    () => allRows.filter((r) => r.is_draft && !r.voided_at),
+    () => allRows.filter((r) => !r.metadata_only && r.is_draft && !r.voided_at),
     [allRows],
   )
 
@@ -469,11 +469,12 @@ function BooksRegister(): React.JSX.Element {
     // `filtered` is already a copy; never mutate allRows.
     return filtered.sort((a, b) => b.created_at.localeCompare(a.created_at))
   }, [allRows, filters, spineState, railService, search, showDrafts, serverSearchActive, searchItems])
-  const desktopRowIds = useMemo(() => desktopRows.map((row) => row.id), [desktopRows])
+  const openableRows = useMemo(() => desktopRows.filter((row) => !row.metadata_only), [desktopRows])
+  const desktopRowIds = useMemo(() => openableRows.map((row) => row.id), [openableRows])
 
   const selectedBook = useMemo(() => {
     const pool = serverSearchActive && searchItems ? searchItems : allRows
-    return pool.find((r) => r.id === selectedId) ?? allRows.find((r) => r.id === selectedId) ?? null
+    return pool.find((r) => r.id === selectedId && !r.metadata_only) ?? allRows.find((r) => r.id === selectedId && !r.metadata_only) ?? null
   }, [allRows, selectedId, serverSearchActive, searchItems])
   // Selection alone (auto-select, deep link, Back) never opens the preview.
   const drawerOpen = drawerTier && paneOpen && selectedBook !== null
@@ -531,12 +532,12 @@ function BooksRegister(): React.JSX.Element {
   // Only rows currently shown count: a row hidden by a filter / search change is
   // neither counted nor acted on (it stays ticked and returns with its row).
   const selectedRows = useMemo(() => {
-    const byId = new Map(desktopRows.map((row) => [row.id, row]))
+    const byId = new Map(openableRows.map((row) => [row.id, row]))
     return [...selectedForBasket].flatMap((id) => {
       const row = byId.get(id)
       return row ? [row] : []
     })
-  }, [selectedForBasket, desktopRows])
+  }, [selectedForBasket, openableRows])
   // Signed / in-flight / Word-session rows are skipped, never deleted.
   const deletableRows = useMemo(
     () => selectedRows.filter((row) => deleteBlockReason(row, { has, isInmateReporter }) === null),
@@ -555,8 +556,8 @@ function BooksRegister(): React.JSX.Element {
       setOpenParam(null)
       return
     }
-    const at = desktopRows.findIndex((row) => row.id === selectedId)
-    const remaining = desktopRows.filter((row) => !removed.has(row.id))
+    const at = openableRows.findIndex((row) => row.id === selectedId)
+    const remaining = openableRows.filter((row) => !removed.has(row.id))
     const next = remaining[Math.min(Math.max(at, 0), remaining.length - 1)]
     setOpenParam(next ? String(next.id) : null)
   }
@@ -606,12 +607,12 @@ function BooksRegister(): React.JSX.Element {
   //    tab, C copies the ref, Esc closes the drawer ──────────────────────────────
   // Active only on the desktop list and, in the drawer tier, only while the
   // drawer is open (nothing is "selected" in the user's mind otherwise).
-  const keysActive = isDesktop && tier !== null && desktopRows.length > 0 && (!drawerTier || drawerOpen)
+  const keysActive = isDesktop && tier !== null && openableRows.length > 0 && (!drawerTier || drawerOpen)
   const stepSelection = (delta: 1 | -1): boolean => {
     if (!keysActive) return false
-    const at = desktopRows.findIndex((row) => row.id === selectedId)
-    const nextIndex = at === -1 ? (delta > 0 ? 0 : desktopRows.length - 1) : at + delta
-    const next = desktopRows[Math.min(Math.max(nextIndex, 0), desktopRows.length - 1)]
+    const at = openableRows.findIndex((row) => row.id === selectedId)
+    const nextIndex = at === -1 ? (delta > 0 ? 0 : openableRows.length - 1) : at + delta
+    const next = openableRows[Math.min(Math.max(nextIndex, 0), openableRows.length - 1)]
     if (next.id !== selectedId) {
       // Focus follows the selection when it was on a row, so Enter / Ctrl+Enter
       // act on the row just stepped to rather than the one last clicked.
@@ -635,7 +636,7 @@ function BooksRegister(): React.JSX.Element {
     if (!isDesktop || tier === null) return false
     const focusedRow = document.activeElement?.closest<HTMLElement>('[data-book-id]')
     const id = Number(focusedRow?.dataset.bookId) || (keysActive ? selectedBook?.id : undefined)
-    if (!id) return false
+    if (!id || !openableRows.some((row) => row.id === id)) return false
     window.open(`/books/${id}`, '_blank', 'noopener')
   })
   useShortcutAction('copyRef', () => {
@@ -658,7 +659,7 @@ function BooksRegister(): React.JSX.Element {
   // Inline tiers only: the drawer tier keeps the list full-width until a row is
   // chosen, and mobile never uses selectedId. A pending Back-restore selects its
   // own row, so it must not be pre-empted by the first row.
-  const firstRowId = desktopRows[0]?.id ?? null
+  const firstRowId = openableRows[0]?.id ?? null
   // No `open` at all, or an `open` whose record is gone (Created-by-me / service
   // change dropped it) → pick the first row.
   const selectionGone = openParam ? listQuery.isSuccess && selectedBook === null : true
@@ -667,7 +668,7 @@ function BooksRegister(): React.JSX.Element {
     !returnPending &&
     selectionGone &&
     firstRowId !== null &&
-    (selectedId === null || !desktopRows.some((r) => r.id === selectedId))
+    (selectedId === null || !openableRows.some((r) => r.id === selectedId))
   useEffect(() => {
     // A deep link that is bouncing to the record page (declared above, so it has
     // already run this commit) must not race a re-selection.

@@ -2094,8 +2094,8 @@
       "alsoSend": "Also send referenced records ({{count}})",
       "sendSummary": "Reference deliveries: {{sent}} sent, {{skipped}} skipped.",
       "skipped": {
-        "not_cleared": "{{ref}}: {{name}} does not have Secret clearance",
-        "personal": "{{ref}}: Personal records cannot be sent",
+        "not_cleared": "{{ref}}: {{name}} does not have the required grade clearance",
+        "writer_only": "{{ref}}: Only the writer can distribute this record",
         "already_recipient": "{{ref}}: {{name}} already received this record",
         "self": "{{ref}}: sending to yourself was skipped"
       },
@@ -2104,35 +2104,41 @@
         "incoming": { "reply": "Replied by", "based_on": "Used to create", "reference": "Referenced by" }
       },
       "errors": {
-        "levelFloor": "The level cannot be below the original's minimum level.",
+        "levelFloor": "An attached classified reference requires at least Secret grade.",
         "classificationRequired": "Select a classification before creating the record.",
         "secretClearance": "Secret clearance is required to create this record.",
         "forbidden": "You do not have permission to create this record.",
         "linkExists": "This record is already attached as a reference.",
         "linkSelf": "A record cannot reference itself.",
-        "levelBelowFloor": "Raise this record's level before attaching this reference.",
+        "levelBelowFloor": "Raise this record's grade before attaching this reference.",
         "bookNotFound": "This record is unavailable or you do not have access to it."
       }
     },
-    "confidentiality": {
-      "label": "Level",
-      "chipTitle": "Record level: {{level}}",
+    "grade": {
+      "label": "Grade",
+      "chipTitle": "Record grade: {{level}}",
       "levels": {
-        "general": "General",
-        "personal": "Personal",
+        "unclassified": "Unclassified",
         "secret": "Secret",
-        "directed": "Directed"
+        "top_secret": "Top Secret",
+        "addressee_only": "Addressee Only"
       },
       "hints": {
-        "general": "Everyone with access to this record type can open it.",
-        "personal": "Only you can open it.",
-        "secret": "Only people with Secret clearance can open it.",
-        "directed": "Only you and the people you send it to can open it."
+        "unclassified": "People with access to this record type can open it.",
+        "secret": "Access requires Secret clearance or higher.",
+        "top_secret": "Access requires Top Secret clearance.",
+        "addressee_only": "Access is restricted to the writer and named addressees."
       },
-      "menu": "Change level…",
-      "changeTitle": "Change record level",
-      "save": "Save level",
-      "changed": "Level changed to {{level}}"
+      "menu": "Change grade",
+      "changeTitle": "Change grade",
+      "save": "Save grade",
+      "changed": "Grade changed to {{level}}"
+    },
+    "urgency": {
+      "label": "Urgency",
+      "normal": "Normal",
+      "high": "Urgent",
+      "veryHigh": "Very Urgent"
     },
     "send": {
       "menu": "Send to…",
@@ -2155,9 +2161,7 @@
       "note": "Note (optional)",
       "notePlaceholder": "Add a short note for the recipients",
       "send": "Send",
-      "switchAndSend": "Switch to Directed and send",
-      "personalNotice": "This record is Personal. Sending it switches it to Directed: only you and the people you send it to can open it.",
-      "secretNotice": "Secret record: only people with Secret clearance are listed.",
+      "secretNotice": "Only people with the required grade clearance are listed.",
       "sent_one": "Sent to {{count}} person",
       "sent_other": "Sent to {{count}} people",
       "nothingSent": "Nothing new was sent",
@@ -2165,9 +2169,10 @@
       "skippedSelf": "you",
       "skippedAlready": "{{name}} (already has it)",
       "errors": {
-        "notCleared": "Some recipients don't have Secret clearance.",
+        "notCleared": "Some recipients don't have the required grade clearance.",
         "invalid": "Some recipients can't receive records.",
-        "personal": "A Personal record must be switched to Directed before sending."
+        "writerOnly": "Only the writer can distribute this record.",
+        "distributionNotNamed": "Recipients must be named in this record's distribution."
       },
       "sentTo_one": "Sent to {{count}} person",
       "sentTo_other": "Sent to {{count}} people",
@@ -2321,9 +2326,6 @@
       "return": "Return for changes",
       "returnShort": "Return",
       "addNote": "Add note",
-      "priority": "Priority",
-      "high": "High",
-      "normal": "Normal",
       "approvalChain": "Approval chain",
       "submitter": "Submitter",
       "approved": "Book approved",
@@ -2850,7 +2852,7 @@
       "created": "Created",
       "notDone": "Not done",
       "note": "Sender note",
-      "confidentiality": "Confidentiality",
+      "grade": "Grade",
       "untitled": "No subject",
       "noMatches": "No matching books",
       "searchHint": "Try a reference, a name or a word from the note, or clear the search.",

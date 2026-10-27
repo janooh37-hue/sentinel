@@ -6,18 +6,22 @@ import { MemoryRouter } from 'react-router-dom'
 import { api, ApiError, type BookRead, type WordSessionRead } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { DeriveRecordDialog } from './DeriveRecordDialog'
-import { deriveLevels } from './derive-levels'
+import { deriveGrades } from './derive-grade'
 
-describe('derive level floor', () => {
-  it('keeps non-general originals above general and attached secret originals secret', () => {
-    for (const attached of [true, false]) {
-      expect(deriveLevels('general', attached)).toEqual(['general', 'personal', 'secret', 'directed'])
-      expect(deriveLevels('directed', attached)).toEqual(['personal', 'secret', 'directed'])
-      expect(deriveLevels('personal', attached)).toEqual(['personal', 'secret', 'directed'])
-    }
-    expect(deriveLevels('secret', true)).toEqual(['secret'])
-    expect(deriveLevels('secret', false)).toEqual(['personal', 'secret', 'directed'])
+describe('derive grade floor', () => {
+  const grades = ['unclassified', 'secret', 'top_secret', 'addressee_only'] as const
+  it.each(grades)('allows every grade for a detached %s original', (grade) => {
+    expect(deriveGrades(grade, false)).toEqual([...grades])
   })
+  it('allows every grade for an attached unclassified original', () => {
+    expect(deriveGrades('unclassified', true)).toEqual([...grades])
+  })
+  it.each(['secret', 'top_secret', 'addressee_only'] as const)(
+    'excludes only unclassified for an attached %s original',
+    (grade) => {
+      expect(deriveGrades(grade, true)).toEqual(['secret', 'top_secret', 'addressee_only'])
+    },
+  )
 })
 
 const navigate = vi.hoisted(() => vi.fn())
@@ -28,7 +32,7 @@ vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => t
 vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'loading-toast'), dismiss: vi.fn(), error: vi.fn() } }))
 vi.mock('@/components/application/fields/ClassificationField', () => ({ ClassificationField: () => null }))
 
-const book = { id: 42, ref_number: 'GS-0410', confidentiality: 'general', classification_code: '1/5', access_scope: 'full' } as BookRead
+const book = { id: 42, ref_number: 'GS-0410', grade: 'unclassified', urgency: 'Normal', distribution: 'named', metadata_only: false, can_change_grade: false, classification_code: '1/5', access_scope: 'full' } as BookRead
 function renderDerive() {
   const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
   return render(createElement(DeriveRecordDialog, { book, kind: 'reply', open: true, onOpenChange: vi.fn() }), {

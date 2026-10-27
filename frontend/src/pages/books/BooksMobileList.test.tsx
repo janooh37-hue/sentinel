@@ -54,7 +54,11 @@ function book(id: number, over: Partial<BookRead> = {}): BookRead {
     approval_state: 'none',
     created_at: '2026-07-01T00:00:00Z',
     deleted_at: null,
-    priority: 'Normal',
+    urgency: 'Normal',
+    grade: 'unclassified',
+    distribution: 'named',
+    metadata_only: false,
+    can_change_grade: false,
     is_draft: false,
     voided_at: null,
     edit_session: null,
@@ -140,6 +144,24 @@ beforeEach(() => {
 })
 
 describe('BooksMobileList cards', () => {
+  it('renders metadata-only cards without links, selection or submit actions', async () => {
+    const view = renderList({ canSubmit: true, rows: [book(1, {
+      metadata_only: true, grade: 'top_secret', classification_code: '7/2',
+      subject: 'Hidden subject', created_by_name: 'Hidden creator',
+    })] })
+    const row = document.querySelector('[data-book-id="1"]') as HTMLElement
+    expect(within(row).getByText('G-2026-001')).toBeInTheDocument()
+    expect(within(row).getByText('7/2')).toBeInTheDocument()
+    expect(within(row).getByText('2026-07-01')).toBeInTheDocument()
+    expect(row).not.toHaveTextContent('Hidden')
+    expect(row.querySelector('a,button,input')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'books.list.select' })).toBeNull()
+    await userEvent.click(row)
+    await userEvent.keyboard('{Enter}')
+    expect(screen.getByTestId('loc')).toHaveTextContent('/books?mine=1')
+    expect(view.onSubmit).not.toHaveBeenCalled()
+  })
+
   it('opens a record through a real link carrying { from, queue }', async () => {
     renderList({ rows: [book(1), book(3)] })
     const link = screen.getByRole('link', { name: 'G-2026-003' })

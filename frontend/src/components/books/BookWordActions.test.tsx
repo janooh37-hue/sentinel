@@ -16,6 +16,7 @@ import { WordReopenButton, WordSessionActions } from './BookWordActions'
 import { BookStatusChips } from './BookStatusChips'
 import * as apiMod from '@/lib/api'
 import type { BookRead, WordSessionRead } from '@/lib/api'
+import type * as AuthModule from '@/lib/authContext'
 
 // ── i18n setup (Arabic only; catches EN leaks) ────────────────────────────────
 void i18n.use(initReactI18next).init({
@@ -65,6 +66,10 @@ vi.mock('@/lib/useCapabilities', () => ({
   }),
 }))
 vi.mock('@/pages/application/DocPdfCanvas', () => ({ default: () => null }))
+vi.mock('@/lib/authContext', async (original) => ({
+  ...await original<typeof AuthModule>(),
+  useAuth: () => ({ user: { id: 1 } }),
+}))
 
 
 // Base book fixture
@@ -79,7 +84,7 @@ const BASE_BOOK: BookRead = {
   approval_state: 'none',
   created_at: '2026-07-01T00:00:00Z',
   deleted_at: null,
-  priority: 'Normal',
+  urgency: 'Normal',
   is_draft: true,
   voided_at: null,
   edit_session: null,
@@ -96,9 +101,11 @@ const BASE_BOOK: BookRead = {
   can_write: true,
   can_sign: false,
   can_review: false,
-  confidentiality: 'general',
+  grade: 'unclassified',
+  distribution: 'named',
+  metadata_only: false,
   can_send: false,
-  can_change_confidentiality: false,
+  can_change_grade: false,
 }
 
 const ACTIVE_SESSION_BOOK: BookRead = {

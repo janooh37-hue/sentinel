@@ -26,9 +26,9 @@ import { BooksRoutingDesk } from './BooksRoutingDesk'
 const BOOK: BookRead = {
   id: 7, ref_number: 'GS-7', subject: 'Staff instruction', category_id: null,
   direction: 'incoming', stamp_style: null, created_at: '2026-10-12T09:00:00Z',
-  deleted_at: null, priority: null, approval_state: 'none', access_scope: 'full',
-  confidentiality: 'general', can_write: false, can_send: false,
-  can_change_confidentiality: false, can_sign: false, can_review: false, is_draft: false,
+  deleted_at: null, urgency: 'Normal', approval_state: 'none', access_scope: 'full',
+  grade: 'unclassified', distribution: 'named', metadata_only: false, can_write: false, can_send: false,
+  can_change_grade: false, can_sign: false, can_review: false, is_draft: false,
   doc_manager_has_signature: false, is_word_book: false,
   included_papers_revision: 0, included_papers_fixed_page_count: 0,
   included_papers_total_page_count: 0, current_template_id: null, service_id: 'General Book',
@@ -63,6 +63,46 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 describe('Books routing desk', () => {
+  it.each(['grade', '-grade'])('passes the %s grade sort to the server', async (sort) => {
+    mount(`/ledger?tab=books&sort=${sort}`)
+    await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith(expect.objectContaining({ sort })))
+  })
+
+  it.each([false, true])('keeps metadata-only rows nonopenable and nondraggable (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    const getBook = vi.spyOn(api, 'getBook')
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{
+      ...BOOK, metadata_only: true, grade: 'top_secret', classification_code: '7/2',
+      subject: 'Hidden subject', created_by_name: 'Hidden creator',
+      can_send: true, can_change_grade: true,
+    }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const ref = await screen.findByText('GS-7')
+    const row = ref.closest('[data-book-id]') as HTMLElement
+    expect(within(row).getByText('7/2')).toBeInTheDocument()
+    expect(within(row).getByTestId('grade-mark')).toHaveTextContent('Top Secret')
+    expect(row).not.toHaveTextContent(/Hidden|Khalid|For action/)
+    expect(row.querySelector('a,button,input,[draggable="true"]')).toBeNull()
+    expect(row.tagName).not.toBe('BUTTON')
+    await userEvent.click(row)
+    fireEvent.keyDown(row, { key: 'Enter' })
+    fireEvent.doubleClick(row)
+    expect(getBook).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('URL')).not.toHaveTextContent('book=')
+  })
+
+  it('distinguishes High and Very High urgency on ledger rows', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({
+      items: [{ ...BOOK, urgency: 'High' }, { ...BOOK, id: 8, ref_number: 'GS-8', urgency: 'Very High' }],
+      total: 2, limit: 50, offset: 0,
+    })
+    mount()
+    const high = within(await screen.findByRole('button', { name: /GS-7/ })).getByText('Urgent')
+    const veryHigh = within(screen.getByRole('button', { name: /GS-8/ })).getByText('Very Urgent')
+    expect(high).toHaveClass('text-warning')
+    expect(veryHigh).toHaveClass('text-destructive')
+  })
+
   it.each([
     ['incoming', 'received'], ['done', 'done'], ['outgoing', 'sent'], ['archived', 'archived'],
   ])('maps the %s URL scope to inbox=%s', async (scope, inbox) => {
@@ -344,10 +384,10 @@ describe('Books routing desk', () => {
     expect(await screen.findByRole('button', { name: /GS-7/ })).toBeInTheDocument()
   })
 
-  it('marks each purpose with its own glyph and label, apart from the confidentiality mark', async () => {
+  it('marks each purpose with its own glyph and label, apart from the grade mark', async () => {
     const purposes = ['info', 'action', 'reply', 'circulate'] as const
     vi.mocked(api.listBooks).mockResolvedValue({
-      items: purposes.map((purpose, index) => ({ ...BOOK, id: index + 1, ref_number: `GS-${index + 1}`, confidentiality: 'secret', my_inbox: { ...BOOK.my_inbox!, purpose } })),
+      items: purposes.map((purpose, index) => ({ ...BOOK, id: index + 1, ref_number: `GS-${index + 1}`, grade: 'secret', my_inbox: { ...BOOK.my_inbox!, purpose } })),
       total: 4, limit: 50, offset: 0,
     })
     mount()
@@ -356,8 +396,8 @@ describe('Books routing desk', () => {
       const mark = within(row).getByText(label)
       expect(mark).toHaveAttribute('data-purpose', purposes[index])
       expect(mark.querySelector('svg')?.getAttribute('class')).toMatch(/lucide-/)
-      expect(mark.closest('[data-testid="confidentiality-mark"]')).toBeNull()
-      expect(within(row).getByTestId('confidentiality-mark')).toHaveTextContent('Secret')
+      expect(mark.closest('[data-testid="grade-mark"]')).toBeNull()
+      expect(within(row).getByTestId('grade-mark')).toHaveTextContent('Secret')
     }
     const glyphs = purposes.map((purpose) => document.querySelector(`[data-purpose="${purpose}"] svg`)!.getAttribute('class'))
     expect(new Set(glyphs).size).toBe(4)
@@ -392,7 +432,7 @@ describe('Books routing desk', () => {
     })
     vi.mocked(api.listBooks).mockResolvedValue({
       // I also received this book (my_inbox set): the Outgoing tab still shows my send.
-      items: [{ ...BOOK, priority: 'High', signer_name: 'Juma Saadi', recipients: [
+      items: [{ ...BOOK, urgency: 'High', signer_name: 'Juma Saadi', recipients: [
         recipient(2, 'Khalid', { read_at: '2026-10-12T10:00:00Z', done_at: '2026-10-12T11:00:00Z' }),
         recipient(3, 'Salim', { read_at: '2026-10-12T10:00:00Z' }),
         recipient(4, 'Aisha'),
@@ -454,7 +494,7 @@ describe('Books routing desk (Arabic)', () => {
   })
 
   it('renders the list and the open book without any English', async () => {
-    const arabic = { ...BOOK, subject: 'تعليمات الموظفين', confidentiality: 'secret' as const, versions: [{ id: 1, version_no: 1, document_id: 73, status: 'none', trigger: 'create', has_fields: false, created_at: BOOK.created_at, manager_sig_embedded: false }] }
+    const arabic = { ...BOOK, subject: 'تعليمات الموظفين', grade: 'secret' as const, versions: [{ id: 1, version_no: 1, document_id: 73, status: 'none', trigger: 'create', has_fields: false, created_at: BOOK.created_at, manager_sig_embedded: false }] }
     const purposes = ['info', 'action', 'reply', 'circulate'] as const
     const items = purposes.map((purpose, index) => ({
       ...arabic, id: index + 1, ref_number: `GS-${index + 1}`,

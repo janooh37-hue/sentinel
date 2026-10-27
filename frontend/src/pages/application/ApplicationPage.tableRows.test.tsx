@@ -87,7 +87,7 @@ function WordSubmitHarness({
       template_name: undefined,
       table_rows,
       sign: true,
-      confidentiality: 'general',
+      grade: 'unclassified',
     })
   }
 
@@ -209,7 +209,7 @@ function ReportWordSubmitHarness({ signerId }: { signerId: number }) {
       date: (values as Record<string, unknown>).report_date as string | null ?? null,
       cc: [],
       manager_id: null,
-      confidentiality: 'general',
+      grade: 'unclassified',
     })
   })
 

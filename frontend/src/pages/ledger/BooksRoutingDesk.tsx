@@ -10,7 +10,7 @@ import { toast } from '@/lib/toast'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 
-import { ConfidentialityMark } from '@/components/books/ConfidentialityChip'
+import { GradeMark } from '@/components/books/GradeChip'
 import { DocumentState } from '@/components/books/DocumentState'
 import { PurposeMark } from '@/components/books/PurposeMark'
 import { RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
@@ -50,12 +50,12 @@ type ListScope = Scope | 'any' | 'folder'
 const INBOX_BY_SCOPE: Record<Exclude<ListScope, 'folder'>, 'received' | 'done' | 'sent' | 'archived' | 'any'> = {
   incoming: 'received', done: 'done', outgoing: 'sent', archived: 'archived', any: 'any',
 }
-type SortColumn = 'date' | 'ref' | 'subject' | 'purpose' | 'confidentiality' | 'status'
+type SortColumn = 'date' | 'ref' | 'subject' | 'purpose' | 'grade' | 'status'
 const SORT_LABEL: Record<SortColumn, string> = {
   date: 'ledger.booksDesk.sent', ref: 'ledger.booksDesk.columns.ref', subject: 'ledger.booksDesk.columns.subject',
-  purpose: 'books.send.purpose', confidentiality: 'ledger.booksDesk.confidentiality', status: 'ledger.booksDesk.columns.state',
+  purpose: 'books.send.purpose', grade: 'ledger.booksDesk.grade', status: 'ledger.booksDesk.columns.state',
 }
-const MOBILE_SORTS: readonly BookSortKey[] = ['-date', 'date', 'ref', 'subject', 'purpose', '-confidentiality', 'status']
+const MOBILE_SORTS: readonly BookSortKey[] = ['-date', 'date', 'ref', 'subject', 'purpose', '-grade', 'status']
 const PAGE_SIZE = 50
 
 function BookDate({ value }: { value: string }): React.JSX.Element {
@@ -125,7 +125,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
   const folders = useBookFolders()
   const [folderDrawerOpen, setFolderDrawerOpen] = useState(false)
   const [rawSort, setSort] = useSearchParam('sort', { fallback: '-date' })
-  const sort: BookSortKey = /^-?(date|ref|subject|purpose|confidentiality|status)$/.test(rawSort) ? rawSort as BookSortKey : '-date'
+  const sort: BookSortKey = /^-?(date|ref|subject|purpose|grade|status)$/.test(rawSort) ? rawSort as BookSortKey : '-date'
   const [bookParam, setBookParam] = useSearchParam('book')
   // Opening pushes, so the toolbar Back and the browser Back both return to the list.
   const bookPage = useUrlOverlay('book', ['view'])
@@ -204,7 +204,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
   }
   function sortHeader(column: SortColumn): ReactNode {
     const active = sort.replace('-', '') === column
-    const next: BookSortKey = active ? (sort.startsWith('-') ? column : `-${column}`) : column === 'date' || column === 'confidentiality' ? `-${column}` : column
+    const next: BookSortKey = active ? (sort.startsWith('-') ? column : `-${column}`) : column === 'date' || column === 'grade' ? `-${column}` : column
     const descending = sort.startsWith('-')
     return (
       <button type="button" className={cn('inline-flex items-center gap-1 text-start hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', column === 'date' && 'justify-end')} aria-pressed={active} aria-label={t('ledger.booksDesk.sortBy', { column: t(SORT_LABEL[column]), direction: t(`ledger.booksDesk.${next.startsWith('-') ? 'descending' : 'ascending'}`) })} onClick={() => changeSort(next)}>
@@ -329,7 +329,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
               <div className={cn('sticky top-0 z-10 hidden gap-x-3 border-b border-hairline bg-surface px-6 py-2 text-xs font-medium text-muted-foreground xl:grid', DESK_GRID)}>
                 {sortHeader('purpose')}
                 {sortHeader('ref')}
-                <span className="flex flex-wrap items-center gap-x-3">{sortHeader('subject')}{sortHeader('confidentiality')}</span>
+                <span className="flex flex-wrap items-center gap-x-3">{sortHeader('subject')}{sortHeader('grade')}</span>
                 <span>{t(asSent ? 'ledger.booksDesk.columns.createdBy' : 'ledger.booksDesk.from')}</span>
                 <span>{t('ledger.booksDesk.to')}</span>
                 <span>{t('ledger.booksDesk.signer')}</span>
@@ -399,6 +399,16 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const me = useAuth().user?.id
+  if (book.metadata_only) {
+    return (
+      <div data-book-id={book.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm lg:px-6">
+        <bdi dir="ltr" className="font-mono tabular-nums">{book.ref_number}</bdi>
+        {book.classification_code && <bdi dir="ltr" className="text-muted-foreground">{book.classification_code}</bdi>}
+        {book.grade === 'unclassified' ? <span>{t('books.grade.levels.unclassified')}</span> : <GradeMark level={book.grade} />}
+        <span className="text-muted-foreground"><BookDate value={book.created_at} /></span>
+      </div>
+    )
+  }
   const name = (en: string | null | undefined, ar: string | null | undefined): string => pickEmployeeName({ name_en: en ?? '', name_ar: ar }, i18n.language)
   const title = (en?: string | null, ar?: string | null): string | null => (i18n.language.startsWith('ar') ? ar || en : en || ar) || null
   const inbox = asSent ? null : book.my_inbox
@@ -442,15 +452,15 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen
         <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
           <span dir="auto" className={cn('min-w-0 break-words', inbox && !inbox.read_at ? 'font-semibold' : 'font-medium')}>{book.subject || t('ledger.booksDesk.untitled')}</span>
           {papers > 1 && <PaperCount count={papers} />}
-          {book.priority === 'High' && (
-            <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-warning">
-              <Flag className="h-3.5 w-3.5 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden />{t('ledger.booksDesk.urgent')}
+          {book.urgency !== 'Normal' && (
+            <span className={cn('inline-flex shrink-0 items-center gap-1 text-xs font-semibold', book.urgency === 'Very High' ? 'text-destructive' : 'text-warning')}>
+              <Flag className="h-3.5 w-3.5 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden />{t(`books.urgency.${book.urgency === 'Very High' ? 'veryHigh' : 'high'}`)}
             </span>
           )}
         </span>
         <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
           {category && <bdi className="min-w-0 truncate">{category}</bdi>}
-          <ConfidentialityMark level={book.confidentiality} />
+          <GradeMark level={book.grade} />
         </span>
         {inFolder && (book.filed_by_name || book.filed_by_name_ar || book.filed_at) && (
           <span className="mt-1 block text-xs text-muted-foreground">
@@ -578,6 +588,8 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
   onInboxUpdated: (id: number, inbox: BookInboxRead) => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const userId = useAuth().user?.id
+  const canSend = book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (userId !== undefined && book.created_by_user_id === userId))
   const [sendOpen, setSendOpen] = useState(false)
   const [pickedPaper, setPickedPaper] = useState<PaperKey | null>(null)
   const papers = useMemo(() => papersOf(book, { inmateReporter: false }), [book])
@@ -603,7 +615,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
         <Button variant="ghost" size="sm" className="shrink-0" onClick={onBack}><ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />{t('ledger.booksDesk.backToList')}</Button>
         <span aria-hidden className="mx-1 hidden h-5 w-px shrink-0 bg-border sm:block" />
         {inboxActions.map((action) => <Button key={action.key} className="shrink-0" variant={action.key === 'done' ? 'default' : 'outline'} size="sm" disabled={action.pending} aria-busy={action.pending} onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
-        {book.can_send && <Button className="shrink-0" variant="outline" size="sm" disabled={loading} onClick={() => setSendOpen(true)}><Send className="h-4 w-4 rtl:-scale-x-100" aria-hidden />{t('ledger.booksDesk.forward')}</Button>}
+        {canSend && <Button className="shrink-0" variant="outline" size="sm" disabled={loading} onClick={() => setSendOpen(true)}><Send className="h-4 w-4 rtl:-scale-x-100" aria-hidden />{t('ledger.booksDesk.forward')}</Button>}
         {reply.actions.map((action) => <Button key={action.key} className="shrink-0" variant="outline" size="sm" onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
         <BookFolderMenu bookId={book.id} disabled={loading} />
         <div className="ms-auto flex shrink-0 items-center gap-1 ps-2">
@@ -615,7 +627,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
           {inbox && <PurposeMark purpose={inbox.purpose} />}
           <bdi dir="ltr" className="font-mono text-xs tabular-nums text-muted-foreground">{book.ref_number}</bdi>
-          <ConfidentialityMark level={book.confidentiality} />
+          <GradeMark level={book.grade} />
         </div>
         <h2 id={titleId} className="mt-2 max-w-[75ch] break-words text-xl font-semibold leading-snug tracking-tight"><bdi>{book.subject || t('ledger.booksDesk.untitled')}</bdi></h2>
       </header>
@@ -640,7 +652,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
           </aside>
         )}
       </div>
-      {book.can_send && <SendRecordDialog book={book} open={sendOpen} onOpenChange={setSendOpen} />}
+      {canSend && <SendRecordDialog book={book} open={sendOpen} onOpenChange={setSendOpen} />}
       {reply.dialog}
     </article>
   )

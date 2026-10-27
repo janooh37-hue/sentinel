@@ -193,9 +193,9 @@ function ApprovalRow({ item, tab, dfLocale, onOpen, onPreview }: RowProps): Reac
         <span className="shrink-0 rounded-md bg-surface-tinted px-1.5 py-0.5 font-mono text-[0.72em] font-semibold text-foreground">
           <bdi dir="ltr">{item.ref_number}</bdi>
         </span>
-        {item.priority === 'High' && (
+        {item.urgency !== 'Normal' && (
           <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[0.65em] font-semibold text-accent">
-            {t('books.approval.high')}
+            {t(item.urgency === 'Very High' ? 'books.urgency.veryHigh' : 'books.urgency.high')}
           </span>
         )}
         {restricted && (

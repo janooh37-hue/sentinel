@@ -186,7 +186,7 @@ export function RecordMoreSheet({
       onSelect: () => openOverlay('papers'),
     })
   }
-  if (book.can_send) {
+  if (book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (view.userId !== undefined && book.created_by_user_id === view.userId))) {
     documentRows.push({
       id: 'send',
       icon: iconOf(Send),
@@ -208,12 +208,12 @@ export function RecordMoreSheet({
       onSelect: () => { if (canEdit && book.access_scope === 'full') openOverlay('link') },
     })
   }
-  if (book.can_change_confidentiality) {
+  if (book.can_change_grade) {
     documentRows.push({
       id: 'level',
       icon: iconOf(Lock),
-      label: t('books.confidentiality.menu'),
-      hint: t(`books.confidentiality.levels.${book.confidentiality}`),
+      label: t('books.grade.menu'),
+      hint: t(`books.grade.levels.${book.grade}`),
       testId: 'record-more-level',
       onSelect: () => openOverlay('level'),
     })

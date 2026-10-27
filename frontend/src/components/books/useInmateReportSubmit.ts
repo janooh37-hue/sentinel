@@ -81,7 +81,7 @@ export function useInmateReportSubmit(options: Options = {}) {
   const { t, i18n } = useTranslation()
   return useMutation({
     mutationFn: (bookId: number) => api.submitBook(bookId, {
-      priority: 'Normal',
+      urgency: 'Normal',
       approver_user_id: null,
       reviewer_user_ids: [],
     }),

@@ -93,7 +93,7 @@ function row(overrides: Partial<ApprovalLogItem>): ApprovalLogItem {
     category_name_en: null,
     status: 'pending',
     record_status: 'pending',
-    priority: 'Normal',
+    urgency: 'Normal',
     submitted_by_user_id: 9,
     submitted_by_name: 'Submitter',
     doc_manager_user_id: null,
@@ -146,6 +146,22 @@ beforeEach(() => {
   vi.mocked(api.listApprovalLog).mockReset()
   vi.mocked(api.getApprovalSummary).mockReset()
   vi.mocked(api.listApprovalLog).mockResolvedValue(emptyLog)
+})
+
+it.each([
+  ['High', 'books.urgency.high'],
+  ['Very High', 'books.urgency.veryHigh'],
+] as const)('shows the distinct %s urgency label', async (urgency, labelKey) => {
+  vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
+  vi.mocked(api.listApprovalLog).mockResolvedValue({
+    ...emptyLog,
+    items: [row({ urgency })],
+    total: 1,
+  })
+  renderPage()
+  expect(await screen.findByText(i18n.t(labelKey))).toBeInTheDocument()
+  const otherLabel = urgency === 'High' ? 'books.urgency.veryHigh' : 'books.urgency.high'
+  expect(screen.queryByText(i18n.t(otherLabel))).not.toBeInTheDocument()
 })
 
 describe('ApprovalsPage generic landing + URL canonicalization', () => {
