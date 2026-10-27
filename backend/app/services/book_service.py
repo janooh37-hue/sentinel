@@ -1046,7 +1046,9 @@ def require_revise_access(db: Session, user: User, book: Book | None) -> BookVer
     if user.role == INMATE_REPORTER_ROLE:
         if book is None:
             raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
-        return require_inmate_report_write_access(db, user, book, action="revise")
+        version = require_inmate_report_write_access(db, user, book, action="revise")
+        require_not_ledger_book(book)
+        return version
     if not perm_service.has_capability(db, user, "books.edit"):
         raise AppError(
             "FORBIDDEN",
@@ -1056,6 +1058,9 @@ def require_revise_access(db: Session, user: User, book: Book | None) -> BookVer
         )
     if book is not None:
         require_full_book_access(db, user, book, write=True)
+        # A generic DOCX regeneration would rewrite the Ledger Revision's
+        # template/fields (or append a DOCX version) outside its chain.
+        require_not_ledger_book(book)
     return None
 
 

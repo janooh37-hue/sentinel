@@ -379,8 +379,10 @@ def _move_draft_images(draft_id: int, book_id: int, body_html: str, copied: list
             target = (target_dir / source.name).resolve()
             if data_dir not in target.parents:
                 raise AppError("INVALID_PATH", "Image path escapes the data directory.")
-            shutil.copy2(source, target)
+            # Registered before copying: a copy that fails half-way still
+            # leaves a partial file the caller must remove on rollback.
             copied.append(target)
+            shutil.copy2(source, target)
     rewritten = body_html.replace(
         f'src="{draft_image_prefix(draft_id)}', f'src="{book_image_prefix(book_id)}'
     )

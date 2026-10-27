@@ -161,3 +161,22 @@ def test_invalid_oversized_and_unknown_image_names(drafts):
     )
     for name in ("0" * 32 + ".png", "invalid.png", "%2e%2e%2fsecret.png", "%2e%2e%5csecret.png"):
         assert client.get(f"{url}/{name}").status_code == 404
+
+
+@pytest.mark.parametrize("finish", ["delete", "save-and-send"])
+def test_draft_ids_are_never_reused(drafts, finish):
+    client, db, _, owner, _, _ = drafts
+    owner.role = "manager"
+    db.commit()
+    first = client.post(
+        BASE, json={"tab": 2, "subjects": ["One"], "body_html": "<p>Body</p>"}
+    ).json()["id"]
+    if finish == "delete":
+        assert client.delete(f"{BASE}/{first}").status_code == 204
+    else:
+        assert client.post(f"{BASE}/{first}/save-and-send").status_code == 200
+
+    second = client.post(BASE, json={}).json()["id"]
+
+    assert second > first
+    error(client.get(f"{BASE}/{first}"), 404, "DRAFT_NOT_FOUND")

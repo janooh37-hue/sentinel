@@ -183,3 +183,35 @@ def test_failed_save_and_send_rolls_back_serial_rows_and_copied_images(
             )
             == 1
         )
+
+
+def test_copy_failing_mid_file_leaves_no_book_images(ledger_sessions, monkeypatch):
+    sessions, settings = ledger_sessions
+    image_bytes = b"\x89PNG\r\n\x1a\n" + b"x" * 64
+    with sessions() as db:
+        writer = make_user(db, role="manager", email="partial-copy@test.ae")
+        draft = ledger_book_service.create_draft(
+            db, writer, LedgerDraftCreate(tab=4, subjects=["Copy"], body_html="<p>Body</p>")
+        )
+        for _ in range(2):
+            ledger_book_service.add_draft_image(db, writer, draft.id, image_bytes)
+        real_copy = ledger_book_service.shutil.copy2
+        calls = []
+
+        def copy_then_fail(source, target):
+            calls.append(target)
+            if len(calls) == 1:
+                return real_copy(source, target)
+            # The second copy writes part of the file, then the disk fails.
+            Path(target).write_bytes(image_bytes[:5])
+            raise OSError("disk full mid-copy")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(ledger_book_service.shutil, "copy2", copy_then_fail)
+            with pytest.raises(OSError, match="disk full"):
+                ledger_book_service.save_and_send(db, writer, draft.id)
+
+        assert len(calls) == 2
+        images_root = settings.data_dir / "book_attachments"
+        assert not any(path.is_file() for path in images_root.rglob("*"))
+        assert db.get(BookDraft, draft.id) is not None
