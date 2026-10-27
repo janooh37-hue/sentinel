@@ -27,7 +27,7 @@ export function LockTimerControl({
 
   return (
     <div
-      className="flex min-h-[54px] w-full items-center gap-2.5 border-y border-hairline bg-surface-raised px-4 py-2.5"
+      className="flex min-h-[54px] w-full flex-wrap items-center gap-x-2.5 gap-y-2 border-y border-hairline bg-surface-raised px-4 py-2.5 @max-[200px]:px-3"
       aria-busy={disabled}
     >
       <Timer
@@ -35,13 +35,16 @@ export function LockTimerControl({
         strokeWidth={1.7}
         aria-hidden="true"
       />
-      <span className="min-w-0 flex-1 text-start text-[0.9em] font-medium text-foreground">
+      <span className="min-w-0 flex-1 text-start text-[0.9em] font-medium text-foreground [overflow-wrap:anywhere]">
         {t('lockTimer.title')}
       </span>
-      <div className="grid shrink-0 grid-cols-[1.75rem_minmax(3.5rem,auto)_1.75rem] items-center overflow-hidden rounded-[10px] border border-border bg-surface">
+      {/* Panel narrower than 200px (a phone at 200% zoom): the stepper stacks (shorter / value / longer) at the
+          row's full width instead of needing a 144px horizontal row. */}
+      <div
+        className="ms-auto grid shrink-0 grid-cols-[1.75rem_minmax(3.5rem,auto)_1.75rem] items-center pointer-coarse:grid-cols-[44px_minmax(3.5rem,auto)_44px] overflow-hidden rounded-[10px] border border-border bg-surface @max-[200px]:ms-0 @max-[200px]:w-full @max-[200px]:grid-cols-1 @max-[200px]:pointer-coarse:grid-cols-1">
         <button
           type="button"
-          className="grid h-[30px] w-7 place-items-center text-primary transition-colors hover:bg-primary-soft focus-visible:z-10 focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--primary),inset_0_0_0_4px_var(--surface)] disabled:cursor-not-allowed disabled:text-faint disabled:opacity-60"
+          className="grid h-[30px] w-7 place-items-center pointer-coarse:h-[44px] pointer-coarse:w-[44px] @max-[200px]:w-full text-primary transition-colors hover:bg-primary-soft focus-visible:z-10 focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--primary),inset_0_0_0_4px_var(--surface)] disabled:cursor-not-allowed disabled:text-faint disabled:opacity-60"
           aria-label={t('lockTimer.shorter')}
           disabled={disabled || previousValue === undefined}
           onClick={() => {
@@ -53,13 +56,13 @@ export function LockTimerControl({
         <output
           role="status"
           aria-live="polite"
-          className="min-w-14 border-x border-hairline px-1.5 text-center font-mono text-[0.68em] font-semibold leading-[30px] text-foreground"
+          className="min-w-14 border-x border-hairline px-1.5 text-center @max-[200px]:border-x-0 @max-[200px]:border-y font-mono text-[0.68em] font-semibold leading-[30px] text-foreground pointer-coarse:leading-[44px]"
         >
           {t(`lockTimer.options.${currentValue}`)}
         </output>
         <button
           type="button"
-          className="grid h-[30px] w-7 place-items-center text-primary transition-colors hover:bg-primary-soft focus-visible:z-10 focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--primary),inset_0_0_0_4px_var(--surface)] disabled:cursor-not-allowed disabled:text-faint disabled:opacity-60"
+          className="grid h-[30px] w-7 place-items-center pointer-coarse:h-[44px] pointer-coarse:w-[44px] @max-[200px]:w-full text-primary transition-colors hover:bg-primary-soft focus-visible:z-10 focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--primary),inset_0_0_0_4px_var(--surface)] disabled:cursor-not-allowed disabled:text-faint disabled:opacity-60"
           aria-label={t('lockTimer.longer')}
           disabled={disabled || nextValue === undefined}
           onClick={() => {

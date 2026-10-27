@@ -311,7 +311,7 @@ Tile grid          → mb-8
 Section-card rows  → mb-4 between pairs, gap-3.5 within
 ```
 
-**Chrome (TopNav):** `px-8 py-3.5` with `gap-7` between the logo block and
+**Chrome (TopNav):** `px-8 pb-3.5 pt-[max(0.875rem, safe-top + 0.75rem)]` with `gap-7` between the logo block and
 the nav, and `ms-5` extra start margin on the nav itself. Right cluster
 uses `ms-auto` + `gap-3.5`.
 
@@ -960,7 +960,7 @@ once so the Dashboard sections (§4) don't repeat the chrome description.
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────┐
-│ <header bg-surface border-b border-border px-8 py-3.5                       │
+│ <header bg-surface border-b border-border px-8 pb-3.5 pt-(see Container)    │
 │         flex items-center gap-7>                                            │
 │                                                                             │
 │   [Logo block]   [Nav]                       [Right cluster]                │
@@ -978,12 +978,15 @@ once so the Dashboard sections (§4) don't repeat the chrome description.
 ```
 flex items-center gap-7
 border-b border-border bg-surface
-px-8 py-3.5
+px-8 pb-3.5 pt-[max(0.875rem, safe-top + 0.75rem)]
 ```
 
-- Total height scales with `[data-font-scale]` — `py-3.5` (0.875rem each
-  side) + the wordmark block's line-box determines it. Approximately
-  64px at root 16px; ~76px at root 19px.
+- Total height scales with `[data-font-scale]` — the 0.875rem bottom padding, the top padding and the tallest
+  control (the avatar trigger) determine it. Approximately 64px at root 16px; ~76px at root 19px.
+- The top padding is `max(0.875rem, --safe-top + 0.75rem)`: with no inset (a desktop, a landscape phone) it is
+  the unchanged 0.875rem; under a status bar / notch inset (a standalone iPad, any >= 768px touch window with a
+  top inset) the controls start >= 12px below it, like the phone bar. `[data-topnav]` side padding already
+  follows the side insets.
 - `gap-7` (1.75rem) between the logo block and the nav.
 
 **Logo block:**
@@ -1190,8 +1193,12 @@ metaphor. Don't tokenize them.
 relative rounded-lg p-2
 transition-colors
 hover:bg-surface-tinted
+pointer-coarse: inline-flex min-h-[44px] min-w-[44px] items-center justify-center
 ```
 
+- On a coarse pointer (touch) the button is a real 44 x 44 CSS px target (px, not rem, so it stays 44px
+  at any text size); a mouse keeps the compact box. In the phone bar (`MobileTopBar`) the trigger also
+  drops its padding and line-height so the box is exactly 44px at every text size.
 - 🔔 emoji at `text-[1.05em]`, `aria-hidden`.
 - Badge (when `count > 0`):
 
@@ -1210,18 +1217,21 @@ ring-2 ring-surface
   place red is allowed to glow brightly.
 - `ring-2 ring-surface` provides the "punched-out of the chrome" look.
 
-**`aria-label`:** `"Notifications, ${count} unread"` or `"Notifications"`.
+**Accessibility:** `aria-label` is localised (`appBar.notifications` / `appBar.notificationsUnread`:
+`"Notifications, N unread"` in English, `"الإشعارات، N غير مقروءة"` in Arabic); `aria-haspopup="dialog"`,
+`aria-expanded` reflects the panel.
 
 #### NavBellPopover (panel)
 
 ```
 absolute end-0 top-full z-50 mt-2 w-[380px]
-overflow-hidden rounded-2xl
+rounded-2xl
 border border-hairline bg-surface
 shadow-xl
 ```
 
-- 380px wide, anchored to the inline-end of the bell.
+- 380px wide, anchored to the inline-end of the bell on the TopNav. On the phone bar it uses the shared header
+  placement (see §3.6 Panel), and the PANEL is the only scroller on a phone/touch screen.
 - `shadow-xl` — heaviest shadow on the page; the panel needs to read
   clearly over arbitrary content beneath it.
 
@@ -1231,7 +1241,7 @@ shadow-xl
 flex items-center justify-between
 border-b border-hairline px-4 py-3
   ├ <h3 text-sm font-semibold text-foreground>Notifications</h3>
-  └ "Mark all read" button (§2.4 pattern) — hidden when count = 0
+  └ "Mark all read" button (§2.4 pattern) — hidden when count = 0; 44 x 44 minimum on touch
 ```
 
 **Body (3 states):**
@@ -1240,7 +1250,7 @@ border-b border-hairline px-4 py-3
 | ------------------ | ------------------------------------------------------------- |
 | Loading            | 3 fake rows: animated `bg-border` rounds + bars, gap-2, py-6  |
 | Empty              | `<EmptyState icon={Inbox}>` with i18n message, `py-10`        |
-| Has items          | `<ul max-h-[360px] overflow-auto>` with row-as-button entries (§2.3) |
+| Has items          | `<ul>` of row-as-button entries (§2.3). Desktop mouse: `md:max-h-[360px] md:overflow-auto`. Phone and any touch screen: no list scroller — the capped panel scrolls, so the footer link is one drag away |
 
 **Row layout:**
 
@@ -1257,7 +1267,7 @@ border-b border-hairline px-4 py-3
 
 - Optional `"+ N more unread"` line when `total_unread > items.length`.
 - `<Link to="/ledger?tab=email">` styled like the inline-button-link pattern, with
-  an `ArrowRight` icon. The arrow rotates 180° in RTL.
+  an `ArrowRight` icon (`min-h-[44px]` on touch). The arrow rotates 180° in RTL.
 
 **Open/close:**
 
@@ -1278,9 +1288,10 @@ available; falls back to initials from `identity.name_en[0]` or the
 configured email's local-part initials.
 
 ```
-<button class="flex items-center gap-2 rounded-full p-0.5
-               transition-colors hover:bg-surface-tinted">
-  <Avatar h-9 w-9 bg-primary-soft text-primary ring-1 ring-border>
+<button class="flex items-center justify-center gap-2 rounded-full p-0.5
+               transition-colors hover:bg-surface-tinted
+               pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px]">
+  <Avatar h-9 w-9 (phone bar: 36px) bg-primary-soft text-primary ring-1 ring-border>
     [AvatarImage from identity.photo_url] OR
     [AvatarFallback (initials)]
   </Avatar>
@@ -1290,14 +1301,43 @@ configured email's local-part initials.
 #### Panel
 
 ```
-absolute end-0 top-full z-50 mt-2 w-80
-overflow-hidden rounded-2xl
-border border-hairline bg-surface
-shadow-xl
+absolute z-50 mt-2 top-full
+rounded-2xl border border-hairline bg-surface shadow-xl
+focus-visible:outline-none
+TopNav:     end-0 w-80   max-h-[calc(100dvh - safe-bottom - max(0.875rem, safe-top + 0.75rem)
+                                    - max(2.5rem, 44px) - 0.5rem - 0.75rem)]
+phone bar:  inset-x-[max(0.75rem, safe-left, safe-right)] ms-auto max-w-80
+            max-h-[calc(100dvh - safe-top - safe-bottom - 2.75rem - 45px)]
+overflow-y-auto overflow-x-hidden overscroll-contain
 ```
 
-- 20rem wide (`w-80`) — scales with font-scale.
-- `role="dialog"` + `aria-label="Account"`.
+Placement is shared with the notifications popover (`components/shell/headerPopover.ts`) and is chosen by the BAR
+THAT RENDERS, not by a breakpoint: `MobileTopBar` passes `phone` to `AccountMenu` / `NavBellPopover`, the TopNav
+passes nothing, and no placement class is an `md:` variant. Which bar renders is a JS px query (`useIsMobile`,
+767px) while Tailwind's `md` is 48rem, which follows the BROWSER's default font size (864 / 960 / 1152px at
+18 / 20 / 24px, 576px at 12px), so a placement keyed on `md` hung the panels off the wrong anchor whenever the
+two disagreed. The phone cap mirrors the phone header's real height exactly (`safe-top + 0.75rem + 44px +
+0.75rem + 1px` border, then the `mt-2` gap, then 0.75rem of margin above the bottom inset); change `MobileTopBar`
+and the cap together. The TopNav cap is the same arithmetic from the TopNav row (`max(0.875rem, safe-top +
+0.75rem)` top padding + the `max(2.5rem, 44px)` avatar trigger that sets the row height + `mt-2` + 0.75rem), not
+a flat guess, so it grows with the text size and the top inset. At 1024x768 and Aa22 the panel's content
+(687px) is taller than the 682px under the header even with no margin, so it scrolls inside itself there (about
+20px; every control reachable, nothing clipped): that is the content's height, not the cap's.
+
+- 20rem wide (`w-80`) on the TopNav — scales with font-scale.
+- **Phone bar:** the trigger wrapper is `static`, so the panel is positioned against the phone
+  `<header>` (`relative`) instead of the 44px avatar. It hangs under the header, spans the width between
+  the safe insets (capped at 20rem, flush with the inline-end edge via `ms-auto`, so it mirrors in RTL
+  without a variant), is capped to the dynamic viewport and scrolls inside itself. No row can end up
+  off-screen at 320px, landscape, or the largest Aa size.
+- **Touch targets:** on a coarse pointer every control in the panel is >= 44 x 44 CSS px: the lock-timer
+  steppers (`44px` columns), the lock-screen layout segments, the "Link this account" row and all full-width
+  rows. The timer and layout rows wrap their stepper under the label instead of overflowing at large text.
+  A mouse keeps the compact 28x30 / 36x30 widgets (pinned by the desktop assertion in `mobile-header.spec.ts`).
+- `role="dialog"` + `aria-label="Account"`, `tabindex="-1"`. Focus moves into the dialog on open and returns
+  to the avatar on Escape, an outside tap or an item (`usePopoverFocus` finds the trigger in the DOM, so it
+  works when a tap — as in Safari — never focused the button); a tap that lands on another focusable control
+  keeps its focus.
 
 **Identity strip (linked variant):**
 
@@ -2567,11 +2607,59 @@ documented.
 
 ### Out of scope for this pass
 
-- **Mobile / narrow-viewport behavior.** The dashboard's grids drop to
-  `grid-cols-1` below the `md` breakpoint (768px), but the TopNav and
-  Hero have no narrow-viewport adaptations. Behavior at <768px is
-  unspecified — confirm with operator whether mobile is supported before
-  documenting.
+- **Mobile / narrow-viewport behavior (beyond the phone header chrome).** The dashboard's grids drop to
+  `grid-cols-1` below the `md` breakpoint (768px); page-level behavior at <768px is otherwise unspecified.
+  The phone chrome itself — `MobileTopBar`, the account / notifications popovers, `NavDrawer` and, for landscape
+  phones >= 768px, the desktop `TopNav` — follows these rules (asserted in Chromium by
+  `frontend/e2e/mobile-header.spec.ts`; see "Not verified" below for what that cannot show):
+  - The header is a non-scrolling sibling above the page scroller (`[data-ptr-scroller]`); nothing is
+    `position: fixed` to it. The shell root is `h-dvh` (not `h-screen`), so on a browser whose dynamic toolbars
+    make 100vh taller than the visible area the shell still matches the visible viewport.
+  - Phone bar padding: inline `max(1rem, --safe-left, --safe-right)`, top `--safe-top + 0.75rem`, bottom
+    `0.75rem` — i.e. >= 12px of breathing room above the 44px controls beyond the safe inset (also with no inset,
+    e.g. Android or landscape). The `env()` insets are physical, so the larger side is used on both — no LTR/RTL
+    variants (`viewport-fit=cover` is set in `index.html`). Pinch zoom stays enabled.
+  - Targets are 44 CSS px (px, not rem, so they stay 44px at any text size). Menu, bell and avatar are 44px; the
+    brand takes the remaining width and sheds first the wordmark (container query) and then the 32px logo
+    (never squeezed: it is a fixed, `max-w-none` circle) before a control would leave the screen. Below 180 CSS px
+    (a 360px phone at 200% zoom) gaps and side padding collapse so three 44px targets still fit. The wordmark is
+    `leading-none` like the bell glyph: at 200% text its inherited 1.5 line box (50px) would otherwise stretch the
+    header past the height arithmetic the popover cap mirrors (99px instead of 93 at 667x375, root 32px).
+  - On a coarse pointer (`pointer-coarse:`), EVERY control in the header, the account / notifications panels
+    and the drawer is >= 44 x 44: the Aa A / slider / A, language toggle, theme switch, lock-timer steppers,
+    layout segments, "Mark all read", "View all in inbox", the nav links and the TopNav utilities. A mouse keeps
+    the compact desktop widgets (asserted at 1280 x 800).
+  - Narrow panels reflow instead of clipping (a 320 / 390px phone at 200% zoom is a 160 / 195 CSS px viewport, so
+    a 136 / 171px panel; root text 32px at 320px is the same problem in rem). The account, notifications and
+    drawer panels are `@container`s: below 200 CSS px the lock-timer stepper, the layout segments and the Aa
+    A / slider / A stack at the row's full width (every part still 44px); below 11rem the account identity
+    strip stacks (avatar, then name, role chip, e-mail) and below 13rem each notification row puts its icon and
+    chevron on one line and the text under them. The thresholds are in rem where the cause is rem-sized padding
+    and icons (so they follow the text size) and in px where it is the fixed 44px targets. Every label, name,
+    role chip and count wraps (`[overflow-wrap:anywhere]`); the only intentional single-line ellipsis is
+    message text (e-mail subject / sender / preview, `data-message-text`), which opens in full from the row.
+    No panel adds horizontal page overflow at any of these sizes, and zoom is never disabled.
+  - Landscape phones (844x390, 932x430) and tablets get `TopNav`: its side padding is `max(1rem, --safe-left/--safe-right)`
+    per side, its top padding clears the top inset (see §3.1), and the destination strip scrolls sideways on touch
+    when 44px targets do not all fit. A strip with destinations hidden past one physical edge paints a soft
+    scroll-shadow on that edge only (`index.css`, `@media (pointer: coarse)`): nothing shows when it fits and the
+    shadow moves to the other edge once scrolled, in RTL too.
+  - Popover panels are anchored to the header, height-capped to the exact header height and scroll inside
+    themselves (see §3.6); the placement follows the bar that renders (`phone` prop), never an `md:` variant,
+    so a larger or smaller BROWSER default font size (which moves Tailwind's rem-based `md`, not the px query that
+    picks the bar) cannot detach them. On a phone/touch screen the panel is the only scroller (no nested
+    notification list scroller). The drawer is capped at `100% − 48px`, scrolls, clears the notch on its
+    inline-start side, keeps scrolled-to controls clear of the status bar / home indicator (`scroll-pt/pb`),
+    reveals whatever the focus trap focuses (Radix wraps Tab with `preventScroll`), and returns focus to
+    the menu button BY REFERENCE (`returnFocusRef`), not by remembering `document.activeElement`. The phone bar is
+    not `md:hidden` either. Still keyed on `md` (unchanged, out of this pass): the bottom tab bar and the main
+    area's bottom padding, which at a browser font under 16px stop applying between 48rem and 768px.
+  - Not verified without a device: real iOS Safari (toolbar/notch/home indicator, whether `100vh` vs `dvh`
+    matters, tap-focus and mouse-event synthesis, whether an outside tap on plain content closes the popovers
+    — they close on `window` `mousedown`) and real Android Chrome. The e2e emulates `env()` insets with CDP and
+    emulates "taps do not focus buttons" by cancelling `mousedown`; both are Chromium models, not WebKit.
+    The `h-dvh` change is a spec-based expectation, unverified on a phone. At 1240–1400px with all eight destinations on a mouse desktop the existing TopNav row already
+    overflows (unrelated, unchanged).
 - **Pages other than Dashboard.** Employees / Application / Ledger /
   Books / Settings each get their own §4.x section in a follow-up pass.
 - **AccountMenu when on Settings page.** AccountMenu hides the "Email
