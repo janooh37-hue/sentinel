@@ -100,8 +100,8 @@ class StampPlan:
     aztec_margin_cm: float = 0.3
     sync_general_book_footer: bool = False
     signature: SignatureStamp | None = None
-    # Record level for the printed mark; None leaves any existing mark untouched.
-    level: str | None = None
+    # Record grade for the printed mark; None leaves any existing mark untouched.
+    grade: str | None = None
 
 
 EMPTY_STAMP_PLAN = StampPlan()
@@ -214,7 +214,7 @@ def _apply_stamps(target: Path, stamps: StampPlan) -> None:
         )
     ):
         raise ArtifactStampError("aztec")
-    if stamps.level is not None and not apply_level_mark(target, stamps.level):
+    if stamps.grade is not None and not apply_level_mark(target, stamps.grade):
         raise ArtifactStampError("level")
     if stamps.signature is not None:
         from app.core import docx_engine

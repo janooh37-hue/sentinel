@@ -1,8 +1,8 @@
-"""Record levels and direct send (send / forward / recall / inbox).
+"""Record grades and direct send (send / forward / recall / inbox).
 
 The access rule itself lives in ``book_service`` (``user_visibility_clause``
 and ``resolve_book_read_access``); this module owns the recipient rows that
-feed it and the level-change flow.
+feed it and the grade-change flow.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from sqlalchemy import event, func, select
 from sqlalchemy.orm import Session, SessionTransaction
 
 from app.api.errors import AppError, NotFoundError
+from app.core import grades
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE, MANAGER_ROLE
 from app.db.models import (
     AuditLog,
@@ -76,25 +77,32 @@ def _audit(db: Session, user: User, action: str, book: Book, payload: dict[str, 
 
 
 # ---------------------------------------------------------------------------
-# Level
+# Grade
 # ---------------------------------------------------------------------------
 
 
-def can_change_confidentiality(user: User, book: Book) -> bool:
-    """Creator, manager, or admin (the caller must also be able to open it)."""
+def _is_writer(user: User, book: Book) -> bool:
+    return book.created_by_user_id is not None and book.created_by_user_id == user.id
+
+
+def can_change_grade(user: User, book: Book) -> bool:
+    """Creator or admin only (ADR 0007, D7); the caller must also open it."""
     if user.role == INMATE_REPORTER_ROLE:
         return False
-    return _is_manager_or_admin(user) or (
-        book.created_by_user_id is not None and book.created_by_user_id == user.id
-    )
+    return user.role == ADMIN_ROLE or _is_writer(user, book)
 
 
-def _change_level(db: Session, user: User, book: Book, level: str) -> None:
-    """Stage a level change + its audit row (caller commits)."""
-    book_link_service.require_level_floor(db, book, level)
-    old = book.confidentiality
-    book.confidentiality = level
-    _audit(db, user, "book_confidentiality_changed", book, {"old": old, "new": level})
+def _change_grade(db: Session, user: User, book: Book, grade: str) -> None:
+    """Stage a grade change + its audit row (caller commits)."""
+    book_link_service.require_grade_floor(db, book, grade)
+    old = book.grade
+    book.grade = grade
+    payload: dict[str, object] = {"old": old, "new": grade}
+    if grade in grades.RESTRICTED_GRADES and book.distribution != grades.NAMED:
+        # Top Secret and Addressee Only are always named (D2).
+        payload["distribution"] = {"old": book.distribution, "new": grades.NAMED}
+        book.distribution = grades.NAMED
+    _audit(db, user, "book_grade_changed", book, payload)
     _restamp_level(db, book)
 
 
@@ -181,7 +189,7 @@ def _restamp_level(db: Session, book: Book) -> None:
                 / str(book.id)
                 / f"level-{target.id}-{uuid.uuid4().hex[:10]}.docx",
                 collision="exact",
-                stamps=artifact_service.StampPlan(level=book.confidentiality),
+                stamps=artifact_service.StampPlan(grade=book.grade),
                 converter=document_service.convert_docx_to_pdf,
             )
             pending_paths.extend(rebuilt.created_paths)
@@ -234,22 +242,47 @@ def _discard_inaccessible_word_session(db: Session, book: Book) -> None:
         word_book_service.discard_word_session(db, user=owner, book_id=book.id)
 
 
-def set_confidentiality(db: Session, user: User, book: Book, level: str) -> Book:
+def set_grade(db: Session, user: User, book: Book, grade: str) -> Book:
     book_service.require_full_book_access(db, user, book, write=True)
-    if not can_change_confidentiality(user, book):
+    if not can_change_grade(user, book):
         raise AppError(
             "FORBIDDEN",
-            "Only the creator, a manager, or an admin can change the level.",
+            "Only the creator or an admin can change the grade.",
             http_status=403,
         )
-    book_service.require_confidentiality_clearance(db, user, level)
-    if book.confidentiality != level:
-        _change_level(db, user, book, level)
+    book_service.require_grade_clearance(db, user, grade)
+    if book.grade != grade:
+        _change_grade(db, user, book, grade)
         db.flush()
         _discard_inaccessible_word_session(db, book)
         db.commit()
     else:
-        book_link_service.require_level_floor(db, book, level)
+        book_link_service.require_grade_floor(db, book, grade)
+    return book
+
+
+def restore_organization_distribution(db: Session, user: User, book: Book, reason: str) -> Book:
+    """Admin-only correction of a legacy Personal record (ADR 0007, D5): an
+    Unclassified named record goes back to organization distribution, audited."""
+    if user.role != ADMIN_ROLE:
+        raise AppError(
+            "FORBIDDEN", "Only an admin can restore organization distribution.", http_status=403
+        )
+    if book.grade != grades.UNCLASSIFIED or book.distribution != grades.NAMED:
+        raise AppError(
+            "DISTRIBUTION_NOT_NAMED",
+            "Only an Unclassified record with named distribution can be restored.",
+            http_status=409,
+        )
+    book.distribution = grades.ORGANIZATION
+    _audit(
+        db,
+        user,
+        "book_distribution_restored",
+        book,
+        {"old": grades.NAMED, "new": grades.ORGANIZATION, "reason": reason},
+    )
+    db.commit()
     return book
 
 
@@ -300,11 +333,11 @@ def user_directory(db: Session, *, exclude_user_id: int | None = None) -> list[D
     return out
 
 
-def recipient_candidates(db: Session, user: User, level: str | None) -> list[DirectoryEntry]:
+def recipient_candidates(db: Session, user: User, grade: str | None) -> list[DirectoryEntry]:
     if user.role == INMATE_REPORTER_ROLE:
         raise AppError("FORBIDDEN", "Inmate reporters cannot send records.", http_status=403)
     entries = user_directory(db, exclude_user_id=user.id)
-    if level == "secret":
+    if grade == grades.SECRET:
         entries = [e for e in entries if e.cleared]
     return entries
 
@@ -355,26 +388,20 @@ def send(
     user_ids: list[int],
     purpose: SendPurpose,
     note: str | None,
-    make_directed: bool,
     include_references: bool = True,
 ) -> tuple[list[BookRecipientRead], list[BookSendSkipped], list[BookReferenceSendResult]]:
-    """Send (or forward) ``book`` to users. Anyone with full access may send."""
+    """Send (or forward) ``book`` to users. Anyone with full access may send,
+    except that only the writer adds recipients to Top Secret and Addressee
+    Only records: nobody else may forward them (ADR 0007, Q4)."""
     if user.role == INMATE_REPORTER_ROLE:
         raise AppError("FORBIDDEN", "Inmate reporters cannot send records.", http_status=403)
     book_service.require_full_book_access(db, user, book)
-    if book.confidentiality == "personal":
-        if not make_directed:
-            raise AppError(
-                "PERSONAL_REQUIRES_DIRECTED",
-                "A Personal record must become Directed before it is sent.",
-                http_status=409,
-            )
-        if user.role != ADMIN_ROLE and book.created_by_user_id != user.id:
-            raise AppError(
-                "FORBIDDEN",
-                "Only the creator or an admin can make this record Directed.",
-                http_status=403,
-            )
+    if book.grade in grades.RESTRICTED_GRADES and not _is_writer(user, book):
+        raise AppError(
+            "WRITER_ONLY_SEND",
+            "Only the writer can add recipients to this record.",
+            http_status=403,
+        )
 
     wanted = list(dict.fromkeys(user_ids))
     skipped = [BookSendSkipped(user_id=uid, reason="self") for uid in wanted if uid == user.id]
@@ -394,7 +421,7 @@ def send(
             http_status=422,
             details={"user_ids": invalid},
         )
-    if book.confidentiality == "secret":
+    if book.grade == grades.SECRET:
         uncleared = [
             uid
             for uid in targets
@@ -422,8 +449,6 @@ def send(
     ]
     new_ids = [uid for uid in targets if uid not in active]
 
-    if book.confidentiality == "personal" and new_ids:
-        _change_level(db, user, book, "directed")
     now = _now()
     rows = [
         BookRecipient(
@@ -476,9 +501,9 @@ def _send_references(
             reason = None
             if uid == user.id:
                 reason = "self"
-            elif reference.confidentiality == "personal":
-                reason = "personal"
-            elif reference.confidentiality == "secret" and not perm_service.has_capability(
+            elif reference.grade in grades.RESTRICTED_GRADES and not _is_writer(user, reference):
+                reason = "writer_only"
+            elif reference.grade == grades.SECRET and not perm_service.has_capability(
                 db, db.get(User, uid), "books.secret"
             ):
                 reason = "not_cleared"
@@ -497,7 +522,6 @@ def _send_references(
                 user_ids=eligible,
                 purpose=purpose,
                 note=note,
-                make_directed=False,
                 include_references=False,
             )
         results.append(

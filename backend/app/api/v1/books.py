@@ -12,7 +12,7 @@ from __future__ import annotations
 import base64
 from collections.abc import Sequence
 from datetime import date, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 from fastapi import (
     APIRouter,
@@ -55,11 +55,11 @@ from app.schemas.book import (
     BookAnnotationRead,
     BookApprovalStepRead,
     BookCategoryRead,
-    BookConfidentiality,
-    BookConfidentialityUpdate,
     BookCreate,
     BookDecisionRequest,
     BookDeriveRequest,
+    BookDistribution,
+    BookDistributionRestore,
     BookEditSessionRead,
     BookFacetsResponse,
     BookFolderCreate,
@@ -67,6 +67,8 @@ from app.schemas.book import (
     BookFolderShareOptions,
     BookFolderSharesUpdate,
     BookFolderUpdate,
+    BookGrade,
+    BookGradeUpdate,
     BookInboxRead,
     BookLinkCreate,
     BookListResponse,
@@ -353,7 +355,7 @@ def create_word_session(
     user: Annotated[User, Depends(get_current_user)],
 ) -> WordSessionRead:
     """Create a General Book or a Word-authored Report."""
-    book_service.require_confidentiality_clearance(db, user, payload.confidentiality)
+    book_service.require_grade_clearance(db, user, payload.grade)
     if user.role == INMATE_REPORTER_ROLE:
         if user.employee_id is None:
             raise AppError(
@@ -398,7 +400,7 @@ def create_word_session(
             subject=payload.subject,
             date=payload.date,
             sign=True,
-            confidentiality=payload.confidentiality,
+            grade=payload.grade,
         )
     else:
         _require_word_capability(db, user, "books.create")
@@ -422,7 +424,7 @@ def create_word_session(
                 subject=payload.subject,
                 date=payload.date,
                 sign=payload.sign,
-                confidentiality=payload.confidentiality,
+                grade=payload.grade,
             )
         else:
             info = word_book_service.create_word_book(
@@ -435,7 +437,7 @@ def create_word_session(
                 manager_id=payload.manager_id,
                 template_name=payload.template_name,
                 table_rows=payload.table_rows,
-                confidentiality=payload.confidentiality,
+                grade=payload.grade,
             )
     return WordSessionRead(
         book_id=info.book_id,
@@ -538,8 +540,9 @@ def derive_book(
     if user.role == INMATE_REPORTER_ROLE:
         raise AppError("FORBIDDEN", "Inmate reporters cannot derive records.", http_status=403)
     original = _require_full_book(db, user, book_id)
-    level = payload.confidentiality or original.confidentiality
-    book_service.require_confidentiality_clearance(db, user, level)
+    book_service.require_grade_clearance(
+        db, user, book_link_service.derived_grade(original, payload)
+    )
     _require_word_capability(db, user, "books.create")
     _require_word_capability(db, user, "books.view")
     _require_record_type_access(
@@ -791,7 +794,7 @@ def list_books(
     drafts: bool = False,
     inbox: book_service.InboxFilter | None = None,
     folder_id: int | None = None,
-    sort: str = Query("-date", pattern=r"^-?(date|ref|subject|purpose|confidentiality|status)$"),
+    sort: str = Query("-date", pattern=r"^-?(date|ref|subject|purpose|grade|status)$"),
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
     offset: int = Query(0, ge=0),
 ) -> BookListResponse:
@@ -833,8 +836,12 @@ def list_books(
         if folder_id is not None
         else {}
     )
+    metadata_only = {row.id for row in rows if book_service.is_metadata_only(db, user, row)}
     items: list[BookRead] = []
     for row in rows:
+        if row.id in metadata_only:
+            items.append(_metadata_only_read(row))
+            continue
         item = _build_book_response(db, row, user, detail=False)
         item.my_inbox = inbox_by_book.get(row.id)
         item.search_snippet = fts_snippets.get(row.id) or None
@@ -845,11 +852,37 @@ def list_books(
     _attach_creator_names(db, rows, items)
     if inbox is not None or folder_id is not None:
         _attach_desk_fields(db, user, rows, items)
+    # Enrichment above is per batch; restore the bare metadata rows afterwards.
+    items = [
+        _metadata_only_read(row) if row.id in metadata_only else item
+        for row, item in zip(rows, items, strict=True)
+    ]
     return BookListResponse(
         items=items,
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+def _metadata_only_read(row: Book) -> BookRead:
+    """An admin's list row of a Top Secret / Addressee Only record it is not
+    named on: ref, tab, grade and dates only (ADR 0007, D6)."""
+    return BookRead(
+        id=row.id,
+        ref_number=row.ref_number,
+        category_id=row.category_id,
+        classification_code=row.classification_code,
+        subject=None,
+        direction=None,
+        stamp_style=None,
+        created_at=row.created_at,
+        deleted_at=row.deleted_at,
+        urgency=None,
+        approval_state=row.approval_state,
+        grade=row.grade,
+        distribution=row.distribution,
+        metadata_only=True,
     )
 
 
@@ -1154,7 +1187,7 @@ def list_reviewer_candidates(
 def list_recipient_candidates(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("books.view"))],
-    confidentiality: BookConfidentiality | None = None,
+    grade: BookGrade | None = None,
 ) -> list[RecipientCandidateRead]:
     return [
         RecipientCandidateRead(
@@ -1165,7 +1198,7 @@ def list_recipient_candidates(
             role=entry.user.role,
             has_secret_clearance=entry.cleared,
         )
-        for entry in book_send_service.recipient_candidates(db, user, confidentiality)
+        for entry in book_send_service.recipient_candidates(db, user, grade)
     ]
 
 
@@ -1517,7 +1550,8 @@ def _build_scoped_book_response(
     return BookRead(
         id=row.id,
         ref_number=row.ref_number,
-        confidentiality=row.confidentiality,
+        grade=row.grade,
+        distribution=row.distribution,
         category_id=category_id,
         category=_snapshot_category(row, context),
         employee_id=_context_string(context, "employee_id"),
@@ -1527,7 +1561,7 @@ def _build_scoped_book_response(
         stamp_style=_context_string(context, "stamp_style"),
         created_at=row.created_at,
         deleted_at=row.deleted_at if access_scope == "full" else None,
-        priority=_context_string(context, "priority"),
+        urgency=_context_string(context, "urgency"),
         approval_state=selected.status,
         access_scope=access_scope,
         selected_version_id=selected.id,
@@ -1639,7 +1673,7 @@ def _build_book_response(
             item.can_write = False
         else:
             item.can_write = True
-        item.can_change_confidentiality = book_send_service.can_change_confidentiality(user, row)
+        item.can_change_grade = book_send_service.can_change_grade(user, row)
         if detail:
             item.my_inbox = book_send_service.my_inbox(db, user.id, [row.id]).get(row.id)
         if user.role == INMATE_REPORTER_ROLE:
@@ -1895,7 +1929,7 @@ def create_book(
         category_id=payload.category_id,
         service_id=OTHER_SERVICE_ID,
     )
-    book_service.require_confidentiality_clearance(db, user, payload.confidentiality)
+    book_service.require_grade_clearance(db, user, payload.grade)
     row = book_service.create_book(db, payload, created_by_user_id=user.id)
     return _build_book_response(db, row, user)
 
@@ -1940,21 +1974,35 @@ def unarchive_book_inbox(
     return book_send_service.set_inbox_state(db, user, row, field="archived_at", enabled=False)
 
 
-@router.put("/{book_id}/confidentiality", response_model=BookRead)
-def set_book_confidentiality(
+@router.put("/{book_id}/grade", response_model=BookRead)
+def set_book_grade(
     book_id: int,
-    payload: BookConfidentialityUpdate,
+    payload: BookGradeUpdate,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> BookRead:
     row = book_service.get_book_detail(db, book_id)
-    # Built before the change: a creator/manager may relabel a record out of
-    # their own reach (e.g. a manager making someone's record Personal), and
-    # re-authorizing afterwards would answer 404 for a change that succeeded.
+    # Built before the change: an admin may regrade a record out of their own
+    # reach (Top Secret), and re-authorizing afterwards would answer 404 for a
+    # change that succeeded.
     item = _build_book_response(db, row, user)
-    book_send_service.set_confidentiality(db, user, row, payload.confidentiality)
-    item.confidentiality = payload.confidentiality
+    book_send_service.set_grade(db, user, row, payload.grade)
+    item.grade = payload.grade
+    item.distribution = cast(BookDistribution, row.distribution)
     return item
+
+
+@router.post("/{book_id}/restore-distribution", response_model=BookRead)
+def restore_book_distribution(
+    book_id: int,
+    payload: BookDistributionRestore,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> BookRead:
+    """Admin: give a legacy Personal record organization distribution again."""
+    row = book_service.get_book_detail(db, book_id)
+    book_send_service.restore_organization_distribution(db, user, row, payload.reason)
+    return _build_book_response(db, row, user)
 
 
 @router.post("/{book_id}/send", response_model=BookSendResponse)
@@ -1972,7 +2020,6 @@ def send_book(
         user_ids=payload.user_ids,
         purpose=payload.purpose,
         note=payload.note,
-        make_directed=payload.make_directed,
         include_references=payload.include_references,
     )
     return BookSendResponse(sent=sent, skipped=skipped, references=references)
@@ -2039,7 +2086,7 @@ def submit_for_approval(
     row = book_service.submit_for_approval(
         db,
         book_id,
-        priority=payload.priority,
+        urgency=payload.urgency,
         approver_user_id=payload.approver_user_id,
         reviewer_user_ids=payload.reviewer_user_ids,
         submitted_by_user_id=user.id,
