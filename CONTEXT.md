@@ -23,13 +23,16 @@ produced from structured form data or finalized from a Word-authored DOCX.
 _Avoid_: Template output, when the source is a Word-authored document
 
 **Reference barcode**:
-The Code 39 symbol printed on a General Book's first page carrying its reference
-and paper date, rendered from the template's barcode font rather than stamped on.
+The Code 39 symbol printed on a General Book's first page, or on a Ledger
+Book's paper, carrying its reference and paper date. On a General Book it is
+rendered from the template's barcode font rather than stamped on; on a Ledger
+Book it is generated at Save & Send and printed with its readable line.
 _Avoid_: QR, Aztec, code stamp
 
 **Paper date**:
-The date printed on a General Book at first commit, fixed for the life of the
-Record so later renditions and the Reference barcode repeat it.
+The date printed on a General Book at first commit, or fixed on a Ledger Book
+at Save & Send, kept for the life of the Record so later renditions and the
+Reference barcode repeat it.
 _Avoid_: Render date, signing date, created date
 
 **Scan-back match**:
@@ -85,11 +88,54 @@ revocation. It does not authorize later Revisions or confer editing/signing
 authority.
 _Avoid_: Record ownership, permanent access to the whole Record
 
-**Level**:
-A Record's confidentiality: General (عام), Personal (شخصي, creator only),
-Secret (سري, users with Secret clearance) or Directed (موجه, creator plus
-Direct send recipients). Separate from the التبويب classification code.
-_Avoid_: Classification (that is the filing tab)
+**Grade**:
+A Record's fixed sensitivity: Unclassified (غير سري), Secret (سري, users with
+Secret clearance), Top Secret (سري للغاية, only the people named on the
+Record) or Addressee Only (لعنايته فقط, like Top Secret without CC or
+forwarding). Separate from the التبويب classification code.
+_Avoid_: Level, confidentiality, Classification (that is the filing tab)
+
+**Distribution**:
+Who a Record is addressed to: the organization, under the record-type rules,
+or named people only. Top Secret is always named.
+_Avoid_: Personal, Directed, audience
+
+**Ledger Book**:
+A form kind authored in HTML inside the Ledger, drafted privately and
+numbered at Save & Send, with To/CC Addressees and an approval chain.
+_Avoid_: HTML book, General Book (that is the Word-authored form)
+
+**Draft** (مسودة):
+A Ledger Book still being written, seen only by its owner in the Drafts
+(المسودات) folder. It has a draft number, no official reference and no
+Reference barcode. It is not yet a Record.
+_Avoid_: Revision, unsent Record, Personal
+
+**Save & Send**:
+The single step that turns a Draft into a Record: it assigns the reference,
+Paper date and Reference barcode, applies the Grade, and submits the Record
+into its approval chain.
+_Avoid_: Reserve, publish, submit (alone)
+
+**Addressee**:
+A person a Ledger Book is addressed to, as To or CC. Addressees receive the
+Record after the final approval.
+_Avoid_: Direct send recipient, approver
+
+**Chain role**:
+One ordered step in a Record's approval chain, held by an assignee who acts
+on it in turn.
+_Avoid_: Reviewer list, approver group
+
+**Break-glass**:
+An admin's audited emergency access to a Top Secret or Addressee Only Record:
+it needs a reason, expires after 24 hours, and records every content read.
+_Avoid_: Override, admin view
+
+**Urgency** (الاستعجال):
+How soon a Record needs action: Normal (عادي), Urgent (عاجل) or Very Urgent
+(عاجل جداً).
+_Avoid_: Priority
 
 **Direct send**:
 Delivering a Record to named users with a purpose (للاطلاع, للتنفيذ, للإفادة,
@@ -325,7 +371,11 @@ the domain language above.
 | Generated artifact | `Document` |
 | Revision | `BookVersion` |
 | Send state | `Book.send_state` |
-| Level | `Book.confidentiality` |
+| Grade | `Book.grade` |
+| Distribution | `Book.distribution` |
+| Draft | `book_drafts` |
+| Addressee | `book_addressees` |
+| Urgency | `Book.urgency` (stored `Normal`, `High`, `Very High`) |
 | Direct send | `BookRecipient` |
 | Threaded reply confirmation | `ScanInbox.source = "email_reply_match"` |
 | Attendance case | `AttendanceCase` |
