@@ -8,6 +8,13 @@
    the viewport instead (LockOverlay.css). */
 [data-sileo-viewport][data-position] {
   z-index: 999999999;
+  /* Match the gallery: edge offsets address the pill, without Sileo's 12px pad.
+     Zoom only the viewport: toastFit's probe and Sileo's scrollWidth/scrollHeight
+     measurements stay in unscaled CSS px; pointer targets zoom with the toast. */
+  width: 350px;
+  max-width: none;
+  padding: 0;
+  zoom: var(--app-toast-scale);
 }
 
 [data-sileo-viewport][data-theme='light'] {
