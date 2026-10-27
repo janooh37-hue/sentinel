@@ -43,6 +43,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, foreign, mapped_column, query_expression, relationship
 
+from app.core import grades
 from app.db.base import Base
 
 # Single-row sequence is keyed by this constant so callers don't sprinkle
@@ -187,7 +188,7 @@ class BookRefSequence(Base):
 
 
 class ClassifiedRefSequence(Base):
-    """Single-row counter for classified refs (1/{tab}/GSSG/{serial}); id always 1."""
+    """Single-row counter for classified refs (1/{tab}/{serial}); id always 1."""
 
     __tablename__ = "classified_ref_sequence"
 
@@ -248,7 +249,8 @@ class Book(Base):
     doc_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    priority: Mapped[str] = mapped_column(
+    # Urgency (الاستعجال): Normal | High (Urgent) | Very High (Very Urgent).
+    urgency: Mapped[str] = mapped_column(
         String(16), nullable=False, default="Normal", server_default="Normal"
     )
     # none | pending | approved | rejected | returned
@@ -269,10 +271,13 @@ class Book(Base):
     # Original creator (users.id): immutable; set once at creation. No FK, same
     # SQLite batch-ALTER reason as submitted_by_user_id.
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # Record level (migration 0102): general | personal | secret | directed.
-    # Gates who can open the record; see book_service.user_visibility_clause.
-    confidentiality: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="general", server_default="general"
+    # Record grade + distribution (migration 0110, ADR 0007; app.core.grades).
+    # Gate who can open the record; see book_service.user_visibility_clause.
+    grade: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="unclassified", server_default="unclassified"
+    )
+    distribution: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="organization", server_default="organization"
     )
     # The Manager directory row actually printed on the doc (reviewer/manager-
     # routed approvals, 2026-06-23). Submit-for-approval follows its `user_id`
@@ -311,10 +316,9 @@ class Book(Base):
         Index("ix_books_employee_id", "employee_id"),
         Index("ix_books_created_at", "created_at"),
         Index("ix_books_created_by_user_id", "created_by_user_id"),
-        CheckConstraint(
-            "confidentiality IN ('general', 'personal', 'secret', 'directed')",
-            name="ck_books_confidentiality",
-        ),
+        CheckConstraint(grades.GRADE_CHECK, name="ck_books_grade"),
+        CheckConstraint(grades.DISTRIBUTION_CHECK, name="ck_books_distribution"),
+        CheckConstraint(grades.URGENCY_CHECK, name="ck_books_urgency"),
     )
 
 
