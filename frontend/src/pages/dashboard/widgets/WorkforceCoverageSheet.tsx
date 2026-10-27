@@ -213,7 +213,8 @@ function WorkforceCoverageContent({
 }
 
 function rowName(row: WorkforceCoverageRow): string | null {
-  return row.kind === 'department' ? row.department : row.kind === 'duty_unit' ? row.duty_unit : row.duty_post
+  const name = row.kind === 'department' ? row.department : row.kind === 'duty_unit' ? row.duty_unit : row.duty_post
+  return name ?? null
 }
 
 function CoverageRow({ row, name, expandable = false }: { row: WorkforceCoverageRow; name: string; expandable?: boolean }): React.JSX.Element {

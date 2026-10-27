@@ -10,9 +10,10 @@ vi.mock('pdfjs-dist', () => ({
 import { purgePdfCaches } from './pdfCachePurge'
 import { clearPdfDocCache, invalidatePdfDocs, leasePdfUrl, PDF_DOC_CACHE_SIZE } from './pdfDocCache'
 
+// pdf.js 6 releases a document through its loading task (`doc.loadingTask.destroy()`).
 interface FakeDoc {
   url: string
-  destroy: Mock
+  loadingTask: { destroy: Mock }
 }
 
 describe('pdfDocCache', () => {
@@ -23,9 +24,10 @@ describe('pdfDocCache', () => {
     docs = []
     getDocumentMock.mockReset()
     getDocumentMock.mockImplementation(() => {
-      const doc: FakeDoc = { url: `doc-${docs.length}`, destroy: vi.fn().mockResolvedValue(undefined) }
+      const loadingTask = { destroy: vi.fn().mockResolvedValue(undefined) }
+      const doc: FakeDoc = { url: `doc-${docs.length}`, loadingTask }
       docs.push(doc)
-      return { promise: Promise.resolve(doc) }
+      return { promise: Promise.resolve(doc), destroy: loadingTask.destroy }
     })
     fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => 'AQ==' })
     vi.stubGlobal('fetch', fetchMock)
@@ -63,23 +65,23 @@ describe('pdfDocCache', () => {
     second.release()
     const third = await leasePdfUrl('/3.pdf')
     third.release()
-    expect(docs.every((d) => d.destroy.mock.calls.length === 0)).toBe(true)
+    expect(docs.every((d) => d.loadingTask.destroy.mock.calls.length === 0)).toBe(true)
 
     const fourth = await leasePdfUrl('/4.pdf')
     fourth.release()
 
     // /1 is the oldest but still leased: /2 (oldest idle) goes.
     const byUrl = new Map(docs.map((d, i) => [`/${i + 1}.pdf`, d]))
-    expect(byUrl.get('/1.pdf')?.destroy).not.toHaveBeenCalled()
-    expect(byUrl.get('/2.pdf')?.destroy).toHaveBeenCalledTimes(1)
-    expect(byUrl.get('/3.pdf')?.destroy).not.toHaveBeenCalled()
-    expect(byUrl.get('/4.pdf')?.destroy).not.toHaveBeenCalled()
+    expect(byUrl.get('/1.pdf')?.loadingTask.destroy).not.toHaveBeenCalled()
+    expect(byUrl.get('/2.pdf')?.loadingTask.destroy).toHaveBeenCalledTimes(1)
+    expect(byUrl.get('/3.pdf')?.loadingTask.destroy).not.toHaveBeenCalled()
+    expect(byUrl.get('/4.pdf')?.loadingTask.destroy).not.toHaveBeenCalled()
 
     // Releasing the old lease makes it evictable on the next trim.
     first.release()
     const fifth = await leasePdfUrl('/5.pdf')
     fifth.release()
-    expect(byUrl.get('/1.pdf')?.destroy).toHaveBeenCalledTimes(1)
+    expect(byUrl.get('/1.pdf')?.loadingTask.destroy).toHaveBeenCalledTimes(1)
   })
 
   it('does not cache a failed load, so a retry refetches', async () => {
@@ -102,7 +104,7 @@ describe('pdfDocCache', () => {
       const first = await leasePdfUrl('/a.pdf')
       first.release()
       invalidatePdfDocs('/a.pdf')
-      expect(docs[0].destroy).toHaveBeenCalledTimes(1)
+      expect(docs[0].loadingTask.destroy).toHaveBeenCalledTimes(1)
 
       const second = await leasePdfUrl('/a.pdf')
       expect(fetchMock).toHaveBeenCalledTimes(2)
@@ -113,15 +115,15 @@ describe('pdfDocCache', () => {
     it('only forgets a leased document: the holder keeps it and destroys it on release', async () => {
       const held = await leasePdfUrl('/a.pdf')
       invalidatePdfDocs((key) => key === '/a.pdf')
-      expect(docs[0].destroy).not.toHaveBeenCalled()
+      expect(docs[0].loadingTask.destroy).not.toHaveBeenCalled()
 
       const fresh = await leasePdfUrl('/a.pdf')
       expect(fresh.doc).not.toBe(held.doc)
       expect(fetchMock).toHaveBeenCalledTimes(2)
 
       held.release()
-      expect(docs[0].destroy).toHaveBeenCalledTimes(1)
-      expect(docs[1].destroy).not.toHaveBeenCalled()
+      expect(docs[0].loadingTask.destroy).toHaveBeenCalledTimes(1)
+      expect(docs[1].loadingTask.destroy).not.toHaveBeenCalled()
       fresh.release()
     })
 
@@ -131,8 +133,8 @@ describe('pdfDocCache', () => {
       const drop = await leasePdfUrl('/drop.pdf')
       drop.release()
       invalidatePdfDocs('/drop')
-      expect(docs[0].destroy).not.toHaveBeenCalled()
-      expect(docs[1].destroy).toHaveBeenCalledTimes(1)
+      expect(docs[0].loadingTask.destroy).not.toHaveBeenCalled()
+      expect(docs[1].loadingTask.destroy).toHaveBeenCalledTimes(1)
       const again = await leasePdfUrl('/keep.pdf')
       expect(again.doc).toBe(keep.doc)
       again.release()
@@ -144,14 +146,14 @@ describe('pdfDocCache', () => {
       const lease = await pending
       expect(docs).toHaveLength(1)
       lease.release()
-      expect(docs[0].destroy).toHaveBeenCalledTimes(1)
+      expect(docs[0].loadingTask.destroy).toHaveBeenCalledTimes(1)
     })
 
     it('is what purgePdfCaches runs', async () => {
       const lease = await leasePdfUrl('/a.pdf')
       lease.release()
       purgePdfCaches()
-      expect(docs[0].destroy).toHaveBeenCalledTimes(1)
+      expect(docs[0].loadingTask.destroy).toHaveBeenCalledTimes(1)
     })
   })
 

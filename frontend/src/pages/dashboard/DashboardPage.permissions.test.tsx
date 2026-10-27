@@ -74,7 +74,9 @@ function summary(): DashboardSummary {
   }
 }
 
-function renderPage(data = summary(), widgets = DEFAULT_LAYOUT.widgets.map((widget) => ({ ...widget, visible: Boolean(visibleWidgets[widget.id]) }))) {
+const DEFAULT_WIDGETS = DEFAULT_LAYOUT.widgets ?? []
+
+function renderPage(data = summary(), widgets = DEFAULT_WIDGETS.map((widget) => ({ ...widget, visible: Boolean(visibleWidgets[widget.id]) }))) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
   client.setQueryData(['dashboard'], data)
   client.setQueryData(['dashboard-layout', 1], {
@@ -183,7 +185,7 @@ describe.each([
 
   it('lets the sole rendered top card fill the row', () => {
     capabilityState.allowed.delete('employees.view')
-    const widgets = DEFAULT_LAYOUT.widgets.map((widget) => ({
+    const widgets = DEFAULT_WIDGETS.map((widget) => ({
       ...widget, visible: widget.id === 'workspace' || widget.id === 'pending', zone: 'top' as const,
     }))
     renderPage(summary(), widgets)
@@ -193,7 +195,7 @@ describe.each([
 
   it('omits zone wrappers when every configured card is denied', () => {
     capabilityState.allowed = new Set()
-    const widgets = DEFAULT_LAYOUT.widgets.map((widget) => ({
+    const widgets = DEFAULT_WIDGETS.map((widget) => ({
       ...widget,
       visible: ['workspace', 'violations', 'ledger'].includes(widget.id),
       zone: widget.id === 'workspace' ? 'top' as const : widget.id === 'violations' ? 'under_workspace' as const : 'under_quick_actions' as const,

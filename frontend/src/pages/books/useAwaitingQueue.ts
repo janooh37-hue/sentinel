@@ -55,7 +55,7 @@ export function useAwaitingQueue(
   const prev = data.previous && !hiddenIds?.has(data.previous.book_id) ? data.previous : null
   const next = data.next && !hiddenIds?.has(data.next.book_id) ? data.next : null
   return {
-    position: data.position,
+    position: data.position ?? null,
     total: data.total,
     prevId: prev?.book_id ?? null,
     prevVersionId: prev?.version_id ?? null,

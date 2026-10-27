@@ -57,7 +57,8 @@ function destroyQuietly(target: { destroy: () => Promise<void> }): void {
 
 function drop(entry: Entry): void {
   if (entries.get(entry.key) === entry) entries.delete(entry.key)
-  if (entry.doc) destroyQuietly(entry.doc)
+  // pdf.js 6 has no `PDFDocumentProxy.destroy()`; the loading task owns the document.
+  if (entry.doc) destroyQuietly(entry.doc.loadingTask)
   else entry.controller.abort()
 }
 
@@ -132,7 +133,7 @@ export function leasePdfDoc(
       .then((doc) => {
         if (controller.signal.aborted) {
           // Every lease was released while loading — nothing wants it.
-          destroyQuietly(doc)
+          destroyQuietly(doc.loadingTask)
           throw new DOMException('Aborted', 'AbortError')
         }
         created.doc = doc
@@ -171,7 +172,7 @@ export function leasePdfDoc(
       return
     }
     // Forgotten by `invalidatePdfDocs` while leased: destroy now, nothing can reuse it.
-    if (!cached) destroyQuietly(held.doc)
+    if (!cached) destroyQuietly(held.doc.loadingTask)
     else trim()
   }
 

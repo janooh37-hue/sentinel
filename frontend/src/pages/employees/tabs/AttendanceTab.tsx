@@ -595,7 +595,7 @@ function SeenOnlyDay({ day }: { day: EmployeeAttendanceHistoryDay }): React.JSX.
         </div>
         <div>
           <dt className="text-[0.85em] text-muted-foreground">{t('attendance.tab.devices')}</dt>
-          <dd className="font-bold">{day.devices.join(' · ') || '—'}</dd>
+          <dd className="font-bold">{(day.devices ?? []).join(' · ') || '—'}</dd>
         </div>
       </dl>
     </section>
@@ -666,7 +666,7 @@ function DayTimeline({ day }: { day: EmployeeAttendanceDay }): React.JSX.Element
               )}
             </>
           )}
-          {day.punches.map((punch) => {
+          {(day.punches ?? []).map((punch) => {
             const at = parseInstant(punch.occurred_at)
             if (at === null) return null
             return (
