@@ -25,6 +25,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
+from app.core import grades
 from app.core.constants import ALLOWED_DOC_EXTS, CLASSIFIED_BOOK_FORMS, STAMP_STYLES
 from app.core.form_kind import (
     OTHER_SERVICE_ID,
@@ -387,52 +388,83 @@ def is_active_recipient(db: Session, user_id: int, book_id: int) -> bool:
     )
 
 
-def _confidentiality_clause(
-    db: Session, user: User, type_ok: ColumnElement[bool]
-) -> ColumnElement[bool]:
-    """SQL: which records a non-admin may open, given ``type_ok`` (the existing
-    record-type rules). Python mirror: ``_confidentiality_allows``."""
-    level = Book.confidentiality
-    creator = Book.created_by_user_id == user.id
+def _named_clause(user: User) -> ColumnElement[bool]:
+    """SQL: ``user`` is named on the correlated ``Book`` (creator or To/CC)."""
+    return or_(Book.created_by_user_id == user.id, active_recipient_clause(user.id))
+
+
+def _grade_clause(db: Session, user: User, type_ok: ColumnElement[bool]) -> ColumnElement[bool]:
+    """SQL: which records ``user`` may open under the ADR 0007 access rule, given
+    ``type_ok`` (the record-type rules). Python mirror: ``_grade_allows``.
+
+    Chain assignees open a record through their assigned or retained revision
+    (``resolve_book_read_access``), not through this register rule.
+    """
+    grade, distribution = Book.grade, Book.distribution
+    restricted = grade.in_(sorted(grades.RESTRICTED_GRADES))
+    named = _named_clause(user)
     if user.role == INMATE_REPORTER_ROLE:
         return and_(
             type_ok,
-            or_(level == "general", and_(level.in_(("personal", "directed")), creator)),
+            grade == grades.UNCLASSIFIED,
+            or_(distribution == grades.ORGANIZATION, Book.created_by_user_id == user.id),
         )
-    recipient = active_recipient_clause(user.id)
-    branches = [
-        and_(level == "general", or_(type_ok, recipient)),
-        and_(level == "personal", creator),
-        and_(level == "directed", or_(creator, recipient)),
-    ]
+    if user.role == ADMIN_ROLE:
+        # Top Secret / Addressee Only: metadata only unless named on the record.
+        return or_(and_(not_(restricted), type_ok), and_(restricted, named))
+    shared = or_(
+        and_(distribution == grades.ORGANIZATION, or_(type_ok, named)),
+        and_(distribution == grades.NAMED, named),
+    )
+    branches = [and_(grade == grades.UNCLASSIFIED, shared), and_(restricted, named)]
     if perm_service.has_capability(db, user, "books.secret"):
-        branches.append(and_(level == "secret", or_(type_ok, recipient)))
+        branches.append(and_(grade == grades.SECRET, shared))
     return or_(*branches)
 
 
-def _confidentiality_allows(
+def _grade_allows(
     db: Session, user: User, book: Book, *, existing: bool, write: bool = False
 ) -> bool:
-    """Python mirror of ``_confidentiality_clause``. ``existing`` is the
-    pre-confidentiality verdict (books.view + record type [+ reporter matrix])."""
-    if user.role == ADMIN_ROLE:
-        return existing
-    level = book.confidentiality
+    """Python mirror of ``_grade_clause``. ``existing`` is the pre-grade verdict
+    (books.view + record type [+ reporter matrix]). A direct send grants reads only."""
     creator = book.created_by_user_id is not None and book.created_by_user_id == user.id
     if user.role == INMATE_REPORTER_ROLE:
-        return existing and (level == "general" or (level in ("personal", "directed") and creator))
-    if level == "personal":
-        return creator
-    if level == "directed":
+        return (
+            existing
+            and book.grade == grades.UNCLASSIFIED
+            and (book.distribution == grades.ORGANIZATION or creator)
+        )
+
+    def named() -> bool:
         return creator or (not write and is_active_recipient(db, user.id, book.id))
-    if level == "secret" and not perm_service.has_capability(db, user, "books.secret"):
+
+    if book.grade in grades.RESTRICTED_GRADES:
+        return named()
+    if user.role == ADMIN_ROLE:
+        return existing
+    if book.grade == grades.SECRET and not perm_service.has_capability(db, user, "books.secret"):
         return False
-    return existing or (not write and is_active_recipient(db, user.id, book.id))
+    if book.distribution == grades.NAMED:
+        return named()
+    return existing or named()
 
 
-def _hidden_by_confidentiality(user: User, book: Book, *, existing: bool) -> bool:
+def _hidden_by_grade(user: User, book: Book, *, existing: bool) -> bool:
     """A denied open that must look like a missing record (404, not 403)."""
-    return existing or (book.confidentiality != "general" and user.role != ADMIN_ROLE)
+    if existing or book.grade in grades.RESTRICTED_GRADES:
+        return True
+    return not grades.is_open_record(book) and user.role != ADMIN_ROLE
+
+
+def is_metadata_only(db: Session, user: User, book: Book) -> bool:
+    """An admin's list row of a Top Secret / Addressee Only record it is not
+    named on: ref, tab, grade and dates only (ADR 0007, D6)."""
+    return (
+        user.role == ADMIN_ROLE
+        and book.grade in grades.RESTRICTED_GRADES
+        and book.created_by_user_id != user.id
+        and not is_active_recipient(db, user.id, book.id)
+    )
 
 
 def _record_type_clause(db: Session, user: User) -> ColumnElement[bool] | None:
@@ -452,14 +484,20 @@ def _record_type_clause(db: Session, user: User) -> ColumnElement[bool] | None:
     return and_(*clauses) if clauses else None
 
 
-def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | None:
+def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool]:
     """SQL clause for the records ``user`` may open: denied services/categories,
-    the inmate-reporter matrix, and the record level (``_confidentiality_clause``).
-    ``None`` only for an admin with nothing denied."""
+    the inmate-reporter matrix, and the record grade (``_grade_clause``)."""
     type_ok = _record_type_clause(db, user)
+    return _grade_clause(db, user, type_ok if type_ok is not None else true())
+
+
+def user_listing_clause(db: Session, user: User) -> ColumnElement[bool] | None:
+    """Records ``user`` may list. Admins also list Top Secret / Addressee Only
+    records they cannot open, as metadata-only rows (``is_metadata_only``).
+    ``None`` only for an admin with nothing denied."""
     if user.role == ADMIN_ROLE:
-        return type_ok
-    return _confidentiality_clause(db, user, type_ok if type_ok is not None else true())
+        return _record_type_clause(db, user)
+    return user_visibility_clause(db, user)
 
 
 def full_read_access_clause(db: Session, user: User) -> ColumnElement[bool]:
@@ -470,14 +508,12 @@ def full_read_access_clause(db: Session, user: User) -> ColumnElement[bool]:
     Deleted Records and revision-scoped access are the caller's to add.
     """
     if user.role == INMATE_REPORTER_ROLE:
-        return _confidentiality_clause(db, user, _inmate_reporter_visibility_clause(user))
+        return _grade_clause(db, user, _inmate_reporter_visibility_clause(user))
     type_ok: ColumnElement[bool] = false()
     if perm_service.has_capability(db, user, "books.view"):
         record_types = _record_type_clause(db, user)
         type_ok = record_types if record_types is not None else true()
-    if user.role == ADMIN_ROLE:
-        return type_ok
-    return _confidentiality_clause(db, user, type_ok)
+    return _grade_clause(db, user, type_ok)
 
 
 def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | None:
@@ -549,9 +585,7 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
         )
         clauses.append(linked_current_visible)
     type_ok = and_(*clauses) if clauses else None
-    if user.role == ADMIN_ROLE:
-        return type_ok
-    level_ok = _confidentiality_clause(db, user, true())
+    level_ok = _grade_clause(db, user, true())
     owner_document = aliased(Document)
 
     def owning_book_matches(condition: ColumnElement[bool]) -> ColumnElement[bool]:
@@ -668,7 +702,7 @@ def resolve_book_read_access(
         # Fixed-scope reporter: never full books.view semantics — current
         # version only, gated by the state/ownership matrix, never a
         # historical revision even when the current report is shared.
-        if not _inmate_reporter_book_visible(book, user.id) or not _confidentiality_allows(
+        if not _inmate_reporter_book_visible(book, user.id) or not _grade_allows(
             db, user, book, existing=True
         ):
             raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
@@ -692,9 +726,9 @@ def resolve_book_read_access(
                 raise
             existing = False
             record_type_error = exc
-    if _confidentiality_allows(db, user, book, existing=existing):
+    if _grade_allows(db, user, book, existing=existing):
         return BookReadAccess(True, ids, version_id or (versions[-1].id if versions else None))
-    level_hidden = _hidden_by_confidentiality(user, book, existing=existing)
+    level_hidden = _hidden_by_grade(user, book, existing=existing)
     allowed = set(
         db.scalars(
             select(BookRevisionAccess.version_id)
@@ -765,9 +799,9 @@ def require_full_book_access(db: Session, user: User, row: Book, *, write: bool 
         row, user.id
     )
     existing = has_view and record_type_error is None and not reporter_hidden
-    if _confidentiality_allows(db, user, row, existing=existing, write=write):
+    if _grade_allows(db, user, row, existing=existing, write=write):
         return
-    if _hidden_by_confidentiality(user, row, existing=existing):
+    if _hidden_by_grade(user, row, existing=existing):
         raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
     if not has_view:
         raise AppError(
@@ -785,9 +819,10 @@ def require_full_book_access(db: Session, user: User, row: Book, *, write: bool 
     )
 
 
-def require_confidentiality_clearance(db: Session, user: User, level: str) -> None:
-    """Only Secret-cleared users may create a Secret record or relabel to Secret."""
-    if level == "secret" and not perm_service.has_capability(db, user, "books.secret"):
+def require_grade_clearance(db: Session, user: User, grade: str) -> None:
+    """Only Secret-cleared users may create a Secret record or regrade to Secret.
+    Top Secret and Addressee Only need no capability (ADR 0007, D2)."""
+    if grade == grades.SECRET and not perm_service.has_capability(db, user, "books.secret"):
         raise AppError(
             "SECRET_CLEARANCE_REQUIRED",
             "Secret clearance is required for Secret records.",
@@ -981,7 +1016,6 @@ _PURPOSE_WORDS: Final[dict[str, tuple[str, ...]]] = {
     "reply": ("للإفادة", "for reply", "reply"),
     "circulate": ("للتعميم", "for circulation", "circulate"),
 }
-_CONFIDENTIALITY_RANK: Final[dict[str, int]] = {"secret": 3, "personal": 2, "directed": 1}
 
 
 def _purposes_named(q: str) -> list[str]:
@@ -1093,7 +1127,7 @@ def service_facets(
         active_word_draft,
     ).where(Book.deleted_at.is_(None))
     if user is not None:
-        visibility = user_visibility_clause(db, user)
+        visibility = user_listing_clause(db, user)
         if visibility is not None:
             stmt = stmt.where(visibility)
     if created_by_me:
@@ -1172,7 +1206,7 @@ def list_books(
     count_stmt = select(func.count()).select_from(Book)
 
     if user is not None:
-        visibility = user_visibility_clause(db, user)
+        visibility = user_listing_clause(db, user)
         if visibility is not None:
             stmt = stmt.where(visibility)
             count_stmt = count_stmt.where(visibility)
@@ -1303,8 +1337,8 @@ def list_books(
         sort_column = Book.ref_number
     elif key == "subject":
         sort_column = Book.subject
-    elif key == "confidentiality":
-        sort_column = case(_CONFIDENTIALITY_RANK, value=Book.confidentiality, else_=0)
+    elif key == "grade":
+        sort_column = case(grades.GRADE_RANK, value=Book.grade, else_=0)
     elif key == "purpose" and user is not None:
         sort_column = (
             _my_send_rows(user, inbox)
@@ -1479,7 +1513,8 @@ def create_book(db: Session, payload: BookCreate, *, created_by_user_id: int | N
         stamp_style=payload.stamp_style,
         created_at=datetime.now(UTC).replace(tzinfo=None),
         created_by_user_id=created_by_user_id,
-        confidentiality=payload.confidentiality,
+        grade=payload.grade,
+        distribution=grades.default_distribution(None, payload.grade),
         deleted_at=None,
     )
     db.add(row)
@@ -1820,7 +1855,7 @@ def _approval_context(
         "category_id": book.category_id,
         "category_name_ar": book.category.name_ar if book.category else None,
         "category_name_en": book.category.name_en if book.category else None,
-        "priority": book.priority,
+        "urgency": book.urgency,
         "direction": book.direction,
         "stamp_style": book.stamp_style,
         "employee_id": book.employee_id,
@@ -1901,7 +1936,7 @@ def submit_for_approval(
     db: Session,
     book_id: int,
     *,
-    priority: str,
+    urgency: str,
     approver_user_id: int | None,
     reviewer_user_ids: Sequence[int],
     submitted_by_user_id: int,
@@ -1939,10 +1974,10 @@ def submit_for_approval(
 
     if caller is not None and caller.role == INMATE_REPORTER_ROLE:
         # Derive the caller from submitted_by_user_id; never trust request routing.
-        if priority != "Normal" or approver_user_id is not None or reviewer_user_ids:
+        if urgency != "Normal" or approver_user_id is not None or reviewer_user_ids:
             raise AppError(
                 "INMATE_REPORTER_INPUT_FORBIDDEN",
-                "This role cannot choose an approver, reviewers, or priority.",
+                "This role cannot choose an approver, reviewers, or urgency.",
                 http_status=403,
             )
         require_inmate_report_write_access(db, caller, book, action="submit")
@@ -2019,7 +2054,7 @@ def submit_for_approval(
                 state="pending",
             )
         )
-    book.priority = priority
+    book.urgency = urgency
     book.submitted_by_user_id = submitted_by_user_id
     capture_approval_context(
         db,
@@ -2998,8 +3033,8 @@ def _build_worklist_item(
         approver_steps[-1] if approver_steps else None
     )
     context = version.approval_context if isinstance(version.approval_context, dict) else {}
-    raw_priority = context.get("priority")
-    priority = raw_priority if isinstance(raw_priority, str) else (book.priority if full else None)
+    raw_urgency = context.get("urgency")
+    urgency = raw_urgency if isinstance(raw_urgency, str) else (book.urgency if full else None)
     doc_manager_user_id, doc_manager_name = _worklist_doc_manager(
         db, book, version, full=full, names_by_id=names_by_id
     )
@@ -3031,7 +3066,7 @@ def _build_worklist_item(
         category_name_en=category_name_en,
         status=row.status,
         record_status=version.status,
-        priority=priority,
+        urgency=urgency,
         submitted_by_user_id=book.submitted_by_user_id if full else None,
         submitted_by_name=submitted_by_name,
         submitted_by_name_ar=context.get(

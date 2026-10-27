@@ -80,8 +80,8 @@ def _book(
     db: Session, creator: User, grade: str, distribution: str, ref: str | None = None
 ) -> Book:
     record = Book(
-        category_id="HR",
-        ref_number=ref or f"HR-{grade}-{distribution}",
+        category_id="INV",
+        ref_number=ref or f"INV-{grade}-{distribution}",
         subject=f"Matrix {grade} {distribution}",
         direction="outgoing",
         grade=grade,
@@ -95,7 +95,8 @@ def _book(
         BookVersion(
             book_id=record.id,
             version_no=1,
-            template_id="General Book",
+            # A form every role (inmate reporters too) may open by record type.
+            template_id="Inmate Conduct Violations",
             fields={},
             status="pending",
             created_by_user_id=creator.id,
@@ -144,7 +145,7 @@ def _relate(db: Session, book: Book, user: User, writer: User, relation: str) ->
 def _scenario(
     db: Session, role: str, relation: str, cleared: bool
 ) -> tuple[User, dict[tuple[str, str], Book]]:
-    db.add(BookCategory(id="HR", prefix="HR", requires_approval=False))
+    db.add(BookCategory(id="INV", prefix="INV", requires_approval=False))
     caller = make_user(db, role=role, email=f"caller-{role}@test.ae")
     writer = make_user(db, role="operator", email="writer@test.ae")
     if cleared:
@@ -185,7 +186,9 @@ def test_grade_access_matrix(
         label = f"{role} {relation} cleared={cleared} {grade}/{distribution}"
         assert _verdict(db, caller, book, listed) == want, label
         assert (book.id in open_ids) == (want == "full"), label
-        assert (book.id in listed) == (want in ("full", "metadata")), label
+        # Admins list every Top Secret / Addressee Only record (metadata rows).
+        admin_metadata = role == "admin" and grade in RESTRICTED
+        assert (book.id in listed) == (want in ("full", "metadata") or admin_metadata), label
 
 
 def test_matrix_covers_every_combination() -> None:
@@ -199,7 +202,7 @@ def test_matrix_covers_every_combination() -> None:
 
 @pytest.fixture()
 def admin_api(api_db: Session) -> Iterator[tuple[TestClient, Book, Book]]:
-    api_db.add(BookCategory(id="HR", prefix="HR", requires_approval=False))
+    api_db.add(BookCategory(id="INV", prefix="INV", requires_approval=False))
     writer = make_user(api_db, role="operator", email="writer@test.ae")
     admin = make_user(api_db, role="admin", email="admin@test.ae")
     secret = _book(api_db, writer, "top_secret", "named")
@@ -259,7 +262,7 @@ LEGACY_VISIBLE = {
 
 def test_legacy_levels_keep_their_visibility(db_session: Session) -> None:
     db = db_session
-    db.add(BookCategory(id="HR", prefix="HR", requires_approval=False))
+    db.add(BookCategory(id="INV", prefix="INV", requires_approval=False))
     users = {
         name: make_user(db, role=role, email=f"legacy-{name}@test.ae")
         for name, role in (
@@ -274,7 +277,7 @@ def test_legacy_levels_keep_their_visibility(db_session: Session) -> None:
     db.add(UserPermission(user_id=users["C2"].id, capability="books.secret", effect="grant"))
     books = {}
     for level, (grade, distribution) in LEGACY.items():
-        books[level] = _book(db, users["A"], grade, distribution, f"HR-legacy-{level}")
+        books[level] = _book(db, users["A"], grade, distribution, f"INV-legacy-{level}")
     db.commit()
     for name, user in users.items():
         clause = book_service.user_visibility_clause(db, user)
