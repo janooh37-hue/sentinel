@@ -33,8 +33,13 @@ from app.schemas.employee import (
     validate_status_end_date,
     validate_transfer_fields,
 )
+from app.services import department_tree_service, workforce_schedule_service
 from app.services import employee_status_history as history
-from app.services import workforce_schedule_service
+from app.services.department_scope_service import (
+    DepartmentScope,
+    employee_visibility_clause,
+    narrow_department_scope,
+)
 from app.services.extraction_service import _MATCH_THRESHOLD, _name_scores
 
 LIST_MAX_LIMIT = 500
@@ -47,10 +52,12 @@ def list_employees(
     q: str | None = None,
     status: str | None = None,
     department: str | None = None,
+    department_id: int | None = None,
     duty_unit: str | None = None,
     pending: bool = False,
     limit: int = LIST_DEFAULT_LIMIT,
     offset: int = 0,
+    scope: DepartmentScope | None = None,
 ) -> tuple[list[Employee], int]:
     """Filtered + paginated list. Returns ``(rows, total_count)``.
 
@@ -93,6 +100,17 @@ def list_employees(
         stmt = stmt.where(clause)
         count_stmt = count_stmt.where(clause)
         non_q_clauses.append(clause)
+    if department_id is not None:
+        scope = narrow_department_scope(
+            db,
+            scope or DepartmentScope(True, frozenset(), frozenset(), "organization"),
+            department_id,
+        )
+    visibility_clause = employee_visibility_clause(scope)
+    if visibility_clause is not None:
+        stmt = stmt.where(visibility_clause)
+        count_stmt = count_stmt.where(visibility_clause)
+        non_q_clauses.append(visibility_clause)
     if duty_unit:
         clause = Employee.duty_unit == duty_unit
         stmt = stmt.where(clause)
@@ -170,7 +188,11 @@ def _validate_transfer(
 
 
 def create_employee(
-    db: Session, payload: EmployeeCreate, *, actor_user_id: int | None = None
+    db: Session,
+    payload: EmployeeCreate,
+    *,
+    actor_user_id: int | None = None,
+    scope: DepartmentScope | None = None,
 ) -> Employee:
     existing = db.get(Employee, payload.id)
     if existing is not None:
@@ -210,6 +232,7 @@ def create_employee(
             site=site,
             return_date=return_date,
         )
+    department_tree_service.recompute(db)
     db.commit()
     db.refresh(row)
     return row
@@ -221,6 +244,7 @@ def update_employee(
     payload: EmployeeUpdate,
     *,
     actor_user_id: int | None = None,
+    scope: DepartmentScope | None = None,
 ) -> Employee:
     """Patch an employee, recording status history for real status changes.
 
@@ -440,6 +464,8 @@ def update_employee(
 
     for k, v in data.items():
         setattr(row, k, v)
+    # The department and its Arabic label come from the org tree.
+    department_tree_service.recompute(db)
     if "duty_unit" in data:
         # A raw duty-unit edit changes only this row; the crew that actually
         # generates shifts is `WorkCrewMembership`, which never moved on its

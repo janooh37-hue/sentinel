@@ -36,6 +36,7 @@ from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
+from app.api.department_scope import require_visible_employee
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
@@ -368,6 +369,8 @@ def generate_document(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> DocumentGenerateResponse:
+    if payload.employee_id is not None:
+        require_visible_employee(db, user, payload.employee_id)
     document_service.authorize_interactive_generation(
         db, user, payload.template_id, classification_code=payload.classification_code
     )

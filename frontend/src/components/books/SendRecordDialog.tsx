@@ -1,5 +1,5 @@
 /**
- * SendRecordDialog — send (or forward) a record to people.
+ * SendRecordDialog — send (or forward) a record to people and departments.
  *
  * Recipients come from listRecipientCandidates (the backend returns only
  * cleared users for a Secret record). A Personal record has to become
@@ -22,10 +22,13 @@ import {
   type BookSendResult,
   type RecipientCandidateRead,
   type SendPurpose,
+  type DepartmentRead,
 } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
+import { departmentErrorMessage, departmentHasReceiver, departmentName, orderDepartments, useDepartmentRollout } from '@/lib/departments'
 
 const MAX_RECIPIENTS = 50
 const MAX_NOTE = 500
@@ -53,15 +56,17 @@ export function SendRecordDialog({ book, open, onOpenChange }: Props): React.JSX
     staleTime: 5 * 60_000,
     enabled: open,
   })
+  const { activeDepartments } = useDepartmentRollout(open && book.confidentiality !== 'personal')
   // Resolve reply defaults before mounting; every opening starts clean.
   if (!open || thread.isPending || candidatesQuery.isPending) return null
   const replyTo = thread.data?.find((item) => item.direction === 'outgoing' && item.kind === 'reply')?.addressee_user_id
   const referenceCount = thread.data?.filter((item) => item.direction === 'outgoing' && item.attached).length ?? 0
-  return <SendBody key={book.id} book={book} replyTo={replyTo} referenceCount={referenceCount} candidatesQuery={candidatesQuery} close={() => onOpenChange(false)} />
+  return <SendBody key={book.id} book={book} replyTo={replyTo} referenceCount={referenceCount} candidatesQuery={candidatesQuery} activeDepartments={activeDepartments} close={() => onOpenChange(false)} />
 }
 
-function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pick<Props, 'book'> & { close: () => void; replyTo?: number | null; referenceCount: number; candidatesQuery: UseQueryResult<RecipientCandidateRead[]> }): React.JSX.Element {
+function SendBody({ book, close, replyTo, referenceCount, candidatesQuery, activeDepartments }: Pick<Props, 'book'> & { close: () => void; replyTo?: number | null; referenceCount: number; candidatesQuery: UseQueryResult<RecipientCandidateRead[]>; activeDepartments: DepartmentRead[] }): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const { user } = useAuth()
   const isAr = i18n.language.startsWith('ar')
   const qc = useQueryClient()
   const noteId = useId()
@@ -77,6 +82,8 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pic
   const isPersonal = book.confidentiality === 'personal'
   const isSecret = book.confidentiality === 'secret'
   const [includeReferences, setIncludeReferences] = useState(true)
+  const [pickedDepartments, setPickedDepartments] = useState<number[]>([])
+  const departments = orderDepartments(activeDepartments)
 
   const candidates = (candidatesQuery.data ?? []).filter((c) => !isSecret || c.has_secret_clearance)
   const nameOf = (c: RecipientCandidateRead): string => pickEmployeeName({ name_en: c.name, name_ar: c.name_ar }, i18n.language)
@@ -94,6 +101,7 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pic
     mutationFn: () =>
       api.sendBook(book.id, {
         user_ids: picked,
+        department_ids: isPersonal ? [] : pickedDepartments,
         purpose,
         note: note.trim() || null,
         make_directed: isPersonal,
@@ -107,19 +115,22 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pic
     },
     onError: (err, _vars, toastId) => {
       const key = err instanceof ApiError ? SEND_ERROR_KEYS[err.code] : undefined
-      toast.error(key ? t(key) : apiErrorMessage(err), { id: toastId, reference: book.ref_number })
+      toast.error(key ? t(key) : departmentErrorMessage(err, t), { id: toastId, reference: book.ref_number })
     },
   })
 
   function reportResult(res: BookSendResult, toastId: string | number | undefined): void {
     const byId = new Map(candidates.map((c) => [c.id, nameOf(c)]))
-    const skipped = res.skipped
-      .map((s) =>
-        s.reason === 'self'
-          ? t('books.send.skippedSelf')
-          : t('books.send.skippedAlready', { name: bidi(byId.get(s.user_id) ?? `#${s.user_id}`) }),
-      )
-      .join(isAr ? '، ' : ', ')
+    // The recipient directory deliberately excludes the sender.
+    if (user) byId.set(user.id, pickEmployeeName({ name_en: user.name_en || user.email, name_ar: user.name_ar }, i18n.language))
+    const departmentById = new Map(departments.map(({ department }) => [department.id, departmentName(department, i18n.language)]))
+    const skipped = res.skipped.map((skip) => {
+      const name = skip.user_id != null
+        ? byId.get(skip.user_id) ?? `#${skip.user_id}`
+        : departmentById.get(skip.department_id ?? 0) ?? `#${skip.department_id}`
+      if (skip.reason === 'self') return t('books.send.skippedSelf', { name: bidi(name) })
+      return t(`books.send.${skip.reason === 'already_sent' ? 'skippedDepartment' : skip.reason === 'not_cleared' ? 'skippedNotCleared' : 'skippedAlready'}`, { name: bidi(name) })
+    }).join(isAr ? '، ' : ', ')
     const references = res.references ?? []
     const referenceSent = references.reduce((count, item) => count + item.sent_user_ids.length, 0)
     const referenceSkipped = references.flatMap((item) => item.skipped.map((skip) =>
@@ -134,7 +145,7 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pic
     else toast.info(t('books.send.nothingSent'), { id: toastId, description, reference: book.ref_number })
   }
 
-  const canSend = picked.length > 0 && !mutation.isPending
+  const canSend = (picked.length > 0 || pickedDepartments.length > 0) && !mutation.isPending
   const sendLabel = isPersonal ? t('books.send.switchAndSend') : t('books.send.send')
 
   return (
@@ -265,6 +276,25 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pic
                 </div>
               )}
             </div>
+            {!isPersonal && activeDepartments.length > 0 && (
+              <fieldset>
+                <legend className="mb-2 text-[0.78em] font-semibold uppercase tracking-wider text-muted-foreground">{t('books.send.departments')}</legend>
+                  <div className="max-h-48 overflow-y-auto rounded-lg border border-hairline">
+                    {departments.map(({ department, depth }) => {
+                      const checked = pickedDepartments.includes(department.id)
+                      const reachable = departmentHasReceiver(department)
+                      const disabled = !reachable || (!checked && pickedDepartments.length >= 20) || mutation.isPending
+                      return (
+                        <label key={department.id} className={cn('flex min-h-11 items-center gap-2 border-b border-hairline py-2 pe-3 text-[0.84em] last:border-0', disabled && 'opacity-50')} style={{ paddingInlineStart: `${12 + depth * 16}px` }}>
+                          <input type="checkbox" className="h-4 w-4 accent-primary" checked={checked} disabled={disabled} onChange={() => setPickedDepartments((prev) => checked ? prev.filter((id) => id !== department.id) : [...prev, department.id])} />
+                          <bdi>{departmentName(department, i18n.language)}</bdi>
+                          {!reachable && <span className="ms-auto text-xs text-muted-foreground">{t('books.send.noHead')}</span>}
+                        </label>
+                      )
+                    })}
+                  </div>
+              </fieldset>
+            )}
 
             {/* Purpose */}
             <fieldset>

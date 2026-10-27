@@ -106,6 +106,11 @@ export function EmployeeIdCard({
   // Alt-language name for bilingual subtitle
   const altName = i18n.language === 'ar' ? employee.name_en : (employee.name_ar ?? null)
   const positionLabel = pickPosition(employee, i18n.language)
+  const departmentLabel = employee.department_id != null
+    ? (i18n.language.startsWith('ar')
+      ? employee.department_name_ar || employee.department_name_en
+      : employee.department_name_en || employee.department_name_ar)
+    : employee.department
   const statusText = statusDetailText(t, employee)
   const { has } = useCapabilities()
   const canEdit = has('employees.edit')
@@ -205,7 +210,7 @@ export function EmployeeIdCard({
       </div>
 
       {/* ── Facts grid (2-column): position / status / department / duty_unit ─── */}
-      {(positionLabel ?? employee.status ?? employee.department ?? employee.duty_unit) && (
+      {(positionLabel ?? employee.status ?? departmentLabel ?? employee.duty_unit) && (
         <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-white/14 pt-3 text-[0.78em]">
           <div>
             <div className="mb-0.5 text-[0.78em] uppercase tracking-wide opacity-55">
@@ -256,8 +261,8 @@ export function EmployeeIdCard({
             <div className="mb-0.5 text-[0.78em] uppercase tracking-wide opacity-55">
               {t('employee.field.department')}
             </div>
-            <div className="truncate font-medium leading-snug">
-              {employee.department || <span className="opacity-40">—</span>}
+            <div className="break-words font-medium leading-snug">
+              {departmentLabel || <span className="opacity-40">—</span>}
             </div>
           </div>
           <div>

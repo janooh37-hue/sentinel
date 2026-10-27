@@ -23,9 +23,11 @@ from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE, MANAGER_ROLE
 from app.db.models import (
     AuditLog,
     Book,
+    BookDepartmentSend,
     BookEditSession,
     BookLink,
     BookRecipient,
+    Department,
     Document,
     Employee,
     User,
@@ -326,6 +328,7 @@ def _recipient_reads(db: Session, user: User, rows: list[BookRecipient]) -> list
         BookRecipientRead(
             id=r.id,
             user_id=r.user_id,
+            department_send_id=r.department_send_id,
             user_name=names.get(r.user_id),
             user_name_ar=names_ar.get(r.user_id),
             user_title=titles.get(r.user_id, (None, None))[0],
@@ -357,11 +360,18 @@ def send(
     note: str | None,
     make_directed: bool,
     include_references: bool = True,
+    department_ids: list[int] | None = None,
 ) -> tuple[list[BookRecipientRead], list[BookSendSkipped], list[BookReferenceSendResult]]:
     """Send (or forward) ``book`` to users. Anyone with full access may send."""
     if user.role == INMATE_REPORTER_ROLE:
         raise AppError("FORBIDDEN", "Inmate reporters cannot send records.", http_status=403)
     book_service.require_full_book_access(db, user, book)
+    if department_ids and book.confidentiality == "personal":
+        raise AppError(
+            "PERSONAL_DEPARTMENT_SEND",
+            "Personal records cannot be sent to a department.",
+            http_status=409,
+        )
     if book.confidentiality == "personal":
         if not make_directed:
             raise AppError(
@@ -408,6 +418,11 @@ def send(
                 details={"user_ids": uncleared},
             )
 
+    from app.services import book_department_send_service
+
+    department_plan, department_skipped = book_department_send_service.prepare_sends(
+        db, book, department_ids or []
+    )
     active = set(
         db.scalars(
             select(BookRecipient.user_id).where(
@@ -439,14 +454,28 @@ def send(
     db.add_all(rows)
     if rows:
         _audit(db, user, "book_sent", book, {"user_ids": new_ids, "purpose": purpose})
+    department_rows, duplicate_skips = book_department_send_service.stage_sends(
+        db, user, book, department_plan, purpose=purpose, note=note
+    )
+    skipped.extend(department_skipped)
+    skipped.extend(duplicate_skips)
     db.commit()
     _push_new(db, book, rows, user)
+    if department_rows:
+        _push_new(db, book, department_rows, user, department_heads=True)
     references = (
-        _send_references(db, user, book, wanted, purpose=purpose, note=note)
+        _send_references(
+            db,
+            user,
+            book,
+            list(dict.fromkeys([*wanted, *(row.user_id for row in department_rows)])),
+            purpose=purpose,
+            note=note,
+        )
         if include_references
         else []
     )
-    return _recipient_reads(db, user, rows), skipped, references
+    return _recipient_reads(db, user, rows + department_rows), skipped, references
 
 
 def _send_references(
@@ -511,7 +540,14 @@ def _send_references(
     return results
 
 
-def _push_new(db: Session, book: Book, rows: list[BookRecipient], sender: User) -> None:
+def _push_new(
+    db: Session,
+    book: Book,
+    rows: list[BookRecipient],
+    sender: User,
+    *,
+    department_heads: bool = False,
+) -> None:
     """Immediate best-effort push; marks the item sent so the tick won't repeat it."""
     if not rows:
         return
@@ -520,9 +556,27 @@ def _push_new(db: Session, book: Book, rows: list[BookRecipient], sender: User) 
 
     sender_name = book_service.user_display_name(db, sender)
     sender_name_ar = book_service.resolve_names_ar_by_ids(db, {sender.id}).get(sender.id)
+    departments: dict[int, Department] = {}
+    if department_heads:
+        departments = {
+            send_id: department
+            for send_id, department in db.execute(
+                select(BookDepartmentSend.id, Department)
+                .join(Department, Department.id == BookDepartmentSend.department_id)
+                .where(BookDepartmentSend.id.in_([row.department_send_id for row in rows]))
+            )
+        }
     for row in rows:
         try:
-            item = notification_service.inbox_item(book, row, sender_name, sender_name_ar)
+            department = departments.get(row.department_send_id) if row.department_send_id else None
+            item = notification_service.inbox_item(
+                book,
+                row,
+                sender_name,
+                sender_name_ar,
+                department_name_en=department.name_en if department else None,
+                department_name_ar=department.name_ar if department else None,
+            )
             messages, url = scheduler_service._build_push("inbox", [item], INBOX_SECTION_URL)
             push_service.send_to_user(db, row.user_id, messages, url)
             push_service.mark_sent(db, row.user_id, "inbox", [item.ref])
@@ -618,9 +672,32 @@ def my_inbox(db: Session, user_id: int, book_ids: list[int]) -> dict[int, BookIn
     names = book_service.resolve_names_by_ids(db, {r.sent_by_user_id for r in rows})
     names_ar = book_service.resolve_names_ar_by_ids(db, {r.sent_by_user_id for r in rows})
     titles = book_service.resolve_titles_by_ids(db, {r.sent_by_user_id for r in rows})
+    departments = {
+        send_id: department
+        for send_id, department in db.execute(
+            select(BookDepartmentSend.id, Department)
+            .join(Department, Department.id == BookDepartmentSend.department_id)
+            .where(
+                BookDepartmentSend.id.in_(
+                    {r.department_send_id for r in rows if r.department_send_id is not None}
+                )
+            )
+        )
+    }
     return {
         r.book_id: BookInboxRead(
             id=r.id,
+            department_send_id=r.department_send_id,
+            department_name_en=(
+                departments[r.department_send_id].name_en
+                if r.department_send_id in departments
+                else None
+            ),
+            department_name_ar=(
+                departments[r.department_send_id].name_ar
+                if r.department_send_id in departments
+                else None
+            ),
             purpose=r.purpose,
             note=r.note,
             sent_by_user_id=r.sent_by_user_id,
@@ -712,13 +789,9 @@ def inbox_summary(db: Session, user: User) -> InboxSummaryRead:
     for row in received:
         setattr(by_purpose, row.purpose, getattr(by_purpose, row.purpose) + 1)
     sent_stmt = (
-        select(func.count(func.distinct(BookRecipient.book_id)))
-        .join(Book, Book.id == BookRecipient.book_id)
-        .where(
-            BookRecipient.sent_by_user_id == user.id,
-            BookRecipient.revoked_at.is_(None),
-            Book.deleted_at.is_(None),
-        )
+        select(func.count())
+        .select_from(Book)
+        .where(Book.deleted_at.is_(None), book_service.inbox_clause(user, "sent"))
     )
     visibility = book_service.user_visibility_clause(db, user)
     if visibility is not None:

@@ -32,15 +32,15 @@ function daysUntil(iso: string, now: Date = new Date()): number {
   return Math.round((target - today) / 86_400_000)
 }
 
-export function PendingDeparturesWidget(): React.JSX.Element | null {
+export function PendingDeparturesWidget({ departmentId }: { departmentId?: number }): React.JSX.Element | null {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { has } = useCapabilities()
 
   const query = useQuery({
-    queryKey: ['employees', 'pending'],
-    queryFn: () => api.listEmployees({ pending: true, limit: 50 }),
+    queryKey: ['employees', 'pending', departmentId],
+    queryFn: () => api.listEmployees({ pending: true, limit: 50, department_id: departmentId }),
     staleTime: 60_000,
   })
 

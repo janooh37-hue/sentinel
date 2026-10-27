@@ -16,6 +16,12 @@ import { WordReopenButton, WordSessionActions } from './BookWordActions'
 import { BookStatusChips } from './BookStatusChips'
 import * as apiMod from '@/lib/api'
 import type { BookRead, WordSessionRead } from '@/lib/api'
+import type * as AuthModule from '@/lib/authContext'
+
+vi.mock('@/lib/authContext', async (original) => {
+  const actual = await original<typeof AuthModule>()
+  return { ...actual, useAuth: () => ({ user: null }) }
+})
 
 // ── i18n setup (Arabic only; catches EN leaks) ────────────────────────────────
 void i18n.use(initReactI18next).init({

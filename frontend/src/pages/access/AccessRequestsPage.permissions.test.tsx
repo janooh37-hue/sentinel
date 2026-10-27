@@ -71,3 +71,29 @@ describe('UsersTable permission-editor eligibility', () => {
   })
 })
 
+
+describe('UsersTable while no active department exists', () => {
+  const props = {
+    emptyMessage: 'empty',
+    currentUserId: 999,
+    onReset: vi.fn(),
+    onChangeRole: vi.fn(),
+    onSetDefaultManager: vi.fn(),
+    onDisable: vi.fn(),
+    onUnlock: vi.fn(),
+  }
+
+  it('keeps the plain user list without department filters or a No department bucket', () => {
+    render(<UsersTable {...props} users={[user()]} departments={[]} />)
+    expect(screen.getByText('Test User')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Filter users by department')).not.toBeInTheDocument()
+    expect(screen.queryByText(/No department/)).not.toBeInTheDocument()
+  })
+
+  it('groups users by department once an active department exists', () => {
+    const department = { id: 1, name_en: 'Operations', name_ar: 'العمليات', active: true } as never
+    render(<UsersTable {...props} users={[user()]} departments={[department]} />)
+    expect(screen.getByLabelText('Filter users by department')).toBeInTheDocument()
+    expect(screen.getAllByText(/No department/).length).toBeGreaterThan(0)
+  })
+})

@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.schemas._base import ORMBase
+from app.schemas.department import UserDepartmentRead
 
 # Known widget / quick-action ids. Add to these lists when the Dashboard
 # component grows a new tile so the API validates instead of silently storing
@@ -202,8 +203,16 @@ class DashboardSyncStatus(ORMBase):
     incoming_today: int
 
 
+class DashboardDepartmentScope(BaseModel):
+    kind: Literal["organization", "department", "branch", "self"]
+    departments: list[UserDepartmentRead] = Field(default_factory=list)
+
+
 class DashboardSummary(BaseModel):
     totals: DashboardTotals
+    department_scope: DashboardDepartmentScope = Field(
+        default_factory=lambda: DashboardDepartmentScope(kind="organization")
+    )
     on_leave_today: list[DashboardLeaveItem]
     upcoming_leave_ends: list[DashboardUpcomingLeaveItem]
     recent_documents: list[DashboardRecentDocument]

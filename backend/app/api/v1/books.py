@@ -60,6 +60,8 @@ from app.schemas.book import (
     BookCreate,
     BookDecisionRequest,
     BookDeriveRequest,
+    BookDistributeRequest,
+    BookDistributionOptions,
     BookEditSessionRead,
     BookFacetsResponse,
     BookFolderCreate,
@@ -108,6 +110,7 @@ from app.schemas.book import (
 )
 from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
 from app.services import (
+    book_department_send_service,
     book_folder_service,
     book_link_service,
     book_send_service,
@@ -878,6 +881,7 @@ def _attach_desk_fields(
     The signatory is the doc's named manager (the signature block printed on the
     paper); without one, whoever signed the current version."""
     recipients = book_send_service.recipients_by_book(db, user, rows)
+    department_sends = book_department_send_service.sends_by_book(db, user, rows)
     manager_ids = {r.doc_manager_id for r in rows if r.doc_manager_id is not None}
     managers = (
         {m.id: m for m in db.scalars(select(Manager).where(Manager.id.in_(manager_ids)))}
@@ -895,6 +899,7 @@ def _attach_desk_fields(
     titles = book_service.resolve_titles_by_ids(db, creator_ids | set(signed_by.values()))
     for row, item in zip(rows, items, strict=True):
         item.recipients = recipients.get(row.id, [])
+        item.department_sends = department_sends.get(row.id, [])
         item.created_by_title, item.created_by_title_ar = titles.get(
             row.created_by_user_id, (None, None)
         )
@@ -1640,6 +1645,9 @@ def _build_book_response(
         item.can_change_confidentiality = book_send_service.can_change_confidentiality(user, row)
         if detail:
             item.my_inbox = book_send_service.my_inbox(db, user.id, [row.id]).get(row.id)
+            item.department_sends = book_department_send_service.sends_by_book(db, user, [row]).get(
+                row.id, []
+            )
         if user.role == INMATE_REPORTER_ROLE:
             item = _project_inmate_reporter_book(item, access.allowed_version_ids)
         return item
@@ -1968,6 +1976,7 @@ def send_book(
         user,
         row,
         user_ids=payload.user_ids,
+        department_ids=payload.department_ids,
         purpose=payload.purpose,
         note=payload.note,
         make_directed=payload.make_directed,
@@ -1995,6 +2004,51 @@ def recall_book_recipient(
 ) -> Response:
     row = book_service.get_book(db, book_id)
     book_send_service.recall(db, user, row, recipient_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/{book_id}/department-sends/{send_id}/distribution-options",
+    response_model=BookDistributionOptions,
+)
+def department_distribution_options(
+    book_id: int,
+    send_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> BookDistributionOptions:
+    row = book_service.get_book(db, book_id)
+    return book_department_send_service.distribution_options(db, user, row, send_id)
+
+
+@router.post(
+    "/{book_id}/department-sends/{send_id}/distribute",
+    response_model=BookSendResponse,
+)
+def distribute_department_send(
+    book_id: int,
+    send_id: int,
+    payload: BookDistributeRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> BookSendResponse:
+    row = book_service.get_book(db, book_id)
+    sent, skipped = book_department_send_service.distribute(db, user, row, send_id, payload)
+    return BookSendResponse(sent=sent, skipped=skipped)
+
+
+@router.delete(
+    "/{book_id}/department-sends/{send_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def recall_department_send(
+    book_id: int,
+    send_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> Response:
+    row = book_service.get_book(db, book_id)
+    book_department_send_service.recall(db, user, row, send_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

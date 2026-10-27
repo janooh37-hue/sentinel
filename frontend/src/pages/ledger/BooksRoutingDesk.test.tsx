@@ -35,10 +35,12 @@ const BOOK: BookRead = {
   my_inbox: { id: 9, purpose: 'action', sent_by_user_id: 2, sent_by_name: 'Khalid', sent_at: '2026-10-12T09:00:00Z', read_at: null },
 }
 
+const DEPARTMENT = { id: 4, name_en: 'Operations', name_ar: 'العمليات' }
+
 const FOLDER: BookFolderRead = {
   id: 3, name: 'Personnel', team: false, count: 2, can_manage: true,
   created_by_name: 'Khalid', created_by_name_ar: 'خالد',
-  everyone: false, shared_users: [], shared_departments: [],
+  everyone: false, shared_users: [], shared_departments: [], legacy_departments: [],
 }
 
 function RouterControls(): React.JSX.Element {
@@ -54,6 +56,7 @@ function mount(url = '/ledger?tab=books'): QueryClient {
 }
 beforeEach(() => {
   vi.mocked(useIsMobile).mockReturnValue(false)
+  vi.spyOn(api.departments, 'list').mockResolvedValue([{ ...DEPARTMENT, active: true }] as never)
   vi.spyOn(api, 'listBooks').mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 })
   vi.spyOn(api, 'listBookFolders').mockResolvedValue([])
   vi.spyOn(api, 'getInboxSummary').mockResolvedValue({ unread: 0, received: 0, sent: 0, archived: 0, by_purpose: { info: 0, action: 0, reply: 0, circulate: 0 } })
@@ -63,6 +66,16 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 describe('Books routing desk', () => {
+  it.each([false, true])('shows the owning department in record details (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.spyOn(api, 'getBook').mockResolvedValue({
+      ...BOOK, department_id: 3, department_name_en: 'Operations', department_name_ar: 'العمليات',
+    })
+    mount('/ledger?tab=books&book=7')
+    expect(await screen.findByText('Operations')).toBeVisible()
+    expect(screen.getByText('Department').tagName).toBe('DT')
+  })
+
   it.each([
     ['incoming', 'received'], ['done', 'done'], ['outgoing', 'sent'], ['archived', 'archived'],
   ])('maps the %s URL scope to inbox=%s', async (scope, inbox) => {
@@ -96,7 +109,7 @@ describe('Books routing desk', () => {
   it.each([false, true])('shows the restricted folder audience above its books (mobile=%s)', async (mobile) => {
     vi.mocked(useIsMobile).mockReturnValue(mobile)
     vi.mocked(api.listBookFolders).mockResolvedValue([{
-      ...FOLDER, team: true, shared_departments: ['Operations'],
+      ...FOLDER, team: true, shared_departments: [DEPARTMENT], legacy_departments: ['Former Operations'],
       shared_users: [{ id: 2, name: 'Aisha', name_ar: 'عائشة', title: 'HR officer', title_ar: 'مسؤولة الموارد البشرية' }],
     }])
     mount('/ledger?tab=books&folder=3')
@@ -104,6 +117,7 @@ describe('Books routing desk', () => {
     expect(header).toHaveTextContent('Team')
     expect(header).toHaveTextContent('Books: 2')
     expect(header).toHaveTextContent(/Shared with:.*Aisha.*Operations.*department/)
+    await waitFor(() => expect(header).toHaveTextContent(/Former Operations.*\(previous department name\)/))
     expect(header).toHaveTextContent('Each person sees only the books they are allowed to open.')
     expect(header).toHaveTextContent(/Created by.*Khalid/)
     expect(within(header).getByRole('button', { name: 'Share' })).toBeInTheDocument()
@@ -112,8 +126,9 @@ describe('Books routing desk', () => {
   it('saves chosen people and departments and refreshes folders and books', async () => {
     vi.mocked(api.listBookFolders).mockResolvedValue([{ ...FOLDER, team: true, everyone: true }])
     vi.spyOn(api, 'getBookFolderShareOptions').mockResolvedValue({
-      departments: ['Operations'],
-      users: [{ id: 2, name: 'Aisha', name_ar: 'عائشة', title: 'HR officer', title_ar: null, department: 'Operations' }],
+      departments: [DEPARTMENT],
+      legacy_departments: [],
+      users: [{ id: 2, name: 'Aisha', name_ar: 'عائشة', title: 'HR officer', title_ar: null, department_id: 4, department: 'Operations' }],
     })
     vi.spyOn(api, 'updateBookFolderShares').mockResolvedValue({ ...FOLDER, team: true })
     const qc = mount('/ledger?tab=books&folder=3')
@@ -124,11 +139,11 @@ describe('Books routing desk', () => {
     await userEvent.click(within(dialog).getByRole('radio', { name: 'Only chosen people and departments' }))
     expect(within(dialog).getByRole('button', { name: 'Save' })).toBeDisabled()
     await userEvent.click(await within(dialog).findByRole('checkbox', { name: 'Operations' }))
-    await userEvent.type(within(dialog).getByRole('searchbox', { name: 'Search people' }), 'Aisha')
-    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Aisha HR officer' }))
+    await userEvent.type(within(dialog).getByRole('searchbox', { name: 'Search people' }), 'Operations')
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Aisha HR officer Operations' }))
     expect(within(dialog).getByText('People selected: 1')).toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(api.updateBookFolderShares).toHaveBeenCalledWith(3, { everyone: false, user_ids: [2], departments: ['Operations'] }))
+    await waitFor(() => expect(api.updateBookFolderShares).toHaveBeenCalledWith(3, { everyone: false, user_ids: [2], department_ids: [4], legacy_departments: [] }))
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books', 'folders'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books', 'routing'] })
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
@@ -136,22 +151,23 @@ describe('Books routing desk', () => {
 
   it('prefills restricted sharing and clears it when everyone is selected', async () => {
     vi.mocked(api.listBookFolders).mockResolvedValue([{
-      ...FOLDER, team: true, shared_departments: ['Operations'],
+      ...FOLDER, team: true, shared_departments: [DEPARTMENT], legacy_departments: ['Former Operations'],
       shared_users: [{ id: 2, name: 'Aisha', name_ar: null, title: null, title_ar: null }],
     }])
     vi.spyOn(api, 'getBookFolderShareOptions').mockResolvedValue({
-      departments: ['Operations'],
-      users: [{ id: 2, name: 'Aisha', name_ar: null, title: null, title_ar: null, department: 'Operations' }],
+      departments: [DEPARTMENT],
+      legacy_departments: [],
+      users: [{ id: 2, name: 'Aisha', name_ar: null, title: null, title_ar: null, department_id: 4, department: 'Operations' }],
     })
     vi.spyOn(api, 'updateBookFolderShares').mockResolvedValue({ ...FOLDER, team: true, everyone: true })
     mount('/ledger?tab=books&folder=3')
     await userEvent.click(await screen.findByRole('button', { name: 'Share' }))
     const dialog = await screen.findByRole('dialog')
     expect(await within(dialog).findByRole('checkbox', { name: 'Operations' })).toBeChecked()
-    expect(within(dialog).getByRole('checkbox', { name: 'Aisha' })).toBeChecked()
+    expect(within(dialog).getByRole('checkbox', { name: 'Aisha Operations' })).toBeChecked()
     await userEvent.click(within(dialog).getByRole('radio', { name: 'Everyone' }))
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(api.updateBookFolderShares).toHaveBeenCalledWith(3, { everyone: true, user_ids: [], departments: [] }))
+    await waitFor(() => expect(api.updateBookFolderShares).toHaveBeenCalledWith(3, { everyone: true, user_ids: [], department_ids: [], legacy_departments: [] }))
   })
 
   it('shows who filed a folder book and when, beneath its subject', async () => {
@@ -431,7 +447,7 @@ describe('Books routing desk (Arabic)', () => {
 
   it('uses Arabic folder details, filing metadata and a right-to-left share dialog', async () => {
     vi.mocked(api.listBookFolders).mockResolvedValue([{
-      ...FOLDER, name: 'شؤون الموظفين', team: true, shared_departments: ['العمليات'],
+      ...FOLDER, name: 'شؤون الموظفين', team: true, shared_departments: [DEPARTMENT], legacy_departments: ['قسم سابق'],
       shared_users: [{ id: 2, name: 'Aisha', name_ar: 'عائشة', title: 'HR officer', title_ar: 'مسؤولة الموارد البشرية' }],
     }])
     vi.mocked(api.listBooks).mockResolvedValue({ items: [{
@@ -439,17 +455,21 @@ describe('Books routing desk (Arabic)', () => {
       my_inbox: { ...BOOK.my_inbox!, sent_by_name_ar: 'خالد' },
     }], total: 1, limit: 50, offset: 0 })
     vi.spyOn(api, 'getBookFolderShareOptions').mockResolvedValue({
-      departments: ['العمليات'],
-      users: [{ id: 2, name: 'Aisha', name_ar: 'عائشة', title: 'HR officer', title_ar: 'مسؤولة الموارد البشرية', department: 'العمليات' }],
+      departments: [DEPARTMENT],
+      legacy_departments: [],
+      users: [{ id: 2, name: 'Aisha', name_ar: 'عائشة', title: 'HR officer', title_ar: 'مسؤولة الموارد البشرية', department_id: 4, department: 'العمليات' }],
     })
     mount('/ledger?tab=books&folder=3')
     const header = (await screen.findByRole('heading', { name: 'شؤون الموظفين' })).closest('header')!
     expect(header).toHaveTextContent(/تمت المشاركة مع:.*عائشة.*قسم.*العمليات/)
+    await waitFor(() => expect(header).toHaveTextContent(/قسم سابق.*\(اسم قسم سابق\)/))
     expect(await screen.findByRole('button', { name: /GS-7/ })).toHaveTextContent('أضافه \u2068عائشة\u2069 · 15/10/2026')
     await userEvent.click(screen.getByRole('button', { name: 'مشاركة' }))
     const dialog = await screen.findByRole('dialog', { name: 'مشاركة مجلد الفريق' })
     expect(dialog).toHaveAttribute('dir', 'rtl')
-    expect(await within(dialog).findByRole('checkbox', { name: 'عائشة مسؤولة الموارد البشرية' })).toBeChecked()
+    expect(await within(dialog).findByRole('checkbox', { name: 'العمليات' })).toBeChecked()
+    expect(within(dialog).getByRole('checkbox', { name: 'عائشة مسؤولة الموارد البشرية العمليات' })).toBeChecked()
+    expect(within(dialog).getByRole('button', { name: 'إزالة اسم القسم السابق: قسم سابق' })).toBeVisible()
     expect(rendered(dialog)).not.toMatch(/[A-Za-z]/)
   })
 

@@ -1,11 +1,18 @@
 """Push copy and record privacy — titles stay the app name in both languages;
 direct-send counts and actionable items include only visible unread active sends."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
-from app.db.models import Book, BookCategory, BookRecipient
+from app.db.models import (
+    Book,
+    BookCategory,
+    BookDepartmentSend,
+    BookRecipient,
+    Department,
+    Employee,
+)
 from app.services import notification_service as ns
 from app.services import scheduler_service as ss
 from app.services.notification_service import ActionableItem
@@ -177,6 +184,76 @@ def test_inbox_item_redacts_non_general_record(level):
     assert (item.ref, item.url, item.label) == ("send:12", "/books/5", "HR-0409")
 
 
+@pytest.mark.parametrize("level", ["general", "personal", "secret", "directed"])
+def test_department_inbox_push_localizes_department_and_redacts_non_general(level):
+    book = Book(id=5, ref_number="HR-0409", subject="Annual leave", confidentiality=level)
+    item = ns.inbox_item(
+        book,
+        BookRecipient(id=12),
+        "Ali",
+        "علي",
+        department_name_en="Human Resources",
+        department_name_ar="الموارد البشرية",
+    )
+    assert item.department_name_en == "Human Resources"
+    assert item.department_name_ar == "الموارد البشرية"
+    assert (item.ref, item.url, item.label) == ("send:12", "/books/5", "HR-0409")
+    if level == "general":
+        expected_en = "New record for Human Resources · HR-0409 — Annual leave\nFrom Ali"
+        expected_ar = "معاملة جديدة للموارد البشرية · HR-0409 — Annual leave\nمن علي"
+    else:
+        assert item.subject is None
+        assert item.requester is None
+        assert item.requester_ar is None
+        expected_en = "New record for Human Resources"
+        expected_ar = "معاملة جديدة للموارد البشرية"
+    messages, url = ss._build_push("inbox", [item], ss._KIND_META["inbox"])
+    assert messages == {"en": (APP, expected_en), "ar": (APP, expected_ar)}
+    assert url == "/books/5"
+
+
+def test_department_confidential_push_omits_subject_and_both_sender_names_even_if_present():
+    item = _item(
+        "inbox",
+        label="HR-0409",
+        subject="Private memo",
+        requester="Ali",
+        requester_ar="علي",
+        confidential=True,
+        department_name_en="Finance",
+        department_name_ar="القسم المالي",
+    )
+    messages, _ = ss._build_push("inbox", [item], "/section")
+    assert messages == {
+        "en": (APP, "New record for Finance"),
+        "ar": (APP, "معاملة جديدة للقسم المالي"),
+    }
+
+
+@pytest.mark.parametrize(
+    "name_en,name_ar,fallback,expected_ar",
+    [
+        ("Finance", None, "Finance", "معاملة جديدة لـFinance"),
+        (None, "القسم المالي", "القسم المالي", "معاملة جديدة للقسم المالي"),
+        (None, "قسم التشغيل", "قسم التشغيل", "معاملة جديدة لقسم التشغيل"),
+    ],
+)
+def test_department_push_falls_back_to_available_department_name(
+    name_en, name_ar, fallback, expected_ar
+):
+    item = _item(
+        "inbox",
+        confidential=True,
+        department_name_en=name_en,
+        department_name_ar=name_ar,
+    )
+    messages, _ = ss._build_push("inbox", [item], "/section")
+    assert messages == {
+        "en": (APP, f"New record for {fallback}"),
+        "ar": (APP, expected_ar),
+    }
+
+
 def test_inbox_multiple_summarizes_without_any_record_details():
     section = ss._KIND_META["inbox"]
     assert section == "/ledger?tab=books&scope=incoming"
@@ -237,8 +314,8 @@ def test_inbox_counts_and_items_only_include_visible_unread_active_sends(api_db,
         api_db.add(row)
         rows.append(row)
     api_db.commit()
-    assert ns.relevant_counts(api_db, user, precomputed_leaves=0).inbox == 2
-    assert ns.relevant_counts(api_db, sender, precomputed_leaves=0).inbox == 0
+    assert ns.relevant_counts(api_db, user).inbox == 2
+    assert ns.relevant_counts(api_db, sender).inbox == 0
     batches = []
     resolve = ns.book_service.resolve_names_by_ids
 
@@ -252,6 +329,73 @@ def test_inbox_counts_and_items_only_include_visible_unread_active_sends(api_db,
     assert {item.ref for item in items} == {f"send:{row.id}" for row in rows[:2]}
     assert next(item for item in items if not item.confidential).requester == sender.email
     assert next(item for item in items if item.confidential).subject is None
+
+
+@pytest.mark.parametrize("level", ["general", "directed"])
+def test_periodic_inbox_department_copy_only_marks_initial_head_deliveries(api_db, level):
+    user = make_user(api_db, email="head@test.ae")
+    sender = make_user(api_db, email="sender@test.ae")
+    distributor = make_user(api_db, email="distributor@test.ae")
+    head = Employee(id="G-FIN-HEAD", name_en="Finance Head")
+    department = Department(name_en="Finance", name_ar="القسم المالي", head_employee_id=head.id)
+    api_db.add(head)
+    api_db.flush()  # No ORM relationship orders the head before its department.
+    api_db.add_all([department, BookCategory(id="HR", name_en="HR", prefix="HR")])
+    api_db.flush()
+    now = datetime(2026, 10, 23, 10, 0)
+    rows = {}
+    for kind, sender_id, created_at in [
+        ("head", sender.id, now),
+        ("member_same_sender", sender.id, now + timedelta(seconds=1)),
+        ("member_same_time", distributor.id, now),
+        ("direct", sender.id, now),
+    ]:
+        book = Book(
+            category_id="HR",
+            ref_number=f"HR-{kind}",
+            subject="Annual leave",
+            confidentiality=level,
+            created_by_user_id=sender.id,
+        )
+        api_db.add(book)
+        api_db.flush()
+        department_send_id = None
+        if kind != "direct":
+            send = BookDepartmentSend(
+                book_id=book.id,
+                department_id=department.id,
+                sent_by_user_id=sender.id,
+                purpose="info",
+                created_at=now,
+            )
+            api_db.add(send)
+            api_db.flush()
+            department_send_id = send.id
+        row = BookRecipient(
+            book_id=book.id,
+            user_id=user.id,
+            sent_by_user_id=sender_id,
+            purpose="info",
+            created_at=created_at,
+            department_send_id=department_send_id,
+        )
+        api_db.add(row)
+        rows[kind] = row
+    api_db.commit()
+    items = {item.ref: item for item in ns.actionable_items(api_db, user) if item.kind == "inbox"}
+    assert set(items) == {f"send:{row.id}" for row in rows.values()}
+    for kind, row in rows.items():
+        item = items[f"send:{row.id}"]
+        expected_names = ("Finance", "القسم المالي") if kind == "head" else (None, None)
+        assert (item.department_name_en, item.department_name_ar) == expected_names
+        messages, _ = ss._build_push("inbox", [item], ss._KIND_META["inbox"])
+        expected_en = "New record for Finance" if kind == "head" else "New record sent to you"
+        expected_ar = "معاملة جديدة للقسم المالي" if kind == "head" else "لديك معاملة جديدة"
+        if level == "general":
+            assert messages["en"][1].startswith(f"{expected_en} · HR-{kind} — Annual leave")
+            assert messages["ar"][1].startswith(f"{expected_ar} · HR-{kind} — Annual leave")
+        else:
+            assert messages == {"en": (APP, expected_en), "ar": (APP, expected_ar)}
 
 
 # --- scan -------------------------------------------------------------------

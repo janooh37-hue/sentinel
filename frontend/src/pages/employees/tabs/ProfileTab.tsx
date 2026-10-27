@@ -14,10 +14,12 @@ import { toast } from '@/lib/toast'
 import { IdentityDocCard } from '@/components/employees/IdentityDocCard'
 import { SignaturePad } from '@/components/employees/SignaturePad'
 import { PassportField } from './PassportField'
-import { api, apiErrorMessage } from '@/lib/api'
+import { api } from '@/lib/api'
+import { departmentErrorMessage } from '@/lib/departments'
 import type { EmployeeRead, EmployeeUpdate } from '@/lib/api'
 import { pickPosition } from '@/lib/employeePosition'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useDepartmentRollout } from '@/lib/departments'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { TransferEmployeeDialog } from '../TransferEmployeeDialog'
@@ -106,7 +108,11 @@ function getFieldValue(
     case 'position':
       return pickPosition(employee, language)
     case 'department':
-      return employee.department
+      return employee.department_id != null
+        ? (language.startsWith('ar')
+          ? employee.department_name_ar || employee.department_name_en
+          : employee.department_name_en || employee.department_name_ar)
+        : employee.department
     case 'duty_unit':
       return employee.duty_unit
     case 'duty_post':
@@ -145,8 +151,7 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
   }, [])
 
   const save = useMutation({
-    mutationFn: () =>
-      api.updateEmployee(employeeId, { [field]: value.trim() } as EmployeeUpdate),
+    mutationFn: () => api.updateEmployee(employeeId, { [field]: value.trim() } as EmployeeUpdate),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employee-detail', employeeId] })
       void qc.invalidateQueries({ queryKey: ['employees'] })
@@ -154,7 +159,7 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
       onDone()
     },
     onError: (err) => {
-      toast.error(apiErrorMessage(err))
+      toast.error(departmentErrorMessage(err, t))
     },
   })
 
@@ -204,6 +209,7 @@ interface FieldRowProps {
   missingSet: Set<string>
   uaeExpiryDays: number | null
   canEdit: boolean
+  departmentReadOnly: boolean
   fixingField: string | null
   onStartFix: (field: string) => void
   onDoneFix: () => void
@@ -215,6 +221,7 @@ function FieldRow({
   missingSet,
   uaeExpiryDays,
   canEdit,
+  departmentReadOnly,
   fixingField,
   onStartFix,
   onDoneFix,
@@ -224,7 +231,9 @@ function FieldRow({
   const isMono = MONO_FIELDS.has(field)
   const isFeminine = FEMININE_FIELDS.has(field)
   const isFixing = isMiss && fixingField === field
-  const val = getFieldValue(field, employee, uaeExpiryDays, t, i18n.language)
+  const val = field === 'department' && !departmentReadOnly
+    ? employee.department
+    : getFieldValue(field, employee, uaeExpiryDays, t, i18n.language)
 
   return (
     <div
@@ -251,7 +260,7 @@ function FieldRow({
             <span className="text-[0.88em] font-semibold text-amber-600">
               {isFeminine ? t('employee.gaps.notSetF') : t('employee.gaps.notSet')}
             </span>
-            {canEdit && (
+            {canEdit && !(field === 'department' && departmentReadOnly) && (
               <button
                 type="button"
                 className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[0.75em] font-semibold text-amber-700 transition-colors hover:bg-amber-500/20"
@@ -260,9 +269,15 @@ function FieldRow({
                 {t('employee.gaps.addNow')}
               </button>
             )}
+            {field === 'department' && departmentReadOnly && (
+              <span className="text-[0.75em] text-muted-foreground">{t('departmentAccess.fromTree')}</span>
+            )}
           </span>
         ) : (
-          val ?? <span className="text-faint">—</span>
+          <>
+            {val ?? <span className="text-faint">—</span>}
+            {field === 'department' && departmentReadOnly && <span className="ms-2 text-[0.75em] text-muted-foreground">{t('departmentAccess.fromTree')}</span>}
+          </>
         )}
       </div>
     </div>
@@ -277,6 +292,7 @@ interface SectionCardProps {
   missingSet: Set<string>
   uaeExpiryDays: number | null
   canEdit: boolean
+  departmentReadOnly?: boolean
   fixingField: string | null
   onStartFix: (field: string) => void
   onDoneFix: () => void
@@ -291,6 +307,7 @@ function SectionCard({
   missingSet,
   uaeExpiryDays,
   canEdit,
+  departmentReadOnly = false,
   fixingField,
   onStartFix,
   onDoneFix,
@@ -323,6 +340,7 @@ function SectionCard({
           missingSet={missingSet}
           uaeExpiryDays={uaeExpiryDays}
           canEdit={canEdit}
+          departmentReadOnly={departmentReadOnly}
           fixingField={fixingField}
           onStartFix={onStartFix}
           onDoneFix={onDoneFix}
@@ -352,6 +370,7 @@ export function ProfileTab({
 }: Props): React.JSX.Element {
   const { t } = useTranslation()
   const { has } = useCapabilities()
+  const { scopingOn } = useDepartmentRollout(false)
   const qc = useQueryClient()
   const canEdit = has('employees.edit')
   // Vault uploads/replace/delete are their own atomic capability — profile
@@ -397,6 +416,8 @@ export function ProfileTab({
   }
 
   const missingSet = new Set(missing)
+  const departmentReadOnly = scopingOn && employee.department_id != null
+  if (departmentReadOnly) missingSet.delete('department')
   const uaeExpiryDays = nearExpiryDays(employee.uae_id_expiry)
 
   const transferFooter = canEdit && has('documents.duty_transfer') ? (
@@ -457,6 +478,7 @@ export function ProfileTab({
           missingSet={missingSet}
           uaeExpiryDays={uaeExpiryDays}
           canEdit={canEdit}
+          departmentReadOnly={departmentReadOnly}
           fixingField={fixingField}
           onStartFix={setFixingField}
           onDoneFix={handleDoneFix}

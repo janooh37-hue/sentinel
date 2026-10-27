@@ -19,7 +19,7 @@ vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1 } }) }))
 vi.mock('@/lib/useIdentity', () => ({ useIdentity: () => ({ identity: null }) }))
 vi.mock('@/lib/useApprovalSummary', () => ({ useApprovalSummary: () => ({ data: undefined }) }))
 vi.mock('@/lib/api', () => ({
-  api: { getDashboardSummary: vi.fn(), getDashboardLayout: vi.fn() },
+  api: { getDashboardSummary: vi.fn(), getDashboardLayout: vi.fn(), departments: { list: vi.fn().mockResolvedValue([]) } },
 }))
 vi.mock('@/components/dashboard/CustomizeWidgetsDialog', () => ({ CustomizeWidgetsDialog: () => null }))
 vi.mock('@/components/dashboard/WidgetEditDialog', () => ({ WidgetEditDialog: () => null }))
@@ -78,7 +78,7 @@ const DEFAULT_WIDGETS = DEFAULT_LAYOUT.widgets ?? []
 
 function renderPage(data = summary(), widgets = DEFAULT_WIDGETS.map((widget) => ({ ...widget, visible: Boolean(visibleWidgets[widget.id]) }))) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
-  client.setQueryData(['dashboard'], data)
+  client.setQueryData(['dashboard', undefined], data)
   client.setQueryData(['dashboard-layout', 1], {
     ...DEFAULT_LAYOUT,
     widgets,

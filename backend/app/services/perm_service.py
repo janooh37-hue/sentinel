@@ -36,7 +36,13 @@ from app.core.permissions import (
     default_caps_for_role,
 )
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
-from app.db.models import BookCategory, RolePermission, User, UserPermission
+from app.db.models import (
+    BookCategory,
+    DepartmentService,
+    RolePermission,
+    User,
+    UserPermission,
+)
 
 
 def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
@@ -154,6 +160,31 @@ def effective_caps(db: Session, user: User) -> set[str]:
             # default) can never widen this role past its fixed scope. A deny
             # override still narrows it — it was already applied above.
             caps &= INMATE_REPORTER_CAPS
+        # Pass the unfiltered caps to avoid scope -> caps -> scope recursion.
+        from app.services.department_scope_service import (
+            resolve_department_scope,
+            user_department_ids_select,
+        )
+
+        # Inmate reporters keep their two fixed services: they cannot hold
+        # departments.all and are never department receivers.
+        if (
+            user.role != INMATE_REPORTER_ROLE
+            and not resolve_department_scope(db, user, capabilities=caps).organization
+        ):
+            allowed = set(
+                db.scalars(
+                    select(DepartmentService.service_id).where(
+                        DepartmentService.department_id.in_(user_department_ids_select(user.id))
+                    )
+                )
+            )
+            caps = {
+                cap
+                for cap in caps
+                if not cap.startswith(SERVICE_CAP_PREFIX)
+                or cap.removeprefix(SERVICE_CAP_PREFIX) in allowed
+            }
 
     user._effective_caps_cache = frozenset(caps)
     return caps
@@ -174,6 +205,7 @@ def _invalidate_caps_cache(db: Session, user_id: int) -> None:
     target = db.get(User, user_id)
     if target is not None:
         target._effective_caps_cache = None
+        target._department_scope_cache = None
 
 
 # ─── Override management (admin matrix) ───────────────────────────────────────

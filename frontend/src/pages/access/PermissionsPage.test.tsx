@@ -25,6 +25,15 @@ vi.mock('@/lib/authContext', () => ({
   useAuth: () => ({ status: 'authed', user: { id: 1 } }),
 }))
 
+// People & permissions only: the Organization & departments tab has its own tests.
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({
+    capabilities: new Set(['users.manage']),
+    isLoading: false,
+    has: (capability: string) => capability === 'users.manage',
+  }),
+}))
+
 // Write failures surface through the toast adapter; mocking it lets the rollback test
 // assert the toast without mounting a Toaster.
 vi.mock('@/lib/toast', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
@@ -1165,7 +1174,7 @@ describe('PermissionsPage Mirror editor', () => {
       'min-[1100px]:gap-6',
       'min-[1100px]:[grid-template-columns:280px_minmax(0,1fr)_360px]',
     )
-    expect(grid.parentElement).toHaveClass('max-w-[1680px]')
+    expect(grid.closest('[class*="max-w-[1680px]"]')).not.toBeNull()
 
     const blueprint = await screen.findByRole('region', { name: 'Permission blueprint' })
     for (const name of ['Pages', 'Services', 'Record categories']) {

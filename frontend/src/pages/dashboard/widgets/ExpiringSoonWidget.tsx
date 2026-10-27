@@ -87,7 +87,7 @@ function ExpiryRow({ item, language, onNavigate }: ExpiryRowProps): React.JSX.El
   )
 }
 
-export function ExpiringSoonWidget(): React.JSX.Element | null {
+export function ExpiringSoonWidget({ departmentId }: { departmentId?: number }): React.JSX.Element | null {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { has } = useCapabilities()
@@ -96,13 +96,13 @@ export function ExpiringSoonWidget(): React.JSX.Element | null {
   const canViewEmployees = has('employees.view')
 
   const expiryQuery = useQuery({
-    queryKey: ['expiry', 'soon'],
-    queryFn: () => api.getExpiry(90, 'all'),
+    queryKey: ['expiry', 'soon', departmentId],
+    queryFn: () => api.getExpiry(90, 'all', departmentId),
     enabled: canViewExpiry,
     staleTime: 60_000,
   })
 
-  const awaitingReturn = useAwaitingReturnCount(canViewExpiry && canViewLeaves)
+  const awaitingReturn = useAwaitingReturnCount(canViewExpiry && canViewLeaves, departmentId)
 
   if (!canViewExpiry) return null
 

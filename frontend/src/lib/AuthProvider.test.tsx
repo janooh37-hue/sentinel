@@ -18,6 +18,7 @@ const USER: SessionUser = {
   name_ar: 'عبدالله الظاهري',
   position: 'Officer',
   department: 'Operations',
+  department_scoping_enabled: false,
   photo_url: null,
   role: 'operator',
   status: 'active',

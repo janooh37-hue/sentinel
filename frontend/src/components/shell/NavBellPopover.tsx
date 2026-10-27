@@ -129,7 +129,7 @@ function DefaultNavBellPopover({ phone }: { phone: boolean }): React.JSX.Element
 
   const expiryQuery = useQuery({
     queryKey: ['expiry', 'summary'],
-    queryFn: api.getExpirySummary,
+    queryFn: () => api.getExpirySummary(),
     enabled: canViewExpiry,
     staleTime: 60_000,
     refetchInterval: 15 * 60_000, // expiry moves daily

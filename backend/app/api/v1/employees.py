@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
+from app.api.department_scope import require_employee_in_scope, require_violation_in_scope
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
@@ -70,12 +71,21 @@ from app.services import (
     vault_service,
     violation_service,
 )
+from app.services.department_scope_service import (
+    employee_visibility_clause,
+    narrow_department_scope,
+    resolve_department_scope,
+)
 from app.services.employee_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
 
 log = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/employees", tags=["employees"])
-violations_router = APIRouter(prefix="/violations", tags=["violations"])
+router = APIRouter(
+    prefix="/employees", tags=["employees"], dependencies=[Depends(require_employee_in_scope)]
+)
+violations_router = APIRouter(
+    prefix="/violations", tags=["violations"], dependencies=[Depends(require_violation_in_scope)]
+)
 
 
 def _photo_fields(db: Session, employee_id: str) -> dict[str, object]:
@@ -117,6 +127,7 @@ def list_employees(
     q: str | None = None,
     employee_status: Annotated[str | None, Query(alias="status")] = None,
     department: str | None = None,
+    department_id: int | None = None,
     duty_unit: str | None = None,
     pending: bool = False,
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
@@ -131,6 +142,7 @@ def list_employees(
         pending=pending,
         limit=limit,
         offset=offset,
+        scope=narrow_department_scope(db, resolve_department_scope(db, _user), department_id),
     )
     # One query for the set of employees with a vault photo — avoids N+1.
     photo_ids = set(
@@ -154,11 +166,18 @@ def lookup_employees(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(_require_employee_lookup)],
     q: str | None = None,
+    department_id: int | None = None,
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
     offset: int = Query(0, ge=0),
 ) -> EmployeeLookupResponse:
     """Search employee identities for services without granting profile access."""
-    rows, total = employee_service.list_employees(db, q=q, limit=limit, offset=offset)
+    rows, total = employee_service.list_employees(
+        db,
+        q=q,
+        limit=limit,
+        offset=offset,
+        scope=narrow_department_scope(db, resolve_department_scope(db, _user), department_id),
+    )
     return EmployeeLookupResponse(
         items=[EmployeeLookupItem.model_validate(row) for row in rows],
         total=total,
@@ -192,7 +211,9 @@ def create_employee(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("employees.create"))],
 ) -> EmployeeRead:
-    row = employee_service.create_employee(db, payload, actor_user_id=user.id)
+    row = employee_service.create_employee(
+        db, payload, actor_user_id=user.id, scope=resolve_department_scope(db, user)
+    )
     return EmployeeRead.model_validate(row).model_copy(update=_photo_fields(db, row.id))
 
 
@@ -200,9 +221,15 @@ def create_employee(
 def employees_completeness(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("employees.view"))],
+    department_id: int | None = None,
 ) -> CompletenessSummaryOut:
     """Aggregate profile gaps over working (Active/Loaned) employees (lookup-page hero card)."""
-    rows = db.query(Employee).filter(Employee.status.in_(WORKING_STATUSES)).all()
+    scope = narrow_department_scope(db, resolve_department_scope(db, _user), department_id)
+    clause = employee_visibility_clause(scope)
+    query = db.query(Employee).filter(Employee.status.in_(WORKING_STATUSES))
+    if clause is not None:
+        query = query.filter(clause)
+    rows = query.all()
     counter: Counter[str] = Counter()
     worst: tuple[int, str] | None = None
     incomplete = 0
@@ -228,6 +255,7 @@ def list_employee_activity(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(require_capability("employees.view"))],
     employee_id: str | None = None,
+    department_id: int | None = None,
     kind: activity_schemas.EmployeeActivityKind | None = None,
     limit: int = Query(
         employee_activity_service.DEFAULT_LIMIT,
@@ -243,6 +271,9 @@ def list_employee_activity(
         kind=kind,
         limit=limit,
         offset=offset,
+        scope=narrow_department_scope(
+            db, resolve_department_scope(db, current_user), department_id
+        ),
     )
 
 
@@ -265,7 +296,9 @@ def update_employee(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("employees.edit"))],
 ) -> EmployeeRead:
-    row = employee_service.update_employee(db, employee_id, payload, actor_user_id=user.id)
+    row = employee_service.update_employee(
+        db, employee_id, payload, actor_user_id=user.id, scope=resolve_department_scope(db, user)
+    )
     return EmployeeRead.model_validate(row).model_copy(
         update={**_photo_fields(db, row.id), **_passport_scan_field(row.id)}
     )

@@ -1,6 +1,6 @@
 # Permissions — how enforcement actually works
 
-**Date:** 2026-08-12 · updated 2026-08-24 for the granular capability split (§7)
+**Date:** 2026-08-12 · updated 2026-10-23 for department scope and the latest gate audit
 **Scope:** how a capability check reaches a request, and which routes are gated by what.
 **Audit tool:** `backend/scripts/audit_capability_gates.py` (re-run any time; it reads the
 tree, so it can't go stale).
@@ -81,7 +81,7 @@ everyone else    -> role_defaults + grants - denies
   check. `_invalidate_caps_cache()` clears it through the session identity map when
   permissions change mid-request.
 
-## 3. The four enforcement tiers on a request
+## 3. The five enforcement tiers on a request
 
 Measured over all 323 `/api/v1` routes (2026-08-24 audit, §5):
 
@@ -152,6 +152,78 @@ and effective service capabilities before rendering, reference allocation, or
 persistence. General Book publication also checks its classification capability
 (maintenance requests use `11/1`). Leave and fleet edit gates and nested-resource
 validation remain in force; permission denial leaves publication state unchanged.
+
+**Tier 4 — department row scope (ADR 0007).** Capabilities answer what the user may
+do; `department_scope_service.resolve_department_scope` answers whose data they
+may see. It is memoized per request and applied to people data, dashboard counts,
+Records (alongside Levels) and service lists. Request department filters intersect
+the resolved scope and never widen it. Object guards answer 404 for out-of-scope
+objects, just as for missing ones; possessing an edit/view capability is not a
+department-scope bypass.
+
+- Departments follow the org tree (rework R). A Department is a head employee
+  plus everyone below them through `supervisor_id`; a head inside another
+  department's branch makes a sub-department, and `parent_id` is derived.
+  `department_tree_service.recompute` is the only writer of
+  `employees.department_id` and `departments.parent_id`, run after supervisor,
+  employee, department and exception writes. Exceptions place an employee (and
+  their branch) in another department or outside all departments.
+- `department_scoping_enabled` defaults to false: while off, everyone resolves to
+  organization scope and existing action/Level gates still apply. The preflight
+  lists users without a department, departments without a receiver (no active
+  head account and no deputies) and departments without services. Switching is
+  reversible and audited, and enabling backfills unstamped Records from their
+  creators' derived departments.
+- When on, admins and holders of `departments.all` retain organization scope.
+  Managers do not automatically receive it. Heads and deputies see their
+  department and every derived sub-department; viewers see that department only.
+  Everyone also sees their own supervisor-tree branch (scope kind `branch` when
+  they have reports), including Records created by users in it. A user outside
+  every department with no reports has only self scope and no services.
+  Deputy and viewer grants to an inactive department confer nothing, like its
+  head and derived members.
+- The employee link confers head/branch scope and department-send delivery; it
+  is set only by an administrator (`PATCH /auth/users/{user_id}/link` or at
+  approval).
+- `departments.manage` gates department create/edit/delete, deputy and viewer
+  grants (`PUT /departments/{id}/people`), services, exceptions, unassigned
+  groups, the picker list `GET /departments/candidate-users` (active,
+  non-inmate-reporter accounts), preflight and the switch. It is admin-only by
+  default, delegable and not requestable. Supervisor links stay on
+  `employees.edit`. The department list `GET /departments` needs a session and
+  refuses inmate reporters (403); without `departments.manage`, deputy and
+  viewer names never fall back to the account email.
+  `departments.all` is the separately grantable, non-sensitive Organization-wide
+  view capability, also not requestable; setup permission does not imply it.
+- The department editor lives on `/permissions?tab=org`. Supervisor links stay
+  editable from the Employees org tree for `employees.edit` holders, as before.
+- `GET /departments/account-access` returns employee profile `position` /
+  `position_ar` (the titles displayed in the org tree) separately from
+  `designation_en` / `designation_ar` (the latest roster designation effective
+  on or before this month's start, using the org tree's shared query).
+  Both accounts and unattached units expose both title sources; unit `team_size`
+  counts working reports, while `team_with_manager` adds the root person.
+- Active direct sends and assigned/revision-retained approval access keep their
+  cross-department Record access, without bypassing Record Levels or capabilities.
+  A user's services come from every department they belong to (derived, headed,
+  deputy or viewer), intersected with per-service denials; an unconfigured
+  department supplies no services. Inmate reporters keep their two fixed
+  services: the department service filter does not apply to them.
+- A department send never gives the sender their own copy: a head or deputy
+  sending to their own department is skipped with reason `self`. A receiving
+  head may keep a delivery (`mode: "keep"`), recorded once as `kept_at` /
+  `kept_by_user_id` for the sender's progress.
+- Team-folder shares already on a folder are not re-validated: a department
+  deactivated later can be retained, while newly added departments must be
+  active. While no active department exists, free-text department audiences
+  can still be added, matched trimmed and case-insensitively as before.
+- Workforce retains its independent text-based scopes. `employees.department`
+  is synchronized from the derived Department's Arabic name only while scoping
+  is on; turning the switch on syncs every label in the same commit, and while
+  it is off labels stay free text. Leaving a department (including
+  rename-and-deactivate or delete) clears the label only when it still equals
+  that department's name. Historical attendance snapshots and duty events are
+  not rewritten.
 
 ## 4. Fixed: `books.view` was not enforced on the register listing
 
@@ -227,6 +299,25 @@ All other gates reference atomic ids (`books.edit` ×21, `books.templates` ×3,
 `books.create`/`books.submit`/`books.delete` ×1 each, `permits.edit` ×15,
 `permits.create`/`permits.revoke`/`permits.delete` ×1 each, `violations.create`/
 `violations.edit`/`violations.delete` ×1 each, etc.).
+
+**2026-10-23 run (department phases P1–P5):**
+
+```
+/api/v1 routes: 494
+  dependency-gated (require_capability / require_admin): 359
+  in-handler gated (perm_service.has_capability):        7
+  authenticated-only (login, but no capability):         121
+  anonymous (no session required at all):                7
+```
+
+This is the audit script's syntactic summary, not a security classification:
+it does not resolve `Annotated` dependencies or aliases such as `DepartmentAdmin`,
+nor gates such as `require_admin_or_manager`. Consequently it labels all 12
+department routes "authenticated-only", although 11 require
+`departments.manage`, and mislabels the two secret-clearance routes "anonymous"
+despite their role/session gates. The script is report-only and writes no files.
+Use Tier 4 above and `test_departments.py` / `test_department_scope*.py` for the
+actual department enforcement contract; the audit does not measure row scope.
 
 ## 6. `books.override_state` — the record-state escape hatch
 

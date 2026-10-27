@@ -21,6 +21,10 @@ from app.core.extraction.ocr import InvalidImageError
 from app.db.models import Employee, User
 from app.db.session import get_db
 from app.schemas.intake import ExternalOut, IntakeResponse, ReturnedFormOut
+from app.services.department_scope_service import (
+    employee_visibility_clause,
+    resolve_department_scope,
+)
 from app.services.scan_triage_service import classify, project_intake
 from app.services.vault_service import MAX_UPLOAD_BYTES
 
@@ -40,7 +44,11 @@ def intake_document(
             f"File exceeds {MAX_UPLOAD_BYTES} bytes",
             max_bytes=MAX_UPLOAD_BYTES,
         )
-    employees = list(db.execute(select(Employee)).scalars())
+    stmt = select(Employee)
+    visibility = employee_visibility_clause(resolve_department_scope(db, user))
+    if visibility is not None:
+        stmt = stmt.where(visibility)
+    employees = list(db.scalars(stmt))
     try:
         result = classify(raw, db=db, employees=employees, user=user)
     except InvalidImageError as exc:

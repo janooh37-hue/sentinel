@@ -48,9 +48,12 @@ DropdownMenuTrigger.displayName = DropdownMenuPrimitive.Trigger.displayName
 
 export const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, align = 'end', ...props }, ref) => (
-  <DropdownMenuPrimitive.Portal>
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
+    /** Portal target; pass the fullscreen element so the menu stays visible there. */
+    container?: HTMLElement | null
+  }
+>(({ className, sideOffset = 4, align = 'end', container, ...props }, ref) => (
+  <DropdownMenuPrimitive.Portal container={container ?? undefined}>
     <DropdownMenuPrimitive.Content
       ref={ref}
       align={align}

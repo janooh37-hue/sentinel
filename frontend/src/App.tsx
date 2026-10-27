@@ -21,6 +21,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 import { AuthProvider } from '@/lib/AuthProvider'
 import { useAuth } from '@/lib/authContext'
+import { useCapabilities } from '@/lib/useCapabilities'
+import { canOpenOrgEditor } from '@/lib/departments'
 import { AppLockContext } from '@/lib/appLockContext'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { DEFAULT_IDLE_LOCK_SECONDS, useLockState } from '@/lib/useLockState'
@@ -160,6 +162,47 @@ function DashboardRoute(): React.JSX.Element {
 function LedgerRoute(): React.JSX.Element {
   const navigatePage = useNavigatePage()
   return <LedgerPage onNavigate={navigatePage} />
+}
+
+function ServicesRoute(): React.JSX.Element {
+  const { t } = useTranslation()
+  const { user } = useAuth()
+  const { capabilities, isLoading } = useCapabilities()
+  const scope = user?.department_scope_kind
+  if (
+    !isLoading &&
+    scope !== undefined &&
+    scope !== 'organization' &&
+    ![...capabilities].some((capability) => capability.startsWith('books.service.'))
+  ) {
+    // Services follow department membership; a branch supervisor outside
+    // every department has none, like plain staff.
+    const inDepartment = scope === 'department' || (user?.departments?.length ?? 0) > 0
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-background p-8 text-center">
+        <h2 className="text-xl font-bold text-foreground">{t('application.servicesTitle')}</h2>
+        <p className="max-w-lg text-sm text-muted-foreground">
+          {t(inDepartment ? 'application.departmentHasNoServices' : 'application.noDepartmentServices')}
+        </p>
+      </div>
+    )
+  }
+  return (
+    <RequireCapability cap="documents.generate">
+      <RequireCapability cap="books.view">
+        <ApplicationPage />
+      </RequireCapability>
+    </RequireCapability>
+  )
+}
+
+function PermissionsRoute(): React.JSX.Element {
+  const { has } = useCapabilities()
+  return (
+    <RequireAnyCapability caps={canOpenOrgEditor(has) ? ['users.manage', 'employees.edit', 'departments.manage'] : ['users.manage']}>
+      <PermissionsPage />
+    </RequireAnyCapability>
+  )
 }
 
 /** `/application?form=x&…` links already went out by SMS/push/bookmark. */
@@ -323,13 +366,7 @@ function Shell(): React.JSX.Element {
                   mounted page (see the <main> key above). */}
               <Route
                 path="/services/:slug?"
-                element={
-                  <RequireCapability cap="documents.generate">
-                    <RequireCapability cap="books.view">
-                      <ApplicationPage />
-                    </RequireCapability>
-                  </RequireCapability>
-                }
+                element={<ServicesRoute />}
               />
               <Route path="/application" element={<LegacyApplicationRedirect />} />
               <Route
@@ -566,14 +603,9 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
-              <Route
-                path="/permissions"
-                element={
-                  <RequireCapability cap="users.manage">
-                    <PermissionsPage />
-                  </RequireCapability>
-                }
-              />
+              {/* People & permissions needs users.manage; the Organization &
+                  departments tab is the org-tree editor (see canOpenOrgEditor). */}
+              <Route path="/permissions" element={<PermissionsRoute />} />
               {/* Role-gated (admin or manager), not capability-gated: the API
                   allows exactly these roles to grant/remove Secret clearance. */}
               <Route

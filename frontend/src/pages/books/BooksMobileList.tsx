@@ -39,6 +39,7 @@ import { useRecordDelete } from './RecordDeleteProvider'
 import { paperCountOf } from './recordPapers'
 import { buildRecordBasketItem } from './recordsBasket'
 import { openRecord, recordLinkProps, useListReturnFocus } from './useRecordNavContext'
+import { departmentName } from '@/lib/departments'
 import type { RecordNavState } from './useRecordNavContext'
 
 function formatDate(iso: string): string {
@@ -528,6 +529,12 @@ function BookMobileCard({
             </>
           ) : null}
         </p>
+        {(row.department_name_en || row.department_name_ar) && (
+          <p className="text-[0.72em] text-muted-foreground">
+            {t('books.record.department')}{' '}
+            <bdi>{departmentName({ name_en: row.department_name_en ?? '', name_ar: row.department_name_ar ?? '' }, i18n.language)}</bdi>
+          </p>
+        )}
       </div>
     </Wrapper>
   )

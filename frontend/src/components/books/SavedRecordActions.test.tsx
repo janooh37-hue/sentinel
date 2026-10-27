@@ -9,10 +9,16 @@ import ar from '@/locales/ar.json'
 import { api, type BookRead } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
+import type * as AuthContextModule from '@/lib/authContext'
 import { SavedRecordActions } from './SavedRecordActions'
 
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: vi.fn() }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: vi.fn() }))
+// The embedded send dialog reads the session user (department rollout gate).
+vi.mock('@/lib/authContext', async (original) => ({
+  ...(await original<typeof AuthContextModule>()),
+  useAuth: () => ({ user: { id: 1, name_en: 'Sender', email: 'sender@example.com', department_scoping_enabled: false } }),
+}))
 vi.mock('./SubmitForApprovalDialog', () => ({
   SubmitForApprovalDialog: ({ bookId }: { bookId: number }) => (
     <div data-testid="approval-dialog">dialog:{bookId}</div>

@@ -31,7 +31,7 @@ it('isolates the changed name and never offers Undo of an Undo', async () => {
   vi.mocked(api.listOrgTree).mockResolvedValue([person('Manager', null), person('Employee', 'Manager')])
   vi.mocked(api.setOrgSupervisor).mockImplementation(async (id, body) => person(id, body.supervisor_id ?? null))
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={qc}><OrgTreeView unit="Unit A" /></QueryClientProvider>)
+  render(<QueryClientProvider client={qc}><OrgTreeView unit="Unit A" editable /></QueryClientProvider>)
   fireEvent.click(await screen.findByRole('button', { name: 'employees.orgTree.editLinks' }))
   fireEvent.click(screen.getAllByRole('button', { name: 'employees.orgTree.pickTitle' })[1])
   fireEvent.click(screen.getByRole('button', { name: 'Remove supervisor' }))

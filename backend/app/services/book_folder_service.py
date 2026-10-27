@@ -7,15 +7,29 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.errors import AppError, NotFoundError
 from app.core.roles import INMATE_REPORTER_ROLE
-from app.db.models import Book, BookFolder, BookFolderItem, BookFolderShare, Employee, User
+from app.db.models import (
+    Book,
+    BookFolder,
+    BookFolderItem,
+    BookFolderShare,
+    Department,
+    Employee,
+    User,
+)
 from app.schemas.book import (
+    BookFolderDepartment,
     BookFolderRead,
     BookFolderShareOption,
     BookFolderShareOptions,
     BookFolderSharesUpdate,
     BookFolderShareUser,
 )
-from app.services import book_send_service, book_service
+from app.services import (
+    book_send_service,
+    book_service,
+    department_scope_service,
+    department_service,
+)
 
 
 def visibility_clause(user: User) -> ColumnElement[bool]:
@@ -42,6 +56,9 @@ def visibility_clause(user: User) -> ColumnElement[bool]:
                     or_(
                         BookFolderShare.user_id == user.id,
                         func.lower(func.trim(BookFolderShare.department)) == department,
+                        BookFolderShare.department_id.in_(
+                            department_scope_service.user_department_ids_select(user.id)
+                        ),
                     ),
                 )
                 .correlate(BookFolder)
@@ -106,6 +123,18 @@ def list_folders(
     names = book_service.resolve_names_by_ids(db, user_ids)
     names_ar = book_service.resolve_names_ar_by_ids(db, user_ids)
     titles = book_service.resolve_titles_by_ids(db, user_ids)
+    department_ids = {
+        share.department_id
+        for rows in shares.values()
+        for share in rows
+        if share.department_id is not None
+    }
+    departments = {
+        department.id: BookFolderDepartment(
+            id=department.id, name_en=department.name_en, name_ar=department.name_ar
+        )
+        for department in db.scalars(select(Department).where(Department.id.in_(department_ids)))
+    }
     return [
         BookFolderRead(
             id=f.id,
@@ -131,6 +160,13 @@ def list_folders(
             if f.owner_user_id is None
             else [],
             shared_departments=[
+                departments[s.department_id]
+                for s in shares.get(f.id, [])
+                if s.department_id is not None and s.department_id in departments
+            ]
+            if f.owner_user_id is None
+            else [],
+            legacy_departments=[
                 s.department for s in shares.get(f.id, []) if s.department is not None
             ]
             if f.owner_user_id is None
@@ -196,6 +232,10 @@ def _require_team_manager(user: User) -> None:
         )
 
 
+def _active_departments_exist(db: Session) -> bool:
+    return db.scalar(select(Department.id).where(Department.active.is_(True)).limit(1)) is not None
+
+
 def share_options(db: Session, user: User) -> BookFolderShareOptions:
     _require_team_manager(user)
     users = [
@@ -207,6 +247,7 @@ def share_options(db: Session, user: User) -> BookFolderShareOptions:
             name_ar=employee.name_ar if employee is not None else None,
             title=employee.position if employee is not None else None,
             title_ar=employee.position_ar if employee is not None else None,
+            department_id=employee.department_id if employee is not None else None,
             department=(employee.department or "").strip() or None
             if employee is not None
             else None,
@@ -215,14 +256,26 @@ def share_options(db: Session, user: User) -> BookFolderShareOptions:
             select(User, Employee)
             .outerjoin(Employee, User.employee_id == Employee.id)
             .where(User.status == "active", User.role != INMATE_REPORTER_ROLE)
-        )
+        ).tuples()
     ]
     users.sort(key=lambda option: (option.name.casefold(), option.id))
+    departments = [
+        BookFolderDepartment(
+            id=department.id, name_en=department.name_en, name_ar=department.name_ar
+        )
+        for department in db.scalars(
+            select(Department)
+            .where(Department.active.is_(True))
+            .order_by(func.lower(Department.name_en), Department.id)
+        )
+    ]
     return BookFolderShareOptions(
         users=users,
-        departments=sorted(
-            {option.department for option in users if option.department}, key=str.casefold
-        ),
+        departments=departments,
+        # Until departments exist, free-text employee labels stay shareable as before.
+        legacy_departments=[]
+        if departments
+        else sorted({option.department for option in users if option.department}, key=str.casefold),
     )
 
 
@@ -234,15 +287,40 @@ def update_shares(
     if folder.owner_user_id is not None:
         raise AppError("FOLDER_NOT_TEAM", "Personal folders cannot be shared.", http_status=422)
     user_ids = set(body.user_ids) if not body.everyone else set()
-    departments = (
-        {department.casefold(): department for department in body.departments}
-        if not body.everyone
-        else {}
-    )
-    if not body.everyone and not user_ids and not departments:
+    department_ids = set(body.department_ids) if not body.everyone else set()
+    legacy_departments = set(body.legacy_departments) if not body.everyone else set()
+    if not body.everyone and not user_ids and not department_ids and not legacy_departments:
         raise AppError(
             "FOLDER_SHARES_EMPTY", "Choose at least one user or department.", http_status=422
         )
+    existing = db.execute(
+        select(BookFolderShare.department_id, BookFolderShare.department).where(
+            BookFolderShare.folder_id == folder.id,
+            or_(
+                BookFolderShare.department_id.is_not(None), BookFolderShare.department.is_not(None)
+            ),
+        )
+    ).all()
+    existing_department_ids = {did for did, _ in existing if did is not None}
+    existing_legacy = {text for _, text in existing if text is not None}
+    retained_legacy = legacy_departments & existing_legacy
+    requested_new = sorted(legacy_departments - existing_legacy)
+    if requested_new and _active_departments_exist(db):
+        raise AppError(
+            "FOLDER_SHARE_LEGACY_INVALID",
+            "Legacy department shares may only be retained or removed.",
+            http_status=422,
+        )
+    # With no active departments, new free-text audiences behave as they did before
+    # departments: trimmed and matched case-insensitively.
+    added_legacy: dict[str, str] = {text.strip().casefold(): text for text in retained_legacy}
+    for text in (raw.strip() for raw in requested_new):
+        if text:
+            added_legacy.setdefault(text.casefold(), text)
+    added_legacy = {key: text for key, text in added_legacy.items() if text not in retained_legacy}
+    # A department already on the folder may be retained after it is deactivated.
+    for department_id in sorted(department_ids - existing_department_ids):
+        department_service.require_active_department(db, department_id)
     valid_ids = (
         set(
             db.scalars(
@@ -260,11 +338,23 @@ def update_shares(
         raise AppError(
             "FOLDER_SHARE_USER_INVALID", "Shared users must be active users.", http_status=422
         )
-    db.execute(delete(BookFolderShare).where(BookFolderShare.folder_id == folder.id))
+    db.execute(
+        delete(BookFolderShare).where(
+            BookFolderShare.folder_id == folder.id,
+            or_(
+                BookFolderShare.department.is_(None),
+                BookFolderShare.department.not_in(retained_legacy),
+            ),
+        )
+    )
     db.add_all(BookFolderShare(folder_id=folder.id, user_id=uid) for uid in sorted(user_ids))
     db.add_all(
-        BookFolderShare(folder_id=folder.id, department=department)
-        for department in sorted(departments.values(), key=str.casefold)
+        BookFolderShare(folder_id=folder.id, department_id=department_id)
+        for department_id in sorted(department_ids)
+    )
+    db.add_all(
+        BookFolderShare(folder_id=folder.id, department=text)
+        for text in sorted(added_legacy.values(), key=str.casefold)
     )
     db.commit()
     return list_folders(db, user, folder_id=folder.id)[0]

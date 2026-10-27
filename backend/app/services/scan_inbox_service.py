@@ -25,6 +25,10 @@ from app.core.extraction import ocr
 from app.core.extraction.dates import parse_date
 from app.db.models import Employee, LedgerEntry, ScanInbox, User
 from app.services import book_service, perm_service, scan_triage_service, vault_service
+from app.services.department_scope_service import (
+    employee_visibility_clause,
+    resolve_department_scope,
+)
 from app.services.document_reader import DocumentReader, read_document
 
 log = logging.getLogger(__name__)
@@ -124,10 +128,15 @@ def _process_one(db: Session, item: ScanInbox, *, reader: DocumentReader) -> Non
         db.commit()
         return
 
-    employees = list(db.execute(select(Employee)).scalars())
-    # An owned item lands in that user's triage list, so it may only propose
-    # Records the owner can open; owner-less items keep the system view.
+    # Owned intake must only propose people and Records its owner can open.
+    # Owner-less items keep the system view.
     owner = db.get(User, item.owner_user_id) if item.owner_user_id is not None else None
+    stmt = select(Employee)
+    if owner is not None:
+        visibility = employee_visibility_clause(resolve_department_scope(db, owner))
+        if visibility is not None:
+            stmt = stmt.where(visibility)
+    employees = list(db.scalars(stmt))
     try:
         classification = scan_triage_service.classify(
             raw, db=db, employees=employees, reader=reader, user=owner

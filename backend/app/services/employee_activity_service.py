@@ -21,6 +21,7 @@ from app.schemas.employee_activity import (
     EmployeeActivityListRead,
 )
 from app.services import document_service, ledger_service, perm_service
+from app.services.department_scope_service import DepartmentScope, employee_visibility_clause
 
 DEFAULT_LIMIT = 25
 MAX_LIMIT = 100
@@ -37,6 +38,7 @@ def _documents(
     requested: int,
     user: User | None,
     excluded_ids: set[int],
+    scope: DepartmentScope | None = None,
 ) -> tuple[list[EmployeeActivityItemRead], int]:
     """Documents owned by a live Record the caller may read, filtered in SQL.
 
@@ -65,6 +67,9 @@ def _documents(
         stmt = stmt.where(Document.employee_id == employee_id)
     if excluded_ids:
         stmt = stmt.where(Document.id.not_in(excluded_ids))
+    clause = employee_visibility_clause(scope)
+    if clause is not None:
+        stmt = stmt.where(clause)
     rows = db.execute(
         stmt.order_by(Document.created_at.desc(), Document.id.desc()).limit(requested)
     ).all()
@@ -86,7 +91,7 @@ def _documents(
 
 
 def _leaves(
-    db: Session, *, employee_id: str | None, requested: int
+    db: Session, *, employee_id: str | None, requested: int, scope: DepartmentScope | None = None
 ) -> tuple[list[EmployeeActivityItemRead], int]:
     stmt = (
         select(
@@ -106,6 +111,9 @@ def _leaves(
     )
     if employee_id is not None:
         stmt = stmt.where(Leave.employee_id == employee_id)
+    clause = employee_visibility_clause(scope)
+    if clause is not None:
+        stmt = stmt.where(clause)
     rows = db.execute(
         stmt.order_by(Leave.created_at.desc(), Leave.id.desc()).limit(requested)
     ).all()
@@ -129,7 +137,7 @@ def _leaves(
 
 
 def _violations(
-    db: Session, *, employee_id: str | None, requested: int
+    db: Session, *, employee_id: str | None, requested: int, scope: DepartmentScope | None = None
 ) -> tuple[list[EmployeeActivityItemRead], int]:
     stmt = select(
         Violation.id.label("source_id"),
@@ -145,6 +153,9 @@ def _violations(
     ).join(Employee, Violation.employee_id == Employee.id)
     if employee_id is not None:
         stmt = stmt.where(Violation.employee_id == employee_id)
+    clause = employee_visibility_clause(scope)
+    if clause is not None:
+        stmt = stmt.where(clause)
     rows = db.execute(
         stmt.order_by(Violation.created_at.desc(), Violation.id.desc()).limit(requested)
     ).all()
@@ -174,6 +185,7 @@ def _ledger(
     employee_id: str | None,
     requested: int,
     visible: ColumnElement[bool] | None = None,
+    scope: DepartmentScope | None = None,
 ) -> tuple[list[EmployeeActivityItemRead], int]:
     stmt = (
         select(
@@ -201,6 +213,9 @@ def _ledger(
         stmt = stmt.where(LedgerEntry.related_employee_id == employee_id)
     if visible is not None:
         stmt = stmt.where(visible)
+    clause = employee_visibility_clause(scope)
+    if clause is not None:
+        stmt = stmt.where(clause)
     rows = db.execute(
         stmt.order_by(LedgerEntry.created_at.desc(), LedgerEntry.id.desc()).limit(requested)
     ).all()
@@ -225,7 +240,7 @@ def _ledger(
 
 
 def _duty_locations(
-    db: Session, *, employee_id: str | None, requested: int
+    db: Session, *, employee_id: str | None, requested: int, scope: DepartmentScope | None = None
 ) -> tuple[list[EmployeeActivityItemRead], int]:
     stmt = (
         select(
@@ -249,6 +264,9 @@ def _duty_locations(
     )
     if employee_id is not None:
         stmt = stmt.where(DutyAssignmentEvent.employee_id == employee_id)
+    clause = employee_visibility_clause(scope)
+    if clause is not None:
+        stmt = stmt.where(clause)
     rows = db.execute(
         stmt.order_by(DutyAssignmentEvent.effective_at.desc(), DutyAssignmentEvent.id.desc()).limit(
             requested
@@ -281,7 +299,7 @@ def _duty_locations(
 
 
 def _status_events(
-    db: Session, *, employee_id: str | None, requested: int
+    db: Session, *, employee_id: str | None, requested: int, scope: DepartmentScope | None = None
 ) -> tuple[list[EmployeeActivityItemRead], int]:
     stmt = (
         select(
@@ -305,6 +323,9 @@ def _status_events(
     )
     if employee_id is not None:
         stmt = stmt.where(EmployeeStatusEvent.employee_id == employee_id)
+    clause = employee_visibility_clause(scope)
+    if clause is not None:
+        stmt = stmt.where(clause)
     rows = db.execute(
         stmt.order_by(EmployeeStatusEvent.created_at.desc(), EmployeeStatusEvent.id.desc()).limit(
             requested
@@ -343,19 +364,20 @@ def list_employee_activity(
     kind: EmployeeActivityKind | None = None,
     limit: int = DEFAULT_LIMIT,
     offset: int = 0,
+    scope: DepartmentScope | None = None,
 ) -> EmployeeActivityListRead:
     requested = offset + limit
     # owner_user_id is the caller: rows about Records they cannot open are hidden.
     caller = db.get(User, owner_user_id)
     sources: list[tuple[list[EmployeeActivityItemRead], int]] = []
     if kind in (None, "leave"):
-        sources.append(_leaves(db, employee_id=employee_id, requested=requested))
+        sources.append(_leaves(db, employee_id=employee_id, requested=requested, scope=scope))
     if (
         kind in (None, "violation")
         and caller is not None
         and perm_service.has_capability(db, caller, "violations.view")
     ):
-        sources.append(_violations(db, employee_id=employee_id, requested=requested))
+        sources.append(_violations(db, employee_id=employee_id, requested=requested, scope=scope))
     if kind in (None, "ledger"):
         sources.append(
             _ledger(
@@ -364,12 +386,17 @@ def list_employee_activity(
                 employee_id=employee_id,
                 requested=requested,
                 visible=ledger_service.related_book_visible(db, caller),
+                scope=scope,
             )
         )
     if kind in (None, "duty_location"):
-        sources.append(_duty_locations(db, employee_id=employee_id, requested=requested))
+        sources.append(
+            _duty_locations(db, employee_id=employee_id, requested=requested, scope=scope)
+        )
     if kind in (None, "status"):
-        sources.append(_status_events(db, employee_id=employee_id, requested=requested))
+        sources.append(
+            _status_events(db, employee_id=employee_id, requested=requested, scope=scope)
+        )
 
     # Documents are filtered in SQL; the exact per-document gate then re-checks
     # only the documents that land on this page. A refused one is excluded and
@@ -384,6 +411,7 @@ def list_employee_activity(
                 requested=requested,
                 user=caller,
                 excluded_ids=refused,
+                scope=scope,
             )
         merged = sorted(
             chain(documents[0], chain.from_iterable(rows for rows, _ in sources)),

@@ -2776,6 +2776,9 @@ will trip over them.
      two-column `dl` (From, Sent, Opened, Done, Papers; outgoing books show
      Created by, Created, Papers), recipients and thread. Mobile stacks the aside below a `65dvh`
      (min `24rem`) document area and scrolls as a page.
+   The owning Department is included when present, using its Arabic or English
+   name to match the UI language. Record-page metadata, the preview pane,
+   draft preview and mobile record cards show the same ownership information.
 - Expand toggles `view=reader` with replace (not a history step) and hides the
   Details aside so the document takes the full width.
 - List queries keep a 30-second fresh cache. Opening patches read state in that

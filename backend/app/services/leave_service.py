@@ -27,6 +27,7 @@ from app.core.leave_calc import TOTAL_AVAILABLE_CAP, LeaveBalance
 from app.db.models import AuditLog, Document, Employee, Leave, Manager, User
 from app.schemas.leave import LeaveBalanceRead, LeaveCreate, LeaveStatus, LeaveUpdate
 from app.services import book_service, document_service, user_signature_service
+from app.services.department_scope_service import DepartmentScope, employee_fk_visible
 
 # ---------------------------------------------------------------------------
 _WORKFORCE_TIMEZONE = ZoneInfo("Asia/Dubai")
@@ -197,9 +198,13 @@ def list_leaves(
     include_deleted: bool = False,
     limit: int = 50,
     offset: int = 0,
+    scope: DepartmentScope | None = None,
 ) -> tuple[list[Leave], int]:
     """Paginated list; returns (rows, total)."""
     base = select(Leave)
+    visibility = employee_fk_visible(scope, Leave.employee_id)
+    if visibility is not None:
+        base = base.where(visibility)
     if not include_deleted:
         base = base.where(Leave.deleted_at.is_(None))
     if employee_id is not None:
@@ -234,7 +239,7 @@ def list_leaves(
     return rows, total
 
 
-def awaiting_return_count(db: Session) -> int:
+def awaiting_return_count(db: Session, *, scope: DepartmentScope | None = None) -> int:
     """Live leaves in lifecycle.ts's ``AwaitingReturn`` display state.
 
     That state is "overdue AND a return form may be filed now". SQL narrows to
@@ -243,11 +248,15 @@ def awaiting_return_count(db: Session) -> int:
     """
     today = datetime.now(_WORKFORCE_TIMEZONE).date()
     has_cert = and_(Leave.certificate_path.is_not(None), Leave.certificate_path != "")
-    groups = db.execute(
+    stmt = (
         select(Leave.leave_type, Leave.status, has_cert, func.count())
         .where(Leave.deleted_at.is_(None), Leave.end_date < today)
         .group_by(Leave.leave_type, Leave.status, has_cert)
-    ).all()
+    )
+    visibility = employee_fk_visible(scope, Leave.employee_id)
+    if visibility is not None:
+        stmt = stmt.where(visibility)
+    groups = db.execute(stmt).all()
     return sum(
         n
         for leave_type, status, cert, n in groups
