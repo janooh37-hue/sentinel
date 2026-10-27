@@ -15,7 +15,6 @@ from __future__ import annotations
 import itertools
 from collections.abc import Iterator
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -61,7 +60,9 @@ def expected(role: str, grade: str, distribution: str, relation: str, cleared: b
     named = relation in ("creator", "to")
     assigned = relation in ("assignee", "retained")
     if role == "inmate_reporter":
-        open_ = grade == "unclassified" and (distribution == "organization" or relation == "creator")
+        open_ = grade == "unclassified" and (
+            distribution == "organization" or relation == "creator"
+        )
         return "full" if open_ else "none"
     if role == "admin":
         if grade not in RESTRICTED or named:
