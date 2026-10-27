@@ -38,7 +38,12 @@ from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Docu
 from app.db.repos import classified_refs_repo
 from app.db.repos._locking import begin_immediate_if_idle
 from app.schemas.book import BookGrade, TemplateSessionRead, WordSessionDetailRead
-from app.services import artifact_service, book_template_service, manager_service
+from app.services import (
+    artifact_service,
+    book_service,
+    book_template_service,
+    manager_service,
+)
 from app.services._pdf_executor import convert_docx_to_pdf
 from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
 
@@ -699,6 +704,7 @@ def finish_word_session(
     book = db.get(Book, book_id)
     if book is None:
         raise AppError("BOOK_NOT_FOUND", f"Book {book_id} not found", http_status=404)
+    book_service.require_ledger_revision_unlocked(db, book)
 
     session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
     if session is None:
@@ -805,8 +811,6 @@ def finish_word_session(
     )
     carried_leave_id = prior_document.leave_id if prior_document is not None else None
     if carried_leave_id is not None:
-        from app.services import book_service
-
         # Read ownership under the write lock, as generation's plan does, so a
         # takeover in flight cannot be overtaken by this revision.
         begin_immediate_if_idle(db)
@@ -992,6 +996,7 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
     book = db.get(Book, book_id)
     if book is None:
         raise AppError("BOOK_NOT_FOUND", f"Book {book_id} not found", http_status=404)
+    book_service.require_ledger_revision_unlocked(db, book)
 
     active = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
     if active is not None:
