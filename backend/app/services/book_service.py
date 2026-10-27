@@ -412,8 +412,10 @@ def _grade_clause(db: Session, user: User, type_ok: ColumnElement[bool]) -> Colu
     if user.role == ADMIN_ROLE:
         # Top Secret / Addressee Only: metadata only unless named on the record.
         return or_(and_(not_(restricted), type_ok), and_(restricted, named))
+    # Organization records keep the record-type gate for their creator too
+    # (unchanged legacy General behavior); a direct send still opens them.
     shared = or_(
-        and_(distribution == grades.ORGANIZATION, or_(type_ok, named)),
+        and_(distribution == grades.ORGANIZATION, or_(type_ok, active_recipient_clause(user.id))),
         and_(distribution == grades.NAMED, named),
     )
     branches = [and_(grade == grades.UNCLASSIFIED, shared), and_(restricted, named)]
@@ -446,7 +448,7 @@ def _grade_allows(
         return False
     if book.distribution == grades.NAMED:
         return named()
-    return existing or named()
+    return existing or (not write and is_active_recipient(db, user.id, book.id))
 
 
 def _hidden_by_grade(user: User, book: Book, *, existing: bool) -> bool:
