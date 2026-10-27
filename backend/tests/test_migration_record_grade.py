@@ -60,6 +60,13 @@ def _at_parent(tmp_path: Path) -> tuple[Engine, Config]:
                 ),
                 {"id": book_id, "context": json.dumps({"priority": priority, "note": "keep"})},
             )
+        # A sent record later set back to Personal kept its active recipient.
+        c.execute(
+            text(
+                "INSERT INTO book_recipients (book_id, user_id, sent_by_user_id, purpose, "
+                "created_at) VALUES (3, 9, 3, 'info', '2026-10-01 00:00:00')"
+            )
+        )
     return engine, config
 
 
@@ -119,7 +126,14 @@ def test_upgrade_backfills_grade_distribution_and_urgency(tmp_path: Path) -> Non
         legacy = c.execute(
             text("SELECT entity_id, payload FROM audit_log WHERE action = 'book_legacy_personal'")
         ).all()
-    assert [(row[0], json.loads(row[1])) for row in legacy] == [("3", {"ref_number": "HR-0003"})]
+    assert [(row[0], json.loads(row[1])) for row in legacy] == [
+        ("3", {"ref_number": "HR-0003", "revoked_recipient_user_ids": [9]})
+    ]
+    with engine.connect() as c:
+        # Personal opened for its creator only; named must not reopen it.
+        assert c.execute(
+            text("SELECT revoked_at IS NOT NULL FROM book_recipients WHERE book_id = 3")
+        ).scalar_one()
     assert _contexts(engine) == {
         book_id: {"urgency": priority, "note": "keep"}
         for book_id, (_level, priority, _grade, _distribution) in LEGACY.items()
