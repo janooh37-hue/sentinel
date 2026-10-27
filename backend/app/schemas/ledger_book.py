@@ -6,6 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas._base import ORMBase
 from app.schemas.book import BookGrade, BookUrgency
 
 
@@ -31,7 +32,7 @@ class LedgerDraftUpdate(BaseModel):
     body_html: str | None = Field(default=None, max_length=2_000_000)
 
 
-class LedgerDraftRead(BaseModel):
+class LedgerDraftRead(ORMBase):
     id: int
     # Zero-padded internal number; the UI adds the DRAFT / مسودة prefix.
     draft_number: str
@@ -44,12 +45,12 @@ class LedgerDraftRead(BaseModel):
     updated_at: datetime
 
 
-class LedgerDraftImageRead(BaseModel):
+class LedgerDraftImageRead(ORMBase):
     name: str
     src: str
 
 
-class LedgerRevisionRead(BaseModel):
+class LedgerRevisionRead(ORMBase):
     version_id: int
     version_no: int
     trigger: str
@@ -61,7 +62,7 @@ class LedgerRevisionRead(BaseModel):
     locked: bool
 
 
-class LedgerBookRead(BaseModel):
+class LedgerBookRead(ORMBase):
     id: int
     ref_number: str
     grade: BookGrade
@@ -87,7 +88,7 @@ class LedgerContentUpdate(BaseModel):
     body_html: str = Field(max_length=2_000_000)
 
 
-class LedgerSaveRead(BaseModel):
+class LedgerSaveRead(ORMBase):
     id: int
     saved_by_user_id: int
     saved_by_name: str | None
