@@ -47,7 +47,7 @@ export function LockLayoutControl({
 
   return (
     <div
-      className="flex min-h-[54px] w-full items-center gap-2.5 border-b border-hairline bg-surface-raised px-4 py-2.5"
+      className="flex min-h-[54px] w-full flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-hairline bg-surface-raised px-4 py-2.5 @max-[200px]:px-3"
       aria-busy={disabled}
     >
       <PanelsTopLeft
@@ -56,17 +56,18 @@ export function LockLayoutControl({
         aria-hidden="true"
       />
       <span className="min-w-0 flex-1 text-start">
-        <span className="block text-[0.9em] font-medium text-foreground">
+        <span className="block text-[0.9em] font-medium text-foreground [overflow-wrap:anywhere]">
           {t('lockScreen.layoutTitle')}
         </span>
-        <span className="block text-[0.72em] text-muted-foreground">
+        <span className="block text-[0.72em] text-muted-foreground [overflow-wrap:anywhere]">
           {t(`lockScreen.layout.${current}`)}
         </span>
       </span>
       <div
         role="group"
         aria-label={t('lockScreen.layoutTitle')}
-        className="grid shrink-0 grid-cols-3 items-center overflow-hidden rounded-[10px] border border-border bg-surface"
+        // A panel narrower than 200px (a phone at 200% zoom) cannot hold three side-by-side 44px segments: stack them.
+        className="ms-auto grid shrink-0 grid-cols-3 items-center overflow-hidden rounded-[10px] border border-border bg-surface @max-[200px]:ms-0 @max-[200px]:w-full @max-[200px]:grid-cols-1"
       >
         {LOCK_LAYOUTS.map((option, index) => {
           const active = current === option
@@ -78,8 +79,8 @@ export function LockLayoutControl({
               aria-pressed={active}
               disabled={disabled}
               onClick={() => onChange(option)}
-              className={`grid h-[30px] w-9 place-items-center transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--primary),inset_0_0_0_4px_var(--surface)] disabled:cursor-not-allowed disabled:opacity-60 ${
-                index > 0 ? 'border-s border-hairline' : ''
+              className={`grid h-[30px] w-9 place-items-center pointer-coarse:h-[44px] pointer-coarse:w-[44px] @max-[200px]:w-full @max-[200px]:pointer-coarse:w-full transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--primary),inset_0_0_0_4px_var(--surface)] disabled:cursor-not-allowed disabled:opacity-60 ${
+                index > 0 ? 'border-s border-hairline @max-[200px]:border-s-0 @max-[200px]:border-t' : ''
               } ${active ? 'bg-primary text-on-primary' : 'text-muted-foreground hover:bg-primary-soft'}`}
             >
               <svg

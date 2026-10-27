@@ -62,8 +62,8 @@ vi.mock('@/lib/useIdentity', () => ({
 
 vi.mock('@/components/dashboard/CustomizeWidgetsDialog', () => ({
   CustomizeWidgetsDialog: (props: {
-    items: typeof DEFAULT_LAYOUT.widgets
-    onSave: (items: typeof DEFAULT_LAYOUT.widgets, width: 'compact' | 'wide') => void
+    items: NonNullable<typeof DEFAULT_LAYOUT.widgets>
+    onSave: (items: NonNullable<typeof DEFAULT_LAYOUT.widgets>, width: 'compact' | 'wide') => void
   }) => (
     <>
       <span data-testid="first-widget">{props.items[0]?.id}</span>
@@ -76,8 +76,8 @@ vi.mock('@/components/dashboard/CustomizeWidgetsDialog', () => ({
 
 vi.mock('@/components/dashboard/WidgetEditDialog', () => ({
   WidgetEditDialog: (props: {
-    items: typeof DEFAULT_LAYOUT.quick_actions
-    onSave: (items: typeof DEFAULT_LAYOUT.quick_actions) => void
+    items: NonNullable<typeof DEFAULT_LAYOUT.quick_actions>
+    onSave: (items: NonNullable<typeof DEFAULT_LAYOUT.quick_actions>) => void
   }) => (
     <button type="button" onClick={() => props.onSave(props.items)}>
       save-quick-layout-{props.items.length}
@@ -98,6 +98,9 @@ vi.mock('@/components/refresh/PullToRefresh', () => ({ PullToRefresh: ({ childre
 vi.mock('@/components/refresh/RefreshButton', () => ({ RefreshButton: () => null }))
 
 const mockedApi = vi.mocked(api)
+
+const DEFAULT_WIDGETS = DEFAULT_LAYOUT.widgets ?? []
+const DEFAULT_QUICK_ACTIONS = DEFAULT_LAYOUT.quick_actions ?? []
 
 function createQueryClient(): QueryClient {
   return new QueryClient({
@@ -129,7 +132,7 @@ describe('DashboardPage per-user layout', () => {
     renderPage()
 
     const save = await screen.findByRole('button', {
-      name: `save-widget-layout-${DEFAULT_LAYOUT.widgets.length}`,
+      name: `save-widget-layout-${DEFAULT_WIDGETS.length}`,
     })
     expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(1)
 
@@ -151,7 +154,7 @@ describe('DashboardPage per-user layout', () => {
     renderPage()
 
     const save = await screen.findByRole('button', {
-      name: `save-quick-layout-${DEFAULT_LAYOUT.quick_actions.length}`,
+      name: `save-quick-layout-${DEFAULT_QUICK_ACTIONS.length}`,
     })
     fireEvent.click(save)
 
@@ -166,8 +169,8 @@ describe('DashboardPage per-user layout', () => {
   })
 
   it('isolates cached layouts across logout and a different authenticated user', async () => {
-    const firstDefaultWidget = DEFAULT_LAYOUT.widgets[0]
-    const firstPrivateWidget = DEFAULT_LAYOUT.widgets.at(-1)
+    const firstDefaultWidget = DEFAULT_WIDGETS[0]
+    const firstPrivateWidget = DEFAULT_WIDGETS.at(-1)
     expect(firstDefaultWidget).toBeDefined()
     expect(firstPrivateWidget).toBeDefined()
     expect(firstPrivateWidget?.id).not.toBe(firstDefaultWidget?.id)
@@ -175,7 +178,7 @@ describe('DashboardPage per-user layout', () => {
       ...DEFAULT_LAYOUT,
       widgets: [
         { ...firstPrivateWidget!, order: 0 },
-        ...DEFAULT_LAYOUT.widgets
+        ...DEFAULT_WIDGETS
           .slice(0, -1)
           .map((widget, index) => ({ ...widget, order: index + 1 })),
       ],
@@ -206,7 +209,7 @@ describe('DashboardPage per-user layout', () => {
     })
     fireEvent.click(
       screen.getByRole('button', {
-        name: `save-widget-layout-${DEFAULT_LAYOUT.widgets.length}`,
+        name: `save-widget-layout-${DEFAULT_WIDGETS.length}`,
       }),
     )
     let finishMutationTick!: () => void
@@ -234,7 +237,7 @@ describe('DashboardPage per-user layout', () => {
 
     fireEvent.click(
       screen.getByRole('button', {
-        name: `save-widget-layout-${DEFAULT_LAYOUT.widgets.length}`,
+        name: `save-widget-layout-${DEFAULT_WIDGETS.length}`,
       }),
     )
     await waitFor(() => expect(mockedApi.updateDashboardLayout).toHaveBeenCalledTimes(1))

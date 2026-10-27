@@ -17,6 +17,12 @@
   --_radius: 16px;
 }
 
+/* All dock text uses inherited em sizes, so Arabic is 5% smaller in the pill
+   and the open body without shrinking thumbnails, icons or hit targets. */
+[dir='rtl'] .scanback-dock {
+  font-size: 0.95em;
+}
+
 [data-theme='dark'] .scanback-dock {
   --_fill: #fafaf6;
   --_tone: #9a4507;

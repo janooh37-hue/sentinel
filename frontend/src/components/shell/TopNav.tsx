@@ -49,7 +49,10 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
   return (
     <header
       data-topnav
-      className="flex flex-nowrap items-center gap-7 border-b border-border bg-surface px-8 py-3.5"
+      // Top padding: the row keeps its 0.875rem on a screen with no inset; with a status-bar / notch inset (a
+      // standalone iPad, any 768px+ touch window under a status bar) the controls start 0.75rem below it, like the
+      // phone bar. HEADER_POPOVER's TopNav height cap subtracts the same inset (headerPopover.ts).
+      className="flex flex-nowrap items-center gap-7 border-b border-border bg-surface px-8 pb-3.5 pt-[max(0.875rem,calc(var(--safe-top)+0.75rem))]"
     >
       <NavLink
         to="/"
@@ -57,12 +60,12 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
         aria-label={t('nav.dashboard')}
         onPointerEnter={() => prefetchRouteForPath('/')}
         onFocus={() => prefetchRouteForPath('/')}
-        className="flex items-center gap-7 rounded-md transition-transform duration-200 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="flex shrink-0 items-center gap-7 rounded-md transition-transform duration-200 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:justify-center"
       >
         <img
           src="/brand/gssg-logo.png"
           alt="GSSG"
-          className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
+          className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-border"
         />
         <div className="topnav-brand-copy text-[1.15em] font-bold leading-tight tracking-tight text-primary">
           GSSG
@@ -125,7 +128,7 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
             onPointerEnter={() => prefetchRouteForPath('/debug')}
             onFocus={() => prefetchRouteForPath('/debug')}
             className={({ isActive }) =>
-              `rounded-lg p-2 transition-colors hover:bg-surface-tinted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${isActive ? 'text-primary' : 'text-foreground'}`
+              `rounded-lg p-2 transition-colors hover:bg-surface-tinted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 pointer-coarse:inline-flex pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:items-center pointer-coarse:justify-center ${isActive ? 'text-primary' : 'text-foreground'}`
             }
           >
             <Bug className="h-[1.15em] w-[1.15em]" strokeWidth={1.8} aria-hidden />
@@ -137,7 +140,7 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
             onClick={onOpenSettings}
             aria-label={t('nav.settings')}
             title={t('nav.settings')}
-            className="rounded-lg p-2 text-foreground transition-colors hover:bg-surface-tinted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            className="rounded-lg p-2 text-foreground transition-colors hover:bg-surface-tinted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 pointer-coarse:inline-flex pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:items-center pointer-coarse:justify-center"
           >
             <Settings className="h-[1.15em] w-[1.15em]" strokeWidth={1.8} aria-hidden />
           </button>

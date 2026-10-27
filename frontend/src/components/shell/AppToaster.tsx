@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import type { CSSProperties } from 'react'
 import { Toaster } from 'sileo'
 import { MotionGlobalConfig } from 'motion/react'
 
@@ -9,6 +10,7 @@ import {
 } from '@/lib/toastAnnouncements'
 import { reconcileToastGenerations, toast } from '@/lib/toast'
 import { setToastHeld } from '@/lib/toastHold'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 import './AppToaster.css'
 
@@ -31,6 +33,11 @@ function useDocumentTheme(): ThemeName {
     () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'),
     () => 'light',
   )
+}
+
+function subscribeViewportWidth(onChange: () => void): () => void {
+  window.addEventListener('resize', onChange)
+  return () => window.removeEventListener('resize', onChange)
 }
 
 /**
@@ -159,6 +166,11 @@ function tidyAccessibility(root: HTMLElement): void {
  */
 export function AppToaster(): React.JSX.Element {
   const theme = useDocumentTheme()
+  const isMobile = useIsMobile()
+  const viewportWidth = useSyncExternalStore(subscribeViewportWidth, () => window.innerWidth, () => 1280)
+  // Sileo's body is 350 CSS px; cap the phone zoom before it can leave the screen.
+  const scale = isMobile ? Math.min(1.05, viewportWidth / 350) : 1.1
+  const hostStyle: CSSProperties & { '--app-toast-scale': number } = { '--app-toast-scale': scale }
   const rootRef = useRef<HTMLDivElement>(null)
   // The toast currently holding Sileo's hover flag, by pointer or by focus.
   const engaged = useRef<HTMLElement | null>(null)
@@ -189,6 +201,7 @@ export function AppToaster(): React.JSX.Element {
     <div
       ref={rootRef}
       data-print-hide
+      style={hostStyle}
       onClick={(event) => {
         const toastEl = closestToast(event.target)
         if (!toastEl || toastEl.dataset.state === 'loading') return
@@ -231,7 +244,17 @@ export function AppToaster(): React.JSX.Element {
         if (id) toast.dismiss(id)
       }}
     >
-      <Toaster position="top-center" offset={{ top: 'calc(12px + env(safe-area-inset-top))' }} theme={theme} />
+      {/* ponytail: Sileo pins each live toast's position. On a breakpoint change,
+          new toasts use the new edge; old ones finish at their original edge.
+          Patch Sileo to move live toasts if cross-breakpoint continuity is needed. */}
+      <Toaster
+        position={isMobile ? 'top-center' : 'bottom-center'}
+        offset={{
+          top: `calc((12px + env(safe-area-inset-top)) / ${scale})`,
+          bottom: 90 / scale,
+        }}
+        theme={theme}
+      />
       <AnnouncementRegion priority="polite" items={announcements} />
       <AnnouncementRegion priority="assertive" items={announcements} />
     </div>

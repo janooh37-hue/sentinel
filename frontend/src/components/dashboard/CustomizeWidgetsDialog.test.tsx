@@ -24,7 +24,7 @@ function renderDialog(canvasWidth: CanvasWidth = 'compact') {
     <CustomizeWidgetsDialog
       open
       onOpenChange={() => {}}
-      items={DEFAULT_LAYOUT.widgets}
+      items={DEFAULT_LAYOUT.widgets ?? []}
       labels={LABELS}
       canvasWidth={canvasWidth}
       onSave={onSave}
