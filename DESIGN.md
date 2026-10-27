@@ -1413,8 +1413,8 @@ replaces the former zones and separate quick-actions band.
 - Wide canvas: full available width, 6 logical columns.
 - Below `md`: 2 logical columns. Grid rows are fixed at `9.25rem`, with
   `gap-3.5` (`0.875rem`), not fractional-height rows.
-- Sizes: S = 1×1, M = 2×1, L = 2×2, W = full-width×1. On phones W is
-  full-width×2. `lib/dashboardLayout.ts` places each box explicitly, then
+- Sizes: S = 1×1, M = 2×1, L = 2×2, W = full-width×1, XL = full-width×3.
+  On phones W is full-width×2. `lib/dashboardLayout.ts` places each box explicitly, then
   grows neighbours to absorb gaps. CSS grid mirrors logical columns in RTL.
 - `pages/dashboard/widgetRegistry.tsx` removes unavailable widgets before
   packing. The final box determines glance, summary, tall, or list content.
@@ -1637,6 +1637,10 @@ empty states stay inside the same clipped frame.
 - **Permits:** zone-scoped security and item summaries; no 500-row item count
   proxy. Every count/preview/register link retains zone. List previews share
   the row budget; security and item remainders link to their own register.
+  An XL box (≥3 columns × ≥3 rows; the default size, and the size legacy
+  layouts migrate to) shows a zone toggle above two panes, security and
+  item permits, each with linked count tiles and its own fitted latest list.
+  Narrower XL boxes on phones use the compact list.
   Item-permit create, edit, submit and delete invalidate the summary prefix,
   refreshing every cached zone alongside the register.
 - **Workforce pulse:** glance shows coverage as a percentage; other aggregate

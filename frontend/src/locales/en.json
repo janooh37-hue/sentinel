@@ -4220,7 +4220,7 @@
       "saved": "Dashboard layout saved",
       "controls": "Customize {{name}}",
       "size": "Size of {{name}}",
-      "sizes": { "S": "Small", "M": "Medium", "L": "Large", "W": "Full width" },
+      "sizes": { "S": "Small", "M": "Medium", "L": "Large", "W": "Full width", "XL": "Extra large" },
       "drag": "Drag {{name}} to move it",
       "earlier": "Move {{name}} earlier",
       "later": "Move {{name}} later",

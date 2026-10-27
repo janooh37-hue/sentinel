@@ -125,7 +125,7 @@ describe('size-based layouts', () => {
       { id: 'drafts', visible: false, order: 1, size: 'S' },
       { id: 'on_leave_today', visible: true, order: 2, size: 'L' },
       { id: 'quick_actions', visible: true, order: 3, size: 'W' },
-      { id: 'permits', visible: true, order: 4, size: 'L' },
+      { id: 'permits', visible: true, order: 4, size: 'XL' },
     ])
     expect(layout.widgets).toHaveLength(WIDGET_IDS.length)
     expect(layout.widgets.find((item) => item.id === 'violations')?.visible).toBe(false)
@@ -232,7 +232,7 @@ describe('dense packing with automatic gap filling', () => {
       let state = seed
       const items = Array.from({ length: 1 + seed % 16 }, (_, index) => {
         state = (state * 1664525 + 1013904223) >>> 0
-        return { id: String(index), size: WIDGET_SIZES[(state >>> 16) % 4]! }
+        return { id: String(index), size: WIDGET_SIZES[(state >>> 16) % WIDGET_SIZES.length]! }
       })
       assertPacking(items, cols)
     }
@@ -250,6 +250,14 @@ describe('dense packing with automatic gap filling', () => {
     expect(packLayout([{ id: 'actions', size: 'W' }], 2).placed[0]).toMatchObject({ w: 2, h: 2 })
     expect(packLayout([], 4)).toEqual({ placed: [], holes: [], cols: 4 })
     expect(() => packLayout([], 0)).toThrow(RangeError)
+  })
+  it('spans extra-large widgets across the canvas for three list rows', () => {
+    for (const cols of [2, 4, 6]) {
+      const { placed } = assertPacking([{ id: 'a', size: 'S' }, { id: 'permits', size: 'XL' }, { id: 'b', size: 'S' }], cols)
+      expect(placed[1]).toMatchObject({ c: 0, r: 1, w: cols, h: 3 })
+      expect(tierOf(placed[1]!.w, placed[1]!.h)).toBe('list')
+      expect(rowsPerHeight(placed[1]!.h)).toBe(7)
+    }
   })
   it('derives content tiers and list row limits from final boxes', () => {
     expect([tierOf(1, 1), tierOf(2, 1), tierOf(1, 2), tierOf(2, 2)]).toEqual(['glance', 'summary', 'tall', 'list'])

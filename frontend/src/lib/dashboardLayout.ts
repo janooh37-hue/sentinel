@@ -4,7 +4,7 @@ import type { WidgetTier } from '@/pages/dashboard/widgets/types'
 export type CanvasWidth = 'compact' | 'wide'
 export const CANVAS_WIDTHS = ['compact', 'wide'] as const
 export const DEFAULT_CANVAS_WIDTH: CanvasWidth = 'compact'
-export const WIDGET_SIZES = ['S', 'M', 'L', 'W'] as const
+export const WIDGET_SIZES = ['S', 'M', 'L', 'W', 'XL'] as const
 export type WidgetSize = (typeof WIDGET_SIZES)[number]
 export const WIDGET_IDS = [
   'waiting_approvals', 'pending', 'sent_approvals', 'inbox', 'ledger', 'workspace',
@@ -48,7 +48,7 @@ const DEFAULT_SIZES: Record<WidgetId, WidgetSize> = {
   waiting_approvals: 'L', pending: 'M', sent_approvals: 'S', inbox: 'S', ledger: 'M',
   workspace: 'M', quick_actions: 'W', on_leave_today: 'L', upcoming_leave: 'S',
   drafts: 'S', expiring_soon: 'S', violation_months: 'S', violations: 'S',
-  pending_departures: 'L', workforce_pulse: 'M', permits: 'L',
+  pending_departures: 'L', workforce_pulse: 'M', permits: 'XL',
 }
 export const DEFAULT_LAYOUT: DashboardLayout = {
   widgets: WIDGET_IDS.map((id, order) => ({ id, visible: order < 12, order, size: DEFAULT_SIZES[id] })),
@@ -60,7 +60,7 @@ const WIDGET_ID_LOOKUP: Record<string, true> = Object.fromEntries(WIDGET_IDS.map
 const QUICK_ACTION_ID_LOOKUP: Record<string, true> = Object.fromEntries(QUICK_ACTION_IDS.map((id) => [id, true]))
 const LEGACY_PANELS: Record<string, true> = {
   waiting_approvals: true, expiring_soon: true, on_leave_today: true, upcoming_leave: true,
-  pending_departures: true, workforce_pulse: true, violation_months: true, permits: true,
+  pending_departures: true, workforce_pulse: true, violation_months: true,
 }
 type SavedWidget = { id: string; visible: boolean; order: number; size?: string; zone?: string | null }
 type SavedLayout = { widgets?: SavedWidget[]; quick_actions?: { id: string; visible: boolean; order: number }[]; canvas_width?: string | null }
@@ -85,6 +85,7 @@ export function resolveLayout(saved: SavedLayout | null | undefined): DashboardL
     const id = item.id as WidgetId
     const size = WIDGET_SIZES.includes(item.size as WidgetSize) ? item.size as WidgetSize
       : item.zone === 'top' || (!item.zone && ['pending', 'workspace'].includes(id)) ? 'M'
+      : id === 'permits' ? 'XL'
       : LEGACY_PANELS[id] === true ? 'L' : 'S'
     kept.push({ id, visible: item.visible, order: kept.length, size })
     if (item.zone !== 'under_quick_actions') bandAfter = kept.length
@@ -136,8 +137,8 @@ export function packLayout(items: readonly { id: string; size: WidgetSize }[], c
   }
   const placed: PackedWidget[] = []
   for (const { id, size } of items) {
-    const w = size === 'W' ? cols : Math.min(size === 'S' ? 1 : 2, cols)
-    const h = size === 'L' || (cols === 2 && size === 'W') ? 2 : 1
+    const w = size === 'W' || size === 'XL' ? cols : Math.min(size === 'S' ? 1 : 2, cols)
+    const h = size === 'XL' ? 3 : size === 'L' || (cols === 2 && size === 'W') ? 2 : 1
     let done = false
     for (let r = 0; !done; r++) for (let c = 0; c <= cols - w && !done; c++) {
       if (free(r, c, w, h)) {

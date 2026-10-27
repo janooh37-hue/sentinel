@@ -10124,7 +10124,7 @@ export interface components {
              * @default S
              * @enum {string}
              */
-            size: "S" | "M" | "L" | "W";
+            size: "S" | "M" | "L" | "W" | "XL";
             /** Zone */
             zone?: ("top" | "under_workspace" | "under_quick_actions") | null;
         };

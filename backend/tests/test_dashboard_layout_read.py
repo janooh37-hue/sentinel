@@ -166,6 +166,25 @@ def test_pre_zone_layout_keeps_legacy_role_for_frontend_migration(db_session):
     assert layout.widgets[0].zone == "top"
 
 
+def test_legacy_permits_panel_reads_as_extra_large_and_xl_round_trips(db_session):
+    user = _store_layout(
+        db_session,
+        {
+            "widgets": [
+                {"id": "permits", "order": 0, "visible": True, "zone": "under_quick_actions"},
+                {"id": "on_leave_today", "order": 1, "visible": True, "zone": "under_workspace"},
+            ]
+        },
+    )
+    layout = dashboard_service.get_user_layout(db_session, user.id)
+    assert layout is not None
+    assert [(w.id, w.size) for w in layout.widgets] == [("permits", "XL"), ("on_leave_today", "L")]
+    saved = DashboardLayout.model_validate(
+        {"widgets": [{"id": "permits", "order": 0, "visible": True, "size": "XL"}]}
+    )
+    assert saved.widgets[0].size == "XL"
+
+
 @pytest.mark.parametrize(
     ("widgets", "expected_widgets"),
     [

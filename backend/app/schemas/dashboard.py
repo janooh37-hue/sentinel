@@ -101,7 +101,7 @@ class DashboardWidgetConfig(BaseModel):
     id: DashboardWidgetId
     visible: bool = True
     order: int
-    size: Literal["S", "M", "L", "W"] = "S"
+    size: Literal["S", "M", "L", "W", "XL"] = "S"
     zone: DashboardWidgetZone | None = None
 
     @model_validator(mode="before")
@@ -115,6 +115,8 @@ class DashboardWidgetConfig(BaseModel):
                 "zone" not in value and widget_id in {"pending", "workspace"}
             ):
                 size = "M"
+            elif widget_id == "permits":
+                size = "XL"
             elif widget_id in {
                 "waiting_approvals",
                 "expiring_soon",
@@ -123,7 +125,6 @@ class DashboardWidgetConfig(BaseModel):
                 "pending_departures",
                 "workforce_pulse",
                 "violation_months",
-                "permits",
             }:
                 size = "L"
             else:

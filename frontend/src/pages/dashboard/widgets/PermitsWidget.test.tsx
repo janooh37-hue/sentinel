@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type ItemPermitListResponse, type PermitListResponse } from '@/lib/api'
+import { DEFAULT_LAYOUT } from '@/lib/dashboardLayout'
 import i18n from '@/lib/i18n'
+import { DashboardRuntimeContext } from './dashboardWidgetContext'
 import { PermitsWidget } from './PermitsWidget'
 import type { WidgetTier } from './types'
 
@@ -23,12 +25,15 @@ const summary = (active: number) => ({
 })
 const itemSummary = { none: 2, pending: 601, awaiting_scan: 3, approved: 4, returned: 0, rejected: 0 }
 
-function renderWidget(tier: WidgetTier = 'list', rows = 2) {
+function renderWidget(tier: WidgetTier = 'list', rows = 2, box = { w: 2, h: 2, cols: 4 }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const runtime = { layout: DEFAULT_LAYOUT, has: () => true, onNavigate: vi.fn(), onOpenCoverage: vi.fn(), box }
   return render(
     <QueryClientProvider client={client}>
       <I18nextProvider i18n={i18n}>
-        <MemoryRouter><PermitsWidget tier={tier} rows={rows} /></MemoryRouter>
+        <DashboardRuntimeContext.Provider value={runtime}>
+          <MemoryRouter><PermitsWidget tier={tier} rows={rows} /></MemoryRouter>
+        </DashboardRuntimeContext.Provider>
       </I18nextProvider>
     </QueryClientProvider>,
   )
@@ -43,15 +48,15 @@ beforeEach(async () => {
   vi.mocked(api.itemPermitsSummary).mockResolvedValue(itemSummary)
   vi.mocked(api.listPermits).mockResolvedValue({
     items: [
-      { id: 41, permit_no: 'PMT-0041', company: 'Red Works LLC', derived_status: 'active', created_at: '2026-10-05T00:00:00' },
-      { id: 40, permit_no: 'PMT-0040', company: 'Older Security', derived_status: 'active', created_at: '2026-10-01T00:00:00' },
+      { id: 41, permit_no: 'PMT-0041', company: 'Red Works LLC', derived_status: 'active', created_at: '2026-10-05T00:00:00', zones: ['red'], access_areas: null, days_remaining: 20, start_date: '2026-10-05', validity: { unit: 'month', value: 3 } },
+      { id: 40, permit_no: 'PMT-0040', company: 'Older Security', derived_status: 'active', created_at: '2026-10-01T00:00:00', zones: ['red'], access_areas: null, days_remaining: 9, start_date: '2026-10-01', validity: { unit: 'month', value: 1 } },
     ],
     total: 10, limit: 2, offset: 0,
   } as unknown as PermitListResponse)
   vi.mocked(api.listItemPermits).mockResolvedValue({
     items: [
-      { id: 3, employee_name: 'Red Pending', employee_name_en: 'Red Pending', approval_state: 'pending', created_at: '2026-10-04T00:00:00' },
-      { id: 2, employee_name: 'Older Item', employee_name_en: 'Older Item', approval_state: 'awaiting_scan', created_at: '2026-10-02T00:00:00' },
+      { id: 3, employee_name: 'Red Pending', employee_name_en: 'Red Pending', approval_state: 'pending', created_at: '2026-10-04T00:00:00', items: [{ name: 'Laptop' }], zones: ['red'] },
+      { id: 2, employee_name: 'Older Item', employee_name_en: 'Older Item', approval_state: 'awaiting_scan', created_at: '2026-10-02T00:00:00', items: [{ name: 'Camera' }], zones: ['green'] },
     ],
     total: 610, limit: 2,
   } as unknown as ItemPermitListResponse)
@@ -105,6 +110,29 @@ describe('PermitsWidget', () => {
     unmount()
     renderWidget('glance', 0)
     expect(screen.getByRole('combobox', { name: 'Zone' })).toHaveValue('red')
+  })
+
+  it('renders the extra-large box as security and item panes with their own rows and zone toggle', async () => {
+    renderWidget('list', 7, { w: 4, h: 3, cols: 4 })
+    const security = await screen.findByRole('region', { name: 'Security permits' })
+    const items = screen.getByRole('region', { name: 'Item permits' })
+    expect(await within(security).findByRole('link', { name: /Older Security/ })).toHaveAttribute('href', '/permits?preview=40')
+    expect(within(security).getByRole('link', { name: /7\s*Active/ })).toHaveAttribute('href', '/permits?state=active')
+    expect(within(security).getByRole('link', { name: '+8 more security permits' })).toHaveAttribute('href', '/permits')
+    expect(within(items).getByRole('link', { name: /Older Item/ })).toHaveAttribute('href', '/permits?tab=items&itemPreview=2')
+    expect(within(items).getByRole('link', { name: /3\s*Awaiting signed copy/ })).toHaveAttribute('href', '/permits?tab=items&istatus=awaiting_scan')
+    expect(within(items).getByRole('link', { name: '+608 more item permits' })).toHaveAttribute('href', '/permits?tab=items')
+    expect(api.listPermits).toHaveBeenCalledWith({ zone: undefined, limit: 7 })
+    expect(screen.queryByRole('combobox', { name: 'Zone' })).not.toBeInTheDocument()
+
+    fireEvent.click(within(screen.getByRole('group', { name: 'Zone' })).getByRole('button', { name: 'Red' }))
+    // A new zone reloads, remounting the panes.
+    await within(await screen.findByRole('region', { name: 'Security permits' })).findByRole('link', { name: /3\s*Active/ })
+    expect(screen.getByRole('button', { name: 'Red' })).toHaveAttribute('aria-pressed', 'true')
+    expect(api.listItemPermits).toHaveBeenLastCalledWith({ zone: 'red', limit: 7 })
+    for (const link of screen.getAllByRole('link')) {
+      expect(new URL(link.getAttribute('href')!, 'https://sentinel.test').searchParams.get('zone')).toBe('red')
+    }
   })
 
   it('keeps loading and a retryable error inside the frame', async () => {
