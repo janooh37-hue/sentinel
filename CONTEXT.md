@@ -23,10 +23,11 @@ produced from structured form data or finalized from a Word-authored DOCX.
 _Avoid_: Template output, when the source is a Word-authored document
 
 **Reference barcode**:
-The Code 39 symbol printed on a General Book's first page, or on a Ledger
-Book's paper, carrying its reference and paper date. On a General Book it is
-rendered from the template's barcode font rather than stamped on; on a Ledger
-Book it is generated at Save & Send and printed with its readable line.
+The decorative Code 39 symbol printed in a General Book's first-page header,
+or in a Ledger Book's recreation of that header, carrying its reference and
+paper date. On a General Book it is rendered from the template's barcode font
+rather than stamped on; on a Ledger Book it is generated at Save & Send and
+printed with its readable line. Scan-back does not depend on decoding it.
 _Avoid_: QR, Aztec, code stamp
 
 **Paper date**:

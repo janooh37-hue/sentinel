@@ -139,16 +139,32 @@ Grade, and each change is audited. Managers lose this right.
   does not go back to Drafts. A rejected book keeps its number.
 - Word General Books are unchanged.
 
-## Ledger Book barcode
+## Ledger Book paper
 
-The Ledger Book carries the same barcode the General Book uses today: Libre
-Barcode 39 (Code 39) with the payload from `qr.barcode_payload(ref,
-paper_date)` (`backend/app/core/qr.py:52`). The human-readable payload is
-printed under the barcode on the HTML paper only. There is no Aztec/QR square
-on Ledger Book paper. The barcode is generated at Save & Send, when the book
-gets its number. A site code (for example `0331`) is left out for now and
-will be added later. Word General Book rendering, `qr.py` and the scan-back
-decoder do not change.
+The Ledger Book paper is HTML that recreates the General Book's Word header
+and footer: the letterhead logo, the reference, date and office block, the
+decorative barcode, the red rule, and the contact footer with the submitter
+G-number. Continuation pages repeat the General Book's continuation header.
+The Grade mark is printed in Arabic at the top of every page, as on the Word
+papers; Unclassified prints none. Secret and above also carry the viewer's
+name as a watermark, and a Draft carries a DRAFT watermark with no reference
+or barcode.
+
+The barcode is the General Book's: Libre Barcode 39 (Code 39) at the same
+decorative size, with the payload from `qr.barcode_payload(ref, paper_date)`
+(`backend/app/core/qr.py:52`) and the human-readable payload printed under it
+on the HTML paper only. There is no Aztec/QR square. The barcode is generated
+at Save & Send, when the book gets its number. A site code (for example
+`0331`) is left out for now and will be added later. Word General Book
+rendering, `qr.py` and the scan-back decoder do not change.
+
+The paper is served by its own route with
+`Content-Security-Policy: sandbox allow-same-origin allow-modals; default-src 'none'; img-src 'self'; font-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'`,
+`Cache-Control: no-store` and `X-Content-Type-Options: nosniff`, and its body
+HTML is sanitized against a fixed allowlist on every save. A plain `sandbox`
+gives the paper an opaque origin, which blocks its authenticated images and
+fonts and stops the app from printing it. `allow-scripts` is never granted,
+so scripts stay blocked by both the sandbox and the CSP.
 
 ## Correction to ADR 0003
 
@@ -163,6 +179,12 @@ def barcode_payload(ref: str, paper_date: date) -> str:
 The Word letterhead uses the same function (`backend/app/core/docx_engine.py:1144`).
 `*GSSG+DD/MM/YYYY+REF*` is the current payload for both papers. The site
 code will be added to it later.
+
+ADR 0003 also says the template sets the barcode at 28 pt so that scans
+decode it. The template's barcode run is 8 pt (`word/header3.xml`), on
+purpose: the barcode is decorative, and scan-back does not depend on decoding
+it. The `BOOK_BARCODE_REF_MISMATCH` check in `book_service.add_attachment`
+only acts when a scan happens to yield a Code 39 symbol.
 
 ## Urgency
 
