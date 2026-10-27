@@ -123,8 +123,9 @@ Record after the final approval.
 _Avoid_: Direct send recipient, approver
 
 **Chain role**:
-One ordered step in a Record's approval chain, held by an assignee who acts
-on it in turn.
+The role an ordered step holds in a Ledger Book's approval chain: the auditor
+(required), then the branch manager and the project manager (optional). Each
+step's assignee acts in turn.
 _Avoid_: Reviewer list, approver group
 
 **Break-glass**:
