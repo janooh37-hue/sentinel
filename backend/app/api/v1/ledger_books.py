@@ -10,12 +10,14 @@ catch-all would otherwise swallow ``/ledger/drafts`` and ``/ledger/books``.
   DELETE /ledger/drafts/{id}                     delete (and its images)
   POST   /ledger/drafts/{id}/images              upload an image
   GET    /ledger/drafts/{id}/images/{name}       owner only
+  GET    /ledger/drafts/{id}/paper               owner only, DRAFT paper
   POST   /ledger/drafts/{id}/save-and-send       number it: a Ledger Book
   GET    /ledger/books/{id}?revision=            detail + a Revision's content
   PUT    /ledger/books/{id}/content              tracked save on the latest Revision
   GET    /ledger/books/{id}/revisions/{vid}/saves  save history
   POST   /ledger/books/{id}/corrections          new Revision from a signed one
   GET    /ledger/books/{id}/images/{name}        readers of the book
+  GET    /ledger/books/{id}/paper?revision=      a Revision as hardened HTML paper
 """
 
 from __future__ import annotations
@@ -24,10 +26,11 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_capability
+from app.core.ledger_paper import paper_response
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.ledger_book import (
@@ -111,6 +114,11 @@ def get_draft_image(draft_id: int, name: str, db: DbDep, user: UserDep) -> FileR
     return _image_response(service.draft_image_path(db, user, draft_id, name))
 
 
+@router.get("/drafts/{draft_id}/paper", response_class=HTMLResponse)
+def get_draft_paper(draft_id: int, db: DbDep, user: UserDep) -> HTMLResponse:
+    return paper_response(service.draft_paper(db, user, draft_id))
+
+
 @router.post("/drafts/{draft_id}/save-and-send", response_model=LedgerBookRead)
 def save_and_send(
     draft_id: int,
@@ -130,6 +138,16 @@ def get_ledger_book(
     revision: Annotated[int | None, Query(description="Revision (version) id")] = None,
 ) -> LedgerBookRead:
     return service.ledger_book_read(db, user, book_id, version_id=revision)
+
+
+@router.get("/books/{book_id}/paper", response_class=HTMLResponse)
+def get_ledger_book_paper(
+    book_id: int,
+    db: DbDep,
+    user: UserDep,
+    revision: Annotated[int | None, Query(description="Revision (version) id")] = None,
+) -> HTMLResponse:
+    return paper_response(service.book_paper(db, user, book_id, version_id=revision))
 
 
 @router.put("/books/{book_id}/content", response_model=LedgerBookRead)

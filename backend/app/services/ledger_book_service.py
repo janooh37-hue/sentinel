@@ -31,6 +31,7 @@ from app.core.book_text import build_search_text, html_to_text
 from app.core.classifications import CLASSIFICATIONS, classified_ref
 from app.core.constants import LEDGER_BOOK_TEMPLATE_ID
 from app.core.ledger_html import sanitize_body
+from app.core.ledger_paper import PaperContext, render_paper
 from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import AuditLog, Book, BookCategory, BookDraft, BookVersion, LedgerBookSave, User
 from app.db.repos import classified_refs_repo
@@ -49,6 +50,7 @@ log = logging.getLogger(__name__)
 
 CATEGORY_ID = "GS"
 PAPER_DATE_FORMAT = "%d-%m-%Y"
+PAPER_ASSET_BASE = "/api/v1/ledger/paper-assets"
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 _IMAGE_NAME = re.compile(r"[0-9a-f]{32}\.(?:png|jpg|gif|webp)")
 _CLASSIFICATION_BY_TAB = {c.tab: c for c in CLASSIFICATIONS}
@@ -455,6 +457,55 @@ def ledger_book_read(
         subjects=list(save.subjects) if save is not None else [],
         body_html=save.body_html if save is not None else "",
         content_sha256=save.content_sha256 if save is not None else "",
+    )
+
+
+def _viewer_label(user: User) -> str:
+    """Who is looking: printed as the Secret-and-above watermark."""
+    return " · ".join(part for part in (user.display_name or user.email, user.employee_id) if part)
+
+
+def draft_paper(db: Session, user: User, draft_id: int) -> str:
+    """The owner's Draft as paper: DRAFT watermark, no reference, date or barcode."""
+    draft = get_own_draft(db, user, draft_id)
+    return render_paper(
+        PaperContext(
+            body_html=draft.body_html,
+            subjects=tuple(_clean_subjects(list(draft.subjects))),
+            grade=draft.grade,
+            urgency=draft.urgency,
+            tab=draft.tab,
+            ref=None,
+            paper_date=None,
+            draft_number=f"{draft.id:06d}",
+            submitter_g_number=user.employee_id,
+            viewer_name=_viewer_label(user),
+            asset_base=PAPER_ASSET_BASE,
+        )
+    )
+
+
+def book_paper(db: Session, user: User, book_id: int, *, version_id: int | None = None) -> str:
+    """One Revision as paper, under the same read access as the detail route."""
+    read = ledger_book_read(db, user, book_id, version_id=version_id)
+    book = get_ledger_book(db, book_id)
+    paper_date = (
+        datetime.strptime(read.paper_date, PAPER_DATE_FORMAT).date() if read.paper_date else None
+    )
+    return render_paper(
+        PaperContext(
+            body_html=read.body_html,
+            subjects=tuple(read.subjects),
+            grade=read.grade,
+            urgency=read.urgency,
+            tab=read.tab,
+            ref=read.ref_number,
+            paper_date=paper_date,
+            draft_number=None,
+            submitter_g_number=book_service.submitter_g_number(db, book),
+            viewer_name=_viewer_label(user),
+            asset_base=PAPER_ASSET_BASE,
+        )
     )
 
 

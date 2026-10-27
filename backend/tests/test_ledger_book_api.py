@@ -305,6 +305,29 @@ def test_version_scoped_reader_cannot_see_newer_revision_or_its_saves(ledger):
     assert client.get(f"{url}/revisions/{v1}/saves").status_code == 200
     assert client.get(url, params={"revision": v2}).status_code in (403, 404)
     assert client.get(f"{url}/revisions/{v2}/saves").status_code in (403, 404)
+    assert client.get(f"{url}/paper", params={"revision": v1}).status_code == 200
+    assert client.get(f"{url}/paper", params={"revision": v2}).status_code in (403, 404)
+
+
+def test_papers_follow_read_access_and_are_hardened(ledger):
+    client, db, actor, owner, other, _ = ledger
+    draft = client.post(DRAFTS, json={"tab": 5, **CONTENT}).json()
+    draft_paper = client.get(f"{DRAFTS}/{draft['id']}/paper")
+    assert draft_paper.status_code == 200, draft_paper.text
+    assert "DRAFT" in draft_paper.text and draft["draft_number"] in draft_paper.text
+    assert "*GSSG+" not in draft_paper.text
+
+    _, detail = send(client, grade="top_secret")
+    paper = client.get(f"{BOOKS}/{detail['id']}/paper")
+    assert paper.status_code == 200, paper.text
+    assert paper.headers["content-security-policy"].startswith("sandbox allow-same-origin")
+    assert paper.headers["cache-control"] == "no-store"
+    assert detail["ref_number"] in paper.text and "Second subject" in paper.text
+    assert (owner.display_name or owner.email) in paper.text  # Secret viewer watermark
+
+    actor[0] = other
+    error(client.get(f"{DRAFTS}/{draft['id']}/paper"), 404, "DRAFT_NOT_FOUND")
+    assert client.get(f"{BOOKS}/{detail['id']}/paper").status_code == 404
 
 
 @pytest.mark.parametrize(
@@ -315,6 +338,7 @@ def test_version_scoped_reader_cannot_see_newer_revision_or_its_saves(ledger):
         ("get", "/revisions/1/saves", None),
         ("post", "/corrections", None),
         ("get", "/images/00000000000000000000000000000000.png", None),
+        ("get", "/paper", None),
     ],
 )
 def test_non_ledger_books_are_not_exposed_by_ledger_routes(ledger, method, suffix, payload):
