@@ -6,7 +6,7 @@
  */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Send, Trash2 } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, Send, Trash2 } from 'lucide-react'
 import { useCallback, useId, useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -15,6 +15,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { GradeSelect } from '@/components/books/GradeSelect'
 import { GRADE_META } from '@/components/books/grades'
 import { deskBookUrl, LEDGER_DRAFTS_KEY, ledgerDraftKey } from '@/components/books/ledgerBookKeys'
+import { LedgerPaperFrame } from '@/components/books/LedgerPaperFrame'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { api, ApiError, apiErrorMessage, type LedgerDraftRead } from '@/lib/api'
@@ -69,6 +70,8 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
   const autosave = useDraftAutosave(draft.id, values, initial, autosaveMs)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [confirm, setConfirm] = useState<'send' | 'delete' | null>(null)
+  const [preview, setPreview] = useState(false)
+  const previewId = useId()
   const classifications = useQuery({
     queryKey: ['books', 'classifications'],
     queryFn: () => api.listBookClassifications(),
@@ -134,6 +137,19 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
         </h1>
         <SaveStatus state={autosave.state} />
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <Button
+            type="button"
+            variant="outline"
+            aria-expanded={preview}
+            aria-controls={previewId}
+            onClick={() => {
+              if (!preview) void autosave.flush(form.getValues())
+              setPreview(!preview)
+            }}
+          >
+            {preview ? <EyeOff aria-hidden="true" className="size-4" /> : <Eye aria-hidden="true" className="size-4" />}
+            {t(preview ? 'ledgerBook.composer.preview.hide' : 'ledgerBook.composer.preview.show')}
+          </Button>
           <Button type="button" variant="outline" disabled={remove.isPending || send.isPending} onClick={() => setConfirm('delete')}>
             <Trash2 aria-hidden="true" className="size-4" />
             {t('ledgerBook.composer.delete.button')}
@@ -153,82 +169,91 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
         {t('ledgerBook.composer.fields.gradeBanner', { label: t('books.grade.label'), grade: t(grade.label) })}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="flex flex-col gap-1">
-          <label htmlFor={tabId} className="text-[0.78em] font-semibold text-muted-foreground">{t('ledgerBook.composer.fields.tab')}</label>
+      <div className={cn('grid gap-6', preview && 'lg:grid-cols-2')}>
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="flex flex-col gap-1">
+              <label htmlFor={tabId} className="text-[0.78em] font-semibold text-muted-foreground">{t('ledgerBook.composer.fields.tab')}</label>
+              <Controller
+                control={form.control}
+                name="tab"
+                render={({ field }) => (
+                  <select
+                    id={tabId}
+                    value={field.value ?? ''}
+                    onChange={(e) => {
+                      clearError('tab')
+                      field.onChange(e.target.value === '' ? null : Number(e.target.value))
+                    }}
+                    aria-invalid={errors.tab ? true : undefined}
+                    aria-describedby={errors.tab ? `${tabId}-error` : undefined}
+                    className="min-h-10 w-full rounded-lg border border-hairline bg-background px-3 py-2 text-[0.84em] text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30 aria-[invalid=true]:border-destructive"
+                  >
+                    <option value="">{t('ledgerBook.composer.fields.tabPlaceholder')}</option>
+                    {tabs.map((c) => (
+                      <option key={c.code} value={c.tab}>
+                        {t('ledgerBook.composer.fields.tabOption', { tab: c.tab, name: isAr ? c.name_ar : c.name_en })}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              />
+              {errors.tab && <p id={`${tabId}-error`} role="alert" className="text-[0.78em] text-destructive">{errors.tab}</p>}
+            </div>
+            <Controller
+              control={form.control}
+              name="grade"
+              render={({ field }) => <GradeSelect value={field.value} onChange={field.onChange} />}
+            />
+            <Controller
+              control={form.control}
+              name="importance"
+              render={({ field }) => <ImportancePicker value={field.value} onChange={field.onChange} />}
+            />
+          </div>
+
           <Controller
             control={form.control}
-            name="tab"
+            name="subjects"
             render={({ field }) => (
-              <select
-                id={tabId}
-                value={field.value ?? ''}
-                onChange={(e) => {
-                  clearError('tab')
-                  field.onChange(e.target.value === '' ? null : Number(e.target.value))
+              <SubjectLines
+                value={field.value}
+                onChange={(lines) => {
+                  clearError('subjects')
+                  field.onChange(lines)
                 }}
-                aria-invalid={errors.tab ? true : undefined}
-                aria-describedby={errors.tab ? `${tabId}-error` : undefined}
-                className="min-h-10 w-full rounded-lg border border-hairline bg-background px-3 py-2 text-[0.84em] text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30 aria-[invalid=true]:border-destructive"
-              >
-                <option value="">{t('ledgerBook.composer.fields.tabPlaceholder')}</option>
-                {tabs.map((c) => (
-                  <option key={c.code} value={c.tab}>
-                    {t('ledgerBook.composer.fields.tabOption', { tab: c.tab, name: isAr ? c.name_ar : c.name_en })}
-                  </option>
-                ))}
-              </select>
+                error={errors.subjects}
+              />
             )}
           />
-          {errors.tab && <p id={`${tabId}-error`} role="alert" className="text-[0.78em] text-destructive">{errors.tab}</p>}
-        </div>
-        <Controller
-          control={form.control}
-          name="grade"
-          render={({ field }) => <GradeSelect value={field.value} onChange={field.onChange} />}
-        />
-        <Controller
-          control={form.control}
-          name="importance"
-          render={({ field }) => <ImportancePicker value={field.value} onChange={field.onChange} />}
-        />
-      </div>
 
-      <Controller
-        control={form.control}
-        name="subjects"
-        render={({ field }) => (
-          <SubjectLines
-            value={field.value}
-            onChange={(lines) => {
-              clearError('subjects')
-              field.onChange(lines)
-            }}
-            error={errors.subjects}
-          />
-        )}
-      />
-
-      <div className="flex flex-col gap-1">
-        <span className="text-[0.78em] font-semibold text-muted-foreground">{t('ledgerBook.composer.body.label')}</span>
-        <Controller
-          control={form.control}
-          name="body_html"
-          render={({ field }) => (
-            <LedgerBodyEditor
-              value={field.value}
-              onChange={(html) => {
-                clearError('body')
-                field.onChange(html)
-              }}
-              label={t('ledgerBook.composer.body.label')}
-              onUploadImage={uploadImage}
-              invalid={Boolean(errors.body)}
-              describedBy={errors.body ? bodyErrorId : undefined}
+          <div className="flex flex-col gap-1">
+            <span className="text-[0.78em] font-semibold text-muted-foreground">{t('ledgerBook.composer.body.label')}</span>
+            <Controller
+              control={form.control}
+              name="body_html"
+              render={({ field }) => (
+                <LedgerBodyEditor
+                  value={field.value}
+                  onChange={(html) => {
+                    clearError('body')
+                    field.onChange(html)
+                  }}
+                  label={t('ledgerBook.composer.body.label')}
+                  onUploadImage={uploadImage}
+                  invalid={Boolean(errors.body)}
+                  describedBy={errors.body ? bodyErrorId : undefined}
+                />
+              )}
             />
-          )}
-        />
-        {errors.body && <p id={bodyErrorId} role="alert" className="text-[0.78em] text-destructive">{errors.body}</p>}
+            {errors.body && <p id={bodyErrorId} role="alert" className="text-[0.78em] text-destructive">{errors.body}</p>}
+          </div>
+        </div>
+        {preview && (
+          <section id={previewId} aria-label={t('ledgerBook.composer.paper.title')} className="min-w-0 lg:sticky lg:top-4 lg:self-start">
+            <LedgerPaperFrame source={{ draftId: draft.id }} reloadKey={autosave.savedCount} className="lg:h-[calc(100vh-8rem)]" />
+          </section>
+        )}
       </div>
 
       <ConfirmDialog

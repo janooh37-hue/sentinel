@@ -139,4 +139,13 @@ describe('Ledger Book composer', () => {
     expect(screen.getByLabelText('Tab')).toBeInvalid()
     expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger/compose/12')
   })
+
+  it('T-C7 Preview shows the draft paper in the sandboxed frame', async () => {
+    mountComposer()
+    const toggle = await screen.findByRole('button', { name: 'Preview' })
+    expect(screen.queryByTitle('Ledger Book paper')).not.toBeInTheDocument()
+    await userEvent.click(toggle)
+    expect(screen.getByTitle('Ledger Book paper')).toHaveAttribute('src', '/api/v1/ledger/drafts/12/paper')
+    expect(screen.getByRole('button', { name: 'Hide preview' })).toHaveAttribute('aria-expanded', 'true')
+  })
 })
