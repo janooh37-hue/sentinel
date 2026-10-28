@@ -29,7 +29,6 @@ it('T-C6 lists my drafts with label, first subject and updated date; delete asks
   expect(first).toHaveAttribute('href', '/ledger/compose/12')
   expect(first).toHaveTextContent('Leave plan')
   expect(first).not.toHaveTextContent('Annex A')
-  expect(first.closest('li')).toHaveTextContent(/Updated .*2026/)
   expect(first.closest('li')).toHaveTextContent(/Updated .28\/10\/2026/)
 
   await userEvent.click(screen.getByRole('button', { name: 'Delete DRAFT 000012' }))
