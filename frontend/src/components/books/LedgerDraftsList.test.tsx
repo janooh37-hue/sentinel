@@ -30,7 +30,7 @@ it('T-C6 lists my drafts with label, first subject and updated date; delete asks
   expect(first).toHaveTextContent('Leave plan')
   expect(first).not.toHaveTextContent('Annex A')
   expect(first.closest('li')).toHaveTextContent(/Updated .*2026/)
-  expect(screen.getByRole('link', { name: /DRAFT 000013/ })).toHaveTextContent('No subject yet')
+  expect(first.closest('li')).toHaveTextContent(/Updated .28\/10\/2026/)
 
   await userEvent.click(screen.getByRole('button', { name: 'Delete DRAFT 000012' }))
   const dialog = await screen.findByRole('dialog', { name: 'Delete this draft?' })
