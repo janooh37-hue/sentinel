@@ -214,6 +214,35 @@ def test_pending_edit_appends_form_and_companion_preserving_old_artifacts(
     assert payload["note"] == "edited from Leaves"
 
 
+def test_approved_record_with_generation_embedded_manager_signature_syncs(env):
+    # The common production shape: approved at generation with the manager
+    # signature embedded, never signed through sign_book.
+    book, leave = generate(env)
+    previous = book.versions[-1]
+    previous.status = "approved"
+    previous.manager_sig_embedded = True
+    book.approval_state = "approved"
+    env.db.commit()
+    assert previous.signed_pdf_path is None and previous.signed_at is None
+    edit(env, leave)
+    current = book.versions[-1]
+    assert current.id != previous.id
+    assert current.status == book.approval_state == "approved"
+    assert current.manager_sig_embedded is True
+    assert current.signed_pdf_path is None and current.signed_by_user_id is None
+    assert (current.fields["start_date"], current.fields["end_date"]) == (
+        "22/10/2026",
+        "25/10/2026",
+    )
+    document = env.db.get_one(Document, current.document_id)
+    assert "25/10/2026" in text(env, document.pdf_path)
+    assert env.db.scalar(
+        select(AuditLog).where(
+            AuditLog.entity_id == str(book.id), AuditLog.action == "book.leave_dates_synced"
+        )
+    )
+
+
 @pytest.mark.parametrize("amend", [False, True])
 def test_signed_record_keeps_signer_decisions_access_and_signature_registry(env, amend):
     book, leave = generate(env)

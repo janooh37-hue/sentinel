@@ -176,7 +176,10 @@ def _sync_leave_record(
 
     signer = None
     signature = None
-    signed = bool(previous.signed_pdf_path or previous.signed_at or previous.status == "approved")
+    # Signed means an electronic sign_book artifact. An approved version whose
+    # manager signature was embedded at generation re-renders through the
+    # generated path below with the same embed flags.
+    signed = bool(previous.signed_pdf_path or previous.signed_at)
     if signed:
         source = previous.signed_base_pdf_path or previous.signed_pdf_path or ""
         if "book_attachments" in Path(source.replace("\\", "/")).parts:
