@@ -1,4 +1,4 @@
-"""Migration 0110 suppresses historical outcomes and reverses without losing steps."""
+"""Migration 0114 suppresses historical outcomes and reverses without losing steps."""
 
 from pathlib import Path
 
@@ -8,8 +8,8 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0110_step_outcome_seen"
-PARENT = "0109_book_folder_shares"
+HEAD = "0114_step_outcome_seen"
+PARENT = "0113_book_folder_box"
 
 
 def test_single_head_and_backfill_round_trip(tmp_path: Path) -> None:

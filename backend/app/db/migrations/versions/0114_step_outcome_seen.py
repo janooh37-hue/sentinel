@@ -1,7 +1,7 @@
 """Track submitters' unseen signing-manager outcomes without replaying history.
 
-Revision ID: 0110_step_outcome_seen
-Revises: 0109_book_folder_shares
+Revision ID: 0114_step_outcome_seen
+Revises: 0113_book_folder_box
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0110_step_outcome_seen"
-down_revision: str | Sequence[str] | None = "0109_book_folder_shares"
+revision: str = "0114_step_outcome_seen"
+down_revision: str | Sequence[str] | None = "0113_book_folder_box"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
