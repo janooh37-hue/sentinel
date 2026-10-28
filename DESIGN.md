@@ -2368,6 +2368,8 @@ will trip over them.
 - Incoming / Done / Outgoing / Archived are personal routing scopes. Done means
   the caller marked their received book done; Archived takes precedence over
   Incoming and Done. Incoming shows the unread count as plain mono text.
+- **New Ledger Book** (`NewLedgerBookButton`, default variant, `w-full`) tops the rail, above Drafts and the boxes, in the desktop rail and the mobile rail sheet; it creates a draft and opens `/ledger/compose/:id`.
+- **Drafts** sits under New and above the boxes: a rail place (`NotebookPen`, "Drafts" / "المسودات", count when > 0, `aria-current` when selected) at `?scope=drafts`; the list pane shows `LedgerDraftsList` with no column header and no folders.
 - **Folders live in the boxes** (`pages/ledger/BooksRail.tsx`). The rail is a
   tree in the box order Incoming, Done, Outgoing, Archived; there are no
   separate "My folders" / "Team folders" sections. Each box row is the box
