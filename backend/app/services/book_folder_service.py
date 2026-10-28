@@ -9,6 +9,7 @@ from app.api.errors import AppError, NotFoundError
 from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import Book, BookFolder, BookFolderItem, BookFolderShare, Employee, User
 from app.schemas.book import (
+    BookFolderBox,
     BookFolderRead,
     BookFolderShareOption,
     BookFolderShareOptions,
@@ -16,6 +17,25 @@ from app.schemas.book import (
     BookFolderShareUser,
 )
 from app.services import book_send_service, book_service
+
+# Each folder box is the desk scope of the same name; `GET /books?inbox=` filter.
+BOX_INBOX: dict[str, book_service.InboxFilter] = {
+    "incoming": "received",
+    "outgoing": "sent",
+    "done": "done",
+    "archived": "archived",
+}
+
+
+def book_in_box(db: Session, user: User, book: Book, box: str) -> bool:
+    """Whether ``book`` is in the caller's desk ``box``: the desk list predicate."""
+    return bool(
+        db.scalar(
+            select(
+                exists().where(Book.id == book.id, book_service.inbox_clause(user, BOX_INBOX[box]))
+            )
+        )
+    )
 
 
 def visibility_clause(user: User) -> ColumnElement[bool]:
@@ -110,6 +130,7 @@ def list_folders(
         BookFolderRead(
             id=f.id,
             name=f.name,
+            box=f.box,
             team=f.owner_user_id is None,
             count=counts.get(f.id, (0, 0))[0],
             can_manage=f.owner_user_id == user.id or book_send_service._is_manager_or_admin(user),
@@ -140,22 +161,38 @@ def list_folders(
     ]
 
 
-def create_folder(db: Session, user: User, *, name: str, team: bool) -> BookFolderRead:
+def create_folder(
+    db: Session, user: User, *, name: str, box: BookFolderBox, team: bool
+) -> BookFolderRead:
     if team and not book_send_service._is_manager_or_admin(user):
         raise AppError(
             "FORBIDDEN", "Only managers and admins may manage team folders.", http_status=403
         )
     folder = BookFolder(
-        owner_user_id=None if team else user.id, name=name, created_by_user_id=user.id
+        owner_user_id=None if team else user.id,
+        name=name,
+        box=box,
+        created_by_user_id=user.id,
     )
     db.add(folder)
     db.commit()
     return list_folders(db, user, folder_id=folder.id)[0]
 
 
-def rename_folder(db: Session, user: User, folder_id: int, *, name: str) -> BookFolderRead:
+def update_folder(
+    db: Session,
+    user: User,
+    folder_id: int,
+    *,
+    name: str | None = None,
+    box: BookFolderBox | None = None,
+) -> BookFolderRead:
+    """Rename and/or move a folder to another box; filed books stay filed."""
     folder = get_folder(db, user, folder_id, manage=True)
-    folder.name = name
+    if name is not None:
+        folder.name = name
+    if box is not None:
+        folder.box = box
     db.commit()
     return list_folders(db, user, folder_id=folder.id)[0]
 
@@ -174,6 +211,13 @@ def file_book(
     folder = get_folder(db, user, folder_id)
     book = book_service.get_book(db, book_id)
     book_service.require_full_book_access(db, user, book)
+    if not remove and not book_in_box(db, user, book, folder.box):
+        raise AppError(
+            "FOLDER_BOX_MISMATCH",
+            "This book is not in the folder's box. / هذا الكتاب ليس في صندوق هذا المجلد.",
+            http_status=409,
+            details={"box": folder.box},
+        )
     if remove:
         db.execute(
             delete(BookFolderItem).where(

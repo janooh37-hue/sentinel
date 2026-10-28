@@ -625,12 +625,19 @@ class BookFolder(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(80), nullable=False)
+    # The desk box (scope) the folder sits in; books are filed only from that box.
+    box: Mapped[str] = mapped_column(String(10), nullable=False, server_default="incoming")
     created_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
     )
 
-    __table_args__ = (Index("ix_book_folders_owner_user_id", "owner_user_id"),)
+    __table_args__ = (
+        Index("ix_book_folders_owner_user_id", "owner_user_id"),
+        CheckConstraint(
+            "box IN ('incoming', 'outgoing', 'done', 'archived')", name="ck_book_folders_box"
+        ),
+    )
 
 
 class BookFolderShare(Base):

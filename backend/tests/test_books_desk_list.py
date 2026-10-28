@@ -24,8 +24,12 @@ def _folders(api: ApiHarness, **params: int) -> list[dict]:
     return response.json()
 
 
-def _create_folder(api: ApiHarness, name: str, *, team: bool = False) -> dict:
-    response = api.client.post(f"{API}/books/folders", json={"name": name, "team": team})
+def _create_folder(
+    api: ApiHarness, name: str, *, team: bool = False, box: str = "incoming"
+) -> dict:
+    response = api.client.post(
+        f"{API}/books/folders", json={"name": name, "team": team, "box": box}
+    )
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -103,6 +107,7 @@ def test_creator_only_folder_is_hidden_from_every_other_user(
     assert folder == {
         "id": folder["id"],
         "name": "A's private folder",
+        "box": "incoming",
         "team": False,
         "count": 0,
         "can_manage": True,
@@ -187,7 +192,10 @@ def test_team_folders_are_managed_by_managers_but_operators_can_file(
     grade_api: ApiHarness, manager: str
 ) -> None:
     api = grade_api
-    denied = api.client.post(f"{API}/books/folders", json={"name": "Not authorized", "team": True})
+    _send(api, "general", ["B"])
+    denied = api.client.post(
+        f"{API}/books/folders", json={"name": "Not authorized", "box": "incoming", "team": True}
+    )
     assert denied.status_code == 403, denied.text
     assert _folders(api) == []
     api.as_user(manager)
@@ -225,7 +233,9 @@ def test_team_folder_counts_and_rows_respect_secret_clearance(
 ) -> None:
     api = grade_api
     api.as_user("D")
-    folder = _create_folder(api, "Shared confidential work", team=True)
+    folder = _create_folder(api, "Shared confidential work", team=True, box="outgoing")
+    _send(api, "general", ["C2"])
+    _send(api, "secret", ["C2"])
     for level in ("general", "secret"):
         response = api.client.put(f"{API}/books/{api.records[level].id}/folders/{folder['id']}")
         assert response.status_code == 204, response.text
@@ -264,8 +274,11 @@ def test_filing_and_unfiling_require_full_book_access(
         )
         api.db.commit()
     api.as_user("D")
-    folder = _create_folder(api, "Full access only", team=True)
+    folder = _create_folder(api, "Full access only", team=True, box="outgoing")
     path = f"{API}/books/{record.id}/folders/{folder['id']}"
+    # A sender with full access has it in their Outgoing box (A lacks secret clearance).
+    api.as_user("D" if level == "secret" else "A")
+    _send(api, level, ["C2"])
     assert api.client.put(path).status_code == 204
     api.as_user(actor)
     if actor == "M":
