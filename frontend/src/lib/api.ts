@@ -856,6 +856,15 @@ export type BookSendResult = components['schemas']['BookSendResponse']
 export type BookRecipientRead = components['schemas']['BookRecipientRead']
 export type BookInboxRead = components['schemas']['BookInboxRead']
 export type RecipientCandidateRead = components['schemas']['RecipientCandidateRead']
+// Ledger Books: private drafts, issued books and their Revisions.
+export type LedgerDraftRead = components['schemas']['LedgerDraftRead']
+export type LedgerDraftCreate = components['schemas']['LedgerDraftCreate']
+export type LedgerDraftUpdate = components['schemas']['LedgerDraftUpdate']
+export type LedgerDraftImageRead = components['schemas']['LedgerDraftImageRead']
+export type LedgerBookRead = components['schemas']['LedgerBookRead']
+export type LedgerRevisionRead = components['schemas']['LedgerRevisionRead']
+export type LedgerContentUpdate = components['schemas']['LedgerContentUpdate']
+export type LedgerSaveRead = components['schemas']['LedgerSaveRead']
 export type BookDeriveRequest = components['schemas']['BookDeriveRequest']
 export type BookThreadItem = components['schemas']['BookThreadItem']
 export type BookLinkCreate = components['schemas']['BookLinkCreate']
@@ -2139,6 +2148,32 @@ export const api = {
   /** GET /books/classifications — full government classification list. */
   listBookClassifications: () =>
     request<components['schemas']['ClassificationListResponse']>('GET', '/books/classifications'),
+  // --- Ledger Books (drafts are private to their writer) ---
+  listLedgerDrafts: () => request<LedgerDraftRead[]>('GET', '/ledger/drafts'),
+  createLedgerDraft: (body: LedgerDraftCreate) => request<LedgerDraftRead>('POST', '/ledger/drafts', body),
+  getLedgerDraft: (id: number) => request<LedgerDraftRead>('GET', `/ledger/drafts/${id}`),
+  /** PATCH only the changed fields; `importance: null` clears it. */
+  updateLedgerDraft: (id: number, body: LedgerDraftUpdate) =>
+    request<LedgerDraftRead>('PATCH', `/ledger/drafts/${id}`, body),
+  deleteLedgerDraft: (id: number) => request<void>('DELETE', `/ledger/drafts/${id}`),
+  uploadLedgerDraftImage: (id: number, file: Blob, filename?: string) => {
+    const form = new FormData()
+    form.append('file', file, filename)
+    return multipart<LedgerDraftImageRead>(`/ledger/drafts/${id}/images`, form)
+  },
+  /** Allocates the reference number and consumes the draft. */
+  saveAndSendLedgerDraft: (id: number) =>
+    request<LedgerBookRead>('POST', `/ledger/drafts/${id}/save-and-send`),
+  /** `revision` is a Revision's `version_id`; omitted = the newest the caller may read. */
+  getLedgerBook: (id: number, revision?: number) =>
+    request<LedgerBookRead>('GET', `/ledger/books/${id}${qs({ revision })}`),
+  updateLedgerBookContent: (id: number, body: LedgerContentUpdate) =>
+    request<LedgerBookRead>('PUT', `/ledger/books/${id}/content`, body),
+  listLedgerRevisionSaves: (id: number, versionId: number) =>
+    request<LedgerSaveRead[]>('GET', `/ledger/books/${id}/revisions/${versionId}/saves`),
+  /** Opens a new correction Revision under the same reference (latest must be signed). */
+  startLedgerCorrection: (id: number) =>
+    request<LedgerBookRead>('POST', `/ledger/books/${id}/corrections`),
   /** POST /books/word-sessions — create a draft book + open-in-Word session.
    *  Returns WordSessionRead with a word_url for WebDAV/Word Direct Access. */
   createWordBook: (body: components['schemas']['WordBookCreate']) =>
