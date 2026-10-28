@@ -37,7 +37,7 @@ const BOOK: BookRead = {
 }
 
 const FOLDER: BookFolderRead = {
-  id: 3, name: 'Personnel', team: false, count: 2, can_manage: true,
+  id: 3, name: 'Personnel', box: 'incoming', team: false, count: 2, can_manage: true,
   created_by_name: 'Khalid', created_by_name_ar: 'خالد',
   everyone: false, shared_users: [], shared_departments: [],
 }
@@ -306,7 +306,7 @@ describe('Books routing desk', () => {
   })
 
   it('selects a folder without retaining the scope filter', async () => {
-    vi.mocked(api.listBookFolders).mockResolvedValue([FOLDER])
+    vi.mocked(api.listBookFolders).mockResolvedValue([{ ...FOLDER, box: 'done' }])
     mount('/ledger?tab=books&scope=done')
     await userEvent.click(await screen.findByRole('button', { name: /^Personnel/ }))
     await waitFor(() => expect(api.listBooks).toHaveBeenLastCalledWith(expect.objectContaining({ folder_id: 3, sort: '-date' })))
@@ -387,13 +387,55 @@ describe('Books routing desk', () => {
   })
 
 
-  it('creates a personal folder inline with Enter', async () => {
+  it('creates a folder inline with Enter in the box it was started from', async () => {
     vi.spyOn(api, 'createBookFolder').mockResolvedValue({ ...FOLDER, id: 4, name: 'Planning', count: 0 })
     mount()
-    await userEvent.click(screen.getByRole('button', { name: 'New personal folder' }))
+    await userEvent.click(screen.getByRole('button', { name: 'New folder in Incoming' }))
     const input = screen.getByRole('textbox', { name: 'Folder name' })
     await userEvent.type(input, 'Planning{Enter}')
-    await waitFor(() => expect(api.createBookFolder).toHaveBeenCalledWith({ name: 'Planning', team: false }))
+    await waitFor(() => expect(api.createBookFolder).toHaveBeenCalledWith({ name: 'Planning', box: 'incoming', team: false }))
+  })
+
+  // T-FR5
+  const SEND = { id: 1, user_id: 4, sent_by_user_id: 1, purpose: 'info' as const, created_at: '2026-10-12T10:00:00Z', revoked_at: null }
+  it.each([
+    ['a done book', { ...BOOK, my_inbox: { ...BOOK.my_inbox!, done_at: '2026-10-13T09:00:00Z' } }, [], ['Done']],
+    ['a book I received and sent on', BOOK, [SEND], ['Incoming', 'Outgoing']],
+    ['a book I only sent', { ...BOOK, my_inbox: null }, [SEND], ['Outgoing']],
+  ])('offers %s only the folders of its boxes, grouped by box', async (_label, book, sends, boxes) => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [book], total: 1, limit: 50, offset: 0 })
+    vi.spyOn(api, 'getBook').mockResolvedValue(book)
+    vi.mocked(api.listBookRecipients).mockResolvedValue(sends as never)
+    vi.mocked(api.listBookFolders).mockResolvedValue([
+      { ...FOLDER, id: 11, name: 'In tray', has_book: false },
+      { ...FOLDER, id: 12, name: 'Sent tray', box: 'outgoing', team: true, everyone: true, has_book: false },
+      { ...FOLDER, id: 13, name: 'Done tray', box: 'done', has_book: false },
+      { ...FOLDER, id: 14, name: 'Old tray', box: 'archived', has_book: false },
+    ])
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: /GS-7/ }))
+    await waitFor(() => expect(api.listBookRecipients).toHaveBeenCalled())
+    await userEvent.click(await screen.findByRole('button', { name: 'Folder' }))
+    const menu = await screen.findByRole('menu')
+    await waitFor(() => expect(within(menu).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(boxes))
+    const trays = { Incoming: 'In tray', Outgoing: 'Sent tray', Done: 'Done tray', Archived: 'Old tray' }
+    expect(within(menu).getAllByRole('menuitemcheckbox').map((item) => item.textContent)).toEqual(boxes.map((box) => trays[box as keyof typeof trays]))
+    expect(within(menu).queryByText('Personal')).toBeNull()
+    expect(within(menu).queryByText('Team folders')).toBeNull()
+    if (boxes.includes('Outgoing')) expect(within(menu).getByRole('menuitemcheckbox', { name: 'Sent tray, shared folder' }).querySelector('.lucide-folder-users')).not.toBeNull()
+  })
+
+  // T-FR8
+  it('shows the same box tree in the mobile sheet', async () => {
+    vi.mocked(useIsMobile).mockReturnValue(true)
+    vi.mocked(api.listBookFolders).mockResolvedValue([FOLDER, { ...FOLDER, id: 5, name: 'Closed', box: 'done' }])
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'Incoming' }))
+    const sheet = await screen.findByRole('dialog')
+    const incoming = await within(sheet).findByRole('group', { name: 'Folders in Incoming' })
+    expect(within(incoming).getByRole('button', { name: /^Personnel/ })).toBeInTheDocument()
+    expect(within(sheet).getByRole('button', { name: 'Folders in Done' })).toHaveAttribute('aria-expanded', 'false')
+    expect(within(sheet).getByRole('button', { name: 'New folder in Archived' })).toBeInTheDocument()
   })
 
   it('files and unfiles an opened book without changing its inbox state', async () => {

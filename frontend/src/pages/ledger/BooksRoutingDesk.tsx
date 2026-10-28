@@ -42,9 +42,9 @@ import { inboxSummaryKey } from '@/pages/books/useInboxCount'
 import { defaultPaperKey, paperCountOf, paperKey, papersOf } from '@/pages/books/recordPapers'
 import type { PaperKey } from '@/pages/books/recordPapers'
 import { BookFolderHeader } from './BookFolderHeader'
-import { BooksRail, ScopeIcon } from './BooksRail'
+import { BooksRail, FolderGlyph, ScopeIcon } from './BooksRail'
 import type { Scope } from './BooksRail'
-import { BOOK_DRAG_TYPE, toastFolderError, useBookFolders } from './useBookFolders'
+import { BOOK_DRAG_TYPE, FOLDER_BOXES, bookBoxDragType, toastFolderError, useBookFolders } from './useBookFolders'
 
 const RecordPaperViewer = lazy(() => import('@/pages/books/RecordPaperViewer'))
 
@@ -355,7 +355,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
               <ul className="divide-y divide-hairline" aria-label={searching ? t('ledger.booksDesk.searchLabel') : placeLabel}>
                 {rows.map((book) => (
                   <li key={book.id}>
-                    <BookRow book={book} asSent={asSent} showScope={searching} inFolder={listScope === 'folder'} current={book.id === lastOpenedId} draggable={!isMobile} onOpen={() => bookPage.open(String(book.id))} />
+                    <BookRow book={book} asSent={asSent} showScope={searching} inFolder={listScope === 'folder'} current={book.id === lastOpenedId} draggable={!isMobile} dragBox={listScope === 'folder' || listScope === 'any' ? undefined : listScope} onOpen={() => bookPage.open(String(book.id))} />
                   </li>
                 ))}
               </ul>
@@ -403,7 +403,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
  * under the column header: one centred mark per mark column. Below xl it
  * stacks: marks and ref, then subject with my state, then designations.
  */
-function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen }: {
+function BookRow({ book, asSent, showScope, inFolder, current, draggable, dragBox, onOpen }: {
   book: BookRead
   /** Outgoing tab: show my send even when I also received this book. */
   asSent: boolean
@@ -412,6 +412,8 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen
   current: boolean
   /** Desktop: drag the row onto a rail folder to file it. */
   draggable: boolean
+  /** The box list the row is dragged from; folder and search lists use the book's own box. */
+  dragBox?: Scope
   onOpen: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -450,7 +452,7 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen
       data-book-id={book.id}
       aria-current={current ? 'true' : undefined}
       draggable={draggable}
-      onDragStart={draggable ? (event) => startBookDrag(event, book.id, book.ref_number, subject, i18n.dir()) : undefined}
+      onDragStart={draggable ? (event) => startBookDrag(event, book.id, dragBox ?? place, book.ref_number, subject, i18n.dir()) : undefined}
       onClick={onOpen}
       className={cn(
         'grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:px-6 xl:py-2.5',
@@ -509,8 +511,10 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen
 }
 
 /** Carry the book id and show a compact chip under the pointer, not the whole wide row. */
-function startBookDrag(event: DragEvent<HTMLElement>, id: number, ref: string, subject: string, dir: 'ltr' | 'rtl'): void {
+function startBookDrag(event: DragEvent<HTMLElement>, id: number, box: Scope, ref: string, subject: string, dir: 'ltr' | 'rtl'): void {
   event.dataTransfer.setData(BOOK_DRAG_TYPE, String(id))
+  // Only types are readable during dragover, so the source box travels as its own type.
+  event.dataTransfer.setData(bookBoxDragType(box), '')
   event.dataTransfer.effectAllowed = 'copy'
   const chip = document.createElement('div')
   chip.dir = dir
@@ -530,7 +534,8 @@ function startBookDrag(event: DragEvent<HTMLElement>, id: number, ref: string, s
   requestAnimationFrame(() => chip.remove())
 }
 
-function BookFolderMenu({ bookId, disabled }: { bookId: number; disabled: boolean }): React.JSX.Element {
+/** Files the open book: only folders of the boxes it is in for me (F7), grouped by box. */
+function BookFolderMenu({ bookId, boxes, disabled }: { bookId: number; boxes: readonly Scope[]; disabled: boolean }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
@@ -556,21 +561,27 @@ function BookFolderMenu({ bookId, disabled }: { bookId: number; disabled: boolea
       <DropdownMenuContent className="max-h-80 max-w-xs overflow-y-auto" align="start">
         {folders.isPending ? <DropdownMenuItem disabled>{t('common.loading')}</DropdownMenuItem> : folders.isError ? (
           <DropdownMenuItem onSelect={(event) => { event.preventDefault(); void folders.refetch() }}>{t('ledger.booksDesk.folders.loadError')} {t('ledger.booksDesk.retry')}</DropdownMenuItem>
-        ) : !folders.data?.length ? <DropdownMenuItem disabled>{t('ledger.booksDesk.folders.createFirst')}</DropdownMenuItem> : (
-          [false, true].map((team) => {
-            const group = folders.data.filter((folder) => folder.team === team)
-            return group.length > 0 && <div key={String(team)}>
-              <p className="px-2.5 py-2 text-xs font-medium text-muted-foreground">{t(team ? 'ledger.booksDesk.folders.team' : 'ledger.booksDesk.folders.personal')}</p>
-              {group.map((folder) => (
+        ) : (() => {
+          // Folders the book is already in stay listed so it can be taken out after it moves box.
+          const groups = FOLDER_BOXES
+            .map((box) => ({ box, items: (folders.data ?? []).filter((folder) => folder.box === box && (boxes.includes(box) || folder.has_book)) }))
+            .filter((group) => group.items.length > 0)
+          if (groups.length === 0) return <DropdownMenuItem disabled>{t('ledger.booksDesk.folders.noneForBook')}</DropdownMenuItem>
+          return groups.map(({ box, items }) => (
+            <div key={box} role="group" aria-label={t(`ledger.booksDesk.${box}`)}>
+              <p aria-hidden className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium text-muted-foreground"><ScopeIcon scope={box} className="h-3.5 w-3.5" />{t(`ledger.booksDesk.${box}`)}</p>
+              {items.map((folder) => (
                 <CheckboxItem key={folder.id} checked={!!folder.has_book} disabled={filing.isPending} onSelect={(event) => event.preventDefault()} onCheckedChange={() => filing.mutate({ id: folder.id, hasBook: !!folder.has_book })}
+                  aria-label={folder.team ? t('ledger.booksDesk.folders.sharedName', { name: folder.name }) : undefined}
                   className="relative flex cursor-pointer items-center gap-2 rounded-lg py-2 pe-3 ps-8 text-sm outline-none focus:bg-surface-tinted data-[disabled]:pointer-events-none data-[disabled]:opacity-50">
                   <ItemIndicator className="absolute start-2"><Check className="h-4 w-4" aria-hidden /></ItemIndicator>
+                  <FolderGlyph team={folder.team} className={folder.team ? 'text-info' : 'text-muted-foreground'} />
                   <bdi className="break-words">{folder.name}</bdi>
                 </CheckboxItem>
               ))}
             </div>
-          })
-        )}
+          ))
+        })()}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -615,6 +626,8 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
     const done = mine.filter((row) => row.done_at).length
     facts.push({ label: t('ledger.booksDesk.columns.progress'), value: <span className="block space-y-0.5"><span className="block">{t('ledger.booksDesk.openedOf', { count: opened, total: mine.length })}</span><span className={cn('block', done === mine.length && 'text-success')}>{t('ledger.booksDesk.doneOf', { count: done, total: mine.length })}</span></span> })
   }
+  // The boxes this book is in for me: the same scopes as the desk lists (incoming = received).
+  const boxes: Scope[] = [...(inbox ? [scopeOf(book)] : []), ...(mine.length > 0 ? ['outgoing' as const] : [])]
   facts.push({ label: t('ledger.booksDesk.columns.papers'), value: <bdi dir="ltr" className="font-mono tabular-nums">{papers.length}</bdi> })
   const titleId = `book-title-${book.id}`
   return (
@@ -625,7 +638,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
         {inboxActions.map((action) => <Button key={action.key} className="shrink-0" variant={action.key === 'done' ? 'default' : 'outline'} size="sm" disabled={action.pending} aria-busy={action.pending} onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
         {canSend && <Button className="shrink-0" variant="outline" size="sm" disabled={loading} onClick={() => setSendOpen(true)}><Send className="h-4 w-4 rtl:-scale-x-100" aria-hidden />{t('ledger.booksDesk.forward')}</Button>}
         {reply.actions.map((action) => <Button key={action.key} className="shrink-0" variant="outline" size="sm" onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
-        <BookFolderMenu bookId={book.id} disabled={loading} />
+        <BookFolderMenu bookId={book.id} boxes={boxes} disabled={loading} />
         <div className="ms-auto flex shrink-0 items-center gap-1 ps-2">
           {!isMobile && <Button variant="ghost" size="sm" onClick={onToggleReader}>{reader ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}{t(reader ? 'ledger.booksDesk.collapse' : 'ledger.booksDesk.expand')}</Button>}
           <Link to={`/books/${book.id}`} className={buttonVariants({ variant: 'ghost', size: 'sm' })}><BookText className="h-4 w-4" aria-hidden />{t('ledger.booksDesk.openInRecords')}</Link>
