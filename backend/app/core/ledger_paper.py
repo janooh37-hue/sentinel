@@ -35,12 +35,6 @@ PAPER_CSP: Final = (
     "form-action 'none'; frame-ancestors 'self'"
 )
 
-URGENCY_LABEL_AR: Final[dict[str, str]] = {
-    "Normal": "عادي",
-    "High": "عاجل",
-    "Very High": "عاجل جداً",
-}
-
 # The General Book's office line (header3.xml), printed as-is.
 _OFFICE_AR: Final = "مكتب ادارة الوثبة"
 
@@ -50,7 +44,6 @@ class PaperContext:
     body_html: str  # ALREADY sanitized upstream; inserted as-is
     subjects: tuple[str, ...]  # ordered; escape every one
     grade: str  # core.grades code
-    urgency: str  # stored value: Normal | High | Very High
     ref: str | None  # None for a Draft
     paper_date: date | None  # None for a Draft
     draft_number: str | None  # "000123" for a Draft, else None
@@ -141,7 +134,6 @@ body {
 .watermark .draft { font-size: 64pt; font-weight: bold; font-family: "GSSG Naskh", sans-serif; }
 .watermark .draft-number { font-size: 28pt; direction: ltr; unicode-bidi: isolate; }
 .watermark .viewer { font-size: 34pt; }
-.urgency { margin: 0 0 2mm; font-weight: bold; }
 .subjects { margin: 0 0 4mm; padding: 0; list-style: none; font-weight: bold; }
 .subjects li { margin: 0; }
 .body { overflow-wrap: anywhere; }
@@ -218,12 +210,6 @@ def render_paper(ctx: PaperContext) -> str:
     mark_html = f'<div class="mark">{_e(mark)}</div>' if mark else ""
     subjects = "".join(f"<li>الموضوع: {_e(subject)}</li>" for subject in ctx.subjects)
     subjects_html = f'<ul class="subjects">{subjects}</ul>' if subjects else ""
-    # The Word letterhead has no urgency; print it once, above the subjects,
-    # only when it is not Normal (as Unclassified prints no grade mark).
-    urgency = URGENCY_LABEL_AR.get(ctx.urgency, ctx.urgency)
-    urgency_html = (
-        f'<p class="urgency">الاستعجال: {_e(urgency)}</p>' if ctx.urgency != "Normal" else ""
-    )
     title = ctx.ref or (f"مسودة {ctx.draft_number}" if ctx.draft_number else "مسودة")
     return (
         '<!DOCTYPE html>\n<html lang="ar" dir="rtl"><head><meta charset="utf-8">'
@@ -238,7 +224,7 @@ def render_paper(ctx: PaperContext) -> str:
         '<table class="frame" role="presentation">'
         '<thead><tr><td><div class="head-space"></div></td></tr></thead>'
         '<tfoot><tr><td><div class="foot-space"></div></td></tr></tfoot>'
-        f"<tbody><tr><td><main>{urgency_html}{subjects_html}"
+        f"<tbody><tr><td><main>{subjects_html}"
         f'<div class="body">{ctx.body_html}</div></main>'
         "</td></tr></tbody></table></div></body></html>"
     )

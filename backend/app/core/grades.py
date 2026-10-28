@@ -1,4 +1,4 @@
-"""Fixed record grades, distributions and urgencies (ADR 0007, D8 + D10).
+"""Fixed record grades, distributions, urgencies and importance (ADRs 0007, 0008).
 
 Grades are code constants: there is no table, setting, or management UI. The
 ``ck_books_grade`` constraint, the API literals, and the printed marks all
@@ -43,6 +43,14 @@ DISTRIBUTIONS: Final[tuple[str, ...]] = (ORGANIZATION, NAMED)
 
 URGENCIES: Final[tuple[str, ...]] = ("Normal", "High", "Very High")
 
+# Ledger Book Importance (الأهمية, ADR 0008): a desk mark, never printed. None
+# means no importance; every non-Ledger record stores None.
+MEDIUM: Final = "medium"
+HIGH: Final = "high"
+IMPORTANCE_LEVELS: Final[tuple[str, ...]] = (MEDIUM, HIGH)
+IMPORTANCE_LABEL_EN: Final[dict[str, str]] = {MEDIUM: "Medium", HIGH: "High"}
+IMPORTANCE_LABEL_AR: Final[dict[str, str]] = {MEDIUM: "متوسطة", HIGH: "عالية"}
+
 
 def paper_mark(grade: str) -> str | None:
     """The Arabic mark printed for ``grade``; None for Unclassified."""
@@ -74,3 +82,4 @@ def _check(column: str, values: tuple[str, ...]) -> str:
 GRADE_CHECK: Final = _check("grade", GRADE_CODES)
 DISTRIBUTION_CHECK: Final = _check("distribution", DISTRIBUTIONS)
 URGENCY_CHECK: Final = _check("urgency", URGENCIES)
+IMPORTANCE_CHECK: Final = _check("importance", IMPORTANCE_LEVELS)

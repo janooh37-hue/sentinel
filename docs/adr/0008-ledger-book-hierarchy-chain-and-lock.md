@@ -135,6 +135,23 @@ One correspondence desk inside Ledger → Books, with folders shown only to
 people who hold the role: Drafts, To audit, To sign, To route, Dispatch,
 Incoming, Outgoing. Desktop and mobile behave the same.
 
+## Importance
+
+Ledger Books carry **Importance** (الأهمية) instead of Urgency:
+
+- Three levels: Medium (متوسطة), High (عالية), or none (بدون, stored NULL,
+  the default). Codes and labels live in `app.core.grades`.
+- The writer sets it on the private Draft (`book_drafts.importance`); Save &
+  Send copies it to the Book (`books.importance`), and a Correction Revision
+  keeps it. It belongs to the Book, not to one Revision.
+- Ledger Books do not use Urgency: the Draft has no urgency (migration 0112
+  drops `book_drafts.urgency`) and the Book keeps the stored default `Normal`.
+- Importance is a desk mark only. Neither the Draft paper nor the issued paper
+  prints Importance or Urgency.
+- Every other Record stores no Importance. The desk shows one derived from its
+  Urgency (Normal and Urgent as Medium, Very Urgent as High); that mapping is a
+  frontend display rule, and the API returns the stored value only.
+
 ## Considered options
 
 - **Top tabs per role (Writer | Reviewer | Branch Manager | Dispatch).**

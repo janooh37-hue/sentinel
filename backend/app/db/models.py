@@ -253,6 +253,9 @@ class Book(Base):
     urgency: Mapped[str] = mapped_column(
         String(16), nullable=False, default="Normal", server_default="Normal"
     )
+    # Ledger Book Importance (الأهمية, ADR 0008): medium | high | None. Always
+    # None for non-Ledger records; Ledger Books keep urgency at Normal.
+    importance: Mapped[str | None] = mapped_column(String(8), nullable=True)
     # none | pending | approved | rejected | returned
     approval_state: Mapped[str] = mapped_column(
         String(16), nullable=False, default="none", server_default="none"
@@ -322,6 +325,7 @@ class Book(Base):
         CheckConstraint(grades.GRADE_CHECK, name="ck_books_grade"),
         CheckConstraint(grades.DISTRIBUTION_CHECK, name="ck_books_distribution"),
         CheckConstraint(grades.URGENCY_CHECK, name="ck_books_urgency"),
+        CheckConstraint(grades.IMPORTANCE_CHECK, name="ck_books_importance"),
     )
 
 
@@ -458,9 +462,7 @@ class BookDraft(Base):
     grade: Mapped[str] = mapped_column(
         String(16), nullable=False, default="unclassified", server_default="unclassified"
     )
-    urgency: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="Normal", server_default="Normal"
-    )
+    importance: Mapped[str | None] = mapped_column(String(8), nullable=True)
     subjects: Mapped[list[str]] = mapped_column(
         JSON, nullable=False, default=list, server_default="[]"
     )
@@ -472,7 +474,7 @@ class BookDraft(Base):
         Index("ix_book_drafts_owner_user_id", "owner_user_id"),
         CheckConstraint("tab IS NULL OR (tab BETWEEN 1 AND 15)", name="ck_book_drafts_tab"),
         CheckConstraint(grades.GRADE_CHECK, name="ck_book_drafts_grade"),
-        CheckConstraint(grades.URGENCY_CHECK, name="ck_book_drafts_urgency"),
+        CheckConstraint(grades.IMPORTANCE_CHECK, name="ck_book_drafts_importance"),
         # Never reuse a deleted draft's id: draft numbers and image URLs carry it.
         {"sqlite_autoincrement": True},
     )

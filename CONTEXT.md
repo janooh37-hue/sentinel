@@ -143,8 +143,17 @@ _Avoid_: Override, admin view
 
 **Urgency** (الاستعجال):
 How soon a Record needs action: Normal (عادي), Urgent (عاجل) or Very Urgent
-(عاجل جداً).
+(عاجل جداً). Not used by Ledger Books: they carry Importance instead and keep
+the stored Urgency at Normal.
 _Avoid_: Priority
+
+**Importance** (الأهمية):
+How much a Ledger Book matters on the desk: Medium (متوسطة), High (عالية) or
+none (بدون). The writer sets it on the Draft; Save & Send copies it to the Book
+and a Correction Revision keeps it. It is a desk mark only and is never printed
+on the paper. Other Records have no Importance; the desk shows one derived from
+their Urgency.
+_Avoid_: Priority, Urgency (for Ledger Books)
 
 **Direct send**:
 Delivering a Record to named users with a purpose (للاطلاع, للتنفيذ, للإفادة,
@@ -414,6 +423,7 @@ the domain language above.
 | Draft | `book_drafts` |
 | Addressee | `book_addressees` |
 | Urgency | `Book.urgency` (stored `Normal`, `High`, `Very High`) |
+| Importance | `Book.importance`, `BookDraft.importance` (stored `medium`, `high`, or NULL) |
 | Direct send | `BookRecipient` |
 | Threaded reply confirmation | `ScanInbox.source = "email_reply_match"` |
 | Attendance case | `AttendanceCase` |
