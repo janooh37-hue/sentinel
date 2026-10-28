@@ -819,6 +819,9 @@ export type BookRead = components['schemas']['BookRead'] & {
   imported_doc?: ImportedDocRead | null
 }
 export type BookFolderRead = components['schemas']['BookFolderRead']
+export type BookFolderCreate = components['schemas']['BookFolderCreate']
+export type BookFolderUpdate = components['schemas']['BookFolderUpdate']
+export type BookFolderBox = BookFolderRead['box']
 export type BookFolderShareUser = components['schemas']['BookFolderShareUser']
 export type BookFolderShareOption = components['schemas']['BookFolderShareOption']
 export type BookFolderShareOptions = components['schemas']['BookFolderShareOptions']
@@ -2101,10 +2104,11 @@ export const api = {
     request<BookFolderShareOptions>('GET', '/books/folders/share-options'),
   updateBookFolderShares: (folderId: number, body: BookFolderSharesUpdate) =>
     request<BookFolderRead>('PUT', `/books/folders/${folderId}/shares`, body),
-  createBookFolder: (body: { name: string; team?: boolean }) =>
+  createBookFolder: (body: BookFolderCreate) =>
     request<BookFolderRead>('POST', '/books/folders', body),
-  renameBookFolder: (id: number, name: string) =>
-    request<BookFolderRead>('PATCH', `/books/folders/${id}`, { name }),
+  /** Rename a folder and/or move it to another box; filed books stay filed. */
+  updateBookFolder: (id: number, body: BookFolderUpdate) =>
+    request<BookFolderRead>('PATCH', `/books/folders/${id}`, body),
   deleteBookFolder: (id: number) =>
     request<void>('DELETE', `/books/folders/${id}`),
   addBookToFolder: (bookId: number, folderId: number) =>

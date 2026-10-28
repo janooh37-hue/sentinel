@@ -2367,6 +2367,32 @@ will trip over them.
 - Incoming / Done / Outgoing / Archived are personal routing scopes. Done means
   the caller marked their received book done; Archived takes precedence over
   Incoming and Done. Incoming shows the unread count as plain mono text.
+- **Folders live in the boxes** (`pages/ledger/BooksRail.tsx`). The rail is a
+  tree in the box order Incoming, Done, Outgoing, Archived; there are no
+  separate "My folders" / "Team folders" sections. Each box row is the box
+  button (icon, label, count), a chevron button (`aria-expanded`, named
+  "Folders in {box}"; `ChevronDown`, turned `-rotate-90 rtl:rotate-90` when
+  closed, no transition under reduced motion) and a `Plus` "New folder in
+  {box}". The selected box, or the box of the selected folder, is open;
+  selecting a box opens it and closes the others, and the chevron opens or
+  closes a box without navigating. A box's folders are a `role="group"` nested
+  with `ps-4` (logical padding only), personal and shared mixed and sorted by
+  name. The mobile sheet shows the same tree.
+- **Shared (team) folders** differ by shape and text, never colour alone:
+  `FolderUsers` instead of `Folder`, a `text-blue-grad-a` glyph and a
+  `bg-blue-grad-a/10` row tint, an accessible name "{name}, shared folder", and
+  a tooltip on hover and focus naming who it is shared with ("Shared with
+  everyone" or the people and departments). The same glyph and name mark
+  shared folders in the record's Folder menu.
+- **Filing follows the box** (F7). The record's Folder menu groups folders by
+  box and lists only the boxes the book is in for me (incoming = received,
+  done, outgoing = I sent it, archived); folders already holding the book stay
+  listed so it can be taken out. While a desk row is dragged, folders of the
+  row's box show a dashed outline and accept the drop; other boxes' folders
+  show `cursor-not-allowed` at half opacity and refuse it. Filing is a label:
+  the book stays in its box list. Create forms open in the box they were
+  started from (managers add "Share with the team"); the rename form adds a
+  Box select that moves the folder, keeping its books.
 - **List.** One full-width list, no placeholder pane. Scope tabs and the search
   field share one bar. From `xl` up, a sticky header and every row share one
   grid template (`DESK_GRID`), in this order: three equal `4rem` mark columns
