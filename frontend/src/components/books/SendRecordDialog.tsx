@@ -1,10 +1,8 @@
 /**
  * SendRecordDialog — send (or forward) a record to people.
  *
- * Recipients come from listRecipientCandidates (the backend returns only
- * cleared users for a Secret record). A Personal record has to become
- * Directed to be sent; the dialog says so and the send button carries the
- * switch (`make_directed`). Callers show the trigger only when `book.can_send`.
+ * Secret recipients require clearance. Top Secret and Addressee Only records
+ * can only be sent by their writer; the server rechecks this permission.
  */
 import { useId, useState } from 'react'
 import * as RadixDialog from '@radix-ui/react-dialog'
@@ -26,13 +24,15 @@ import {
 import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/authContext'
+import { isWriterOnlyGrade } from './grades'
 
 const MAX_RECIPIENTS = 50
 const MAX_NOTE = 500
 const SEND_ERROR_KEYS: Record<string, string | undefined> = {
   RECIPIENT_NOT_CLEARED: 'books.send.errors.notCleared',
   RECIPIENT_INVALID: 'books.send.errors.invalid',
-  PERSONAL_REQUIRES_DIRECTED: 'books.send.errors.personal',
+  WRITER_ONLY_SEND: 'books.send.errors.writerOnly',
 }
 
 interface Props {
@@ -42,19 +42,21 @@ interface Props {
 }
 
 export function SendRecordDialog({ book, open, onOpenChange }: Props): React.JSX.Element | null {
+  const { user } = useAuth()
+  const permitted = !book.metadata_only && (!isWriterOnlyGrade(book.grade) || book.created_by_user_id === user?.id)
   const thread = useQuery({
     queryKey: ['books', 'thread', book.id],
     queryFn: () => api.getBookThread(book.id),
-    enabled: open,
+    enabled: open && permitted,
   })
   const candidatesQuery = useQuery({
-    queryKey: ['books', 'recipient-candidates', book.confidentiality],
-    queryFn: () => api.listRecipientCandidates(book.confidentiality),
+    queryKey: ['books', 'recipient-candidates', book.grade],
+    queryFn: () => api.listRecipientCandidates(book.grade),
     staleTime: 5 * 60_000,
-    enabled: open,
+    enabled: open && permitted,
   })
   // Resolve reply defaults before mounting; every opening starts clean.
-  if (!open || thread.isPending || candidatesQuery.isPending) return null
+  if (!open || !permitted || thread.isPending || candidatesQuery.isPending) return null
   const replyTo = thread.data?.find((item) => item.direction === 'outgoing' && item.kind === 'reply')?.addressee_user_id
   const referenceCount = thread.data?.filter((item) => item.direction === 'outgoing' && item.attached).length ?? 0
   return <SendBody key={book.id} book={book} replyTo={replyTo} referenceCount={referenceCount} candidatesQuery={candidatesQuery} close={() => onOpenChange(false)} />
@@ -69,13 +71,12 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pic
   const [query, setQuery] = useState('')
   const [picked, setPicked] = useState<number[]>(() =>
     replyTo != null && candidatesQuery.data?.some((candidate) =>
-      candidate.id === replyTo && (book.confidentiality !== 'secret' || candidate.has_secret_clearance),
+      candidate.id === replyTo && (book.grade !== 'secret' || candidate.has_secret_clearance),
     ) ? [replyTo] : [],
   )
   const [purpose, setPurpose] = useState<SendPurpose>(replyTo != null ? 'reply' : 'info')
   const [note, setNote] = useState('')
-  const isPersonal = book.confidentiality === 'personal'
-  const isSecret = book.confidentiality === 'secret'
+  const isSecret = book.grade === 'secret'
   const [includeReferences, setIncludeReferences] = useState(true)
 
   const candidates = (candidatesQuery.data ?? []).filter((c) => !isSecret || c.has_secret_clearance)
@@ -96,7 +97,6 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pic
         user_ids: picked,
         purpose,
         note: note.trim() || null,
-        make_directed: isPersonal,
         include_references: includeReferences,
       }),
     onMutate: () => toast.loading(t('books.send.sending')),
@@ -135,7 +135,7 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pic
   }
 
   const canSend = picked.length > 0 && !mutation.isPending
-  const sendLabel = isPersonal ? t('books.send.switchAndSend') : t('books.send.send')
+  const sendLabel = t('books.send.send')
 
   return (
     <RadixDialog.Root open onOpenChange={(o) => { if (!o) close() }}>
@@ -180,15 +180,6 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pic
           </header>
 
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
-            {isPersonal && (
-              <p
-                role="note"
-                data-testid="send-personal-notice"
-                className="rounded-lg border border-warning/40 bg-warning-soft/50 px-3 py-2 text-[0.8em] text-foreground"
-              >
-                {t('books.send.personalNotice')}
-              </p>
-            )}
             {isSecret && (
               <p className="text-[0.78em] text-muted-foreground">{t('books.send.secretNotice')}</p>
             )}

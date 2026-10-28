@@ -266,7 +266,7 @@ def test_revision_preview_matches_approval_send(
         book.id,
         submitted_by_user_id=signer.id,
         approver_user_id=signer.id,
-        priority="normal",
+        urgency="Normal",
         reviewer_user_ids=[],
     )
     book_service.decide_step(
@@ -306,7 +306,7 @@ def test_revision_preview_matches_approval_send(
         book.id,
         submitted_by_user_id=signer.id,
         approver_user_id=signer.id,
-        priority="normal",
+        urgency="Normal",
         reviewer_user_ids=[],
     )
     book_service.sign_book(api_db, book.id, user_id=signer.id, version_id=book.versions[-1].id)
@@ -369,7 +369,7 @@ def test_approved_revision_preview_matches_deduplicated_send(
             book.id,
             submitted_by_user_id=signer.id,
             approver_user_id=signer.id,
-            priority="normal",
+            urgency="Normal",
             reviewer_user_ids=[],
         )
         book_service.sign_book(api_db, book.id, user_id=signer.id, version_id=book.versions[-1].id)

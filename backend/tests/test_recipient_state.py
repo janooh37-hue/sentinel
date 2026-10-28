@@ -12,21 +12,21 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.models import BookRecipient
 from app.services import notification_service
-from tests.test_book_confidentiality import (
+from tests.test_book_grade import (
     API,
     ApiHarness,
     _listing,
     _send,
 )
-from tests.test_book_confidentiality import (
-    confidentiality_api as confidentiality_api,
+from tests.test_book_grade import (
+    grade_api as grade_api,
 )
 from tests.test_migration_record_confidentiality import HEAD, _at_parent_with_a_book
 
 
-def test_send_purpose_rejects_sign_and_accepts_circulate(confidentiality_api: ApiHarness) -> None:
-    api = confidentiality_api
-    path = f"{API}/books/{api.records['directed'].id}/send"
+def test_send_purpose_rejects_sign_and_accepts_circulate(grade_api: ApiHarness) -> None:
+    api = grade_api
+    path = f"{API}/books/{api.records['named'].id}/send"
     targets = [api.users["B"].id]
     rejected = api.client.post(path, json={"user_ids": targets, "purpose": "sign"})
     assert rejected.status_code == 422, rejected.text
@@ -35,11 +35,11 @@ def test_send_purpose_rejects_sign_and_accepts_circulate(confidentiality_api: Ap
     assert accepted.json()["sent"][0]["purpose"] == "circulate"
 
 
-def test_detail_peek_does_not_mark_recipient_read(confidentiality_api: ApiHarness) -> None:
-    api = confidentiality_api
-    sent = _send(api, "directed", ["B"])["sent"][0]
+def test_detail_peek_does_not_mark_recipient_read(grade_api: ApiHarness) -> None:
+    api = grade_api
+    sent = _send(api, "named", ["B"])["sent"][0]
     api.as_user("B")
-    path = f"{API}/books/{api.records['directed'].id}"
+    path = f"{API}/books/{api.records['named'].id}"
     response = api.client.get(path, params={"mark_read": False})
     assert response.status_code == 200, response.text
     assert response.json()["my_inbox"]["read_at"] is None
@@ -56,11 +56,11 @@ def test_detail_peek_does_not_mark_recipient_read(confidentiality_api: ApiHarnes
     assert api.client.get(f"{API}/books/inbox/summary").json()["unread"] == 0
 
 
-def test_done_marks_read_and_undo_preserves_first_read(confidentiality_api: ApiHarness) -> None:
-    api = confidentiality_api
-    _send(api, "directed", ["B", "C"], purpose="action")
+def test_done_marks_read_and_undo_preserves_first_read(grade_api: ApiHarness) -> None:
+    api = grade_api
+    _send(api, "named", ["B", "C"], purpose="action")
     api.as_user("B")
-    path = f"{API}/books/{api.records['directed'].id}/inbox/done"
+    path = f"{API}/books/{api.records['named'].id}/inbox/done"
     done = api.client.post(path)
     assert done.status_code == 200, done.text
     state = done.json()
@@ -82,7 +82,7 @@ def test_done_marks_read_and_undo_preserves_first_read(confidentiality_api: ApiH
     assert redone.status_code == 200, redone.text
     assert redone.json()["read_at"] == state["read_at"]
     api.as_user("A")
-    recipients = api.client.get(f"{API}/books/{api.records['directed'].id}/recipients").json()
+    recipients = api.client.get(f"{API}/books/{api.records['named'].id}/recipients").json()
     own = next(row for row in recipients if row["user_id"] == api.users["B"].id)
     other = next(row for row in recipients if row["user_id"] == api.users["C"].id)
     assert own["done_at"] == redone.json()["done_at"]
@@ -91,17 +91,17 @@ def test_done_marks_read_and_undo_preserves_first_read(confidentiality_api: ApiH
 
 
 def test_done_scope_moves_own_incoming_and_archive_takes_precedence(
-    confidentiality_api: ApiHarness,
+    grade_api: ApiHarness,
 ) -> None:
-    api = confidentiality_api
-    sent = _send(api, "directed", ["B", "C"], purpose="action")["sent"]
+    api = grade_api
+    sent = _send(api, "named", ["B", "C"], purpose="action")["sent"]
     api.as_user("B")
-    base = f"{API}/books/{api.records['directed'].id}/inbox"
-    _listing(api, {"directed"}, "received")
+    base = f"{API}/books/{api.records['named'].id}/inbox"
+    _listing(api, {"named"}, "received")
     _listing(api, set(), "done")
     assert api.client.post(f"{base}/done").status_code == 200
     _listing(api, set(), "received")
-    _listing(api, {"directed"}, "done")
+    _listing(api, {"named"}, "done")
     _listing(api, set(), "archived")
     summary = api.client.get(f"{API}/books/inbox/summary").json()
     assert summary["received"] == summary["unread"] == summary["archived"] == 0
@@ -109,24 +109,24 @@ def test_done_scope_moves_own_incoming_and_archive_takes_precedence(
 
     # Other recipients' state and the sender's outgoing list are independent.
     api.as_user("C")
-    _listing(api, {"directed"}, "received")
+    _listing(api, {"named"}, "received")
     _listing(api, set(), "done")
     api.as_user("A")
-    _listing(api, {"directed"}, "sent")
+    _listing(api, {"named"}, "sent")
     _listing(api, set(), "done")
 
     api.as_user("B")
     assert api.client.post(f"{base}/archive").status_code == 200
     _listing(api, set(), "received")
     _listing(api, set(), "done")
-    _listing(api, {"directed"}, "archived")
+    _listing(api, {"named"}, "archived")
     summary = api.client.get(f"{API}/books/inbox/summary").json()
     assert summary["archived"] == 1
     assert summary["received"] == summary["unread"] == 0
     assert api.client.delete(f"{base}/archive").status_code == 200
-    _listing(api, {"directed"}, "done")
+    _listing(api, {"named"}, "done")
     assert api.client.delete(f"{base}/done").status_code == 200
-    _listing(api, {"directed"}, "received")
+    _listing(api, {"named"}, "received")
     _listing(api, set(), "done")
     summary = api.client.get(f"{API}/books/inbox/summary").json()
     assert summary["received"] == summary["by_purpose"]["action"] == 1
@@ -136,7 +136,7 @@ def test_done_scope_moves_own_incoming_and_archive_takes_precedence(
     assert api.client.post(f"{base}/done").status_code == 200
     api.as_user("A")
     own = next(row for row in sent if row["user_id"] == api.users["B"].id)
-    recalled = api.client.delete(f"{API}/books/{api.records['directed'].id}/recipients/{own['id']}")
+    recalled = api.client.delete(f"{API}/books/{api.records['named'].id}/recipients/{own['id']}")
     assert recalled.status_code == 204, recalled.text
     api.as_user("B")
     for scope in ("received", "done", "archived"):
@@ -146,21 +146,21 @@ def test_done_scope_moves_own_incoming_and_archive_takes_precedence(
 @pytest.mark.parametrize("action", ["done", "archive"])
 @pytest.mark.parametrize("method", ["post", "delete"])
 def test_recipient_state_requires_visible_record_and_own_active_send(
-    confidentiality_api: ApiHarness, action: str, method: str
+    grade_api: ApiHarness, action: str, method: str
 ) -> None:
-    api = confidentiality_api
+    api = grade_api
     sent = _send(api, "general", ["B"])["sent"][0]
     path = f"{API}/books/{api.records['general'].id}/inbox/{action}"
     # The creator can open the record, but cannot change a recipient's state.
     denied = getattr(api.client, method)(path)
     assert denied.status_code == 404, denied.text
     api.as_user("B")
-    # An active send never overrides Personal visibility.
-    api.records["general"].confidentiality = "personal"
+    # An active send cannot override the Secret clearance requirement.
+    api.records["general"].grade = "secret"
     api.db.commit()
     hidden = getattr(api.client, method)(path)
     assert hidden.status_code == 404, hidden.text
-    api.records["general"].confidentiality = "general"
+    api.records["general"].grade = "unclassified"
     api.db.commit()
     api.as_user("A")
     recall = api.client.delete(f"{API}/books/{api.records['general'].id}/recipients/{sent['id']}")
@@ -171,18 +171,18 @@ def test_recipient_state_requires_visible_record_and_own_active_send(
 
 
 def test_archive_hides_inbox_counts_not_access_and_unarchive_restores(
-    confidentiality_api: ApiHarness,
+    grade_api: ApiHarness,
 ) -> None:
-    api = confidentiality_api
-    _send(api, "directed", ["B", "C"], purpose="circulate")
+    api = grade_api
+    _send(api, "named", ["B", "C"], purpose="circulate")
     api.as_user("B")
-    path = f"{API}/books/{api.records['directed'].id}/inbox/archive"
+    path = f"{API}/books/{api.records['named'].id}/inbox/archive"
     archived = api.client.post(path)
     assert archived.status_code == 200, archived.text
     assert archived.json()["archived_at"] is not None
     assert archived.json()["read_at"] is None
     _listing(api, set(), "received")
-    _listing(api, {"directed"}, "archived")
+    _listing(api, {"named"}, "archived")
     summary = api.client.get(f"{API}/books/inbox/summary")
     assert summary.status_code == 200, summary.text
     assert summary.json() == {
@@ -198,13 +198,13 @@ def test_archive_hides_inbox_counts_not_access_and_unarchive_restores(
         for item in notification_service.actionable_items(api.db, api.users["B"])
     )
     api.as_user("C")
-    _listing(api, {"directed"}, "received")
+    _listing(api, {"named"}, "received")
     assert api.client.get(f"{API}/books/inbox/summary").json()["unread"] == 1
     api.as_user("B")
     restored = api.client.delete(path)
     assert restored.status_code == 200, restored.text
     assert restored.json()["archived_at"] is None
-    _listing(api, {"directed"}, "received")
+    _listing(api, {"named"}, "received")
     _listing(api, set(), "archived")
     restored_summary = api.client.get(f"{API}/books/inbox/summary").json()
     assert restored_summary["unread"] == restored_summary["received"] == 1
@@ -220,14 +220,14 @@ def test_archive_hides_inbox_counts_not_access_and_unarchive_restores(
     )
     # Archive again before opening, proving the grant survives archive.
     assert api.client.post(path).status_code == 200
-    detail = api.client.get(f"{API}/books/{api.records['directed'].id}")
+    detail = api.client.get(f"{API}/books/{api.records['named'].id}")
     assert detail.status_code == 200, detail.text
     assert detail.json()["my_inbox"]["archived_at"] is not None
 
 
-def test_recipient_state_applies_to_all_active_sends(confidentiality_api: ApiHarness) -> None:
-    api = confidentiality_api
-    _send(api, "directed", ["B"])
+def test_recipient_state_applies_to_all_active_sends(grade_api: ApiHarness) -> None:
+    api = grade_api
+    _send(api, "named", ["B"])
     # Legacy/multiple-send rows must all transition even though today's index
     # prevents creating a second active row through the send API.
     api.db.execute(text("DROP INDEX uq_book_recipients_active"))
@@ -254,17 +254,17 @@ def test_recipient_state_applies_to_all_active_sends(confidentiality_api: ApiHar
     )
     api.db.commit()
     api.as_user("B")
-    base = f"{API}/books/{api.records['directed'].id}/inbox"
-    _listing(api, {"directed"}, "received")
+    base = f"{API}/books/{api.records['named'].id}/inbox"
+    _listing(api, {"named"}, "received")
     _listing(api, set(), "archived")
     assert api.client.get(f"{API}/books/inbox/summary").json()["archived"] == 0
     assert api.client.post(f"{base}/done").status_code == 200
     assert api.client.post(f"{base}/archive").status_code == 200
     _listing(api, set(), "received")
-    _listing(api, {"directed"}, "archived")
+    _listing(api, {"named"}, "archived")
     assert api.client.get(f"{API}/books/inbox/summary").json()["archived"] == 1
     api.as_user("A")
-    rows = api.client.get(f"{API}/books/{api.records['directed'].id}/recipients").json()
+    rows = api.client.get(f"{API}/books/{api.records['named'].id}/recipients").json()
     assert len(rows) == 3
     active = [row for row in rows if row["revoked_at"] is None]
     revoked = next(row for row in rows if row["revoked_at"] is not None)
@@ -275,17 +275,17 @@ def test_recipient_state_applies_to_all_active_sends(confidentiality_api: ApiHar
     assert api.client.delete(f"{base}/done").status_code == 200
     assert api.client.delete(f"{base}/archive").status_code == 200
     api.as_user("A")
-    rows = api.client.get(f"{API}/books/{api.records['directed'].id}/recipients").json()
+    rows = api.client.get(f"{API}/books/{api.records['named'].id}/recipients").json()
     assert all(row["done_at"] is None and row["archived_at"] is None for row in rows)
     assert all(row["read_at"] for row in rows if row["revoked_at"] is None)
     assert next(row for row in rows if row["revoked_at"] is not None)["read_at"] is None
 
 
 def test_open_marks_all_active_sends_read_even_when_newest_is_already_read(
-    confidentiality_api: ApiHarness,
+    grade_api: ApiHarness,
 ) -> None:
-    api = confidentiality_api
-    sent = _send(api, "directed", ["B", "C"])["sent"]
+    api = grade_api
+    sent = _send(api, "named", ["B", "C"])["sent"]
     api.db.execute(text("DROP INDEX uq_book_recipients_active"))
     api.db.execute(
         text(
@@ -298,7 +298,7 @@ def test_open_marks_all_active_sends_read_even_when_newest_is_already_read(
     )
     api.db.commit()
     api.as_user("B")
-    response = api.client.get(f"{API}/books/{api.records['directed'].id}")
+    response = api.client.get(f"{API}/books/{api.records['named'].id}")
     assert response.status_code == 200, response.text
     assert datetime.fromisoformat(response.json()["my_inbox"]["read_at"]) == datetime(
         2026, 10, 2, tzinfo=UTC
@@ -310,14 +310,14 @@ def test_open_marks_all_active_sends_read_even_when_newest_is_already_read(
         assert (stored.read_at is not None) == (row["user_id"] == api.users["B"].id)
 
 
-@pytest.mark.parametrize("hidden", ["personal", "secret", "deleted"])
+@pytest.mark.parametrize("hidden", ["secret_named", "secret", "deleted"])
 @pytest.mark.parametrize("archived", [False, True])
 def test_hidden_received_records_do_not_leak_inbox_counts_or_allow_state_changes(
-    confidentiality_api: ApiHarness,
+    grade_api: ApiHarness,
     hidden: str,
     archived: bool,
 ) -> None:
-    api = confidentiality_api
+    api = grade_api
     sent = _send(api, "general", ["B"])["sent"][0]
     recipient = api.db.get(BookRecipient, sent["id"])
     if archived:
@@ -325,7 +325,10 @@ def test_hidden_received_records_do_not_leak_inbox_counts_or_allow_state_changes
     if hidden == "deleted":
         api.records["general"].deleted_at = datetime(2026, 10, 2)
     else:
-        api.records["general"].confidentiality = hidden
+        api.records["general"].grade = "secret"
+        api.records["general"].distribution = (
+            "named" if hidden == "secret_named" else "organization"
+        )
     api.db.commit()
     api.as_user("B")
     _listing(api, set(), "received")

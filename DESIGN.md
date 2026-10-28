@@ -2356,7 +2356,7 @@ will trip over them.
 ## 7. Ledger Books workspace
 
 **Sources:** `pages/ledger/LedgerPage.tsx`, `pages/ledger/BooksRoutingDesk.tsx`,
-`components/books/PurposeMark.tsx`.
+`components/books/PurposeMark.tsx`, `components/books/ImportanceMark.tsx`.
 
 - Books is the first Ledger tab and the landing tab. Email opens for
   `?tab=email`, `?mail=` or `?action=`; the resolved tab is pinned in the URL
@@ -2381,12 +2381,14 @@ will trip over them.
 - **Status** is text plus shape, never colour alone: New = `h-2 w-2` primary dot +
   `font-semibold`; Read = muted text; Done = `CheckCheck` + `text-success`;
   Archived = `Archive` icon.
-- **Purpose mark** (`PurposeMark`): bare lucide glyph (`h-4 w-4`, stroke 1.8) +
-  label, no background, no border, no radius. It sits in a fixed column so it
-  never competes with the confidentiality chip, which keeps its existing pill
-  (`ConfidentialityChip`, uppercase, tinted background; General renders nothing).
-  The glyph shape and label carry the meaning; the tone only helps scanning.
-  No new tokens.
+- **Purpose mark** (`PurposeMark`): bare lucide glyph (`h-4 w-4`, stroke 1.8),
+  no background, no border, no radius. In rows it is icon only: `role="img"`
+  named by the purpose label (the name joins the row button's accessible name)
+  with a hover tooltip. The record title band shows the glyph + label
+  (`showLabel`). It sits in a fixed column so it never competes with the
+  confidentiality chip, which keeps its existing pill (`ConfidentialityChip`,
+  uppercase, tinted background; General renders nothing). The glyph shape
+  carries the meaning; the tone only helps scanning. No new tokens.
 
   | Purpose     | Glyph                | Glyph tone              | Label weight    | RTL                |
   | ----------- | -------------------- | ----------------------- | --------------- | ------------------ |
@@ -2396,7 +2398,25 @@ will trip over them.
   | `circulate` | `Megaphone`          | `text-success`          | `font-medium`   | `rtl:-scale-x-100` |
 
   Glyphs avoid `Flag` (Email follow-up) and the chip icons (`Lock`, `UserRound`,
-  `Send`).
+  `Send`). The label weight applies only where the label shows.
+- **Importance mark** (`ImportanceMark`): bare glyph (`h-4 w-4`, stroke 1.8),
+  shape plus tone, never colour alone. Order everywhere (row, stacked mobile
+  row, title band): Purpose · Grade · Importance.
+
+  | Importance | Glyph           | Tone               | Motion                                              |
+  | ---------- | --------------- | ------------------ | --------------------------------------------------- |
+  | `high`     | `TriangleAlert` | `text-destructive` | `gssg-importance-pulse`, opacity 1→0.45, 2s/cycle; steady under reduced motion |
+  | `medium`   | `CircleAlert`   | `text-caution`     | static                                              |
+  | none       | —               | —                  | renders nothing                                     |
+
+  Display mapping (`importanceOf`, frontend only): a Ledger Book
+  (`current_template_id === 'Ledger Book'`) shows its own `importance`; any
+  other record maps `urgency` Normal/High → medium, Very High → high, else none.
+  The accessible name is "Importance: High" / "الأهمية: عالية". Inside a row
+  `<button>` the mark is `role="img"` + `aria-label` with a hover tooltip (no
+  nested interactive content). In the title band it is a focusable `<button>`
+  tooltip trigger that opens on hover, focus and tap. It replaces the old
+  `Flag` urgency label on rows.
 - **Book view.** Clicking a row pushes `?book=` (`useUrlOverlay('book', ['view'])`)
   and replaces the list and the Ledger tabs with a full-page view; the list stays
   mounted but hidden. Toolbar Back and browser Back both pop to the list, which
@@ -2408,8 +2428,9 @@ will trip over them.
      only `default` button), Send / Forward, reply actions; then at the inline
      end Expand / Collapse (desktop) and Open in Records (ghost link,
      `BookText`). On mobile the toolbar is sticky and wraps.
-  2. Title band `px-4 py-4 lg:px-6`: purpose mark, mono reference, confidentiality
-     chip, then the subject as `h2 text-xl font-semibold` (`max-w-[75ch]`,
+  2. Title band `px-4 py-4 lg:px-6`: purpose mark (with label), mono reference,
+     confidentiality chip, importance mark, then the subject as
+     `h2 text-xl font-semibold` (`max-w-[75ch]`,
      wrapped in `<bdi>` so it aligns to the page start).
   3. Body: the reused `RecordPaperViewer` (`mode="pane"`, `compact`,
      `initialFit="width"`, capped at actual size) beside a Details aside

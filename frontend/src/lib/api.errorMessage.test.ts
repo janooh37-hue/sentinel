@@ -31,6 +31,7 @@ describe('apiErrorMessage', () => {
       'هذا المستند موقّع، لذا أصبح ملف Word القابل للتعديل مقفلاً.',
     ],
     ['SECRET_CLEARANCE_REQUIRED', 'Secret clearance is required for Secret records.', 'المعاملات السرية تتطلب تصريح الاطلاع على السري.'],
+    ['DISTRIBUTION_NOT_NAMED', 'Only an Unclassified record with named distribution can be restored.', 'لا يمكن الاستعادة إلا لمعاملة غير سرية موزعة على مسمّين.'],
     ['RECORD_TYPE_FORBIDDEN', "You don't have access to this record type.", 'لا تملك صلاحية الوصول إلى هذا النوع من المعاملات.'],
     [
       'INCLUDED_PAPERS_CREATOR_ONLY',
@@ -46,6 +47,20 @@ describe('apiErrorMessage', () => {
     ['APPROVED_IMPORT_TOKEN_FORBIDDEN', 'This staged import belongs to another user.', 'ملف الاستيراد المؤقت تابع لمستخدم آخر.'],
   ])('keeps the specific meaning of a %s refusal ahead of the permission fallback', async (code, en, ar) => {
     const refusal = new ApiError(403, code, 'server detail')
+    expect(apiErrorMessage(refusal)).toBe(en)
+    await i18n.changeLanguage('ar')
+    expect(apiErrorMessage(refusal)).toBe(ar)
+  })
+
+  it.each([
+    [
+      'LEDGER_BOOK_CHAIN_ONLY',
+      'Ledger Books are approved and signed only through their branch chain.',
+      'لا يُعتمد كتاب السجل ولا يُوقَّع إلا عبر تسلسل الفرع.',
+    ],
+    ['DRAFT_TAB_REQUIRED', 'Choose the tab (classification) first.', 'اختر التبويب أولاً.'],
+  ])('localizes the %s Ledger Book refusal even when the server text has Arabic letters', async (code, en, ar) => {
+    const refusal = new ApiError(409, code, 'Choose the tab (التبويب) first.')
     expect(apiErrorMessage(refusal)).toBe(en)
     await i18n.changeLanguage('ar')
     expect(apiErrorMessage(refusal)).toBe(ar)

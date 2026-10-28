@@ -44,7 +44,7 @@ const BOOK: BookRead = {
   approval_state: 'pending',
   created_at: '2026-07-01T00:00:00Z',
   deleted_at: null,
-  priority: 'Normal',
+  urgency: 'Normal',
   is_draft: false,
   voided_at: null,
   edit_session: null,
@@ -61,9 +61,11 @@ const BOOK: BookRead = {
   can_write: true,
   can_sign: false,
   can_review: false,
-  confidentiality: 'general',
+  grade: 'unclassified',
+  distribution: 'named',
+  metadata_only: false,
   can_send: false,
-  can_change_confidentiality: false,
+  can_change_grade: false,
 }
 
 function wrapper(qc: QueryClient) {

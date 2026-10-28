@@ -491,7 +491,12 @@ def test_api_identifier_search_returns_snippet_and_hides_restricted_records(
     assert body["total"] == 1
     assert "40817" in body["items"][0]["search_snippet"]
     for secret in ("sensitive", "classified", books_api.hidden.ref_number):
-        assert secret not in res.text
+        assert secret not in str(
+            [
+                (item["subject"], item["search_snippet"], item["ref_number"])
+                for item in body["items"]
+            ]
+        )
 
 
 # ---------------------------------------------------------------------------

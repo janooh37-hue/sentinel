@@ -2,7 +2,7 @@
 
 Every General Book — rich-editor or Word-authored — files under one of these
 codes and takes its ref from the shared classified register
-(``1/{tab}/GSSG/{serial}``). Rendering always uses the single General Book
+(``1/{tab}/{serial}``). Rendering always uses the single General Book
 template (``core.constants.TEMPLATE_FILES["General Book"]``); the registry
 carries no per-classification layout.
 """

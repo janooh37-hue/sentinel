@@ -284,11 +284,11 @@ def test_employee_view_alone_allows_lookup(api_db: Session):
 
 
 def _seed_linked_documents(
-    db: Session, count: int, *, first_id: int, personal_every_third: bool = False
+    db: Session, count: int, *, first_id: int, named_every_third: bool = False
 ) -> list[int]:
     """Seed ``count`` committed documents, each owned by its own live Record.
 
-    With ``personal_every_third``, every third Record is someone else's personal
+    With ``named_every_third``, every third Record is someone else's named
     Record, which no other non-admin caller may open.
     """
     created = datetime(2026, 8, 1, 8)
@@ -297,8 +297,8 @@ def _seed_linked_documents(
     hidden: list[int] = []
     for offset in range(count):
         record_id = first_id + offset
-        personal = personal_every_third and offset % 3 == 0
-        if personal:
+        named = named_every_third and offset % 3 == 0
+        if named:
             hidden.append(record_id)
         books.append(
             Book(
@@ -306,7 +306,8 @@ def _seed_linked_documents(
                 category_id="HR",
                 ref_number=f"HR-{record_id}",
                 employee_id="G100",
-                confidentiality="personal" if personal else "general",
+                grade="unclassified",
+                distribution="named" if named else "organization",
                 created_by_user_id=None,
             )
         )
@@ -377,7 +378,7 @@ def test_activity_page_cost_does_not_grow_with_document_total(
 def test_activity_total_matches_the_pages_when_records_are_hidden(
     api_db: Session, manager_client: TestClient
 ):
-    hidden = set(_seed_linked_documents(api_db, 30, first_id=1000, personal_every_third=True))
+    hidden = set(_seed_linked_documents(api_db, 30, first_id=1000, named_every_third=True))
 
     seen: list[int] = []
     total = None

@@ -44,7 +44,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
   const canSubmitCap = has('books.submit')
   const canApprove = has('books.approve')
 
-  const [priority, setPriority] = useState<'Normal' | 'High'>('Normal')
+  const [urgency, setUrgency] = useState<'Normal' | 'High' | 'Very High'>('Normal')
   // The backend requires EXACTLY ONE signing manager, so the picker is
   // single-select rather than an ordered chain. `null` = untouched (the
   // linked manager or default manager preselects); '' = explicitly reset
@@ -125,7 +125,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
   const submitMutation = useMutation({
     mutationFn: () =>
       api.submitBook(bookId, {
-        priority,
+        urgency,
         approver_user_id: Number.parseInt(selectedUserId, 10),
         reviewer_user_ids: reviewerIds,
       }),
@@ -213,27 +213,28 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
 
           {/* scrollable body */}
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 space-y-5">
-            {/* Priority toggle */}
+            {/* Urgency control */}
             <div>
               <p className="mb-2 text-[0.78em] font-semibold uppercase tracking-wider text-muted-foreground">
-                {t('books.approval.priority')}
+                {t('books.urgency.label')}
               </p>
-              <div className="inline-flex rounded-lg border border-hairline bg-surface-tinted p-0.5">
-                {(['Normal', 'High'] as const).map((opt) => (
+              <div role="group" aria-label={t('books.urgency.label')} className="inline-flex flex-wrap rounded-lg border border-hairline bg-surface-tinted p-0.5">
+                {(['Normal', 'High', 'Very High'] as const).map((opt) => (
                   <button
                     key={opt}
                     type="button"
-                    onClick={() => setPriority(opt)}
+                    aria-pressed={urgency === opt}
+                    onClick={() => setUrgency(opt)}
                     className={cn(
                       'rounded-md px-3.5 py-1.5 text-[0.82em] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      priority === opt
-                        ? opt === 'High'
-                          ? 'bg-accent text-white shadow-sm'
+                      urgency === opt
+                        ? opt !== 'Normal'
+                          ? opt === 'Very High' ? 'bg-destructive text-white shadow-sm' : 'bg-accent text-white shadow-sm'
                           : 'bg-surface text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
-                    {t(`books.approval.${opt.toLowerCase()}`)}
+                    {t(`books.urgency.${opt === 'Very High' ? 'veryHigh' : opt.toLowerCase()}`)}
                   </button>
                 ))}
               </div>

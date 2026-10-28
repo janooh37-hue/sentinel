@@ -8,7 +8,7 @@ import type { BookRead } from '@/lib/api'
 import { api } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
-import { ConfidentialityChip } from './ConfidentialityChip'
+import { GradeChip } from './GradeChip'
 
 interface Props {
   book: BookRead
@@ -28,9 +28,9 @@ export function BookStatusChips({ book, noClassification }: Props): React.JSX.El
 
   const chips: React.ReactNode[] = []
 
-  // Level chip (Personal / Secret / Directed; General renders nothing)
-  if (book.confidentiality !== 'general') {
-    chips.push(<ConfidentialityChip key="level" level={book.confidentiality} />)
+  // Classified grade mark; Unclassified deliberately has no mark.
+  if (book.grade !== 'unclassified') {
+    chips.push(<GradeChip key="level" level={book.grade} />)
   }
 
   // Classification chip — navy

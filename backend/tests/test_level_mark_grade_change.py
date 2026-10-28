@@ -11,10 +11,9 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.core.level_mark import apply_level_mark
-from app.db.models import Book, BookCategory, BookEditSession, Document, User
+from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, User
 from app.services import book_send_service, book_service, document_service, included_papers_service
 from tests.conftest import make_user
-from tests.test_book_confidentiality import _book
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 _TEMPLATE = Path(__file__).resolve().parents[1] / "templates" / "GSSG-GS_300-004_Report.docx"
@@ -47,7 +46,37 @@ def editable_record(
 ) -> tuple[Book, Document, Path]:
     db_session.add(BookCategory(id="HR", prefix="HR", requires_approval=False))
     db_session.commit()
-    book, document = _book(db_session, admin_user, "general", tmp_path)
+    pdf = _pdf(tmp_path / "record.pdf", "unclassified")
+    book = Book(
+        category_id="HR",
+        ref_number="HR-mark-1",
+        subject="Grade mark",
+        grade="unclassified",
+        distribution="organization",
+        created_by_user_id=admin_user.id,
+        approval_state="none",
+    )
+    document = Document(
+        template_id="Report",
+        ref_number=book.ref_number,
+        submission_id="mark-submission",
+        role="primary",
+        pdf_path=str(pdf),
+    )
+    db_session.add_all([book, document])
+    db_session.flush()
+    db_session.add(
+        BookVersion(
+            book_id=book.id,
+            version_no=1,
+            trigger="initial",
+            status="none",
+            template_id="Report",
+            document_id=document.id,
+            fields={},
+            created_by_user_id=admin_user.id,
+        )
+    )
     source = tmp_path / "record.docx"
     shutil.copy2(_TEMPLATE, source)
     document.docx_path = source.name  # Exercise data-dir-relative path resolution.
@@ -58,7 +87,7 @@ def editable_record(
     monkeypatch.setattr(included_papers_service, "get_settings", lambda: settings)
 
     def convert(docx: Path) -> Path:
-        return _pdf(docx.with_suffix(".pdf"), "secret" if "سري" in _marks(docx) else "general")
+        return _pdf(docx.with_suffix(".pdf"), "marked" if _marks(docx) else "unclassified")
 
     monkeypatch.setattr(document_service, "convert_docx_to_pdf", convert)
     return book, document, source
@@ -85,7 +114,7 @@ def editable_companion(
     return companion, source
 
 
-def test_level_change_restamps_docx_and_republishes_package(
+def test_grade_change_restamps_docx_and_republishes_package(
     db_session: Session, admin_user: User, editable_record, tmp_path: Path
 ) -> None:
     book, document, source = editable_record
@@ -95,13 +124,13 @@ def test_level_change_restamps_docx_and_republishes_package(
 
     original = source.read_bytes()
     revision = book.included_papers_revision
-    for level, expected in (
+    for grade, expected in (
         ("secret", ["سري"]),
-        ("personal", ["شخصي"]),
-        ("directed", []),
-        ("general", []),
+        ("top_secret", ["سري للغاية"]),
+        ("addressee_only", ["سري للغاية — لعنايته فقط"]),
+        ("unclassified", []),
     ):
-        book_send_service.set_confidentiality(db_session, admin_user, book, level)
+        book_send_service.set_grade(db_session, admin_user, book, grade)
         committed = document_service._authored_docx_of(db_session, book.versions[-1])
         assert committed is not None
         assert committed != source
@@ -111,11 +140,11 @@ def test_level_change_restamps_docx_and_republishes_package(
         resolved = document_service.resolve_document_artifact(db_session, document.id, format="pdf")
         with fitz.open(resolved.path) as pdf:
             assert pdf.page_count == 2
-            assert ("secret" if level == "secret" else "general") in pdf[0].get_text()
+            assert ("marked" if expected else "unclassified") in pdf[0].get_text()
             assert "included paper" in pdf[1].get_text()
         with fitz.open(tmp_path / document.base_pdf_path) as pdf:
             assert pdf.page_count == 1
-            assert ("secret" if level == "secret" else "general") in pdf[0].get_text()
+            assert ("marked" if expected else "unclassified") in pdf[0].get_text()
 
 
 @pytest.mark.parametrize(
@@ -138,9 +167,9 @@ def test_signed_locked_record_is_not_restamped(
     pdf_path = document.pdf_path
     docx_path = document.docx_path
 
-    book_send_service.set_confidentiality(db_session, admin_user, book, "secret")
+    book_send_service.set_grade(db_session, admin_user, book, "secret")
 
-    assert book.confidentiality == "secret"
+    assert book.grade == "secret"
     assert source.read_bytes() == original
     assert document.docx_path == docx_path
     assert document.pdf_path == pdf_path
@@ -168,9 +197,9 @@ def test_active_word_working_file_is_not_restamped(
     db_session.commit()
     original = source.read_bytes()
 
-    book_send_service.set_confidentiality(db_session, admin_user, book, "secret")
+    book_send_service.set_grade(db_session, admin_user, book, "secret")
 
-    assert book.confidentiality == "secret"
+    assert book.grade == "secret"
     assert source.read_bytes() == original
     assert working.read_bytes() == original
     committed = document_service._authored_docx_of(db_session, book.versions[-1])
@@ -184,7 +213,7 @@ def test_active_word_working_file_is_not_restamped(
 
 
 @pytest.mark.parametrize("failure", ["conversion", "publication"])
-def test_pdf_failure_does_not_fail_level_change(
+def test_pdf_failure_does_not_fail_grade_change(
     db_session: Session,
     admin_user: User,
     editable_record,
@@ -202,9 +231,9 @@ def test_pdf_failure_does_not_fail_level_change(
     else:
         monkeypatch.setattr(included_papers_service, "publish_generated_package", fail)
 
-    book_send_service.set_confidentiality(db_session, admin_user, book, "secret")
+    book_send_service.set_grade(db_session, admin_user, book, "secret")
 
-    assert book.confidentiality == "secret"
+    assert book.grade == "secret"
     committed = document_service._authored_docx_of(db_session, book.versions[-1])
     assert committed is not None
     assert "سري" in _marks(committed)
@@ -212,15 +241,33 @@ def test_pdf_failure_does_not_fail_level_change(
     assert document.pdf_path == original_pdf_path
 
 
-def test_personal_send_restamps_as_directed(
-    db_session: Session, admin_user: User, editable_record, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    "grade, distribution",
+    [
+        ("unclassified", "organization"),
+        ("unclassified", "named"),
+        ("secret", "organization"),
+        ("secret", "named"),
+        ("top_secret", "named"),
+        ("addressee_only", "named"),
+    ],
+)
+def test_send_preserves_grade_distribution_and_artifacts(
+    db_session: Session,
+    admin_user: User,
+    editable_record,
+    monkeypatch: pytest.MonkeyPatch,
+    grade: str,
+    distribution: str,
 ) -> None:
     book, document, source = editable_record
-    book.confidentiality = "personal"
-    assert apply_level_mark(source, "personal")
+    book.grade, book.distribution = grade, distribution
+    assert apply_level_mark(source, grade)
     db_session.commit()
-    recipient = make_user(db_session, email="level-mark-recipient@test.ae")
+    recipient = make_user(db_session, email="grade-mark-recipient@test.ae", role="admin")
     monkeypatch.setattr(book_send_service, "_push_new", lambda *args: None)
+    original = source.read_bytes()
+    paths = document.docx_path, document.pdf_path, document.base_pdf_path
 
     book_send_service.send(
         db_session,
@@ -229,15 +276,51 @@ def test_personal_send_restamps_as_directed(
         user_ids=[recipient.id],
         purpose="info",
         note=None,
-        make_directed=True,
     )
 
-    assert book.confidentiality == "directed"
-    committed = document_service._authored_docx_of(db_session, book.versions[-1])
-    assert committed is not None
-    assert _marks(committed) == []
-    assert "شخصي" in _marks(source)
-    assert document.base_pdf_path is not None
+    assert (book.grade, book.distribution) == (grade, distribution)
+    assert (document.docx_path, document.pdf_path, document.base_pdf_path) == paths
+    assert source.read_bytes() == original
+
+
+@pytest.mark.parametrize("grade", ["top_secret", "addressee_only"])
+def test_non_creator_cannot_send_restricted_record(
+    db_session: Session, admin_user: User, editable_record, grade: str
+) -> None:
+    from app.api.errors import AppError
+    from app.db.models import BookRecipient
+
+    book, document, source = editable_record
+    book.grade, book.distribution = grade, "named"
+    forwarder = make_user(db_session, email="forwarder@test.ae")
+    recipient = make_user(db_session, email="recipient@test.ae")
+    db_session.add(
+        BookRecipient(
+            book_id=book.id,
+            user_id=forwarder.id,
+            sent_by_user_id=admin_user.id,
+            purpose="info",
+        )
+    )
+    db_session.commit()
+    original = source.read_bytes()
+    paths = document.docx_path, document.pdf_path, document.base_pdf_path
+
+    with pytest.raises(AppError) as error:
+        book_send_service.send(
+            db_session,
+            forwarder,
+            book,
+            user_ids=[recipient.id],
+            purpose="info",
+            note=None,
+        )
+
+    assert error.value.code == "WRITER_ONLY_SEND"
+    assert error.value.http_status == 403
+    assert (book.grade, book.distribution) == (grade, "named")
+    assert (document.docx_path, document.pdf_path, document.base_pdf_path) == paths
+    assert source.read_bytes() == original
 
 
 @pytest.mark.parametrize("ending", ["rollback", "close"])
@@ -250,7 +333,7 @@ def test_restamp_rollback_preserves_original_artifacts(
     original_pdf_path, original_docx_path = document.pdf_path, document.docx_path
     original_pdf = Path(original_pdf_path).read_bytes()
 
-    book_send_service._change_level(db_session, admin_user, book, "secret")
+    book_send_service._change_grade(db_session, admin_user, book, "secret")
     staged_docx = document_service._authored_docx_of(db_session, book.versions[-1])
     assert staged_docx is not None
     staged_paths = [
@@ -271,25 +354,17 @@ def test_restamp_rollback_preserves_original_artifacts(
     assert persisted_document.docx_path == original_docx_path
     assert persisted_document.pdf_path == original_pdf_path
     assert persisted_document.base_pdf_path is None
-    assert db_session.get(Book, book_id).confidentiality == "general"
+    assert db_session.get(Book, book_id).grade == "unclassified"
 
 
-@pytest.mark.parametrize("operation", ["change", "send"])
-def test_failed_commit_rolls_back_restamp_and_level(
+def test_failed_commit_rolls_back_restamp_and_grade(
     db_session: Session,
     admin_user: User,
     editable_record,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    operation: str,
 ) -> None:
     book, document, source = editable_record
-    recipient = make_user(db_session, email="restamp-rollback-recipient@test.ae")
-    if operation == "send":
-        book.confidentiality = "personal"
-        assert apply_level_mark(source, "personal")
-        db_session.commit()
-    original_level = book.confidentiality
     original_docx, original_pdf_path = source.read_bytes(), document.pdf_path
     original_docx_path = document.docx_path
 
@@ -298,24 +373,12 @@ def test_failed_commit_rolls_back_restamp_and_level(
 
     monkeypatch.setattr(db_session, "commit", fail_commit)
     with pytest.raises(RuntimeError, match="commit failed"):
-        if operation == "change":
-            book_send_service.set_confidentiality(db_session, admin_user, book, "secret")
-        else:
-            book_send_service.send(
-                db_session,
-                admin_user,
-                book,
-                user_ids=[recipient.id],
-                purpose="info",
-                note=None,
-                make_directed=True,
-                include_references=False,
-            )
+        book_send_service.set_grade(db_session, admin_user, book, "secret")
     staged_docx = document_service._authored_docx_of(db_session, book.versions[-1])
     staged_pdf = tmp_path / document.pdf_path
     db_session.rollback()
 
-    assert book.confidentiality == original_level
+    assert book.grade == "unclassified"
     assert document.docx_path == original_docx_path
     assert document.pdf_path == original_pdf_path
     assert source.read_bytes() == original_docx
@@ -333,15 +396,15 @@ def test_stamp_failure_keeps_previous_artifacts(
     original = source.read_bytes()
     monkeypatch.setattr(artifact_service, "apply_level_mark", lambda *args: False)
 
-    book_send_service.set_confidentiality(db_session, admin_user, book, "secret")
+    book_send_service.set_grade(db_session, admin_user, book, "secret")
 
-    assert book.confidentiality == "secret"
+    assert book.grade == "secret"
     assert document.docx_path == original_docx_path
     assert document.pdf_path == original_pdf_path
     assert source.read_bytes() == original
 
 
-def test_level_change_restamps_companions_before_publishing_package(
+def test_grade_change_restamps_companions_before_publishing_package(
     db_session: Session, admin_user: User, editable_record, editable_companion, tmp_path: Path
 ) -> None:
     book, document, source = editable_record
@@ -351,12 +414,17 @@ def test_level_change_restamps_companions_before_publishing_package(
     book.merged_attachment_paths = [{"path": paper.name}]
     db_session.commit()
 
-    for level, expected in (("secret", {"سري"}), ("personal", {"شخصي"}), ("directed", set())):
-        book_send_service.set_confidentiality(db_session, admin_user, book, level)
+    for grade, expected in (
+        ("secret", {"سري"}),
+        ("top_secret", {"سري للغاية"}),
+        ("addressee_only", {"سري للغاية — لعنايته فقط"}),
+        ("unclassified", set()),
+    ):
+        book_send_service.set_grade(db_session, admin_user, book, grade)
         assert set(_marks(Path(document.docx_path))) == expected
         assert set(_marks(Path(companion.docx_path))) == expected
         assert not Path(companion.pdf_path).is_absolute()
-        pdf_level = "secret" if level == "secret" else "general"
+        pdf_level = "marked" if expected else "unclassified"
         with fitz.open(tmp_path / companion.pdf_path) as pdf:
             assert pdf.page_count == 1
             assert pdf_level in pdf[0].get_text()
@@ -388,7 +456,7 @@ def test_companion_restamp_rollback_restores_paths_and_preserves_bytes(
     original_docx = companion_source.read_bytes()
     original_pdf = (tmp_path / original_pdf_path).read_bytes()
 
-    book_send_service._change_level(db_session, admin_user, book, "secret")
+    book_send_service._change_grade(db_session, admin_user, book, "secret")
     staged_paths = [
         Path(document.docx_path),
         tmp_path / document.pdf_path,
@@ -443,9 +511,9 @@ def test_companion_failure_preserves_all_published_pdf_paths(
 
         monkeypatch.setattr(document_service, "convert_docx_to_pdf", convert)
 
-    book_send_service.set_confidentiality(db_session, admin_user, book, "secret")
+    book_send_service.set_grade(db_session, admin_user, book, "secret")
 
-    assert book.confidentiality == "secret"
+    assert book.grade == "secret"
     assert "سري" in _marks(Path(document.docx_path))
     assert "سري" in _marks(Path(companion.docx_path))
     assert document.pdf_path == old_primary_pdf
@@ -455,7 +523,7 @@ def test_companion_failure_preserves_all_published_pdf_paths(
     assert bool(publish_calls) == (failure == "publication")
 
 
-def test_level_change_does_not_restamp_unrelated_companions(
+def test_grade_change_does_not_restamp_unrelated_companions(
     db_session: Session,
     admin_user: User,
     editable_record,
@@ -468,7 +536,7 @@ def test_level_change_does_not_restamp_unrelated_companions(
     original_docx_path, original_pdf_path = companion.docx_path, companion.pdf_path
     original = companion_source.read_bytes()
 
-    book_send_service.set_confidentiality(db_session, admin_user, book, "secret")
+    book_send_service.set_grade(db_session, admin_user, book, "secret")
 
     assert companion.docx_path == original_docx_path
     assert companion.pdf_path == original_pdf_path

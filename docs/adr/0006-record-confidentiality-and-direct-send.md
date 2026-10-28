@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Superseded in part by ADR 0007 (record grade, distribution and drafts).
+
 Each record carries one of four levels: General, Personal, Secret and Directed.
 
 - **General** keeps the existing record-type rules.
