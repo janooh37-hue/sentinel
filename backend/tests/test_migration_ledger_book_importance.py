@@ -86,7 +86,9 @@ def assert_seed_and_fts_survive(engine: Engine) -> None:
 
 def test_single_head_follows_parent() -> None:
     script = ScriptDirectory.from_config(_config(ROOT / "unused.db"))
-    assert len(script.get_heads()) == 1
+    heads = script.get_heads()
+    assert len(heads) == 1
+    assert HEAD in {revision.revision for revision in script.walk_revisions("base", heads[0])}
     assert script.get_revision(HEAD).down_revision == PARENT
 
 

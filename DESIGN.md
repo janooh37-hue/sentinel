@@ -2370,7 +2370,7 @@ will trip over them.
 - **Folders live in the boxes** (`pages/ledger/BooksRail.tsx`). The rail is a
   tree in the box order Incoming, Done, Outgoing, Archived; there are no
   separate "My folders" / "Team folders" sections. Each box row is the box
-  button (icon, label, count), a chevron button (`aria-expanded`, named
+  button (icon, label; Incoming adds the unread badge), a chevron button (`aria-expanded`, named
   "Folders in {box}"; `ChevronDown`, turned `-rotate-90 rtl:rotate-90` when
   closed, no transition under reduced motion) and a `Plus` "New folder in
   {box}". The selected box, or the box of the selected folder, is open;

@@ -250,13 +250,12 @@ export function BooksRail({ scope, folderId, switcher, onSelectScope, onSelectFo
   function renderFolder(folder: BookFolderRead): ReactNode {
     if (editor?.id === folder.id) return <div key={folder.id} data-folder-id={folder.id}>{renderEditor()}</div>
     const drop = dragBox === null ? undefined : dropTarget === folder.id ? 'target' : dragBox === folder.box ? 'open' : 'refused'
-    const label = folder.team ? t(`${KEY}.sharedName`, { name: folder.name }) : folder.name
     const button = (
       <button
         type="button"
         onClick={() => onSelectFolder(folder.id)}
         aria-current={folderId === folder.id ? 'page' : undefined}
-        aria-label={`${label} ${folder.count}`}
+        aria-label={folder.team ? t(`${KEY}.sharedNameCount`, { name: folder.name, count: folder.count }) : `${folder.name} ${folder.count}`}
         className={cn(
           'flex min-w-0 w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-start text-[0.82em] transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           folderId === folder.id ? 'bg-rail-3 font-semibold text-white' : cn('text-rail-text hover:bg-rail-2', folder.team && 'bg-blue-grad-a/10'),
