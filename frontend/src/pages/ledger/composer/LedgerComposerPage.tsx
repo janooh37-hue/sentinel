@@ -7,7 +7,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Eye, EyeOff, Send, Trash2 } from 'lucide-react'
-import { useCallback, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -41,18 +41,50 @@ const FIELD_OF_CODE: Readonly<Record<string, Field>> = {
 
 class DraftNotSaved extends Error {}
 
+/** `/ledger/compose` starts a new draft; `/ledger/compose/:draftId` edits one. */
 export function LedgerComposerPage({ autosaveMs = AUTOSAVE_MS }: { autosaveMs?: number }): React.JSX.Element {
+  const param = useParams().draftId
+  return param === undefined ? <NewDraft /> : <DraftLoader draftId={Number(param)} autosaveMs={autosaveMs} />
+}
+
+function Failed({ onRetry }: { onRetry: () => void }): React.JSX.Element {
   const { t } = useTranslation()
-  const draftId = Number(useParams().draftId)
+  return (
+    <div className="mx-auto flex max-w-xl flex-col items-start gap-3 p-6">
+      <p role="alert">{t('ledgerBook.composer.loadFailed')}</p>
+      <Button type="button" variant="outline" onClick={onRetry}>{t('ledgerBook.composer.retry')}</Button>
+    </div>
+  )
+}
+
+function NewDraft(): React.JSX.Element {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const qc = useQueryClient()
+  const started = useRef(false)
+  const create = useMutation({
+    mutationFn: () => api.createLedgerDraft({ grade: 'unclassified', body_html: '' }),
+    onSuccess: (draft) => {
+      qc.setQueryData(ledgerDraftKey(draft.id), draft)
+      void qc.invalidateQueries({ queryKey: LEDGER_DRAFTS_KEY, exact: true })
+      navigate(`/ledger/compose/${draft.id}`, { replace: true })
+    },
+  })
+  const { mutate } = create
+  useEffect(() => {
+    // One draft per visit, also under StrictMode's double effect run.
+    if (started.current) return
+    started.current = true
+    mutate()
+  }, [mutate])
+  if (create.isError) return <Failed onRetry={() => create.mutate()} />
+  return <p role="status" className="p-6 text-muted-foreground">{t('ledgerBook.composer.creating')}</p>
+}
+
+function DraftLoader({ draftId, autosaveMs }: { draftId: number; autosaveMs: number }): React.JSX.Element {
+  const { t } = useTranslation()
   const query = useQuery({ queryKey: ledgerDraftKey(draftId), queryFn: () => api.getLedgerDraft(draftId), staleTime: Infinity })
-  if (query.isError) {
-    return (
-      <div className="mx-auto flex max-w-xl flex-col items-start gap-3 p-6">
-        <p role="alert">{t('ledgerBook.composer.loadFailed')}</p>
-        <Button type="button" variant="outline" onClick={() => void query.refetch()}>{t('ledgerBook.composer.retry')}</Button>
-      </div>
-    )
-  }
+  if (query.isError) return <Failed onRetry={() => void query.refetch()} />
   if (!query.data) return <p role="status" className="p-6 text-muted-foreground">{t('ledgerBook.composer.loading')}</p>
   return <Composer key={draftId} draft={query.data} autosaveMs={autosaveMs} />
 }
