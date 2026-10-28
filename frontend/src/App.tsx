@@ -93,6 +93,12 @@ const VehicleAccidentsPage = lazy(loadVehicleAccidentsPage)
 const VehicleAccidentLetterPage = lazy(loadVehicleAccidentLetterPage)
 const VehicleMaintenancePage = lazy(loadVehicleMaintenancePage)
 const LedgerPage = lazy(loadLedgerPage)
+const LedgerComposerPage = lazy(() =>
+  import('@/pages/ledger/composer/LedgerComposerPage').then((m) => ({ default: m.LedgerComposerPage })),
+)
+const LedgerContentEditorPage = lazy(() =>
+  import('@/pages/ledger/composer/LedgerContentEditorPage').then((m) => ({ default: m.LedgerContentEditorPage })),
+)
 const SettingsPage = lazy(loadSettingsPage)
 const DashboardPage = lazy(loadDashboardPage)
 const AttendancePage = lazy(loadAttendancePage)
@@ -497,6 +503,25 @@ function Shell(): React.JSX.Element {
                 element={
                   <RequireAnyCapability caps={['ledger.view', 'books.view']}>
                     <LedgerRoute />
+                  </RequireAnyCapability>
+                }
+              />
+              {['/ledger/compose', '/ledger/compose/:draftId'].map((path) => (
+                <Route
+                  key={path}
+                  path={path}
+                  element={
+                    <RequireAnyCapability caps={['ledger.view', 'books.view']}>
+                      <LedgerComposerPage />
+                    </RequireAnyCapability>
+                  }
+                />
+              ))}
+              <Route
+                path="/ledger/books/:bookId/edit"
+                element={
+                  <RequireAnyCapability caps={['ledger.view', 'books.view']}>
+                    <LedgerContentEditorPage />
                   </RequireAnyCapability>
                 }
               />

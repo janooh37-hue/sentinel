@@ -32,6 +32,7 @@ function mountComposer(url = '/ledger/compose/12'): void {
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[url]}>
         <Routes>
+          <Route path="/ledger/compose" element={<LedgerComposerPage autosaveMs={10} />} />
           <Route path="/ledger/compose/:draftId" element={<LedgerComposerPage autosaveMs={10} />} />
           <Route path="*" element={null} />
         </Routes>
@@ -147,5 +148,13 @@ describe('Ledger Book composer', () => {
     await userEvent.click(toggle)
     expect(screen.getByTitle('Ledger Book paper')).toHaveAttribute('src', '/api/v1/ledger/drafts/12/paper')
     expect(screen.getByRole('button', { name: 'Hide preview' })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('T-C1 /ledger/compose creates one draft and replaces the URL with it', async () => {
+    const create = vi.spyOn(api, 'createLedgerDraft').mockResolvedValue(DRAFT)
+    mountComposer('/ledger/compose')
+    expect(await screen.findByRole('heading', { name: /DRAFT 000012/ })).toBeInTheDocument()
+    expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger/compose/12')
+    expect(create).toHaveBeenCalledTimes(1)
   })
 })
