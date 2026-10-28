@@ -1,10 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { DragEvent, ReactNode } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, Folder, FolderArchive, FolderCheck, FolderInput, FolderOutput, FolderUsers, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ChevronDown, Folder, FolderArchive, FolderCheck, FolderInput, FolderOutput, FolderUsers, MoreHorizontal, NotebookPen, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from '@/lib/toast'
 
+import { LEDGER_DRAFTS_KEY } from '@/components/books/ledgerBookKeys'
+import { NewLedgerBookButton } from '@/components/books/NewLedgerBookButton'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
@@ -113,12 +115,15 @@ function FolderEditor({ edit, canShare, pending, onChange, onSave, onCancel }: {
   )
 }
 
-export function BooksRail({ scope, folderId, switcher, onSelectScope, onSelectFolder }: {
+export function BooksRail({ scope, folderId, drafts, switcher, onSelectScope, onSelectFolder, onSelectDrafts }: {
   scope: Scope | null
   folderId: number | null
+  /** The Drafts place is selected. */
+  drafts: boolean
   switcher?: ReactNode
   onSelectScope: (scope: Scope) => void
   onSelectFolder: (id: number) => void
+  onSelectDrafts: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const { user } = useAuth()
@@ -131,6 +136,7 @@ export function BooksRail({ scope, folderId, switcher, onSelectScope, onSelectFo
   const folders = useBookFolders()
   const summary = useInboxSummary()
   const isMobile = useIsMobile()
+  const draftCount = useQuery({ queryKey: LEDGER_DRAFTS_KEY, queryFn: () => api.listLedgerDrafts(), select: (rows) => rows.length }).data ?? 0
   const [editor, setEditor] = useState<FolderEdit | null>(null)
   const [deleting, setDeleting] = useState<BookFolderRead | null>(null)
   // Chevron choices; a box without one is open only while it (or one of its folders) is selected.
@@ -310,6 +316,16 @@ export function BooksRail({ scope, folderId, switcher, onSelectScope, onSelectFo
     <TooltipProvider>
       <nav ref={navRef} dir={i18n.dir()} aria-label={t(`${KEY}.navigation`)} className="flex h-full min-h-0 w-[236px] shrink-0 flex-col gap-0.5 overflow-y-auto border-e border-rail-line bg-rail p-3 text-rail-text">
         {switcher ? <div className="mb-3">{switcher}</div> : null}
+        <NewLedgerBookButton className="mb-2 w-full" />
+        <div className="mb-1">
+          <FolderButton
+            icon={<NotebookPen className="h-4 w-4 shrink-0" strokeWidth={1.8} aria-hidden />}
+            label={t('ledgerBook.composer.drafts.place')}
+            active={drafts}
+            count={draftCount > 0 ? draftCount : undefined}
+            onClick={onSelectDrafts}
+          />
+        </div>
         {folders.isError ? (
           <div role="alert" className="mb-2 space-y-2 rounded-md bg-rail-2 px-2.5 py-2 text-[0.78em]">
             <p>{t(`${KEY}.loadError`)}</p>
@@ -328,7 +344,7 @@ export function BooksRail({ scope, folderId, switcher, onSelectScope, onSelectFo
                   <FolderButton
                     icon={<ScopeIcon scope={box} />}
                     label={boxLabel}
-                    active={folderId === null && scope === box}
+                    active={!drafts && folderId === null && scope === box}
                     badge={box === 'incoming' && (summary.data?.unread ?? 0) > 0 ? summary.data?.unread : undefined}
                     onClick={() => {
                       setToggled({ [box]: true })

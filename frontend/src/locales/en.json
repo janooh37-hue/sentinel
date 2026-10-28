@@ -2877,6 +2877,7 @@
         "deleted": "Draft deleted."
       },
       "drafts": {
+        "place": "Drafts",
         "title": "My drafts",
         "empty": "No drafts.",
         "noSubject": "No subject yet",
