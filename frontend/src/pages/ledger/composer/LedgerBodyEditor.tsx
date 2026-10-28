@@ -3,6 +3,11 @@
  * inserted and pasted images go to the server and the body keeps only their
  * server URL; without it the image tools are off. Falls back to a plain
  * textarea when the self-hosted HugeRTE bundle fails to load.
+ *
+ * Browser checks must use native iframe windows: automation that proxies
+ * `iframe.contentWindow` breaks HugeRTE's native event bindings. Oxide also
+ * overrides the shell's inline `visibility: hidden`, so inspect computed
+ * visibility and the toolbar rather than treating that attribute as a failure.
  */
 import { Editor } from '@hugerte/hugerte-react'
 import { useMemo, useState } from 'react'
