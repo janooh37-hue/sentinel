@@ -43,6 +43,7 @@ import {
 } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useDecisionNotices } from '@/lib/useDecisionNotices'
 import { canFileSignedCopy, canSendForApproval, footerActionFor, inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
 import { reportReviewOf, signedSourceOf, type ReportReview } from './bookStateLabel'
 import { changesRequestedCount, isApproverAssignee, myPendingReviewerStep } from '@/components/books/reviewers'
@@ -561,6 +562,21 @@ function BookRecordPageBody(): React.JSX.Element {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [book?.id, myStep?.id, myStep?.seen_at])
+
+  const decisionsQuery = useDecisionNotices()
+  const unseenDecision = decisionsQuery.data?.items.find((item) => item.book_id === book?.id)
+  const decisionKey = unseenDecision
+    ? `${user?.id}:${unseenDecision.book_id}:${unseenDecision.version_id}:${unseenDecision.decided_at}`
+    : null
+  const seenDecisionRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!book || !decisionKey || seenDecisionRef.current === decisionKey) return
+    seenDecisionRef.current = decisionKey
+    void api.markBookSeen(book.id).then(() => {
+      void qc.invalidateQueries({ queryKey: ['notifications', 'decisions'] })
+      void qc.invalidateQueries({ queryKey: ['books', 'approval-log'] })
+    }).catch(() => {})
+  }, [book, decisionKey, qc])
 
   // Annotation overlay (Slice 3). Marks live on the current version; shown while
   // the book is in an active review state.
