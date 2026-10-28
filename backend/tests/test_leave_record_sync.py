@@ -29,6 +29,7 @@ from app.db.models import (
     Leave,
     Manager,
     SignatureArtifactRevision,
+    Submitter,
     User,
 )
 from app.schemas.leave import LeaveUpdate
@@ -102,6 +103,7 @@ def generate(
     leave_type="Annual Leave",
     attachments=None,
     embed_signature=None,
+    submitter_id=None,
 ):
     result = document_service.generate_document(
         env.db,
@@ -120,6 +122,7 @@ def generate(
         current_user=env.signer,
         attachments=attachments,
         embed_signature=embed_signature,
+        submitter_id=submitter_id,
     )
     book = env.db.get_one(Book, result.book_id)
     document = env.db.get_one(Document, book.versions[-1].document_id)
@@ -718,6 +721,37 @@ def test_legacy_paper_without_snapshot_keeps_its_employee_signature(env, monkeyp
     assert roles(env, companion_of(env, new_doc).docx_path) == roles(
         env, companion_of(env, old_doc).docx_path
     )
+
+
+def test_record_filed_by_a_submitter_syncs_with_the_same_signatures(env):
+    # A picked submitter signs the employee cell; the form has no submitter
+    # slot, so the submitter's signature appears only once, as ``employee``.
+    give_employee_signature(env)
+    submitter = Submitter(name=env.employee.name_en, employee_id=env.employee.id)
+    env.db.add(submitter)
+    env.db.commit()
+    book, leave = generate(env, embed_signature={"employee": True}, submitter_id=submitter.id)
+    previous = book.versions[-1]
+    old_doc = env.db.get_one(Document, previous.document_id)
+    assert previous.fields["_signing"]["submitter_id"] == submitter.id
+    assert roles(env, old_doc.docx_path) == Counter({"employee": 1})
+    edit(env, leave)
+    current = book.versions[-1]
+    assert current.version_no == previous.version_no + 1
+    assert current.trigger == "leave-edit"
+    new_doc = env.db.get_one(Document, current.document_id)
+    assert roles(env, new_doc.docx_path) == roles(env, old_doc.docx_path)
+    assert roles(env, companion_of(env, new_doc).docx_path) == roles(
+        env, companion_of(env, old_doc).docx_path
+    )
+    assert "25/10/2026" in docx_text(env, new_doc.docx_path)
+    actions = env.db.scalars(
+        select(AuditLog.action).where(
+            AuditLog.entity_type == "book", AuditLog.entity_id == str(book.id)
+        )
+    ).all()
+    assert "book.leave_dates_synced" in actions
+    assert "book.leave_dates_not_synced" not in actions
 
 
 @pytest.mark.parametrize("legacy", [False, True])

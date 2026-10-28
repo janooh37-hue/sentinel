@@ -126,10 +126,17 @@ _ROLE_KEYS = {
 
 
 def _require_signatures_available(data: dict[str, Any], original: _Paper) -> None:
-    """Before rendering: every signature the paper carries resolves to a readable file."""
+    """Before rendering: every signature the paper carries resolves to a readable file.
+
+    A signature for a role the paper lacks is ignored: a template without that
+    slot (a Leave Application's submitter) never prints it, and
+    ``_require_same_paper`` checks the render itself.
+    """
     for role, keys in _ROLE_KEYS.items():
+        if original.marked and not original.marked[role]:
+            continue
         values = [data.get(key) for key in keys if data.get(key)]
-        if original.marked and bool(values) != (original.marked[role] > 0):
+        if original.marked and not values:
             raise _Unreproducible("Re-rendered signatures differ from the record's paper")
         for value in values:
             if isinstance(value, str) and not value.startswith("data:"):
