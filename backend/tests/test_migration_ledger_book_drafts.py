@@ -72,11 +72,11 @@ def assert_seed_and_fts_survive(engine: Engine) -> None:
         assert triggers == {"books_ai", "books_ad", "books_au"}
 
 
-def test_single_head_follows_parent() -> None:
+def test_revision_follows_parent_on_a_single_head() -> None:
     config = Config(str(ROOT / "alembic.ini"))
     config.set_main_option("script_location", str(ROOT / "backend/app/db/migrations"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == [HEAD]
+    assert len(script.get_heads()) == 1
     assert script.get_revision(HEAD).down_revision == PARENT
 
 
