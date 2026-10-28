@@ -85,6 +85,10 @@ it('initializes once after new-draft navigation and preserves the editor through
   await screen.findByRole('heading', { name: /DRAFT 000012/ })
   expect(create).toHaveBeenCalledTimes(1)
   expect(engine.init).toHaveBeenCalledTimes(1)
+  expect(engine.init).toHaveBeenCalledWith(expect.objectContaining({
+    relative_urls: false,
+    remove_script_host: true,
+  }))
 
   act(() => engine.type('<p>Typed body</p>'))
   await waitFor(() => expect(update).toHaveBeenCalledWith(12, { body_html: '<p>Typed body</p>' }))

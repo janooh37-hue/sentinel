@@ -49,6 +49,9 @@ export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invali
     automatic_uploads: true,
     image_uploadtab: Boolean(onUploadImage),
     images_file_types: 'png,jpg,jpeg,gif,webp',
+    // The sanitizer accepts only root-relative URLs under our image API.
+    relative_urls: false,
+    remove_script_host: true,
     images_upload_handler: onUploadImage
       ? (info: BlobInfo) => onUploadImage(info.blob(), info.filename()).catch((err: unknown) => {
         throw new Error(apiErrorMessage(err))
