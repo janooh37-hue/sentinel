@@ -5,23 +5,24 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileText, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { api, apiErrorMessage, type LedgerDraftRead } from '@/lib/api'
+import { bidi } from '@/lib/bidi'
+import { formatDmy } from '@/lib/formatDmy'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { LEDGER_DRAFTS_KEY, ledgerDraftKey } from './ledgerBookKeys'
 
 export function LedgerDraftsList({ className }: { className?: string }): React.JSX.Element {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const drafts = useQuery({ queryKey: LEDGER_DRAFTS_KEY, queryFn: () => api.listLedgerDrafts() })
   const [pending, setPending] = useState<LedgerDraftRead | null>(null)
-  const dateFmt = useMemo(() => new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }), [i18n.language])
   const remove = useMutation({
     mutationFn: (id: number) => api.deleteLedgerDraft(id),
     onSuccess: (_void, id) => {
@@ -62,7 +63,7 @@ export function LedgerDraftsList({ className }: { className?: string }): React.J
                     {subject ?? t('ledgerBook.composer.drafts.noSubject')}
                   </span>
                   <span className="text-[0.72em] text-muted-foreground">
-                    {t('ledgerBook.composer.drafts.updated', { date: dateFmt.format(new Date(draft.updated_at)) })}
+                    {t('ledgerBook.composer.drafts.updated', { date: bidi(formatDmy(draft.updated_at.slice(0, 10))) })}
                   </span>
                 </span>
               </Link>
