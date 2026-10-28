@@ -43,6 +43,8 @@ class ActionableItem:
     attachments: int = 0  # attachment count, for the email body's "size" line
     confidential: bool = False
     requester_ar: str | None = None
+    verdict: str | None = None
+    is_report: bool = False
 
 
 def inbox_item(
@@ -143,8 +145,10 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
     # Approval chain — books whose current pending step is assigned to this user.
     awaiting = book_service.list_awaiting(db, user_id=user.id)
     received = book_send_service.unread_received(db, user)
+    decisions = book_service.unseen_decisions(db, user)
     user_ids = {book.submitted_by_user_id for book in awaiting if book.submitted_by_user_id}
     user_ids.update(row.sent_by_user_id for row, _ in received)
+    user_ids.update(step.assignee_user_id for _, _, step in decisions)
     sender_names = book_service.resolve_names_by_ids(db, user_ids)
     sender_names_ar = book_service.resolve_names_ar_by_ids(db, user_ids)
     for book in awaiting:
@@ -162,6 +166,21 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
                 subject=subject,
                 requester=sender_names.get(book.submitted_by_user_id),
                 requester_ar=sender_names_ar.get(book.submitted_by_user_id),
+            )
+        )
+
+    for book, _, step in decisions:
+        items.append(
+            ActionableItem(
+                kind="decision",
+                ref=f"decision:{step.id}",
+                url=f"/books/{book.id}",
+                label=book.ref_number,
+                subject=book.subject if book.confidentiality == "general" else None,
+                requester=sender_names.get(step.assignee_user_id),
+                requester_ar=sender_names_ar.get(step.assignee_user_id),
+                verdict=step.state,
+                is_report=book_service.is_report(book),
             )
         )
 
@@ -283,6 +302,7 @@ def relevant_counts(
     monthly = _monthly_items(db, user)
     return NotificationCounts(
         approvals=approvals,
+        decisions=book_service.unseen_decision_count(db, user),
         leaves=leaves,
         scans=scans,
         emails=emails,

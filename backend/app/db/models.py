@@ -358,6 +358,8 @@ class BookApprovalStep(Base):
     seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # First time the submitter opened this signing-manager outcome.
+    outcome_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     book: Mapped[Book] = relationship(back_populates="approval_steps")

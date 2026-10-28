@@ -497,6 +497,7 @@ _APP_NAME = "GSSG Manager"
 _KIND_META: dict[str, str] = {
     "approval": "/books?status=pending",
     "review": "/books?status=pending",
+    "decision": "/books/approvals?tab=sent",
     "scan": "/scan-inbox",
     "email": "/ledger",
     "scanback": "/scan-back",
@@ -580,6 +581,41 @@ def _doc_push(
     noun_en = "documents awaiting your signature" if is_sign else "documents awaiting your review"
     noun_ar = "مستندات بانتظار توقيعك" if is_sign else "مستندات بانتظار مراجعتك"
     return _localized(f"{n} {noun_en}", f"{n} {noun_ar}"), section_url
+
+
+def _decision_push(
+    new_items: list[notification_service.ActionableItem], section_url: str
+) -> tuple[dict[str, tuple[str, str]], str]:
+    """Tell the submitter what the signing manager decided, never an action request."""
+    if len(new_items) == 1:
+        item = new_items[0]
+        verdicts = {
+            "approved": ("Approved", "تمت الموافقة"),
+            "rejected": ("Rejected", "مرفوض"),
+            "returned": ("Returned to you", "مُعاد إليك"),
+        }
+        en, ar = verdicts[item.verdict or ""]
+        if item.verdict == "approved" and item.is_report:
+            en, ar = "Reviewed", "تمت المراجعة"
+        subject = f" — {item.subject}" if item.subject else ""
+        by_en = f"\nBy {item.requester}" if item.requester else ""
+        requester_ar = item.requester_ar or item.requester
+        by_ar = f"\nبواسطة {requester_ar}" if requester_ar else ""
+        return (
+            _localized(
+                f"{en} · {item.label}{subject}{by_en}",
+                f"{ar} · \u2066{item.label}\u2069{subject}{by_ar}",
+            ),
+            item.url,
+        )
+    count = len(new_items)
+    return (
+        _localized(
+            f"{count} decisions on your records",
+            f"قرارات على معاملاتك · \u2066{count}\u2069",
+        ),
+        section_url,
+    )
 
 
 def _inbox_push(
@@ -722,6 +758,8 @@ def _build_push(
         return _email_push(new_items, section_url)
     if kind == "inbox":
         return _inbox_push(new_items, section_url)
+    if kind == "decision":
+        return _decision_push(new_items, section_url)
     if kind == "scan":
         return _scan_push(new_items, section_url)
     if kind == "scanback":

@@ -5144,6 +5144,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Decisions */
+        get: operations["get_decisions_api_v1_notifications_decisions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/decisions/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Decisions Seen */
+        post: operations["mark_decisions_seen_api_v1_notifications_decisions_seen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications/stream": {
         parameters: {
             query?: never;
@@ -7858,6 +7892,11 @@ export interface components {
             decided_at?: string | null;
             /** Verdict */
             verdict?: ("approved" | "rejected" | "returned") | null;
+            /**
+             * Outcome Unseen
+             * @default false
+             */
+            outcome_unseen: boolean;
             /** Document Id */
             document_id?: number | null;
             /** Version Id */
@@ -10399,6 +10438,42 @@ export interface components {
             window?: string | null;
             /** Note */
             note?: string | null;
+        };
+        /** DecisionNotice */
+        DecisionNotice: {
+            /** Book Id */
+            book_id: number;
+            /** Version Id */
+            version_id: number;
+            /** Ref Number */
+            ref_number: string;
+            /** Subject */
+            subject: string | null;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "approved" | "rejected" | "returned";
+            /** Is Report */
+            is_report: boolean;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+            /** Decider Name */
+            decider_name: string | null;
+            /** Decider Name Ar */
+            decider_name_ar: string | null;
+            /** Note */
+            note: string | null;
+        };
+        /** DecisionNoticesResponse */
+        DecisionNoticesResponse: {
+            /** Items */
+            items: components["schemas"]["DecisionNotice"][];
+            /** Total */
+            total: number;
         };
         /**
          * DefaultManagerRequest
@@ -13411,6 +13486,8 @@ export interface components {
             monthly_approvals: number;
             /** Inbox */
             inbox: number;
+            /** Decisions */
+            decisions: number;
         };
         /** NotifyDaysUpdate */
         NotifyDaysUpdate: {
@@ -29042,6 +29119,66 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["NotificationCounts"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_decisions_api_v1_notifications_decisions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionNoticesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_decisions_seen_api_v1_notifications_decisions_seen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

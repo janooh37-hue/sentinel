@@ -16,10 +16,23 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path, PurePath
-from typing import Any, Final, Literal, NamedTuple
+from typing import Any, Final, Literal, NamedTuple, cast
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Integer, and_, case, exists, false, func, not_, or_, select, text, true
+from sqlalchemy import (
+    Integer,
+    and_,
+    case,
+    exists,
+    false,
+    func,
+    not_,
+    or_,
+    select,
+    text,
+    true,
+    update,
+)
 from sqlalchemy.orm import Session, aliased, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -3218,6 +3231,72 @@ def _worklist_names(
     return resolve_names_by_ids(db, user_ids), resolve_names_ar_by_ids(db, user_ids)
 
 
+def _unseen_decisions_query(db: Session, user: User) -> Any:
+    """One SQL definition shared by the list, count and acknowledgement paths."""
+    # Visibility subqueries use BookVersion themselves; keep this joined version
+    # aliased so SQLAlchemy cannot correlate their FROM clause away.
+    version = aliased(BookVersion)
+    current_version_no = (
+        select(func.max(BookVersion.version_no))
+        .where(BookVersion.book_id == Book.id)
+        .correlate(Book)
+        .scalar_subquery()
+    )
+    stmt = (
+        select(Book, version, BookApprovalStep)
+        .join(version, version.book_id == Book.id)
+        .join(BookApprovalStep, BookApprovalStep.version_id == version.id)
+        .where(
+            Book.deleted_at.is_(None),
+            Book.voided_at.is_(None),
+            Book.submitted_by_user_id == user.id,
+            version.version_no == current_version_no,
+            BookApprovalStep.book_id == Book.id,
+            BookApprovalStep.kind == "approver",
+            BookApprovalStep.state.in_(("approved", "rejected", "returned")),
+            BookApprovalStep.decided_at.is_not(None),
+            BookApprovalStep.outcome_seen_at.is_(None),
+            BookApprovalStep.assignee_user_id != user.id,
+        )
+    )
+    visibility = user_visibility_clause(db, user)
+    return stmt.where(visibility) if visibility is not None else stmt
+
+
+def unseen_decisions(
+    db: Session, user: User, *, limit: int | None = None
+) -> list[tuple[Book, BookVersion, BookApprovalStep]]:
+    stmt = _unseen_decisions_query(db, user).order_by(
+        BookApprovalStep.decided_at.desc(), BookApprovalStep.id.desc()
+    )
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    # is_report reads the current version; load it in one batch, not per record.
+    stmt = stmt.options(selectinload(Book.versions))
+    rows = cast(
+        Sequence[tuple[Book, BookVersion, BookApprovalStep]], db.execute(stmt).tuples().all()
+    )
+    return list(rows)
+
+
+def unseen_decision_count(db: Session, user: User) -> int:
+    return int(
+        db.scalar(select(func.count()).select_from(_unseen_decisions_query(db, user).subquery()))
+        or 0
+    )
+
+
+def mark_decisions_seen(db: Session, user: User) -> None:
+    ids = _unseen_decisions_query(db, user).with_only_columns(BookApprovalStep.id)
+    db.execute(
+        update(BookApprovalStep)
+        .where(BookApprovalStep.id.in_(ids))
+        .values(outcome_seen_at=datetime.now(UTC).replace(tzinfo=None)),
+        execution_options={"synchronize_session": "fetch"},
+    )
+    db.commit()
+
+
 def _sent_worklist_rows(
     db: Session,
     user: User,
@@ -3278,6 +3357,15 @@ def approval_log_sent(
     )[offset : offset + limit]
     names_by_id = _worklist_names(db, ordered)
     items = [_build_worklist_item(db, row, names_by_id=names_by_id) for row in ordered]
+    for item, row in zip(items, ordered, strict=True):
+        item.outcome_unseen = row.book.voided_at is None and any(
+            step.kind == "approver"
+            and step.state in ("approved", "rejected", "returned")
+            and step.decided_at is not None
+            and step.outcome_seen_at is None
+            and step.assignee_user_id != user.id
+            for step in row.version.approval_steps
+        )
     return items, total
 
 
@@ -3590,18 +3678,30 @@ def record_review(
 
 
 def mark_seen(db: Session, book_id: int, *, user_id: int) -> bool:
-    """Stamp seen_at on the caller's step (either kind) the first time they open
-    the record. Idempotent; no-op (False) if the caller has no step."""
+    """Acknowledge the assignee's first view and the submitter's current outcome."""
     book = _get_book_with_versions(db, book_id)
     version = _current_version(book)
     if version is None:
         return False
-    for s in version.approval_steps:
-        if s.assignee_user_id == user_id and s.seen_at is None:
-            s.seen_at = datetime.now(UTC).replace(tzinfo=None)
-            db.commit()
-            return True
-    return False
+    now = datetime.now(UTC).replace(tzinfo=None)
+    changed = False
+    for step in version.approval_steps:
+        if step.assignee_user_id == user_id and step.seen_at is None:
+            step.seen_at = now
+            changed = True
+            break
+    if book.submitted_by_user_id == user_id and (user := db.get(User, user_id)) is not None:
+        stmt = _unseen_decisions_query(db, user).where(Book.id == book_id)
+        outcomes = cast(
+            Sequence[BookApprovalStep],
+            db.scalars(stmt.with_only_columns(BookApprovalStep)).all(),
+        )
+        for outcome in outcomes:
+            outcome.outcome_seen_at = now
+            changed = True
+    if changed:
+        db.commit()
+    return changed
 
 
 def add_reviewers(db: Session, book_id: int, *, user_ids: Sequence[int]) -> Book:
