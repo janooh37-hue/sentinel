@@ -63,12 +63,37 @@ def _restore_books_fts_triggers() -> None:
         op.execute(sql)
 
 
+def _draft_seq() -> int:
+    """The book_drafts AUTOINCREMENT high-water mark; the rebuild copy resets it
+    to max(surviving id), which would reuse ids of drafts deleted earlier."""
+    seq = op.get_bind().scalar(
+        sa.text("SELECT seq FROM sqlite_sequence WHERE name = 'book_drafts'")
+    )
+    return int(seq or 0)
+
+
+def _restore_draft_seq(seq: int) -> None:
+    bind = op.get_bind()
+    params = {"seq": seq}
+    updated = bind.execute(
+        sa.text("UPDATE sqlite_sequence SET seq = MAX(seq, :seq) WHERE name = 'book_drafts'"),
+        params,
+    ).rowcount
+    if not updated and seq:
+        bind.execute(
+            sa.text("INSERT INTO sqlite_sequence (name, seq) VALUES ('book_drafts', :seq)"),
+            params,
+        )
+
+
 def upgrade() -> None:
+    seq = _draft_seq()
     with op.batch_alter_table("book_drafts", table_kwargs=DRAFTS_TABLE_KWARGS) as batch:
         batch.drop_constraint("ck_book_drafts_urgency", type_="check")
         batch.drop_column("urgency")
         batch.add_column(sa.Column("importance", sa.String(length=8), nullable=True))
         batch.create_check_constraint("ck_book_drafts_importance", IMPORTANCE_CHECK)
+    _restore_draft_seq(seq)
     with op.batch_alter_table("books") as batch:
         batch.add_column(sa.Column("importance", sa.String(length=8), nullable=True))
         batch.create_check_constraint("ck_books_importance", IMPORTANCE_CHECK)
@@ -80,6 +105,7 @@ def downgrade() -> None:
         batch.drop_constraint("ck_books_importance", type_="check")
         batch.drop_column("importance")
     _restore_books_fts_triggers()
+    seq = _draft_seq()
     with op.batch_alter_table("book_drafts", table_kwargs=DRAFTS_TABLE_KWARGS) as batch:
         batch.drop_constraint("ck_book_drafts_importance", type_="check")
         batch.drop_column("importance")
@@ -87,3 +113,4 @@ def downgrade() -> None:
             sa.Column("urgency", sa.String(length=16), nullable=False, server_default="Normal")
         )
         batch.create_check_constraint("ck_book_drafts_urgency", URGENCY_CHECK)
+    _restore_draft_seq(seq)
