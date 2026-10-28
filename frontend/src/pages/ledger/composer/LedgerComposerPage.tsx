@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
 import { useId, useState } from 'react'
-import { Controller, useForm } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 
@@ -49,7 +49,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
   const tabId = useId()
   const [initial] = useState(() => valuesFromDraft(draft))
   const form = useForm<ComposerValues>({ resolver: zodResolver(composerSchema), defaultValues: initial })
-  const values = form.watch()
+  const values = useWatch({ control: form.control }) as ComposerValues
   const autosave = useDraftAutosave(draft.id, values, initial, autosaveMs)
   const [errors] = useState<FieldErrors>({})
   const classifications = useQuery({

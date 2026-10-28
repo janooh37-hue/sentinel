@@ -93,4 +93,28 @@ describe('Ledger Book composer', () => {
     await userEvent.click(within(group).getByRole('radio', { name: 'None' }))
     await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { importance: null }))
   })
+
+  it('T-C4 adds, removes and reorders subject lines; the first is the subject; at most 20', async () => {
+    mountComposer()
+    const lines = (): string[] => screen.getAllByRole('textbox', { name: /^Subject line/ }).map((el) => (el as HTMLInputElement).value)
+    expect(await screen.findByLabelText('Subject line 1')).toHaveAccessibleDescription(/The first line is the subject/)
+    await userEvent.click(screen.getByRole('button', { name: 'Add line' }))
+    await userEvent.type(screen.getByLabelText('Subject line 2'), 'Annex')
+    await userEvent.click(screen.getByRole('button', { name: 'Move line 2 up' }))
+    expect(lines()).toEqual(['Annex', 'Leave plan'])
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { subjects: ['Annex', 'Leave plan'] }))
+    expect(screen.getByRole('button', { name: 'Move line 1 up' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Move line 2 down' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Move line 1 down' }))
+    expect(lines()).toEqual(['Leave plan', 'Annex'])
+    await userEvent.click(screen.getByRole('button', { name: 'Remove line 1' }))
+    expect(lines()).toEqual(['Annex'])
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { subjects: ['Annex'] }))
+    // The last line cannot be removed: a book always has a subject line.
+    expect(screen.getByRole('button', { name: 'Remove line 1' })).toBeDisabled()
+
+    for (let i = 1; i < 20; i++) await userEvent.click(screen.getByRole('button', { name: 'Add line' }))
+    expect(lines()).toHaveLength(20)
+    expect(screen.getByRole('button', { name: 'Add line' })).toBeDisabled()
+  })
 })
