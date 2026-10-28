@@ -158,8 +158,15 @@ describe('BookRecordPage — header', () => {
     })
   })
 
-  it('does not mark an outcome seen when the opened book has no decision notice', async () => {
+  it('marks the submitter outcome seen on open when it is omitted from the newest-five list', async () => {
     vi.mocked(api.getBook).mockResolvedValue(fixture() as never)
+    renderRecord()
+    await screen.findByTestId('record-meta')
+    await waitFor(() => expect(api.markBookSeen).toHaveBeenCalledExactlyOnceWith(48))
+  })
+
+  it('does not mark an outcome seen when another user submitted the opened book', async () => {
+    vi.mocked(api.getBook).mockResolvedValue(fixture({ submitted_by_user_id: 9 }) as never)
     renderRecord()
     await screen.findByTestId('record-meta')
     await waitFor(() => expect(api.getDecisionNotices).toHaveBeenCalledOnce())

@@ -78,6 +78,26 @@ def test_manager_decision_notifies_submitter_and_opening_clears_it(api_db: Sessi
     assert not sent[0].outcome_unseen
 
 
+def test_reopened_step_notifies_again_after_new_decision(api_db: Session):
+    submitter = _user(api_db, "submitter@x.ae", "manager")
+    decider = _user(api_db, "decider@x.ae", "manager")
+    admin = _user(api_db, "admin@x.ae", "admin")
+    book = _submitted_book(api_db, book_id=1, ref="HR-1", submitter=submitter, approver=decider)
+    version = book.versions[0]
+    book_service.decide_step(
+        api_db, book.id, user_id=decider.id, version_id=version.id, decision="rejected", note="No"
+    )
+    assert book_service.mark_seen(api_db, book.id, user_id=submitter.id)
+    assert notification_service.relevant_counts(api_db, submitter).decisions == 0
+    book_service.override_state(
+        api_db, book.id, target_state="pending", actor=admin, reason="Reopen"
+    )
+    book_service.decide_step(
+        api_db, book.id, user_id=decider.id, version_id=version.id, decision="returned", note="Fix"
+    )
+    assert notification_service.relevant_counts(api_db, submitter).decisions == 1
+
+
 def test_decision_list_is_newest_five_and_mark_all_is_user_scoped(api_db: Session):
     submitter = _user(api_db, "submitter@x.ae", "manager")
     other = _user(api_db, "other@x.ae", "manager")
