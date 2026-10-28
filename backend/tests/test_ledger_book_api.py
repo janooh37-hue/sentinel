@@ -23,7 +23,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.main import create_app
-from app.services import book_service, ledger_book_service
+from app.services import book_service, ledger_book_service, push_service
 from tests.conftest import make_user
 
 DRAFTS = "/api/v1/ledger/drafts"
@@ -83,7 +83,7 @@ def sign(db, detail):
 def test_save_and_send_materializes_numbered_book_and_provenance(ledger):
     client, db, _, owner, _, _ = ledger
     today = datetime.now().strftime("%d-%m-%Y")
-    draft, result = send(client, grade="top_secret", urgency="High")
+    draft, result = send(client, grade="top_secret", importance="high")
     assert result["ref_number"] == "1/5/1"
     assert result["classification_code"] == "5/1"
     assert result["paper_date"] == today
@@ -97,7 +97,8 @@ def test_save_and_send_materializes_numbered_book_and_provenance(ledger):
     assert book.source_draft_id == draft["id"]
     assert book.subject == CONTENT["subjects"][0]
     assert all(subject.lower() in book.search_text.lower() for subject in CONTENT["subjects"])
-    assert (book.grade, book.urgency, book.approval_state) == ("top_secret", "High", "none")
+    assert (book.grade, book.importance, book.approval_state) == ("top_secret", "high", "none")
+    assert book.urgency == "Normal"
     assert book.created_by_user_id == book.submitted_by_user_id == owner.id
     version = db.get(BookVersion, result["selected_version_id"])
     assert version.template_id == LEDGER_BOOK_TEMPLATE_ID
@@ -372,3 +373,153 @@ def test_denied_classification_hides_organization_visible_ledger_book(ledger):
     response = client.get("/api/v1/books")
     assert response.status_code == 200, response.text
     assert book.id not in [row["id"] for row in response.json()["items"]]
+
+
+# ---------------------------------------------------------------------------
+# Importance (الأهمية): Ledger Books only; Urgency is not used by them.
+# ---------------------------------------------------------------------------
+
+
+def test_draft_importance_defaults_to_none_and_round_trips(ledger):
+    """T-B1"""
+    client, _, _, _, _, _ = ledger
+    blank = client.post(DRAFTS, json={"tab": 5, **CONTENT})
+    assert blank.status_code == 201, blank.text
+    assert blank.json()["importance"] is None
+    assert "urgency" not in blank.json()
+    for level in ("medium", "high"):
+        created = client.post(DRAFTS, json={"tab": 5, "importance": level})
+        assert created.status_code == 201, created.text
+        assert created.json()["importance"] == level
+        listed = {row["id"]: row for row in client.get(DRAFTS).json()}
+        assert listed[created.json()["id"]]["importance"] == level
+
+
+def test_draft_importance_update_sets_and_clears_and_keeps_when_absent(ledger):
+    """T-B2"""
+    client, _, _, _, _, _ = ledger
+    draft = client.post(DRAFTS, json={"tab": 5}).json()
+    url = f"{DRAFTS}/{draft['id']}"
+    assert client.patch(url, json={"importance": "high"}).json()["importance"] == "high"
+    # Fields not sent stay as they are.
+    assert client.patch(url, json={"tab": 2}).json()["importance"] == "high"
+    assert client.patch(url, json={"importance": "medium"}).json()["importance"] == "medium"
+    # An explicit null clears it back to no importance.
+    assert client.patch(url, json={"importance": None}).json()["importance"] is None
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"importance": "low"},
+        {"importance": "High"},
+        {"importance": ""},
+        {"urgency": "High"},
+    ],
+)
+def test_draft_rejects_unknown_importance_and_urgency(ledger, payload):
+    """T-B3"""
+    client, _, _, _, _, _ = ledger
+    assert client.post(DRAFTS, json={"tab": 5, **payload}).status_code == 422
+    draft = client.post(DRAFTS, json={"tab": 5}).json()
+    assert client.patch(f"{DRAFTS}/{draft['id']}", json=payload).status_code == 422
+
+
+@pytest.mark.parametrize("importance", [None, "medium", "high"])
+def test_save_and_send_copies_importance_and_leaves_urgency_normal(ledger, importance):
+    """T-B4"""
+    client, db, _, _, _, _ = ledger
+    _, result = send(client, importance=importance)
+    assert result["importance"] == importance
+    assert "urgency" not in result
+    book = db.get(Book, result["id"])
+    assert (book.importance, book.urgency) == (importance, "Normal")
+
+
+def test_correction_revision_keeps_importance(ledger):
+    """T-B5"""
+    client, db, _, _, _, _ = ledger
+    _, detail = send(client, importance="high")
+    sign(db, detail)
+    response = client.post(f"{BOOKS}/{detail['id']}/corrections")
+    assert response.status_code == 201, response.text
+    assert response.json()["importance"] == "high"
+    assert db.get(Book, detail["id"]).importance == "high"
+    assert client.get(f"{BOOKS}/{detail['id']}").json()["importance"] == "high"
+
+
+def test_desk_rows_carry_importance_and_ledger_template(ledger, monkeypatch):
+    """T-B7: the BooksRoutingDesk rows (inbox scopes) and the record detail."""
+    client, db, actor, owner, other, _ = ledger
+    monkeypatch.setattr(push_service, "send_to_user", lambda *args, **kwargs: None)
+    _, ledger_book = send(client, importance="high")
+    db.add(BookCategory(id="HR", prefix="HR", requires_approval=False))
+    word = Book(
+        category_id="HR",
+        ref_number="HR-word",
+        subject="Word General Book",
+        direction="outgoing",
+        urgency="Very High",
+        distribution="named",
+        created_by_user_id=owner.id,
+    )
+    db.add(word)
+    db.flush()
+    db.add(
+        BookVersion(
+            book_id=word.id,
+            version_no=1,
+            template_id="General Book",
+            fields={},
+            status="none",
+            created_by_user_id=owner.id,
+        )
+    )
+    db.commit()
+    for book_id in (ledger_book["id"], word.id):
+        response = client.post(
+            f"/api/v1/books/{book_id}/send", json={"user_ids": [other.id], "purpose": "info"}
+        )
+        assert response.status_code == 200, response.text
+
+    def rows(inbox):
+        response = client.get("/api/v1/books", params={"inbox": inbox})
+        assert response.status_code == 200, response.text
+        return {row["id"]: row for row in response.json()["items"]}
+
+    expected = {
+        ledger_book["id"]: (LEDGER_BOOK_TEMPLATE_ID, "high"),
+        word.id: ("General Book", None),
+    }
+    sent = rows("sent")
+    actor[0] = other
+    received = rows("received")
+    for listed in (sent, received):
+        assert {
+            book_id: (row["current_template_id"], row["importance"])
+            for book_id, row in listed.items()
+        } == expected
+    detail = client.get(f"/api/v1/books/{ledger_book['id']}")
+    assert detail.status_code == 200, detail.text
+    assert (detail.json()["current_template_id"], detail.json()["importance"]) == (
+        LEDGER_BOOK_TEMPLATE_ID,
+        "high",
+    )
+    word_detail = client.get(f"/api/v1/books/{word.id}").json()
+    # Urgency is never mapped to importance on the backend (D7 is display-only).
+    assert (word_detail["urgency"], word_detail["importance"]) == ("Very High", None)
+
+
+@pytest.mark.parametrize("importance", [None, "medium", "high"])
+def test_papers_print_no_importance_or_urgency(ledger, importance):
+    """T-B6: importance is a desk mark only; neither paper prints it nor urgency."""
+    client, _, _, _, _, _ = ledger
+    draft = client.post(DRAFTS, json={"tab": 5, **CONTENT, "importance": importance}).json()
+    draft_paper = client.get(f"{DRAFTS}/{draft['id']}/paper")
+    _, detail = send(client, importance=importance)
+    issued = client.get(f"{BOOKS}/{detail['id']}/paper")
+    for paper in (draft_paper, issued):
+        assert paper.status_code == 200, paper.text
+        assert "الأهمية" not in paper.text
+        assert "الاستعجال" not in paper.text
+        assert 'class="urgency"' not in paper.text

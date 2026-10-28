@@ -7,7 +7,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas._base import ORMBase
-from app.schemas.book import BookGrade, BookUrgency
+from app.schemas.book import BookGrade, BookImportance
 
 
 class LedgerDraftCreate(BaseModel):
@@ -15,7 +15,7 @@ class LedgerDraftCreate(BaseModel):
 
     tab: int | None = Field(default=None, ge=1, le=15)
     grade: BookGrade = "unclassified"
-    urgency: BookUrgency = "Normal"
+    importance: BookImportance | None = None
     subjects: list[str] = Field(default_factory=list, max_length=20)
     body_html: str = Field(default="", max_length=2_000_000)
 
@@ -27,7 +27,8 @@ class LedgerDraftUpdate(BaseModel):
 
     tab: int | None = Field(default=None, ge=1, le=15)
     grade: BookGrade | None = None
-    urgency: BookUrgency | None = None
+    # Sent as null: clears the importance.
+    importance: BookImportance | None = None
     subjects: list[str] | None = Field(default=None, max_length=20)
     body_html: str | None = Field(default=None, max_length=2_000_000)
 
@@ -38,7 +39,7 @@ class LedgerDraftRead(ORMBase):
     draft_number: str
     tab: int | None
     grade: BookGrade
-    urgency: BookUrgency
+    importance: BookImportance | None
     subjects: list[str]
     body_html: str
     created_at: datetime
@@ -66,7 +67,7 @@ class LedgerBookRead(ORMBase):
     id: int
     ref_number: str
     grade: BookGrade
-    urgency: BookUrgency
+    importance: BookImportance | None
     tab: int | None
     classification_code: str | None
     # dd-mm-YYYY, as printed and as scan-back reads it.

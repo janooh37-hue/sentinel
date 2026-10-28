@@ -9021,6 +9021,8 @@ export interface components {
             deleted_at: string | null;
             /** Urgency */
             urgency: string | null;
+            /** Importance */
+            importance?: ("medium" | "high") | null;
             /** Approval State */
             approval_state: string;
             /**
@@ -12562,11 +12564,8 @@ export interface components {
              * @enum {string}
              */
             grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
-            /**
-             * Urgency
-             * @enum {string}
-             */
-            urgency: "Normal" | "High" | "Very High";
+            /** Importance */
+            importance: ("medium" | "high") | null;
             /** Tab */
             tab: number | null;
             /** Classification Code */
@@ -12607,12 +12606,8 @@ export interface components {
              * @enum {string}
              */
             grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
-            /**
-             * Urgency
-             * @default Normal
-             * @enum {string}
-             */
-            urgency: "Normal" | "High" | "Very High";
+            /** Importance */
+            importance?: ("medium" | "high") | null;
             /** Subjects */
             subjects?: string[];
             /**
@@ -12641,11 +12636,8 @@ export interface components {
              * @enum {string}
              */
             grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
-            /**
-             * Urgency
-             * @enum {string}
-             */
-            urgency: "Normal" | "High" | "Very High";
+            /** Importance */
+            importance: ("medium" | "high") | null;
             /** Subjects */
             subjects: string[];
             /** Body Html */
@@ -12670,8 +12662,8 @@ export interface components {
             tab?: number | null;
             /** Grade */
             grade?: ("unclassified" | "secret" | "top_secret" | "addressee_only") | null;
-            /** Urgency */
-            urgency?: ("Normal" | "High" | "Very High") | null;
+            /** Importance */
+            importance?: ("medium" | "high") | null;
             /** Subjects */
             subjects?: string[] | null;
             /** Body Html */

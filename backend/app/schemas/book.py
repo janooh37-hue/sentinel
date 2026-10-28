@@ -22,10 +22,12 @@ BookStampStyle = Literal[
     "Watermark Style",
 ]
 
-# Record grade + distribution (app.core.grades, ADR 0007), urgency, send purpose.
+# Record grade + distribution (app.core.grades, ADR 0007), urgency, Ledger Book
+# importance (ADR 0008), send purpose.
 BookGrade = Literal["unclassified", "secret", "top_secret", "addressee_only"]
 BookDistribution = Literal["organization", "named"]
 BookUrgency = Literal["Normal", "High", "Very High"]
+BookImportance = Literal["medium", "high"]
 SendPurpose = Literal["info", "action", "reply", "circulate"]
 
 
@@ -575,6 +577,9 @@ class BookRead(ORMBase):
     created_at: datetime
     deleted_at: datetime | None
     urgency: str | None
+    # Stored Ledger Book importance; None for every non-Ledger record (D7 maps
+    # urgency for display in the frontend only).
+    importance: BookImportance | None = None
     approval_state: str
     access_scope: Literal["full", "assigned_revision"] = "full"
     grade: BookGrade = "unclassified"

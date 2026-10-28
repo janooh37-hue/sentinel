@@ -151,7 +151,7 @@ def draft_read(draft: BookDraft) -> LedgerDraftRead:
         draft_number=f"{draft.id:06d}",
         tab=draft.tab,
         grade=draft.grade,
-        urgency=draft.urgency,
+        importance=draft.importance,
         subjects=list(draft.subjects or []),
         body_html=draft.body_html,
         created_at=draft.created_at,
@@ -182,7 +182,7 @@ def create_draft(db: Session, user: User, payload: LedgerDraftCreate) -> BookDra
         owner_user_id=user.id,
         tab=payload.tab,
         grade=payload.grade,
-        urgency=payload.urgency,
+        importance=payload.importance,
         subjects=[subject.strip() for subject in payload.subjects],
         body_html="",
     )
@@ -213,8 +213,8 @@ def update_draft(db: Session, user: User, draft_id: int, payload: LedgerDraftUpd
         draft.tab = data["tab"]
     if data.get("grade") is not None:
         _set_grade(db, user, draft, data["grade"])
-    if data.get("urgency") is not None:
-        draft.urgency = data["urgency"]
+    if "importance" in data:
+        draft.importance = data["importance"]
     if data.get("subjects") is not None:
         draft.subjects = [subject.strip() for subject in data["subjects"]]
     if data.get("body_html") is not None:
@@ -321,7 +321,7 @@ def _number_draft(
         subject=subjects[0],
         grade=draft.grade,
         distribution=grades.NAMED,
-        urgency=draft.urgency,
+        importance=draft.importance,
         classification_code=classification.code,
         approval_state="none",
         submitted_by_user_id=user.id,
@@ -434,7 +434,7 @@ def ledger_book_read(
         id=book.id,
         ref_number=book.ref_number,
         grade=book.grade,
-        urgency=book.urgency,
+        importance=book.importance,
         tab=tab if isinstance(tab, int) else None,
         classification_code=book.classification_code,
         paper_date=paper_date if isinstance(paper_date, str) else None,
@@ -473,7 +473,6 @@ def draft_paper(db: Session, user: User, draft_id: int) -> str:
             body_html=draft.body_html,
             subjects=tuple(_clean_subjects(list(draft.subjects))),
             grade=draft.grade,
-            urgency=draft.urgency,
             ref=None,
             paper_date=None,
             draft_number=f"{draft.id:06d}",
@@ -496,7 +495,6 @@ def book_paper(db: Session, user: User, book_id: int, *, version_id: int | None 
             body_html=read.body_html,
             subjects=tuple(read.subjects),
             grade=read.grade,
-            urgency=read.urgency,
             ref=read.ref_number,
             paper_date=paper_date,
             draft_number=None,
