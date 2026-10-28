@@ -25,7 +25,7 @@ import json
 import logging
 import shutil
 import uuid
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -3156,6 +3156,7 @@ def render_signed_artifact(
     signer_user_id: int | None = None,
     output_dir: Path | None = None,
     converter: artifact_service.PdfConverter | None = None,
+    signing_snapshot: Mapping[str, Any] | None = None,
 ) -> artifact_service.ArtifactResult:
     """Re-render ``version``'s document with the signer's signature embedded in
     the manager slot (``sig1_path``); return the retained ``ArtifactResult``
@@ -3202,6 +3203,9 @@ def render_signed_artifact(
         )
     employee = db.get(Employee, book.employee_id) if book.employee_id else None
     fields = dict(version.fields or {})
+    if signing_snapshot is not None:
+        # A pre-snapshot paper's recovered choices, render-only (leave_record_sync).
+        fields[_SIGNING_KEY] = dict(signing_snapshot)
     signing = fields.get(_SIGNING_KEY)
     signing = signing if isinstance(signing, dict) else {}
     # Replay the generation's employee/submitter signature choice.

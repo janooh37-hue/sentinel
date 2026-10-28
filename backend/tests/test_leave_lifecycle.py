@@ -96,6 +96,28 @@ def test_can_amend_annual_approved_only():
 
 
 @pytest.mark.parametrize(
+    ("leave_type", "status", "expected"),
+    [
+        ("Annual Leave", "Pending", True),
+        ("Annual Leave - إجازة سنوية", "Pending", True),
+        ("Emergency Leave", "Pending", True),
+        ("National Service", "Pending", True),
+        ("Annual Leave", "Approved", False),
+        ("Annual Leave", "Generated", False),
+        ("Emergency Leave", "Rejected", False),
+        ("National Service", "Completed", False),
+        # Sick and record kinds follow their record's signature, never the Leaves page.
+        ("Sick Leave", "Pending", False),
+        ("Sick Leave", "Approved", False),
+        ("Leave Permit", "Pending", False),
+        ("Administrative Leave", "Pending", False),
+    ],
+)
+def test_can_edit_dates_pending_request_and_national_service_only(leave_type, status, expected):
+    assert ll.can_edit_dates(leave_type, status) is expected
+
+
+@pytest.mark.parametrize(
     ("leave_type", "status", "deleted", "expected"),
     [
         ("Sick Leave", "Approved", False, "sick"),

@@ -41,6 +41,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { SkeletonRow } from '@/components/ui/skeleton'
 import { BooksFilterBar } from './BooksFilterBar'
+import { BooksSearchField } from './BooksSearchField'
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
 import { BookPreview } from '@/components/books/BookPreview'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
@@ -1091,6 +1092,11 @@ function BooksRegister(): React.JSX.Element {
             highlightedId={highlightedId}
             onSubmit={submitBook}
             onClearFilters={clearAllFilters}
+            search={
+              isInmateReporter ? undefined : (
+                <BooksSearchField filters={filters} onChange={setFilters} />
+              )
+            }
           />
         </>
       )}

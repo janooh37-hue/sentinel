@@ -104,16 +104,17 @@ def allowed_transitions(leave_type: str, current_status: str) -> frozenset[str]:
 def can_amend(leave_type: str, current_status: str) -> bool:
     """Post-approval amendment (end date / days only): Annual Leave + Approved.
 
-    Distinct from ``can_edit_dates`` (NS-while-Pending, start+end): an amend
+    Distinct from ``can_edit_dates`` (Pending, start+end): an amend
     keeps the start date fixed and is allowed only after approval.
     """
     return is_annual(leave_type) and canonical_status(current_status) == "Approved"
 
 
 def can_edit_dates(leave_type: str, current_status: str) -> bool:
-    return (
-        classify_group(leave_type) == "national_service"
-        and canonical_status(current_status) == "Pending"
+    """Leaves-page start/end edits: request kinds and National Service while
+    Pending. Sick and record kinds follow their record's signature instead."""
+    return classify_group(leave_type) in ("request", "national_service") and (
+        canonical_status(current_status) == "Pending"
     )
 
 

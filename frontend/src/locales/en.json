@@ -1994,6 +1994,22 @@
       "fileButton": "File & complete",
       "filed": "Return form filed — leave completed"
     },
+    "edit": {
+      "action": "Edit",
+      "title": "Edit pending leave",
+      "help": "Update the dates and notes before approving or rejecting this leave. The leave type cannot be changed.",
+      "startDate": "Start date",
+      "endDate": "End date",
+      "save": "Save changes",
+      "toast": "Leave updated",
+      "errors": {
+        "dateRequired": "Enter a date.",
+        "endBeforeStart": "End date must be on or after the start date.",
+        "datesForbidden": "Dates cannot be changed for this leave in its current status.",
+        "datesInvalid": "Check the leave dates. The end date must be on or after the start date.",
+        "duplicate": "A leave with the same employee, type and dates already exists."
+      }
+    },
     "amend": {
       "action": "Edit leave",
       "title": "Edit approved leave",
@@ -2644,7 +2660,7 @@
       "signedCopyUnfiled": "Signed copy removed — record reverted",
       "papers_one": "{{count}} paper",
       "papers_other": "{{count}} papers",
-      "searchPlaceholder": "Search ref, form, employee…",
+      "searchPlaceholder": "Search ref, form, employee name or G-number…",
       "collapse": "Collapse preview",
       "wider": "Wider preview",
       "normal": "Normal width",

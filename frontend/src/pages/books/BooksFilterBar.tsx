@@ -2,7 +2,8 @@
  * Sticky filter bar for the Books page — TAMM redesign.
  *
  * One rounded surface pill with: category popover · direction chips · date range
- * · search · clear. Tests still reach inputs by their data-testid attributes.
+ * · clear. The phone search box lives beside "Select" (BooksSearchField). Tests
+ * still reach inputs by their data-testid attributes.
  */
 
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
@@ -12,7 +13,6 @@ import { useTranslation } from 'react-i18next'
 import type { BookCategoryRead, ServiceFacetRead } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
-import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { serviceArtwork, serviceGlyph, useServiceLabel } from './serviceLabels'
 import { useCapabilities } from '@/lib/useCapabilities'
@@ -51,7 +51,6 @@ export function BooksFilterBar({
       ? visibleServices
       : [...visibleServices, { id: selectedServiceId }]
   const resetDeniedServiceRef = useRef<string | null>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [catOpen, setCatOpen] = useState(false)
   const catRootRef = useRef<HTMLDivElement>(null)
   const resetDeniedService = useEffectEvent(() => {
@@ -75,24 +74,6 @@ export function BooksFilterBar({
   const clear = (): void => {
     onChange({ ...DEFAULT_BOOKS_FILTERS })
   }
-
-  // Debounce the search box — onChange is called immediately for other fields
-  const handleSearchChange = (value: string): void => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      onChange({ ...filters, q: value })
-    }, 300)
-  }
-
-  // Track raw input value separately so the input isn't laggy
-  const searchRef = useRef<HTMLInputElement>(null)
-
-  // Keep input value in sync when filters are cleared externally
-  useEffect(() => {
-    if (searchRef.current && filters.q === '') {
-      searchRef.current.value = ''
-    }
-  }, [filters.q])
 
   // Close the category popover on outside-click or Escape
   useEffect(() => {
@@ -321,10 +302,10 @@ export function BooksFilterBar({
         {t('books.filters.drafts')}
       </button>
 
-      {/* Direction chips + status + date + search row. On the phone it scrolls
-          sideways under a fade at the inline-end edge (the cue that more chips
-          follow); "Drafts" and "Created by me" are pinned in the row above so
-          they never need a scroll to reach. */}
+      {/* Direction chips + status + date row. On the phone it scrolls sideways
+          under a fade at the inline-end edge (the cue that more chips follow);
+          "Drafts" and "Created by me" are pinned in the row above so they never
+          need a scroll to reach. Search sits beside "Select" (BooksSearchField). */}
       <div className="flex items-center gap-2 overflow-x-auto pb-0.5 max-md:w-full max-md:[mask-image:linear-gradient(to_right,#000_calc(100%-28px),transparent)] max-md:rtl:[mask-image:linear-gradient(to_left,#000_calc(100%-28px),transparent)] md:flex-wrap md:pb-0">
         <DirectionChips filters={filters} onChange={onChange} testId="direction-toggle" className="shrink-0 flex-nowrap" />
 
@@ -358,19 +339,6 @@ export function BooksFilterBar({
         <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
 
         <DateRangeFields filters={filters} onChange={onChange} className="shrink-0" />
-
-        <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
-
-        {/* Search */}
-        <Input
-          ref={searchRef}
-          defaultValue={filters.q}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          placeholder={t('common.search')}
-          aria-label={t('books.filters.search')}
-          className="h-8 w-44 shrink-0 rounded-full border-hairline bg-surface text-[0.85em]"
-          data-testid="search-input"
-        />
 
         {isAnyFilterActive && (
           <Button

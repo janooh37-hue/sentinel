@@ -12251,7 +12251,8 @@ export interface components {
         /**
          * LeaveUpdate
          * @description PATCH payload. Dates are accepted only where the lifecycle allows date
-         *     edits (National Service while Pending — delay/extend).
+         *     edits (request kinds and National Service while Pending). A date change
+         *     also writes a new version of the owning record's form.
          */
         LeaveUpdate: {
             /** Status */
