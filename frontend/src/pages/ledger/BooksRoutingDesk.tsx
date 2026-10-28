@@ -73,17 +73,18 @@ function Person({ label, people, column, className }: {
   label: string; people: { name: string; title: string | null }[]; column: string; className?: string
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
-  const full = people.map(({ name, title }) => title ? `${title} (${name})` : name).join(i18n.language.startsWith('ar') ? '، ' : ', ')
+  const sep = i18n.language.startsWith('ar') ? '، ' : ', '
+  const entries = people.map(({ name, title }) => title ? `${title} (${name})` : name)
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span role="img" data-column={column} aria-label={`${label}: ${full}`} className={cn('inline-flex min-w-0 max-w-full items-baseline gap-1', className)}>
+          <span role="img" data-column={column} aria-label={`${label}: ${entries.join(sep)}`} className={cn('inline-flex min-w-0 max-w-full items-baseline gap-1', className)}>
             <span className="shrink-0 xl:sr-only">{label}:</span>
             <span className="min-w-0 truncate text-foreground"><bdi>{people[0].title || people[0].name}</bdi>{people.length > 1 && <>{' '}<bdi dir="ltr" className="text-xs text-muted-foreground">{t('ledger.booksDesk.moreNames', { count: people.length - 1 })}</bdi></>}</span>
           </span>
         </TooltipTrigger>
-        <TooltipContent>{full}</TooltipContent>
+        <TooltipContent>{entries.map((entry, index) => <span key={index}>{index > 0 && sep}<bdi>{entry}</bdi></span>)}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   )
@@ -477,7 +478,7 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen
                   <MessageSquareText className="h-4 w-4 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden />
                 </span>
               </TooltipTrigger>
-              <TooltipContent className="max-w-xs whitespace-pre-wrap break-words"><bdi>{noteLabel}</bdi></TooltipContent>
+              <TooltipContent className="max-w-xs whitespace-pre-wrap break-words">{t('ledger.booksDesk.noteShort')}: <bdi>{note}</bdi></TooltipContent>
             </Tooltip>
           </TooltipProvider>
         )}
