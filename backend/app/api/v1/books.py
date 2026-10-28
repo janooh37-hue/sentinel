@@ -401,6 +401,8 @@ def create_word_session(
             date=payload.date,
             sign=True,
             grade=payload.grade,
+            attachments=payload.attachments,
+            record_access_user=user,
         )
     else:
         _require_word_capability(db, user, "books.create")
@@ -425,6 +427,8 @@ def create_word_session(
                 date=payload.date,
                 sign=payload.sign,
                 grade=payload.grade,
+                attachments=payload.attachments,
+                record_access_user=user,
             )
         else:
             info = word_book_service.create_word_book(
@@ -438,6 +442,8 @@ def create_word_session(
                 template_name=payload.template_name,
                 table_rows=payload.table_rows,
                 grade=payload.grade,
+                attachments=payload.attachments,
+                record_access_user=user,
             )
     return WordSessionRead(
         book_id=info.book_id,
@@ -672,8 +678,15 @@ def word_session_preview(
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id)
     pdf = word_book_service.render_session_preview(db, book_id=book_id)
-    if (b64 := maybe_base64(pdf.read_bytes(), encoding)) is not None:
+    data = pdf if isinstance(pdf, bytes) else pdf.read_bytes()
+    if (b64 := maybe_base64(data, encoding)) is not None:
         return b64
+    if isinstance(pdf, bytes):
+        return Response(
+            content=pdf,
+            media_type="application/pdf",
+            headers={"Cache-Control": "no-store"},
+        )
     return FileResponse(
         str(pdf),
         media_type="application/pdf",

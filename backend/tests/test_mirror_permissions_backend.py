@@ -2136,10 +2136,14 @@ def test_generation_attachment_sources_require_full_source_book_access(
     from app.api.v1.documents import GenerateAttachmentSpec
 
     _category(mirror_api.db, "SOURCE", name_en="Source records")
+    # Real one-page PDFs: sources are validated as papers before generation.
     primary_path = tmp_path / "source-primary.pdf"
-    primary_path.write_bytes(b"%PDF-source")
     attachment_path = tmp_path / "source-scan.pdf"
-    attachment_path.write_bytes(b"%PDF-scan")
+    for path in (primary_path, attachment_path):
+        pdf = fitz.open()
+        pdf.new_page()
+        pdf.save(path)
+        pdf.close()
     primary = Document(
         template_id="Report",
         ref_number="SOURCE-DOC",

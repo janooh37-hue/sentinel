@@ -33,6 +33,8 @@ export interface RecordPaperPickerDialogProps {
   onOpenChange: (open: boolean) => void
   /** Called with the picked paper; the caller closes the dialog. */
   onPick: (value: AttachmentValue) => void
+  /** Omit the record whose package is being edited. */
+  excludeBookId?: number
 }
 
 /** Last path segment, tolerant of either separator (backend stores POSIX-ish
@@ -46,6 +48,7 @@ export function RecordPaperPickerDialog({
   open,
   onOpenChange,
   onPick,
+  excludeBookId,
 }: RecordPaperPickerDialogProps): React.JSX.Element {
   const { t } = useTranslation()
   const [q, setQ] = useState('')
@@ -76,7 +79,9 @@ export function RecordPaperPickerDialog({
     enabled: open,
     staleTime: 30_000,
   })
-  const books: BookRead[] = booksQuery.data?.items ?? []
+  const books: BookRead[] = (booksQuery.data?.items ?? []).filter(
+    (book) => book.id !== excludeBookId,
+  )
 
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>

@@ -12,6 +12,7 @@ import secrets
 import shutil
 import threading
 import uuid
+from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -37,11 +38,17 @@ from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, Manager, User
 from app.db.repos import classified_refs_repo
 from app.db.repos._locking import begin_immediate_if_idle
-from app.schemas.book import BookGrade, TemplateSessionRead, WordSessionDetailRead
+from app.schemas.book import (
+    BookGrade,
+    GenerateAttachmentSpec,
+    TemplateSessionRead,
+    WordSessionDetailRead,
+)
 from app.services import (
     artifact_service,
     book_service,
     book_template_service,
+    document_service,
     manager_service,
 )
 from app.services._pdf_executor import convert_docx_to_pdf
@@ -79,6 +86,8 @@ def create_word_book(
     body_docx: Path | None = None,
     reference_line: str = "",
     commit: bool = True,
+    attachments: Sequence[GenerateAttachmentSpec] | None = None,
+    record_access_user: User | None = None,
 ) -> WordSessionInfo:
     """Create a General Book with a working docx for Word.
 
@@ -118,6 +127,13 @@ def create_word_book(
             http_status=409,
             details={"file": template_file},
         )
+    attachment_specs = list(attachments or [])
+    slots = document_service._validate_attachment_slots(
+        _TEMPLATE_ID, attachment_specs, require_slots=True
+    )
+    resolved_attachments = document_service._resolve_attachment_sources(
+        db, attachment_specs, record_access_user=record_access_user
+    )
     serial = classified_refs_repo.allocate_classified_serial(db)
     ref = classified_ref(cls.tab, serial)
 
@@ -142,6 +158,13 @@ def create_word_book(
     )
     db.add(book)
     db.flush()  # get book.id
+    consumed = (
+        document_service.persist_attachment_sources(
+            book, resolved_attachments, slots, current_user=user, data_dir=settings.data_dir
+        )
+        if resolved_attachments
+        else []
+    )
 
     # ------------------------------------------------------------------
     # 3. Build output path
@@ -242,6 +265,10 @@ def create_word_book(
         db.rollback()
         artifact_service.cleanup_created(artifact, allowed_root=output_path.parent)
         raise
+    if commit:
+        for path in consumed:
+            with contextlib.suppress(OSError):
+                path.unlink(missing_ok=True)
 
     # ------------------------------------------------------------------
     # 7. Build URLs
@@ -564,6 +591,8 @@ def create_report_word_book(
     date: str | None,
     sign: bool,
     grade: BookGrade = "unclassified",
+    attachments: Sequence[GenerateAttachmentSpec] | None = None,
+    record_access_user: User | None = None,
 ) -> WordSessionInfo:
     """Create a no-ref Report on the report paper with an empty, Word-editable body.
 
@@ -576,6 +605,13 @@ def create_report_word_book(
 
     settings = get_settings()
     name, title, _sig = report_service._resolve_signer(db, signer_employee_id)
+    attachment_specs = list(attachments or [])
+    slots = document_service._validate_attachment_slots(
+        "Report", attachment_specs, require_slots=True
+    )
+    resolved_attachments = document_service._resolve_attachment_sources(
+        db, attachment_specs, record_access_user=record_access_user
+    )
 
     if db.get(BookCategory, "GS") is None:
         db.add(BookCategory(id="GS", prefix="GS"))
@@ -598,6 +634,13 @@ def create_report_word_book(
     db.flush()  # assigns book.id
     book.ref_number = f"REPORT-{book.id}"
     db.flush()
+    consumed = (
+        document_service.persist_attachment_sources(
+            book, resolved_attachments, slots, current_user=user, data_dir=settings.data_dir
+        )
+        if resolved_attachments
+        else []
+    )
 
     filename = book.ref_number + ".docx"  # REPORT-N has no slashes
     output_path = settings.data_dir / "editing" / f"book-{book.id}" / filename
@@ -645,6 +688,9 @@ def create_report_word_book(
         db.rollback()
         artifact_service.cleanup_created(artifact, allowed_root=output_path.parent)
         raise
+    for path in consumed:
+        with contextlib.suppress(OSError):
+            path.unlink(missing_ok=True)
 
     base_url = settings.public_base_url.rstrip("/")
     dav_url = f"{base_url}/dav/{token}/{filename}"
@@ -1108,14 +1154,20 @@ def render_session_preview(
     *,
     book_id: int,
     converter: artifact_service.PdfConverter | None = None,
-) -> Path:
-    """Resolve the active book session and reuse the session conversion core."""
+) -> Path | bytes:
+    """Return the cached letter, or in-memory letter-plus-papers package."""
     session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
     if session is None:
         raise AppError(
             "NO_ACTIVE_SESSION", "No active editing session for this book", http_status=409
         )
-    return render_edit_session_preview(session, converter=converter)
+    letter = render_edit_session_preview(session, converter=converter)
+    book = db.get(Book, book_id)
+    if book is not None and book.merged_attachment_paths:
+        from app.services import included_papers_service
+
+        return included_papers_service.build_word_preview(book, letter)
+    return letter
 
 
 def render_edit_session_preview(

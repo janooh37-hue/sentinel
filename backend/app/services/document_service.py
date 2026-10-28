@@ -29,7 +29,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Literal
+from typing import Any, Final, Literal
 
 from sqlalchemy import ColumnElement, and_, case, exists, func, not_, or_, select
 from sqlalchemy.orm import InstrumentedAttribute, Session, aliased
@@ -75,7 +75,7 @@ from app.db.models import (
 from app.db.repos._locking import begin_immediate_if_idle
 from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
-from app.schemas.book import BookGrade
+from app.schemas.book import BookGrade, GenerateAttachmentSpec
 from app.schemas.employee import EMPLOYEE_STATUS_RESIGNED, WORKING_STATUSES
 from app.schemas.linked_document import LinkedDocumentRead
 from app.services import (
@@ -95,11 +95,6 @@ from app.services.employee_status_history import (
 _build_docx_filename = artifact_service.build_docx_filename
 _output_dir_for_admin = artifact_service.output_dir_for_admin
 
-if TYPE_CHECKING:
-    # Type-only: app.api.v1.documents imports this module at runtime, so a
-    # real import here would be circular. The specs are plain pydantic value
-    # objects — only their attributes are read.
-    from app.api.v1.documents import GenerateAttachmentSpec
 
 log = logging.getLogger(__name__)
 _INTERVIEWER_FORMS: Final[frozenset[str]] = frozenset(
@@ -1824,6 +1819,19 @@ def _resolve_attachment_sources(
                         attachment_index=idx,
                         slot_key=spec.slot_key,
                     )
+        original_name = Path(spec.original_name or path.name).name
+        if spec.original_name and (
+            original_name != spec.original_name
+            or Path(original_name).suffix.lower() != path.suffix.lower()
+        ):
+            raise ValidationFailedError(
+                "INVALID_ATTACHMENT_NAME",
+                "An attachment requires its original safe filename",
+                filename=spec.original_name,
+            )
+        from app.services import included_papers_service
+
+        included_papers_service.inspect_paper(path, display_name=original_name)
         resolved.append((spec, path))
     return resolved
 
@@ -1840,6 +1848,80 @@ def _ordered_attachment_specs(
     )
     extras = [item for item in resolved if not item[0].slot_key]
     return [*keyed, *extras]
+
+
+def _validate_attachment_slots(
+    template_id: str,
+    specs: Sequence[GenerateAttachmentSpec],
+    *,
+    require_slots: bool,
+) -> list[form_policy.AttachmentSlot]:
+    slots = form_policy.attachment_slots_of(template_id)
+    slot_keys = {slot.key for slot in slots}
+    for spec in specs:
+        if spec.slot_key and spec.slot_key not in slot_keys:
+            raise ValidationFailedError(
+                "UNKNOWN_ATTACHMENT_SLOT",
+                f"Template {template_id!r} has no attachment slot {spec.slot_key!r}",
+                slot_key=spec.slot_key,
+                template_id=template_id,
+            )
+    if require_slots:
+        missing = [
+            slot.key
+            for slot in slots
+            if slot.required and not any(spec.slot_key == slot.key for spec in specs)
+        ]
+        if missing:
+            raise ValidationFailedError(
+                "REQUIRED_ATTACHMENT_MISSING", ", ".join(missing), slots=missing
+            )
+    return slots
+
+
+def persist_attachment_sources(
+    book: Book,
+    resolved: Sequence[tuple[GenerateAttachmentSpec, Path]],
+    slots: Sequence[form_policy.AttachmentSlot],
+    *,
+    current_user: User | None,
+    data_dir: Path,
+) -> list[Path]:
+    """Copy ordered sources using one metadata convention; return staged files.
+
+    The caller owns the transaction and unlinks returned files only after commit.
+    """
+    from app.services import included_papers_service
+
+    att_dir = data_dir / "book_attachments" / str(book.id)
+    att_dir.mkdir(parents=True, exist_ok=True)
+    persisted: list[dict[str, Any]] = []
+    consumed: list[Path] = []
+    added_at = datetime.now(UTC).isoformat()
+    for spec, src in _ordered_attachment_specs(resolved, slots):
+        original_name = Path(spec.original_name or src.name).name
+        dest = Vault.collision_safe_name(att_dir, f"{spec.slot_key or 'extra'}_{original_name}")
+        shutil.copyfile(src, dest)
+        media_type, page_count = included_papers_service.inspect_paper(
+            dest, display_name=original_name
+        )
+        persisted.append(
+            {
+                "id": str(uuid.uuid4()),
+                "path": dest.relative_to(data_dir).as_posix(),
+                "original_name": original_name,
+                "slot_key": spec.slot_key,
+                "media_type": media_type,
+                "size": dest.stat().st_size,
+                "page_count": page_count,
+                "added_by_user_id": current_user.id if current_user is not None else None,
+                "added_at": added_at,
+            }
+        )
+        if spec.source == "staged":
+            consumed.append(src)
+    book.merged_attachment_paths = persisted
+    return consumed
 
 
 def _freeze_legacy_current_approval_context(db: Session, book: Book, version: BookVersion) -> None:
@@ -1938,14 +2020,12 @@ def generate_document(
     actually embedded), scan → ``awaiting_scan``, in_app → auto-submitted
     ``pending`` when a default manager exists.
 
-    ``attachments`` (spec §6): per-slot / free-form sources merged into the
-    combined primary PDF on a committed save. Required slots
-    (``form_policy.attachment_slots_of``) block the commit when absent;
-    sources are resolved before ref allocation (fail fast), persisted under
-    ``book_attachments/{book_id}/``, recorded on
-    ``Book.merged_attachment_paths`` and appended to the primary PDF in slot
-    order then request order. A revise with ``attachments=None`` re-merges
-    the book's existing set; a provided list replaces it.
+    ``attachments`` are appended to previews without consuming staged files.
+    Required slots (``form_policy.attachment_slots_of``) block only commits.
+    Sources resolve before ref allocation, and committed saves persist them under
+    ``book_attachments/{book_id}/`` with metadata on ``Book.merged_attachment_paths``.
+    Both paths append papers in slot order then request order. A revise with
+    ``attachments=None`` re-merges the existing set; a provided list replaces it.
 
     ``return_for_leave_id`` (return-form filing): when set for a Duty Resumption
     generation, the standalone "Duty Resumption" register row is NOT created;
@@ -2123,34 +2203,17 @@ def generate_document(
     # 1c. Attachments (spec §6) — validate slots + resolve sources BEFORE
     # ref allocation so a bad payload fails fast with nothing to roll back.
     # ------------------------------------------------------------------
-    slots = form_policy.attachment_slots_of(template_id)
     attachment_specs = list(attachments or [])
-    slot_keys = {s.key for s in slots}
-    for spec in attachment_specs:
-        if spec.slot_key and spec.slot_key not in slot_keys:
-            raise ValidationFailedError(
-                "UNKNOWN_ATTACHMENT_SLOT",
-                f"Template {template_id!r} has no attachment slot {spec.slot_key!r}",
-                slot_key=spec.slot_key,
-                template_id=template_id,
-            )
-    # Revise with attachments=None reuses the book's stored merged set —
-    # required slots were satisfied when the book was first committed.
     reuse_merged: list[dict[str, Any]] = []
     if revise_book is not None and attachments is None:
         reuse_merged = list(revise_book.merged_attachment_paths or [])
-    elif commit:
-        missing = [
-            s.key
-            for s in slots
-            if s.required and not any(x.slot_key == s.key for x in attachment_specs)
-        ]
-        if missing:
-            raise ValidationFailedError(
-                "REQUIRED_ATTACHMENT_MISSING", ", ".join(missing), slots=missing
-            )
+    slots = _validate_attachment_slots(
+        template_id,
+        attachment_specs,
+        require_slots=commit and not (revise_book is not None and attachments is None),
+    )
     resolved_attachments: list[tuple[GenerateAttachmentSpec, Path]] = []
-    if commit and attachment_specs:
+    if attachment_specs:
         resolved_attachments = _resolve_attachment_sources(
             db,
             attachment_specs,
@@ -2353,7 +2416,7 @@ def generate_document(
         # pending (fresh specs or a revise reuse) but there is no PDF to merge
         # into. Abort the generation — the transaction rolls back and staged
         # files stay on disk for retry / the 24h TTL purge.
-        if commit and (resolved_attachments or reuse_merged):
+        if resolved_attachments or (commit and reuse_merged):
             artifact_service.cleanup_created(primary_artifact, allowed_root=out_dir)
             raise ValidationFailedError(
                 "GENERATION_PDF_FAILED",
@@ -2674,72 +2737,32 @@ def generate_document(
     # all carry the combined PDF with zero further changes. Consumed staged
     # files are unlinked only after the commit (alongside the B1 loop).
     # ------------------------------------------------------------------
-    merge_sources: list[Path] = []
+    if not commit and resolved_attachments and pdf_path is not None:
+        from app.core.pdf_merge import build_pdf_package
+
+        built = build_pdf_package(
+            pdf_path,
+            [
+                (path, spec.original_name or path.name)
+                for spec, path in _ordered_attachment_specs(resolved_attachments, slots)
+            ],
+        )
+        pdf_path.write_bytes(built.pdf_bytes)
     if commit and _logged_book is not None and pdf_path is not None:
         if resolved_attachments:
-            from app.services import included_papers_service
-
-            att_dir = settings.data_dir / "book_attachments" / str(_logged_book.id)
-            att_dir.mkdir(parents=True, exist_ok=True)
-            persisted: list[dict[str, Any]] = []
-            added_at = datetime.now(UTC).isoformat()
-            for spec, src in _ordered_attachment_specs(resolved_attachments, slots):
-                original_name = Path(spec.original_name or src.name).name
-                if spec.original_name and (
-                    original_name != spec.original_name
-                    or Path(original_name).suffix.lower() != src.suffix.lower()
-                ):
-                    raise ValidationFailedError(
-                        "INVALID_ATTACHMENT_NAME",
-                        "An attachment requires its original safe filename",
-                        filename=spec.original_name,
-                    )
-                dest = Vault.collision_safe_name(
-                    att_dir, f"{spec.slot_key or 'extra'}_{original_name}"
+            superseded_files.extend(
+                str(path)
+                for path in persist_attachment_sources(
+                    _logged_book,
+                    resolved_attachments,
+                    slots,
+                    current_user=current_user,
+                    data_dir=settings.data_dir,
                 )
-                shutil.copyfile(src, dest)
-                media_type, page_count = included_papers_service.inspect_paper(
-                    dest, display_name=original_name
-                )
-                persisted.append(
-                    {
-                        "id": str(uuid.uuid4()),
-                        "path": dest.relative_to(settings.data_dir).as_posix(),
-                        "original_name": original_name,
-                        "slot_key": spec.slot_key,
-                        "media_type": media_type,
-                        "size": dest.stat().st_size,
-                        "page_count": page_count,
-                        "added_by_user_id": (current_user.id if current_user is not None else None),
-                        "added_at": added_at,
-                    }
-                )
-                merge_sources.append(dest)
-                if spec.source == "staged":
-                    # Consumed — unlink post-commit (B1 pattern below).
-                    superseded_files.append(str(src))
-            # A provided list replaces the stored set (old files stay on disk
-            # — earlier versions may reference them; cheap and safe).
-            _logged_book.merged_attachment_paths = persisted
+            )
         elif attachments is not None and revise_book is not None:
             # Explicit empty list on revise clears the stored set.
             _logged_book.merged_attachment_paths = []
-        elif reuse_merged:
-            # Revise with attachments=None: re-merge the existing set into
-            # the freshly generated PDF; the column is left untouched.
-            from app.services import book_service
-
-            for item in reuse_merged:
-                rel_path = item.get("path")
-                src_path = book_service.resolve_attachment_path(rel_path) if rel_path else None
-                if src_path is None:
-                    log.warning(
-                        "merged attachment %s missing for book %s — skipped on re-merge",
-                        rel_path,
-                        _logged_book.id,
-                    )
-                    continue
-                merge_sources.append(src_path)
         db.flush()
 
     # ------------------------------------------------------------------

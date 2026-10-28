@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import i18n from 'i18next'
 import { z } from 'zod'
+import type { UseFormReturn } from 'react-hook-form'
+import type { AttachmentsState } from '@/components/application/attachmentsState'
 import { toast } from '@/lib/toast'
 
 import en from '@/locales/en.json'
@@ -37,6 +39,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
       generateDocument: vi.fn(),
       getBook: vi.fn(),
       getBookVersionFields: vi.fn(),
+      createWordBook: vi.fn(),
+      listBookClassifications: vi.fn().mockResolvedValue({ items: [] }),
     },
     apiErrorMessage: (error: unknown) => String(error),
   }
@@ -61,7 +65,7 @@ vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ capabilities: new Set(), isLoading: false, has: () => true }),
 }))
 vi.mock('@/lib/applicationFormSchema', () => ({
-  buildZodSchema: () => z.object({}),
+  buildZodSchema: () => z.object({}).passthrough(),
 }))
 vi.mock('./JobStatus', () => ({
   JobStatus: ({ jobId, onDone, onFailed, onPollingStopped }: { jobId: string; onDone: (job: JobStatusResponse) => void; onFailed: (job: JobStatusResponse) => void; onPollingStopped: () => void }) => {
@@ -72,10 +76,27 @@ vi.mock('./JobStatus', () => ({
   },
 }))
 vi.mock('@/components/application/TemplateForm', () => ({
-  TemplateForm: () => <div data-testid="template-form" />,
+  TemplateForm: ({ templateId, form, onClassificationChange }: { templateId: string; form: UseFormReturn; onClassificationChange: (code: string) => void }) => {
+    return (
+      <div data-testid="template-form">
+        {['General Book', 'Report'].includes(templateId) && <input aria-label="Subject" {...form.register('subject')} />}
+        <button type="button" onClick={() => onClassificationChange('5/1')}>Set classification</button>
+      </div>
+    )
+  },
 }))
 vi.mock('@/components/application/AttachmentsBlock', () => ({
-  AttachmentsBlock: () => null,
+  AttachmentsBlock: ({ state, onChange }: { state: AttachmentsState; onChange: (value: AttachmentsState) => void }) => (
+    <button
+      type="button"
+      onClick={() => onChange({
+        ...state,
+        extras: [...state.extras, { kind: 'staged', token: 'upload-token', filename: 'evidence.pdf', size: 42 }],
+      })}
+    >
+      Add test attachment ({state.extras.length})
+    </button>
+  ),
 }))
 vi.mock('./EmployeeHeader', () => ({
   EmployeeHeader: () => <div data-testid="employee-header" />,
@@ -125,6 +146,7 @@ function renderPage(route = '/services/demo?employee_id=G1') {
       <MemoryRouter initialEntries={[route]}>
         <Routes>
           <Route path="/services/:slug?" element={<ApplicationPage />} />
+          <Route path="/books/:id/word" element={<div>Word session</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -191,6 +213,96 @@ afterEach(() => {
 })
 
 describe('ApplicationPage generated handoff reset', () => {
+  it('includes staged attachments in Preview and reuses the same specs on Save', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Add test attachment (0)' }))
+    await startPendingSave(user)
+
+    const expected = [{
+      slot_key: null,
+      source: 'staged',
+      staged_token: 'upload-token',
+      original_name: 'evidence.pdf',
+    }]
+    expect(mockedApi.generateDocument).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      commit: false,
+      attachments: expected,
+    }))
+    expect(mockedApi.generateDocument).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      commit: true,
+      attachments: expected,
+    }))
+  })
+
+  it.each(['General Book', 'Report'])('sends attachments when creating %s in Word', async (templateId) => {
+    mockedApi.listTemplates.mockResolvedValue({
+      items: [{ id: templateId, name_en: templateId, name_ar: templateId, category: 'admin' }],
+    } as never)
+    mockedApi.getTemplateFields.mockResolvedValue({
+      meta: {},
+      fields: templateId === 'Report' ? [] : [{ id: 'body', type: 'arabic_rich_full' }],
+      attachment_slots: [],
+    } as never)
+    mockedApi.createWordBook.mockResolvedValue({ book_id: 99 } as never)
+    const user = userEvent.setup()
+    renderPage(`/services/${templateId === 'Report' ? 'report' : 'general_book'}`)
+    await user.type(await screen.findByRole('textbox', { name: 'Subject' }), 'Package subject')
+    await user.click(screen.getByRole('button', { name: 'Set classification' }))
+    await user.click(screen.getByRole('button', { name: 'Add test attachment (0)' }))
+    await user.click(screen.getByRole('button', { name: en.books.word.createAndOpen }))
+
+    await waitFor(() => expect(mockedApi.createWordBook).toHaveBeenCalledWith(expect.objectContaining({
+      subject: 'Package subject',
+      attachments: [{
+        slot_key: null,
+        source: 'staged',
+        staged_token: 'upload-token',
+        original_name: 'evidence.pdf',
+      }],
+    })))
+    expect(clearDraft).toHaveBeenCalledWith(templateId)
+    expect(await screen.findByText('Word session')).toBeVisible()
+  })
+
+  it.each(['General Book', 'Report'])('blocks Word creation of %s when a required attachment is absent', async (templateId) => {
+    mockedApi.listTemplates.mockResolvedValue({
+      items: [{ id: templateId, name_en: templateId, name_ar: templateId, category: 'admin' }],
+    } as never)
+    mockedApi.getTemplateFields.mockResolvedValue({
+      meta: {},
+      fields: templateId === 'Report' ? [] : [{ id: 'body', type: 'arabic_rich_full' }],
+      attachment_slots: [{ key: 'proof', label_en: 'Proof', label_ar: 'إثبات', required: true }],
+    } as never)
+    const user = userEvent.setup()
+    renderPage(`/services/${templateId === 'Report' ? 'report' : 'general_book'}`)
+    await user.type(await screen.findByRole('textbox', { name: 'Subject' }), 'Package subject')
+    await user.click(screen.getByRole('button', { name: 'Set classification' }))
+    await user.click(screen.getByRole('button', { name: en.books.word.createAndOpen }))
+
+    expect(mockedApi.createWordBook).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalledWith(i18n.t('application.attachments.requiredHint', { slot: 'Proof' }))
+  })
+
+  it('allows Preview while required attachment slots are empty', async () => {
+    mockedApi.getTemplateFields.mockResolvedValue({
+      meta: {},
+      fields: [],
+      attachment_slots: [{ key: 'proof', label_en: 'Proof', label_ar: 'إثبات', required: true }],
+    } as never)
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /^Preview$/ })
+      .some((button) => !button.hasAttribute('disabled'))).toBe(true))
+    const preview = screen.getAllByRole('button', { name: /^Preview$/ })
+      .filter((button) => !button.hasAttribute('disabled')).pop()!
+    await user.click(preview)
+    await waitFor(() => expect(mockedApi.generateDocument).toHaveBeenCalledWith(expect.objectContaining({
+      commit: false,
+      attachments: undefined,
+    })))
+  })
+
   it('does not request or render a revision message preview when autosend is disabled', async () => {
     mockedApi.getSettings.mockResolvedValue({ sms_autosend_enabled: false } as never)
     mockedApi.getBook.mockResolvedValue({ versions: [{ id: 9 }] } as never)
