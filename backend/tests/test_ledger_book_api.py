@@ -311,7 +311,7 @@ def test_version_scoped_reader_cannot_see_newer_revision_or_its_saves(ledger):
 
 
 def test_papers_follow_read_access_and_are_hardened(ledger):
-    client, db, actor, owner, other, _ = ledger
+    client, _db, actor, owner, other, _ = ledger
     draft = client.post(DRAFTS, json={"tab": 5, **CONTENT}).json()
     draft_paper = client.get(f"{DRAFTS}/{draft['id']}/paper")
     assert draft_paper.status_code == 200, draft_paper.text
