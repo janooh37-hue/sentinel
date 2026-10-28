@@ -471,7 +471,7 @@ def create_book_folder(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("books.view"))],
 ) -> BookFolderRead:
-    return book_folder_service.create_folder(db, user, name=body.name, team=body.team)
+    return book_folder_service.create_folder(db, user, name=body.name, box=body.box, team=body.team)
 
 
 @router.get("/folders/share-options", response_model=BookFolderShareOptions)
@@ -493,13 +493,14 @@ def update_book_folder_shares(
 
 
 @router.patch("/folders/{folder_id}", response_model=BookFolderRead)
-def rename_book_folder(
+def update_book_folder(
     folder_id: int,
     body: BookFolderUpdate,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("books.view"))],
 ) -> BookFolderRead:
-    return book_folder_service.rename_folder(db, user, folder_id, name=body.name)
+    """Rename a folder and/or move it to another box; filed books stay filed."""
+    return book_folder_service.update_folder(db, user, folder_id, name=body.name, box=body.box)
 
 
 @router.delete("/folders/{folder_id}", status_code=204)

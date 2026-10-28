@@ -6,7 +6,14 @@ from datetime import datetime
 from typing import Annotated, ClassVar, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, computed_field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    computed_field,
+    model_validator,
+)
 
 from app.core.form_kind import resolve_service, word_draft_service
 from app.schemas._base import ORMBase
@@ -44,13 +51,28 @@ class BookCategoryRead(ORMBase):
     requires_approval: bool
 
 
+# The desk box a folder sits in; one per desk scope.
+BookFolderBox = Literal["incoming", "outgoing", "done", "archived"]
+FolderName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+
+
 class BookFolderCreate(BaseModel):
-    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+    name: FolderName
+    box: BookFolderBox
     team: bool = False
 
 
 class BookFolderUpdate(BaseModel):
-    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+    """Rename and/or move a folder to another box; filed books stay filed."""
+
+    name: FolderName | None = None
+    box: BookFolderBox | None = None
+
+    @model_validator(mode="after")
+    def _one_change(self) -> BookFolderUpdate:
+        if self.name is None and self.box is None:
+            raise ValueError("Give a new name or box.")
+        return self
 
 
 class BookFolderShareUser(BaseModel):
@@ -81,6 +103,7 @@ class BookFolderSharesUpdate(BaseModel):
 class BookFolderRead(BaseModel):
     id: int
     name: str
+    box: BookFolderBox
     team: bool
     count: int
     can_manage: bool

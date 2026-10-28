@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 
 from app.db.models import BookFolderItem, BookFolderShare, Employee
 from tests.conftest import make_user
-from tests.test_book_grade import API, ApiHarness, _error
+from tests.test_book_grade import API, ApiHarness, _error, _send
 from tests.test_book_grade import grade_api as grade_api
 from tests.test_books_desk_list import _create_folder, _folders, _rows
 
@@ -38,7 +38,11 @@ def test_restricted_team_visibility_filing_and_everyone(grade_api: ApiHarness) -
     _employee(api, "M", "Management")
     _employee(api, "B", "Stores")
     _employee(api, "C", "  fINance ")
+    # Everyone who files the book has it in Incoming, the folder's box.
+    api.as_user("D")
+    _send(api, "general", ["A", "B", "C", "M"])
     api.as_user("M")
+    _send(api, "general", ["D"])
     folder = _create_folder(api, "Restricted team", team=True)
     assert folder["everyone"] is True
     assert folder["created_by_name"] == "Employee M"
@@ -100,6 +104,7 @@ def test_restricted_team_visibility_filing_and_everyone(grade_api: ApiHarness) -
 
 def test_share_validation_and_atomic_replacement(grade_api: ApiHarness) -> None:
     api = grade_api
+    _send(api, "general", ["M"])
     api.as_user("M")
     personal = _create_folder(api, "Personal")
     _error(_share(api, personal["id"], everyone=True), 422, "FOLDER_NOT_TEAM")

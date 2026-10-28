@@ -2706,8 +2706,11 @@ export interface paths {
         delete: operations["delete_book_folder_api_v1_books_folders__folder_id__delete"];
         options?: never;
         head?: never;
-        /** Rename Book Folder */
-        patch: operations["rename_book_folder_api_v1_books_folders__folder_id__patch"];
+        /**
+         * Update Book Folder
+         * @description Rename a folder and/or move it to another box; filed books stay filed.
+         */
+        patch: operations["update_book_folder_api_v1_books_folders__folder_id__patch"];
         trace?: never;
     };
     "/api/v1/books/{book_id}/folders/{folder_id}": {
@@ -8871,6 +8874,11 @@ export interface components {
             /** Name */
             name: string;
             /**
+             * Box
+             * @enum {string}
+             */
+            box: "incoming" | "outgoing" | "done" | "archived";
+            /**
              * Team
              * @default false
              */
@@ -8882,6 +8890,11 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+            /**
+             * Box
+             * @enum {string}
+             */
+            box: "incoming" | "outgoing" | "done" | "archived";
             /** Team */
             team: boolean;
             /** Count */
@@ -8945,10 +8958,15 @@ export interface components {
             /** Departments */
             departments?: string[];
         };
-        /** BookFolderUpdate */
+        /**
+         * BookFolderUpdate
+         * @description Rename and/or move a folder to another box; filed books stay filed.
+         */
         BookFolderUpdate: {
             /** Name */
-            name: string;
+            name?: string | null;
+            /** Box */
+            box?: ("incoming" | "outgoing" | "done" | "archived") | null;
         };
         /** BookGradeUpdate */
         BookGradeUpdate: {
@@ -23494,7 +23512,7 @@ export interface operations {
             };
         };
     };
-    rename_book_folder_api_v1_books_folders__folder_id__patch: {
+    update_book_folder_api_v1_books_folders__folder_id__patch: {
         parameters: {
             query?: never;
             header?: never;
