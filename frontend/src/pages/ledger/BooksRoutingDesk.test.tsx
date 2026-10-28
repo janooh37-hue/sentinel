@@ -5,6 +5,7 @@ import i18n from 'i18next'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import ar from '@/locales/ar.json'
+import en from '@/locales/en.json'
 import type { BookFolderRead, BookRead } from '@/lib/api'
 import type * as ApiModule from '@/lib/api'
 import { useIsMobile } from '@/lib/useIsMobile'
@@ -91,24 +92,58 @@ describe('Books routing desk', () => {
     expect(screen.getByLabelText('URL')).not.toHaveTextContent('book=')
   })
 
-  it('distinguishes High and Very High urgency on ledger rows', async () => {
-    vi.mocked(api.listBooks).mockResolvedValue({
-      items: [{ ...BOOK, urgency: 'High' }, { ...BOOK, id: 8, ref_number: 'GS-8', urgency: 'Very High' }],
-      total: 2, limit: 50, offset: 0,
-    })
-    mount()
-    const high = within(await screen.findByRole('button', { name: /GS-7/ })).getByText('Urgent')
-    const veryHigh = within(screen.getByRole('button', { name: /GS-8/ })).getByText('Very Urgent')
-    expect(high).toHaveClass('text-warning')
-    expect(veryHigh).toHaveClass('text-destructive')
-  })
+  const LEDGER = { ...BOOK, current_template_id: 'Ledger Book' }
+  const before = (a: Element, b: Element): boolean => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
 
-  it.each([null, 'Normal'])('does not flag %s urgency on ledger rows', async (urgency) => {
-    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, urgency }], total: 1, limit: 50, offset: 0 })
+  // T-R2 (D7: a Ledger Book shows its own importance)
+  it.each([
+    ['high', 'Importance: High', 'text-destructive'],
+    ['medium', 'Importance: Medium', 'text-caution'],
+  ] as const)('marks a Ledger Book row by its own %s importance, whatever its urgency', async (importance, name, tone) => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...LEDGER, urgency: 'Normal', importance }], total: 1, limit: 50, offset: 0 })
     mount()
     const row = await screen.findByRole('button', { name: /GS-7/ })
-    expect(within(row).queryByText('Urgent')).not.toBeInTheDocument()
-    expect(within(row).queryByText('Very Urgent')).not.toBeInTheDocument()
+    expect(within(row).getByRole('img', { name })).toHaveClass(tone)
+    expect(row).toHaveAccessibleName(expect.stringContaining(name))
+  })
+
+  // T-R2
+  it('leaves a Ledger Book row without importance unmarked, even when very urgent', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...LEDGER, urgency: 'Very High', importance: null }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(row.querySelector('[data-importance]')).toBeNull()
+  })
+
+  // T-R2 (D7: any other record maps urgency)
+  it.each([
+    ['Normal', 'Importance: Medium'], ['High', 'Importance: Medium'], ['Very High', 'Importance: High'], [null, null],
+  ] as const)('maps another record\'s %s urgency to its importance mark, without the old urgency flag', async (urgency, name) => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, urgency, importance: 'high' }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    if (name) expect(within(row).getByRole('img', { name })).toBeInTheDocument()
+    else expect(row.querySelector('[data-importance]')).toBeNull()
+    expect(row).not.toHaveTextContent(/Urgent/)
+  })
+
+  // T-R1
+  it.each([false, true])('orders Purpose · Grade · Importance in the row and the record header (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    const book = { ...LEDGER, grade: 'secret' as const, importance: 'high' as const }
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [book], total: 1, limit: 50, offset: 0 })
+    vi.spyOn(api, 'getBook').mockResolvedValue(book)
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    const [purpose, grade, importance] = [within(row).getByRole('img', { name: 'For action' }), within(row).getByTestId('grade-mark'), within(row).getByRole('img', { name: 'Importance: High' })]
+    expect(before(purpose, grade) && before(grade, importance)).toBe(true)
+    await userEvent.click(row)
+    const header = (await screen.findByRole('heading', { name: 'Staff instruction' })).closest('header')!
+    const mark = within(header).getByRole('button', { name: 'Importance: High' })
+    expect(before(within(header).getByText('For action'), within(header).getByTestId('grade-mark'))).toBe(true)
+    expect(before(within(header).getByTestId('grade-mark'), mark)).toBe(true)
+    mark.focus()
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Importance: High')
   })
 
   it.each([
@@ -458,7 +493,7 @@ describe('Books routing desk', () => {
     expect(row).not.toHaveTextContent('Forwarded')
     expect(row).toHaveTextContent('Count by Thursday')
     expect(row).toHaveTextContent('Juma Saadi')
-    expect(row).toHaveTextContent('Urgent')
+    expect(within(row).getByRole('img', { name: 'Importance: Medium' })).toBeInTheDocument()
     expect(within(row).getByText('Opened by 2 of 3')).toBeInTheDocument()
     expect(within(row).getByText('Done by 1 of 3')).toBeInTheDocument()
   })
@@ -518,10 +553,31 @@ describe('Books routing desk (Arabic)', () => {
     const desk = screen.getByRole('region', { name: 'الكتب' })
     await screen.findByRole('button', { name: /GS-1/ })
     for (const label of ['للاطلاع', 'للتنفيذ', 'للإفادة', 'للتعميم']) expect(within(desk).getByRole('img', { name: label })).toBeInTheDocument()
+    expect(within(desk).getAllByRole('img', { name: 'الأهمية: متوسطة' })).toHaveLength(4)
     expect(rendered(desk)).not.toMatch(/[A-Za-z]/)
     await userEvent.click(screen.getByRole('button', { name: /GS-2/ }))
     await screen.findByRole('button', { name: 'العودة إلى الكتب' })
     await screen.findByRole('complementary', { name: 'التفاصيل' })
     expect(rendered(desk)).not.toMatch(/[A-Za-z]/)
+  })
+
+  // T-R3
+  it('names every importance level in Arabic on rows and the header, with the same keys as English', async () => {
+    expect(Object.keys(ar.books.importance).sort()).toEqual(Object.keys(en.books.importance).sort())
+    expect(Object.values(ar.books.importance).every((value) => value && !/[A-Za-z]/.test(value))).toBe(true)
+    const ledger = { ...BOOK, current_template_id: 'Ledger Book' }
+    const items = [
+      { ...ledger, importance: 'high' as const },
+      { ...ledger, id: 8, ref_number: 'GS-8', importance: 'medium' as const },
+      { ...BOOK, id: 9, ref_number: 'GS-9', urgency: 'Very High' },
+    ]
+    vi.mocked(api.listBooks).mockResolvedValue({ items, total: 3, limit: 50, offset: 0 })
+    vi.spyOn(api, 'getBook').mockResolvedValue(items[0])
+    mount()
+    expect(within(await screen.findByRole('button', { name: /GS-7/ })).getByRole('img', { name: 'الأهمية: عالية' })).toBeInTheDocument()
+    expect(within(screen.getByRole('button', { name: /GS-8/ })).getByRole('img', { name: 'الأهمية: متوسطة' })).toBeInTheDocument()
+    expect(within(screen.getByRole('button', { name: /GS-9/ })).getByRole('img', { name: 'الأهمية: عالية' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /GS-7/ }))
+    expect(await screen.findByRole('button', { name: 'الأهمية: عالية' })).toBeInTheDocument()
   })
 })
