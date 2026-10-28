@@ -15,7 +15,9 @@ PARENT = "0113_book_folder_box"
 def test_single_head_and_backfill_round_trip(tmp_path: Path) -> None:
     config = Config(str(ROOT / "alembic.ini"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == [HEAD]
+    heads = script.get_heads()
+    assert len(heads) == 1
+    assert HEAD in {rev.revision for rev in script.walk_revisions("base", heads[0])}
     assert script.get_revision(HEAD).down_revision == PARENT
     database = tmp_path / "outcomes.db"
     config.set_main_option("sqlalchemy.url", f"sqlite:///{database}")

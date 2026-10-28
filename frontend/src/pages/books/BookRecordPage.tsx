@@ -566,12 +566,15 @@ function BookRecordPageBody(): React.JSX.Element {
 
   const decisionsQuery = useDecisionNotices()
   const unseenDecision = decisionsQuery.data?.items.find((item) => item.book_id === book?.id)
+  // The bell list is capped at five, so the submitter also acknowledges on open.
+  const isSubmitter = book != null && user != null && book.submitted_by_user_id === user.id
   const decisionKey = unseenDecision
     ? `${user?.id}:${unseenDecision.book_id}:${unseenDecision.version_id}:${unseenDecision.decided_at}`
-    : null
+    : isSubmitter && decisionsQuery.isSuccess ? `${user?.id}:${book?.id}` : null
   const seenDecisionRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!book || !decisionKey || seenDecisionRef.current === decisionKey) return
+    const seen = seenDecisionRef.current
+    if (!book || !decisionKey || seen === decisionKey || seen?.startsWith(`${decisionKey}:`)) return
     seenDecisionRef.current = decisionKey
     void api.markBookSeen(book.id).then(() => {
       void qc.invalidateQueries({ queryKey: ['notifications', 'decisions'] })

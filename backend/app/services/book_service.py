@@ -2329,6 +2329,7 @@ def _align_chain_to(
             step.state = "pending"
             step.note = None
             step.decided_at = None
+            step.outcome_seen_at = None
         return
     if target_state == "approved":
         # Administrative approval — the steps stop contradicting the state; no
@@ -4359,6 +4360,7 @@ def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -
             if step.state == "approved" and step.decided_at in (None, flip_at):
                 step.state = "pending"
                 step.decided_at = None
+                step.outcome_seen_at = None
         _recompute_approval_state(book)
     db.add(
         AuditLog(
