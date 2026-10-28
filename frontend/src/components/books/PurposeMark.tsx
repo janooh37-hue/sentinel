@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { SendPurpose } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { MARK_ICON_CLASS, MARK_STROKE_WIDTH } from './markSize'
 
 const MARK: Record<SendPurpose, { icon: typeof Eye; tone: string }> = {
   info: { icon: Eye, tone: 'text-muted-foreground' },
@@ -31,7 +32,7 @@ export function PurposeMark({ purpose, showLabel = false, className }: {
   const { t } = useTranslation()
   const { icon: Icon, tone } = MARK[purpose]
   const label = t(`books.send.purposes.${purpose}`)
-  const glyph = <Icon className={cn('h-4 w-4 shrink-0', tone)} strokeWidth={1.8} aria-hidden="true" />
+  const glyph = <Icon className={cn(MARK_ICON_CLASS, tone)} strokeWidth={MARK_STROKE_WIDTH} aria-hidden="true" />
   if (showLabel) {
     return (
       <span data-purpose={purpose} className={cn('inline-flex items-center gap-1.5 whitespace-nowrap', purpose === 'action' ? 'font-semibold' : 'font-medium', className)}>

@@ -405,7 +405,7 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen
       <div data-book-id={book.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm lg:px-6">
         <bdi dir="ltr" className="font-mono tabular-nums">{book.ref_number}</bdi>
         {book.classification_code && <bdi dir="ltr" className="text-muted-foreground">{book.classification_code}</bdi>}
-        {book.grade === 'unclassified' ? <span>{t('books.grade.levels.unclassified')}</span> : <GradeMark level={book.grade} />}
+        {book.grade === 'unclassified' ? <span>{t('books.grade.levels.unclassified')}</span> : <GradeMark level={book.grade} showLabel />}
         <span className="text-muted-foreground"><BookDate value={book.created_at} /></span>
       </div>
     )
@@ -624,7 +624,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
           {inbox && <PurposeMark purpose={inbox.purpose} showLabel />}
           <bdi dir="ltr" className="font-mono text-xs tabular-nums text-muted-foreground">{book.ref_number}</bdi>
-          <GradeMark level={book.grade} />
+          <GradeMark level={book.grade} showLabel />
           <ImportanceMark importance={importanceOf(book)} interactive />
         </div>
         <h2 id={titleId} className="mt-2 max-w-[75ch] break-words text-xl font-semibold leading-snug tracking-tight"><bdi>{book.subject || t('ledger.booksDesk.untitled')}</bdi></h2>

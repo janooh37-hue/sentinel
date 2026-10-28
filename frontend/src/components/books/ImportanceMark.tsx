@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { MARK_ICON_CLASS, MARK_STROKE_WIDTH } from './markSize'
 
 export type Importance = 'medium' | 'high'
 
@@ -57,7 +58,7 @@ export function ImportanceMark({ importance, interactive = false, className }: {
   if (!importance) return null
   const { icon: Icon, tone } = MARK[importance]
   const label = `${t('books.importance.label')}: ${t(`books.importance.${importance}`)}`
-  const glyph = <Icon className="h-4 w-4 shrink-0" strokeWidth={1.8} aria-hidden="true" />
+  const glyph = <Icon className={MARK_ICON_CLASS} strokeWidth={MARK_STROKE_WIDTH} aria-hidden="true" />
   const markClass = cn('inline-flex shrink-0 items-center', tone, className)
   return (
     <TooltipProvider>
