@@ -32,6 +32,7 @@ const APPROVAL_ROW: ApprovalLogItem = {
   priority: 'High', status: 'pending', record_status: 'pending', access_scope: 'assigned_revision',
   submitted_by_name: 'Ahmed', submitted_by_name_ar: 'أحمد', approver_name: 'Khalid', approver_name_ar: 'خالد',
   submitted_at: '2026-10-20T08:00:00',
+  outcome_unseen: false,
 }
 const APPROVALS: ApprovalSummaryResponse = {
   can_view_sent: true, available_received_kinds: ['approver', 'reviewer'],

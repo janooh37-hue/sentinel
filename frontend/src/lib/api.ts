@@ -774,6 +774,8 @@ export interface ScanInboxCount {
 
 // Phase 4 LAN — Notification counts (SSE + JSON safety-poll).
 export type NotificationCounts = components['schemas']['NotificationCounts']
+export type DecisionNotice = components['schemas']['DecisionNotice']
+export type DecisionNoticesResponse = components['schemas']['DecisionNoticesResponse']
 
 // Phase 05 — Books
 // ``attachment_paths`` (Task 1 / migration 0023) is not yet in api.types.ts;
@@ -3067,6 +3069,10 @@ export const api = {
   /** JSON safety-poll fallback; used when EventSource is unavailable. */
   getNotificationCounts: () =>
     request<NotificationCounts>('GET', '/notifications/counts'),
+  getDecisionNotices: () =>
+    request<DecisionNoticesResponse>('GET', '/notifications/decisions'),
+  markDecisionsSeen: () =>
+    request<void>('POST', '/notifications/decisions/seen'),
 
   // --- web push (Phase 5 LAN) ---
   getVapidPublicKey: () => request<{ public_key: string }>('GET', '/push/vapid-public-key'),

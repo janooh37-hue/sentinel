@@ -4,7 +4,7 @@
  * the tab title.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -31,13 +31,14 @@ vi.mock('@/lib/api', async (orig) => {
       listBookAnnotations: vi.fn().mockResolvedValue([]),
       listBookClassifications: vi.fn().mockResolvedValue({ items: [] }),
       markBookSeen: vi.fn().mockResolvedValue(undefined),
+      getDecisionNotices: vi.fn().mockResolvedValue({ items: [], total: 0 }),
       listAwaitingBooks: vi.fn().mockResolvedValue([]),
     },
   }
 })
 vi.mock('@/lib/authContext', async (orig) => ({
   ...(await orig<typeof AuthContextModule>()),
-  useAuth: () => ({ user: { id: 7 } }),
+  useAuth: () => ({ status: 'authed', user: { id: 7 } }),
 }))
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
@@ -111,7 +112,7 @@ function fixture(overrides: Record<string, unknown> = {}): unknown {
   }
 }
 
-function renderRecord(entry = '/books/48'): void {
+function renderRecord(entry = '/books/48'): QueryClient {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={qc}>
@@ -124,6 +125,7 @@ function renderRecord(entry = '/books/48'): void {
       </MemoryRouter>
     </QueryClientProvider>,
   )
+  return qc
 }
 
 describe('BookRecordPage — header', () => {
@@ -134,6 +136,41 @@ describe('BookRecordPage — header', () => {
     viewport.mobile = false
     mockHas.mockImplementation(() => false)
     vi.mocked(api.getBook).mockReset()
+    vi.mocked(api.markBookSeen).mockClear()
+    vi.mocked(api.getDecisionNotices).mockReset().mockResolvedValue({ items: [], total: 0 })
+  })
+
+  it('marks a submitter decision seen once when opening its record and refreshes the decision query', async () => {
+    vi.mocked(api.getBook).mockResolvedValue(fixture() as never)
+    vi.mocked(api.getDecisionNotices).mockResolvedValueOnce({
+      items: [{
+        book_id: 48, version_id: 5, ref_number: 'GS-0048', subject: 'Leave request',
+        verdict: 'returned', is_report: false, decided_at: '2026-08-02T09:00:00Z',
+        decider_name: 'Manager Khalid', decider_name_ar: null, note: 'Fix the dates',
+      }],
+      total: 1,
+    })
+    const qc = renderRecord()
+    await screen.findByTestId('record-meta')
+    await waitFor(() => {
+      expect(api.markBookSeen).toHaveBeenCalledExactlyOnceWith(48)
+      expect(qc.getQueryData(['notifications', 'decisions', 7])).toEqual({ items: [], total: 0 })
+    })
+  })
+
+  it('marks the submitter outcome seen on open when it is omitted from the newest-five list', async () => {
+    vi.mocked(api.getBook).mockResolvedValue(fixture() as never)
+    renderRecord()
+    await screen.findByTestId('record-meta')
+    await waitFor(() => expect(api.markBookSeen).toHaveBeenCalledExactlyOnceWith(48))
+  })
+
+  it('does not mark an outcome seen when another user submitted the opened book', async () => {
+    vi.mocked(api.getBook).mockResolvedValue(fixture({ submitted_by_user_id: 9 }) as never)
+    renderRecord()
+    await screen.findByTestId('record-meta')
+    await waitFor(() => expect(api.getDecisionNotices).toHaveBeenCalledOnce())
+    expect(api.markBookSeen).not.toHaveBeenCalled()
   })
 
   it.each([false, true])('hides Link from the record tools and denies its URL overlay without books.edit (mobile=%s)', async (mobile) => {

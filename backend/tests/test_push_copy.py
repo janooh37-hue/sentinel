@@ -289,3 +289,53 @@ def test_sender_name_extracts_display_name():
     assert ns._sender_name("plain@host.com") == "plain@host.com"
     assert ns._sender_name(None) == "Unknown sender"
     assert ns._sender_name('"Quoted Name" <q@x.ae>') == "Quoted Name"
+
+
+@pytest.mark.parametrize(
+    ("verdict", "report", "en", "ar"),
+    [
+        ("approved", False, "Approved", "تمت الموافقة"),
+        ("rejected", False, "Rejected", "مرفوض"),
+        ("returned", False, "Returned to you", "مُعاد إليك"),
+        ("approved", True, "Reviewed", "تمت المراجعة"),
+    ],
+)
+def test_decision_push_names_outcome_record_and_decider(verdict, report, en, ar):
+    item = _item(
+        "decision",
+        verdict=verdict,
+        is_report=report,
+        url="/books/5",
+        label="HR-5",
+        subject="Annual leave",
+        requester="Ali",
+        requester_ar="علي",
+    )
+    messages, url = ss._build_push("decision", [item], "/section")
+    assert messages == {
+        "en": (APP, f"{en} · HR-5 — Annual leave\nBy Ali"),
+        "ar": (APP, f"{ar} · \u2066HR-5\u2069 — Annual leave\nبواسطة علي"),
+    }
+    assert url == "/books/5"
+
+
+def test_decision_push_redacted_subject_and_fallback_decider_name():
+    item = _item("decision", verdict="approved", label="HR-5", requester="Ali")
+    messages, _ = ss._build_push("decision", [item], "/section")
+    assert messages["en"][1] == "Approved · HR-5\nBy Ali"
+    assert messages["ar"][1] == "تمت الموافقة · \u2066HR-5\u2069\nبواسطة Ali"
+
+
+def test_several_decisions_summarize_without_record_details():
+    section = ss._KIND_META["decision"]
+    assert section == "/books/approvals?tab=sent"
+    items = [
+        _item("decision", verdict="approved", subject="Private", requester="Ali"),
+        _item("decision", verdict="returned", ref="decision:2"),
+    ]
+    messages, url = ss._build_push("decision", items, section)
+    assert messages == {
+        "en": (APP, "2 decisions on your records"),
+        "ar": (APP, "قرارات على معاملاتك · \u20662\u2069"),
+    }
+    assert url == section
