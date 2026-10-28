@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
-import { api, type LedgerDraftRead } from '@/lib/api'
+import { api, ApiError, type LedgerBookRead, type LedgerDraftRead } from '@/lib/api'
 
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
 // HugeRTE can't mount in jsdom: a plain textarea stands in for the body editor.
@@ -116,5 +116,27 @@ describe('Ledger Book composer', () => {
     for (let i = 1; i < 20; i++) await userEvent.click(screen.getByRole('button', { name: 'Add line' }))
     expect(lines()).toHaveLength(20)
     expect(screen.getByRole('button', { name: 'Add line' })).toBeDisabled()
+  })
+
+  it('T-C5 Save & Send asks first, then opens the issued book on the desk', async () => {
+    const send = vi.spyOn(api, 'saveAndSendLedgerDraft').mockResolvedValue({ id: 40, ref_number: '1/2/7' } as LedgerBookRead)
+    mountComposer()
+    await userEvent.click(await screen.findByRole('button', { name: 'Save & Send' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Save & Send this Ledger Book?' })
+    expect(dialog).toHaveTextContent('A reference number is allocated now. After that, the book can only change through a correction.')
+    expect(send).not.toHaveBeenCalled()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save & Send' }))
+    await waitFor(() => expect(send).toHaveBeenCalledWith(12))
+    expect(await screen.findByText('/ledger?tab=books&book=40')).toBeInTheDocument()
+  })
+
+  it('T-C5 DRAFT_TAB_REQUIRED shows its message at the Tab field', async () => {
+    vi.spyOn(api, 'saveAndSendLedgerDraft').mockRejectedValue(new ApiError(422, 'DRAFT_TAB_REQUIRED', 'Choose the tab (التبويب) first.'))
+    mountComposer()
+    await userEvent.click(await screen.findByRole('button', { name: 'Save & Send' }))
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save & Send' }))
+    await waitFor(() => expect(screen.getByLabelText('Tab')).toHaveAccessibleDescription('Choose the tab (classification) first.'))
+    expect(screen.getByLabelText('Tab')).toBeInvalid()
+    expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger/compose/12')
   })
 })

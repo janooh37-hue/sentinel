@@ -1,21 +1,24 @@
 /**
  * Ledger Book composer — `/ledger/compose/:draftId`. A private draft with no
  * number: Tab, Grade, Importance, ordered Subject lines and the HugeRTE body,
- * autosaved as the writer types.
+ * autosaved as the writer types. Save & Send allocates the reference number
+ * and opens the issued book on the desk.
  */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft } from 'lucide-react'
-import { useId, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, Send, Trash2 } from 'lucide-react'
+import { useCallback, useId, useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { GradeSelect } from '@/components/books/GradeSelect'
 import { GRADE_META } from '@/components/books/grades'
-import { ledgerDraftKey } from '@/components/books/ledgerBookKeys'
+import { deskBookUrl, LEDGER_DRAFTS_KEY, ledgerDraftKey } from '@/components/books/ledgerBookKeys'
 import { Button } from '@/components/ui/button'
-import { api, type LedgerDraftRead } from '@/lib/api'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { api, ApiError, apiErrorMessage, type LedgerDraftRead } from '@/lib/api'
+import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { composerSchema, valuesFromDraft, type ComposerValues } from './composerForm'
 import { ImportancePicker } from './ImportancePicker'
@@ -25,7 +28,17 @@ import { useDraftAutosave, type SaveState } from './useDraftAutosave'
 
 const AUTOSAVE_MS = 800
 
-type FieldErrors = Partial<Record<'tab' | 'subjects' | 'body', string>>
+type Field = 'tab' | 'subjects' | 'body'
+type FieldErrors = Partial<Record<Field, string>>
+
+/** Save & Send refusals that belong next to a field. */
+const FIELD_OF_CODE: Readonly<Record<string, Field>> = {
+  DRAFT_TAB_REQUIRED: 'tab',
+  DRAFT_SUBJECT_REQUIRED: 'subjects',
+  DRAFT_BODY_REQUIRED: 'body',
+}
+
+class DraftNotSaved extends Error {}
 
 export function LedgerComposerPage({ autosaveMs = AUTOSAVE_MS }: { autosaveMs?: number }): React.JSX.Element {
   const { t } = useTranslation()
@@ -46,12 +59,16 @@ export function LedgerComposerPage({ autosaveMs = AUTOSAVE_MS }: { autosaveMs?: 
 function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: number }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
+  const navigate = useNavigate()
+  const qc = useQueryClient()
   const tabId = useId()
+  const bodyErrorId = useId()
   const [initial] = useState(() => valuesFromDraft(draft))
   const form = useForm<ComposerValues>({ resolver: zodResolver(composerSchema), defaultValues: initial })
   const values = useWatch({ control: form.control }) as ComposerValues
   const autosave = useDraftAutosave(draft.id, values, initial, autosaveMs)
-  const [errors] = useState<FieldErrors>({})
+  const [errors, setErrors] = useState<FieldErrors>({})
+  const [confirm, setConfirm] = useState<'send' | 'delete' | null>(null)
   const classifications = useQuery({
     queryKey: ['books', 'classifications'],
     queryFn: () => api.listBookClassifications(),
@@ -61,6 +78,45 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
   const grade = GRADE_META[values.grade]
   const GradeIcon = grade.icon
   const draftLabel = t('ledgerBook.composer.draftLabel', { number: draft.draft_number })
+
+  const clearError = (field: Field): void => setErrors((current) => (current[field] ? { ...current, [field]: undefined } : current))
+  const forgetDraft = (): void => {
+    qc.removeQueries({ queryKey: ledgerDraftKey(draft.id) })
+    void qc.invalidateQueries({ queryKey: LEDGER_DRAFTS_KEY, exact: true })
+  }
+
+  const send = useMutation({
+    mutationFn: async () => {
+      if (!(await autosave.flush(form.getValues()))) throw new DraftNotSaved()
+      return api.saveAndSendLedgerDraft(draft.id)
+    },
+    onSuccess: (book) => {
+      forgetDraft()
+      toast.success(t('ledgerBook.composer.send.sent', { ref: book.ref_number }))
+      navigate(deskBookUrl(book.id))
+    },
+    onError: (err) => {
+      if (err instanceof DraftNotSaved) return toast.error(t('ledgerBook.composer.save.failed'))
+      const field = err instanceof ApiError ? FIELD_OF_CODE[err.code] : undefined
+      if (field) setErrors({ [field]: apiErrorMessage(err) })
+      else toast.error(apiErrorMessage(err))
+    },
+  })
+
+  const remove = useMutation({
+    mutationFn: () => api.deleteLedgerDraft(draft.id),
+    onSuccess: () => {
+      forgetDraft()
+      toast.success(t('ledgerBook.composer.delete.deleted'))
+      navigate('/ledger?tab=books')
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  })
+
+  const uploadImage = useCallback(
+    async (file: Blob, filename: string) => (await api.uploadLedgerDraftImage(draft.id, file, filename)).src,
+    [draft.id],
+  )
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-3 py-4 sm:px-6">
@@ -77,6 +133,16 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
           <bdi>{draftLabel}</bdi>
         </h1>
         <SaveStatus state={autosave.state} />
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <Button type="button" variant="outline" disabled={remove.isPending || send.isPending} onClick={() => setConfirm('delete')}>
+            <Trash2 aria-hidden="true" className="size-4" />
+            {t('ledgerBook.composer.delete.button')}
+          </Button>
+          <Button type="button" className="flex-1 sm:flex-none" disabled={send.isPending || remove.isPending} onClick={() => setConfirm('send')}>
+            <Send aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+            {t('ledgerBook.composer.send.button')}
+          </Button>
+        </div>
       </header>
 
       <div
@@ -97,10 +163,13 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
               <select
                 id={tabId}
                 value={field.value ?? ''}
-                onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
+                onChange={(e) => {
+                  clearError('tab')
+                  field.onChange(e.target.value === '' ? null : Number(e.target.value))
+                }}
                 aria-invalid={errors.tab ? true : undefined}
                 aria-describedby={errors.tab ? `${tabId}-error` : undefined}
-                className="min-h-10 w-full rounded-lg border border-hairline bg-background px-3 py-2 text-[0.84em] text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+                className="min-h-10 w-full rounded-lg border border-hairline bg-background px-3 py-2 text-[0.84em] text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30 aria-[invalid=true]:border-destructive"
               >
                 <option value="">{t('ledgerBook.composer.fields.tabPlaceholder')}</option>
                 {tabs.map((c) => (
@@ -128,7 +197,16 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
       <Controller
         control={form.control}
         name="subjects"
-        render={({ field }) => <SubjectLines value={field.value} onChange={field.onChange} error={errors.subjects} />}
+        render={({ field }) => (
+          <SubjectLines
+            value={field.value}
+            onChange={(lines) => {
+              clearError('subjects')
+              field.onChange(lines)
+            }}
+            error={errors.subjects}
+          />
+        )}
       />
 
       <div className="flex flex-col gap-1">
@@ -139,14 +217,37 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
           render={({ field }) => (
             <LedgerBodyEditor
               value={field.value}
-              onChange={field.onChange}
+              onChange={(html) => {
+                clearError('body')
+                field.onChange(html)
+              }}
               label={t('ledgerBook.composer.body.label')}
+              onUploadImage={uploadImage}
               invalid={Boolean(errors.body)}
+              describedBy={errors.body ? bodyErrorId : undefined}
             />
           )}
         />
-        {errors.body && <p role="alert" className="text-[0.78em] text-destructive">{errors.body}</p>}
+        {errors.body && <p id={bodyErrorId} role="alert" className="text-[0.78em] text-destructive">{errors.body}</p>}
       </div>
+
+      <ConfirmDialog
+        open={confirm === 'send'}
+        onOpenChange={(open) => !open && setConfirm(null)}
+        title={t('ledgerBook.composer.send.confirmTitle')}
+        description={t('ledgerBook.composer.send.confirmBody')}
+        confirmLabel={t('ledgerBook.composer.send.button')}
+        onConfirm={() => send.mutate()}
+      />
+      <ConfirmDialog
+        open={confirm === 'delete'}
+        onOpenChange={(open) => !open && setConfirm(null)}
+        title={t('ledgerBook.composer.delete.confirmTitle')}
+        description={t('ledgerBook.composer.delete.confirmBody')}
+        confirmLabel={t('ledgerBook.composer.delete.button')}
+        destructive
+        onConfirm={() => remove.mutate()}
+      />
     </div>
   )
 }
