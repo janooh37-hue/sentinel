@@ -2644,7 +2644,7 @@
       "signedCopyUnfiled": "Signed copy removed — record reverted",
       "papers_one": "{{count}} paper",
       "papers_other": "{{count}} papers",
-      "searchPlaceholder": "Search ref, form, employee…",
+      "searchPlaceholder": "Search ref, form, employee name or G-number…",
       "collapse": "Collapse preview",
       "wider": "Wider preview",
       "normal": "Normal width",

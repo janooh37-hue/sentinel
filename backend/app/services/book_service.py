@@ -1234,6 +1234,15 @@ def list_books(
         branches: list[ColumnElement[bool]] = [
             Book.subject.ilike(needle),
             Book.ref_number.ilike(needle),
+            # The employee the record is about: G-number, name as filed, and the
+            # live employee's English/Arabic names.
+            Book.employee_id.ilike(needle),
+            Book.employee_name_snapshot.ilike(needle),
+            Book.employee_id.in_(
+                select(Employee.id).where(
+                    or_(Employee.name_en.ilike(needle), Employee.name_ar.ilike(needle))
+                )
+            ),
         ]
         # Union: ilike OR FTS body match (fts_ids empty = ilike only).
         if fts_ids:
