@@ -3,6 +3,11 @@
  * inserted and pasted images go to the server and the body keeps only their
  * server URL; without it the image tools are off. Falls back to a plain
  * textarea when the self-hosted HugeRTE bundle fails to load.
+ *
+ * Browser checks must use native iframe windows: automation that proxies
+ * `iframe.contentWindow` breaks HugeRTE's native event bindings. Oxide also
+ * overrides the shell's inline `visibility: hidden`, so inspect computed
+ * visibility and the toolbar rather than treating that attribute as a failure.
  */
 import { Editor } from '@hugerte/hugerte-react'
 import { useMemo, useState } from 'react'
@@ -44,6 +49,9 @@ export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invali
     automatic_uploads: true,
     image_uploadtab: Boolean(onUploadImage),
     images_file_types: 'png,jpg,jpeg,gif,webp',
+    // The sanitizer accepts only root-relative URLs under our image API.
+    relative_urls: false,
+    remove_script_host: true,
     images_upload_handler: onUploadImage
       ? (info: BlobInfo) => onUploadImage(info.blob(), info.filename()).catch((err: unknown) => {
         throw new Error(apiErrorMessage(err))
