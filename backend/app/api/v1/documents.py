@@ -44,7 +44,7 @@ from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import Book, Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
-from app.schemas.book import BookConfidentiality
+from app.schemas.book import BookConfidentiality, GenerateAttachmentSpec
 from app.schemas.signature_placement import (
     LegacyCandidateRead,
     SignatureEditorRead,
@@ -103,30 +103,18 @@ jobs_router = APIRouter(prefix="/jobs", tags=["jobs"])
 # ---------------------------------------------------------------------------
 
 
-class GenerateAttachmentSpec(BaseModel):
-    """One attachment to merge into the generated PDF (spec 2026-06-11 §6).
-
-    ``source`` discriminates which locator fields apply: ``staged`` reads
-    ``staged_token`` (from ``POST /documents/attachments/stage``);
-    ``record_document`` reads ``book_id`` (that book's current generated PDF);
-    ``record_attachment`` reads ``book_id`` + ``attachment_index`` (one of the
-    book's film-strip scans). ``slot_key=None`` means a free-form extra.
-    """
-
-    slot_key: str | None = None
-    source: Literal["staged", "record_document", "record_attachment"]
-    staged_token: str | None = None
-    original_name: str | None = None
-    book_id: int | None = None
-    attachment_index: int | None = None
-
-
 class StagedAttachmentRead(BaseModel):
     """Response of ``POST /documents/attachments/stage``."""
 
     token: str
     filename: str
     size: int
+
+
+class StageFromRecordRequest(BaseModel):
+    book_id: int
+    source: Literal["record_document", "record_attachment"]
+    attachment_index: int | None = None
 
 
 class DocumentGenerateRequest(BaseModel):
@@ -153,8 +141,8 @@ class DocumentGenerateRequest(BaseModel):
     # When set, regenerate a new version of this existing book (reuse its ref)
     # instead of allocating a fresh ref + Book row. Requires commit=True.
     revise_of_book_id: int | None = None
-    # Attachments validated/persisted/merged into the combined PDF on commit
-    # (slots per core.form_policy; see document_service.generate_document).
+    # Attachments are merged into previews without consuming uploads; committed
+    # saves validate required slots and persist the same sources on the book.
     attachments: list[GenerateAttachmentSpec] | None = None
     # General Book only: government classification (التبويب) code, e.g. "5/1".
     # Required on commit — every General Book ref is now allocated from the
@@ -417,6 +405,30 @@ async def stage_attachment(
     """
     data = await upload.read()
     staged = staging_service.stage(data, upload.filename or "")
+    return StagedAttachmentRead(token=staged.token, filename=staged.filename, size=staged.size)
+
+
+@documents_router.post("/attachments/stage-from-record", response_model=StagedAttachmentRead)
+def stage_attachment_from_record(
+    payload: StageFromRecordRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("documents.generate"))],
+) -> StagedAttachmentRead:
+    """Copy a readable record's generated PDF or scan into upload staging."""
+    spec = GenerateAttachmentSpec(
+        source=payload.source,
+        book_id=payload.book_id,
+        attachment_index=payload.attachment_index,
+    )
+    [(_, path)] = document_service._resolve_attachment_sources(db, [spec], record_access_user=user)
+    book = db.get(Book, payload.book_id)
+    assert book is not None
+    filename = (
+        book.ref_number.replace("/", "-") + ".pdf"
+        if payload.source == "record_document"
+        else path.name
+    )
+    staged = staging_service.stage(path.read_bytes(), filename)
     return StagedAttachmentRead(token=staged.token, filename=staged.filename, size=staged.size)
 
 

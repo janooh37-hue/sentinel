@@ -957,6 +957,7 @@ export type SigningPath = components['schemas']['TemplateMeta']['signing_path']
 export type AttachmentSlotRead = components['schemas']['AttachmentSlotRead']
 export type GenerateAttachmentSpec = components['schemas']['GenerateAttachmentSpec']
 export type StagedAttachmentRead = components['schemas']['StagedAttachmentRead']
+export type StageFromRecordRequest = components['schemas']['StageFromRecordRequest']
 
 // Phase 12 — Dashboard
 // Dashboard responses come from the generated backend contract.
@@ -2814,6 +2815,8 @@ export const api = {
     form.append('file', file)
     return multipart<StagedAttachmentRead>('/documents/attachments/stage', form)
   },
+  stageAttachmentFromRecord: (body: StageFromRecordRequest) =>
+    request<StagedAttachmentRead>('POST', '/documents/attachments/stage-from-record', body),
   inspectApprovedViolation: (file: File) => {
     const form = new FormData()
     form.append('file', file)
