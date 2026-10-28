@@ -25,6 +25,7 @@ function neighborRow(bookId: number, versionId: number): ApprovalLogItem {
     book_id: bookId,
     ref_number: `HR-${bookId}`,
     status: 'pending',
+    outcome_unseen: false,
     urgency: 'Normal',
     version_id: versionId,
     access_scope: 'full',

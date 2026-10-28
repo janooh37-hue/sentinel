@@ -102,6 +102,7 @@ function row(overrides: Partial<ApprovalLogItem>): ApprovalLogItem {
     reviewer_names: [],
     submitted_at: '2026-08-01T09:00:00+00:00',
     decided_at: null,
+    outcome_unseen: false,
     verdict: null,
     document_id: null,
     version_id: 1,
@@ -171,6 +172,38 @@ it.each([null, 'Normal'])('does not flag %s urgency', async (urgency) => {
   expect(await screen.findByText('HR-0001')).toBeInTheDocument()
   expect(screen.queryByText(i18n.t('books.urgency.high'))).not.toBeInTheDocument()
   expect(screen.queryByText(i18n.t('books.urgency.veryHigh'))).not.toBeInTheDocument()
+})
+
+it('marks unseen outcomes New only in Sent, and removes the marker after the outcome is seen', async () => {
+  vi.mocked(api.getApprovalSummary).mockResolvedValue(summary({ can_view_sent: true }))
+  vi.mocked(api.listApprovalLog).mockResolvedValue({
+    ...emptyLog,
+    items: [row({ status: 'returned', outcome_unseen: true })],
+    total: 1,
+  })
+  const view = renderPage('/books/approvals?tab=sent')
+  expect(await screen.findByText('New')).toBeVisible()
+  view.unmount()
+  vi.mocked(api.listApprovalLog).mockResolvedValue({
+    ...emptyLog,
+    items: [row({ status: 'returned', outcome_unseen: false })],
+    total: 1,
+  })
+  renderPage('/books/approvals?tab=sent')
+  await screen.findByTestId('approval-row')
+  expect(screen.queryByText('New')).not.toBeInTheDocument()
+})
+
+it('does not show a submitter outcome marker on Received rows', async () => {
+  vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
+  vi.mocked(api.listApprovalLog).mockResolvedValue({
+    ...emptyLog,
+    items: [row({ outcome_unseen: true })],
+    total: 1,
+  })
+  renderPage('/books/approvals?tab=received&kind=sign')
+  await screen.findByTestId('approval-row')
+  expect(screen.queryByText('New')).not.toBeInTheDocument()
 })
 
 describe('ApprovalsPage generic landing + URL canonicalization', () => {
