@@ -261,6 +261,30 @@ describe('Books routing desk', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Operations manager (Khalid)')
   })
 
+  // T-L5
+  it('lists the category and my recipients\' opened/done progress in the record details', async () => {
+    const recipient = (id: number, extra: object = {}) => ({ id, user_id: id, user_name: `R${id}`, sent_by_user_id: 1, purpose: 'action' as const, created_at: '2026-10-12T09:00:00Z', can_recall: true, ...extra })
+    const category = { id: 'GC', name_en: 'General correspondence', name_ar: 'المراسلات العامة', prefix: 'GC', requires_approval: false }
+    const recipients = [
+      recipient(2, { read_at: '2026-10-12T10:00:00Z', done_at: '2026-10-12T11:00:00Z' }),
+      recipient(3, { read_at: '2026-10-12T10:00:00Z' }),
+      recipient(4),
+      { ...recipient(5), sent_by_user_id: 2 },
+      recipient(6, { revoked_at: '2026-10-12T12:00:00Z' }),
+    ]
+    const book = { ...BOOK, my_inbox: null, category } as BookRead
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...book, recipients }], total: 1, limit: 50, offset: 0 })
+    // The record itself carries no recipients; the details read them from the record's recipients list.
+    vi.spyOn(api, 'getBook').mockResolvedValue(book)
+    vi.mocked(api.listBookRecipients).mockResolvedValue(recipients)
+    mount('/ledger?tab=books&scope=outgoing')
+    await userEvent.click(await screen.findByRole('button', { name: /GS-7/ }))
+    const details = await screen.findByRole('complementary', { name: 'Details' })
+    expect(details).toHaveTextContent(/Category\s*General correspondence/)
+    await waitFor(() => expect(details).toHaveTextContent('Opened by 2 of 3'))
+    expect(details).toHaveTextContent('Done by 1 of 3')
+  })
+
   it.each([
     ['incoming', 'received'], ['done', 'done'], ['outgoing', 'sent'], ['archived', 'archived'],
   ])('maps the %s URL scope to inbox=%s', async (scope, inbox) => {
@@ -686,5 +710,46 @@ describe('Books routing desk (Arabic)', () => {
     expect(within(screen.getByRole('button', { name: /GS-9/ })).getByRole('img', { name: 'الأهمية: عالية' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /GS-7/ }))
     expect(await screen.findByRole('button', { name: 'الأهمية: عالية' })).toBeInTheDocument()
+  })
+
+  // T-L8
+  it.each([false, true])('lays out the Arabic row right to left with the same columns, Arabic mark names and designations (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    const category = { id: 'GC', name_en: 'General correspondence', name_ar: 'المراسلات العامة', prefix: 'GC', requires_approval: false }
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{
+      ...BOOK, current_template_id: 'Ledger Book', importance: 'high', grade: 'secret', subject: 'تعليمات الموظفين', category,
+      my_inbox: { ...BOOK.my_inbox!, sent_by_name_ar: 'خالد', sent_by_title: 'Operations manager', sent_by_title_ar: 'مدير العمليات', read_at: '2026-10-13T09:00:00Z' },
+    } as BookRead], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(screen.getByRole('region', { name: 'الكتب' })).toHaveAttribute('dir', 'rtl')
+    const order = Array.from(row.querySelectorAll('[data-column]'), (cell) => cell.getAttribute('data-column'))
+    expect(order.slice(0, 5)).toEqual(['purpose', 'grade', 'importance', 'ref', 'subject'])
+    for (const name of ['للتنفيذ', 'درجة سرية المعاملة: سري', 'الأهمية: عالية', 'من: مدير العمليات (خالد)']) expect(within(row).getByRole('img', { name })).toBeInTheDocument()
+    expect(row).toHaveTextContent('مدير العمليات')
+    expect(row).not.toHaveTextContent(/خالد|المراسلات العامة|سري/)
+    expect(row.querySelector('[data-column="state"]')).toHaveTextContent(/^مقروء$/)
+    if (!mobile) expect(document.querySelector('[data-desk-header] [data-column="importance"]')).toHaveTextContent('الأهمية')
+  })
+
+  // T-L8
+  it('shows an Arabic Sent state in the row and the Arabic category and progress in the record details', async () => {
+    const category = { id: 'GC', name_en: 'General correspondence', name_ar: 'المراسلات العامة', prefix: 'GC', requires_approval: false }
+    const recipients = [
+      { id: 2, user_id: 2, user_name: 'Aisha', user_name_ar: 'عائشة', sent_by_user_id: 1, purpose: 'action' as const, created_at: '2026-10-12T09:00:00Z', can_recall: true, read_at: '2026-10-12T10:00:00Z' },
+      { id: 3, user_id: 3, user_name: 'Salim', user_name_ar: 'سالم', sent_by_user_id: 1, purpose: 'action' as const, created_at: '2026-10-12T09:00:00Z', can_recall: true },
+    ]
+    const book = { ...BOOK, subject: 'تعليمات الموظفين', my_inbox: null, category, created_by_name_ar: 'أحمد' } as BookRead
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...book, recipients }], total: 1, limit: 50, offset: 0 })
+    vi.spyOn(api, 'getBook').mockResolvedValue(book)
+    vi.mocked(api.listBookRecipients).mockResolvedValue(recipients)
+    mount('/ledger?tab=books&scope=outgoing')
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(row.querySelector('[data-column="state"]')).toHaveTextContent(/^مرسل$/)
+    await userEvent.click(row)
+    const details = await screen.findByRole('complementary', { name: 'التفاصيل' })
+    expect(details).toHaveTextContent(/الفئة\s*المراسلات العامة/)
+    await waitFor(() => expect(details).toHaveTextContent('فتحه 1 من 2'))
+    expect(details).toHaveTextContent('أنجزه 0 من 2')
   })
 })

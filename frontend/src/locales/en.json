@@ -2826,7 +2826,9 @@
         "subject": "Subject",
         "createdBy": "Created by",
         "state": "Status",
-        "papers": "Papers"
+        "papers": "Papers",
+        "category": "Category",
+        "progress": "Progress"
       },
       "state": {
         "unread": "New",

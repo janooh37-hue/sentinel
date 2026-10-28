@@ -3077,7 +3077,9 @@
         "subject": "الموضوع",
         "createdBy": "أنشأه",
         "state": "الحالة",
-        "papers": "المستندات"
+        "papers": "المستندات",
+        "category": "الفئة",
+        "progress": "التقدّم"
       },
       "state": {
         "unread": "جديد",

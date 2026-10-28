@@ -2356,7 +2356,8 @@ will trip over them.
 ## 7. Ledger Books workspace
 
 **Sources:** `pages/ledger/LedgerPage.tsx`, `pages/ledger/BooksRoutingDesk.tsx`,
-`components/books/PurposeMark.tsx`, `components/books/ImportanceMark.tsx`.
+`components/books/PurposeMark.tsx`, `components/books/GradeChip.tsx` (`GradeMark`),
+`components/books/ImportanceMark.tsx`, `components/books/markSize.ts`.
 
 - Books is the first Ledger tab and the landing tab. Email opens for
   `?tab=email`, `?mail=` or `?action=`; the resolved tab is pinned in the URL
@@ -2367,28 +2368,47 @@ will trip over them.
   the caller marked their received book done; Archived takes precedence over
   Incoming and Done. Incoming shows the unread count as plain mono text.
 - **List.** One full-width list, no placeholder pane. Scope tabs and the search
-  field share one bar. From `lg` up, a sticky `aria-hidden` header and every row
-  share one grid template (`RECEIVED_GRID`):
-  `9.5rem` purpose, `10.5rem` reference, `1fr` subject, `minmax(7rem,12rem)`
-  sender, `6.5rem` confidentiality, `6rem` status, `6rem` sent date (end
-  aligned). Outgoing (`OUTGOING_GRID`) drops purpose and status and shows the
-  creator and created date. Below `lg` the same row stacks in three lines:
-  purpose, reference and date; subject; sender, confidentiality and status.
-  Rows are `<button>`s: `px-4 py-3 lg:px-6`, `hover:bg-surface-tinted`, inset
-  focus ring. Unread subjects are `font-semibold`. A paper count (`FileText` +
-  mono number + sr-only plural) follows the subject only when there is more
-  than one paper.
-- **Status** is text plus shape, never colour alone: New = `h-2 w-2` primary dot +
-  `font-semibold`; Read = muted text; Done = `CheckCheck` + `text-success`;
-  Archived = `Archive` icon.
-- **Purpose mark** (`PurposeMark`): bare lucide glyph (`h-4 w-4`, stroke 1.8),
+  field share one bar. From `xl` up, a sticky header and every row share one
+  grid template (`DESK_GRID`), in this order: three equal `4rem` mark columns
+  (Purpose · Grade · Importance, each mark centred in its cell, one mark per
+  cell), `5rem` reference, `minmax(11rem,2fr)` subject, three
+  `minmax(6.5rem,1fr)` people columns (From or Created by, To, Signatory),
+  `6.5rem` status, `5rem` date (end aligned). Purpose, Grade, Reference,
+  Subject, Status and Date headers sort; Importance does not.
+- **Rows are one line on desktop** (`xl:py-2.5`, `items-center`): the subject
+  truncates (full text in `title` and the accessible name), and a sender note
+  is a `MessageSquareText` glyph whose text is in its accessible name and
+  tooltip. Detail belongs to the record, not the row: no category line, no
+  recipient progress. Below `xl` the same row stacks in three lines: marks and
+  reference with the date; subject with my status; designations. Rows are
+  `<button>`s: `px-4 py-3 lg:px-6`, `hover:bg-surface-tinted`, inset focus
+  ring, never with a focusable child. Unread subjects are `font-semibold`. A
+  paper count (`FileText` + mono number + sr-only plural) follows the subject
+  only when there is more than one paper.
+- **People cells** show the designation (title) only; the name lives in the
+  tooltip and the accessible name ("From: Operations manager (Khalid)"). The
+  cell is a non-focusable `role="img"`, like the marks. A person without a
+  designation shows the name; extra recipients show as `+n`.
+- **Status** shows my own state only, as text plus shape, never colour alone:
+  New = `h-2 w-2` primary dot + `font-semibold`; Read = muted text; Done =
+  `CheckCheck` + `text-success`; Archived = `Archive` icon. A book I sent (no
+  inbox row for me) shows Sent (`Send` glyph). The recipients' opened/done
+  progress shows in the record details, not the row.
+- **Mark size.** Purpose, Grade and Importance share one glyph size and stroke:
+  `MARK_ICON_CLASS` = `h-5 w-5` and `MARK_STROKE_WIDTH` = 1.8
+  (`components/books/markSize.ts`), in rows, stacked mobile rows and the title
+  band. Never size a mark locally.
+- **Grade mark** (`GradeMark`): icon only in rows — `role="img"` named "Record
+  grade: Secret" / "درجة سرية المعاملة: سري" with a hover tooltip. Secret and
+  Top Secret are `text-destructive` (`Lock`, `ShieldAlert`), Addressee Only
+  muted (`UserRound`); Unclassified renders nothing. The title band and
+  metadata-only rows add the visible level (`showLabel`).
+- **Purpose mark** (`PurposeMark`): bare lucide glyph at the shared mark size,
   no background, no border, no radius. In rows it is icon only: `role="img"`
   named by the purpose label (the name joins the row button's accessible name)
   with a hover tooltip. The record title band shows the glyph + label
-  (`showLabel`). It sits in a fixed column so it never competes with the
-  confidentiality chip, which keeps its existing pill (`ConfidentialityChip`,
-  uppercase, tinted background; General renders nothing). The glyph shape
-  carries the meaning; the tone only helps scanning. No new tokens.
+  (`showLabel`). The glyph shape carries the meaning; the tone only helps
+  scanning. No new tokens.
 
   | Purpose     | Glyph                | Glyph tone              | Label weight    | RTL                |
   | ----------- | -------------------- | ----------------------- | --------------- | ------------------ |
@@ -2399,7 +2419,7 @@ will trip over them.
 
   Glyphs avoid `Flag` (Email follow-up) and the chip icons (`Lock`, `UserRound`,
   `Send`). The label weight applies only where the label shows.
-- **Importance mark** (`ImportanceMark`): bare glyph (`h-4 w-4`, stroke 1.8),
+- **Importance mark** (`ImportanceMark`): bare glyph at the shared mark size,
   shape plus tone, never colour alone. Order everywhere (row, stacked mobile
   row, title band): Purpose · Grade · Importance.
 
@@ -2435,8 +2455,9 @@ will trip over them.
   3. Body: the reused `RecordPaperViewer` (`mode="pane"`, `compact`,
      `initialFit="width"`, capped at actual size) beside a Details aside
      (`w-80 xl:w-96`, `border-s`, own scroll) holding the sender note, a
-     two-column `dl` (From, Sent, Opened, Done, Papers; outgoing books show
-     Created by, Created, Papers), recipients and thread. Mobile stacks the aside below a `65dvh`
+     two-column `dl` (From, Sent, Opened, Done; outgoing books show Created
+     by, Created; then Category, Progress — my recipients' "Opened by n of m"
+     and "Done by n of m", revoked sends excluded — and Papers), recipients and thread. Mobile stacks the aside below a `65dvh`
      (min `24rem`) document area and scrolls as a page.
 - Expand toggles `view=reader` with replace (not a history step) and hides the
   Details aside so the document takes the full width.

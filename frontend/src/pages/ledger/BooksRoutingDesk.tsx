@@ -595,6 +595,8 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
   const inboxActions = useInboxActions(loading ? null : book, onInboxUpdated)
   const reply = useReplyActions(loading ? null : book)
   const inbox = book.my_inbox
+  // Same query as the recipients panel below, so the list is fetched once.
+  const recipients = useQuery({ queryKey: ['books', 'recipients', book.id], queryFn: () => api.listBookRecipients(book.id), enabled: !loading })
   const facts: { label: string; value: ReactNode }[] = inbox ? [
     { label: t('ledger.booksDesk.from'), value: <bdi>{pickEmployeeName({ name_en: inbox.sent_by_name ?? '', name_ar: inbox.sent_by_name_ar }, i18n.language)}</bdi> },
     { label: t('ledger.booksDesk.sent'), value: <BookDate value={inbox.sent_at} /> },
@@ -604,6 +606,14 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
     { label: t('ledger.booksDesk.columns.createdBy'), value: <bdi>{pickEmployeeName({ name_en: book.created_by_name ?? '', name_ar: book.created_by_name_ar }, i18n.language)}</bdi> },
     { label: t('ledger.booksDesk.created'), value: <BookDate value={book.created_at} /> },
   ]
+  if (book.category) facts.push({ label: t('ledger.booksDesk.columns.category'), value: <bdi>{(i18n.language.startsWith('ar') ? book.category.name_ar : book.category.name_en) || book.category.name_en || book.category.name_ar}</bdi> })
+  // My sends' progress: the row shows only my state, so the opened/done counts live here.
+  const mine = (recipients.data ?? []).filter((row) => row.sent_by_user_id === userId && !row.revoked_at)
+  if (mine.length > 0) {
+    const opened = mine.filter((row) => row.read_at).length
+    const done = mine.filter((row) => row.done_at).length
+    facts.push({ label: t('ledger.booksDesk.columns.progress'), value: <span className="block space-y-0.5"><span className="block">{t('ledger.booksDesk.openedOf', { count: opened, total: mine.length })}</span><span className={cn('block', done === mine.length && 'text-success')}>{t('ledger.booksDesk.doneOf', { count: done, total: mine.length })}</span></span> })
+  }
   facts.push({ label: t('ledger.booksDesk.columns.papers'), value: <bdi dir="ltr" className="font-mono tabular-nums">{papers.length}</bdi> })
   const titleId = `book-title-${book.id}`
   return (
