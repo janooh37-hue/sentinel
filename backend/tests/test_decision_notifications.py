@@ -145,7 +145,7 @@ def test_decision_exclusions(api_db: Session, excluded: str):
     elif excluded == "superseded":
         book.versions.append(BookVersion(version_no=2, status="pending"))
     elif excluded == "hidden":
-        book.confidentiality = "personal"
+        book.distribution = "named"
         book.created_by_user_id = decider.id
     elif excluded == "category":
         api_db.add(
@@ -170,7 +170,7 @@ def test_decision_exclusions(api_db: Session, excluded: str):
     # Mark-all cannot acknowledge an outcome outside the caller's visible set.
     if excluded == "hidden":
         book_service.mark_decisions_seen(api_db, submitter)
-        book.confidentiality = "general"
+        book.distribution = "organization"
         api_db.commit()
         assert notification_service.relevant_counts(api_db, submitter).decisions == 1
 
@@ -192,7 +192,7 @@ def test_resubmission_supersedes_unread_return(api_db: Session):
     book_service.submit_for_approval(
         api_db,
         book.id,
-        priority="Normal",
+        urgency="Normal",
         approver_user_id=decider.id,
         reviewer_user_ids=[],
         submitted_by_user_id=submitter.id,
@@ -200,8 +200,11 @@ def test_resubmission_supersedes_unread_return(api_db: Session):
     assert notification_service.relevant_counts(api_db, submitter).decisions == 0
 
 
-@pytest.mark.parametrize("level", ["general", "personal", "secret", "directed"])
-def test_decision_push_items_redact_only_subject(api_db: Session, level: str):
+@pytest.mark.parametrize(
+    ("level", "distribution"),
+    [("unclassified", "organization"), ("unclassified", "named"), ("secret", "organization")],
+)
+def test_decision_push_items_redact_only_subject(api_db: Session, level: str, distribution: str):
     submitter = _user(api_db, "submitter@x.ae", "admin")
     decider = _user(api_db, "decider@x.ae", "manager")
     book = _submitted_book(
@@ -215,7 +218,8 @@ def test_decision_push_items_redact_only_subject(api_db: Session, level: str):
         subject="Private dates",
         decided_at=datetime(2026, 10, 1),
     )
-    book.confidentiality = level
+    book.grade = level
+    book.distribution = distribution
     api_db.commit()
     items = [
         i for i in notification_service.actionable_items(api_db, submitter) if i.kind == "decision"
@@ -229,7 +233,8 @@ def test_decision_push_items_redact_only_subject(api_db: Session, level: str):
         "approved",
         False,
     )
-    assert item.subject == ("Private dates" if level == "general" else None)
+    is_open = (level, distribution) == ("unclassified", "organization")
+    assert item.subject == ("Private dates" if is_open else None)
     assert item.requester == "decider@x.ae"
     body = _client(api_db, submitter).get("/api/v1/notifications/decisions").json()
     assert body["items"][0]["subject"] == item.subject

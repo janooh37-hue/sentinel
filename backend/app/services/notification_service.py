@@ -176,7 +176,7 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
                 ref=f"decision:{step.id}",
                 url=f"/books/{book.id}",
                 label=book.ref_number,
-                subject=book.subject if book.confidentiality == "general" else None,
+                subject=book.subject if grades.is_open_record(book) else None,
                 requester=sender_names.get(step.assignee_user_id),
                 requester_ar=sender_names_ar.get(step.assignee_user_id),
                 verdict=step.state,

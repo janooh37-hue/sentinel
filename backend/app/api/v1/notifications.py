@@ -35,6 +35,7 @@ from sqlalchemy.orm import sessionmaker as _make_sm
 
 from app.api.deps import COOKIE_NAME, get_current_user
 from app.api.errors import AppError
+from app.core import grades
 from app.core.security import hash_token
 from app.db.models import User
 from app.db.session import SessionLocal, get_db
@@ -109,7 +110,7 @@ def get_decisions(
                 book_id=book.id,
                 version_id=version.id,
                 ref_number=book.ref_number,
-                subject=book.subject if book.confidentiality == "general" else None,
+                subject=book.subject if grades.is_open_record(book) else None,
                 verdict=step.state,
                 is_report=book_service.is_report(book),
                 decided_at=step.decided_at,
