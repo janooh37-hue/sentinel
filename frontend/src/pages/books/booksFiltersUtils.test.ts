@@ -96,6 +96,25 @@ describe('matchesBookFilters (mobile)', () => {
     const reportNonDraft = makeBook({ service_id: 'Report', is_draft: false })
     expect(matchesBookFilters(reportNonDraft, filters)).toBe(false)
   })
+
+  it.each(['G3082', 'g3082', '3082', 'salem'])(
+    'search %s matches the linked employee G-number or name, not another employee',
+    (q) => {
+      const filters = { ...DEFAULT_BOOKS_FILTERS, q }
+      const mine = makeBook({
+        subject: 'Leave Application Form',
+        employee_id: 'G3082',
+        employee_name_snapshot: 'Salem Kaabi',
+      })
+      const other = makeBook({
+        subject: 'Leave Application Form',
+        employee_id: 'G4455',
+        employee_name_snapshot: 'Khalid Mansoori',
+      })
+      expect(matchesBookFilters(mine, filters)).toBe(true)
+      expect(matchesBookFilters(other, filters)).toBe(false)
+    },
+  )
 })
 
 describe('matchesDesktopSearchRow (desktop, active server search)', () => {
