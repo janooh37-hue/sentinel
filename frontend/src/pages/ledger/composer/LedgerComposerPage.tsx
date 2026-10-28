@@ -19,6 +19,7 @@ import { LedgerPaperFrame } from '@/components/books/LedgerPaperFrame'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { api, ApiError, apiErrorMessage, type LedgerDraftRead } from '@/lib/api'
+import { bidi } from '@/lib/bidi'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { composerSchema, valuesFromDraft, type ComposerValues } from './composerForm'
@@ -127,7 +128,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
     },
     onSuccess: (book) => {
       forgetDraft()
-      toast.success(t('ledgerBook.composer.send.sent', { ref: book.ref_number }))
+      toast.success(t('ledgerBook.composer.send.sent', { ref: bidi(book.ref_number) }))
       navigate(deskBookUrl(book.id))
     },
     onError: (err) => {
