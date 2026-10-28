@@ -146,6 +146,40 @@ describe('Books routing desk', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Importance: High')
   })
 
+  // T-L2
+  it.each([false, true])('draws Purpose, Grade and Importance at one shared size (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...LEDGER, grade: 'secret', importance: 'medium' }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    const glyphs = ['For action', 'Record grade: Secret', 'Importance: Medium'].map((name) => within(row).getByRole('img', { name }).querySelector('svg')!)
+    for (const glyph of glyphs) expect(glyph).toHaveClass('h-5', 'w-5')
+    expect(new Set(glyphs.map((glyph) => glyph.getAttribute('stroke-width'))).size).toBe(1)
+  })
+
+  // T-L7 (O-3)
+  it.each(['secret', 'top_secret', 'addressee_only'] as const)('marks the %s grade with an icon only, named by its level', async (grade) => {
+    const level = { secret: 'Secret', top_secret: 'Top Secret', addressee_only: 'Addressee Only' }[grade]
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, grade }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    const mark = within(row).getByRole('img', { name: `Record grade: ${level}` })
+    expect(mark).not.toHaveAttribute('tabindex')
+    expect(row).not.toHaveTextContent(level)
+    expect(row).toHaveAccessibleName(expect.stringContaining(`Record grade: ${level}`))
+    await userEvent.hover(mark)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(`Record grade: ${level}`)
+  })
+
+  // T-L7 (O-3)
+  it('shows no grade mark for an unclassified record', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, grade: 'unclassified' }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(within(row).queryByRole('img', { name: /Record grade/ })).toBeNull()
+    expect(row).not.toHaveTextContent('Unclassified')
+  })
+
   it.each([
     ['incoming', 'received'], ['done', 'done'], ['outgoing', 'sent'], ['archived', 'archived'],
   ])('maps the %s URL scope to inbox=%s', async (scope, inbox) => {
@@ -444,7 +478,7 @@ describe('Books routing desk', () => {
       expect(mark).not.toHaveAttribute('tabindex')
       expect(mark.querySelector('svg')?.getAttribute('class')).toMatch(/lucide-/)
       expect(mark.closest('[data-testid="grade-mark"]')).toBeNull()
-      expect(within(row).getByTestId('grade-mark')).toHaveTextContent('Secret')
+      expect(within(row).getByTestId('grade-mark')).toHaveAccessibleName('Record grade: Secret')
     }
     const glyphs = purposes.map((purpose) => document.querySelector(`[data-purpose="${purpose}"] svg`)!.getAttribute('class'))
     expect(new Set(glyphs).size).toBe(4)
