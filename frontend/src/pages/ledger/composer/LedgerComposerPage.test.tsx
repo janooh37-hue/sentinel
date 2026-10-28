@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
@@ -82,5 +82,15 @@ describe('Ledger Book composer', () => {
     await userEvent.selectOptions(screen.getByLabelText('Tab'), '1')
     await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { tab: 1, body_html: '<p>Hello there</p>' }))
     expect(await screen.findByText('Saved')).toBeInTheDocument()
+  })
+
+  it('T-C3 offers None, Medium and High; None clears importance with null', async () => {
+    vi.mocked(api.getLedgerDraft).mockResolvedValue({ ...DRAFT, importance: 'medium' })
+    mountComposer()
+    const group = await screen.findByRole('group', { name: 'Importance' })
+    expect(within(group).getAllByRole('radio').map((r) => r.closest('label')?.textContent)).toEqual(['None', 'Medium', 'High'])
+    expect(within(group).getByRole('radio', { name: 'Medium' })).toBeChecked()
+    await userEvent.click(within(group).getByRole('radio', { name: 'None' }))
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { importance: null }))
   })
 })
