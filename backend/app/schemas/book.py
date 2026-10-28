@@ -767,6 +767,7 @@ class ApprovalLogItem(ORMBase):
     # When the final verdict landed (None while still in flight).
     decided_at: datetime | None = None
     verdict: Literal["approved", "rejected", "returned"] | None = None
+    outcome_unseen: bool = False
     # Selected revision's generated document — thumbnail source; None for
     # drafts and v3-imported records.
     document_id: int | None = None

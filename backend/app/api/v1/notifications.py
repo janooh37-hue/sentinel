@@ -28,7 +28,7 @@ from collections.abc import AsyncIterator, Callable
 from typing import Annotated
 
 import anyio
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker as _make_sm
@@ -38,8 +38,8 @@ from app.api.errors import AppError
 from app.core.security import hash_token
 from app.db.models import User
 from app.db.session import SessionLocal, get_db
-from app.schemas.notifications import NotificationCounts
-from app.services import auth_service, notification_service
+from app.schemas.notifications import DecisionNotice, DecisionNoticesResponse, NotificationCounts
+from app.services import auth_service, book_service, notification_service
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -90,6 +90,45 @@ def get_counts(
     # tabs' streams must not keep emitting the older cached value.
     _counts_cache[user.id] = (time.monotonic(), counts)
     return counts
+
+
+@router.get("/decisions", response_model=DecisionNoticesResponse)
+def get_decisions(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> DecisionNoticesResponse:
+    rows = book_service.unseen_decisions(db, user, limit=5)
+    ids = {step.assignee_user_id for _, _, step in rows}
+    names = book_service.resolve_names_by_ids(db, ids)
+    names_ar = book_service.resolve_names_ar_by_ids(db, ids)
+    items = []
+    for book, version, step in rows:
+        assert step.decided_at is not None
+        items.append(
+            DecisionNotice(
+                book_id=book.id,
+                version_id=version.id,
+                ref_number=book.ref_number,
+                subject=book.subject if book.confidentiality == "general" else None,
+                verdict=step.state,
+                is_report=book_service.is_report(book),
+                decided_at=step.decided_at,
+                decider_name=names.get(step.assignee_user_id),
+                decider_name_ar=names_ar.get(step.assignee_user_id),
+                note=step.note if step.state in ("rejected", "returned") else None,
+            )
+        )
+    return DecisionNoticesResponse(items=items, total=book_service.unseen_decision_count(db, user))
+
+
+@router.post("/decisions/seen", status_code=status.HTTP_204_NO_CONTENT)
+def mark_decisions_seen(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> Response:
+    book_service.mark_decisions_seen(db, user)
+    _counts_cache.pop(user.id, None)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 def _frame(counts: NotificationCounts) -> str:
