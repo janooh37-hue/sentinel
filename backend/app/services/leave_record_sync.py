@@ -454,7 +454,7 @@ def _sync_leave_record(
                         template_id, (employee.name_en if employee else "") or "", datetime.now()
                     ),
                     stamps=artifact_service.StampPlan(
-                        grade=owner.grade,
+                        level=owner.confidentiality,
                         reference=owner.ref_number,
                         header_reference=owner.classification_code is None,
                         aztec_corner=aztec_corner_for(template_id),

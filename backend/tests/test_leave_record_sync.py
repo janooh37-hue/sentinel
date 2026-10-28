@@ -132,7 +132,7 @@ def submit(env, book):
         book.id,
         submitted_by_user_id=env.signer.id,
         approver_user_id=env.signer.id,
-        urgency="Normal",
+        priority="Normal",
         reviewer_user_ids=[],
     )
 
