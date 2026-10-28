@@ -13,6 +13,7 @@ import shutil
 from collections import Counter
 from contextlib import ExitStack
 from copy import deepcopy
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -76,56 +77,91 @@ def _generation_version(book: Book) -> BookVersion:
     )
 
 
-def _signature_shape(path: Path) -> tuple[Counter[str], int]:
-    """Marked signature roles, and the count of other images, in a rendered DOCX body."""
-    try:
-        marked = Counter[str](d.role for d in signature_layout.inspect_signature_drawings(path))
-    except signature_layout.SignatureIdentityError as exc:
-        raise _Unreproducible("The paper's signature markers are malformed") from exc
+@dataclass(frozen=True)
+class _Paper:
+    """What a rendered DOCX carries: signature roles, other images, printed dates."""
+
+    marked: Counter[str]
+    unmarked: int
+    dates: list[str]
+
+
+def _paper_of(path: Path) -> _Paper:
+    marked = Counter[str](d.role for d in signature_layout.inspect_signature_drawings(path))
     body = DocxDocument(str(path)).element.body
     unmarked = sum(
         1
         for docpr in body.iter(qn("wp:docPr"))
         if signature_layout.parse_marker_descr(docpr.get("descr")) is None
     )
-    return marked, unmarked
+    text = "\n".join(t.text or "" for t in body.iter(qn("w:t")))
+    return _Paper(marked, unmarked, _PRINTED_DATE.findall(text))
 
 
-def _printed_dates(path: Path) -> list[str]:
-    """Every printed date, in document order."""
-    body = DocxDocument(str(path)).element.body
-    return _PRINTED_DATE.findall("\n".join(t.text or "" for t in body.iter(qn("w:t"))))
+def _read_paper(path: Path) -> _Paper:
+    """An EXISTING record file: any read/parse problem means skip, not fail."""
+    try:
+        return _paper_of(path)
+    except Exception as exc:  # missing, unreadable, corrupt, malformed markers
+        raise _Unreproducible(
+            f"The record's paper cannot be read: {path.name} ({type(exc).__name__})"
+        ) from exc
+
+
+def _require_readable(path: Path) -> None:
+    try:
+        with path.open("rb") as handle:
+            handle.read(1)
+    except OSError as exc:
+        raise _Unreproducible(
+            f"A signature file cannot be read: {path.name} ({type(exc).__name__})"
+        ) from exc
+
+
+_ROLE_KEYS = {
+    "manager": ("sig1_path", "manager_sig_path"),
+    "employee": ("sig2_path", "employee_sig_path"),
+    "submitter": ("submitter_sig_path",),
+}
+
+
+def _require_signatures_available(data: dict[str, Any], original: _Paper) -> None:
+    """Before rendering: every signature the paper carries resolves to a readable file."""
+    for role, keys in _ROLE_KEYS.items():
+        values = [data.get(key) for key in keys if data.get(key)]
+        if original.marked and bool(values) != (original.marked[role] > 0):
+            raise _Unreproducible("Re-rendered signatures differ from the record's paper")
+        for value in values:
+            if isinstance(value, str) and not value.startswith("data:"):
+                _require_readable(Path(value))
 
 
 def _require_same_paper(
-    original: Path, rendered: Path, old_dates: set[str], new_dates: set[str]
+    original: _Paper, rendered: Path, old_dates: set[str], new_dates: set[str]
 ) -> None:
     """Only the leave dates may differ: same signatures, same request/issue dates."""
-    old_marked, old_unmarked = _signature_shape(original)
-    new_marked, new_unmarked = _signature_shape(rendered)
-    if old_marked:
-        same = old_marked == new_marked and old_unmarked == new_unmarked
+    new = _paper_of(rendered)  # our own render: a read failure is a render failure
+    if original.marked:
+        same = original.marked == new.marked and original.unmarked == new.unmarked
     else:
         # Before signature markers (2026-09-15) every signature was an unmarked image.
-        same = old_unmarked == new_unmarked + sum(new_marked.values())
+        same = original.unmarked == new.unmarked + sum(new.marked.values())
     if not same:
         raise _Unreproducible("Re-rendered signatures differ from the record's paper")
     # Same template, same token order: each printed date either stays or is a
     # leave date that moved (a request date may equal a leave date).
-    old_printed, new_printed = _printed_dates(original), _printed_dates(rendered)
-    if len(old_printed) != len(new_printed) or any(
-        old != new and (old not in old_dates or new not in new_dates)
-        for old, new in zip(old_printed, new_printed, strict=True)
+    if len(original.dates) != len(new.dates) or any(
+        old != moved and (old not in old_dates or moved not in new_dates)
+        for old, moved in zip(original.dates, new.dates, strict=True)
     ):
         raise _Unreproducible("Re-rendered request/issue dates differ from the record's paper")
 
 
 def _recovered_snapshot(
-    db: Session, fields: dict[str, Any], reference: Path, *, issued: datetime
+    db: Session, fields: dict[str, Any], roles: Counter[str], *, issued: datetime
 ) -> dict[str, Any]:
     """Issue date and signature choices of a paper rendered before ``_signing``
     existed, read from the paper itself; ``_require_same_paper`` verifies them."""
-    roles = _signature_shape(reference)[0]
     submitter_id: int | None = None
     if roles["submitter"]:
         raw = str(fields.get("submitter_id") or "")
@@ -309,13 +345,34 @@ def _sync_leave_record(
     # record in the sign gate (book_service.is_enrolled).
     snapshot = fields.get(document_service._SIGNING_KEY)
     snapshot = dict(snapshot) if isinstance(snapshot, dict) else None
-    signed_reference: Path | None = None
     signed_snapshot: dict[str, Any] | None = None
+    companion = (
+        db.scalar(
+            select(Document).where(
+                Document.submission_id == original.submission_id,
+                Document.role == "companion",
+                Document.template_id == "Leave Undertaking",
+            )
+        )
+        if original.submission_id
+        else None
+    )
+    companion_paper: _Paper | None = None
+    signed_paper: _Paper | None = None
     try:
+        # Every read of the record's existing files happens here, before any
+        # render: an unreadable record is skipped, never a refused leave edit.
+        original_paper = _read_paper(output)
+        if companion is not None:
+            if not companion.docx_path:
+                raise _Unreproducible("The record's companion paper is missing")
+            companion_paper = _read_paper(_absolute(companion.docx_path, settings.data_dir))
         render_snapshot = snapshot or _recovered_snapshot(
-            db, fields, output, issued=_generation_version(owner).created_at
+            db, fields, original_paper.marked, issued=_generation_version(owner).created_at
         )
         if signed:
+            assert signature is not None
+            _require_readable(signature)
             retained = (
                 db.scalar(
                     select(SignatureArtifactRevision.docx_path).where(
@@ -326,16 +383,17 @@ def _sync_leave_record(
                 if previous.signature_revision
                 else None
             )
-            signed_reference = _absolute(retained, settings.data_dir) if retained else None
+            if retained:
+                signed_paper = _read_paper(_absolute(retained, settings.data_dir))
             if snapshot is None:
-                if signed_reference is None or previous.signed_at is None:
+                if signed_paper is None or previous.signed_at is None:
                     raise _Unreproducible(
                         "The signed paper predates snapshots and was not retained"
                     )
                 signed_snapshot = _recovered_snapshot(
                     db,
                     fields,
-                    signed_reference,
+                    signed_paper.marked,
                     issued=previous.signed_at.replace(tzinfo=UTC).astimezone(),
                 )
     except _Unreproducible as skip:
@@ -373,6 +431,13 @@ def _sync_leave_record(
             **data,
             "employee_sig_path": document_service._submitter_sign_path(db, submitter_id),
         }
+    try:
+        _require_signatures_available(primary_data, original_paper)
+        if companion_paper is not None:
+            _require_signatures_available(data, companion_paper)
+    except _Unreproducible as skip:
+        audit(reason=str(skip))
+        return
     try:
         with db.begin_nested():
             submission_id = str(uuid4())
@@ -414,27 +479,13 @@ def _sync_leave_record(
                 return document, artifact
 
             primary, artifact = render(previous.template_id, primary_data, "primary")
-            _require_same_paper(output, artifact.docx_path, old_dates, new_dates)
-            companion = (
-                db.scalar(
-                    select(Document).where(
-                        Document.submission_id == original.submission_id,
-                        Document.role == "companion",
-                        Document.template_id == "Leave Undertaking",
-                    )
-                )
-                if original.submission_id
-                else None
-            )
+            _require_same_paper(original_paper, artifact.docx_path, old_dates, new_dates)
             if companion is not None:
                 _, companion_artifact = render("Leave Undertaking", data, "companion")
-                if companion.docx_path:
-                    _require_same_paper(
-                        _absolute(companion.docx_path, settings.data_dir),
-                        companion_artifact.docx_path,
-                        old_dates,
-                        new_dates,
-                    )
+                assert companion_paper is not None
+                _require_same_paper(
+                    companion_paper, companion_artifact.docx_path, old_dates, new_dates
+                )
 
             document_service._freeze_legacy_current_approval_context(db, owner, previous)
             version = BookVersion(
@@ -490,9 +541,9 @@ def _sync_leave_record(
                 cleanup.callback(
                     artifact_service.cleanup_created, signed_artifact, allowed_root=out_dir
                 )
-                if signed_reference is not None:
+                if signed_paper is not None:
                     _require_same_paper(
-                        signed_reference, signed_artifact.docx_path, old_dates, new_dates
+                        signed_paper, signed_artifact.docx_path, old_dates, new_dates
                     )
                 signed_primary = signed_artifact.conversion.pdf_path
                 if signed_primary is None:

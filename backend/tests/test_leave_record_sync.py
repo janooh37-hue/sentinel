@@ -3,6 +3,7 @@
 import json
 from collections import Counter
 from datetime import date, datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import docx
@@ -779,3 +780,58 @@ def test_signature_that_cannot_be_reproduced_skips_instead_of_unsigned_copy(env,
         )
     )
     assert "signature" in json.loads(audit.payload)["reason"].lower()
+
+
+@pytest.mark.parametrize("damage", ["missing", "corrupt", "unreadable"])
+def test_unreadable_record_paper_skips_sync_and_saves_the_leave(env, monkeypatch, damage):
+    book, leave = generate(env)
+    previous = book.versions[-1]
+    original = env.settings.data_dir / env.db.get_one(Document, previous.document_id).docx_path
+    if damage == "missing":
+        original.unlink()
+    elif damage == "corrupt":
+        original.write_bytes(b"not a zip archive")
+    else:
+        real_open = Path.open
+
+        def denied(self, *args, **kwargs):
+            if self == original:
+                raise PermissionError(13, "Permission denied", str(self))
+            return real_open(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", denied)
+        real_docx = leave_record_sync.DocxDocument
+
+        def denied_docx(source, *args, **kwargs):
+            if Path(str(source)) == original:
+                raise PermissionError(13, "Permission denied", str(source))
+            return real_docx(source, *args, **kwargs)
+
+        monkeypatch.setattr(leave_record_sync, "DocxDocument", denied_docx)
+        monkeypatch.setattr(
+            signature_layout,
+            "inspect_signature_drawings",
+            lambda p: (
+                (_ for _ in ()).throw(PermissionError(13, "Permission denied"))
+                if Path(p) == original
+                else []
+            ),
+        )
+    converted = []
+    monkeypatch.setattr(
+        document_service, "convert_docx_to_pdf", lambda path: converted.append(path)
+    )
+    files_before = {path for path in env.settings.data_dir.rglob("*") if path.is_file()}
+    edit(env, leave)
+    env.db.commit()
+    env.db.refresh(leave)
+    assert (leave.end_date, leave.days) == (date(2026, 10, 25), 4)
+    assert book.versions == [previous]
+    assert converted == []  # skipped before any Word conversion
+    assert {path for path in env.settings.data_dir.rglob("*") if path.is_file()} == files_before
+    audit = env.db.scalar(
+        select(AuditLog).where(
+            AuditLog.entity_id == str(book.id), AuditLog.action == "book.leave_dates_not_synced"
+        )
+    )
+    assert "cannot be read" in json.loads(audit.payload)["reason"]
