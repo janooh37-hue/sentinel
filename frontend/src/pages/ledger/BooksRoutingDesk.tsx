@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { DragEvent, ReactNode } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Archive, ArrowDownUp, ArrowLeft, BookText, Check, CheckCheck, ChevronDown, ChevronUp, Eye, FileText,
+  Archive, ArrowDownUp, ArrowLeft, BookText, Check, CheckCheck, ChevronDown, ChevronUp, FileText,
   Folder, FolderPlus, Maximize2, MessageSquareText, Minimize2, Search, Send, X,
 } from 'lucide-react'
 import { CheckboxItem, ItemIndicator } from '@radix-ui/react-dropdown-menu'
@@ -27,6 +27,7 @@ import { Kbd } from '@/components/ui/kbd'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { api, apiErrorMessage } from '@/lib/api'
 import type { BookInboxRead, BookListResponse, BookRead, BookRecipientRead, BookSortKey, SendPurpose } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
@@ -63,17 +64,28 @@ function BookDate({ value }: { value: string }): React.JSX.Element {
   return <time dateTime={value} dir="ltr" className="font-mono tabular-nums">{formatDmy(value.slice(0, 10))}</time>
 }
 
-function Person({ label, name, title, className, tooltip, extra }: {
-  label: string; name: string; title?: string | null; className?: string; tooltip?: string; extra?: ReactNode
+/**
+ * A people cell: the designation shows, the name lives in the tooltip and the
+ * accessible name. `role="img"` keeps it non-focusable inside the row button,
+ * like the marks; a person without a designation shows the name.
+ */
+function Person({ label, people, column, className }: {
+  label: string; people: { name: string; title: string | null }[]; column: string; className?: string
 }): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+  const full = people.map(({ name, title }) => title ? `${title} (${name})` : name).join(i18n.language.startsWith('ar') ? '، ' : ', ')
   return (
-    <span className={cn('inline-flex min-w-0 max-w-full items-baseline gap-1 xl:block', className)} title={tooltip ?? (title ? `${title} (${name})` : name)}>
-      <span className="shrink-0 xl:sr-only">{label}: </span>
-      <span className="min-w-0">
-        <span className="text-foreground xl:line-clamp-2 xl:break-words"><bdi>{title || name}</bdi>{extra}</span>
-        {title && <span className="text-xs text-muted-foreground xl:mt-0.5 xl:block"><span className="xl:hidden"> (</span><bdi>{name}</bdi><span className="xl:hidden">)</span></span>}
-      </span>
-    </span>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span role="img" data-column={column} aria-label={`${label}: ${full}`} className={cn('inline-flex min-w-0 max-w-full items-baseline gap-1', className)}>
+            <span className="shrink-0 xl:sr-only">{label}:</span>
+            <span className="min-w-0 truncate text-foreground"><bdi>{people[0].title || people[0].name}</bdi>{people.length > 1 && <>{' '}<bdi dir="ltr" className="text-xs text-muted-foreground">{t('ledger.booksDesk.moreNames', { count: people.length - 1 })}</bdi></>}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{full}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }
 
@@ -86,9 +98,9 @@ function scopeOf(book: BookRead): Scope {
 
 
 // One template for the header and every row so columns align from xl up; below xl rows stack.
-// purpose | ref | subject (+ type, level) | from | to | signatory | status | date.
+// purpose | grade | importance (one centred mark each) | ref | subject | from | to | signatory | status | date.
 // Subject takes a double share of the spare width; the three people columns one share each.
-const DESK_GRID = 'xl:grid-cols-[7rem_5rem_minmax(11rem,2fr)_minmax(7.5rem,1fr)_minmax(7.5rem,1fr)_minmax(7.5rem,1fr)_6.5rem_5rem]'
+const DESK_GRID = 'xl:grid-cols-[4rem_4rem_4rem_5rem_minmax(11rem,2fr)_minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_6.5rem_5rem]'
 
 function DeskLoading(): React.JSX.Element {
   return <div className="space-y-4 p-5" aria-busy="true"><Skeleton className="h-5 w-2/3" /><Skeleton className="h-5 w-full" /><Skeleton className="h-5 w-1/2" /></div>
@@ -327,15 +339,17 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
             </div>
           ) : (
             <>
-              <div className={cn('sticky top-0 z-10 hidden gap-x-3 border-b border-hairline bg-surface px-6 py-2 text-xs font-medium text-muted-foreground xl:grid', DESK_GRID)}>
-                {sortHeader('purpose')}
-                {sortHeader('ref')}
-                <span className="flex flex-wrap items-center gap-x-3">{sortHeader('subject')}{sortHeader('grade')}</span>
-                <span>{t(asSent ? 'ledger.booksDesk.columns.createdBy' : 'ledger.booksDesk.from')}</span>
-                <span>{t('ledger.booksDesk.to')}</span>
-                <span>{t('ledger.booksDesk.signer')}</span>
-                {asSent ? <span>{t('ledger.booksDesk.columns.state')}</span> : sortHeader('status')}
-                {sortHeader('date')}
+              <div data-desk-header className={cn('sticky top-0 z-10 hidden items-center gap-x-3 border-b border-hairline bg-surface px-6 py-2 text-xs font-medium text-muted-foreground xl:grid', DESK_GRID)}>
+                <span data-column="purpose" className="flex text-center leading-tight xl:justify-center">{sortHeader('purpose')}</span>
+                <span data-column="grade" className="flex text-center leading-tight xl:justify-center">{sortHeader('grade')}</span>
+                <span data-column="importance" className="flex text-center leading-tight xl:justify-center">{t('books.importance.label')}</span>
+                <span data-column="ref">{sortHeader('ref')}</span>
+                <span data-column="subject">{sortHeader('subject')}</span>
+                <span data-column="from">{t(asSent ? 'ledger.booksDesk.columns.createdBy' : 'ledger.booksDesk.from')}</span>
+                <span data-column="to">{t('ledger.booksDesk.to')}</span>
+                <span data-column="signer">{t('ledger.booksDesk.signer')}</span>
+                <span data-column="state">{asSent ? t('ledger.booksDesk.columns.state') : sortHeader('status')}</span>
+                <span data-column="date" className="flex justify-end">{sortHeader('date')}</span>
               </div>
               <ul className="divide-y divide-hairline" aria-label={searching ? t('ledger.booksDesk.searchLabel') : placeLabel}>
                 {rows.map((book) => (
@@ -383,9 +397,10 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
 }
 
 /**
- * One book on the desk: enough to decide before opening it. From lg it is a
- * table row under the column header; below lg it stacks: purpose, then
- * subject + note, then a labelled meta line, with date and status at the end.
+ * One book on the desk: enough to decide before opening it; detail (category,
+ * recipients' progress) lives in the record. From xl it is a one-line table row
+ * under the column header: one centred mark per mark column. Below xl it
+ * stacks: marks and ref, then subject with my state, then designations.
  */
 function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen }: {
   book: BookRead
@@ -421,86 +436,71 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen
   const purpose: SendPurpose | undefined = inbox?.purpose ?? mine[0]?.purpose
   const note = inbox ? inbox.note : mine.find((row) => row.note)?.note
   const sentAt = inbox?.sent_at ?? mine.at(-1)?.created_at ?? book.created_at
-  const toNames = toRows.map((row) => name(row.user_name, row.user_name_ar))
-  const toTitles = toRows.map((row) => title(row.user_title, row.user_title_ar))
-  const listSep = i18n.language.startsWith('ar') ? '، ' : ', '
   const papers = paperCountOf(book, { inmateReporter: false })
-  const category = book.category ? (i18n.language.startsWith('ar') ? book.category.name_ar : book.category.name_en) || book.category.name_en : null
+  const subject = book.subject || t('ledger.booksDesk.untitled')
   const signer = book.signer_name || book.signer_name_ar ? name(book.signer_name, book.signer_name_ar) : null
-  const opened = mine.filter((row) => row.read_at).length
-  const done = mine.filter((row) => row.done_at).length
-  // xl: every cell pins to its header column on row 1 (the meta wrapper dissolves via xl:contents).
+  const noteLabel = note ? `${t('ledger.booksDesk.noteShort')}: ${note}` : ''
+  // xl: every cell pins to its header column on row 1 (the stacking wrappers dissolve via xl:contents).
   const cell = 'xl:row-start-1 xl:text-sm'
+  const markCell = 'flex items-center empty:hidden xl:row-start-1 xl:justify-center xl:empty:flex'
   return (
     <button
       type="button"
       data-book-id={book.id}
       aria-current={current ? 'true' : undefined}
       draggable={draggable}
-      onDragStart={draggable ? (event) => startBookDrag(event, book.id, book.ref_number, book.subject || t('ledger.booksDesk.untitled'), i18n.dir()) : undefined}
+      onDragStart={draggable ? (event) => startBookDrag(event, book.id, book.ref_number, subject, i18n.dir()) : undefined}
       onClick={onOpen}
       className={cn(
-        'grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-4 py-3 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:px-6',
+        'grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:px-6 xl:py-2.5',
         DESK_GRID,
         current && 'bg-primary-soft hover:bg-primary-soft',
       )}
     >
-      <span className="col-start-1 row-start-1 flex flex-col items-start gap-1 empty:hidden xl:col-start-1 xl:empty:block">
-        {purpose && <PurposeMark purpose={purpose} />}
-        {showScope && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><ScopeIcon scope={place} className="h-3.5 w-3.5" />{t(`ledger.booksDesk.${place}`)}</span>}
+      <span className="col-start-1 row-start-1 flex min-w-0 items-center gap-3 xl:contents">
+        <span data-column="purpose" className={cn(markCell, 'xl:col-start-1')}>{purpose && <PurposeMark purpose={purpose} />}</span>
+        <span data-column="grade" className={cn(markCell, 'xl:col-start-2')}><GradeMark level={book.grade} /></span>
+        <span data-column="importance" className={cn(markCell, 'xl:col-start-3')}><ImportanceMark importance={importanceOf(book)} /></span>
+        <span data-column="ref" title={book.ref_number} className="min-w-0 truncate text-xs text-muted-foreground xl:col-start-4 xl:row-start-1">
+          <span className="sr-only">{t('ledger.booksDesk.columns.ref')}: </span><bdi dir="ltr" className="font-mono tabular-nums">{book.ref_number}</bdi>
+        </span>
       </span>
-      <span className="col-start-1 row-start-2 min-w-0 xl:col-start-3 xl:row-start-1">
-        <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span dir="auto" className={cn('min-w-0 break-words', inbox && !inbox.read_at ? 'font-semibold' : 'font-medium')}>{book.subject || t('ledger.booksDesk.untitled')}</span>
-          {papers > 1 && <PaperCount count={papers} />}
-        </span>
-        <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-          {category && <bdi className="min-w-0 truncate">{category}</bdi>}
-          <GradeMark level={book.grade} />
-          <ImportanceMark importance={importanceOf(book)} />
-        </span>
+      <span data-column="subject" className="col-start-1 row-start-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 xl:col-start-5 xl:row-start-1 xl:flex-nowrap">
+        {showScope && <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground"><ScopeIcon scope={place} className="h-3.5 w-3.5" />{t(`ledger.booksDesk.${place}`)}</span>}
+        <span dir="auto" title={subject} className={cn('min-w-0 break-words xl:truncate', inbox && !inbox.read_at ? 'font-semibold' : 'font-medium')}>{subject}</span>
+        {papers > 1 && <PaperCount count={papers} />}
+        {note && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span role="img" aria-label={noteLabel} className="inline-flex shrink-0 items-center text-muted-foreground">
+                  <MessageSquareText className="h-4 w-4 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs whitespace-pre-wrap break-words"><bdi>{noteLabel}</bdi></TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
         {inFolder && (book.filed_by_name || book.filed_by_name_ar || book.filed_at) && (
-          <span className="mt-1 block text-xs text-muted-foreground">
+          <span className="min-w-0 truncate text-xs text-muted-foreground">
             {t('ledger.booksDesk.folders.filedBy', { name: bidi(name(book.filed_by_name, book.filed_by_name_ar) || t('ledger.booksDesk.folders.unknownPerson')) })}
             {book.filed_at && <> · <BookDate value={book.filed_at} /></>}
           </span>
         )}
-        {note && (
-          <span className="mt-1 flex min-w-0 items-start gap-1.5 text-muted-foreground">
-            <MessageSquareText className="mt-0.5 h-3.5 w-3.5 shrink-0 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden />
-            <span className="sr-only">{t('ledger.booksDesk.noteShort')}: </span>
-            <bdi className="line-clamp-2 min-w-0 break-words">{note}</bdi>
-          </span>
-        )}
       </span>
-      <span className="col-start-1 row-start-3 mt-0.5 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground xl:contents">
-        <span title={book.ref_number} className="min-w-0 truncate xl:col-start-2 xl:row-start-1 xl:text-xs">
-          <span className="sr-only">{t('ledger.booksDesk.columns.ref')}: </span><bdi dir="ltr" className="font-mono tabular-nums">{book.ref_number}</bdi>
-        </span>
+      <span className="col-span-2 col-start-1 row-start-3 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground xl:contents">
         {inbox
-          ? <Person label={t('ledger.booksDesk.from')} name={name(inbox.sent_by_name, inbox.sent_by_name_ar)} title={title(inbox.sent_by_title, inbox.sent_by_title_ar)} className={cn(cell, 'xl:col-start-4')} />
-          : <Person label={t('ledger.booksDesk.columns.createdBy')} name={name(book.created_by_name, book.created_by_name_ar)} title={title(book.created_by_title, book.created_by_title_ar)} className={cn(cell, 'xl:col-start-4')} />}
-        {toNames.length > 0 && (
-          <Person label={t('ledger.booksDesk.to')} name={toNames[0]} title={toTitles[0]} tooltip={toNames.map((value, index) => toTitles[index] ? `${toTitles[index]} (${value})` : value).join(listSep)} className={cn(cell, 'xl:col-start-5')}
-            extra={toNames.length > 1 && <>{' '}<bdi dir="ltr" className="text-xs text-muted-foreground">{t('ledger.booksDesk.moreNames', { count: toNames.length - 1 })}</bdi></>} />
+          ? <Person column="from" label={t('ledger.booksDesk.from')} people={[{ name: name(inbox.sent_by_name, inbox.sent_by_name_ar), title: title(inbox.sent_by_title, inbox.sent_by_title_ar) }]} className={cn(cell, 'xl:col-start-6')} />
+          : <Person column="from" label={t('ledger.booksDesk.columns.createdBy')} people={[{ name: name(book.created_by_name, book.created_by_name_ar), title: title(book.created_by_title, book.created_by_title_ar) }]} className={cn(cell, 'xl:col-start-6')} />}
+        {toRows.length > 0 && (
+          <Person column="to" label={t('ledger.booksDesk.to')} people={toRows.map((row) => ({ name: name(row.user_name, row.user_name_ar), title: title(row.user_title, row.user_title_ar) }))} className={cn(cell, 'xl:col-start-7')} />
         )}
-        {signer && <Person label={t('ledger.booksDesk.signer')} name={signer} title={title(book.signer_title, book.signer_title_ar)} className={cn(cell, 'xl:col-start-6')} />}
+        {signer && <Person column="signer" label={t('ledger.booksDesk.signer')} people={[{ name: signer, title: title(book.signer_title, book.signer_title_ar) }]} className={cn(cell, 'xl:col-start-8')} />}
       </span>
-      <span className={cn('col-start-2 row-start-2 flex justify-end text-xs text-muted-foreground xl:col-start-7 xl:justify-start', cell)}>
-        {inbox ? <InboxState inbox={inbox} /> : mine.length > 0 && (
-          <span className="inline-flex items-center gap-3 font-mono tabular-nums">
-            <span className="inline-flex items-center gap-1" title={t('ledger.booksDesk.openedOf', { count: opened, total: mine.length })}>
-              <Eye className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden /><bdi dir="ltr" aria-hidden>{opened}/{mine.length}</bdi>
-              <span className="sr-only">{t('ledger.booksDesk.openedOf', { count: opened, total: mine.length })}</span>
-            </span>
-            <span className={cn('inline-flex items-center gap-1', done === mine.length && 'text-success')} title={t('ledger.booksDesk.doneOf', { count: done, total: mine.length })}>
-              <CheckCheck className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden /><bdi dir="ltr" aria-hidden>{done}/{mine.length}</bdi>
-              <span className="sr-only">{t('ledger.booksDesk.doneOf', { count: done, total: mine.length })}</span>
-            </span>
-          </span>
-        )}
+      <span data-column="state" className={cn('col-start-2 row-start-2 flex justify-end text-xs text-muted-foreground xl:col-start-9 xl:justify-start', cell)}>
+        {inbox ? <InboxState inbox={inbox} /> : mine.length > 0 && <span className="inline-flex items-center gap-1.5"><Send className="h-3.5 w-3.5 shrink-0 rtl:-scale-x-100" aria-hidden />{t('ledger.booksDesk.state.sent')}</span>}
       </span>
-      <span className="col-start-2 row-start-1 text-end text-xs text-muted-foreground xl:col-start-8 xl:row-start-1">
+      <span data-column="date" className="col-start-2 row-start-1 text-end text-xs text-muted-foreground xl:col-start-10 xl:row-start-1">
         <span className="sr-only">{t(inbox || mine.length ? 'ledger.booksDesk.sent' : 'ledger.booksDesk.created')}: </span><BookDate value={sentAt} />
       </span>
     </button>
