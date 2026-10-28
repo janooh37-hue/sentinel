@@ -2824,6 +2824,84 @@
       "deleted": "Template deleted"
     }
   },
+  "ledgerBook": {
+    "composer": {
+      "newButton": "New Ledger Book",
+      "creating": "Creating…",
+      "title": "Ledger Book",
+      "draftLabel": "DRAFT {{number}}",
+      "back": "Back to Ledger",
+      "loading": "Loading…",
+      "loadFailed": "This could not be loaded.",
+      "retry": "Retry",
+      "fields": {
+        "tab": "Tab",
+        "tabPlaceholder": "Choose a tab",
+        "tabOption": "{{tab}} — {{name}}",
+        "gradeBanner": "{{label}}: {{grade}}"
+      },
+      "subjects": {
+        "legend": "Subject lines",
+        "hint": "The first line is the subject. Up to {{max}} lines.",
+        "line": "Subject line {{n}}",
+        "add": "Add line",
+        "remove": "Remove line {{n}}",
+        "moveUp": "Move line {{n}} up",
+        "moveDown": "Move line {{n}} down"
+      },
+      "body": {
+        "label": "Body"
+      },
+      "save": {
+        "saving": "Saving…",
+        "saved": "Saved",
+        "failed": "Not saved. Your next change tries again."
+      },
+      "preview": {
+        "show": "Preview",
+        "hide": "Hide preview"
+      },
+      "paper": {
+        "title": "Ledger Book paper"
+      },
+      "send": {
+        "button": "Save & Send",
+        "confirmTitle": "Save & Send this Ledger Book?",
+        "confirmBody": "A reference number is allocated now. After that, the book can only change through a correction.",
+        "sent": "Ledger Book {{ref}} issued. Use Send on the desk to deliver it."
+      },
+      "delete": {
+        "button": "Delete draft",
+        "confirmTitle": "Delete this draft?",
+        "confirmBody": "The draft and its images are removed. This cannot be undone.",
+        "deleted": "Draft deleted."
+      },
+      "drafts": {
+        "title": "My drafts",
+        "empty": "No drafts.",
+        "noSubject": "No subject yet",
+        "updated": "Updated {{date}}",
+        "delete": "Delete {{label}}"
+      },
+      "book": {
+        "print": "Print",
+        "startCorrection": "Start correction",
+        "editContent": "Edit content",
+        "revisions": "Revision",
+        "revisionOption": "Revision {{n}}",
+        "revisionLocked": "Revision {{n}} (signed)",
+        "correctionStarted": "Correction Revision {{n}} started."
+      },
+      "content": {
+        "title": "Edit {{ref}}",
+        "save": "Save",
+        "saved": "Saved.",
+        "cancel": "Cancel",
+        "locked": "This Revision is signed and locked. Start a correction to change it.",
+        "imagesNote": "Images already in the body stay; new images can only be added in a draft."
+      }
+    }
+  },
   "ledger": {
     "title": "Ledger",
     "tabs": {
