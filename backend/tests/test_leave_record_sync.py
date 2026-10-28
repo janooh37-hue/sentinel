@@ -1,7 +1,8 @@
 """Leaves date edits append artifacts without restarting the record's workflow."""
 
 import json
-from datetime import date
+from collections import Counter
+from datetime import date, datetime
 from types import SimpleNamespace
 
 import docx
@@ -14,6 +15,8 @@ from app.api.errors import ValidationFailedError
 from app.api.v1.books import _signed_pdf_url_of
 from app.api.v1.documents import GenerateAttachmentSpec
 from app.config import Settings, get_settings
+from app.core import docx_engine, docx_render, signature_layout
+from app.core import signature as signature_core
 from app.db.models import (
     AuditLog,
     Book,
@@ -97,6 +100,7 @@ def generate(
     template="Leave Application Form",
     leave_type="Annual Leave",
     attachments=None,
+    embed_signature=None,
 ):
     result = document_service.generate_document(
         env.db,
@@ -109,10 +113,12 @@ def generate(
             "total_days": count,
             "duration": count,
             "date": start,
+            "admin_leaves_this_month": "1",
         },
         manager_id=env.manager.id,
         current_user=env.signer,
         attachments=attachments,
+        embed_signature=embed_signature,
     )
     book = env.db.get_one(Book, result.book_id)
     document = env.db.get_one(Document, book.versions[-1].document_id)
@@ -643,3 +649,133 @@ def test_render_or_publish_exception_removes_all_attempt_files(env, monkeypatch,
     assert {path for path in env.settings.data_dir.rglob("*") if path.is_file()} == files_before
     env.db.rollback()
     assert (leave.start_date, leave.end_date) == old_dates
+
+
+class _Sept30(datetime):
+    """Generation clock: the paper is issued on 30/09/2026, edited today."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return cls(2026, 9, 30, 10, 0, tzinfo=tz)
+
+
+def generate_on_sept_30(env, monkeypatch, **kwargs):
+    with monkeypatch.context() as clock:
+        for module in (document_service, docx_engine, docx_render, artifact_service):
+            clock.setattr(module, "datetime", _Sept30)
+        return generate(env, **kwargs)
+
+
+def give_employee_signature(env):
+    path = signature_core.employee_signature_path(env.settings.vault_dir, env.employee.id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGBA", (120, 40), (0, 0, 80, 255)).save(path)
+    return path
+
+
+def drop_snapshot(env, book):
+    """A paper generated before the ``_signing`` snapshot existed."""
+    version = book.versions[-1]
+    version.fields = {k: v for k, v in version.fields.items() if k != "_signing"}
+    env.db.commit()
+
+
+def roles(env, docx_path):
+    path = env.settings.data_dir / docx_path
+    return Counter(d.role for d in signature_layout.inspect_signature_drawings(path))
+
+
+def companion_of(env, document):
+    return env.db.scalar(
+        select(Document).where(
+            Document.submission_id == document.submission_id, Document.role == "companion"
+        )
+    )
+
+
+def docx_text(env, docx_path):
+    document = docx.Document(env.settings.data_dir / docx_path)
+    cells = (c.text for t in document.tables for r in t.rows for c in r.cells)
+    return "\n".join([*(p.text for p in document.paragraphs), *cells])
+
+
+def test_legacy_paper_without_snapshot_keeps_its_employee_signature(env, monkeypatch):
+    give_employee_signature(env)
+    book, leave = generate_on_sept_30(env, monkeypatch, embed_signature={"employee": True})
+    drop_snapshot(env, book)
+    previous = book.versions[-1]
+    old_doc = env.db.get_one(Document, previous.document_id)
+    assert roles(env, old_doc.docx_path)["employee"] == 1
+    edit(env, leave)
+    current = book.versions[-1]
+    assert current.id != previous.id
+    # Render-only recovery: the record is not enrolled into the sign gate.
+    assert "_signing" not in current.fields
+    assert not book_service.is_enrolled(book)
+    new_doc = env.db.get_one(Document, current.document_id)
+    assert roles(env, new_doc.docx_path) == roles(env, old_doc.docx_path)
+    assert roles(env, companion_of(env, new_doc).docx_path) == roles(
+        env, companion_of(env, old_doc).docx_path
+    )
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_leave_edit_keeps_the_original_request_date(env, monkeypatch, legacy):
+    book, leave = generate_on_sept_30(env, monkeypatch)
+    if legacy:
+        drop_snapshot(env, book)
+    old_doc = env.db.get_one(Document, book.versions[-1].document_id)
+    old_text = docx_text(env, old_doc.docx_path)
+    assert "30/09/2026" in old_text
+    edit(env, leave)
+    new_doc = env.db.get_one(Document, book.versions[-1].document_id)
+    new_text = docx_text(env, new_doc.docx_path)
+    assert "25/10/2026" in new_text
+    assert new_text.count("30/09/2026") == old_text.count("30/09/2026")
+    today = datetime.now().strftime("%d/%m/%Y")
+    if today not in old_text:
+        assert today not in new_text
+    companion_text = docx_text(env, companion_of(env, new_doc).docx_path)
+    assert companion_text.count("30/09/2026") == docx_text(
+        env, companion_of(env, old_doc).docx_path
+    ).count("30/09/2026")
+
+
+def test_legacy_signed_copy_is_reproduced_from_its_retained_source(env, monkeypatch):
+    give_employee_signature(env)
+    book, leave = generate_on_sept_30(env, monkeypatch, embed_signature={"employee": True})
+    drop_snapshot(env, book)
+    sign(env, book)
+    previous = book.versions[-1]
+    old_retained = env.db.scalar(
+        select(SignatureArtifactRevision).where(SignatureArtifactRevision.version_id == previous.id)
+    )
+    edit(env, leave)
+    current = book.versions[-1]
+    assert current.id != previous.id
+    assert current.signed_at == previous.signed_at
+    assert book.approval_state == "approved"
+    new_retained = env.db.scalar(
+        select(SignatureArtifactRevision).where(SignatureArtifactRevision.version_id == current.id)
+    )
+    assert roles(env, new_retained.docx_path) == roles(env, old_retained.docx_path)
+    assert "25/10/2026" in text(env, current.signed_pdf_path)
+
+
+def test_signature_that_cannot_be_reproduced_skips_instead_of_unsigned_copy(env, monkeypatch):
+    signature = give_employee_signature(env)
+    book, leave = generate_on_sept_30(env, monkeypatch, embed_signature={"employee": True})
+    drop_snapshot(env, book)
+    previous = book.versions[-1]
+    signature.unlink()
+    files_before = {path for path in env.settings.data_dir.rglob("*") if path.is_file()}
+    edit(env, leave)
+    assert leave.days == 4
+    assert book.versions == [previous]
+    assert {path for path in env.settings.data_dir.rglob("*") if path.is_file()} == files_before
+    audit = env.db.scalar(
+        select(AuditLog).where(
+            AuditLog.entity_id == str(book.id), AuditLog.action == "book.leave_dates_not_synced"
+        )
+    )
+    assert "signature" in json.loads(audit.payload)["reason"].lower()
