@@ -301,6 +301,26 @@ def _refuse_sign_gated(db: Session, row: Leave) -> None:
         )
 
 
+def _refuse_duplicate_dates(db: Session, row: Leave, start: date, end: date) -> None:
+    """Moving ``row`` onto another live leave's natural key (ux_leaves_natural_key)."""
+    clash = db.execute(
+        select(Leave.id).where(
+            Leave.employee_id == row.employee_id,
+            Leave.leave_type == row.leave_type,
+            Leave.start_date == start,
+            Leave.end_date == end,
+            Leave.deleted_at.is_(None),
+            Leave.id != row.id,
+        )
+    ).scalar()
+    if clash is not None:
+        raise ValidationFailedError(
+            "LEAVE_DUPLICATE",
+            f"Another {row.leave_type!r} leave already covers {start} to {end}",
+            leave_id=clash,
+        )
+
+
 def update_leave(
     db: Session, leave_id: int, payload: LeaveUpdate, *, actor: str | None = None
 ) -> Leave:
@@ -339,6 +359,7 @@ def update_leave(
                 "LEAVE_DATES_INVALID",
                 "end_date must be on or after start_date",
             )
+        _refuse_duplicate_dates(db, row, new_start, new_end)
         old = {"start": str(row.start_date), "end": str(row.end_date), "days": row.days}
         row.start_date = new_start
         row.end_date = new_end
@@ -402,6 +423,7 @@ def amend_approved_leave(
         raise ValidationFailedError(
             "LEAVE_DATES_INVALID", "end_date must be on or after start_date"
         )
+    _refuse_duplicate_dates(db, row, row.start_date, end_date)
     old = {"end": str(row.end_date), "days": row.days}
     old_days = row.days
     row.end_date = end_date
