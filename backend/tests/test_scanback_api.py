@@ -110,8 +110,9 @@ def test_scope_all_shows_other_peoples(api_db):
 
 
 def test_route_is_books_edit_gated(api_db):
-    """An operator (books.view + documents.scan by role, no books.edit) is refused."""
+    """An operator whose books.edit is denied is refused."""
     op = _user(api_db, email="op@x.ae", role="operator")
+    perm_service.set_user_override(api_db, op.id, "books.edit", "deny")
     r = _client(api_db, op).get("/api/v1/books/awaiting-scan")
     assert r.status_code == 403
 
@@ -126,6 +127,7 @@ def test_actionable_items_scanback_is_zero_without_books_edit(api_db):
     """Same books.edit gate as the scan-back list: a push must never nag someone
     who would get a 403 filing the upload it points at."""
     op = _user(api_db, email="op@x.ae", role="operator")
+    perm_service.set_user_override(api_db, op.id, "books.edit", "deny")
     _stranded(api_db, ref="GS-0006", owner_id=op.id)
     items = notification_service.actionable_items(api_db, op)
     assert [i for i in items if i.kind == "scanback"] == []

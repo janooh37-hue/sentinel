@@ -130,7 +130,7 @@ def test_unlinked_account_cannot_claim_or_access_another_employee_signature(
 @pytest.mark.parametrize(
     "operation", ["create", "link", "relink", "unlink", "same_link", "upload", "delete"]
 )
-def test_employee_linked_manager_mutations_require_employee_edit_before_any_changes(
+def test_employee_linked_manager_mutations_require_signature_capability_before_any_changes(
     api_db: Session, data_dir: Path, profile_exists: bool, operation: str
 ) -> None:
     api_db.add(Employee(id="G-2", name_en="Victim"))
@@ -141,8 +141,8 @@ def test_employee_linked_manager_mutations_require_employee_edit_before_any_chan
     authorized = _user(api_db, "both@x.ae")
     for user in (editor, authorized):
         perm_service.set_user_override(api_db, user.id, "settings.edit", "grant")
-    perm_service.set_user_override(api_db, editor.id, "employees.edit", "deny")
-    perm_service.set_user_override(api_db, authorized.id, "employees.edit", "grant")
+    perm_service.set_user_override(api_db, editor.id, "employees.signature.manage", "deny")
+    perm_service.set_user_override(api_db, authorized.id, "employees.signature.manage", "grant")
     profile = employee_signature_path(get_settings().vault_dir, "G-2")
     original = _png("red")
     if profile_exists:
@@ -181,7 +181,7 @@ def test_employee_linked_manager_mutations_require_employee_edit_before_any_chan
 
     response = mutate(_client(api_db, editor))
     assert response.status_code == 403
-    assert response.json()["error"]["details"]["capability"] == "employees.edit"
+    assert response.json()["error"]["details"]["capability"] == "employees.signature.manage"
     assert _snapshot(api_db, data_dir) == before
     assert profile.read_bytes() == original if profile_exists else not profile.exists()
 
@@ -202,7 +202,7 @@ def test_settings_only_editor_can_manage_standalone_manager_signature(
 ) -> None:
     editor = _user(api_db, "settings@x.ae")
     perm_service.set_user_override(api_db, editor.id, "settings.edit", "grant")
-    perm_service.set_user_override(api_db, editor.id, "employees.edit", "deny")
+    perm_service.set_user_override(api_db, editor.id, "employees.signature.manage", "deny")
     client = _client(api_db, editor)
     response = client.post("/api/v1/managers", json={"name_en": "Standalone"})
     assert response.status_code == 201
@@ -217,3 +217,35 @@ def test_settings_only_editor_can_manage_standalone_manager_signature(
     assert client.get(url).content == signature
     assert client.delete(url).status_code == 204
     assert client.get(url).status_code == 404
+
+
+def test_default_employee_cannot_replace_or_remove_a_profile_signature(
+    api_db: Session, data_dir: Path
+) -> None:
+    """The operator preset edits employee files, yet a linked manager approves
+    with the profile signature, so writing it stays a manager capability."""
+    api_db.add(Employee(id="G-7", name_en="Approver"))
+    api_db.commit()
+    _user(api_db, "approver@x.ae", role="manager", employee_id="G-7")
+    profile = employee_signature_path(get_settings().vault_dir, "G-7")
+    profile.parent.mkdir(parents=True, exist_ok=True)
+    original = _png("red")
+    profile.write_bytes(original)
+    url = "/api/v1/employees/G-7/signature"
+
+    operator = _client(api_db, _user(api_db, "clerk@x.ae"))
+    for response in (
+        operator.post(url, files={"file": ("sig.png", _png("blue"), "image/png")}),
+        operator.delete(url),
+    ):
+        assert response.status_code == 403
+        assert response.json()["error"]["details"]["capability"] == "employees.signature.manage"
+    assert profile.read_bytes() == original
+
+    manager = _client(api_db, _user(api_db, "hr-manager@x.ae", role="manager"))
+    replacement = _png("green")
+    upload = manager.post(url, files={"file": ("sig.png", replacement, "image/png")})
+    assert upload.status_code == 201, upload.text
+    assert profile.read_bytes() == replacement
+    assert manager.delete(url).status_code == 204
+    assert not profile.exists()

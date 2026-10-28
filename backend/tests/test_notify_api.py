@@ -108,8 +108,10 @@ def test_send_requires_capability(api_db: Session) -> None:
 
 
 def test_refresh_delivery_requires_capability(api_db: Session) -> None:
-    """operator role does NOT have books.edit → must get 403."""
-    c = _client(api_db, _user(api_db, role="operator", email="op2@x.ae"))
+    """A books.edit deny → 403."""
+    op = _user(api_db, role="operator", email="op2@x.ae")
+    perm_service.set_user_override(api_db, op.id, "books.edit", "deny")
+    c = _client(api_db, op)
     r = c.post("/api/v1/notify/1/refresh-delivery")
     assert r.status_code == 403
 

@@ -226,6 +226,7 @@ def test_api_requires_permits_capabilities(env: Session) -> None:
     env.add_all([viewer, denied])
     env.commit()
     env.add(UserPermission(user_id=denied.id, capability="permits.view", effect="deny"))
+    env.add(UserPermission(user_id=viewer.id, capability="permits.create", effect="deny"))
     env.commit()
     r = _client(env, denied).get("/api/v1/item-permits")
     assert r.status_code == 403 and r.json()["error"]["details"]["capability"] == "permits.view"
@@ -438,8 +439,11 @@ def test_permit_with_deleted_letter_stays_editable(env: Session, operation: str)
     assert _client(env, creator).delete(f"/api/v1/books/{book.id}").status_code == 204
     letter_before = [(v.id, v.fields) for v in book.versions]
     path = f"/api/v1/item-permits/{row.id}"
+    capability = "permits.edit" if operation == "update" else "permits.delete"
     viewer = User(email="viewer@x.ae", password_hash="x", role="operator", status="active")
     env.add(viewer)
+    env.commit()
+    env.add(UserPermission(user_id=viewer.id, capability=capability, effect="deny"))
     env.commit()
 
     def request(user: User):
@@ -450,7 +454,6 @@ def test_permit_with_deleted_letter_stays_editable(env: Session, operation: str)
 
     denied = request(viewer)
     assert denied.status_code == 403, denied.text
-    capability = "permits.edit" if operation == "update" else "permits.delete"
     assert denied.json()["error"]["details"]["capability"] == capability
     response = request(_permit_operator(env))
     assert response.status_code == (200 if operation == "update" else 204), response.text

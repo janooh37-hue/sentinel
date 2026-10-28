@@ -190,9 +190,10 @@ def test_post_word_session_no_classification_rejected(api_db, monkeypatch, tmp_p
 
 
 def test_post_word_session_requires_books_create(api_db, monkeypatch, tmp_path):
-    """Plain operator (no books.create) → 403 — creating a book is a create."""
+    """Creating a book through Word is a create: a books.create deny → 403."""
     _seed_gs(api_db)
     user = _make_user(api_db, role="operator")
+    perm_service.set_user_override(api_db, user.id, "books.create", "deny")
     c = _client(api_db, user, monkeypatch, tmp_path)
     resp = c.post(
         "/api/v1/books/word-sessions",
@@ -407,8 +408,9 @@ def _admin_client(api_db, monkeypatch, tmp_path):
 
 
 def _plain_client(api_db, monkeypatch, tmp_path):
-    """No books write caps (operator role)."""
+    """An operator whose books.edit is denied."""
     user = _make_user(api_db, role="operator", email=f"op_{id(tmp_path)}@test.ae")
+    perm_service.set_user_override(api_db, user.id, "books.edit", "deny")
     return _client(api_db, user, monkeypatch, tmp_path), user
 
 
@@ -431,7 +433,7 @@ def test_list_word_templates_empty(api_db, monkeypatch, tmp_path):
 
 
 def test_list_word_templates_requires_books_edit(api_db, monkeypatch, tmp_path):
-    """Template reads are composer-level (books.edit); operator lacks it."""
+    """Template reads are composer-level (books.edit)."""
     from app.services import book_template_service
 
     tpl_lib = tmp_path / "tpl_lib"

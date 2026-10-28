@@ -102,7 +102,6 @@ def _add_header_block(doc: Document) -> None:
     header.add_paragraph("1/5/141+20260720")
 
 
-
 def _plain_docx(path: Path) -> None:
     """Retokenized General Book docx with no table."""
     doc = Document()
@@ -171,12 +170,13 @@ def test_get_table_missing_template_404(api_db, monkeypatch, tmp_path):
     assert r.status_code == 404
 
 
-def test_get_table_requires_books_templates(api_db, monkeypatch, tmp_path):
+def test_get_table_requires_books_edit(api_db, monkeypatch, tmp_path):
     tpl_lib = tmp_path / "tpl_lib"
     tpl_lib.mkdir()
     monkeypatch.setattr(book_template_service, "templates_dir", lambda: tpl_lib)
 
-    c, _ = _plain_client(api_db, monkeypatch, tmp_path)
+    c, user = _plain_client(api_db, monkeypatch, tmp_path)
+    perm_service.set_user_override(api_db, user.id, "books.edit", "deny")
     r = c.get("/api/v1/books/word-templates/anything.docx/table")
     assert r.status_code == 403
 

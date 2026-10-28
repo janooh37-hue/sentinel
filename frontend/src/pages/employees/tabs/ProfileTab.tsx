@@ -521,7 +521,7 @@ export function ProfileTab({
       </section>
 
       {/* ── Signature (bottom) ─────────────────────────────────────────────── */}
-      <SignaturePad employeeId={employee.id} canEdit={canEdit} />
+      <SignaturePad employeeId={employee.id} canEdit={has('employees.signature.manage')} />
     </div>
   )
 }

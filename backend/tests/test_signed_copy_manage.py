@@ -238,5 +238,7 @@ def test_unfile_signed_copy_route(api_db, tmp_path) -> None:
 
 def test_unfile_requires_manage(api_db, tmp_path) -> None:
     _signed_scanback_book(api_db, tmp_path)
-    c = _client(api_db, _user(api_db, role="operator", email="op2@x.ae"))
+    op = _user(api_db, role="operator", email="op2@x.ae")
+    perm_service.set_user_override(api_db, op.id, "books.edit", "deny")
+    c = _client(api_db, op)
     assert c.request("DELETE", "/api/v1/books/1/signed-copy").status_code == 403
