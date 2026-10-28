@@ -864,7 +864,6 @@ export type LedgerDraftImageRead = components['schemas']['LedgerDraftImageRead']
 export type LedgerBookRead = components['schemas']['LedgerBookRead']
 export type LedgerRevisionRead = components['schemas']['LedgerRevisionRead']
 export type LedgerContentUpdate = components['schemas']['LedgerContentUpdate']
-export type LedgerSaveRead = components['schemas']['LedgerSaveRead']
 export type BookDeriveRequest = components['schemas']['BookDeriveRequest']
 export type BookThreadItem = components['schemas']['BookThreadItem']
 export type BookLinkCreate = components['schemas']['BookLinkCreate']
@@ -2169,8 +2168,6 @@ export const api = {
     request<LedgerBookRead>('GET', `/ledger/books/${id}${qs({ revision })}`),
   updateLedgerBookContent: (id: number, body: LedgerContentUpdate) =>
     request<LedgerBookRead>('PUT', `/ledger/books/${id}/content`, body),
-  listLedgerRevisionSaves: (id: number, versionId: number) =>
-    request<LedgerSaveRead[]>('GET', `/ledger/books/${id}/revisions/${versionId}/saves`),
   /** Opens a new correction Revision under the same reference (latest must be signed). */
   startLedgerCorrection: (id: number) =>
     request<LedgerBookRead>('POST', `/ledger/books/${id}/corrections`),
