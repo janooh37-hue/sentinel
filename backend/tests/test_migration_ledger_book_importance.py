@@ -169,3 +169,30 @@ def test_rebuilt_drafts_table_never_reuses_deleted_ids(
         indexes = {index["name"] for index in inspect(c).get_indexes("book_drafts")}
     assert second > first
     assert "ix_book_drafts_owner_user_id" in indexes
+
+
+def _insert_draft(engine: Engine) -> int:
+    with engine.begin() as c:
+        return int(c.execute(text(DRAFT_INSERT.format(columns="", values=""))).lastrowid)
+
+
+@pytest.mark.parametrize("empty", [False, True])
+@pytest.mark.parametrize("direction", ["upgrade", "downgrade"])
+def test_rebuild_keeps_draft_id_high_water_mark(
+    at_parent: tuple[Engine, Config], direction: str, empty: bool
+) -> None:
+    """Ids of drafts deleted BEFORE the rebuild (Save & Send) are never reused."""
+    engine, config = at_parent
+    if direction == "downgrade":
+        command.upgrade(config, HEAD)
+    highest = max(_insert_draft(engine) for _ in range(3))
+    with engine.begin() as c:
+        if empty:
+            c.execute(text("DELETE FROM book_drafts"))
+        else:
+            c.execute(text("DELETE FROM book_drafts WHERE id >= :id"), {"id": highest - 1})
+    if direction == "upgrade":
+        command.upgrade(config, HEAD)
+    else:
+        command.downgrade(config, PARENT)
+    assert _insert_draft(engine) > highest
