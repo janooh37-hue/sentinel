@@ -17,7 +17,7 @@ export type DisplayState =
   | 'Recorded' | 'Requested' | 'Confirmed' | 'PreApproved'
   | 'Scheduled' | 'AwaitingCertificate' | 'AwaitingReturn' | 'Completed'
   | 'Rejected' | 'Cancelled' | 'Unknown'
-export type LeaveAction = 'approve' | 'reject' | 'cancel' | 'delay' | 'extend' | 'certificate' | 'return' | 'amend'
+export type LeaveAction = 'edit' | 'approve' | 'reject' | 'cancel' | 'delay' | 'extend' | 'certificate' | 'return' | 'amend'
 
 export const ENDING_SOON_DAYS = 3
 
@@ -99,7 +99,7 @@ export function actionsFor(
   const s = canonStatus(status)
   const group = lifecycleGroup(leaveType)
   if (group === 'request') {
-    if (s === 'Pending') return ['approve', 'reject', 'cancel']
+    if (s === 'Pending') return ['edit', 'approve', 'reject', 'cancel']
     if (s === 'Approved') {
       const acts: LeaveAction[] = isReturnable(leaveType) && isOverdue(endDate, todayIso)
         ? ['return', 'cancel'] : ['cancel']

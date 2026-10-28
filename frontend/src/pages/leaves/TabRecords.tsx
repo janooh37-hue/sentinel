@@ -35,6 +35,7 @@ import { useLeaveDecisionActions } from './useLeaveDecisionActions'
 import { NationalServiceDialog } from './NationalServiceDialog'
 import { NsControls } from './NsControls'
 import { AmendLeaveDialog } from './AmendLeaveDialog'
+import { EditLeaveDialog } from './EditLeaveDialog'
 import { ReturnFormDialog } from './ReturnFormDialog'
 import { StatusBadge } from './StatusBadge'
 import { LeaveEmployeePicker } from './LeaveEmployeePicker'
@@ -310,6 +311,7 @@ function LeaveDetailDrawer({
   onMutated: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const queryClient = useQueryClient()
   const [notes, setNotes] = useState('')
   // Approve-only notify opt-out (On by default); reject/cancel always notify.
   const [notifyEmployee, setNotifyEmployee] = useState(true)
@@ -317,16 +319,17 @@ function LeaveDetailDrawer({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
   const [amendOpen, setAmendOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
 
   const today = new Date().toISOString().slice(0, 10)
 
   useEffect(() => {
     function onKey(e: KeyboardEvent): void {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && !editOpen) onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, editOpen])
 
   const detailQuery = useQuery({
     queryKey: ['leave', leaveId],
@@ -458,9 +461,20 @@ function LeaveDetailDrawer({
               />
             )}
 
-            {/* Request action buttons: Approve / Reject / Cancel */}
+            {/* Request action buttons: Edit / Approve / Reject / Cancel */}
             {hasRequestActions && (
               <div className="flex flex-wrap gap-2">
+                {acts.includes('edit') && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setEditOpen(true)}
+                    disabled={updateMutation.isPending}
+                    className="rounded-full"
+                  >
+                    {t('leaves.edit.action')}
+                  </Button>
+                )}
                 {acts.includes('approve') && (
                   <Button
                     size="sm"
@@ -596,6 +610,19 @@ function LeaveDetailDrawer({
     )}
     {leave && (
       <AmendLeaveDialog open={amendOpen} leave={leave} onOpenChange={setAmendOpen} onAmended={onMutated} />
+    )}
+    {leave && (
+      <EditLeaveDialog
+        open={editOpen}
+        leave={leave}
+        onOpenChange={setEditOpen}
+        onEdited={() => {
+          const updatedNotes = queryClient.getQueryData<LeaveRead>(['leave', leaveId])?.notes ?? ''
+          // A date-only edit must not discard an unsaved decision reason.
+          if (updatedNotes !== (leave.notes ?? '')) setNotes(updatedNotes)
+          onMutated()
+        }}
+      />
     )}
     </>
   )
