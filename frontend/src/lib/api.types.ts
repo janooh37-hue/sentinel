@@ -1877,6 +1877,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/attachments/stage-from-record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage Attachment From Record
+         * @description Copy a readable record's generated PDF or scan into upload staging.
+         */
+        post: operations["stage_attachment_from_record_api_v1_documents_attachments_stage_from_record_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/documents/inmate-violations/approved-imports/inspect": {
         parameters: {
             query?: never;
@@ -11527,13 +11547,7 @@ export interface components {
         };
         /**
          * GenerateAttachmentSpec
-         * @description One attachment to merge into the generated PDF (spec 2026-06-11 §6).
-         *
-         *     ``source`` discriminates which locator fields apply: ``staged`` reads
-         *     ``staged_token`` (from ``POST /documents/attachments/stage``);
-         *     ``record_document`` reads ``book_id`` (that book's current generated PDF);
-         *     ``record_attachment`` reads ``book_id`` + ``attachment_index`` (one of the
-         *     book's film-strip scans). ``slot_key=None`` means a free-form extra.
+         * @description A staged upload, generated record PDF, or record scan to include.
          */
         GenerateAttachmentSpec: {
             /** Slot Key */
@@ -14723,6 +14737,18 @@ export interface components {
             /** Effective To */
             effective_to?: string | null;
         };
+        /** StageFromRecordRequest */
+        StageFromRecordRequest: {
+            /** Book Id */
+            book_id: number;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "record_document" | "record_attachment";
+            /** Attachment Index */
+            attachment_index?: number | null;
+        };
         /**
          * StagedAttachmentRead
          * @description Response of ``POST /documents/attachments/stage``.
@@ -16555,6 +16581,8 @@ export interface components {
              * @enum {string}
              */
             confidentiality: "general" | "personal" | "secret" | "directed";
+            /** Attachments */
+            attachments?: components["schemas"]["GenerateAttachmentSpec"][] | null;
             /** Signer Employee Id */
             signer_employee_id?: string | null;
             /**
@@ -21227,6 +21255,41 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": components["schemas"]["Body_stage_attachment_api_v1_documents_attachments_stage_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StagedAttachmentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stage_attachment_from_record_api_v1_documents_attachments_stage_from_record_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StageFromRecordRequest"];
             };
         };
         responses: {

@@ -304,6 +304,17 @@ class ClassificationListResponse(BaseModel):
     items: list[ClassificationRead]
 
 
+class GenerateAttachmentSpec(BaseModel):
+    """A staged upload, generated record PDF, or record scan to include."""
+
+    slot_key: str | None = None
+    source: Literal["staged", "record_document", "record_attachment"]
+    staged_token: str | None = None
+    original_name: str | None = None
+    book_id: int | None = None
+    attachment_index: int | None = None
+
+
 class WordBookCreate(BaseModel):
     classification_code: str | None = None
     recipient_id: int | None = None
@@ -313,6 +324,7 @@ class WordBookCreate(BaseModel):
     template_name: str | None = None
     table_rows: list[dict[str, str]] | None = None
     confidentiality: BookConfidentiality = "general"
+    attachments: list[GenerateAttachmentSpec] | None = None
     # Report path only: present ⇒ create a Report (no classification/ref). `sign`
     # embeds the signer's signature at Finish; `date` is the report's document date.
     signer_employee_id: str | None = None

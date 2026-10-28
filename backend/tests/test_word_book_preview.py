@@ -169,6 +169,8 @@ def test_preview_route_supports_base64(
         db.add(book)
         db.flush()
         working = tmp_path / "editing" / f"book-{book.id}" / "1-11-8.docx"
+        paper = _pdf(tmp_path / "included.pdf")
+        book.merged_attachment_paths = [{"path": paper.name}]
         working.parent.mkdir(parents=True)
         DocxFile().save(str(working))
         db.add(
@@ -203,7 +205,11 @@ def test_preview_route_supports_base64(
         res = client.get(f"/api/v1/books/{book.id}/word-sessions/preview?encoding=base64")
         assert res.status_code == 200
         assert res.headers["content-type"].startswith("text/plain")
-        assert base64.b64decode(res.text).startswith(b"%PDF")
+        preview_bytes = base64.b64decode(res.text)
+        with fitz.open("pdf", preview_bytes) as preview:
+            assert preview.page_count == 2
+        with fitz.open(working.parent / "preview-src.pdf") as letter:
+            assert letter.page_count == 1
     finally:
         db.close()
         eng.dispose()
