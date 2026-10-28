@@ -6,7 +6,7 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import ar from '@/locales/ar.json'
 import en from '@/locales/en.json'
-import type { BookFolderRead, BookRead } from '@/lib/api'
+import type { BookFolderRead, BookRead, LedgerBookRead, LedgerDraftRead } from '@/lib/api'
 import type * as ApiModule from '@/lib/api'
 import { useIsMobile } from '@/lib/useIsMobile'
 
@@ -60,8 +60,114 @@ beforeEach(() => {
   vi.spyOn(api, 'getInboxSummary').mockResolvedValue({ unread: 0, received: 0, sent: 0, archived: 0, by_purpose: { info: 0, action: 0, reply: 0, circulate: 0 } })
   vi.spyOn(api, 'listBookRecipients').mockResolvedValue([])
   vi.spyOn(api, 'getBookThread').mockResolvedValue([])
+  vi.spyOn(api, 'listLedgerDrafts').mockResolvedValue([])
 })
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
+
+describe('Books routing desk: Ledger Books', () => {
+  const DRAFT = {
+    id: 12, draft_number: '000012', grade: 'unclassified', importance: null, tab: null, subjects: ['Leave plan'], body_html: '',
+    created_at: '2026-10-28T08:00:00Z', updated_at: '2026-10-28T08:00:00Z',
+  } as unknown as LedgerDraftRead
+  const LEDGER_BOOK = {
+    id: 7, ref_number: '1/2/7', grade: 'unclassified', importance: null, tab: 2, classification_code: '2/1',
+    paper_date: '28-10-2026', approval_state: 'none', created_by_user_id: 1, voided: false,
+    revisions: [
+      { version_id: 71, version_no: 1, trigger: 'initial', created_at: '2026-10-28T08:00:00Z', signed_at: null, superseded: false, locked: false },
+      { version_id: 72, version_no: 2, trigger: 'correction', created_at: '2026-10-28T09:00:00Z', signed_at: null, superseded: false, locked: false },
+    ],
+    selected_version_id: 72, subjects: ['Leave plan'], body_html: '<p>x</p>', content_sha256: 'abc',
+  } as unknown as LedgerBookRead
+
+  // W2
+  it('shows my drafts in the list pane for ?scope=drafts, without the column header or folders', async () => {
+    vi.mocked(api.listLedgerDrafts).mockResolvedValue([DRAFT])
+    vi.mocked(api.listBookFolders).mockResolvedValue([FOLDER])
+    mount('/ledger?tab=books&scope=drafts')
+    const list = await screen.findByRole('region', { name: 'My drafts' })
+    expect(within(list).getByRole('link', { name: /Leave plan/ })).toHaveAttribute('href', '/ledger/compose/12')
+    expect(document.querySelector('[data-desk-header]')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Drafts 1' })).toHaveAttribute('aria-current', 'page')
+    expect(api.listBooks).not.toHaveBeenCalled()
+    expect(screen.queryByRole('group', { name: /Folders in/ })).toBeNull()
+  })
+
+  it('selecting Drafts in the rail puts scope=drafts in the URL', async () => {
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'Drafts' }))
+    expect(screen.getByLabelText('URL')).toHaveTextContent('scope=drafts')
+    expect(await screen.findByText('No drafts.')).toBeInTheDocument()
+  })
+
+  // W3
+  it.each([false, true])('shows a Ledger Book in the sandboxed paper frame at ?rev with its actions (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book', can_send: true })
+    vi.spyOn(api, 'getLedgerBook').mockResolvedValue(LEDGER_BOOK)
+    mount('/ledger?tab=books&book=7&rev=71')
+    const frame = await screen.findByTitle('Ledger Book paper')
+    expect(frame.tagName).toBe('IFRAME')
+    expect(frame).toHaveAttribute('src', '/api/v1/ledger/books/7/paper?revision=71')
+    expect(frame.getAttribute('sandbox')).not.toContain('allow-scripts')
+    expect(screen.queryByRole('document')).toBeNull()
+    const send = screen.getByRole('button', { name: 'Send' })
+    const print = await screen.findByRole('button', { name: 'Print' })
+    expect(send.parentElement).toBe(print.closest('div')?.parentElement)
+    await waitFor(() => expect(api.getLedgerBook).toHaveBeenCalledWith(7, 71))
+    const picker = screen.getByRole('combobox', { name: 'Revision' })
+    expect(picker).toHaveValue('71')
+    await userEvent.selectOptions(picker, '72')
+    expect(screen.getByLabelText('URL')).toHaveTextContent('rev=72')
+    expect(await screen.findByTitle('Ledger Book paper')).toHaveAttribute('src', '/api/v1/ledger/books/7/paper?revision=72')
+  })
+
+  // W3
+  it('keeps a Word book in the PDF viewer with no Ledger Book actions', async () => {
+    const word = { ...BOOK, versions: [{ id: 1, version_no: 1, document_id: 73, status: 'none', trigger: 'create', has_fields: false, created_at: BOOK.created_at, manager_sig_embedded: false }] }
+    vi.spyOn(api, 'getBook').mockResolvedValue(word)
+    const getLedgerBook = vi.spyOn(api, 'getLedgerBook')
+    mount('/ledger?tab=books&book=7')
+    expect(await screen.findByRole('document')).toBeInTheDocument()
+    expect(screen.queryByTitle('Ledger Book paper')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Print' })).toBeNull()
+    expect(getLedgerBook).not.toHaveBeenCalled()
+  })
+
+  // W4
+  it('reaches New Ledger Book and Drafts from the mobile rail sheet', async () => {
+    vi.mocked(useIsMobile).mockReturnValue(true)
+    vi.mocked(api.listLedgerDrafts).mockResolvedValue([DRAFT])
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'Incoming' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByRole('button', { name: 'New Ledger Book' })).toBeInTheDocument()
+    await userEvent.click(await within(sheet).findByRole('button', { name: 'Drafts 1' }))
+    expect(screen.getByLabelText('URL')).toHaveTextContent('scope=drafts')
+    expect(await screen.findByRole('region', { name: 'My drafts' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Drafts' })).toBeInTheDocument()
+  })
+})
+
+// W4
+describe('Books routing desk: Ledger Books (Arabic)', () => {
+  beforeAll(async () => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage('ar')
+  })
+  afterAll(async () => { await i18n.changeLanguage('en') })
+
+  it.each([false, true])('names New Ledger Book and Drafts in Arabic (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    mount('/ledger?tab=books&scope=drafts')
+    if (mobile) await userEvent.click(await screen.findByRole('button', { name: 'المسودات' }))
+    const nav = await screen.findByRole('navigation')
+    expect(within(nav).getByRole('button', { name: 'كتاب سجل جديد' })).toBeInTheDocument()
+    expect(within(nav).getByRole('button', { name: 'المسودات' })).toHaveAttribute('aria-current', 'page')
+    expect(await screen.findByText('لا توجد مسودات.')).toBeInTheDocument()
+    expect(en.ledgerBook.composer.drafts.place).toBe('Drafts')
+  })
+})
 
 describe('Books routing desk', () => {
   it.each(['grade', '-grade'])('passes the %s grade sort to the server', async (sort) => {

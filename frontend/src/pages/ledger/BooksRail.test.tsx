@@ -4,8 +4,9 @@ import userEvent from '@testing-library/user-event'
 import i18n from 'i18next'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import ar from '@/locales/ar.json'
-import type { BookFolderRead } from '@/lib/api'
+import type { BookFolderRead, LedgerDraftRead } from '@/lib/api'
 import { api } from '@/lib/api'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 
 const auth = vi.hoisted(() => ({ role: 'employee' }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: auth.role } }) }))
@@ -27,13 +28,22 @@ const ALPHA: BookFolderRead = {
 }
 const CLOSED: BookFolderRead = { ...BASE, id: 3, name: 'Closed', box: 'done' }
 const OLD: BookFolderRead = { ...BASE, id: 4, name: 'Old', box: 'archived', team: true, everyone: true }
+const DRAFT = {
+  id: 12, draft_number: '000012', grade: 'unclassified', importance: null, tab: null, subjects: [], body_html: '',
+  created_at: '2026-10-28T08:00:00Z', updated_at: '2026-10-28T08:00:00Z',
+} as unknown as LedgerDraftRead
+
+function Where(): React.JSX.Element {
+  return <output aria-label="URL">{useLocation().pathname}</output>
+}
 
 function mount(props: Partial<React.ComponentProps<typeof BooksRail>> = {}) {
   const onSelectScope = vi.fn()
   const onSelectFolder = vi.fn()
+  const onSelectDrafts = vi.fn()
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={qc}><BooksRail scope="incoming" folderId={null} onSelectScope={onSelectScope} onSelectFolder={onSelectFolder} {...props} /></QueryClientProvider>)
-  return { onSelectScope, onSelectFolder }
+  render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={['/ledger']}><BooksRail scope="incoming" folderId={null} drafts={false} onSelectScope={onSelectScope} onSelectFolder={onSelectFolder} onSelectDrafts={onSelectDrafts} {...props} /><Where /></MemoryRouter></QueryClientProvider>)
+  return { onSelectScope, onSelectFolder, onSelectDrafts }
 }
 
 const group = (name: string) => screen.queryByRole('group', { name })
@@ -43,8 +53,44 @@ beforeEach(() => {
   auth.role = 'employee'
   vi.spyOn(api, 'listBookFolders').mockResolvedValue([ZETA, ALPHA, CLOSED, OLD])
   vi.spyOn(api, 'getInboxSummary').mockResolvedValue({ unread: 0, received: 0, sent: 0, archived: 0, by_purpose: { info: 0, action: 0, reply: 0, circulate: 0 } })
+  vi.spyOn(api, 'listLedgerDrafts').mockResolvedValue([DRAFT, { ...DRAFT, id: 13 }])
 })
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
+
+describe('Books rail Ledger Book places', () => {
+  const before = (a: Element, b: Element): boolean => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+
+  // W1
+  it('puts New Ledger Book, then Drafts with its count, above the boxes', async () => {
+    const { onSelectDrafts } = mount()
+    const create = screen.getByRole('button', { name: 'New Ledger Book' })
+    const drafts = await screen.findByRole('button', { name: 'Drafts 2' })
+    const incoming = screen.getByRole('button', { name: 'Incoming' })
+    expect(before(create, drafts)).toBe(true)
+    expect(before(drafts, incoming)).toBe(true)
+    expect(create.className).toMatch(/\bw-full\b/)
+    expect(drafts.querySelector('svg')).not.toBeNull()
+    expect(drafts).not.toHaveAttribute('aria-current')
+    drafts.focus()
+    await userEvent.keyboard('{Enter}')
+    expect(onSelectDrafts).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks Drafts as the current place when selected', async () => {
+    mount({ scope: null, drafts: true })
+    expect(await screen.findByRole('button', { name: 'Drafts 2' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'Incoming' })).not.toHaveAttribute('aria-current')
+  })
+
+  // W1
+  it('New Ledger Book creates a draft and opens the composer', async () => {
+    vi.spyOn(api, 'createLedgerDraft').mockResolvedValue({ ...DRAFT, id: 21 })
+    mount()
+    await userEvent.click(screen.getByRole('button', { name: 'New Ledger Book' }))
+    await waitFor(() => expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger/compose/21'))
+    expect(api.createLedgerDraft).toHaveBeenCalledTimes(1)
+  })
+})
 
 describe('Books rail folder tree', () => {
   // T-FR1

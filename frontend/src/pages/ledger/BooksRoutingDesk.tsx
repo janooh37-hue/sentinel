@@ -3,14 +3,17 @@ import type { DragEvent, ReactNode } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Archive, ArrowDownUp, ArrowLeft, BookText, Check, CheckCheck, ChevronDown, ChevronUp, FileText,
-  Folder, FolderPlus, Maximize2, MessageSquareText, Minimize2, Search, Send, X,
+  Folder, FolderPlus, Maximize2, MessageSquareText, Minimize2, NotebookPen, Search, Send, X,
 } from 'lucide-react'
 import { CheckboxItem, ItemIndicator } from '@radix-ui/react-dropdown-menu'
 import { toast } from '@/lib/toast'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 
 import { GradeMark } from '@/components/books/GradeChip'
+import { LedgerBookActions } from '@/components/books/LedgerBookActions'
+import { LedgerDraftsList } from '@/components/books/LedgerDraftsList'
+import { LedgerPaperFrame } from '@/components/books/LedgerPaperFrame'
 import { DocumentState } from '@/components/books/DocumentState'
 import { ImportanceMark, importanceOf } from '@/components/books/ImportanceMark'
 import { PurposeMark } from '@/components/books/PurposeMark'
@@ -132,17 +135,20 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
   const isMobile = useIsMobile()
   const qc = useQueryClient()
   const [params, setParams] = useSearchParams()
+  const location = useLocation()
   const rawScope = params.get('scope')
   const scope: Scope = rawScope === 'done' || rawScope === 'outgoing' || rawScope === 'archived' ? rawScope : 'incoming'
   const rawFolder = params.get('folder') ?? ''
   const folderId = /^\d+$/.test(rawFolder) && Number(rawFolder) > 0 ? Number(rawFolder) : null
+  // The Drafts place: my Ledger Book drafts instead of a box list.
+  const draftsPlace = rawScope === 'drafts' && folderId === null
   const folders = useBookFolders()
   const [folderDrawerOpen, setFolderDrawerOpen] = useState(false)
   const [rawSort, setSort] = useSearchParam('sort', { fallback: '-date' })
   const sort: BookSortKey = /^-?(date|ref|subject|purpose|grade|status)$/.test(rawSort) ? rawSort as BookSortKey : '-date'
-  const [bookParam, setBookParam] = useSearchParam('book')
+  const [bookParam] = useSearchParam('book')
   // Opening pushes, so the toolbar Back and the browser Back both return to the list.
-  const bookPage = useUrlOverlay('book', ['view'])
+  const bookPage = useUrlOverlay('book', ['view', 'rev'])
   const [view, setView] = useSearchParam('view')
   const selectedId = /^\d+$/.test(bookParam) && Number(bookParam) > 0 ? Number(bookParam) : null
   const [lastOpenedId, setLastOpenedId] = useState(selectedId)
@@ -158,6 +164,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
   }, [search])
   // A search looks through every place at once; each hit shows where it lives.
   const listScope: ListScope = query ? 'any' : folderId ? 'folder' : scope
+  const showDrafts = draftsPlace && !query
   const open = selectedId !== null
   useShortcutAction('focusSearch', useCallback(() => {
     if (open || !searchRef.current) return false
@@ -176,6 +183,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
     queryKey: ['books', 'routing', listScope, query, sort, offset, listScope === 'folder' ? folderId : null],
     queryFn: () => api.listBooks({ ...(listScope === 'folder' ? { folder_id: folderId! } : { inbox: INBOX_BY_SCOPE[listScope] }), q: query || undefined, sort, limit: PAGE_SIZE, offset }),
     staleTime: 30_000,
+    enabled: !showDrafts,
     placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === listScope && previousQuery.queryKey[6] === (listScope === 'folder' ? folderId : null) ? keepPreviousData(previous) : undefined,
   })
   const detail = useQuery({
@@ -198,7 +206,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
     placeholderData: () => list.data?.items.find((book) => book.id === selectedId),
   })
 
-  function selectPlace(value: Scope | number): void {
+  function selectPlace(value: Scope | 'drafts' | number): void {
     setOffset(0)
     setSearch('')
     setQuery('')
@@ -209,6 +217,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
       next.set(typeof value === 'number' ? 'folder' : 'scope', String(value))
       next.delete('book')
       next.delete('view')
+      next.delete('rev')
       return next
     }, { replace: true })
   }
@@ -235,8 +244,15 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
       // Work the queue: open the next book in place, or return to the empty list.
       const index = list.data?.items.findIndex((row) => row.id === id) ?? 0
       const next = remaining[index] ?? remaining[0]
-      if (next) setBookParam(String(next.id))
-      else bookPage.close()
+      if (next) {
+        // The next book starts at its own newest Revision.
+        setParams((previous) => {
+          const params = new URLSearchParams(previous)
+          params.set('book', String(next.id))
+          params.delete('rev')
+          return params
+        }, { replace: true, state: location.state })
+      } else bookPage.close()
     }
     qc.setQueryData<BookRead>(['books', 'detail', id, null], (previous) => previous && ({ ...previous, my_inbox: inbox }))
     for (const [key] of qc.getQueriesData<BookListResponse>({ queryKey: ['books', 'routing'] })) {
@@ -257,8 +273,8 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
   const searching = listScope === 'any'
   const asSent = !searching && !folderId && scope === 'outgoing'
   const activeFolder = !searching && folderId ? folders.data?.find((folder) => folder.id === folderId) : undefined
-  const placeLabel = folderId ? folders.data?.find((folder) => folder.id === folderId)?.name ?? t('ledger.booksDesk.folders.folder') : scopeLabel(scope)
-  const rail = <BooksRail scope={searching || folderId ? null : scope} folderId={searching ? null : folderId} switcher={!isMobile ? switcher : undefined} onSelectScope={selectPlace} onSelectFolder={selectPlace} />
+  const placeLabel = folderId ? folders.data?.find((folder) => folder.id === folderId)?.name ?? t('ledger.booksDesk.folders.folder') : draftsPlace ? t('ledgerBook.composer.drafts.place') : scopeLabel(scope)
+  const rail = <BooksRail scope={searching || folderId || draftsPlace ? null : scope} folderId={searching ? null : folderId} drafts={showDrafts} switcher={!isMobile ? switcher : undefined} onSelectScope={selectPlace} onSelectFolder={selectPlace} onSelectDrafts={() => selectPlace('drafts')} />
 
   return (
     <section ref={deskRef} dir={i18n.dir()} className="flex min-h-0 flex-1 flex-col bg-surface" aria-label={t('ledger.tabs.books')}>
@@ -268,7 +284,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
           <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
             {switcher}
             <Sheet open={folderDrawerOpen} onOpenChange={setFolderDrawerOpen}>
-              <SheetTrigger asChild><Button variant="ghost" size="sm" className="min-w-0">{folderId ? <Folder className="h-4 w-4 shrink-0" aria-hidden /> : <ScopeIcon scope={scope} />}<span className="truncate">{placeLabel}</span></Button></SheetTrigger>
+              <SheetTrigger asChild><Button variant="ghost" size="sm" className="min-w-0">{folderId ? <Folder className="h-4 w-4 shrink-0" aria-hidden /> : draftsPlace ? <NotebookPen className="h-4 w-4 shrink-0" strokeWidth={1.8} aria-hidden /> : <ScopeIcon scope={scope} />}<span className="truncate">{placeLabel}</span></Button></SheetTrigger>
               <SheetContent dir={i18n.dir()} className="w-[260px] bg-rail p-0 pt-10" aria-describedby={undefined}>
                 <SheetTitle className="sr-only">{t('ledger.booksDesk.folders.navigation')}</SheetTitle>
                 {rail}
@@ -330,7 +346,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
           {searching && list.data && (
             <p role="status" className="border-b border-hairline px-4 py-2 text-xs text-muted-foreground lg:px-6">{t('ledger.booksDesk.results', { count: list.data.total })}</p>
           )}
-          {list.isPending ? <DeskLoading /> : list.isError ? (
+          {showDrafts ? <LedgerDraftsList className="px-2 py-2 lg:px-4" /> : list.isPending ? <DeskLoading /> : list.isError ? (
             <div role="alert" className="px-4 py-8 text-sm text-destructive lg:px-6"><p>{apiErrorMessage(list.error)}</p><Button variant="outline" className="mt-3" onClick={() => void list.refetch()}>{t('ledger.booksDesk.retry')}</Button></div>
           ) : rows.length === 0 ? (
             <div className="max-w-prose px-4 py-10 text-sm lg:px-6">
@@ -599,6 +615,10 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
   const { t, i18n } = useTranslation()
   const userId = useAuth().user?.id
   const canSend = book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (userId !== undefined && book.created_by_user_id === userId))
+  const isLedgerBook = book.current_template_id === 'Ledger Book'
+  // The shown Revision (`version_id`) stays in the URL; empty = the newest I may read.
+  const [rawRev, setRev] = useSearchParam('rev')
+  const revision = isLedgerBook && /^\d+$/.test(rawRev) ? Number(rawRev) : undefined
   const [sendOpen, setSendOpen] = useState(false)
   const [pickedPaper, setPickedPaper] = useState<PaperKey | null>(null)
   const papers = useMemo(() => papersOf(book, { inmateReporter: false }), [book])
@@ -637,6 +657,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
         <span aria-hidden className="mx-1 hidden h-5 w-px shrink-0 bg-border sm:block" />
         {inboxActions.map((action) => <Button key={action.key} className="shrink-0" variant={action.key === 'done' ? 'default' : 'outline'} size="sm" disabled={action.pending} aria-busy={action.pending} onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
         {canSend && <Button className="shrink-0" variant="outline" size="sm" disabled={loading} onClick={() => setSendOpen(true)}><Send className="h-4 w-4 rtl:-scale-x-100" aria-hidden />{t('ledger.booksDesk.forward')}</Button>}
+        {isLedgerBook && !loading && <LedgerBookActions className="shrink-0" bookId={book.id} revision={revision} onRevisionChange={(versionId) => setRev(String(versionId))} />}
         {reply.actions.map((action) => <Button key={action.key} className="shrink-0" variant="outline" size="sm" onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
         <BookFolderMenu bookId={book.id} boxes={boxes} disabled={loading} />
         <div className="ms-auto flex shrink-0 items-center gap-1 ps-2">
@@ -655,7 +676,9 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
       </header>
       <div className={cn('flex min-w-0', isMobile ? 'shrink-0 flex-col' : 'min-h-0 flex-1')}>
         <div className={cn('flex min-w-0 flex-col', isMobile ? 'h-[65dvh] min-h-[24rem] shrink-0' : 'min-h-0 flex-1')}>
-          {loading ? <DeskLoading /> : papers.length === 0 ? (
+          {loading ? <DeskLoading /> : isLedgerBook ? (
+            <LedgerPaperFrame source={{ bookId: book.id, revision }} className="min-h-0 flex-1 rounded-none border-0" />
+          ) : papers.length === 0 ? (
             <DocumentState kind="empty" title={t('ledger.booksDesk.noDocument')} body={t('ledger.booksDesk.noDocumentHint')} />
           ) : <Suspense fallback={<DeskLoading />}><RecordPaperViewer papers={papers} selectedKey={selectedPaper} onSelectKey={setPickedPaper} mode="pane" initialFit="width" compact /></Suspense>}
         </div>
