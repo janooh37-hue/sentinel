@@ -1797,6 +1797,16 @@ body {
   .modal-centered[data-state] { animation: none !important; }
 }
 
+/* High importance (ImportanceMark): a slow opacity pulse, 2s per cycle, so it
+   draws the eye without flashing. Reduced motion stops it at steady full red. */
+@keyframes gssg-importance-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.gssg-importance-pulse {
+  animation: gssg-importance-pulse 2s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .anim-fade-up,
   .anim-stagger > *,
@@ -1806,7 +1816,8 @@ body {
   .anim-empty > .anim-empty-icon,
   .anim-empty > .anim-empty-text,
   .anim-check-settle,
-  .skeleton-shimmer {
+  .skeleton-shimmer,
+  .gssg-importance-pulse {
     animation: none;
   }
   .service-artwork img,
