@@ -4,7 +4,7 @@ ledger.{create,edit,delete} are independently denyable; smart folders ride
 the ledger ids.
 
 The pinpoint scenario: a manager with a ``deny`` override on one atomic child
-keeps every other action. Operator (view-only) gets 403 everywhere writey.
+keeps every other action, and a denied child closes only its own routes.
 
 Auth pattern mirrors test_granular_people_gates.py: shared ``api_db`` fixture
 (temp-file SQLite, cross-thread safe), override get_db + get_current_user,
@@ -37,8 +37,10 @@ def _client(db: Session, user: User) -> TestClient:
     return TestClient(app, raise_server_exceptions=True)
 
 
-def test_operator_cannot_create_permit(api_db):
+def test_create_permit_needs_permits_create(api_db):
     u = _user(api_db, "operator", "pc@x.ae")
+    api_db.add(UserPermission(user_id=u.id, capability="permits.create", effect="deny"))
+    api_db.commit()
     r = _client(api_db, u).post("/api/v1/permits", json={})
     assert r.status_code == 403
     assert r.json()["error"]["details"]["capability"] == "permits.create"
@@ -84,20 +86,20 @@ def test_permit_revoke_is_its_own_gate(api_db):
 
 def test_permit_delete_does_not_cover_create(api_db):
     u = _user(api_db, "operator", "pd@x.ae")
-    api_db.add(UserPermission(user_id=u.id, capability="permits.create", effect="grant"))
-    api_db.commit()
     c = _client(api_db, u)
-    # create passes for the operator now…
+    # create passes for the operator…
     assert c.post("/api/v1/permits", json={}).status_code in (201, 422)
-    # …but delete stays closed (the create grant doesn't reach it).
+    # …but delete stays closed (holding create doesn't reach it).
     r = c.delete("/api/v1/permits/999999")
     assert r.status_code == 403
     assert r.json()["error"]["details"]["capability"] == "permits.delete"
 
 
 def test_scan_helpers_need_permits_edit(api_db):
-    """OCR helpers moved off create: plain operator 403s on permits.edit."""
+    """OCR helpers moved off create: a permits.edit deny closes them."""
     u = _user(api_db, "operator", "ps@x.ae")
+    api_db.add(UserPermission(user_id=u.id, capability="permits.edit", effect="deny"))
+    api_db.commit()
     c = _client(api_db, u)
     for url in ("/api/v1/permits/scan-vehicle-licence", "/api/v1/permits/scan-emirates-id"):
         r = c.post(url, files={"file": ("m.jpg", b"x", "image/jpeg")})

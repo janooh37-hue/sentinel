@@ -351,6 +351,8 @@ def test_set_supervisor_denies_viewer_without_edit(api_db: Session) -> None:
     api_db.add_all([employee, supervisor])
     api_db.commit()
     viewer = _user(api_db, email="tree-readonly@test.ae")
+    api_db.add(UserPermission(user_id=viewer.id, capability="employees.edit", effect="deny"))
+    api_db.commit()
 
     response = _client(api_db, viewer).patch(
         f"/api/v1/org-tree/{employee.id}/supervisor",

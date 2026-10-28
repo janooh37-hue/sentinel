@@ -69,8 +69,10 @@ def client(api_db) -> TestClient:
 
 @pytest.fixture()
 def viewer_client(api_db) -> TestClient:
-    """An operator: ``leaves.view`` only — can see absences, cannot mark them."""
-    return _client_for(api_db, "operator", "ops@x.ae")
+    """An operator whose ``leaves.edit`` is denied: sees absences, cannot mark them."""
+    client = _client_for(api_db, "operator", "ops@x.ae")
+    perm_service.set_user_override(api_db, client.user_id, "leaves.edit", "deny")  # type: ignore[attr-defined]
+    return client
 
 
 def test_post_creates_one_row_per_day(client, db_session):

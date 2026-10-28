@@ -148,8 +148,18 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "employees",
         "Edit employee profiles",
         "تعديل بيانات الموظفين",
-        "Edit profiles, photos, signature, and passport data.",
-        "تعديل البيانات والصور والتوقيع وبيانات جواز السفر.",
+        "Edit profiles, photos, and passport data.",
+        "تعديل البيانات والصور وبيانات جواز السفر.",
+    ),
+    Capability(
+        "employees.signature.manage",
+        "employees",
+        "Manage employee signatures",
+        "إدارة تواقيع الموظفين",
+        "Upload, replace, or remove the saved signature on any employee profile. "
+        "A linked user signs approvals with this same file.",
+        "رفع التوقيع المحفوظ في ملف أي موظف أو استبداله أو إزالته. "
+        "يعتمد المستخدم المرتبط بالموظف المعاملات بهذا الملف نفسه.",
     ),
     Capability(
         "employees.vault.manage",
@@ -608,23 +618,40 @@ ALL_CAPABILITIES: Final[frozenset[str]] = CAPABILITY_IDS
 
 
 # ─── Role presets ───────────────────────────────────────────────────────────────
-# Operator: read-only across the app + the daily-work write surfaces (document
-# generation, ledger entries, and Outlook handoff, including entry deletion —
-# ledger.delete was held pre-split and is preserved).
-# Manager: adds the management writes. Admin: everything.
+# Operator (shown as "Employee" / «موظف»): views the whole app and does the
+# daily work — create, edit, and submit leaves, violations, records, permits,
+# and employee files, plus generation, scanning, and the ledger (ledger.delete
+# was held pre-split and is preserved).
+# Manager: adds what is destructive, approves, governs shared configuration,
+# or acts on someone's identity: deletes and revocations, approval, Word and
+# editor templates, submitters, time-sheet correction and month close,
+# employee notifications, and employee signatures.
+# Admin: everything.
 _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
     {
         "app.access",
         "employees.view",
+        "employees.create",
+        "employees.edit",
+        "employees.vault.manage",
         "expiry.view",
         "leaves.view",
+        "leaves.create",
+        "leaves.edit",
         "timesheet.view",
         "violations.view",
+        "violations.create",
+        "violations.edit",
         "documents.generate",
         "documents.duty_transfer",
         "documents.scan",
         "books.view",
+        "books.create",
+        "books.edit",
+        "books.submit",
         "permits.view",
+        "permits.create",
+        "permits.edit",
         "ledger.view",
         "ledger.create",
         "ledger.edit",
@@ -636,34 +663,20 @@ _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
     }
 )
 
-# Atomic equivalents of the old bundled manager grants, plus the newer
-# per-domain grants upstream presets carry (timesheet). Workforce is
-# intentionally absent: it always needs an explicit grant + scope.
+# Workforce is intentionally absent: it always needs an explicit grant + scope.
 _MANAGER_EXTRA: Final[frozenset[str]] = frozenset(
     {
         "inmate_statistics.review",
         "inmate_statistics.approve",
-        "employees.create",
-        "employees.edit",
-        "employees.vault.manage",
+        "employees.signature.manage",
         "employees.notify",
-        "leaves.create",
-        "leaves.edit",
         "leaves.delete",
-        "violations.create",
-        "violations.edit",
         "violations.delete",
-        "books.create",
-        "books.edit",
-        "books.submit",
         "books.templates",
         "books.delete",
         "books.approve",
-        "permits.create",
-        "permits.edit",
         "permits.revoke",
         "permits.delete",
-        "ledger.delete",
         "submitters.manage",
         "editor_templates.manage",
         "timesheet.edit",

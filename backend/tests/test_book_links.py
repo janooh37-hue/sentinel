@@ -164,6 +164,7 @@ def test_links_require_edit_capability(links_api: LinkApi, actor: str) -> None:
     api.db.add(row)
     api.db.commit()
     api.as_user(actor)
+    perm_service.set_user_override(api.db, api.actor.id, "books.edit", "deny")
     assert perm_service.has_capability(api.db, api.actor, "books.view")
     assert not perm_service.has_capability(api.db, api.actor, "books.edit")
     if actor == "sender":
