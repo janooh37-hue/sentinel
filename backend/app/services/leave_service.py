@@ -26,7 +26,7 @@ from app.core import leave_lifecycle
 from app.core.leave_calc import TOTAL_AVAILABLE_CAP, LeaveBalance
 from app.db.models import AuditLog, Document, Employee, Leave, Manager, User
 from app.schemas.leave import LeaveBalanceRead, LeaveCreate, LeaveStatus, LeaveUpdate
-from app.services import book_service, document_service, user_signature_service
+from app.services import book_service, document_service, leave_record_sync, user_signature_service
 
 # ---------------------------------------------------------------------------
 _WORKFORCE_TIMEZONE = ZoneInfo("Asia/Dubai")
@@ -326,6 +326,7 @@ def update_leave(
 ) -> Leave:
     """Apply a PATCH payload with per-kind lifecycle enforcement."""
     row = get_leave(db, leave_id)
+    old_start, old_end, old_days = row.start_date, row.end_date, row.days
     before = _workforce_leave_snapshot(row)
     status_changed = False
     if payload.status is not None:
@@ -364,7 +365,7 @@ def update_leave(
         row.start_date = new_start
         row.end_date = new_end
         row.days = (new_end - new_start).days + 1
-        dates_changed = True
+        dates_changed = new_start != old_start or new_end != old_end
         _audit(
             db,
             "leave.dates_changed",
@@ -387,6 +388,10 @@ def update_leave(
                 if status_changed and not dates_changed
                 else "LEAVE_DATES_AMENDED"
             ),
+        )
+    if dates_changed:
+        leave_record_sync.sync_leave_record(
+            db, row, old_start=old_start, old_end=old_end, old_days=old_days, actor=actor
         )
     db.commit()
     db.refresh(row)
@@ -412,6 +417,7 @@ def amend_approved_leave(
     (start fixed), reason required. Notifies the employee (best-effort) with
     old vs new duration and the reason. Spec 2026-07-15."""
     row = get_leave(db, leave_id)
+    old_start, old_end = row.start_date, row.end_date
     before = _workforce_leave_snapshot(row)
     if not leave_lifecycle.can_amend(row.leave_type, row.status):
         raise ValidationFailedError(
@@ -443,6 +449,10 @@ def amend_approved_leave(
         after=row,
         reason_code="LEAVE_AMENDED",
     )
+    if end_date != old_end:
+        leave_record_sync.sync_leave_record(
+            db, row, old_start=old_start, old_end=old_end, old_days=old_days, actor=actor
+        )
     db.commit()
     db.refresh(row)
     _cache_invalidate_employee(row.employee_id)
