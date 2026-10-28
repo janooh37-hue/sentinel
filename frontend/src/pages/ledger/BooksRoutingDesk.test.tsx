@@ -401,8 +401,12 @@ describe('Books routing desk', () => {
     mount()
     for (const [index, label] of ['For information', 'For action', 'For reply', 'For circulation'].entries()) {
       const row = await screen.findByRole('button', { name: new RegExp(`GS-${index + 1}`) })
-      const mark = within(row).getByText(label)
+      // Icon only in the row: no visible label, but the purpose names the mark and joins the row's name.
+      expect(row).not.toHaveTextContent(label)
+      expect(row).toHaveAccessibleName(expect.stringContaining(label))
+      const mark = within(row).getByRole('img', { name: label })
       expect(mark).toHaveAttribute('data-purpose', purposes[index])
+      expect(mark).not.toHaveAttribute('tabindex')
       expect(mark.querySelector('svg')?.getAttribute('class')).toMatch(/lucide-/)
       expect(mark.closest('[data-testid="grade-mark"]')).toBeNull()
       expect(within(row).getByTestId('grade-mark')).toHaveTextContent('Secret')
@@ -513,7 +517,7 @@ describe('Books routing desk (Arabic)', () => {
     mount()
     const desk = screen.getByRole('region', { name: 'الكتب' })
     await screen.findByRole('button', { name: /GS-1/ })
-    for (const label of ['للاطلاع', 'للتنفيذ', 'للإفادة', 'للتعميم']) expect(within(desk).getByText(label)).toBeInTheDocument()
+    for (const label of ['للاطلاع', 'للتنفيذ', 'للإفادة', 'للتعميم']) expect(within(desk).getByRole('img', { name: label })).toBeInTheDocument()
     expect(rendered(desk)).not.toMatch(/[A-Za-z]/)
     await userEvent.click(screen.getByRole('button', { name: /GS-2/ }))
     await screen.findByRole('button', { name: 'العودة إلى الكتب' })

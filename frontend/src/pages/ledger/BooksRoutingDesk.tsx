@@ -625,7 +625,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
       </div>
       <header className="shrink-0 border-b border-hairline px-4 py-4 lg:px-6">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
-          {inbox && <PurposeMark purpose={inbox.purpose} />}
+          {inbox && <PurposeMark purpose={inbox.purpose} showLabel />}
           <bdi dir="ltr" className="font-mono text-xs tabular-nums text-muted-foreground">{book.ref_number}</bdi>
           <GradeMark level={book.grade} />
         </div>

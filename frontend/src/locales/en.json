@@ -2145,6 +2145,12 @@
       "high": "Urgent",
       "veryHigh": "Very Urgent"
     },
+    "importance": {
+      "label": "Importance",
+      "high": "High",
+      "medium": "Medium",
+      "none": "None"
+    },
     "send": {
       "menu": "Send to…",
       "hint": "Send this record to people in the system",
