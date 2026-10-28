@@ -66,6 +66,7 @@ Other pages will be appended under §4 as they're documented.
 5. Animation appendix
 6. Not yet documented
 7. Ledger Books workspace
+   7.1  Ledger Book composer
 ```
 
 ---
@@ -2493,3 +2494,40 @@ will trip over them.
   book in place (replace), or return to the list when the scope is empty.
 - Dates are `DD/MM/YYYY` with Western digits (`formatDmy`, `dir="ltr"` mono) in
   both languages, per §1.7.
+
+### 7.1 Ledger Book composer
+
+- Routes: `/ledger/compose` creates one private draft and replaces the URL with
+  `/ledger/compose/:draftId`; `/ledger/books/:bookId/edit` is the content editor
+  for an issued book. Code: `pages/ledger/composer/`; desk-facing pieces in
+  `components/books/` (`NewLedgerBookButton`, `LedgerDraftsList`,
+  `LedgerPaperFrame`, `LedgerBookActions`).
+- Header: Back to Ledger (ghost link, arrow mirrored in RTL), `h1` "Ledger Book
+  · DRAFT / مسودة {n}" (`<bdi>`), the save state (`role="status"`: Saving… /
+  Saved / Not saved in `text-destructive`), then Preview, Delete draft and
+  Save & Send (the only `default` button). On mobile the actions wrap to their
+  own row and Save & Send grows.
+- A grade banner follows the header in the grade's `GRADE_META` tone with its
+  icon and text ("Grade: Secret"); Unclassified is `bg-muted`.
+- Fields: Tab (native select, "{tab} — {name}" in the UI language), Grade
+  (`GradeSelect`), Importance (radio group None / Medium / High; Medium and High
+  carry the `ImportanceMark` glyphs, never colour alone), ordered Subject lines
+  (numbered; move up/down and remove are 40 px icon buttons; Add line stops at
+  20; one line always stays; the first line is the subject and is bold), Body in
+  HugeRTE (minimal toolbar plus image upload to the draft).
+- Autosave: 800 ms after the last change, PATCH only the changed fields. A
+  failed save keeps them pending and the next change sends them again.
+- Preview opens the server paper beside the form on `lg` (sticky) and below it
+  on smaller screens, in `LedgerPaperFrame`: `sandbox="allow-same-origin
+  allow-modals"`, no scripts. It reloads after every accepted save.
+- Save & Send and Delete draft confirm with `ConfirmDialog`. Save & Send
+  refusals (`DRAFT_TAB_REQUIRED`, `DRAFT_SUBJECT_REQUIRED`,
+  `DRAFT_BODY_REQUIRED`) show their translated message under the field
+  (`role="alert"`, `aria-invalid`, `aria-describedby`); other errors toast.
+- Issued books: `LedgerBookActions` holds Print (opens the paper in the
+  `ledger-book-<id>` window and prints it), the Revision picker ("Revision n",
+  "(signed)" when locked) and, for the writer only, Edit content (latest
+  Revision unsigned) or Start correction (latest Revision signed). The content
+  editor shows a locked Revision read-only with a `Lock` note.
+- Logical properties only (`ms/me/ps/pe`, `start/end`); the composer test
+  rejects physical direction utilities.
