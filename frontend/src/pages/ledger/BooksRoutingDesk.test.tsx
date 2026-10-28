@@ -180,6 +180,87 @@ describe('Books routing desk', () => {
     expect(row).not.toHaveTextContent('Unclassified')
   })
 
+  const columns = (root: Element): (string | null)[] => Array.from(root.querySelectorAll(':scope > [data-column], :scope > * > [data-column]'), (cell) => cell.getAttribute('data-column'))
+
+  // T-L1 (O-5)
+  it('gives Purpose, Grade and Importance their own centred columns before Ref, in the header and the row', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...LEDGER, grade: 'secret', importance: 'high' }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    const header = screen.getByRole('button', { name: /^Sort by Purpose/ }).closest('[data-desk-header]')!
+    const order = ['purpose', 'grade', 'importance', 'ref', 'subject', 'from', 'to', 'signer', 'state', 'date']
+    expect(columns(header)).toEqual(order)
+    expect(columns(row).slice(0, 5)).toEqual(order.slice(0, 5))
+    for (const [column, name] of [['purpose', 'For action'], ['grade', 'Record grade: Secret'], ['importance', 'Importance: High']]) {
+      const cell = row.querySelector(`[data-column="${column}"]`) as HTMLElement
+      expect(within(cell).getAllByRole('img')).toHaveLength(1)
+      expect(within(cell).getByRole('img', { name })).toBeInTheDocument()
+      expect(cell).toHaveClass('xl:justify-center')
+      expect(header.querySelector(`[data-column="${column}"]`)).toHaveClass('xl:justify-center')
+    }
+    // The grade left the Subject header for its own column.
+    expect(header.querySelector('[data-column="subject"]')).not.toHaveTextContent('Grade')
+    expect(header.querySelector('[data-column="importance"]')).toHaveTextContent('Importance')
+  })
+
+  // T-L3
+  it.each([false, true])('leaves the category out of the row (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    const category = { id: 'GC', name_en: 'General correspondence', name_ar: 'المراسلات العامة', prefix: 'GC', requires_approval: false }
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, category } as BookRead], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(row).not.toHaveTextContent('General correspondence')
+  })
+
+  // T-L4
+  it.each([
+    [{ read_at: null }, 'New'],
+    [{ read_at: '2026-10-13T09:00:00Z' }, 'Read'],
+    [{ read_at: '2026-10-13T09:00:00Z', done_at: '2026-10-14T09:00:00Z' }, 'Done'],
+    [{ read_at: '2026-10-13T09:00:00Z', archived_at: '2026-10-14T09:00:00Z' }, 'Archived'],
+  ])('shows only my own state in the state cell (%o)', async (inbox, state) => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, my_inbox: { ...BOOK.my_inbox!, ...inbox } }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(row.querySelector('[data-column="state"]')).toHaveTextContent(new RegExp(`^${state}$`))
+  })
+
+  // T-L4 (O-4)
+  it.each([false, true])('shows a simple Sent state for a book I sent, without opened/done counters (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, my_inbox: null, recipients: [
+      { id: 2, user_id: 2, user_name: 'Khalid', sent_by_user_id: 1, purpose: 'action', created_at: '2026-10-12T09:00:00Z', can_recall: true, read_at: '2026-10-12T10:00:00Z', done_at: '2026-10-12T11:00:00Z' },
+      { id: 3, user_id: 3, user_name: 'Salim', sent_by_user_id: 1, purpose: 'action', created_at: '2026-10-12T09:00:00Z', can_recall: true },
+    ] }], total: 1, limit: 50, offset: 0 })
+    mount('/ledger?tab=books&scope=outgoing')
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(row.querySelector('[data-column="state"]')).toHaveTextContent(/^Sent$/)
+    expect(row).not.toHaveTextContent(/(^|[^\d/])[0-2]\/2($|[^\d/])/)
+    expect(row).not.toHaveAccessibleName(expect.stringMatching(/Opened by|Done by/))
+  })
+
+  // T-L6
+  it.each([false, true])('shows people by designation, with the name only in the tooltip and accessible name (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{
+      ...BOOK, signer_name: 'Juma Saadi', signer_title: 'Director',
+      my_inbox: { ...BOOK.my_inbox!, sent_by_title: 'Operations manager', sent_by_title_ar: 'مدير العمليات' },
+      recipients: [{ id: 2, user_id: 2, user_name: 'Aisha', user_title: 'HR officer', sent_by_user_id: 2, purpose: 'action', created_at: '2026-10-12T09:00:00Z', can_recall: false }],
+    }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    for (const [label, title, name] of [['From', 'Operations manager', 'Khalid'], ['To', 'HR officer', 'Aisha'], ['Signatory', 'Director', 'Juma Saadi']]) {
+      expect(row).toHaveTextContent(title)
+      expect(row).not.toHaveTextContent(name)
+      const person = within(row).getByRole('img', { name: `${label}: ${title} (${name})` })
+      expect(person).not.toHaveAttribute('tabindex')
+      expect(row).toHaveAccessibleName(expect.stringContaining(name))
+    }
+    await userEvent.hover(within(row).getByRole('img', { name: /^From:/ }))
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Operations manager (Khalid)')
+  })
+
   it.each([
     ['incoming', 'received'], ['done', 'done'], ['outgoing', 'sent'], ['archived', 'archived'],
   ])('maps the %s URL scope to inbox=%s', async (scope, inbox) => {
@@ -277,18 +358,10 @@ describe('Books routing desk', () => {
     mount('/ledger?tab=books&folder=3')
     const row = await screen.findByRole('button', { name: /GS-7/ })
     expect(row).toHaveTextContent('Filed by \u2068Aisha\u2069 · 15/10/2026')
-    const subject = within(row).getByText('Staff instruction').parentElement!.parentElement!
+    const subject = row.querySelector('[data-column="subject"]')!
     expect(subject).toHaveTextContent('Filed by \u2068Aisha\u2069')
   })
 
-  it('shows the sender designation with the name below it', async () => {
-    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, my_inbox: { ...BOOK.my_inbox!, sent_by_title: 'Operations manager', sent_by_title_ar: 'مدير العمليات' } }], total: 1, limit: 50, offset: 0 })
-    mount()
-    const row = await screen.findByRole('button', { name: /GS-7/ })
-    const cell = within(row).getByTitle('Operations manager (Khalid)')
-    expect(within(cell).getByText('Operations manager')).toBeInTheDocument()
-    expect(within(cell).getByText('Khalid')).toBeInTheDocument()
-  })
 
   it('creates a personal folder inline with Enter', async () => {
     vi.spyOn(api, 'createBookFolder').mockResolvedValue({ ...FOLDER, id: 4, name: 'Planning', count: 0 })
@@ -506,7 +579,7 @@ describe('Books routing desk', () => {
     expect(await screen.findByRole('button', { name: /GS-7/ })).toBeInTheDocument()
   })
 
-  it('shows an outgoing book with its recipients, my note and their read/done progress', async () => {
+  it('shows an outgoing book with its recipients and my note, leaving their progress to the record', async () => {
     const recipient = (id: number, name: string, extra: object = {}) => ({
       id, user_id: id, user_name: name, sent_by_user_id: 1, purpose: 'action' as const, note: 'Count by Thursday',
       created_at: '2026-10-12T09:00:00Z', can_recall: true, ...extra,
@@ -525,11 +598,11 @@ describe('Books routing desk', () => {
     const row = await screen.findByRole('button', { name: /GS-7/ })
     expect(row).toHaveTextContent('Khalid +2')
     expect(row).not.toHaveTextContent('Forwarded')
-    expect(row).toHaveTextContent('Count by Thursday')
+    // The note keeps the row to one line: an icon whose name carries the text.
+    expect(within(row).getByRole('img', { name: 'Note: Count by Thursday' })).toBeInTheDocument()
     expect(row).toHaveTextContent('Juma Saadi')
     expect(within(row).getByRole('img', { name: 'Importance: Medium' })).toBeInTheDocument()
-    expect(within(row).getByText('Opened by 2 of 3')).toBeInTheDocument()
-    expect(within(row).getByText('Done by 1 of 3')).toBeInTheDocument()
+    expect(row).not.toHaveTextContent(/Opened by|Done by|(^|[^\d/])[0-3]\/3($|[^\d/])/)
   })
 })
 

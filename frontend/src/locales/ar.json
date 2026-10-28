@@ -3098,7 +3098,8 @@
       "state": {
         "unread": "جديد",
         "read": "مقروء",
-        "archived": "مؤرشف"
+        "archived": "مؤرشف",
+        "sent": "مرسل"
       },
       "openInRecords": "فتح في المستندات",
       "details": "التفاصيل",

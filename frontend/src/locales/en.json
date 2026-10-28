@@ -2847,7 +2847,8 @@
       "state": {
         "unread": "New",
         "read": "Read",
-        "archived": "Archived"
+        "archived": "Archived",
+        "sent": "Sent"
       },
       "openInRecords": "Open in Records",
       "details": "Details",
