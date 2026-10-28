@@ -4,7 +4,13 @@ import i18n from 'i18next'
 import { afterEach, describe, expect, it } from 'vitest'
 import ar from '@/locales/ar.json'
 
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { ImportanceMark, importanceOf } from './ImportanceMark'
+
+// Vitest is run from frontend/ (pnpm -C frontend).
+const css = readFileSync(resolve('src/index.css'), 'utf8')
 
 afterEach(async () => {
   cleanup()
@@ -13,12 +19,19 @@ afterEach(async () => {
 
 describe('ImportanceMark', () => {
   // T-F1
-  it('marks high importance red with its own glyph and a slow pulse', () => {
+  it('marks high importance red with its own glyph and a slow pulse that reduced motion stops', async () => {
     render(<ImportanceMark importance="high" />)
     const mark = screen.getByRole('img', { name: 'Importance: High' })
     expect(mark).toHaveAttribute('data-importance', 'high')
     expect(mark).toHaveClass('text-destructive', 'gssg-importance-pulse')
     expect(mark.querySelector('svg')).not.toBeNull()
+    const reduced = [...css.matchAll(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/g)].map((m) => m[1]).join('\n')
+    expect(reduced).toMatch(/\.gssg-importance-pulse\s*\{[^}]*animation: none/)
+    cleanup()
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage('ar')
+    render(<ImportanceMark importance="high" />)
+    expect(screen.getByRole('img', { name: 'الأهمية: عالية' })).toBeInTheDocument()
   })
 
   // T-F2
@@ -65,6 +78,15 @@ describe('ImportanceMark', () => {
     await userEvent.tab()
     expect(screen.getByRole('button', { name: 'الأهمية: متوسطة' })).toHaveFocus()
     expect(await screen.findByRole('tooltip')).toHaveTextContent('الأهمية: متوسطة')
+  })
+
+  // T-F4
+  it('shows its tooltip on hover inside a row, without becoming focusable', async () => {
+    render(<ImportanceMark importance="high" />)
+    const mark = screen.getByRole('img', { name: 'Importance: High' })
+    expect(mark).not.toHaveAttribute('tabindex')
+    await userEvent.hover(mark)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Importance: High')
   })
 
   it('standalone, it opens on tap', async () => {

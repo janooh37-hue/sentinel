@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { DragEvent, ReactNode } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Archive, ArrowDownUp, ArrowLeft, BookText, Check, CheckCheck, ChevronDown, ChevronUp, Eye, FileText, Flag,
+  Archive, ArrowDownUp, ArrowLeft, BookText, Check, CheckCheck, ChevronDown, ChevronUp, Eye, FileText,
   Folder, FolderPlus, Maximize2, MessageSquareText, Minimize2, Search, Send, X,
 } from 'lucide-react'
 import { CheckboxItem, ItemIndicator } from '@radix-ui/react-dropdown-menu'
@@ -12,6 +12,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 
 import { GradeMark } from '@/components/books/GradeChip'
 import { DocumentState } from '@/components/books/DocumentState'
+import { ImportanceMark, importanceOf } from '@/components/books/ImportanceMark'
 import { PurposeMark } from '@/components/books/PurposeMark'
 import { RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
 import { RecordThreadSection } from '@/components/books/RecordThreadSection'
@@ -452,15 +453,11 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen
         <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
           <span dir="auto" className={cn('min-w-0 break-words', inbox && !inbox.read_at ? 'font-semibold' : 'font-medium')}>{book.subject || t('ledger.booksDesk.untitled')}</span>
           {papers > 1 && <PaperCount count={papers} />}
-          {(book.urgency === 'High' || book.urgency === 'Very High') && (
-            <span className={cn('inline-flex shrink-0 items-center gap-1 text-xs font-semibold', book.urgency === 'Very High' ? 'text-destructive' : 'text-warning')}>
-              <Flag className="h-3.5 w-3.5 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden />{t(`books.urgency.${book.urgency === 'Very High' ? 'veryHigh' : 'high'}`)}
-            </span>
-          )}
         </span>
         <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
           {category && <bdi className="min-w-0 truncate">{category}</bdi>}
           <GradeMark level={book.grade} />
+          <ImportanceMark importance={importanceOf(book)} />
         </span>
         {inFolder && (book.filed_by_name || book.filed_by_name_ar || book.filed_at) && (
           <span className="mt-1 block text-xs text-muted-foreground">
@@ -628,6 +625,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
           {inbox && <PurposeMark purpose={inbox.purpose} showLabel />}
           <bdi dir="ltr" className="font-mono text-xs tabular-nums text-muted-foreground">{book.ref_number}</bdi>
           <GradeMark level={book.grade} />
+          <ImportanceMark importance={importanceOf(book)} interactive />
         </div>
         <h2 id={titleId} className="mt-2 max-w-[75ch] break-words text-xl font-semibold leading-snug tracking-tight"><bdi>{book.subject || t('ledger.booksDesk.untitled')}</bdi></h2>
       </header>
