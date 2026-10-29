@@ -7,13 +7,13 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { defaultDraftText, renderDraftSample } from '@/lib/draftTemplates'
 import {
-  draftTokensFor, TEMPLATES_CAP, useDraftTemplates, useResetDraftTemplate, useSaveDraftTemplate,
+  draftTokensFor, templateViewCapability, TEMPLATES_CAP, useDraftTemplates, useResetDraftTemplate, useSaveDraftTemplate,
 } from '@/lib/messageTemplates'
 import type { DraftTemplateFields, DraftTemplatesRead } from '@/lib/messageTemplates'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { normalizeDigits } from '@/lib/utils'
 import { TemplateTokens } from './TemplateTokens'
-import { templateErrorMessage, useTokenInsertion } from './templateEditing'
+import { isTemplateUnavailable, templateErrorMessage, useTokenInsertion } from './templateEditing'
 
 const fields = ['subject', 'intro', 'closing'] as const
 const editableValues = (value?: DraftTemplateFields) => ({
@@ -23,6 +23,10 @@ const editableValues = (value?: DraftTemplateFields) => ({
 export function EmailDraftEditor({ draftKey, label }: { draftKey: string; label: string }) {
   const query = useDraftTemplates()
   const { t } = useTranslation()
+  const { has, isLoading } = useCapabilities()
+  if (isLoading) return <p role="status" className="text-sm text-muted-foreground">{t('msgTemplates.editor.loading')}</p>
+  if (!has(templateViewCapability('email', draftKey)))
+    return <p role="status" className="text-sm text-muted-foreground">{t('msgTemplates.editor.unavailable')}</p>
   if (query.isPending) return <p role="status" className="text-sm text-muted-foreground">{t('msgTemplates.editor.loading')}</p>
   if (query.isError) return <div role="alert" className="space-y-2 text-sm"><p>{templateErrorMessage(query.error, t)}</p><Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" onClick={() => void query.refetch()}>{t('msgTemplates.editor.retry')}</Button></div>
   return <DraftEditor key={JSON.stringify([draftKey, query.data.overrides?.[draftKey]])} draftKey={draftKey} label={label} data={query.data} />
@@ -53,6 +57,9 @@ function DraftEditor({ draftKey, label, data }: { draftKey: string; label: strin
     setConfirmReset(false)
     toast.success(t('msgTemplates.editor.saved'))
   }
+
+  if (isTemplateUnavailable(error))
+    return <p role="status" className="text-sm text-muted-foreground">{t('msgTemplates.editor.unavailable')}</p>
 
   return (
     <section className="min-w-0 space-y-4 text-start" aria-labelledby={`${id}-title`}>

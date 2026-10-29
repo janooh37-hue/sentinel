@@ -5,6 +5,8 @@ import { api } from '@/lib/api'
 import { buildBasketBodyHtml, buildBasketSubject, defaultBasketDraftText } from '@/lib/basketEmail'
 import type { EmailBasketItem } from '@/lib/emailBasket'
 import type { DraftTemplateFields } from '@/lib/messageTemplates'
+import { templateViewCapability } from '@/lib/messageTemplates'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { buildAbsenceEmail, defaultAbsenceDraftText, type AbsenceEmailRow } from '@/pages/absences/absenceEmail'
 
 export type DraftOverrides = Record<string, DraftTemplateFields>
@@ -27,6 +29,7 @@ const FORM_LABELS: Record<string, string> = {
 
 export function useDraftVariants(): DraftVariant[] {
   const { t } = useTranslation()
+  const { has } = useCapabilities()
   const classifications = useQuery({
     queryKey: ['books', 'classifications'],
     queryFn: api.listBookClassifications,
@@ -62,7 +65,7 @@ export function useDraftVariants(): DraftVariant[] {
       services: ['General Book'],
     })
   }
-  return variants
+  return variants.filter((variant) => has(templateViewCapability('email', variant.key)))
 }
 
 export function draftKeysForService(variants: DraftVariant[], service: string): string[] {

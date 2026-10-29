@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
-from app.core.permissions import INMATE_REPORTER_CAPS, SENSITIVE_CAPABILITY_IDS
+from app.core.permissions import SENSITIVE_CAPABILITY_IDS
 from app.db.models import Book, BookApprovalStep, BookCategory, EditorTemplate, User, UserPermission
 from app.schemas.access import (
     AccessItem,
@@ -47,9 +47,10 @@ from app.services import (
     capability_catalog_service,
     perm_service,
     role_route_service,
+    template_capability_service,
 )
 
-RULE_VERSION = "permission-studio-2026-10-29.3"
+RULE_VERSION = "permission-studio-2026-10-29.4"
 
 
 def _utc(value: datetime | None) -> datetime | None:
@@ -145,6 +146,13 @@ def _cap_reasons(user: User, resolution, capability: str) -> list[Reason]:
     rows = {cap: (effect, expiry) for cap, effect, expiry in resolution.overrides}
     override = rows.get(capability)
     ignored = user.role == "admin"
+    expired_view_grant = (
+        override is not None
+        and override[0] == "grant"
+        and override[1] is not None
+        and override[1] <= resolution.evaluated_at
+        and capability in template_capability_service.capability_ids()
+    )
     reasons = [
         _reason(
             "ADMIN_POLICY"
@@ -158,8 +166,8 @@ def _cap_reasons(user: User, resolution, capability: str) -> list[Reason]:
             id=user.role,
             contribution="grant" if granted else "deny",
             capability=capability,
-            applied=override is None or ignored,
-            decisive=override is None or ignored,
+            applied=override is None or ignored or expired_view_grant,
+            decisive=override is None or ignored or expired_view_grant,
         )
     ]
     if override:
@@ -174,15 +182,17 @@ def _cap_reasons(user: User, resolution, capability: str) -> list[Reason]:
                 else "PERSONAL_" + effect.upper(),
                 kind="personal",
                 id=str(user.id),
-                contribution="deny" if expired else effect,
+                contribution="deny" if expired and not expired_view_grant else effect,
                 capability=capability,
-                applied=not ignored,
-                decisive=not ignored,
+                applied=not ignored and not expired_view_grant,
+                decisive=not ignored and not expired_view_grant,
                 expiry=expiry,
-                suppresses_default=expired and granted,
+                suppresses_default=expired and granted and not expired_view_grant,
             )
         )
-    if user.role == "inmate_reporter" and capability not in INMATE_REPORTER_CAPS:
+    if user.role == "inmate_reporter" and not template_capability_service.reporter_capability(
+        capability
+    ):
         reasons.append(_reason("REPORTER_CEILING", contribution="ceiling", capability=capability))
     return reasons
 
@@ -224,7 +234,7 @@ def _decision(
     effects = [None, "deny"]
     if not any(cap in SENSITIVE_CAPABILITY_IDS for cap in capabilities) and not (
         user.role == "inmate_reporter"
-        and any(cap not in INMATE_REPORTER_CAPS for cap in capabilities)
+        and any(not template_capability_service.reporter_capability(cap) for cap in capabilities)
     ):
         effects.insert(1, "grant")
     return Decision(
@@ -252,6 +262,8 @@ def _decision(
 
 
 def _action(capability: str) -> Action:
+    if capability in template_capability_service.capability_ids():
+        return Action.view
     suffix = capability.rsplit(".", 1)[-1]
     return Action(suffix) if suffix in Action._value2member_map_ else Action.manage
 
@@ -277,6 +289,9 @@ def _catalog(
     category_ids = frozenset(db.scalars(select(BookCategory.id)))
     items = []
     for entry in catalog:
+        # Explicit template action rows below already bind these catalog IDs.
+        if entry.id in template_capability_service.capability_ids():
+            continue
         resource = Resource(kind="capability", id=entry.id)
         decision = _evaluate(
             db,
@@ -369,6 +384,9 @@ def _catalog(
                 if identifier == "library"
                 else None
             )
+            if kind in ("notification_template", "email_template"):
+                entry = by_id[template_capability_service.view_capability(kind, str(identifier))]
+                label = LocalizedText(en=entry.label_en, ar=entry.label_ar or entry.label_en)
             items.append(
                 AccessItem(
                     resource=resource,
@@ -873,19 +891,17 @@ def _evaluate_action(
         ):
             raise AppError("NOT_FOUND", "Resource not found.", http_status=404)
         try:
-            guard = action_guard_service.template_decision(caps, resource.kind, action.value)
+            guard = action_guard_service.template_decision(
+                caps, resource.kind, action.value, resource.id
+            )
         except ValueError:
             _unsupported()
         if resource.kind in ("notification_template", "email_template"):
-            bindings = [] if action in (Action.view, Action.read) else ["messages.templates"]
-            warnings = [
-                Issue(
-                    code="TEMPLATES_REMAIN_VISIBLE",
-                    severity="info",
-                    capabilities=["messages.templates"],
-                )
-            ]
-            extra = [_reason("SIGNED_IN_TEMPLATE_VIEW", decisive=not bindings)]
+            view = template_capability_service.view_capability(resource.kind, resource.id)
+            bindings = (
+                [view] if action in (Action.view, Action.read) else ["messages.templates", view]
+            )
+            warnings, extra = [], []
         elif resource.kind == "word_template":
             bindings = ["books.edit" if action in (Action.view, Action.read) else "books.templates"]
             warnings, extra = [], []
@@ -1132,9 +1148,6 @@ def _evaluate(
     decision.reason_tree = ReasonNode(
         op="all", children=[ReasonReference(reason_index=len(decision.reasons) - 1)]
     )
-    decision.warnings = [
-        warning for warning in decision.warnings if warning.code != "TEMPLATES_REMAIN_VISIBLE"
-    ]
     return decision
 
 

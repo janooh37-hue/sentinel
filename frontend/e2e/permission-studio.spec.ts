@@ -164,12 +164,11 @@ for (const locale of ['en', 'ar'] as const) {
       const editName = `${strings.actions.edit} · ${notification.label[locale]}`
       const editRow = page.getByRole('article', { name: editName, exact: true })
       // Both catalog languages must find the same action in either UI language.
-      for (const query of ['notification wording', 'نص الإشعارات']) {
+      for (const query of [notification.label.en, notification.label.ar]) {
         await resourceSearch.fill(query)
         const results = page.getByRole('listbox', { name: strings.search.resources, exact: true })
         const editResult = results.getByRole('option').filter({ hasText: `notification_template:${notification.resource.id}:edit` })
         await expect(editResult).toHaveCount(1)
-        expect((await results.getByRole('option').allTextContents()).every((text) => text.includes('notification_template:'))).toBe(true)
         await editResult.click()
         await expect(editRow.getByRole('heading', { name: editName, exact: true })).toBeFocused()
         await expect(page.getByText(target.email, { exact: true })).toBeInViewport()
@@ -180,7 +179,6 @@ for (const locale of ['en', 'ar'] as const) {
       await resourceSearch.press('Escape')
       expect(authorizationWrites).toHaveLength(0)
       await editRow.getByRole('radio', { name: strings.settings.deny, exact: true }).check()
-      await expect(editRow.getByText(strings.residualView, { exact: true })).toBeVisible()
       const denied = await reviewAndSave(page, request, locale, baseline, [templateDeny])
       expect(authorizationWrites).toHaveLength(1)
       expect(personalSettings(denied)).toEqual([templateDeny])
@@ -260,6 +258,28 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(editRow.getByRole('radio', { name: strings.settings.allow, exact: true })).toBeChecked()
       await expect(editRow.getByText(strings.outcomes.allowed, { exact: true }).first()).toBeVisible()
       await expect(page.getByText(target.email, { exact: true })).toBeVisible()
+
+      // A personal view denial hides just this event, even with global edit
+      // allowed. Restoring edit explicitly reviews both prerequisite IDs.
+      const viewCapability = notification.actions.find(({ action }) => action === 'view')?.setting_capabilities[0]
+      expect(viewCapability).toBeTruthy()
+      if (!viewCapability) throw new Error('Per-template view binding is required')
+      const viewDeny: Patch = { capability: viewCapability, effect: 'deny', expires_at: null }
+      await viewRow.getByRole('radio', { name: strings.settings.deny, exact: true }).check()
+      const hidden = await reviewAndSave(page, request, locale, copied, [viewDeny])
+      const hiddenItem = hidden.items.find(({ resource }) => resource.kind === 'notification_template' && resource.id === notification.resource.id)
+      expect(hiddenItem?.actions.find(({ action }) => action === 'view')?.authorization).toBe('denied')
+      expect(hiddenItem?.actions.find(({ action }) => action === 'edit')?.authorization).toBe('denied')
+      await viewRow.locator('summary').filter({ hasText: strings.why.title }).click()
+      await expect(viewRow.getByText(strings.reasonCodes.PERSONAL_DENY, { exact: true }).first()).toBeVisible()
+
+      // Deny/Allow here uses the actual controls rather than bypassing them
+      // through an API patch, and the preview/save must carry both IDs.
+      await editRow.getByRole('radio', { name: strings.settings.deny, exact: true }).check()
+      await editRow.getByRole('radio', { name: strings.settings.allow, exact: true }).check()
+      const viewGrant: Patch = { capability: viewCapability, effect: 'grant', expires_at: null }
+      const restored = await reviewAndSave(page, request, locale, hidden, [templateGrant, viewGrant])
+      expect(restored.items.find(({ resource }) => resource.kind === 'notification_template' && resource.id === notification.resource.id)?.actions.every(({ authorization }) => authorization === 'allowed')).toBe(true)
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 
       await page.getByRole('button', { name: strings.backToAccounts, exact: true }).click()

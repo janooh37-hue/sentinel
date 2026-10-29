@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { request } from '@/lib/api'
 import type { components } from '@/lib/api.types'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 type Schemas = components['schemas']
 export type MessageTemplateRead = Schemas['MessageTemplateRead']
@@ -25,8 +26,12 @@ export const TEMPLATE_ERROR_CODES = [
   'UNKNOWN_KEY',
 ] as const
 
-/** Capability that unlocks editing; viewing needs none. */
+/** Editing additionally requires the specific template's view capability. */
 export const TEMPLATES_CAP = 'messages.templates'
+
+export function templateViewCapability(kind: 'notify' | 'email', id: string): string {
+  return `messages.templates.view.${kind}.${id}`
+}
 
 const enc = encodeURIComponent
 
@@ -50,7 +55,13 @@ export const MESSAGE_TEMPLATES_KEY = ['notify-templates'] as const
 export const DRAFT_TEMPLATES_KEY = ['email-draft-templates'] as const
 
 export function useMessageTemplates() {
-  return useQuery({ queryKey: MESSAGE_TEMPLATES_KEY, queryFn: messageTemplatesApi.list, staleTime: 60_000 })
+  const { has } = useCapabilities()
+  return useQuery({
+    queryKey: MESSAGE_TEMPLATES_KEY,
+    queryFn: messageTemplatesApi.list,
+    staleTime: 60_000,
+    select: (templates) => templates.filter((template) => has(templateViewCapability('notify', template.event))),
+  })
 }
 
 export function useSaveMessageTemplate() {

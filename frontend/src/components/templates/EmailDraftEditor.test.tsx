@@ -45,6 +45,36 @@ afterEach(async () => {
 })
 
 describe('EmailDraftEditor', () => {
+  it('does not reconstruct default wording or sample previews for a hidden draft', async () => {
+    has.mockImplementation((capability: string) => capability === 'messages.templates')
+    mount()
+    expect(screen.getByRole('status')).toHaveTextContent('This template is unavailable')
+    expect(screen.queryByText('الموضوع الافتراضي')).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(sample).not.toHaveBeenCalled()
+  })
+
+  it('unmounts cached wording and draft previews when view access is revoked', async () => {
+    const view = mount()
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Subject' }), { target: { value: 'عنوان غير محفوظ' } })
+    has.mockImplementation((capability: string) => capability !== 'messages.templates.view.email.leave:Annual')
+    view.refresh()
+    expect(screen.getByRole('status')).toHaveTextContent('This template is unavailable')
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.queryByText('الموضوع الافتراضي')).not.toBeInTheDocument()
+    expect(screen.queryByText('موضوع تجريبي')).not.toBeInTheDocument()
+  })
+
+  it('removes wording after a hidden-template save is refused with 404', async () => {
+    vi.mocked(messageTemplatesApi.saveDraft).mockRejectedValue(new ApiError(404, 'TEMPLATE_NOT_FOUND', 'Not found'))
+    mount()
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Subject' }), { target: { value: 'عنوان غير محفوظ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save template' }))
+    expect(await screen.findByText('This template is unavailable or you no longer have permission to view it.')).toBeVisible()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.queryByText('موضوع تجريبي')).not.toBeInTheDocument()
+  })
+
   it('keeps wording visible but removes edit and reset controls after capability loss', async () => {
     vi.mocked(messageTemplatesApi.drafts).mockResolvedValue({
       overrides: { 'leave:Annual': { subject: 'عنوان خاص' } }, tokens: { leave: ['names'] },
@@ -53,7 +83,7 @@ describe('EmailDraftEditor', () => {
     fireEvent.change(await screen.findByRole('textbox', { name: 'Subject' }), { target: { value: 'عنوان غير محفوظ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
     expect(screen.getByRole('button', { name: 'Confirm reset' })).toBeVisible()
-    has.mockReturnValue(false)
+    has.mockImplementation((capability: string) => capability !== 'messages.templates')
     view.refresh()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Confirm reset' })).not.toBeInTheDocument()
@@ -84,7 +114,7 @@ describe('EmailDraftEditor', () => {
     expect(screen.getByRole('textbox', { name: 'Subject' })).toHaveValue('عنوان غير محفوظ')
     expect(screen.getByText('Unsaved changes')).toBeVisible()
 
-    has.mockReturnValue(false)
+    has.mockImplementation((capability: string) => capability !== 'messages.templates')
     view.refresh()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     for (const value of ['عنوان محفوظ', 'مقدمة محفوظة', 'خاتمة محفوظة']) {
@@ -169,7 +199,7 @@ describe('EmailDraftEditor', () => {
   })
 
   it('shows defaults and preview without inputs or mutation controls in read-only mode', async () => {
-    has.mockReturnValue(false)
+    has.mockImplementation((capability: string) => capability !== 'messages.templates')
     const { container } = mount()
     expect(await screen.findByText('المقدمة الافتراضية')).toHaveAttribute('dir', 'rtl')
     expect(container.querySelector('textarea, input')).not.toBeInTheDocument()

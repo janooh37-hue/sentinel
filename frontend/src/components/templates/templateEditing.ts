@@ -55,10 +55,15 @@ function tokenList(names: unknown): string {
   )
 }
 
+export function isTemplateUnavailable(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404 && error.code === 'TEMPLATE_NOT_FOUND'
+}
+
 /** Localized message for a template API failure; never raw server/browser text.
  *  Lists the offending names: UNKNOWN_PLACEHOLDER details are `{ar: [...], en: [...]}`,
  *  UNKNOWN_TOKEN details are `{tokens: [...]}`. */
 export function templateErrorMessage(error: unknown, t: TFunction): string {
+  if (isTemplateUnavailable(error)) return t('msgTemplates.editor.unavailable')
   if (error instanceof ApiError && error.code === 'VALIDATION_ERROR' && Array.isArray(error.details.errors)) {
     const tooLong = error.details.errors.find((detail) => detail?.type === 'string_too_long')
     if (typeof tooLong?.ctx?.max_length === 'number') {

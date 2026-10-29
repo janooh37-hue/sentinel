@@ -38,16 +38,15 @@ from app.core.permissions import (
 )
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import BookCategory, RolePermission, User, UserPermission
+from app.services import template_capability_service
 
 
 def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
-    """Load role defaults and category defaults together in one query.
+    """Load role defaults and implicit configuration/service/category visibility.
 
-    ``inmate_reporter`` is a fixed, narrow-scope role: it must NOT receive the
-    implicit all-service/all-category union every other role gets (that union
-    is what makes ``books.category.*``/``books.service.*`` "dynamic" —
-    granted by default, deny-only). It gets only the two dynamic ids its
-    ceiling names; every other service/category is denied by omission.
+    The reporter retains its fixed service/category ceiling. Configuration
+    visibility defaults apply to every authenticated role; existing fixed-role
+    route restrictions still determine which endpoints that role can use.
     """
     if role == INMATE_REPORTER_ROLE:
         role_caps: set[str] = set(
@@ -57,7 +56,7 @@ def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
             cap
             for cap in INMATE_REPORTER_CAPS
             if cap.startswith(SERVICE_CAP_PREFIX) or cap.startswith(SERVICE_RECORDS_CAP_PREFIX)
-        }
+        } | set(template_capability_service.capability_ids())
         return role_caps, dynamic_caps
     tagged_caps = union_all(
         select(
@@ -74,6 +73,7 @@ def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
         set(AUTO_GRANTED_SERVICE_CAPABILITY_IDS)
         | set(AUTO_GRANTED_SERVICE_RECORDS_CAPABILITY_IDS)
         | set(CLASSIFICATION_CATEGORY_CAPABILITY_IDS)
+        | set(template_capability_service.capability_ids())
     )
     for capability, is_dynamic in db.execute(tagged_caps):
         if is_dynamic:
@@ -86,13 +86,13 @@ def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
 
 
 def role_default_caps_with_dynamic(db: Session, role: str) -> set[str]:
-    """Role defaults plus implicit service/category capabilities."""
+    """Role defaults plus implicit configuration/service/category capabilities."""
     role_caps, dynamic_caps = _role_and_dynamic_caps(db, role)
     caps = role_caps | dynamic_caps
     if role == INMATE_REPORTER_ROLE:
         # Hard ceiling: a stale/edited role_permissions row can never widen
         # this role beyond its fixed scope.
-        caps &= INMATE_REPORTER_CAPS
+        caps = {cap for cap in caps if template_capability_service.reporter_capability(cap)}
     return caps
 
 
@@ -105,11 +105,12 @@ def category_capability_ids(db: Session) -> set[str]:
 
 
 def dynamic_capability_ids(db: Session) -> set[str]:
-    """Implicitly granted service and category capabilities."""
+    """Recognized per-item configuration, service and category capability IDs."""
     return (
         set(SERVICE_CAPABILITY_IDS)
         | set(SERVICE_RECORDS_CAPABILITY_IDS)
         | category_capability_ids(db)
+        | set(template_capability_service.capability_ids())
     )
 
 
@@ -150,13 +151,20 @@ def resolve_capabilities(
     caps = set(baseline)
     if user.role != ADMIN_ROLE:
         for capability, (effect, expiry) in rows.items():
-            if effect == "deny" or (expiry is not None and expiry <= now):
+            if effect == "deny":
                 caps.discard(capability)
+            elif expiry is not None and expiry <= now:
+                # Configuration wording is default-visible: an expired Allow
+                # cannot manufacture a Deny, before or after expiry cleanup.
+                if capability not in template_capability_service.capability_ids():
+                    caps.discard(capability)
             elif effect == "grant":
                 caps.add(capability)
         if user.role == INMATE_REPORTER_ROLE:
-            caps &= INMATE_REPORTER_CAPS
-            baseline &= INMATE_REPORTER_CAPS
+            caps = {cap for cap in caps if template_capability_service.reporter_capability(cap)}
+            baseline = {
+                cap for cap in baseline if template_capability_service.reporter_capability(cap)
+            }
     expiries = [
         expiry
         for capability, (effect, expiry) in rows.items()
@@ -164,7 +172,10 @@ def resolve_capabilities(
         and expiry is not None
         and expiry > now
         and user.role != ADMIN_ROLE
-        and (user.role != INMATE_REPORTER_ROLE or capability in INMATE_REPORTER_CAPS)
+        and (
+            user.role != INMATE_REPORTER_ROLE
+            or template_capability_service.reporter_capability(capability)
+        )
     ]
     return CapabilityResolution(
         frozenset(caps),
@@ -226,6 +237,7 @@ def _validate_temporary_dynamic_grant(
         and existing.effect == "grant"
         and existing.expires_at is not None
         and existing.expires_at <= datetime.now(UTC).replace(tzinfo=None)
+        and capability not in template_capability_service.capability_ids()
     )
     restores_prior_deny = (
         existing is not None and existing.effect == "deny"
@@ -275,7 +287,7 @@ def _reject_inmate_reporter_scope_widening(
         target is not None
         and target.role == INMATE_REPORTER_ROLE
         and effect == "grant"
-        and capability not in INMATE_REPORTER_CAPS
+        and not template_capability_service.reporter_capability(capability)
     ):
         raise AppError(
             "INMATE_REPORTER_SCOPE_FIXED",
@@ -424,7 +436,7 @@ def denied_record_types(db: Session, user: User) -> tuple[set[str], set[str]]:
 
 
 def sweep_expired_grants(db: Session) -> int:
-    """Clean expired grants, restoring denies for current role/default caps."""
+    """Expire grants; template views revert to visible defaults, others retain policy."""
     now = datetime.now(UTC).replace(tzinfo=None)
     expired = list(
         db.scalars(
@@ -440,6 +452,9 @@ def sweep_expired_grants(db: Session) -> int:
     defaults_by_user: dict[int, set[str]] = {}
     for row in expired:
         affected_user_ids.add(row.user_id)
+        if row.capability in template_capability_service.capability_ids():
+            db.delete(row)
+            continue
         if row.user_id not in defaults_by_user:
             user = db.get(User, row.user_id)
             defaults_by_user[row.user_id] = (

@@ -105,3 +105,64 @@ def test_override_reaches_real_send_then_reset_restores_default(
         )
         assert rows[0].body == (expected_override if overridden else default)
         assert default != expected_override
+
+
+@pytest.mark.parametrize(
+    "path,event",
+    [
+        ("manual", "leave_approved"),
+        ("scheduled", "leave_ending"),
+        ("amended", "leave_amended"),
+    ],
+)
+@pytest.mark.parametrize("language", ["ar", "en"])
+def test_hidden_configuration_does_not_block_real_delivery(
+    api_db, send_client, path, event, language
+):
+    user = api_db.scalar(select(User).where(User.email == "send-template@test.ae"))
+    employee = Employee(
+        id="H1",
+        name_en="Hidden Recipient",
+        name_ar="مستلم الإشعار",
+        contact="0501234567",
+        msg_language=language,
+    )
+    leave = Leave(
+        employee=employee,
+        leave_type="Annual Leave",
+        status="Approved",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 30),
+        days=30,
+    )
+    api_db.add(leave)
+    api_db.commit()
+    draft = {"ar": "نص مخصص {name}", "en": "Custom text {name}"}
+    url = f"/api/v1/notify/templates/{event}"
+    assert send_client.put(url, json=draft).status_code == 200
+    perm_service.set_user_override(
+        api_db, user.id, f"messages.templates.view.notify.{event}", "deny"
+    )
+    perm_service.set_user_override(api_db, user.id, "messages.templates", "deny")
+    assert send_client.get(url).status_code == 404
+    assert send_client.delete(url).status_code == 404
+    if path == "manual":
+        response = send_client.post(
+            "/api/v1/notify/send", json={"event_type": event, "record_id": leave.id}
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "sent"
+    elif path == "scheduled":
+        assert notify_dispatch.send_ending_reminders(api_db, today=date(2026, 6, 28)) == 1
+    else:
+        notify_dispatch.auto_send_leave_amended(
+            api_db, leave.id, old_days=35, reason="Travel dates changed", sent_by=user.id
+        )
+    rows = api_db.scalars(
+        select(OutboundMessage).where(OutboundMessage.event_ref == f"{event}:{leave.id}")
+    ).all()
+    assert len(rows) == 1
+    assert rows[0].status == "sent"
+    assert rows[0].body == (
+        "نص مخصص مستلم الإشعار" if language == "ar" else "Custom text Hidden Recipient"
+    )

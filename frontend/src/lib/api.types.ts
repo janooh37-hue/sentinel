@@ -5338,7 +5338,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Read Template */
+        get: operations["read_template_api_v1_notify_templates__event__get"];
         /** Update Template */
         put: operations["update_template_api_v1_notify_templates__event__put"];
         post?: never;
@@ -29763,6 +29764,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageTemplateRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_template_api_v1_notify_templates__event__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTemplateRead"];
                 };
             };
             /** @description Validation Error */

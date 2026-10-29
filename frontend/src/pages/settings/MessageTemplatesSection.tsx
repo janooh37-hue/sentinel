@@ -1,4 +1,4 @@
-/** Settings overview shares the service editors; viewing needs no template capability. */
+/** Settings overview shares the service editors and their per-template view gates. */
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'

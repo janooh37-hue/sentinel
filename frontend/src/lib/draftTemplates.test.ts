@@ -10,6 +10,8 @@ import type { DraftOverrides } from '@/lib/draftTemplates'
 import type { EmailBasketItem } from '@/lib/emailBasket'
 import { deriveRecordItem } from '@/pages/books/recordsBasket'
 
+const { has } = vi.hoisted(() => ({ has: vi.fn<(capability: string) => boolean>(() => true) }))
+vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has }) }))
 const item: EmailBasketItem = {
   bookId: 1, docId: 2, ref: 'REF-1', employeeId: 'G1001',
   nameEn: 'Ahmed', nameAr: 'أحمد', formKind: 'General Book',
@@ -17,7 +19,10 @@ const item: EmailBasketItem = {
   bankName: 'Bank & Co', startDate: '2026-06-01', endDate: '2026-06-02',
 }
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  has.mockImplementation(() => true)
+})
 
 describe('draft template rendering', () => {
   it('resolves classification → generic → defaults separately for each field', () => {
@@ -152,6 +157,20 @@ describe('draft template rendering', () => {
     expect(result.current.find((variant) => variant.key === 'classification:15/1')?.label)
       .toEqual({ en: '15/1 — Class 15', ar: '15/1 — تصنيف 15' })
     unmount()
+    client.clear()
+
+    has.mockImplementation((capability: string) => ![
+      'messages.templates.view.email.classification:15/1',
+      'messages.templates.view.email.leave:Annual',
+      'messages.templates.view.email.absence:absent',
+    ].includes(capability))
+    const hidden = renderHook(useDraftVariants, {
+      wrapper: ({ children }) => createElement(QueryClientProvider, { client }, children),
+    })
+    await waitFor(() => expect(draftKeysForService(hidden.result.current, 'General Book')).toHaveLength(16))
+    expect(hidden.result.current.some((variant) => ['classification:15/1', 'leave:Annual', 'absence:absent'].includes(variant.key))).toBe(false)
+    expect(draftKeysForService(hidden.result.current, 'absences')).toEqual(['absence:returned'])
+    hidden.unmount()
     client.clear()
   })
 })

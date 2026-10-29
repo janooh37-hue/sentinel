@@ -18,7 +18,7 @@ from app.db.models import AppSetting, AuditLog, User, UserPermission
 from app.db.session import get_db
 from app.main import create_app
 from app.schemas.email_draft_template import EmailDraftTemplateParts
-from app.services import email_draft_template_service
+from app.services import email_draft_template_service, perm_service
 
 URL = "/api/v1/email/draft-templates"
 SETTING_KEY = "email.draft_templates"
@@ -297,3 +297,63 @@ def test_audit_is_scoped_to_variant_and_skips_noops(
         {"before": first, "after": second},
         {"before": second, "after": None},
     ]
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "General Book",
+        "classification:5/1",
+        "leave:Sick",
+        "Salary Transfer Request",
+        "General Book:transfer",
+        "absence:absent",
+        "absence:returned",
+    ],
+)
+def test_hidden_draft_is_omitted_from_lists_and_other_mutation_responses(
+    client: TestClient, api_db: Session, draft_user: User, key: str
+) -> None:
+    parts = {"subject": "Private wording {names}"}
+    assert client.put(_url(key), json=parts).status_code == 200
+    assert client.get(URL).json()["overrides"][key] == parts
+    view = f"messages.templates.view.email.{key}"
+    perm_service.set_user_override(api_db, draft_user.id, view, "deny")
+    assert key not in client.get(URL).json()["overrides"]
+    # Mutations return the shared collection: never leak hidden siblings.
+    other_key = "HR Request Form"
+    response = client.put(_url(other_key), json={"subject": "Other wording"})
+    assert response.status_code == 200
+    assert key not in response.json()["overrides"]
+    response = client.delete(_url(other_key))
+    assert response.status_code == 200
+    assert key not in response.json()["overrides"]
+    for response in (
+        client.put(_url(key), json={"subject": "Changed"}),
+        client.delete(_url(key)),
+    ):
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "TEMPLATE_NOT_FOUND"
+    assert json.loads(api_db.get(AppSetting, SETTING_KEY).value)[key] == parts
+    perm_service.set_user_override(api_db, draft_user.id, view, None)
+    assert client.get(URL).json()["overrides"][key] == parts
+
+
+def test_draft_visibility_is_personal_and_never_leaks_through_general_settings(
+    client: TestClient, api_db: Session, draft_user: User
+) -> None:
+    parts = {"subject": "Hidden configuration wording"}
+    assert client.put(_url("General Book"), json=parts).status_code == 200
+    perm_service.set_user_override(
+        api_db, draft_user.id, "messages.templates.view.email.General Book", "deny"
+    )
+    assert client.get(URL).json()["overrides"] == {}
+    settings = client.get("/api/v1/settings")
+    assert settings.status_code == 200
+    assert "Hidden configuration wording" not in settings.text
+    assert SETTING_KEY not in settings.json()
+    other = User(email="default-draft@test.ae", password_hash="x", role="operator", status="active")
+    api_db.add(other)
+    api_db.commit()
+    client.app.dependency_overrides[get_current_user] = lambda: other
+    assert client.get(URL).json()["overrides"] == {"General Book": parts}

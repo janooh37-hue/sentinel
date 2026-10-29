@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Collection
 from typing import cast
 
 from sqlalchemy.orm import Session
@@ -45,6 +46,22 @@ KEY_FAMILIES = {
 _TOKEN = re.compile(r"\{(\w+)\}")
 _BRACE_EXPRESSION = re.compile(r"\{([^{}]*)\}")
 _HTML = re.compile(r"<(?:[^\W\d_]|[/!])|&(?:\w+;|#)")
+
+
+def visible_templates(
+    templates: EmailDraftTemplatesRead, caps: Collection[str]
+) -> EmailDraftTemplatesRead:
+    from app.services.template_capability_service import view_capability
+
+    return templates.model_copy(
+        update={
+            "overrides": {
+                key: value
+                for key, value in templates.overrides.items()
+                if key in KEY_FAMILIES and view_capability("email_template", key) in caps
+            }
+        }
+    )
 
 
 def get_templates(db: Session) -> EmailDraftTemplatesRead:

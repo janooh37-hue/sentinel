@@ -46,7 +46,7 @@ vi.mock('@/lib/authContext', async (importOriginal) => ({
 }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({
   isLoading: false,
-  has: (capability: string) => capability === 'books.view' || capability === 'documents.generate' || capability.startsWith('books.service.'),
+  has: (capability: string) => capability === 'books.view' || capability === 'documents.generate' || capability.startsWith('books.service.') || capability.startsWith('messages.templates.view.'),
 }) }))
 vi.mock('@/lib/useIdentity', () => ({ useIdentity: () => ({ isAdmin: false }) }))
 vi.mock('@/pages/leaves/useAwaitingReturnCount', () => ({ useAwaitingReturnCount: () => 0 }))
