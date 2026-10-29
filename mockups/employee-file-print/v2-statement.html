@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Employee file print, version 2: Statement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
+<style id="pagecss">@page { size: A4 portrait; margin: 0 }</style>
+<style>
+:root{
+  --navy:#0d2845; --navy-2:#2b4466; --ink:#1a2535; --muted:#566172;
+  --cream:#f5f4f1; --surface:#fcfbf8; --tint:#e7ecf3; --line:#ddd9ce; --line2:#ece9e1;
+  --red:#c8102e; --letterhead:#b92027; --ok:#047857; --caution:#8a5d00; --warn:#b45309; --info:#1d4ed8;
+  --canvas:#cdcbc4;
+  --sans:'Inter','Noto Sans Arabic',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --chrome:44px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--cream);color:var(--ink);font:14px/1.5 var(--sans)}
+:lang(ar){font-family:'Noto Sans Arabic','Inter',system-ui,sans-serif;letter-spacing:0}
+button{font:inherit;color:inherit;cursor:pointer}
+input,select{font:inherit;color:inherit}
+.mono{font-family:var(--mono);font-feature-settings:"zero" 0}
+.ltr{direction:ltr;unicode-bidi:isolate;display:inline-block}
+:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+.i{flex:none;display:inline-block;vertical-align:middle}
+[dir=rtl] .flip{transform:scaleX(-1)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ===== mock chrome (never prints) ===== */
+.mockbar{position:sticky;top:0;z-index:50;height:var(--chrome);background:#0a1a2e;color:#dfe7f1;display:flex;align-items:center;gap:20px;padding-inline:20px;font-size:13px}
+.mockbar b{font-weight:600;color:#fff}
+.mockbar .grow{flex:1}
+.mockbar nav{display:flex;gap:2px}
+.mockbar nav button{background:none;border:0;padding:6px 12px;border-radius:6px;color:#b9c6d8;font-size:13px}
+.mockbar nav button[aria-current=true]{background:#1b3556;color:#fff}
+.mockbar .lt{display:inline-flex;border:1px solid #35506f;border-radius:6px;overflow:hidden}
+.mockbar .lt button{background:none;border:0;padding:4px 12px;color:#b9c6d8}
+.mockbar .lt button[aria-pressed=true]{background:#dfe7f1;color:#0a1a2e;font-weight:600}
+.frame{display:none}
+.frame.on{display:block}
+
+/* ===== app shell ===== */
+.appbar{height:52px;background:var(--navy);color:#fff;display:flex;align-items:center;gap:14px;padding-inline:28px;font-size:13px}
+.appbar img{width:26px;height:26px}
+.appbar .brand{font-weight:600;font-size:14px}
+.appbar .crumb{color:#b8c6da;display:flex;gap:8px;align-items:center}
+.appbar .grow{flex:1}
+.appbar .who{display:flex;gap:10px;align-items:center;color:#d6e0ee}
+.avatar{width:28px;height:28px;border-radius:50%;background:#26446b;color:#fff;display:grid;place-items:center;font-size:11px;font-weight:600}
+.page{max-width:1320px;margin:0 auto;padding-inline:32px}
+.emphead{display:flex;align-items:center;gap:16px;padding:22px 0 16px}
+.emphead .avatar{width:52px;height:52px;font-size:17px;background:var(--navy)}
+.emphead h1{margin:0;font-size:22px;line-height:1.25;font-weight:600;color:var(--navy)}
+.emphead .sub{color:var(--muted);font-size:13.5px;margin-top:2px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border:1px solid var(--line);border-radius:999px;font-size:12px;background:var(--surface)}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs a{padding:10px 14px;font-size:14px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;text-decoration:none}
+.tabs a[aria-current=page]{color:var(--navy);font-weight:600;border-bottom-color:var(--navy)}
+
+/* ===== frame 1: activity statement ===== */
+.actgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:48px;padding:26px 0 64px;align-items:start}
+.period{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+.period h2{margin:0;font-size:24px;line-height:1.2;font-weight:600;color:var(--navy)}
+.period label{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.sel{appearance:none;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23566172' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat;background-position:right 10px center;border:1px solid var(--line);border-radius:6px;padding:6px 32px 6px 12px;color:var(--ink);font-size:13px}
+[dir=rtl] .sel{background-position:left 10px center;padding:6px 12px 6px 32px}
+.plain{margin:10px 0 18px;font-size:16px;line-height:1.6;max-width:70ch}
+.plain b{font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lg{display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 10px;border:1px solid var(--line);border-radius:999px;background:transparent;font-size:13px;color:var(--muted)}
+[dir=rtl] .lg{padding:6px 10px 6px 12px}
+.lg .n{font-family:var(--mono);font-size:12px}
+.lg .ck{width:14px;height:14px;border-radius:4px;border:1.5px solid #9aa4b2;display:grid;place-items:center;color:#fff}
+.lg[aria-pressed=true]{background:var(--tint);border-color:var(--navy-2);color:var(--navy);font-weight:500}
+.lg[aria-pressed=true] .ck{background:var(--navy);border-color:var(--navy)}
+.lg[aria-pressed=false] .ck svg{display:none}
+.lg[disabled]{opacity:.55;cursor:default}
+.lg.reset{border-style:dashed}
+.shown{margin:12px 0 0;font-size:13px;color:var(--muted)}
+.month{display:flex;justify-content:space-between;align-items:baseline;margin-top:26px;padding-bottom:8px;border-bottom:1.5px solid var(--navy)}
+.month h3{margin:0;font-size:14px;font-weight:600;color:var(--navy)}
+.month span{font-size:12.5px;color:var(--muted)}
+.entry{border-bottom:1px solid var(--line2)}
+.entry>button{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:14px;align-items:start;width:100%;text-align:start;background:none;border:0;border-radius:8px;padding:12px 10px}
+.entry>button:hover{background:#efede6}
+.entry[data-open=true]>button{background:#efede6}
+.ico{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
+.tone-document,.tone-ledger,.tone-place{color:var(--navy)}
+.tone-leave{color:var(--ok)}
+.tone-violation{color:var(--warn)}
+.tone-absence{color:var(--red)}
+.sent{font-size:15px;line-height:1.55}
+.sent b{font-weight:600;color:var(--navy)}
+.kl{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--muted);margin-top:2px}
+.trail{text-align:end;font-size:12px;color:var(--muted);line-height:1.5;padding-top:2px;white-space:nowrap}
+.trail .ref{font-family:var(--mono);color:var(--ink)}
+.xp{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:0 10px 14px;padding:16px 18px 16px 58px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+[dir=rtl] .xp{padding:16px 58px 16px 18px}
+.xp dt{font-size:12px;color:var(--muted);margin-bottom:2px}
+.xp dd{margin:0;font-size:13.5px}
+.xp .wide{grid-column:1/-1}
+.docs{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0;padding:0;list-style:none}
+.doc{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:13px}
+.doc .mono{font-size:12px}
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:7px 14px;font-size:13.5px;font-weight:500;color:var(--navy);text-decoration:none}
+.btn:hover{background:#efede6}
+.btn.pri{background:var(--navy);border-color:var(--navy);color:#fff}
+.btn.pri:hover{background:#163a63}
+.btn.sm{padding:4px 10px;font-size:12.5px}
+.empty{padding:36px 10px;color:var(--muted);font-size:14px}
+.rail{position:sticky;top:calc(var(--chrome) + 16px)}
+.rail h3{margin:0 0 4px;font-size:14px;font-weight:600;color:var(--navy)}
+.facts{margin:0;padding:0}
+.facts div{display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px solid var(--line2);font-size:13.5px}
+.facts dt{color:var(--muted)}
+.facts dd{margin:0;text-align:end;font-weight:500}
+.rail .printbox{margin-top:22px;padding-top:16px;border-top:1.5px solid var(--navy)}
+.rail .printbox p{margin:0 0 12px;font-size:13px;color:var(--muted)}
+.rail .printbox .btn{width:100%;justify-content:center;padding:10px 14px}
+.st{display:inline-flex;gap:6px;align-items:center}
+.st .dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+
+/* ===== setup frames ===== */
+.sethead{height:64px;display:flex;align-items:center;gap:18px;padding-inline:28px;border-bottom:1px solid var(--line);background:var(--surface)}
+.sethead .back{display:inline-flex;gap:8px;align-items:center;color:var(--navy);font-size:13.5px;font-weight:500;text-decoration:none;border:0;background:none;padding:6px 8px;border-radius:6px}
+.sethead .back:hover{background:#efede6}
+.sethead h1{margin:0;font-size:18px;font-weight:600;color:var(--navy)}
+.sethead .who2{font-size:13px;color:var(--muted)}
+.sethead .grow{flex:1}
+.setup{display:grid;grid-template-columns:400px minmax(0,1fr);height:calc(100vh - var(--chrome) - 52px - 64px)}
+.settings{overflow:auto;background:var(--surface);border-inline-end:1px solid var(--line);display:flex;flex-direction:column}
+.settings .in{padding:6px 26px 0;flex:1}
+.fs{border:0;margin:0;padding:18px 0 16px;border-bottom:1px solid var(--line2)}
+.fs legend{padding:0;font-size:13.5px;font-weight:600;color:var(--navy);margin-bottom:8px;float:inline-start;width:100%}
+.fs legend+*{clear:both}
+.hint{font-size:12.5px;color:var(--muted);margin:6px 0 0}
+.opt{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid transparent;border-radius:6px;font-size:13.5px;cursor:pointer}
+.opt:hover{background:#f1efe9}
+.opt[data-on=true]{border-color:var(--navy-2);background:var(--tint)}
+.opt input{accent-color:var(--navy);width:16px;height:16px;margin:0}
+.opt .grow{flex:1}
+.opt .rng{font-size:12.5px;color:var(--muted)}
+.opt .n{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.dates{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0 0}
+.dates label{display:grid;gap:3px;font-size:12px;color:var(--muted)}
+.dates input,.fld{border:1px solid var(--line);border-radius:6px;background:#fff;padding:6px 10px;font-size:13.5px;color:var(--ink)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff}
+.seg button{border:0;background:none;padding:7px 16px;font-size:13.5px;border-inline-end:1px solid var(--line)}
+.seg button:last-child{border-inline-end:0}
+.seg button[aria-pressed=true]{background:var(--navy);color:#fff;font-weight:500}
+.mstep{display:flex;align-items:center;gap:8px;margin:2px 0 4px;padding-inline-start:36px}
+.mstep .cur{min-width:140px;text-align:center;font-weight:600;font-size:14px;color:var(--navy)}
+.mstep .ib{width:30px;height:30px;display:grid;place-items:center;border:1px solid var(--line);background:#fff;border-radius:6px}
+.mstep .ib[disabled]{opacity:.4;cursor:default}
+.shortcuts{display:flex;gap:6px;margin:4px 0 6px;padding-inline-start:36px}
+.result{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--navy);padding:14px 26px;font-size:13.5px}
+.result b{font-size:15px;color:var(--navy)}
+.result .s{color:var(--muted);font-size:12.5px;margin-top:2px}
+.canvas{background:var(--canvas);overflow:auto;padding:28px 28px 48px;position:relative}
+.canvas .note{position:sticky;top:0;z-index:2;width:fit-content;margin:0 auto 14px;background:#fff7e0;border:1px solid #e3cf8a;color:#5c4400;border-radius:6px;padding:6px 12px;font-size:12.5px}
+.zoomwrap{width:fit-content;margin-inline:auto;box-shadow:0 2px 14px rgba(20,30,45,.28)}
+.papertools{height:52px;display:flex;align-items:center;gap:14px;padding-inline:28px;background:var(--surface);border-bottom:1px solid var(--line);font-size:13.5px}
+.papertools .grow{flex:1}
+.paperstage{background:var(--canvas);padding:28px 0 56px}
+.toast{position:fixed;bottom:22px;inset-inline-start:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 18px;border-radius:8px;font-size:13.5px;z-index:90;max-width:520px;box-shadow:0 4px 18px rgba(0,0,0,.25)}
+[dir=rtl] .toast{transform:translateX(50%)}
+.build{max-width:960px;margin:0 auto;padding:40px 32px 80px}
+.build h2{margin:0 0 6px;color:var(--navy);font-size:20px}
+.build h3{margin:22px 0 4px;font-size:14px;color:var(--navy)}
+.build ul{margin:4px 0;padding-inline-start:20px}
+.build li{margin:3px 0;font-size:13.5px}
+
+/* ===== paper ===== */
+.sheet{--pw:210mm;--ph:297mm;width:var(--pw);background:#fff;color:#151515;border-collapse:collapse;table-layout:fixed;font-size:8.6pt;line-height:1.38;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-family:'Inter','Noto Naskh Arabic',sans-serif}
+.sheet.land{--pw:297mm;--ph:210mm}
+.sheet[data-l=ar]{font-family:'Noto Naskh Arabic','Inter',serif;font-size:9.4pt;line-height:1.5}
+.sheet :lang(ar){font-family:'Noto Naskh Arabic','Inter',serif;letter-spacing:0}
+.sheet>thead>tr>td{padding:6mm 14mm 0;vertical-align:top}
+.sheet>tbody>tr>td{padding:0 14mm;vertical-align:top}
+.sheet>tbody>tr.br{break-inside:avoid}
+.sheet>tbody>tr.fill>td{height:100%;padding:0}
+.sheet>tfoot>tr>td{padding:0 14mm 7mm;vertical-align:bottom}
+.sheet .bi{font-size:.92em;color:#333}
+.lh{display:flex;justify-content:space-between;align-items:flex-start;gap:8mm}
+.lh img{width:87mm;height:29mm;object-fit:contain;display:block;margin-block:-6mm}
+.office{font-size:8pt;line-height:1.7;color:#222;min-width:62mm;padding-top:3mm}
+.office div{display:flex;gap:2mm}
+.office .k{color:#555;min-width:18mm;white-space:nowrap}
+.office .v{font-weight:500}
+.rule{display:flex;align-items:flex-start;margin-top:0}
+.cmp{display:flex;align-items:center;gap:6mm;padding-bottom:2mm;border-bottom:.3mm solid var(--navy);font-size:8.4pt}
+.cmp img{width:30mm;height:10mm;object-fit:contain;margin-block:-2mm}
+.cmp b{font-size:10.5pt;color:var(--navy);font-weight:600}
+.cmp .g{flex:1}
+.first{padding-top:4mm}
+.rule i{display:block;background:var(--letterhead)}
+.rule i:first-child{width:65%;height:.15mm}
+.rule i:last-child{flex:1;height:5.5mm}
+.dtitle{display:flex;justify-content:space-between;align-items:baseline;gap:8mm;margin-top:4mm}
+.dtitle h1{margin:0;font-size:14.5pt;font-weight:600;color:var(--navy);line-height:1.2}
+.dtitle .per{font-size:9.5pt;font-weight:500;text-align:end}
+.meta{width:100%;border-collapse:collapse;margin:2.4mm 0 3mm;font-size:8.4pt}
+.meta td{padding:1mm 0;border-bottom:.2mm solid #cfcfcf;vertical-align:baseline}
+.meta td.k{width:25mm;color:#555;padding-inline-end:2mm}
+.sheet[data-l=both] .meta td.k{width:36mm}
+.meta td.v{font-weight:500}
+.meta tr:first-child td{border-top:.3mm solid var(--navy)}
+.meta td.v+td.k{padding-inline-start:4mm}
+.scope{margin:1mm 0 3.5mm;padding:2mm 3mm;border:.25mm solid #888;font-size:8.2pt}
+.scope b{font-weight:600}
+.sec{margin:0 0 5mm;break-inside:avoid}
+.sec h2{margin:0 0 1.4mm;font-size:10pt;font-weight:600;color:var(--navy);display:flex;gap:2.5mm;align-items:baseline}
+.sec h2 .c{font-weight:400;font-size:8.4pt;color:#555}
+.dt{width:100%;border-collapse:collapse;font-size:8.3pt}
+.dt th{background:#e9edf2;color:var(--navy);font-weight:600;text-align:start;padding:1.1mm 1.6mm;border-top:.3mm solid var(--navy);border-bottom:.3mm solid var(--navy);font-size:7.8pt;vertical-align:bottom}
+.dt td{padding:1.2mm 1.6mm;border-bottom:.2mm solid #d3d3d3;vertical-align:top}
+.dt td:first-child{white-space:nowrap}
+.dt tr{break-inside:avoid}
+.dt thead{display:table-header-group}
+.dt .num{text-align:end;font-variant-numeric:tabular-nums}
+.dt .mn{font-family:var(--mono);font-size:7.6pt;white-space:nowrap}
+.dt tr.tot td{border-top:.3mm solid var(--navy);border-bottom:.3mm solid var(--navy);font-weight:600;background:#f4f4f4}
+.dt td.none{color:#444;font-style:italic;padding:2mm 1.6mm}
+.sheet .sub2{display:block;color:#555;font-size:7.6pt}
+.gl{width:3.2mm;height:3.2mm;vertical-align:-.6mm;margin-inline-end:1.2mm}
+.gl.t-verified{color:var(--ok)}.gl.t-grace{color:var(--caution)}.gl.t-late{color:var(--warn)}.gl.t-absent{color:var(--red)}.gl.t-unpaired{color:var(--info)}.gl.t-leave{color:#555}.gl.t-off{color:#888}
+.sum{width:100%;border-collapse:collapse;font-size:8.4pt;margin-bottom:4.5mm}
+.sum td{padding:1.3mm 1.6mm;border-bottom:.2mm solid #d3d3d3;vertical-align:baseline}
+.sum td.k{color:#333;width:30%}
+.sum td.v{font-weight:600;font-variant-numeric:tabular-nums;width:20%}
+.sum td.v small{font-weight:400;color:#555;font-size:7.6pt}
+.sum tr:first-child td{border-top:.3mm solid var(--navy)}
+.sum tr:last-child td{border-bottom:.3mm solid var(--navy)}
+.sum td.v+td.k{padding-inline-start:5mm}
+.calwrap{margin-bottom:5mm;break-inside:avoid}
+.calwrap h2{margin:0 0 1.4mm;font-size:10pt;font-weight:600;color:var(--navy)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);border-top:.3mm solid var(--navy);border-inline-start:.2mm solid #aaa}
+.cal .wd{background:#e9edf2;color:var(--navy);font-weight:600;font-size:7.6pt;padding:1mm 1.4mm;border-inline-end:.2mm solid #aaa;border-bottom:.3mm solid var(--navy)}
+.cal .c{height:16.5mm;border-inline-end:.2mm solid #aaa;border-bottom:.2mm solid #aaa;padding:.9mm 1.2mm;display:grid;grid-template-columns:1fr auto;grid-template-rows:auto 1fr;font-size:7pt;overflow:hidden}
+.cal .c.blank{background:#fafafa}
+.cal .c.off{background:#f1f1f1;color:#555}
+.cal .c.leave{background:repeating-linear-gradient(135deg,#fff 0 1.1mm,#e6e6e6 1.1mm 1.5mm);color:#333}
+.cal .c.fut{color:#999;background:#fff}
+.cal .c.ex-absent{outline:.45mm solid #151515;outline-offset:-.45mm;background:#f6f6f6}
+.cal .c.ex-late,.cal .c.ex-unpaired{outline:.25mm dashed #151515;outline-offset:-.3mm}
+.cal .dn{font-weight:700;font-size:8.2pt;line-height:1.1}
+.cal .sh{font-family:var(--mono);font-weight:600;font-size:7pt;border:.2mm solid #444;border-radius:.6mm;padding:0 1mm;line-height:1.35;align-self:start;justify-self:end}
+.cal .gx{align-self:end;display:flex;flex-direction:column;gap:.2mm;font-size:6.4pt;line-height:1.2}
+.cal .gx .gl{margin-inline-end:.6mm}
+.cal .pn{align-self:end;justify-self:end;text-align:end;font-family:var(--mono);font-size:6.4pt;line-height:1.25;direction:ltr}
+.leg{display:grid;grid-template-columns:1fr 1fr;gap:1mm 8mm;font-size:7.8pt;margin:2.4mm 0 5mm;padding:2.2mm 3mm;border:.2mm solid #aaa;break-inside:avoid}
+.leg h3{grid-column:1/-1;margin:0;font-size:8pt;font-weight:600;color:var(--navy)}
+.leg .sw{display:inline-block;width:5mm;height:3.4mm;vertical-align:-.6mm;border:.2mm solid #666;margin-inline-end:1.4mm}
+.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:8mm;margin:7mm 0 2mm;break-inside:avoid}
+.sign.two{grid-template-columns:repeat(2,1fr)}
+.sign .b{padding-top:12mm;border-top:.3mm solid #222;font-size:8pt;line-height:1.4}
+.sign .b small{display:block;color:#555;font-size:7.4pt}
+.prov{border-top:.25mm solid #777;padding-top:1.8mm;font-size:7pt;line-height:1.5;color:#333;display:flex;justify-content:space-between;gap:6mm}
+.prov .l{flex:1}
+.prov .r{text-align:end;white-space:nowrap}
+.contact{margin-top:1.8mm;background:#ececec;padding:1.8mm 3mm;display:flex;flex-wrap:wrap;gap:1mm 5mm;align-items:center;font-size:6.9pt;color:#333;justify-content:space-between}
+.contact span{display:inline-flex;gap:1.4mm;align-items:center}
+.contact img{width:3mm;height:3mm}
+.xdash{display:none}
+
+/* ===== print: only the paper ===== */
+@media print{
+  html,body{background:#fff}
+  .mockbar,.appbar,.sethead,.settings,.papertools,.canvas .note,.no-print,.toast{display:none!important}
+  .frame{display:none!important}
+  .frame.on{display:block!important}
+  .setup{display:block;height:auto}
+  .canvas,.paperstage{background:none;padding:0;overflow:visible}
+  .zoomwrap{zoom:1!important;box-shadow:none;margin:0;width:auto}
+  .sheet{margin:0}
+}
+@media (max-width:1180px){
+  .actgrid{grid-template-columns:1fr}
+  .rail{position:static}
+}
+</style>
+</head>
+<body>
+<div class="mockbar no-print" id="mockbar"></div>
+<main id="stage">
+  <section class="frame" id="f1"></section>
+  <section class="frame" id="f2"></section>
+  <section class="frame" id="f3"></section>
+  <section class="frame" id="f4"></section>
+  <section class="frame" id="f5"></section>
+  <section class="frame" id="f6"></section>
+</main>
+<div id="toast" class="toast no-print" role="status" hidden></div>
+
+<script src="assets/sample-data.js"></script>
+<script>
+(function(){
+'use strict';
+const D = window.SAMPLE;
+const TODAY = '2026-10-27';
+const EMP = D.employee;
+
+/* ---------- state ---------- */
+const S = {
+  ui:'en', frame:1,
+  screen:{preset:'year', cats:new Set(), open:9811},
+  act:{preset:'year', from:'2026-01-01', to:TODAY, cats:new Set(), lang:'en', orient:'portrait', summary:true, sign:true},
+  att:{mode:'month', y:2026, m:10, q:4, from:'2026-10-01', to:TODAY, lang:'en', orient:'portrait',
+       summary:true, calendar:true, exceptions:true, daily:false, dailyEx:false, punches:true, sign:true}
+};
+const CATS = ['leave','violation','absence','document','ledger','place'];
+CATS.forEach(c=>{S.screen.cats.add(c);S.act.cats.add(c)});
+
+/* parse #f=2&l=ar for automated screenshots */
+(function(){
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get('l')==='ar') S.ui='ar';
+  if (h.get('f')) S.frame = +h.get('f');
+  S.act.lang = S.att.lang = S.ui;
+  if (h.get('al')) S.act.lang = S.att.lang = h.get('al');
+  if (h.get('o')==='land') S.act.orient = S.att.orient = 'landscape';
+  if (h.get('d')) S.att.daily = true;
+  if (h.get('m')) S.att.mode = h.get('m');
+})();
+
+const $ = (s,r)=>(r||document).querySelector(s);
+const U = (en,ar)=> S.ui==='ar' ? ar : en;
+
+/* ---------- helpers: dates, numbers ---------- */
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const dt = iso => new Date(iso+'T00:00:00Z');
+const arFmt = (o)=> new Intl.DateTimeFormat('ar-EG',Object.assign({timeZone:'UTC'},o));
+function dateStr(iso, lang, year=true){
+  const d = dt(iso);
+  if (lang==='ar') return arFmt(year?{day:'numeric',month:'long',year:'numeric'}:{day:'numeric',month:'long'}).format(d);
+  return d.getUTCDate()+' '+MON[d.getUTCMonth()]+(year?' '+d.getUTCFullYear():'');
+}
+function monthStr(ym, lang){ // 'YYYY-MM'
+  const [y,m] = ym.split('-').map(Number);
+  if (lang==='ar') return arFmt({month:'long',year:'numeric'}).format(new Date(Date.UTC(y,m-1,1)));
+  return MONL[m-1]+' '+y;
+}
+function num(n, lang){ return lang==='ar' ? Number(n).toLocaleString('ar-EG',{useGrouping:false}) : String(n); }
+function rangeStr(from,to,lang){
+  const sameY = from.slice(0,4)===to.slice(0,4);
+  const a = dateStr(from,lang,!sameY), b = dateStr(to,lang,true);
+  return lang==='ar' ? `من ${a} إلى ${b}` : `${a} to ${b}`;
+}
+function wdName(i, lang, long){ // i: 0=Sunday
+  const d = new Date(Date.UTC(2026,9,4+i)); // 4 Oct 2026 is a Sunday
+  if (lang==='ar') return arFmt({weekday:long?'long':'short'}).format(d);
+  return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][i];
+}
+const addDays = (iso,n)=>{const d=dt(iso);d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
+const daysBetween = (a,b)=>Math.round((dt(b)-dt(a))/864e5);
+
+/* ---------- periods ---------- */
+const PRESETS = {
+  month:{en:'This month', ar:'هذا الشهر', f:()=>['2026-10-01',TODAY]},
+  last3:{en:'Last 3 months', ar:'آخر ٣ أشهر', f:()=>['2026-07-28',TODAY]},
+  year:{en:'This year', ar:'هذه السنة', f:()=>['2026-01-01',TODAY]},
+  all:{en:'All', ar:'الكل', f:()=>[EMP.joined,TODAY]},
+  custom:{en:'Custom range', ar:'نطاق مخصص', f:null}
+};
+function applyActPreset(){
+  const p = PRESETS[S.act.preset];
+  if (p && p.f){ const [a,b]=p.f(); S.act.from=a; S.act.to=b; }
+}
+function attRange(){
+  const a = S.att;
+  let from,to;
+  if (a.mode==='month'){
+    from = `${a.y}-${String(a.m).padStart(2,'0')}-01`;
+    const last = new Date(Date.UTC(a.y,a.m,0)).getUTCDate();
+    to = `${a.y}-${String(a.m).padStart(2,'0')}-${String(last).padStart(2,'0')}`;
+  } else if (a.mode==='quarter'){
+    const m0 = (a.q-1)*3+1;
+    from = `2026-${String(m0).padStart(2,'0')}-01`;
+    const last = new Date(Date.UTC(2026,m0+2,0)).getUTCDate();
+    to = `2026-${String(m0+2).padStart(2,'0')}-${String(last).padStart(2,'0')}`;
+  } else if (a.mode==='ytd'){ from='2026-01-01'; to=TODAY; }
+  else { from=a.from; to=a.to; }
+  if (to>TODAY) to=TODAY;
+  return [from,to];
+}
+
+/* ---------- icons ---------- */
+const P = {
+  document:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2"/>',
+  leave:'<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
+  violation:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/>',
+  ledger:'<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+  absence:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5M22 8l-5 5"/>',
+  place:'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+  duty_location:'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+  status:'<path d="M8 3 4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4"/>',
+  printer:'<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
+  back:'<path d="m12 19-7-7 7-7M19 12H5"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  chev:'<path d="m9 18 6-6-6-6"/>',
+  chevl:'<path d="m15 18-6-6 6-6"/>',
+  ext:'<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>'
+};
+function ic(n,s=18){return `<svg class="i" viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`}
+const GL = {
+  verified:'<path d="M2 6.5l2.6 2.6L10 3.2"/>',
+  grace:'<circle cx="6" cy="6" r="5"/><path d="M3.7 6.2l1.7 1.7 2.9-3.3"/>',
+  late:'<path d="M6 1.6 11 10.4H1z" fill="currentColor"/>',
+  absent:'<rect x="1.6" y="1.6" width="8.8" height="8.8"/><path d="M3.9 3.9l4.2 4.2M8.1 3.9 3.9 8.1"/>',
+  unpaired:'<circle cx="6" cy="6" r="4.6"/><path d="M6 1.4a4.6 4.6 0 0 1 0 9.2z" fill="currentColor"/>',
+  leave:'<rect x="1.6" y="1.6" width="8.8" height="8.8"/><path d="M2 10 10 2M2 6l4-4M6 10l4-4"/>',
+  off:'<path d="M3 6h6"/>'
+};
+function gl(st){return `<svg class="gl t-${st}" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GL[st]}</svg>`}
+
+/* ---------- activity data ---------- */
+const catOf = k => (k==='duty_location'||k==='status') ? 'place' : k;
+const CATINFO = {
+  leave:{en:'Leave',ar:'إجازة',sec_en:'Leaves',sec_ar:'الإجازات'},
+  violation:{en:'Violation',ar:'مخالفة',sec_en:'Violations',sec_ar:'المخالفات'},
+  absence:{en:'Absence',ar:'غياب',sec_en:'Absences',sec_ar:'الغياب'},
+  document:{en:'Document',ar:'مستند',sec_en:'Documents issued',sec_ar:'المستندات الصادرة'},
+  ledger:{en:'Correspondence',ar:'مراسلات',sec_en:'Correspondence',sec_ar:'المراسلات'},
+  place:{en:'Placement and status',ar:'الموقع والحالة',sec_en:'Placement and status history',sec_ar:'سجل الموقع والحالة'}
+};
+const SEN = {
+  9811:['<b>Mariam Al Kaabi</b> issued a <b>salary certificate</b> to Emirates NBD','أصدرت <b>مريم الكعبي</b> <b>شهادة راتب</b> موجهة إلى بنك الإمارات دبي الوطني'],
+  312:['<b>Khalid Al Hammadi</b> recorded a <b>violation</b>: late arrival to post, written warning (2nd in 12 months)','سجّل <b>خالد الحمادي</b> <b>مخالفة</b>: التأخر عن الموقع، إنذار كتابي (الثانية خلال ١٢ شهرًا)'],
+  5520:['<b>Records desk</b> logged <b>incoming correspondence</b> from the employee: request for transfer to night rotation','سجّل <b>مكتب السجلات</b> <b>مراسلة واردة</b> من الموظف: طلب نقل إلى المناوبة الليلية'],
+  77:['<b>Attendance desk</b> recorded an <b>absence</b>: unexcused, 1 day','سجّل <b>مكتب الدوام</b> <b>غيابًا</b> بدون عذر ليوم واحد'],
+  41:['<b>Mariam Al Kaabi</b> confirmed the <b>return from leave</b> and duty resumption','أكدت <b>مريم الكعبي</b> <b>العودة من الإجازة</b> ومباشرة العمل'],
+  9702:['<b>Mariam Al Kaabi</b> issued a <b>duty resumption form</b>, signed by the unit supervisor','أصدرت <b>مريم الكعبي</b> <b>نموذج مباشرة عمل</b> موقعًا من مشرف الوحدة'],
+  1440:['<b>Fatima Al Dhaheri</b> approved <b>annual leave</b> for 28 days, 1 Sep to 28 Sep','اعتمدت <b>فاطمة الظاهري</b> <b>إجازة سنوية</b> لمدة ٢٨ يومًا، من ١ سبتمبر إلى ٢٨ سبتمبر'],
+  40:['<b>System</b> marked the <b>departure on leave</b>, expected back 29 Sep','سجّل <b>النظام</b> <b>المغادرة في إجازة</b>، والعودة المتوقعة ٢٩ سبتمبر'],
+  9590:['<b>Fatima Al Dhaheri</b> filed a <b>leave application</b> for 28 days of annual leave','قدّمت <b>فاطمة الظاهري</b> <b>طلب إجازة</b> سنوية لمدة ٢٨ يومًا'],
+  210:['<b>Khalid Al Hammadi</b> <b>transferred</b> the employee to Al Wathba Site, Main Gate, from Mussafah Site, Patrol','نقل <b>خالد الحمادي</b> الموظف إلى <b>موقع الوثبة</b>، البوابة الرئيسية، من موقع مصفح، الدوريات'],
+  5133:['<b>Records desk</b> sent <b>outgoing correspondence</b> to the Site Manager: transfer memo, Al Wathba Site','أصدر <b>مكتب السجلات</b> <b>مراسلة صادرة</b> إلى مدير الموقع: مذكرة نقل، موقع الوثبة'],
+  288:['<b>Khalid Al Hammadi</b> recorded a <b>violation</b>: uniform not to standard, verbal notice','سجّل <b>خالد الحمادي</b> <b>مخالفة</b>: الزي غير مطابق، تنبيه شفهي'],
+  1301:['<b>Fatima Al Dhaheri</b> approved <b>sick leave</b> for 2 days, medical report attached','اعتمدت <b>فاطمة الظاهري</b> <b>إجازة مرضية</b> لمدة يومين، والتقرير الطبي مرفق'],
+  9100:['<b>Mariam Al Kaabi</b> issued an <b>experience certificate</b> to whom it may concern','أصدرت <b>مريم الكعبي</b> <b>شهادة خبرة</b> لمن يهمه الأمر'],
+  4410:['<b>Records desk</b> sent <b>outgoing correspondence</b> to the Training Centre: training nomination, first aid','أصدر <b>مكتب السجلات</b> <b>مراسلة صادرة</b> إلى مركز التدريب: ترشيح لدورة الإسعافات الأولية'],
+  1180:['<b>Fatima Al Dhaheri</b> approved <b>emergency leave</b> for 3 days, 5 Jan to 7 Jan','اعتمدت <b>فاطمة الظاهري</b> <b>إجازة طارئة</b> لمدة ٣ أيام، من ٥ يناير إلى ٧ يناير']
+};
+const ACTOR_AR = {'Mariam Al Kaabi':'مريم الكعبي','Khalid Al Hammadi':'خالد الحمادي','Fatima Al Dhaheri':'فاطمة الظاهري','Records desk':'مكتب السجلات','Attendance desk':'مكتب الدوام','System':'النظام'};
+const actor = (it,lang)=> lang==='ar' ? (ACTOR_AR[it.actor]||it.actor) : it.actor;
+const inRange = (it,a,b)=>{const d=it.when.slice(0,10);return d>=a&&d<=b};
+const itemsIn = (a,b)=>D.activity.filter(it=>inRange(it,a,b));
+const timeOf = it => it.when.slice(11,16)==='00:00' ? '' : it.when.slice(11,16);
+
+function linkedDocs(it){
+  const k = it.kind;
+  if (k==='document') return [{name:it.summary.replace('Generated ','')+'_'+EMP.id+'.pdf', ref:it.ref, act:['Preview','معاينة'], ic:'file'}];
+  if (k==='leave') return [{name:'leave_form_'+it.ref+'.pdf', ref:it.ref, act:['Open leave','فتح الإجازة'], ic:'file'}];
+  if (k==='violation') return [{name:'violation_notice_'+it.ref+'.pdf', ref:it.ref, act:['Open violation','فتح المخالفة'], ic:'file'}];
+  if (k==='ledger') return [{name:'letter_'+it.ref+'.pdf', ref:it.ref, act:['Open in ledger','فتح في السجل'], ic:'file'}];
+  if (k==='duty_location') return [{name:'transfer_order_'+it.ref+'.pdf', ref:it.ref, act:['Open placement','فتح الموقع'], ic:'file'}];
+  return [];
+}
+
+/* plain summary sentence */
+function summaryBits(items, lang){
+  const c = {leave:0,violation:0,absence:0,document:0,ledger:0,duty_location:0,status:0}; let days=0;
+  items.forEach(it=>{c[it.kind]++; if(it.kind==='leave') days+=it.days});
+  const out=[];
+  const N = n=>`<b>${num(n,lang)}</b>`;
+  if (lang==='en'){
+    const pl=(n,s,p)=>`${N(n)} ${n===1?s:p}`;
+    if(c.leave) out.push(`${pl(c.leave,'leave','leaves')} totalling <b>${days}</b> days`);
+    if(c.violation) out.push(pl(c.violation,'violation','violations'));
+    if(c.absence) out.push(pl(c.absence,'absence','absences'));
+    if(c.document) out.push(`${pl(c.document,'document','documents')} issued`);
+    if(c.ledger) out.push(pl(c.ledger,'letter','letters'));
+    if(c.duty_location) out.push(pl(c.duty_location,'transfer','transfers'));
+    if(c.status) out.push(pl(c.status,'status change','status changes'));
+  } else {
+    const ar=(n,one,two,many,sing)=> n===1?`<b>${one}</b>`: n===2?`<b>${two}</b>` : n<=10?`${N(n)} ${many}`:`${N(n)} ${sing}`;
+    const dy = n=> n===1?'<b>يوم واحد</b>': n===2?'<b>يومان</b>': n<=10?`${N(n)} أيام`:`${N(n)} يومًا`;
+    if(c.leave) out.push(`${ar(c.leave,'إجازة واحدة','إجازتان','إجازات','إجازة')} بإجمالي ${dy(days)}`);
+    if(c.violation) out.push(ar(c.violation,'مخالفة واحدة','مخالفتان','مخالفات','مخالفة'));
+    if(c.absence) out.push(ar(c.absence,'غياب واحد','غيابان','حالات غياب','حالة غياب'));
+    if(c.document) out.push(ar(c.document,'مستند واحد صادر','مستندان صادران','مستندات صادرة','مستندًا صادرًا'));
+    if(c.ledger) out.push(ar(c.ledger,'مراسلة واحدة','مراسلتان','مراسلات','مراسلة'));
+    if(c.duty_location) out.push(ar(c.duty_location,'نقل واحد','نقلان','عمليات نقل','عملية نقل'));
+    if(c.status) out.push(ar(c.status,'تغيير واحد في الحالة','تغييران في الحالة','تغييرات في الحالة','تغييرًا في الحالة'));
+  }
+  return out;
+}
+function joinBits(bits, lang){
+  if (!bits.length) return lang==='ar' ? 'لا توجد سجلات في هذه الفترة' : 'No entries in this period';
+  if (bits.length===1) return bits[0];
+  const last = bits[bits.length-1], head = bits.slice(0,-1).join(lang==='ar'?'، ':', ');
+  return lang==='ar' ? `${head} و${last}` : `${head} and ${last}`;
+}
+
+/* ---------- mock bar ---------- */
+function renderBar(){
+  const names = [U('Activity','النشاط'),U('Print setup','إعداد الطباعة'),U('Activity paper','ورقة النشاط'),U('Attendance setup','إعداد الدوام'),U('Attendance paper','ورقة الدوام'),U('Build notes','متطلبات البناء')];
+  const f = S.frame;
+  $('#mockbar').innerHTML = `<b>${U('Employee file print','طباعة ملف الموظف')}</b><span>${U('Version 2: Statement','النسخة ٢: الكشف')}</span>
+   <nav aria-label="Frames">${names.map((n,i)=>`<button data-a="go" data-v="${i+1}" ${f===i+1?'aria-current="true"':''}>${i+1}. ${n}</button>`).join('')}</nav>
+   <span class="grow"></span>
+   <div class="lt" role="group" aria-label="Language"><button data-a="ui" data-v="en" aria-pressed="${S.ui==='en'}">EN</button><button data-a="ui" data-v="ar" aria-pressed="${S.ui==='ar'}" lang="ar">عربي</button></div>`;
+}
+
+/* ---------- shell pieces ---------- */
+function appbar(crumbs){
+  return `<header class="appbar no-print"><img src="assets/gssg-crest.png" alt=""><span class="brand">GSSG Manager</span>
+   <span class="crumb">${crumbs.map((c,i)=>(i?`<span class="flip" style="opacity:.6">${ic('chev',14)}</span>`:'')+`<span>${c}</span>`).join('')}</span>
+   <span class="grow"></span><span class="who"><span>${U('Mariam Al Kaabi','مريم الكعبي')}</span><span class="avatar">${U('MK','م ك')}</span></span></header>`;
+}
+function empHead(){
+  const first = S.ui==='ar' ? EMP.name_ar : EMP.name_en, second = S.ui==='ar' ? EMP.name_en : EMP.name_ar;
+  return `<div class="emphead"><div class="avatar" aria-hidden="true">${U('AM','أم')}</div>
+   <div><h1>${first} <span style="font-weight:400;color:var(--muted);font-size:16px" lang="${S.ui==='ar'?'en':'ar'}" dir="${S.ui==='ar'?'ltr':'rtl'}">${second}</span></h1>
+   <div class="sub"><span class="mono">${EMP.id}</span> &nbsp;·&nbsp; ${U(EMP.job_en,EMP.job_ar)} &nbsp;·&nbsp; ${U(EMP.department_en,EMP.department_ar)} &nbsp;·&nbsp; ${U(EMP.unit_en,EMP.unit_ar)}</div></div>
+   <span style="flex:1"></span><span class="chip"><span class="dot"></span>${U(EMP.status_en,EMP.status_ar)}</span></div>`;
+}
+function tabs(){
+  const t = [U('Overview','نظرة عامة'),U('Leaves','الإجازات'),U('Attendance','الدوام'),U('Violations','المخالفات'),U('Documents','المستندات'),U('Correspondence','المراسلات'),U('Activity','النشاط')];
+  return `<nav class="tabs" aria-label="${U('Employee file','ملف الموظف')}">${t.map((x,i)=>`<a href="#" ${i===6?'aria-current="page"':''} onclick="return false">${x}</a>`).join('')}</nav>`;
+}
+
+/* ---------- frame 1 ---------- */
+function renderF1(){
+  const [from,to] = PRESETS[S.screen.preset].f();
+  const items = itemsIn(from,to);
+  const counts = {}; CATS.forEach(c=>counts[c]=items.filter(i=>catOf(i.kind)===c).length);
+  const shown = items.filter(i=>S.screen.cats.has(catOf(i.kind)));
+  const sub = S.screen.cats.size<CATS.length;
+  const legend = CATS.map(c=>`<button class="lg" data-a="cat" data-v="${c}" aria-pressed="${S.screen.cats.has(c)}" ${counts[c]===0?'disabled':''}><span class="ck">${ic('check',10)}</span><span class="tone-${c}" style="display:inline-flex">${ic(c,16)}</span>${U(CATINFO[c].en,CATINFO[c].ar)}<span class="n">${num(counts[c],S.ui)}</span></button>`).join('')
+    + (sub?`<button class="lg reset" data-a="allcats">${U('Show all','عرض الكل')}</button>`:'');
+  const groups = {};
+  shown.forEach(it=>{(groups[it.when.slice(0,7)] = groups[it.when.slice(0,7)]||[]).push(it)});
+  const body = Object.keys(groups).sort().reverse().map(ym=>{
+    const g = groups[ym];
+    return `<div class="month"><h3>${monthStr(ym,S.ui)}</h3><span>${U(g.length+(g.length===1?' entry':' entries'), num(g.length,'ar')+' '+(g.length===1?'سجل':'سجلات'))}</span></div>
+    <ul style="list-style:none;margin:0;padding:0">${g.map(entry).join('')}</ul>`;
+  }).join('') || `<p class="empty">${U('No entries match these filters. Select a category above or widen the period.','لا توجد سجلات مطابقة. اختر فئة أعلاه أو وسّع الفترة.')}</p>`;
+  const cur = D.activity.find(a=>a.kind==='duty_location');
+  $('#f1').innerHTML = appbar([U('Employees','الموظفون'),EMP.id]) + `<div class="page">${empHead()}${tabs()}
+  <div class="actgrid"><div>
+    <div class="period"><h2>${rangeStr(from,to,S.ui)}</h2>
+      <label>${U('Period','الفترة')}<select class="sel" data-a="scrperiod" data-k="scrperiod">${['month','last3','year','all'].map(k=>`<option value="${k}" ${S.screen.preset===k?'selected':''}>${U(PRESETS[k].en,PRESETS[k].ar)}</option>`).join('')}</select></label></div>
+    <p class="plain">${joinBits(summaryBits(items,S.ui),S.ui)}.</p>
+    <div class="legend" role="group" aria-label="${U('Filter by category','التصفية حسب الفئة')}">${legend}</div>
+    <p class="shown" aria-live="polite">${U(`Showing ${shown.length} of ${items.length} entries`,`عرض ${num(shown.length,'ar')} من ${num(items.length,'ar')} سجلًا`)}</p>
+    ${body}
+  </div>
+  <aside class="rail" aria-label="${U('Current placement','الموقع الحالي')}">
+    <h3>${U('Current placement and status','الموقع والحالة الحاليان')}</h3>
+    <dl class="facts">
+      <div><dt>${U('Status','الحالة')}</dt><dd><span class="st"><span class="dot"></span>${U(EMP.status_en,EMP.status_ar)}</span></dd></div>
+      <div><dt>${U('Department','القسم')}</dt><dd>${U(EMP.department_en,EMP.department_ar)}</dd></div>
+      <div><dt>${U('Unit','الوحدة')}</dt><dd>${U(EMP.unit_en,EMP.unit_ar)}</dd></div>
+      <div><dt>${U('Post','نقطة العمل')}</dt><dd>${U(EMP.post_en,EMP.post_ar)}</dd></div>
+      <div><dt>${U('In this placement since','في هذا الموقع منذ')}</dt><dd>${dateStr('2026-07-15',S.ui)}</dd></div>
+      <div><dt>${U('Previous','السابق')}</dt><dd>${U('Mussafah Site · Patrol','موقع مصفح · الدوريات')}</dd></div>
+      <div><dt>${U('Joined','تاريخ الالتحاق')}</dt><dd>${dateStr(EMP.joined,S.ui)}</dd></div>
+    </dl>
+    <div class="printbox"><p>${U('Print this record as a statement on letterhead. You choose the period and sections first.','اطبع هذا السجل ككشف على ورق رسمي. تختار الفترة والأقسام أولًا.')}</p>
+      <button class="btn pri" data-a="toprint">${ic('printer',16)}${U('Print activity statement','طباعة كشف النشاط')}</button></div>
+  </aside></div></div>`;
+}
+function entry(it){
+  const open = S.screen.open===it.ref_id;
+  const s = SEN[it.ref_id]; const sent = s ? s[S.ui==='ar'?1:0] : U(it.title_en,it.title_ar);
+  const kind = D.kinds[it.kind];
+  const docs = linkedDocs(it);
+  const t = timeOf(it);
+  return `<li class="entry" data-open="${open}"><button data-a="open" data-v="${it.ref_id}" aria-expanded="${open}" data-k="e${it.ref_id}">
+    <span class="ico tone-${catOf(it.kind)}">${ic(it.kind,18)}</span>
+    <span><span class="sent">${sent}</span><span class="kl">${U(kind.en,kind.ar)}</span></span>
+    <span class="trail"><span>${dateStr(it.when.slice(0,10),S.ui,false)}${t?' · <span class="mono ltr">'+t+'</span>':''}</span><br>${it.ref?`<span class="ref">${it.ref}</span>`:'<span aria-hidden="true">&nbsp;</span>'}</span></button>
+    ${open?`<dl class="xp">
+      <div><dt>${U('Detail','التفاصيل')}</dt><dd>${U(it.detail_en,it.detail_ar)}</dd></div>
+      <div><dt>${U('Recorded by','سُجّل بواسطة')}</dt><dd>${actor(it,S.ui)}</dd></div>
+      <div><dt>${U('Reference','المرجع')}</dt><dd class="mono">${it.ref||U('None','لا يوجد')}</dd></div>
+      <div class="wide"><dt>${U('Linked documents','المستندات المرتبطة')}</dt><dd>${docs.length?`<ul class="docs">${docs.map(d=>`<li class="doc">${ic(d.ic,16)}<span class="mono ltr">${d.name}</span><button class="btn sm" data-a="toast" data-v="${d.act[S.ui==='ar'?1:0]}">${d.act[S.ui==='ar'?1:0]}${ic('ext',13)}</button></li>`).join('')}</ul>`:`<span style="color:var(--muted)">${U('No linked documents for this entry.','لا توجد مستندات مرتبطة بهذا السجل.')}</span>`}</dd></div>
+    </dl>`:''}</li>`;
+}
+
+/* ---------- paper language helper ---------- */
+function mk(lang){
+  const f = {lang, dir: lang==='ar'?'rtl':'ltr'};
+  const arS = t=>`<span class="bi" lang="ar" dir="rtl">${t}</span>`;
+  f.L = (en,ar)=> lang==='en'?en : lang==='ar'?ar : `${en} / ${arS(ar)}`;
+  f.V = (en,ar)=> lang==='en'?en : lang==='ar'?ar : `${en} · ${arS(ar)}`;
+  f.S = (en,ar)=> lang==='en'?en : lang==='ar'?ar : `${en}<span class="sub2" lang="ar" dir="rtl">${ar}</span>`;
+  f.d = (iso,y=true)=> dateStr(iso, lang==='ar'?'ar':'en', y);
+  f.n = n=> num(n, lang==='ar'?'ar':'en');
+  f.range = (a,b)=> rangeStr(a,b, lang==='ar'?'ar':'en');
+  return f;
+}
+const mono = t=>`<span class="mn ltr">${t}</span>`;
+const PRINTED_AT = '27 Oct 2026, 11:20';
+
+function masthead(f, title, from, to, refNo, extraMeta){
+  const o = [
+    [f.L('Department','الإدارة'), f.S(D.office_en,D.office_ar)],
+    [f.L('Date','التاريخ'), f.d(TODAY)],
+    [f.L('Ref','الرقم'), mono(refNo)]
+  ];
+  return `<div class="lh"><img src="assets/gssg-wordmark.png" alt="GSSG">
+    <div class="office">${o.map(([k,v])=>`<div><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')}</div></div>
+   <div class="rule"><i></i><i></i></div>
+   <div class="dtitle"><h1>${title}</h1><div class="per">${f.range(from,to)}</div></div>
+   <table class="meta"><tr><td class="k">${f.L('Name','الاسم')}</td><td class="v"><span lang="en" dir="ltr">${EMP.name_en}</span> &nbsp;|&nbsp; <span lang="ar" dir="rtl">${EMP.name_ar}</span></td><td class="k">${f.L('Employee no.','الرقم الوظيفي')}</td><td class="v">${mono(EMP.id)}</td></tr>
+   <tr><td class="k">${f.L('Job title','المسمى الوظيفي')}</td><td class="v">${f.V(EMP.job_en,EMP.job_ar)}</td><td class="k">${f.L('Department','القسم')}</td><td class="v">${f.V(EMP.department_en,EMP.department_ar)}</td></tr>
+   <tr><td class="k">${f.L('Unit / Post','الوحدة / نقطة العمل')}</td><td class="v">${f.V(EMP.unit_en,EMP.unit_ar)} / ${f.V(EMP.post_en,EMP.post_ar)}</td><td class="k">${f.L('Joined','الالتحاق')}</td><td class="v">${f.d(EMP.joined)}</td></tr></table>`;
+}
+function foot(f, lineTotal){
+  const C = D.contacts;
+  return `<div class="prov"><div class="l">${f.L('Printed','طُبع في')} ${PRINTED_AT.replace('27 Oct 2026', f.d(TODAY))} · ${f.L('by','بواسطة')} ${f.V(D.printedBy.name_en+', '+D.printedBy.role_en, D.printedBy.name_ar+'، '+D.printedBy.role_ar)}<br>${f.L('Source','المصدر')}: GSSG Manager, ${f.L('employee file','ملف الموظف')} ${mono(EMP.id)} · ${mono('gssg-manager/employees/'+EMP.id)}</div><div class="r"><b>${lineTotal}</b></div></div>
+   <div class="contact"><span><img src="assets/icon-location.png" alt="">${C.location}</span><span><img src="assets/icon-email.png" alt="">${C.email} · ${C.web}</span><span><img src="assets/icon-phone.png" alt="">${f.L('Phone','هاتف')} <span class="ltr">${C.phone}</span> · ${f.L('Fax','فاكس')} <span class="ltr">${C.fax}</span></span></div>`;
+}
+/* The body is a list of table rows, not one tall cell: Chrome repeats thead and tfoot
+   on every printed page only when a page break falls between rows. Long tables are
+   cut into chunks of 10 lines, each chunk repeating its column header. */
+function toRows(html){
+  const t = document.createElement('template'); t.innerHTML = html;
+  const out = [];
+  [...t.content.children].forEach(el=>{
+    const tbl = el.matches('.sec') ? el.querySelector(':scope > table.dt') : null;
+    const trs = tbl && tbl.tBodies[0] ? [...tbl.tBodies[0].rows] : [];
+    if (!tbl || trs.length <= 10){ out.push(el.outerHTML); return; }
+    const n = Math.ceil(trs.length/10), size = Math.ceil(trs.length/n);
+    const pre = [...el.children].filter(c=>c!==tbl).map(c=>c.outerHTML).join('');
+    for (let i=0;i<trs.length;i+=size){
+      out.push(`<div class="sec">${i===0?pre:''}<table class="dt">${tbl.tHead.outerHTML}<tbody>${trs.slice(i,i+size).map(r=>r.outerHTML).join('')}</tbody></table></div>`);
+    }
+  });
+  return out;
+}
+function sheetHtml(cls, f, head, bodyHtml, footHtml){
+  const rows = toRows(bodyHtml).map(r=>`<tr class="br"><td>${r}</td></tr>`).join('');
+  return `<table class="sheet ${cls}" data-l="${f.lang}" lang="${f.lang==='ar'?'ar':'en'}" dir="${f.dir}"><thead><tr><td>${head}</td></tr></thead><tbody>${rows}<tr class="fill"><td></td></tr></tbody><tfoot><tr><td>${footHtml}</td></tr></tfoot></table>`;
+}
+/* Chrome skips a repeating thead when thead + tfoot pass about a third of the page
+   (measured: 100 mm fails on A4 portrait, 88 mm repeats). A4 portrait repeats the full
+   letterhead and identity block. A4 landscape has 210 mm, so the full masthead prints
+   once as the first row and the repeating head is one compact line. */
+function paperOut(land, f, title, from, to, refNo, body, lineTotal){
+  const full = masthead(f,title,from,to,refNo);
+  const cls = land ? 'land' : '';
+  if (!land) return sheetHtml(cls, f, full, body, foot(f,lineTotal));
+  const cmp = `<div class="cmp"><img src="assets/gssg-wordmark.png" alt="GSSG"><b>${title}</b><span class="g"><span lang="en" dir="ltr">${EMP.name_en}</span> · <span lang="ar" dir="rtl">${EMP.name_ar}</span> · ${mono(EMP.id)}</span><span>${f.range(from,to)}</span></div>`;
+  return sheetHtml(cls, f, cmp, `<div class="first">${full}</div>` + body, foot(f,lineTotal));
+}
+function signBlocks(f, kinds){
+  const prep = `<div class="b">${f.L('Prepared by','أعدّه')}<small>${f.V(D.printedBy.name_en+', '+D.printedBy.role_en, D.printedBy.name_ar+'، '+D.printedBy.role_ar)}</small><small>${f.L('Signature and date','التوقيع والتاريخ')}</small></div>`;
+  const rev = `<div class="b">${f.L('Reviewed by','راجعه')}<small>${f.V('HR Manager','مدير الموارد البشرية')}</small><small>${f.L('Signature and date','التوقيع والتاريخ')}</small></div>`;
+  const emp = `<div class="b">${f.L('Employee acknowledgement','إقرار الموظف')}<small>${f.V(EMP.name_en,EMP.name_ar)}</small><small>${f.L('Signature and date','التوقيع والتاريخ')}</small></div>`;
+  return kinds==='three' ? `<div class="sign">${prep}${rev}${emp}</div>` : `<div class="sign two">${prep}${rev}</div>`;
+}
+
+/* ---------- activity paper ---------- */
+function activityPaper(){
+  const A = S.act, f = mk(A.lang);
+  const inP = itemsIn(A.from,A.to);
+  const sel = inP.filter(i=>A.cats.has(catOf(i.kind)));
+  const excluded = CATS.filter(c=>!A.cats.has(c));
+  const secs = CATS.filter(c=>A.cats.has(c));
+  const cnt = c=>inP.filter(i=>catOf(i.kind)===c).length;
+  const strip = (s,p)=>{const r=s.startsWith(p)?s.slice(p.length):s; return (f.lang==='ar')?r:r.charAt(0).toUpperCase()+r.slice(1)};
+  const row = (cells)=>`<tr>${cells.join('')}</tr>`;
+  const none = cols=>`<tr><td class="none" colspan="${cols}">${f.L('None in this period','لا يوجد في هذه الفترة')}</td></tr>`;
+  const th = (arr)=>`<thead><tr>${arr.map(([en,ar,c])=>`<th class="${c||''}">${f.S(en,ar)}</th>`).join('')}</tr></thead>`;
+  const by = it=>f.V(it.actor, ACTOR_AR[it.actor]||it.actor);
+  const ds = it=>f.d(it.when.slice(0,10));
+  const sections = {
+    leave:()=>{ const L=inP.filter(i=>i.kind==='leave'); const tot=L.reduce((n,i)=>n+i.days,0);
+      return th([['Type','النوع'],['From','من'],['To','إلى'],['Days','الأيام','num'],['Status','الحالة'],['Ref','المرجع']])+`<tbody>${L.length?L.map(i=>row([`<td>${f.S(i.leave_type_en,i.leave_type_ar)}</td>`,`<td>${f.d(i.start)}</td>`,`<td>${f.d(i.end)}</td>`,`<td class="num">${f.n(i.days)}</td>`,`<td>${gl('verified')}${f.V(i.leave_status_en,i.leave_status_ar)}</td>`,`<td>${mono(i.ref)}</td>`])).join('')+row([`<td colspan="3">${f.L('Total','الإجمالي')}</td>`,`<td class="num">${f.n(tot)}</td>`,`<td colspan="2"></td>`]).replace('<tr>','<tr class="tot">'):none(6)}</tbody>`;},
+    violation:()=>{ const V=inP.filter(i=>i.kind==='violation');
+      return th([['Date','التاريخ'],['Violation','المخالفة'],['Penalty','الجزاء'],['Ref','المرجع'],['Recorded by','سُجّل بواسطة']])+`<tbody>${V.length?V.map(i=>{const [pen,...rest]=i.detail_en.split(' · ');const [penA,...restA]=i.detail_ar.split(' · ');
+        return row([`<td>${ds(i)}</td>`,`<td>${f.S(strip(i.title_en,'Violation: '),strip(i.title_ar,'مخالفة: '))}</td>`,`<td>${f.S(pen,penA)}${rest.length?`<span class="sub2">${f.lang==='ar'?restA.join(' · '):rest.join(' · ')}</span>`:''}</td>`,`<td>${mono(i.ref)}</td>`,`<td>${by(i)}</td>`]);}).join(''):none(5)}</tbody>`;},
+    absence:()=>{ const X=inP.filter(i=>i.kind==='absence');
+      return th([['Date','التاريخ'],['Record','السجل'],['Days','الأيام','num'],['Ref','المرجع'],['Recorded by','سُجّل بواسطة']])+`<tbody>${X.length?X.map(i=>row([`<td>${ds(i)}</td>`,`<td>${gl('absent')}${f.S(i.title_en,i.title_ar)}<span class="sub2">${f.lang==='ar'?i.detail_ar.split(' · ')[0]:i.detail_en.split(' · ')[0]}</span></td>`,`<td class="num">${f.n(1)}</td>`,`<td>${mono(i.ref)}</td>`,`<td>${by(i)}</td>`])).join(''):none(5)}</tbody>`;},
+    document:()=>{ const X=inP.filter(i=>i.kind==='document');
+      return th([['Date','التاريخ'],['Document','المستند'],['Detail','التفاصيل'],['Ref','المرجع'],['Issued by','أصدره']])+`<tbody>${X.length?X.map(i=>row([`<td>${ds(i)}</td>`,`<td>${f.S(i.title_en,i.title_ar)}</td>`,`<td>${f.S(i.detail_en,i.detail_ar)}</td>`,`<td>${mono(i.ref)}</td>`,`<td>${by(i)}</td>`])).join(''):none(5)}</tbody>`;},
+    ledger:()=>{ const X=inP.filter(i=>i.kind==='ledger');
+      return th([['Date','التاريخ'],['Direction','الاتجاه'],['Subject','الموضوع'],['Ref','المرجع'],['Recorded by','سُجّل بواسطة']])+`<tbody>${X.length?X.map(i=>{const out=i.detail_en.startsWith('Outgoing');const [ , pe=''] = i.detail_en.split(' · ');const [ , pa=''] = i.detail_ar.split(' · ');
+        return row([`<td>${ds(i)}</td>`,`<td>${f.V(out?'Outgoing':'Incoming',out?'صادر':'وارد')}<span class="sub2">${f.lang==='ar'?pa:pe}</span></td>`,`<td>${f.S(strip(i.title_en,'Correspondence: '),strip(i.title_ar,'مراسلة: '))}</td>`,`<td>${mono(i.ref)}</td>`,`<td>${by(i)}</td>`]);}).join(''):none(5)}</tbody>`;},
+    place:()=>{ const X=inP.filter(i=>catOf(i.kind)==='place');
+      return th([['Date','التاريخ'],['Event','الحدث'],['Detail','التفاصيل'],['Ref','المرجع'],['Recorded by','سُجّل بواسطة']])+`<tbody>${X.length?X.map(i=>row([`<td>${ds(i)}</td>`,`<td>${f.S(i.title_en,i.title_ar)}</td>`,`<td>${f.S(i.detail_en,i.detail_ar)}</td>`,`<td>${i.ref?mono(i.ref):'-'}</td>`,`<td>${by(i)}</td>`])).join(''):none(5)}</tbody>`;}
+  };
+  const daysFor = c=> c==='leave' ? inP.filter(i=>i.kind==='leave').reduce((n,i)=>n+i.days,0) : c==='absence' ? inP.filter(i=>i.kind==='absence').length : null;
+  const sumRows = secs.map(c=>`<tr><td>${f.V(CATINFO[c].sec_en,CATINFO[c].sec_ar)}</td><td class="num">${f.n(cnt(c))}</td><td class="num">${daysFor(c)==null?'-':f.n(daysFor(c))}</td></tr>`).join('');
+  const sumTbl = A.summary ? `<div class="sec"><h2>${f.L('Period summary','ملخص الفترة')}</h2><table class="dt"><thead><tr><th>${f.S('Category','الفئة')}</th><th class="num">${f.S('Entries','السجلات')}</th><th class="num">${f.S('Total days','إجمالي الأيام')}</th></tr></thead><tbody>${sumRows}<tr class="tot"><td>${f.L('Total','الإجمالي')}</td><td class="num">${f.n(sel.length)}</td><td class="num">${f.n(daysFor('leave')!=null&&A.cats.has('leave')?daysFor('leave'):0)}</td></tr></tbody></table></div>` : '';
+  const scope = excluded.length
+    ? `<div class="scope"><b>${f.L('Filtered statement','كشف مصفّى')}.</b> ${f.L('Includes','يشمل')}: ${secs.map(c=>f.V(CATINFO[c].sec_en,CATINFO[c].sec_ar)).join(', ')||'-'}. ${f.L('Left out','مستثنى')}: ${excluded.map(c=>f.V(CATINFO[c].sec_en,CATINFO[c].sec_ar)).join(', ')}. ${f.L('Entries shown','السجلات المعروضة')}: ${f.n(sel.length)} ${f.L('of','من')} ${f.n(inP.length)}.</div>`
+    : `<div class="scope"><b>${f.L('All categories included','جميع الفئات مشمولة')}.</b> ${f.L('Entries in this period','السجلات في هذه الفترة')}: ${f.n(inP.length)}.</div>`;
+  const secHtml = secs.map(c=>`<div class="sec"><h2>${f.V(CATINFO[c].sec_en,CATINFO[c].sec_ar)} <span class="c">${f.n(cnt(c))}</span></h2><table class="dt">${sections[c]()}</table></div>`).join('');
+  const body = scope + sumTbl + secHtml + (A.sign?signBlocks(f,'two'):'');
+  const title = f.L('Activity statement','كشف النشاط');
+  const lineTotal = `${f.L('Line total','إجمالي السطور')}: ${f.n(sel.length)} ${f.L(sel.length===1?'entry':'entries','سجل')}`;
+  return paperOut(A.orient==='landscape', f, title, A.from, A.to, 'AS/'+EMP.id+'/'+TODAY, body, lineTotal);
+}
+
+/* ---------- attendance data ---------- */
+const DAYS = {};
+for (let d=1; d<=30; d++){
+  const date = `2026-09-${String(d).padStart(2,'0')}`;
+  DAYS[date] = d<=28 ? {date, shift_code:null, state:'leave', first_punch:null, last_punch:null, punch_count:0, minutes_past_grace:0}
+    : {date, shift_code:'noon', state:'verified', first_punch:d===29?'12:53':'12:47', last_punch:d===29?'21:02':'21:05', punch_count:2, minutes_past_grace:0};
+}
+D.attendance.forEach(r=>DAYS[r.date]=r);
+const SH = D.shifts;
+const SHL = {morning:['M','ص'],noon:['N','ظ'],night:['L','ل'],office_day:['O','د']};
+function attRows(from,to){
+  const out=[]; for(let d=from; d<=to; d=addDays(d,1)) if(DAYS[d]) out.push(DAYS[d]); return out;
+}
+function attStats(rows){
+  const j = rows.filter(r=>r.shift_code);
+  const g = s=>j.filter(r=>r.state===s).length;
+  const late = j.filter(r=>r.state==='late');
+  const st = {sched:j.length, ontime:g('verified'), grace:g('grace'), late:late.length, lateMin:late.reduce((n,r)=>n+r.minutes_past_grace,0),
+    absent:g('absent'), single:g('unpaired'), rest:rows.filter(r=>r.state==='off').length, leave:rows.filter(r=>r.state==='leave').length};
+  st.punct = st.sched ? Math.round((st.ontime+st.grace)/st.sched*100) : 0;
+  st.exc = rows.filter(r=>['late','absent','unpaired'].includes(r.state));
+  return st;
+}
+function attendancePaper(){
+  const A = S.att, f = mk(A.lang);
+  const [from,to] = attRange();
+  const rows = attRows(from,to), st = attStats(rows);
+  const sl = c => c? (f.lang==='ar'?SHL[c][1]:SHL[c][0]) : '';
+  const stName = s => f.V(D.states[s].en, D.states[s].ar);
+  const win = c=>`<span class="mn ltr">${SH[c].start} - ${SH[c].end}</span>`;
+  const first = r=> r.first_punch ? `<span class="mn ltr">${r.first_punch}</span>` : '-';
+  const last = r=> r.last_punch ? `<span class="mn ltr">${r.last_punch}${r.first_punch&&r.last_punch<r.first_punch?' +1':''}</span>` : '-';
+  const pairs = [
+    [f.L('Scheduled shifts','الورديات المجدولة'), f.n(st.sched)],
+    [f.L('On time','في الوقت'), f.n(st.ontime)],
+    [f.L('Inside grace (30 min)','داخل مدة السماح (٣٠ دقيقة)'), f.n(st.grace)],
+    [f.L('Late past grace','تأخر بعد السماح'), `${f.n(st.late)} <small>${f.L('days, total','أيام، المجموع')} ${f.n(st.lateMin)} ${f.L('min','دقيقة')}</small>`],
+    [f.L('Absent','غائب'), f.n(st.absent)],
+    [f.L('Single punch','بصمة واحدة'), f.n(st.single)],
+    [f.L('Rest days','أيام الراحة'), f.n(st.rest)],
+    [f.L('Punctuality','الالتزام بالوقت'), `${f.n(st.punct)}% <small>${f.L('on time and inside grace, of scheduled','في الوقت وداخل السماح من المجدول')}</small>`]
+  ];
+  if (st.leave) pairs.push([f.L('On leave (days)','في إجازة (أيام)'), f.n(st.leave)]);
+  if (pairs.length%2) pairs.push(['','']);
+  let sumRows=''; for(let i=0;i<pairs.length;i+=2) sumRows+=`<tr><td class="k">${pairs[i][0]}</td><td class="v">${pairs[i][1]}</td><td class="k">${pairs[i+1][0]}</td><td class="v">${pairs[i+1][1]}</td></tr>`;
+  const sumHtml = A.summary ? `<div class="sec"><h2>${f.L('Summary','الملخص')}</h2><table class="sum">${sumRows}</table></div>` : '';
+  /* month by month, only when the range spans months */
+  const ym = x=>x.slice(0,7);
+  const spans = ym(from)!==ym(to);
+  const mrows = D.months.filter(m=>m.month>=ym(from)&&m.month<=ym(to));
+  const monthTbl = (spans && A.summary) ? `<div class="sec"><h2>${f.L('By month','حسب الشهر')}</h2><table class="dt"><thead><tr><th>${f.S('Month','الشهر')}</th><th class="num">${f.S('Shifts worked','ورديات منفذة')}</th><th class="num">${f.S('Leave days','أيام الإجازة')}</th></tr></thead><tbody>${mrows.map(m=>`<tr><td>${monthStr(m.month,f.lang==='ar'?'ar':'en')}</td><td class="num">${f.n(m.worked)}</td><td class="num">${f.n(m.leave_days)}</td></tr>`).join('')}<tr class="tot"><td>${f.L('Total','الإجمالي')}</td><td class="num">${f.n(mrows.reduce((n,m)=>n+m.worked,0))}</td><td class="num">${f.n(mrows.reduce((n,m)=>n+m.leave_days,0))}</td></tr></tbody></table></div>` : '';
+  /* calendars */
+  const firstWd = f.lang==='ar' ? 6 : 0; // Saturday : Sunday
+  const months = [...new Set(rows.map(r=>ym(r.date)))].sort();
+  const cal = A.calendar ? months.map(m=>{
+    const [y,mo] = m.split('-').map(Number);
+    const dim = new Date(Date.UTC(y,mo,0)).getUTCDate();
+    const lead = (new Date(Date.UTC(y,mo-1,1)).getUTCDay() - firstWd + 7) % 7;
+    let cells = ''; for(let i=0;i<7;i++) cells += `<div class="wd">${wdName((firstWd+i)%7, f.lang==='ar'?'ar':'en', false)}</div>`;
+    for(let i=0;i<lead;i++) cells += '<div class="c blank"></div>';
+    for(let d=1; d<=dim; d++){
+      const iso = `${m}-${String(d).padStart(2,'0')}`;
+      const r = DAYS[iso]; const inside = iso>=from && iso<=to && r;
+      const dn = f.n(d);
+      if (!inside){ cells += `<div class="c fut"><span class="dn">${dn}</span></div>`; continue; }
+      const s = r.state;
+      const ex = ['late','absent','unpaired'].includes(s) ? ' ex-'+s : '';
+      const tag = s==='late' ? `+${f.n(r.minutes_past_grace)} ${f.L('min','د')}` : s==='absent' ? f.L('Absent','غائب') : s==='unpaired' ? f.L('1 punch','بصمة') : s==='leave' ? f.L('Leave','إجازة') : s==='off' ? f.L('Rest','راحة') : '';
+      const punches = (A.punches && r.first_punch) ? `${r.first_punch}<br>${r.last_punch?r.last_punch+(r.last_punch<r.first_punch?'+1':''):'-'}` : '';
+      cells += `<div class="c ${s==='off'?'off':s==='leave'?'leave':''}${ex}"><span class="dn">${dn}</span><span class="sh">${sl(r.shift_code)}</span><span class="gx">${gl(s)}${tag?`<span>${tag}</span>`:''}</span><span class="pn">${punches}</span></div>`;
+    }
+    return `<div class="calwrap"><h2>${monthStr(m,f.lang==='ar'?'ar':'en')}</h2><div class="cal">${cells}</div></div>`;
+  }).join('') : '';
+  const legend = (A.calendar||A.daily) ? `<div class="leg"><h3>${f.L('Legend','دليل الرموز')}</h3>
+    ${['verified','grace','late','absent','unpaired','leave','off'].map(s=>`<div>${gl(s)}${stName(s)}</div>`).join('')}
+    ${Object.keys(SH).map(c=>`<div><span class="mn ltr" style="border:.2mm solid #444;padding:0 1mm;border-radius:.6mm;margin-inline-end:1.4mm">${sl(c)}</span>${f.V(SH[c].en,SH[c].ar)} ${win(c)}</div>`).join('')}
+    <div style="grid-column:1/-1;color:#444">${f.L('Devices record punches without direction: first punch and last punch of the day are shown. +1 marks a last punch after midnight.','الأجهزة تسجل البصمات دون تحديد الاتجاه: تظهر أول بصمة وآخر بصمة في اليوم. العلامة +١ تعني بصمة بعد منتصف الليل.')}</div></div>` : '';
+  const nodata = rows.length===0 ? `<div class="scope">${f.L('No attendance record in this period.','لا يوجد سجل دوام في هذه الفترة.')}</div>` : '';
+  /* exceptions */
+  const exc = st.exc;
+  const excHtml = A.exceptions ? `<div class="sec"><h2>${f.L('Exceptions','الاستثناءات')} <span class="c">${f.L('late, absent and single-punch days','أيام التأخر والغياب والبصمة الواحدة')}: ${f.n(exc.length)}</span></h2><table class="dt"><thead><tr><th>${f.S('Date','التاريخ')}</th><th>${f.S('Shift','الوردية')}</th><th>${f.S('Exception','الاستثناء')}</th>${A.punches?`<th>${f.S('First punch','أول بصمة')}</th><th>${f.S('Last punch','آخر بصمة')}</th>`:''}<th class="num">${f.S('Punches','البصمات')}</th><th class="num">${f.S('Past grace (min)','بعد السماح (د)')}</th></tr></thead><tbody>${exc.length?exc.map(r=>`<tr><td>${f.d(r.date)}<span class="sub2">${wdName(dt(r.date).getUTCDay(),f.lang==='ar'?'ar':'en',true)}</span></td><td>${sl(r.shift_code)} ${f.V(SH[r.shift_code].en,SH[r.shift_code].ar)}</td><td>${gl(r.state)}${stName(r.state)}</td>${A.punches?`<td>${first(r)}</td><td>${last(r)}</td>`:''}<td class="num">${f.n(r.punch_count)}</td><td class="num">${r.state==='late'?f.n(r.minutes_past_grace):'-'}</td></tr>`).join(''):`<tr><td class="none" colspan="${A.punches?7:5}">${f.L('None in this period','لا يوجد في هذه الفترة')}</td></tr>`}</tbody></table></div>` : '';
+  /* daily table */
+  const dr = A.dailyEx ? rows.filter(r=>['late','absent','unpaired'].includes(r.state)) : rows;
+  const dailyHtml = A.daily ? `<div class="sec" style="break-inside:auto"><h2>${f.L('Daily record','السجل اليومي')}</h2>${A.dailyEx?`<div class="scope"><b>${f.L('Filtered','مصفّى')}.</b> ${f.L('Exception days only','أيام الاستثناء فقط')}: ${f.n(dr.length)} ${f.L('of','من')} ${f.n(rows.length)} ${f.L('days','يومًا')}.</div>`:''}<table class="dt"><thead><tr><th>${f.S('Date','التاريخ')}</th><th>${f.S('Day','اليوم')}</th><th>${f.S('Shift','الوردية')}</th><th>${f.S('State','الحالة')}</th>${A.punches?`<th>${f.S('First punch','أول بصمة')}</th><th>${f.S('Last punch','آخر بصمة')}</th>`:''}<th class="num">${f.S('Punches','البصمات')}</th><th class="num">${f.S('Past grace (min)','بعد السماح (د)')}</th></tr></thead><tbody>${dr.map(r=>`<tr><td>${f.d(r.date)}</td><td>${wdName(dt(r.date).getUTCDay(),f.lang==='ar'?'ar':'en',false)}</td><td>${r.shift_code?sl(r.shift_code)+' '+f.V(SH[r.shift_code].en,SH[r.shift_code].ar):'-'}</td><td>${gl(r.state)}${stName(r.state)}</td>${A.punches?`<td>${first(r)}</td><td>${last(r)}</td>`:''}<td class="num">${r.shift_code?f.n(r.punch_count):'-'}</td><td class="num">${r.state==='late'?f.n(r.minutes_past_grace):'-'}</td></tr>`).join('')}</tbody></table></div>` : '';
+  const body = nodata + sumHtml + monthTbl + cal + legend + excHtml + dailyHtml + (A.sign?signBlocks(f,'three'):'');
+  const title = f.L('Attendance statement','كشف الدوام');
+  const lineTotal = `${f.L('Line total','إجمالي السطور')}: ${f.n(rows.length)} ${f.L('days','يومًا')} · ${f.n(exc.length)} ${f.L('exceptions','استثناءات')}`;
+  return paperOut(A.orient==='landscape', f, title, from, to, 'AT/'+EMP.id+'/'+TODAY, body, lineTotal);
+}
+
+/* ---------- setup frames ---------- */
+function seg(a, cur, opts){
+  return `<div class="seg" role="group">${opts.map(([v,l])=>`<button data-a="${a}" data-v="${v}" data-k="${a}${v}" aria-pressed="${cur===v}">${l}</button>`).join('')}</div>`;
+}
+function backBar(title, sub){
+  return `<div class="sethead no-print"><button class="back" data-a="go" data-v="${S.frame<=3?1:1}"><span class="flip">${ic('back',16)}</span>${U('Back to Activity','العودة إلى النشاط')}</button><h1>${title}</h1><span class="who2">${sub}</span><span class="grow"></span>
+    <button class="btn" data-a="pdf">${ic('ext',16)}${U('Open as PDF','فتح كملف PDF')}</button><button class="btn pri" data-a="print">${ic('printer',16)}${U('Print','طباعة')}</button></div>`;
+}
+function langSeg(a, cur){
+  return seg(a, cur, [['ar','العربية'],['en','English'],['both',U('Bilingual','ثنائي اللغة')]]);
+}
+function orientSeg(a, cur){
+  return seg(a, cur, [['portrait',U('Portrait','طولي')],['landscape',U('Landscape','عرضي')]]);
+}
+function chk(a,on,label,extra,k){
+  return `<label class="opt" data-on="${on}"><input type="checkbox" data-a="${a}" data-k="${k||a}" ${on?'checked':''}><span class="grow">${label}</span>${extra||''}</label>`;
+}
+function renderF2(){
+  const A = S.act, inP = itemsIn(A.from,A.to);
+  const sel = inP.filter(i=>A.cats.has(catOf(i.kind)));
+  const presets = ['month','last3','year','all','custom'];
+  const periodHtml = presets.map(k=>{
+    let rg=''; if (k!=='custom'){const [a,b]=PRESETS[k].f(); rg=rangeStr(a,b,S.ui);}
+    return `<label class="opt" data-on="${A.preset===k}"><input type="radio" name="ap" data-a="aperiod" data-v="${k}" data-k="ap${k}" ${A.preset===k?'checked':''}><span class="grow">${U(PRESETS[k].en,PRESETS[k].ar)}</span><span class="rng">${rg}</span></label>`;
+  }).join('');
+  const catsHtml = CATS.map(c=>{const n=inP.filter(i=>catOf(i.kind)===c).length;
+    return chk('acat'+'_'+c, A.cats.has(c), `<span class="tone-${c}" style="display:inline-flex;margin-inline-end:8px;vertical-align:middle">${ic(c,16)}</span>${U(CATINFO[c].sec_en,CATINFO[c].sec_ar)}`, `<span class="n">${num(n,S.ui)}</span>`, 'acat_'+c);}).join('');
+  const pages = '<span id="pgcount">...</span>';
+  $('#f2').innerHTML = appbar([U('Employees','الموظفون'),EMP.id,U('Activity','النشاط'),U('Print','طباعة')]) +
+   backBar(U('Print activity statement','طباعة كشف النشاط'), `${U(EMP.name_en,EMP.name_ar)} · ${EMP.id}`) +
+   `<div class="setup"><div class="settings"><div class="in">
+     <fieldset class="fs"><legend>${U('Period','الفترة')}</legend>${periodHtml}
+       <div class="dates"><label>${U('From','من')}<input type="date" data-a="afrom" data-k="afrom" value="${A.from}" max="${TODAY}"></label><label>${U('To','إلى')}<input type="date" data-a="ato" data-k="ato" value="${A.to}" max="${TODAY}"></label></div></fieldset>
+     <fieldset class="fs"><legend>${U('Sections to include','الأقسام المطلوبة')}</legend>${catsHtml}
+       <p class="hint"><button class="btn sm" data-a="acats" data-v="all">${U('All','الكل')}</button> <button class="btn sm" data-a="acats" data-v="none">${U('None','لا شيء')}</button></p></fieldset>
+     <fieldset class="fs"><legend>${U('On the page','في الصفحة')}</legend>${chk('asummary',A.summary,U('Period summary table','جدول ملخص الفترة'))}${chk('asign',A.sign,U('Signature block (prepared by, reviewed by)','خانة التوقيع (أعدّه، راجعه)'))}</fieldset>
+     <fieldset class="fs"><legend>${U('Language','اللغة')}</legend>${langSeg('alang',A.lang)}<p class="hint">${U('Default is the interface language (English now). Official copies are usually printed in Arabic.','الافتراضي لغة الواجهة (العربية الآن). النسخ الرسمية تُطبع عادةً بالعربية.')}</p></fieldset>
+     <fieldset class="fs" style="border-bottom:0"><legend>${U('Paper','الورق')}</legend>${orientSeg('aorient',A.orient)}<p class="hint">A4</p></fieldset>
+   </div><div class="result" aria-live="polite"><b>${num(sel.length,S.ui)} ${U(sel.length===1?'entry':'entries','سجلًا')}</b><div class="s">${U('in','في')} ${num(CATS.filter(c=>A.cats.has(c)).length,S.ui)} ${U('sections','أقسام')} · ${U('about','نحو')} ${pages} ${U('pages','صفحات')} · A4 ${A.orient==='landscape'?U('landscape','عرضي'):U('portrait','طولي')}</div></div></div>
+   <div class="canvas" id="c2"><div class="zoomwrap" id="z2">${activityPaper()}</div></div></div>`;
+}
+function renderF3(){
+  $('#f3').innerHTML = appbar([U('Employees','الموظفون'),EMP.id,U('Activity','النشاط'),U('Print','طباعة')]) +
+   `<div class="papertools no-print"><button class="back btn" data-a="go" data-v="2"><span class="flip">${ic('back',16)}</span>${U('Back to setup','العودة إلى الإعداد')}</button><span>${U('Activity statement as it prints','كشف النشاط كما سيُطبع')} · A4 ${S.act.orient==='landscape'?U('landscape','عرضي'):U('portrait','طولي')} · ${U('about','نحو')} <span id="pgcount">...</span> ${U('pages','صفحات')}</span><span class="grow"></span><button class="btn" data-a="pdf">${ic('ext',16)}${U('Open as PDF','فتح كملف PDF')}</button><button class="btn pri" data-a="print">${ic('printer',16)}${U('Print','طباعة')}</button></div>
+   <div class="paperstage" id="c3"><div class="zoomwrap" id="z3">${activityPaper()}</div></div>`;
+}
+function renderF4(){
+  const A = S.att; const [from,to] = attRange();
+  const rows = attRows(from,to), st = attStats(rows);
+  const monthName = monthStr(`${A.y}-${String(A.m).padStart(2,'0')}`, S.ui);
+  const canNext = !(A.y===2026&&A.m>=10), canPrev = !(A.y===2026&&A.m<=1);
+  const opt = (k,label,extra)=>`<label class="opt" data-on="${A.mode===k}"><input type="radio" name="am" data-a="amode" data-v="${k}" data-k="am${k}" ${A.mode===k?'checked':''}><span class="grow">${label}</span>${extra||''}</label>`;
+  const partial = from < '2026-09-01';
+  const warnNote = partial ? `<div class="note no-print">${U('Mockup data: day-level records exist for Sep and Oct 2026 only.','بيانات تجريبية: السجلات اليومية متوفرة لشهري سبتمبر وأكتوبر ٢٠٢٦ فقط.')}</div>` : '';
+  $('#f4').innerHTML = appbar([U('Employees','الموظفون'),EMP.id,U('Attendance','الدوام'),U('Print','طباعة')]) +
+   backBar(U('Print attendance statement','طباعة كشف الدوام'), `${U(EMP.name_en,EMP.name_ar)} · ${EMP.id}`).replace(U('Back to Activity','العودة إلى النشاط'),U('Back to Attendance','العودة إلى الدوام')) +
+   `<div class="setup"><div class="settings"><div class="in">
+     <fieldset class="fs"><legend>${U('Period','الفترة')}</legend>
+       ${opt('month',U('Month','شهر'),`<span class="rng">${rangeStr(...(function(){const f=`${A.y}-${String(A.m).padStart(2,'0')}-01`;let t=addDays(f,32).slice(0,7)+'-01';t=addDays(t,-1);return [f,t>TODAY?TODAY:t]})(),S.ui)}</span>`)}
+       <div class="mstep"><button class="ib" data-a="mprev" aria-label="${U('Previous month','الشهر السابق')}" ${canPrev?'':'disabled'}><span class="flip">${ic('chevl',16)}</span></button><span class="cur">${monthName}</span><button class="ib" data-a="mnext" aria-label="${U('Next month','الشهر التالي')}" ${canNext?'':'disabled'}><span class="flip">${ic('chev',16)}</span></button></div>
+       <div class="shortcuts"><button class="btn sm" data-a="mthis">${U('This month','هذا الشهر')}</button><button class="btn sm" data-a="mlast">${U('Last month','الشهر الماضي')}</button></div>
+       ${opt('quarter',U('Quarter','ربع سنة'),`<select class="sel" data-a="aq" data-k="aq" aria-label="${U('Quarter','ربع سنة')}">${[1,2,3,4].map(q=>`<option value="${q}" ${A.q===q?'selected':''}>${U('Q'+q+' 2026','الربع '+num(q,'ar')+' ٢٠٢٦')}</option>`).join('')}</select>`)}
+       ${opt('ytd',U('Year to date','منذ بداية السنة'),`<span class="rng">${rangeStr('2026-01-01',TODAY,S.ui)}</span>`)}
+       ${opt('custom',U('Custom range','نطاق مخصص'))}
+       <div class="dates"><label>${U('From','من')}<input type="date" data-a="atfrom" data-k="atfrom" value="${from}" max="${TODAY}"></label><label>${U('To','إلى')}<input type="date" data-a="atto" data-k="atto" value="${to}" max="${TODAY}"></label></div>
+       <p class="hint">${U('Dates after today are not printed.','التواريخ بعد اليوم لا تُطبع.')}</p></fieldset>
+     <fieldset class="fs"><legend>${U('Content','المحتوى')}</legend>
+       ${chk('csummary',A.summary,U('Summary table','جدول الملخص'))}${chk('ccalendar',A.calendar,U('Month calendar','تقويم الشهر'))}${chk('cexc',A.exceptions,U('Exceptions list (late, absent, single punch)','قائمة الاستثناءات (تأخر، غياب، بصمة واحدة)'))}${chk('cdaily',A.daily,U('Daily table','الجدول اليومي'))}
+       <div style="padding-inline-start:26px">${chk('cdailyex',A.dailyEx,U('Exception days only','أيام الاستثناء فقط'))}</div>
+       ${chk('cpunch',A.punches,U('Punch times (first and last)','أوقات البصمات (الأولى والأخيرة)'))}
+       <p class="hint">${U('A filtered daily table says so on the page.','الجدول اليومي المصفّى يذكر ذلك في الصفحة.')}</p></fieldset>
+     <fieldset class="fs"><legend>${U('Signatures','التوقيعات')}</legend>${chk('csign',A.sign,U('Prepared by, reviewed by, employee acknowledgement','أعدّه، راجعه، إقرار الموظف'))}</fieldset>
+     <fieldset class="fs"><legend>${U('Language','اللغة')}</legend>${langSeg('tlang',A.lang)}<p class="hint">${U('Default is the interface language. The calendar starts on Sunday in English and Saturday in Arabic.','الافتراضي لغة الواجهة. يبدأ التقويم بالأحد في الإنجليزية وبالسبت في العربية.')}</p></fieldset>
+     <fieldset class="fs" style="border-bottom:0"><legend>${U('Paper','الورق')}</legend>${orientSeg('torient',A.orient)}<p class="hint">A4</p></fieldset>
+   </div><div class="result" aria-live="polite"><b>${num(rows.length,S.ui)} ${U('days','يومًا')} · ${num(st.exc.length,S.ui)} ${U(st.exc.length===1?'exception':'exceptions','استثناءات')}</b><div class="s">${rangeStr(from,to,S.ui)} · ${U('about','نحو')} <span id="pgcount">...</span> ${U('pages','صفحات')} · A4 ${A.orient==='landscape'?U('landscape','عرضي'):U('portrait','طولي')}</div></div></div>
+   <div class="canvas" id="c4">${warnNote}<div class="zoomwrap" id="z4">${attendancePaper()}</div></div></div>`;
+}
+function renderF5(){
+  $('#f5').innerHTML = appbar([U('Employees','الموظفون'),EMP.id,U('Attendance','الدوام'),U('Print','طباعة')]) +
+   `<div class="papertools no-print"><button class="back btn" data-a="go" data-v="4"><span class="flip">${ic('back',16)}</span>${U('Back to setup','العودة إلى الإعداد')}</button><span>${U('Attendance statement as it prints','كشف الدوام كما سيُطبع')} · A4 ${S.att.orient==='landscape'?U('landscape','عرضي'):U('portrait','طولي')} · ${U('about','نحو')} <span id="pgcount">...</span> ${U('pages','صفحات')}</span><span class="grow"></span><button class="btn" data-a="pdf">${ic('ext',16)}${U('Open as PDF','فتح كملف PDF')}</button><button class="btn pri" data-a="print">${ic('printer',16)}${U('Print','طباعة')}</button></div>
+   <div class="paperstage" id="c5"><div class="zoomwrap" id="z5">${attendancePaper()}</div></div>`;
+}
+function renderF6(){
+  const li = a=>`<ul>${a.map(x=>`<li>${x}</li>`).join('')}</ul>`;
+  $('#f6').innerHTML = `<div class="build" dir="ltr" lang="en"><h2>What building this needs</h2>
+   <h3>Backend</h3>${li([
+     'Activity endpoint with <code>from</code>, <code>to</code> and <code>kinds</code> parameters and no 20-item cap (today <code>ACTIVITY_LIMIT</code> in <code>employee_detail_service._build_activity</code>); the print setup shows the exact entry count, so the count comes from the same query.',
+     'Server-built sentence parts per entry in both languages: actor, verb, object, detail, reference and who recorded it. None of these exist on <code>ActivityItemRead</code> today; Arabic plurals and the summary sentence are built from counts, not translated strings.',
+     'Month grouping and per-category totals (entries, leave days) returned with the list, so screen and paper cannot disagree.',
+     'Attendance already accepts any range through <code>getEmployeeAttendance</code>. A multi-month paper needs the day rows for every month in range, plus rest days and leave days as rows, which the roster-only call omits.',
+     'Linked documents per entry (the file behind a certificate, leave form, violation notice or letter).'])}
+   <h3>Frontend</h3>${li([
+     '<code>ActivityTab.tsx</code>: replace the timeline with <code>ActivityStatement</code> (period header, summary sentence, category toggles, month groups, expandable entries, rail). Keep <code>DutyLocationActivity</code> and <code>StatusActivity</code> for their detail panels.',
+     'New route for print setup, for example <code>/employees/:id/activity/print</code>, and the same for attendance, so the browser Back button leaves the preview. Settings live in the URL query so a setup can be shared or reloaded.',
+     'One paper component per document, modelled on <code>AttendancePrintSheet.tsx</code>: letterhead and identity in <code>thead</code>, provenance in <code>tfoot</code>, <code>@page { size: A4 }</code> injected for landscape. The month calendar is a 7-column CSS grid with logical properties.',
+     'Letterhead component shared with the Ledger Book paper (ADR 0007): wordmark, office block, red rule, contact footer.',
+     'Both language dictionaries and Noto Naskh Arabic for paper. Weekday order flips with language.'])}
+   <h3>Risks</h3>${li([
+     'Chrome repeats a table head on each printed page only while head + foot stay under about a third of the page. A4 portrait passes (letterhead and identity 64 mm + provenance 25 mm = 89 mm of 297 mm), but it costs a third of every page. A4 landscape (210 mm) would not, so the full masthead prints once as the first row and later pages carry one compact line. The paper body must be a list of table rows: a page break inside a single tall cell repeats nothing.',
+     'Chrome cannot print page numbers. The paper states the line total instead; the page count in setup is a simulated pagination of the rendered rows, not a promise.',
+     'Live preview is one continuous sheet, not paginated. Page breaks appear only in print.',
+     'Long ranges (all years) print many pages; the setup states the page estimate before printing.',
+     'Not designed here: mobile surfaces of the Activity tab.'])}
+   </div>`;
+}
+
+/* ---------- render + wiring ---------- */
+let renderedFrame = 0;
+function fit(){
+  [['c2','z2','act'],['c4','z4','att']].forEach(([c,z,kind])=>{
+    const cv = document.getElementById(c), zw = document.getElementById(z); if(!cv||!zw) return;
+    const sheet = zw.firstElementChild; zw.style.zoom=1;
+    const w = sheet.offsetWidth; const avail = cv.clientWidth - 56;
+    zw.style.zoom = Math.min(1, avail/w);
+  });
+}
+/* Paginates the measured rows the way print does (a row never splits) and pads the last
+   page so the provenance block sits at the foot of the sheet, as on the letterhead. */
+function pagesEstimate(zid){
+  const zw = document.getElementById(zid); if(!zw) return;
+  const sheet = zw.firstElementChild; const zoom = zw.style.zoom; zw.style.zoom = 1;
+  const fill = sheet.querySelector('tr.fill > td'); fill.style.height = '0px';
+  const mm = 3.7795, ph = (sheet.classList.contains('land')?210:297)*mm;
+  const h = el=>el.getBoundingClientRect().height;
+  const per = ph - h(sheet.tHead) - h(sheet.tFoot) - 2*mm;
+  let n = 1, y = 0;
+  [...sheet.tBodies[0].rows].filter(r=>!r.classList.contains('fill')).forEach(r=>{
+    const rh = h(r); if (y + rh > per && y > 0){ n++; y = 0; } y += rh;
+  });
+  fill.style.height = Math.max(0, per - y) + 'px';
+  zw.style.zoom = zoom;
+  document.querySelectorAll('#pgcount').forEach(e=>e.textContent = num(n,S.ui));
+  return n;
+}
+function render(){
+  const key = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
+  document.documentElement.lang = S.ui; document.documentElement.dir = S.ui==='ar'?'rtl':'ltr';
+  renderBar();
+  document.querySelectorAll('.frame').forEach((el,i)=>{el.classList.toggle('on', i+1===S.frame); if(i+1!==S.frame) el.innerHTML='';});
+  [renderF1,renderF2,renderF3,renderF4,renderF5,renderF6][S.frame-1]();
+  const land = (S.frame<=3 ? S.act : S.att).orient==='landscape';
+  $('#pagecss').textContent = `@page { size: A4 ${land?'landscape':'portrait'}; margin: 0 }`;
+  fit();
+  const z = {2:'z2',3:'z3',4:'z4',5:'z5'}[S.frame]; if(z) pagesEstimate(z);
+  if (key){const el=document.querySelector(`[data-k="${key}"]`); if(el) el.focus({preventScroll:true});}
+}
+function toast(t){const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,2600)}
+const tr = (en,ar)=>U(en,ar);
+const A = {
+  go:el=>{S.frame=+el.dataset.v; window.scrollTo(0,0)},
+  ui:el=>{S.ui=el.dataset.v; S.act.lang=S.att.lang=S.ui},
+  cat:el=>{const c=el.dataset.v; S.screen.cats.has(c)?S.screen.cats.delete(c):S.screen.cats.add(c); if(!S.screen.cats.size) CATS.forEach(x=>S.screen.cats.add(x))},
+  allcats:()=>CATS.forEach(x=>S.screen.cats.add(x)),
+  scrperiod:el=>{S.screen.preset=el.value},
+  open:el=>{const id=+el.dataset.v; S.screen.open = S.screen.open===id?null:id},
+  toast:el=>toast(el.dataset.v+': '+tr('opens in the app','يفتح في التطبيق')),
+  toprint:()=>{S.act.preset=S.screen.preset; applyActPreset(); S.act.cats=new Set(S.screen.cats); S.frame=2; window.scrollTo(0,0)},
+  print:()=>{ window.print() },
+  pdf:()=>toast(tr('In the app this opens the generated PDF in a new tab.','في التطبيق يُفتح ملف PDF المُنشأ في تبويب جديد.')),
+  aperiod:el=>{S.act.preset=el.dataset.v; applyActPreset()},
+  afrom:el=>{S.act.from=el.value; if(S.act.to<S.act.from) S.act.to=S.act.from; S.act.preset='custom'},
+  ato:el=>{S.act.to=el.value; if(S.act.to<S.act.from) S.act.from=S.act.to; S.act.preset='custom'},
+  acats:el=>{S.act.cats = new Set(el.dataset.v==='all'?CATS:[])},
+  asummary:el=>{S.act.summary=el.checked}, asign:el=>{S.act.sign=el.checked},
+  alang:el=>{S.act.lang=el.dataset.v}, aorient:el=>{S.act.orient=el.dataset.v},
+  amode:el=>{S.att.mode=el.dataset.v},
+  mprev:()=>{S.att.mode='month'; S.att.m--; if(S.att.m<1){S.att.m=12;S.att.y--}},
+  mnext:()=>{S.att.mode='month'; S.att.m++; if(S.att.m>12){S.att.m=1;S.att.y++}},
+  mthis:()=>{S.att.mode='month';S.att.y=2026;S.att.m=10}, mlast:()=>{S.att.mode='month';S.att.y=2026;S.att.m=9},
+  aq:el=>{S.att.mode='quarter'; S.att.q=+el.value},
+  atfrom:el=>{S.att.mode='custom'; S.att.from=el.value; if(S.att.to<S.att.from) S.att.to=S.att.from},
+  atto:el=>{S.att.mode='custom'; S.att.to=el.value; if(S.att.to<S.att.from) S.att.from=S.att.to},
+  csummary:el=>{S.att.summary=el.checked}, ccalendar:el=>{S.att.calendar=el.checked}, cexc:el=>{S.att.exceptions=el.checked},
+  cdaily:el=>{S.att.daily=el.checked}, cdailyex:el=>{S.att.dailyEx=el.checked; if(el.checked) S.att.daily=true}, cpunch:el=>{S.att.punches=el.checked},
+  csign:el=>{S.att.sign=el.checked}, tlang:el=>{S.att.lang=el.dataset.v}, torient:el=>{S.att.orient=el.dataset.v}
+};
+function dispatch(el){
+  let name = el.dataset.a;
+  if (name && name.startsWith('acat_')){ const c=name.slice(5); el.checked?S.act.cats.add(c):S.act.cats.delete(c); render(); return; }
+  if (A[name]){ A[name](el); if(name!=='print'&&name!=='pdf'&&name!=='toast') render(); else if(name==='toast'){} }
+}
+document.addEventListener('click', e=>{
+  const el = e.target.closest('[data-a]'); if(!el) return;
+  if (el.tagName==='INPUT'||el.tagName==='SELECT') return;
+  dispatch(el);
+});
+document.addEventListener('change', e=>{
+  const el = e.target.closest('[data-a]'); if(!el) return;
+  if (el.tagName==='INPUT'||el.tagName==='SELECT') dispatch(el);
+});
+window.addEventListener('resize', fit);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{fit(); const z={2:'z2',3:'z3',4:'z4',5:'z5'}[S.frame]; if(z) pagesEstimate(z)});
+render();
+})();
+</script>
+</body>
+</html>
