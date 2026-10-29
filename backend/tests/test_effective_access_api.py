@@ -311,13 +311,14 @@ def test_message_template_deny_preserves_read_but_real_write_denies(api_db):
     edit = check(c, target, "notification_template", "violation", "edit")
     reset = check(c, target, "notification_template", "violation", "reset")
     assert read.json()["current"]["authorization"] == "allowed"
-    assert read.json()["current"]["setting_capabilities"] == []
+    view = "messages.templates.view.notify.violation"
+    assert read.json()["current"]["setting_capabilities"] == [view]
     assert (
         edit.json()["current"]["authorization"]
         == reset.json()["current"]["authorization"]
         == "denied"
     )
-    assert edit.json()["current"]["setting_capabilities"] == ["messages.templates"]
+    assert edit.json()["current"]["setting_capabilities"] == ["messages.templates", view]
     target_client = client(api_db, target)
     assert target_client.get("/api/v1/notify/templates").status_code == 200
     assert (
@@ -879,3 +880,211 @@ def test_duty_transfer_explains_conditional_record_gates_without_denying_initial
     assert any(
         reason["code"] == "INITIAL_PLACEMENT_BYPASSES_RECORD_TYPE" for reason in decision["reasons"]
     )
+
+
+@pytest.mark.parametrize(
+    "kind,identifier,list_path,write_path,payload",
+    [
+        (
+            "notification_template",
+            "violation",
+            "/api/v1/notify/templates",
+            "/api/v1/notify/templates/violation",
+            {"ar": "نص", "en": "Text"},
+        ),
+        (
+            "email_template",
+            "absence:absent",
+            "/api/v1/email/draft-templates",
+            "/api/v1/email/draft-templates/absence:absent",
+            {"subject": "Absence"},
+        ),
+    ],
+)
+def test_template_visibility_snapshot_why_check_preview_and_consumer_agree(
+    api_db, kind, identifier, list_path, write_path, payload
+):
+    from app.services.template_capability_service import view_capability
+
+    _, target, c = setup(api_db)
+    consumer = client(api_db, target)
+    view = view_capability(kind, identifier)
+    perm_service.set_user_override(api_db, target.id, "messages.templates", "grant")
+    assert consumer.put(write_path, json=payload).status_code == 200
+    current = c.get(url(target)).json()
+    assert view in current["effective"] and view in current["role_defaults"]
+    row = next(
+        item
+        for item in current["items"]
+        if item["resource"]["kind"] == kind and item["resource"]["id"] == identifier
+    )
+    assert {
+        decision["action"]: decision["setting_capabilities"] for decision in row["actions"]
+    } == {
+        "view": [view],
+        "edit": ["messages.templates", view],
+        "reset": ["messages.templates", view],
+    }
+    patch = [{"capability": view, "effect": "deny"}]
+    preview = c.post(
+        url(target, "effective-access/preview"),
+        json={"expected_revision": current["revision"], "items": patch},
+    )
+    assert preview.status_code == 200, preview.text
+    assert view in perm_service.effective_caps(api_db, target)  # preview is non-mutating
+    changes = [
+        item
+        for item in preview.json()["impacts"]
+        if item["resource"]["kind"] == kind and item["resource"]["id"] == identifier
+    ]
+    assert {item["action"] for item in changes} == {"view", "edit", "reset"}
+    assert all(item["after"]["authorization"] == "denied" for item in changes)
+    saved = c.put(
+        url(target, "permissions/bulk"),
+        headers={"If-Match": current["revision"]},
+        json={"items": patch},
+    )
+    assert saved.status_code == 200, saved.text
+    denied_snapshot = c.get(url(target)).json()
+    assert view not in denied_snapshot["effective"]
+    assert view in denied_snapshot["role_defaults"]
+    for action in ("view", "read", "edit", "reset"):
+        decision = check(c, target, kind, identifier, action).json()["current"]
+        assert decision["authorization"] == "denied"
+        assert any(
+            reason["code"] == "PERSONAL_DENY"
+            and reason["capability"] == view
+            and reason["decisive"]
+            and reason["applied"]
+            for reason in decision["reasons"]
+        )
+    listed = consumer.get(list_path)
+    assert listed.status_code == 200
+    if kind == "notification_template":
+        assert identifier not in [item["event"] for item in listed.json()]
+        assert consumer.get(write_path).status_code == 404
+        assert consumer.post(write_path + "/render", json=payload).status_code == 404
+    else:
+        assert identifier not in listed.json()["overrides"]
+    assert consumer.put(write_path, json=payload).status_code == 404
+    assert consumer.delete(write_path).status_code == 404
+
+
+def test_template_labels_reuse_bilingual_event_catalog_and_default_view_ids(api_db):
+    from app.services import message_template_service, sms_templates, template_capability_service
+
+    _, target, c = setup(api_db)
+    snapshot = c.get(url(target)).json()
+    rows = {
+        item["resource"]["id"]: item
+        for item in snapshot["items"]
+        if item["resource"]["kind"] == "notification_template"
+    }
+    assert set(rows) == set(sms_templates.EVENTS)
+    for event, row in rows.items():
+        en, ar = message_template_service.event_label(event)
+        assert row["label"] == {"en": en, "ar": ar}
+        assert en != event and ar != event
+        assert row["actions"][0]["authorization"] == "allowed"
+    assert not any(
+        item["resource"]["kind"] == "capability"
+        and item["resource"]["id"] in template_capability_service.capability_ids()
+        for item in snapshot["items"]
+    )
+
+
+@pytest.mark.parametrize("role", ["operator", "manager", "admin", "inmate_reporter"])
+def test_template_view_defaults_preserve_all_authenticated_role_baselines(api_db, role):
+    from app.services import template_capability_service
+
+    _, target, _ = setup(api_db, role=role)
+    expected = template_capability_service.capability_ids()
+    resolution = perm_service.resolve_capabilities(api_db, target)
+    assert expected <= resolution.effective
+    assert expected <= resolution.role_defaults
+    view = "messages.templates.view.notify.admin_leave"
+    perm_service.set_user_override(api_db, target.id, view, "deny")
+    assert (view in perm_service.resolve_capabilities(api_db, target).effective) == (
+        role == "admin"
+    )
+    if role != "admin":
+        perm_service.set_user_override(api_db, target.id, view, "grant")
+        assert view in perm_service.resolve_capabilities(api_db, target).effective
+
+
+@pytest.mark.parametrize(
+    "kind,identifier,list_path,write_path,payload",
+    [
+        (
+            "notification_template",
+            "violation",
+            "/api/v1/notify/templates",
+            "/api/v1/notify/templates/violation",
+            {"ar": "نص مخصص", "en": "Custom wording"},
+        ),
+        (
+            "email_template",
+            "absence:absent",
+            "/api/v1/email/draft-templates",
+            "/api/v1/email/draft-templates/absence:absent",
+            {"subject": "Custom absence wording"},
+        ),
+    ],
+)
+def test_expired_template_view_grant_preserves_default_reads_before_and_after_sweep(
+    api_db, kind, identifier, list_path, write_path, payload
+):
+    from app.services.template_capability_service import view_capability
+
+    _, target, diagnostic = setup(api_db)
+    consumer = client(api_db, target)
+    view = view_capability(kind, identifier)
+    perm_service.set_user_override(api_db, target.id, "messages.templates", "grant")
+    assert consumer.put(write_path, json=payload).status_code == 200
+    # A temporary grant originally replaced a personal Deny. Its expiry must
+    # not create a new hiding policy: only a currently explicit Deny hides.
+    perm_service.set_user_override(api_db, target.id, view, "deny")
+    perm_service.set_user_override(
+        api_db,
+        target.id,
+        view,
+        "grant",
+        expires_at=datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=1),
+    )
+    for swept in (False, True):
+        if swept:
+            assert perm_service.sweep_expired_grants(api_db) == 1
+            assert api_db.get(UserPermission, (target.id, view)) is None
+        snapshot = diagnostic.get(url(target)).json()
+        assert view in snapshot["effective"]
+        assert view in snapshot["role_defaults"]
+        response = check(diagnostic, target, kind, identifier, "view")
+        assert response.status_code == 200, response.text
+        decision = response.json()["current"]
+        assert decision["authorization"] == "allowed"
+        assert any(
+            reason["code"] == "IMPLICIT_DEFAULT"
+            and reason["capability"] == view
+            and reason["applied"]
+            and reason["decisive"]
+            for reason in decision["reasons"]
+        )
+        if not swept:
+            expired = next(
+                reason
+                for reason in decision["reasons"]
+                if reason["code"] == "EXPIRED_GRANT" and reason["capability"] == view
+            )
+            assert expired["source"]["contribution"] == "grant"
+            assert expired["source"]["expires_at"] is not None
+            assert expired["applied"] is False and expired["decisive"] is False
+            assert expired["params"]["suppresses_default"] is False
+        listed = consumer.get(list_path)
+        assert listed.status_code == 200
+        if kind == "notification_template":
+            assert identifier in [item["event"] for item in listed.json()]
+            assert consumer.get(write_path).json()["override"] == payload
+            assert consumer.post(write_path + "/render", json=payload).status_code == 200
+        else:
+            assert listed.json()["overrides"][identifier] == payload
+        assert consumer.put(write_path, json=payload).status_code == 200

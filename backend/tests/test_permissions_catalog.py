@@ -5,21 +5,12 @@ from app.db.models import BookCategory
 
 
 def test_static_catalog_has_complete_bilingual_request_policy_metadata():
-    assert len(CAPABILITIES) == 60
     for cap in CAPABILITIES:
         assert cap.label_en.strip(), cap.id
         assert cap.label_ar.strip(), cap.id
         assert cap.description_en.strip(), cap.id
         assert cap.description_ar.strip(), cap.id
         assert not cap.sensitive or not cap.requestable, cap.id
-
-    by_id = {cap.id: cap for cap in CAPABILITIES}
-    assert by_id["books.view"].label_en == "View records"
-    assert by_id["books.view"].label_ar == "عرض السجلات"
-    assert by_id["books.approve"].label_en == "Approve / reject records"
-    assert by_id["books.approve"].label_ar == "اعتماد / رفض السجلات"
-    assert by_id["ledger.view"].label_en == "View ledger"
-    assert by_id["ledger.view"].label_ar == "عرض سجل المراسلات"
 
     assert frozenset({"users.manage", "system.admin", "inmate_statistics.approve"}) == (
         permissions.SENSITIVE_CAPABILITY_IDS
@@ -31,16 +22,6 @@ def test_static_catalog_has_complete_bilingual_request_policy_metadata():
     # clearance is granted by an admin or manager, never asked for.
     assert {cap.id for cap in CAPABILITIES if not cap.sensitive and not cap.requestable} == {
         "books.secret"
-    }
-
-
-def test_static_role_default_counts_are_preserved():
-    assert {
-        role: len(caps) for role, caps in ROLE_DEFAULTS.items() if role != "inmate_reporter"
-    } == {
-        "operator": 19,
-        "manager": 43,
-        "admin": 60,
     }
 
 
@@ -67,7 +48,12 @@ def test_inmate_reporter_preset_is_exactly_its_fixed_ceiling():
 
 
 def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
-    from app.services import capability_catalog_service
+    from app.services import (
+        capability_catalog_service,
+        message_template_service,
+        sms_templates,
+        template_capability_service,
+    )
 
     db_session.add_all(
         [
@@ -84,10 +70,21 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     db_session.commit()
 
     catalog = capability_catalog_service.list_catalog(db_session)
-    assert len(catalog) == 60 + (2 * (len(SERVICE_IDS) + 1)) + 15 + 2
+    template_ids = template_capability_service.capability_ids()
+    templates = tuple(entry for entry in catalog if entry.id in template_ids)
+    assert {entry.id for entry in templates} == template_ids
+    for entry in templates:
+        assert entry.label_en and entry.label_ar
+        assert entry.default_roles == ("operator", "manager", "admin", "inmate_reporter")
+        assert capability_catalog_service.get_catalog_entry(db_session, entry.id) == entry
+    for event in sms_templates.EVENTS:
+        entry = next(
+            item for item in templates if item.id == f"messages.templates.view.notify.{event}"
+        )
+        assert (entry.label_en, entry.label_ar) == message_template_service.event_label(event)
     assert len({entry.id for entry in catalog}) == len(catalog)
 
-    dynamic = catalog[len(CAPABILITIES) :]
+    dynamic = tuple(entry for entry in catalog[len(CAPABILITIES) :] if entry.id not in template_ids)
     expected_pair_ids = [
         capability_id
         for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)

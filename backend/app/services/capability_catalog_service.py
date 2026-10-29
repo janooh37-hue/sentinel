@@ -21,6 +21,7 @@ from app.core.permissions import (
 )
 from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import BookCategory
+from app.services import template_capability_service
 
 _ROLE_ORDER: Final[tuple[str, ...]] = ("operator", "manager", "admin", "inmate_reporter")
 _SERVICE_IDS: Final[tuple[str, ...]] = (*SERVICE_IDS, OTHER_SERVICE_ID)
@@ -166,6 +167,76 @@ def _book_category_entry(category: BookCategory) -> CapabilityCatalogEntry:
     )
 
 
+def _template_entry(kind: str, identifier: str) -> CapabilityCatalogEntry:
+    from app.services.message_template_service import event_label
+
+    label_en, label_ar = (
+        event_label(identifier)
+        if kind == "notification_template"
+        else _email_template_names(identifier)
+    )
+    consequence_en, consequence_ar = (
+        ("Sending notifications is not affected.", "لا يتأثر إرسال الإشعارات.")
+        if kind == "notification_template"
+        else (
+            "Hidden custom wording is not used in emails this person drafts. Other applicable visible wording or defaults may be used.",
+            "لا يُستخدم النص المخصص المخفي في رسائل البريد التي يُعدّها هذا الشخص. قد تُستخدم صياغة أخرى ظاهرة تنطبق على الرسالة أو النصوص الافتراضية.",
+        )
+    )
+    return CapabilityCatalogEntry(
+        id=template_capability_service.view_capability(kind, identifier),
+        domain="messages",
+        label_en=label_en,
+        label_ar=label_ar,
+        description_en=f"View configuration wording for {label_en}. {consequence_en}",
+        description_ar=f"عرض نص قالب «{label_ar}». {consequence_ar}" if label_ar else None,
+        sensitive=False,
+        requestable=True,
+        default_roles=_ROLE_ORDER,
+    )
+
+
+def _template_entries() -> tuple[CapabilityCatalogEntry, ...]:
+    from app.services import email_draft_template_service, sms_templates
+
+    return tuple(
+        _template_entry(kind, identifier)
+        for kind, identifiers in (
+            ("notification_template", sms_templates.EVENTS),
+            ("email_template", email_draft_template_service.KEY_FAMILIES),
+        )
+        for identifier in identifiers
+    )
+
+
+def _email_template_names(key: str) -> tuple[str, str | None]:
+    if key.startswith("classification:"):
+        classification = get_classification(key.removeprefix("classification:"))
+        assert classification is not None
+        return (
+            f"{classification.code} — {classification.name_en}",
+            f"{classification.code} — {classification.name_ar}",
+        )
+    if key.startswith("leave:"):
+        kind = key.removeprefix("leave:")
+        names = {
+            "Annual": "إجازة سنوية",
+            "Sick": "إجازة مرضية",
+            "Compassionate": "إجازة وفاة",
+            "Duty": "إجازة مهمة عمل",
+            "Emergency": "إجازة طارئة",
+            "Hajj": "إجازة حج",
+            "Others": "إجازة أخرى",
+        }
+        return "Other leave" if kind == "Others" else f"{kind} leave", names[kind]
+    labels = {
+        "General Book:transfer": ("Employee transfers", "تنقلات الموظفين"),
+        "absence:absent": ("Absence — still absent", "التغيب — لا يزال متغيبًا"),
+        "absence:returned": ("Absence — returned to duty", "التغيب — عاد إلى العمل"),
+    }
+    return labels[key] if key in labels else _service_names(key)
+
+
 def list_catalog(db: Session) -> tuple[CapabilityCatalogEntry, ...]:
     """Return the complete catalog in stable presentation order."""
     static = tuple(_STATIC_BY_ID[capability.id] for capability in CAPABILITIES)
@@ -179,7 +250,7 @@ def list_catalog(db: Session) -> tuple[CapabilityCatalogEntry, ...]:
         for category in db.scalars(select(BookCategory).order_by(BookCategory.id)).all()
         if get_classification(category.id) is None
     )
-    return (*static, *services, *classifications, *categories)
+    return (*static, *services, *classifications, *categories, *_template_entries())
 
 
 def get_catalog_entry(db: Session, capability_id: str) -> CapabilityCatalogEntry | None:
@@ -187,6 +258,12 @@ def get_catalog_entry(db: Session, capability_id: str) -> CapabilityCatalogEntry
     static = _STATIC_BY_ID.get(capability_id)
     if static is not None:
         return static
+    if capability_id in template_capability_service.capability_ids():
+        prefix = template_capability_service.NOTIFY_VIEW_PREFIX
+        kind = "notification_template"
+        if not capability_id.startswith(prefix):
+            prefix, kind = template_capability_service.EMAIL_VIEW_PREFIX, "email_template"
+        return _template_entry(kind, capability_id.removeprefix(prefix))
 
     if capability_id.startswith(SERVICE_RECORDS_CAP_PREFIX):
         service_id = capability_id.removeprefix(SERVICE_RECORDS_CAP_PREFIX)

@@ -519,8 +519,8 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "messages",
         "Manage message templates",
         "إدارة قوالب الرسائل",
-        "Edit or reset employee message and email draft wording.",
-        "تعديل صياغة رسائل الموظفين ومسودات البريد أو إعادتها إلى الافتراضي.",
+        "Edit or reset visible employee message and email draft wording. Each template also requires its own view permission.",
+        "تعديل صياغة رسائل الموظفين ومسودات البريد الظاهرة أو إعادتها إلى الافتراضي. يلزم أيضًا إذن عرض القالب المعني.",
     ),
     Capability(
         "workforce.self.view",

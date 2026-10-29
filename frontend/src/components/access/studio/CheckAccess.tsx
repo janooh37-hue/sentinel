@@ -306,10 +306,11 @@ function CheckAccessForm({
                 <h4 className="mb-2 text-sm font-semibold">
                   {t('access.studio.check.current')}
                 </h4>
-                <DecisionOutcome decision={response.current} />
+                <DecisionOutcome decision={response.current} resource={{ kind, id: resourceId }} />
                 <WhyAccess
                   decision={response.current}
                   snapshot={response.snapshot}
+                  resource={{ kind, id: resourceId }}
                 />
               </div>
               {response.proposed && (
@@ -317,10 +318,11 @@ function CheckAccessForm({
                   <h4 className="mb-2 text-sm font-semibold">
                     {t('access.studio.check.proposed')}
                   </h4>
-                  <DecisionOutcome decision={response.proposed} />
+                  <DecisionOutcome decision={response.proposed} resource={{ kind, id: resourceId }} />
                   <WhyAccess
                     decision={response.proposed}
                     snapshot={response.snapshot}
+                    resource={{ kind, id: resourceId }}
                   />
                 </div>
               )}
@@ -351,11 +353,12 @@ function CheckAccessForm({
                             )}{' '}
                             · {t(`access.studio.actions.${impact.action}`)}
                           </p>
-                          <DecisionOutcome decision={impact.after} />
+                          <DecisionOutcome decision={impact.after} resource={impact.resource} />
                           <AccessWarnings warnings={impact.after.warnings} />
                           <WhyAccess
                             decision={impact.after}
                             snapshot={response.snapshot}
+                            resource={impact.resource}
                           />
                         </li>
                       )

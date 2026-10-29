@@ -7,6 +7,7 @@ import { DEFAULT_QUERY_STALE_TIME } from '@/App'
 import type * as MessageTemplatesModule from '@/lib/messageTemplates'
 import ar from '@/locales/ar.json'
 import { messageTemplatesApi, useSaveMessageTemplate, type NotifyPreviewRequest, type NotifyPreviewResponse } from '@/lib/messageTemplates'
+import { ApiError } from '@/lib/api'
 import { NotifyMessagePreview } from './NotifyMessagePreview'
 
 vi.mock('@/lib/messageTemplates', async (importOriginal) => {
@@ -50,6 +51,25 @@ afterEach(() => {
 })
 
 describe('NotifyMessagePreview', () => {
+  it('reports a hidden preview as unavailable without exposing cached wording', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    render(<NotifyMessagePreview body={body} notifyEmployee />, { wrapper })
+    expect(await screen.findByText(response.text!.en)).toBeVisible()
+    preview.mockRejectedValue(new ApiError(404, 'TEMPLATE_NOT_FOUND', 'Not found'))
+    await act(async () => { await client.invalidateQueries({ queryKey: ['notify-preview'] }) })
+    expect(await screen.findByText("Message preview isn't available for your account. Sending is not affected.")).toBeVisible()
+    expect(screen.queryByText(response.text!.en)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Arabic' })).not.toBeInTheDocument()
+  })
+
+  it.each(['EMPLOYEE_NOT_FOUND', 'BOOK_NOT_FOUND'])('does not describe %s as a hidden template', async (code) => {
+    preview.mockRejectedValue(new ApiError(404, code, 'Not found'))
+    renderPreview()
+    expect(await screen.findByText(i18n.t('msgTemplates.preview.error'))).toBeVisible()
+    expect(screen.queryByText(i18n.t('msgTemplates.preview.hidden'))).not.toBeInTheDocument()
+  })
+
   it('refreshes a remounted save-screen preview after a template edit with production staleTime', async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: DEFAULT_QUERY_STALE_TIME } },

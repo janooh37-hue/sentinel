@@ -2,17 +2,18 @@ import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { localized, type Decision, type Snapshot } from './studioModel'
+import { isMessageTemplate, localized, type Decision, type Resource, type Snapshot } from './studioModel'
 
 export interface WhyAccessProps {
   decision: Decision
   snapshot: Snapshot
+  resource?: Resource
 }
 
 type Reason = Decision['reasons'][number]
 type ReasonNode = Decision['reason_tree']
 
-export function DecisionOutcome({ decision }: { decision: Decision }) {
+export function DecisionOutcome({ decision, resource }: { decision: Decision; resource?: Resource }) {
   const { t } = useTranslation()
   return (
     <span
@@ -24,7 +25,9 @@ export function DecisionOutcome({ decision }: { decision: Decision }) {
           'text-warning',
       )}
     >
-      {t(`access.studio.outcomes.${decision.authorization}`)}
+      {t(resource && isMessageTemplate(resource) && decision.action === 'view' && decision.authorization === 'denied'
+        ? 'access.studio.templateHidden'
+        : `access.studio.outcomes.${decision.authorization}`)}
       {decision.authorization === 'allowed' &&
         decision.executable_now === false && (
           <span className="font-normal text-warning">
@@ -220,7 +223,7 @@ function ReasonTree({
   )
 }
 
-export function WhyAccess({ decision, snapshot }: WhyAccessProps) {
+export function WhyAccess({ decision, snapshot, resource }: WhyAccessProps) {
   const { t } = useTranslation()
   const id = useId()
   const requiredContext = decision.required_context ?? []
@@ -255,7 +258,7 @@ export function WhyAccess({ decision, snapshot }: WhyAccessProps) {
         {t('access.studio.why.title')}
       </summary>
       <div id={id} className="space-y-5 py-3 text-sm">
-        <DecisionOutcome decision={decision} />
+        <DecisionOutcome decision={decision} resource={resource} />
         {sections
           .filter((section) => section.reasons.length)
           .map((section) => (

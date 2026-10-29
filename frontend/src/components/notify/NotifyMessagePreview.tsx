@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { isTemplateUnavailable } from '@/components/templates/templateEditing'
 import { messageTemplatesApi, type MsgLang, type NotifyPreviewRequest } from '@/lib/messageTemplates'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { normalizeDigits } from '@/lib/utils'
@@ -37,7 +38,7 @@ export function NotifyMessagePreview({ body, notifyEmployee }: NotifyMessagePrev
     )
   }
   if (preview.isError) {
-    return <p className="mt-3 text-xs text-muted-foreground">{t('msgTemplates.preview.error')}</p>
+    return <p className="mt-3 text-xs text-muted-foreground">{t(isTemplateUnavailable(preview.error) ? 'msgTemplates.preview.hidden' : 'msgTemplates.preview.error')}</p>
   }
   if (!preview.data.text) {
     return <p className="mt-3 text-xs text-muted-foreground">{t('msgTemplates.preview.empty')}</p>

@@ -15,8 +15,9 @@ import { CopyAccess } from './CopyAccess'
 import {
   destinationId,
   savedSetting,
-  personalSetting,
   localized,
+  isMessageTemplate,
+  stageActionSetting,
   type AccessItem,
   type Decision,
   type Patch,
@@ -532,6 +533,11 @@ function WorkspaceSession({
                   <bdi>{localized(item.label, i18n.language)}</bdi> ·{' '}
                   {t(`access.studio.actions.${action.action}`)}
                 </p>
+                {isMessageTemplate(item.resource) && ['edit', 'reset'].includes(action.action) && (
+                  <p className="max-w-prose text-sm text-muted-foreground">
+                    {t('access.studio.templateEditImpliesView')}
+                  </p>
+                )}
                 <bdi dir="ltr" className="block text-xs">
                   {destinationId(item.resource, action.action)}
                 </bdi>
@@ -564,21 +570,8 @@ function WorkspaceSession({
                       disabled={!allowed.length}
                       onClick={() =>
                         stage(
-                          allowed.flatMap(({ action }) =>
-                            action.setting_capabilities.map(
-                              (capability: string) => ({
-                                capability,
-                                effect,
-                                expires_at:
-                                  effect === null
-                                    ? null
-                                    : personalSetting(
-                                        capability,
-                                        draft.baseline,
-                                        draft.patches,
-                                      ).expires_at,
-                              }),
-                            ),
+                          allowed.flatMap(({ item, action }) =>
+                            stageActionSetting(item, action, effect, draft.baseline, draft.patches),
                           ),
                         )
                       }

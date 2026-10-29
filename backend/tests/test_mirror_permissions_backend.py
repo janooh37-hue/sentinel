@@ -207,6 +207,8 @@ def test_expiry_capability_is_static_and_operator_default() -> None:
 def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
     db_session: Session,
 ) -> None:
+    from app.services.template_capability_service import capability_ids
+
     category = _category(db_session, "MIR", name_en="Mirror")
     operator = _user(db_session, role="operator", email="dynamic-op@test.ae")
     admin = _user(db_session, role="admin", email="dynamic-admin@test.ae")
@@ -223,6 +225,7 @@ def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
         | service_record_caps
         | {category_cap}
         | {f"books.category.{tab}/1" for tab in range(1, 16)}
+        | set(capability_ids())
     )
 
     # 2026-09-21 HR intake additions (permissions.OPT_IN_SERVICE_IDS) are

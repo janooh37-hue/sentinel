@@ -96,9 +96,26 @@ def refresh_delivery(
 @router.get("/templates", response_model=list[MessageTemplateRead])
 def templates(
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_template_action("notification_template", "view"))],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> list[dict[str, Any]]:
-    return [message_template_service.read_template(db, event) for event in sms_templates.EVENTS]
+    from app.services import perm_service
+    from app.services.action_guard_service import template_decision
+
+    caps = perm_service.effective_caps(db, user)
+    return [
+        message_template_service.read_template(db, event)
+        for event in sms_templates.EVENTS
+        if template_decision(caps, "notification_template", "view", event).allowed
+    ]
+
+
+@router.get("/templates/{event}", response_model=MessageTemplateRead)
+def read_template(
+    event: str,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_template_action("notification_template", "read"))],
+) -> dict[str, Any]:
+    return message_template_service.read_template(db, event)
 
 
 @router.put("/templates/{event}", response_model=MessageTemplateRead)
@@ -157,7 +174,7 @@ def preview(
         from app.services.action_guard_service import book_revise_decision
 
         book_revise_decision(db, user, revise_book).require()
-    return message_template_service.preview(db, payload)
+    return message_template_service.preview(db, payload, user=user)
 
 
 __all__ = ["router"]

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import ValidationFailedError
 from app.core import form_policy
-from app.db.models import Book, Employee, Leave
+from app.db.models import Book, Employee, Leave, User
 from app.schemas.notify import MessageText, NotifyPreviewRequest
 from app.services import document_service, notify_dispatch, settings_service, sms_templates
 from app.services import notify_format as nf
@@ -63,8 +63,12 @@ def require_event(event: str) -> None:
         raise HTTPException(status_code=404, detail="Message template not found")
 
 
+def event_label(event: str) -> tuple[str, str]:
+    return _LABELS[event]
+
+
 def catalog_metadata(event: str) -> dict[str, Any]:
-    en, ar = _LABELS[event]
+    en, ar = event_label(event)
     services = [tpl for tpl, target in nf.TEMPLATE_EVENTS.items() if target == event]
     if event == nf.EVENT_VIOLATION:
         services += ["Violation Form", "violations"]
@@ -161,7 +165,7 @@ def render_sample(event: str, text: MessageText) -> dict[str, Any]:
     )
 
 
-def preview(db: Session, payload: NotifyPreviewRequest) -> dict[str, Any]:
+def preview(db: Session, payload: NotifyPreviewRequest, *, user: User) -> dict[str, Any]:
     fields = document_service.join_violation_types(payload.fields)
     employee = db.get(Employee, payload.employee_id) if payload.employee_id is not None else None
     if payload.employee_id is not None and employee is None:
@@ -227,6 +231,12 @@ def preview(db: Session, payload: NotifyPreviewRequest) -> dict[str, Any]:
     )
     if event is None:
         return result
+    from app.services import perm_service
+    from app.services.action_guard_service import template_decision
+
+    template_decision(
+        perm_service.effective_caps(db, user), "notification_template", "read", event
+    ).require()
     if revise_book is not None and not notify_dispatch.approval_notification_eligible(
         db,
         revise_book,

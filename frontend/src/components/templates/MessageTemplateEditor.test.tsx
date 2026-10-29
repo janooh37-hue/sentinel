@@ -7,13 +7,14 @@ import { messageTemplatesApi } from '@/lib/messageTemplates'
 import type { MessageTemplateRead } from '@/lib/messageTemplates'
 import type * as MessageTemplatesModule from '@/lib/messageTemplates'
 import { MessageTemplateEditor } from './MessageTemplateEditor'
+import { ServiceNotificationTab } from './ServiceNotificationTab'
 
 const { has } = vi.hoisted(() => ({ has: vi.fn() }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has }) }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn() } }))
 vi.mock('@/lib/messageTemplates', async (importOriginal) => {
   const original = await importOriginal<typeof MessageTemplatesModule>()
-  Object.assign(original.messageTemplatesApi, { render: vi.fn(), save: vi.fn(), reset: vi.fn() })
+  Object.assign(original.messageTemplatesApi, { list: vi.fn(), render: vi.fn(), save: vi.fn(), reset: vi.fn() })
   return original
 })
 
@@ -45,8 +46,52 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('MessageTemplateEditor', () => {
+  it('omits a hidden notification from service lists even when its wording is cached', async () => {
+    const visible = { ...template, event: 'visible_event', label: { en: 'Visible notification', ar: 'إشعار ظاهر' } }
+    vi.mocked(messageTemplatesApi.list).mockResolvedValue([template, visible])
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const editor = <QueryClientProvider client={client}><ServiceNotificationTab service="leaves" /></QueryClientProvider>
+    const view = render(editor)
+    expect(await screen.findByRole('heading', { name: template.label.en })).toBeVisible()
+    has.mockImplementation((capability: string) => capability !== `messages.templates.view.notify.${template.event}`)
+    view.rerender(<QueryClientProvider client={client}><ServiceNotificationTab service="leaves" /></QueryClientProvider>)
+    expect(screen.queryByRole('heading', { name: template.label.en })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Visible notification' })).toBeVisible()
+  })
+
+  it('does not expose cached wording, tokens or render requests without template view access', () => {
+    has.mockImplementation((capability: string) => capability === 'messages.templates')
+    mount()
+    expect(screen.getByRole('status')).toHaveTextContent('This template is unavailable')
+    expect(screen.queryByText(template.override!.en)).not.toBeInTheDocument()
+    expect(screen.queryByText(template.default.en)).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(messageTemplatesApi.render).not.toHaveBeenCalled()
+  })
+
+  it('removes mounted wording and unsaved edits when template view access is revoked', async () => {
+    const view = mount()
+    await screen.findByText('Dear Ahmed')
+    fireEvent.change(screen.getByRole('textbox', { name: 'English message' }), { target: { value: 'Unsaved wording' } })
+    has.mockImplementation((capability: string) => capability !== `messages.templates.view.notify.${template.event}`)
+    view.refresh()
+    expect(screen.getByRole('status')).toHaveTextContent('This template is unavailable')
+    expect(screen.queryByText(template.override!.en)).not.toBeInTheDocument()
+    expect(screen.queryByText('Dear Ahmed')).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save template' })).not.toBeInTheDocument()
+  })
+
+  it('replaces all cached wording with an unavailable state after a render 404', async () => {
+    vi.mocked(messageTemplatesApi.render).mockRejectedValue(new ApiError(404, 'TEMPLATE_NOT_FOUND', 'Not found'))
+    mount()
+    expect(await screen.findByText('This template is unavailable or you no longer have permission to view it.')).toBeVisible()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.queryByText(template.override!.en)).not.toBeInTheDocument()
+  })
+
   it('shows text and live previews without editing controls when capability is absent', async () => {
-    has.mockReturnValue(false)
+    has.mockImplementation((capability: string) => capability !== 'messages.templates')
     const { container } = mount()
     expect(container.querySelector('textarea')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save template' })).not.toBeInTheDocument()
@@ -63,7 +108,7 @@ describe('MessageTemplateEditor', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'English message' }), { target: { value: 'Unsaved wording' } })
     fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
     expect(screen.getByRole('button', { name: 'Confirm reset' })).toBeVisible()
-    has.mockReturnValue(false)
+    has.mockImplementation((capability: string) => capability !== 'messages.templates')
     view.refresh()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Confirm reset' })).not.toBeInTheDocument()
@@ -86,7 +131,7 @@ describe('MessageTemplateEditor', () => {
     expect(screen.getByRole('textbox', { name: 'English message' })).toHaveValue('Unsaved {name}')
     expect(screen.getByText('Unsaved changes')).toBeVisible()
 
-    has.mockReturnValue(false)
+    has.mockImplementation((capability: string) => capability !== 'messages.templates')
     view.refresh()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     expect(screen.getByText(template.override!.ar)).toBeVisible()

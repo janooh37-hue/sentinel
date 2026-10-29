@@ -213,7 +213,7 @@ def test_unknown_event_is_not_found(api_db, template_client):
             "email_template",
             "messages.templates",
             "/email/draft-templates",
-            "/email/draft-templates/ledger.new",
+            "/email/draft-templates/absence:absent",
             True,
         ),
         (
@@ -242,10 +242,11 @@ def test_template_family_decisions_match_denied_consumer_routes(
     if kind == "word_template":
         perm_service.set_user_override(api_db, user.id, "books.edit", "deny")
     caps = perm_service.effective_caps(api_db, user)
-    read = template_decision(caps, kind, "view")
+    identifier = write_path.rsplit("/", 1)[-1] if read_allowed else None
+    read = template_decision(caps, kind, "view", identifier)
     assert read.allowed is read_allowed
     assert client.get("/api/v1" + read_path).status_code == (200 if read_allowed else 403)
-    edit = template_decision(caps, kind, "reset" if read_allowed else "delete")
+    edit = template_decision(caps, kind, "reset" if read_allowed else "delete", identifier)
     assert edit.allowed is False
     assert client.delete("/api/v1" + write_path).status_code == 403
     if kind == "notification_template":
@@ -256,3 +257,84 @@ def test_template_family_decisions_match_denied_consumer_routes(
             ).status_code
             == 200
         )
+
+
+@pytest.mark.parametrize("event", sms_templates.EVENTS)
+def test_per_event_deny_omits_list_and_blocks_direct_render_and_writes(
+    api_db, template_client, event
+):
+    client, user = template_client
+    path = f"/api/v1/notify/templates/{event}"
+    draft = {"ar": "مرحبا {name}", "en": "Hello {name}"}
+    # Existing authenticated readers keep access without any personal grant.
+    assert client.get(path).status_code == 200
+    assert client.post(path + "/render", json=draft).status_code == 200
+    grant(api_db, user)
+    assert client.put(path, json=draft).status_code == 200
+    view = f"messages.templates.view.notify.{event}"
+    perm_service.set_user_override(api_db, user.id, view, "deny")
+    response = client.get("/api/v1/notify/templates")
+    assert response.status_code == 200
+    assert [row["event"] for row in response.json()] == [
+        item for item in sms_templates.EVENTS if item != event
+    ]
+    for response in (
+        client.get(path),
+        client.post(path + "/render", json=draft),
+        client.put(path, json={"ar": "جديد", "en": "Changed"}),
+        client.delete(path),
+    ):
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "TEMPLATE_NOT_FOUND"
+    assert sms_templates.get_override(api_db, event) == draft
+    perm_service.set_user_override(api_db, user.id, view, None)
+    assert client.get(path).json()["override"] == draft
+    assert client.post(path + "/render", json=draft).status_code == 200
+
+
+@pytest.mark.parametrize(
+    "template_id,fields,event",
+    [
+        ("Violation Form", {}, "violation"),
+        ("Salary Transfer Request", {}, "salary_transfer"),
+        ("Duty Resumption Form", {}, "duty_resumption"),
+        ("Administrative Leave Form", {}, "admin_leave"),
+        ("Leave Application Form", {"leave_type": "Annual Leave"}, "leave_requested"),
+        ("Leave Application Form", {"leave_type": "Emergency Leave"}, "leave_approved"),
+        ("Leave Application Form", {"leave_type": "Sick Leave"}, "sick_leave_registered"),
+    ],
+)
+def test_document_form_preview_never_exposes_hidden_wording(
+    api_db, template_client, template_id, fields, event
+):
+    client, user = template_client
+    body = {
+        "template_id": template_id,
+        "fields": {
+            "start_date": "01/11/2026",
+            "end_date": "05/11/2026",
+            "resumption_date": "05/11/2026",
+            "total_days": "5",
+            "duration": "5",
+            **fields,
+        },
+    }
+    before = client.post("/api/v1/notify/preview", json=body)
+    assert before.status_code == 200, before.text
+    assert before.json()["event"] == event
+    assert before.json()["text"]
+    perm_service.set_user_override(
+        api_db, user.id, f"messages.templates.view.notify.{event}", "deny"
+    )
+    denied = client.post("/api/v1/notify/preview", json=body)
+    assert denied.status_code == 404, denied.text
+    assert denied.json()["error"]["code"] == "TEMPLATE_NOT_FOUND"
+    assert "text" not in denied.json()
+    # A second, ordinary authenticated reader retains the default.
+    other = User(
+        email="default-template@test.ae", password_hash="x", role="operator", status="active"
+    )
+    api_db.add(other)
+    api_db.commit()
+    client.app.dependency_overrides[get_current_user] = lambda: other
+    assert client.post("/api/v1/notify/preview", json=body).json()["text"] == before.json()["text"]

@@ -141,6 +141,21 @@ function fixture(id = 42): Snapshot {
     ],
   }
 }
+
+function templateFixture(kind: 'notification_template' | 'email_template' = 'notification_template'): Snapshot {
+  const snapshot = fixture()
+  const capability = `messages.templates.view.${kind === 'email_template' ? 'email' : 'notify'}.wording`
+  snapshot.items[0].resource.kind = kind
+  snapshot.items[0].description = { en: 'Configuration wording', ar: 'نصوص الإعدادات' }
+  snapshot.items[0].actions = [
+    decision('view', capability, false),
+    { ...decision('edit', 'messages.templates', false), setting_capabilities: ['messages.templates', capability] },
+    { ...decision('reset', 'messages.templates', false), setting_capabilities: ['messages.templates', capability] },
+  ]
+  snapshot.role_defaults.push(capability)
+  snapshot.overrides = [{ capability, effect: 'deny', expires_at: null, state: 'active' }]
+  return snapshot
+}
 function previewFor(snapshot: Snapshot, patches: Patch[]): PreviewResponse {
   const proposed = structuredClone(snapshot)
   for (const item of proposed.items)
@@ -188,6 +203,101 @@ beforeEach(() => {
 })
 
 describe('AccessWorkspace', () => {
+  it.each(['notification_template', 'email_template'] as const)('stages and reviews both backend bindings when allowing edit of a hidden %s', async (kind) => {
+    const snapshot = templateFixture(kind)
+    state.snapshot = snapshot
+    mount()
+    const viewRow = document.getElementById(`${kind}:wording:view`)!.closest('article')!
+    expect(within(viewRow).getAllByText('access.studio.templateHidden').length).toBeGreaterThan(0)
+    expect(within(viewRow).getByText('access.studio.templateViewRequired')).toBeVisible()
+    expect(within(viewRow).getByText('access.studio.why.title')).toBeVisible()
+    expect(within(viewRow).getByText(kind === 'email_template'
+      ? 'access.studio.templateViewConsequenceEmail'
+      : 'access.studio.templateViewConsequence')).toBeVisible()
+    const editRow = document.getElementById(`${kind}:wording:edit`)!.closest('article')!
+    expect(within(editRow).getByText('access.studio.templateEditImpliesView')).toBeVisible()
+    fireEvent.click(within(editRow).getByRole('radio', { name: 'access.studio.settings.allow' }))
+    expect(screen.getByText('access.studio.unsaved 2')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.reviewAction' }))
+    const acknowledge = await screen.findByRole('button', { name: 'access.studio.review.acknowledge' })
+    expect(state.save).not.toHaveBeenCalled()
+    expect(state.preview.mock.calls[0][0].items).toEqual([
+      { capability: 'messages.templates', effect: 'grant', expires_at: null },
+      { capability: snapshot.items[0].actions[0].setting_capabilities[0], effect: 'grant', expires_at: null },
+    ])
+    fireEvent.click(acknowledge)
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.save' }))
+    await waitFor(() => expect(state.save).toHaveBeenCalledOnce())
+    expect(state.save.mock.calls[0][0].items).toEqual(state.preview.mock.calls[0][0].items)
+  })
+
+  it('allows restoring template view through Edit Allow when the global edit grant is already saved', async () => {
+    const snapshot = templateFixture()
+    snapshot.overrides.push({ capability: 'messages.templates', effect: 'grant', expires_at: null, state: 'active' })
+    state.snapshot = snapshot
+    mount()
+    const editRow = document.getElementById('notification_template:wording:edit')!.closest('article')!
+    const allow = within(editRow).getByRole('radio', { name: 'access.studio.settings.allow' })
+    expect(allow).not.toBeChecked()
+    fireEvent.click(allow)
+    expect(screen.getByText('access.studio.unsaved 2')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.reviewAction' }))
+    await screen.findByRole('button', { name: 'access.studio.review.acknowledge' })
+    expect(state.preview.mock.calls[0][0].items).toEqual([
+      { capability: 'messages.templates', effect: 'grant', expires_at: null },
+      { capability: 'messages.templates.view.notify.wording', effect: 'grant', expires_at: null },
+    ])
+  })
+
+  it('preserves a staged Follow role view setting instead of presenting Edit Allow as blocked', async () => {
+    const snapshot = templateFixture()
+    snapshot.overrides.push({ capability: 'messages.templates', effect: 'grant', expires_at: null, state: 'active' })
+    state.snapshot = snapshot
+    mount()
+    const viewRow = document.getElementById('notification_template:wording:view')!.closest('article')!
+    fireEvent.click(within(viewRow).getByRole('radio', { name: 'access.studio.settings.followRole' }))
+    const editRow = document.getElementById('notification_template:wording:edit')!.closest('article')!
+    expect(within(editRow).getByRole('radio', { name: 'access.studio.settings.allow' })).toBeChecked()
+    expect(screen.getByText('access.studio.unsaved 1')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.save' }))
+    await waitFor(() => expect(state.save).toHaveBeenCalledOnce())
+    expect(state.save.mock.calls[0][0].items).toEqual([
+      { capability: 'messages.templates.view.notify.wording', effect: null, expires_at: null },
+    ])
+  })
+
+  it.each(['edit', 'reset'] as const)('denies %s without hiding independently allowed template wording', async (action) => {
+    const snapshot = templateFixture()
+    snapshot.overrides = []
+    snapshot.items[0].actions[0].authorization = 'allowed'
+    state.snapshot = snapshot
+    mount()
+    const row = document.getElementById(`notification_template:wording:${action}`)!.closest('article')!
+    fireEvent.click(within(row).getByRole('radio', { name: 'access.studio.settings.deny' }))
+    expect(screen.getByText('access.studio.unsaved 1')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.save' }))
+    await waitFor(() => expect(state.save).toHaveBeenCalledOnce())
+    expect(state.save.mock.calls[0][0].items).toEqual([
+      { capability: 'messages.templates', effect: 'deny', expires_at: null },
+    ])
+  })
+
+  it('shows the view consequence and stages both edit bindings for explicitly selected bulk Allow', async () => {
+    state.snapshot = templateFixture()
+    mount()
+    const row = document.getElementById('notification_template:wording:edit')!.closest('article')!
+    fireEvent.click(within(row).getByRole('checkbox'))
+    const bulk = screen.getByRole('group', { name: /applySelected/ })
+    expect(within(bulk).getByText('access.studio.templateEditImpliesView')).toBeVisible()
+    fireEvent.click(within(bulk).getByRole('button', { name: 'access.studio.setting.grant' }))
+    expect(screen.getByText('access.studio.unsaved 2')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.reviewAction' }))
+    await screen.findByRole('button', { name: 'access.studio.review.acknowledge' })
+    expect(state.preview.mock.calls[0][0].items.map((patch: Patch) => patch.capability)).toEqual([
+      'messages.templates', 'messages.templates.view.notify.wording',
+    ])
+  })
+
   it('renders and filters server diagnostics with omitted default fields', () => {
     const snapshot = fixture()
     for (const item of snapshot.items) {
@@ -667,6 +777,54 @@ describe('AccessWorkspace', () => {
 })
 
 describe('draft patch defaults', () => {
+  it('does not stage an unchanged template edit/view grant pair', () => {
+    const snapshot = templateFixture()
+    snapshot.overrides = ['messages.templates', 'messages.templates.view.notify.wording'].map((capability) => ({
+      capability, effect: 'grant', expires_at: null, state: 'active',
+    }))
+    const { result } = renderHook(() => useAccessDraft(snapshot))
+    act(() => result.current.stage([
+      { capability: 'messages.templates', effect: 'grant', expires_at: null },
+      { capability: 'messages.templates.view.notify.wording', effect: 'grant', expires_at: null },
+    ]))
+    expect(result.current.dirty).toBe(false)
+    expect(result.current.patches).toEqual([])
+  })
+
+  it('drops a reviewed template pair when rebase confirms both grants are already saved', () => {
+    const snapshot = templateFixture()
+    snapshot.overrides.push({ capability: 'messages.templates', effect: 'grant', expires_at: null, state: 'active' })
+    const grants: Patch[] = [
+      { capability: 'messages.templates', effect: 'grant', expires_at: null },
+      { capability: 'messages.templates.view.notify.wording', effect: 'grant', expires_at: null },
+    ]
+    const { result } = renderHook(() => useAccessDraft(snapshot))
+    act(() => result.current.stage(grants))
+    expect(result.current.patches).toEqual(grants)
+    act(() => result.current.rebase({
+      ...snapshot, revision: 'r2', overrides: grants.map((patch) => ({
+        capability: patch.capability, effect: 'grant', expires_at: null, state: 'active',
+      })),
+    }))
+    expect(result.current.dirty).toBe(false)
+    expect(result.current.patches).toEqual([])
+  })
+
+  it('removes an unchanged edit grant when the dependent staged grant is returned to its saved value', () => {
+    const snapshot = templateFixture()
+    snapshot.overrides.push({ capability: 'messages.templates', effect: 'grant', expires_at: null, state: 'active' })
+    const { result } = renderHook(() => useAccessDraft(snapshot))
+    act(() => result.current.stage([
+      { capability: 'messages.templates', effect: 'grant', expires_at: null },
+      { capability: 'messages.templates.view.notify.wording', effect: 'grant', expires_at: null },
+    ]))
+    act(() => result.current.stage([
+      { capability: 'messages.templates.view.notify.wording', effect: 'deny', expires_at: null },
+    ]))
+    expect(result.current.dirty).toBe(false)
+    expect(result.current.patches).toEqual([])
+  })
+
   it('normalizes an omitted effect to Follow role without creating a phantom draft', () => {
     const { result } = renderHook(() => useAccessDraft(fixture()))
     act(() => result.current.stage([{ capability: 'messages.templates' }]))

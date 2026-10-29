@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   savedSetting,
   sameSetting,
+  reviewedTemplateGrants,
   type Patch,
   type Snapshot,
 } from './studioModel'
@@ -21,13 +22,13 @@ export function useAccessDraft(snapshot: Snapshot) {
           effect: patch.effect ?? null,
           expires_at: patch.effect == null ? null : (patch.expires_at ?? null),
         }
-        if (sameSetting(savedSetting(baseline, patch.capability), normalized))
-          next.delete(patch.capability)
-        else next.set(patch.capability, normalized)
+        next.set(patch.capability, normalized)
       }
-      return [...next.values()].sort((a, b) =>
-        a.capability.localeCompare(b.capability),
-      )
+      const candidate = [...next.values()]
+      const reviewedBindings = reviewedTemplateGrants(baseline, candidate)
+      return candidate.filter((patch) =>
+        reviewedBindings.has(patch.capability) || !sameSetting(savedSetting(baseline, patch.capability), patch),
+      ).sort((a, b) => a.capability.localeCompare(b.capability))
     })
     setVersion((value) => value + 1)
   }
@@ -38,11 +39,12 @@ export function useAccessDraft(snapshot: Snapshot) {
   }
   function rebase(next: Snapshot) {
     setBaseline(next)
-    setPatches((previous) =>
-      previous.filter(
-        (patch) => !sameSetting(savedSetting(next, patch.capability), patch),
-      ),
-    )
+    setPatches((previous) => {
+      const reviewedBindings = reviewedTemplateGrants(next, previous)
+      return previous.filter(
+        (patch) => reviewedBindings.has(patch.capability) || !sameSetting(savedSetting(next, patch.capability), patch),
+      )
+    })
     setVersion((value) => value + 1)
   }
   return {

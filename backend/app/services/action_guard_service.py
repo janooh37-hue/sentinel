@@ -154,13 +154,25 @@ def duty_transfer_decision(
     )
 
 
-def template_decision(caps: Collection[str], kind: str, action: str) -> GuardDecision:
+def template_decision(
+    caps: Collection[str], kind: str, action: str, identifier: str | None = None
+) -> GuardDecision:
     if kind in ("notification_template", "email_template"):
-        if action in ("view", "read"):
-            return GuardDecision(True, "template.signed_in_view")
-        if action not in ("edit", "reset"):
+        from app.services.template_capability_service import view_capability
+
+        if action not in ("view", "read", "edit", "reset"):
             raise ValueError("Unsupported message template action")
-        required = ("messages.templates",)
+        if identifier is None:
+            raise ValueError("Message template actions require an item identifier")
+        view = view_capability(kind, identifier)
+        if view not in caps:
+            return GuardDecision(
+                False,
+                f"template.{kind}.{action}",
+                (view,),
+                NotFoundError("TEMPLATE_NOT_FOUND", "Template not found."),
+            )
+        required = (view,) if action in ("view", "read") else ("messages.templates", view)
     elif kind == "word_template":
         if action in ("view", "read"):
             required = ("books.edit",)

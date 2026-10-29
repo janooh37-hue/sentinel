@@ -5,7 +5,10 @@ import { cn } from '@/lib/utils'
 import {
   destinationId,
   localized,
+  isMessageTemplate,
   personalSetting,
+  personalSettingBindings,
+  stageActionSetting,
   type AccessItem,
   type Decision,
   type Patch,
@@ -161,26 +164,40 @@ export function ActionRow({
     decision.configurable &&
     decision.setting_capabilities.length > 0 &&
     decision.editable_effects.length > 0
-  const settings: Patch[] = decision.setting_capabilities.map(
-    (capability: Decision['setting_capabilities'][number]) =>
+  const template = isMessageTemplate(item.resource)
+  const editImpliesView = template && ['edit', 'reset'].includes(decision.action)
+  const settingBindings = personalSettingBindings(item, decision)
+  const settings: Patch[] = settingBindings.map(
+    (capability) =>
       personalSetting(capability, snapshot, patches),
   )
+  const view = item.actions.find((action: Decision) => action.action === 'view')
+  const viewBlocked = view?.setting_capabilities.some((capability) => {
+    const setting = personalSetting(capability, snapshot, patches)
+    if (setting.effect === 'deny') return true
+    if (setting.effect === 'grant') return false
+    if (patches.some((patch) => patch.capability === capability))
+      return !snapshot.role_defaults.includes(capability)
+    return view.authorization === 'denied'
+  })
   const effect =
     settings.length &&
     settings.every(
       (setting: Patch) =>
         (setting.effect ?? null) === (settings[0].effect ?? null),
     )
-      ? (settings[0].effect ?? null)
+      ? (editImpliesView && viewBlocked && settings[0].effect === 'grant'
+          ? 'mixed'
+          : (settings[0].effect ?? null))
       : 'mixed'
-  const baselineCount = decision.setting_capabilities.filter(
-    (capability: Decision['setting_capabilities'][number]) =>
+  const baselineCount = settingBindings.filter(
+    (capability) =>
       snapshot.role_defaults.includes(capability),
   ).length
   const baseline =
     baselineCount === 0
       ? 'not_granted'
-      : baselineCount === decision.setting_capabilities.length
+      : baselineCount === settingBindings.length
         ? 'granted'
         : 'mixed'
   const changed = patches.some((patch: Patch) =>
@@ -191,7 +208,6 @@ export function ActionRow({
       (entry: Decision['reasons'][number]) => entry.decisive,
     ) ??
     decision.reasons.find((entry: Decision['reasons'][number]) => entry.applied)
-  const view = item.actions.find((action: Decision) => action.action === 'view')
   const residualView =
     decision.action !== 'view' &&
     view?.authorization === 'allowed' &&
@@ -244,7 +260,10 @@ export function ActionRow({
           <p className="text-xs font-medium text-muted-foreground">
             {t('access.studio.current')}
           </p>
-          <DecisionOutcome decision={decision} />
+          <DecisionOutcome decision={decision} resource={item.resource} />
+          {template && decision.action === 'view' && decision.authorization === 'denied' && (
+            <p className="text-sm text-muted-foreground">{t('access.studio.templateViewRequired')}</p>
+          )}
           {reason && (
             <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">
               <ReasonText reason={reason} />
@@ -262,7 +281,7 @@ export function ActionRow({
               {t('access.studio.proposed')}
             </p>
             {proposed ? (
-              <DecisionOutcome decision={proposed} />
+              <DecisionOutcome decision={proposed} resource={item.resource} />
             ) : (
               <p className="text-sm text-muted-foreground">
                 {t('access.studio.previewPending')}
@@ -299,7 +318,19 @@ export function ActionRow({
       )}
       {editable ? (
         <div className="space-y-3">
-          <fieldset disabled={disabled} className="min-w-0 space-y-2">
+          {editImpliesView && (
+            <p id={`${radioName}-consequence`} className="max-w-prose text-sm text-muted-foreground">
+              {t('access.studio.templateEditImpliesView')}
+            </p>
+          )}
+          {template && decision.action === 'view' && (
+            <p id={`${radioName}-consequence`} className="max-w-prose text-sm text-muted-foreground">
+              {t(item.resource.kind === 'email_template'
+                ? 'access.studio.templateViewConsequenceEmail'
+                : 'access.studio.templateViewConsequence')}
+            </p>
+          )}
+          <fieldset disabled={disabled} aria-describedby={template ? `${radioName}-consequence` : undefined} className="min-w-0 space-y-2">
             <legend className="text-sm font-medium">
               {t('access.studio.personalSetting')}
               {effect === 'mixed' && (
@@ -332,14 +363,7 @@ export function ActionRow({
                       className="size-4 accent-primary"
                       onChange={() =>
                         onStage(
-                          settings.map((setting: Patch) => ({
-                            ...setting,
-                            effect: option.effect,
-                            expires_at:
-                              option.effect === null
-                                ? null
-                                : setting.expires_at,
-                          })),
+                          stageActionSetting(item, decision, option.effect, snapshot, patches),
                         )
                       }
                     />
@@ -395,13 +419,13 @@ export function ActionRow({
           {t('access.studio.lockedPolicy')}
         </p>
       )}
-      {residualView && (
+      {residualView && !editImpliesView && (
         <p className="text-sm text-muted-foreground">
           {t('access.studio.residualView')}
         </p>
       )}
       <AccessWarnings warnings={(proposed ?? decision).warnings} />
-      <WhyAccess decision={decision} snapshot={snapshot} />
+      <WhyAccess decision={decision} snapshot={snapshot} resource={item.resource} />
     </article>
   )
 }

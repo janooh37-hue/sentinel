@@ -8,14 +8,19 @@ import { Textarea } from '@/components/ui/textarea'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import {
-  messageTemplatesApi, TEMPLATES_CAP, useResetMessageTemplate, useSaveMessageTemplate,
+  messageTemplatesApi, templateViewCapability, TEMPLATES_CAP, useResetMessageTemplate, useSaveMessageTemplate,
 } from '@/lib/messageTemplates'
 import type { MessageTemplateRead, MsgLang } from '@/lib/messageTemplates'
 import { normalizeDigits } from '@/lib/utils'
 import { TemplateTokens } from './TemplateTokens'
-import { templateErrorMessage, useTokenInsertion } from './templateEditing'
+import { isTemplateUnavailable, templateErrorMessage, useTokenInsertion } from './templateEditing'
 
 export function MessageTemplateEditor({ template }: { template: MessageTemplateRead }) {
+  const { has, isLoading } = useCapabilities()
+  const { t } = useTranslation()
+  if (isLoading) return <p role="status" className="text-sm text-muted-foreground">{t('msgTemplates.tabs.loading')}</p>
+  if (!has(templateViewCapability('notify', template.event)))
+    return <p role="status" className="text-sm text-muted-foreground">{t('msgTemplates.editor.unavailable')}</p>
   return <MessageEditor key={JSON.stringify([template.event, template.default, template.override])} template={template} />
 }
 
@@ -48,6 +53,9 @@ function MessageEditor({ template }: { template: MessageTemplateRead }) {
     setConfirmReset(false)
     toast.success(t('msgTemplates.editor.saved'))
   }
+
+  if (isTemplateUnavailable(preview.error) || isTemplateUnavailable(error))
+    return <p role="status" className="text-sm text-muted-foreground">{t('msgTemplates.editor.unavailable')}</p>
 
   return (
     <section className="min-w-0 space-y-4 text-start" aria-labelledby={`${id}-title`}>

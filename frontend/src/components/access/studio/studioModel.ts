@@ -46,3 +46,49 @@ export function personalSetting(
   const staged = patches.find((patch) => patch.capability === capability)
   return staged ?? savedSetting(snapshot, capability)
 }
+
+export function isMessageTemplate(resource: Resource): boolean {
+  return resource.kind === 'notification_template' || resource.kind === 'email_template'
+}
+
+/** Editing requires view, but removing edit must not remove independent viewing. */
+export function personalSettingBindings(item: AccessItem, decision: Decision): string[] {
+  if (!isMessageTemplate(item.resource) || !['edit', 'reset'].includes(decision.action))
+    return decision.setting_capabilities
+  const view = item.actions.find((action) => action.action === 'view')
+  return decision.setting_capabilities.filter((capability) =>
+    !view?.setting_capabilities.includes(capability),
+  )
+}
+
+export function stageActionSetting(
+  item: AccessItem,
+  decision: Decision,
+  effect: Patch['effect'],
+  snapshot: Snapshot,
+  patches: Patch[],
+): Patch[] {
+  const bindings = effect === 'grant'
+    ? decision.setting_capabilities
+    : personalSettingBindings(item, decision)
+  return bindings.map((capability) => {
+    const setting = personalSetting(capability, snapshot, patches)
+    return { ...setting, effect, expires_at: effect == null ? null : setting.expires_at }
+  })
+}
+
+/** Preserve the complete reviewed conjunction, including an already-saved edit grant. */
+export function reviewedTemplateGrants(snapshot: Snapshot, patches: Patch[]): Set<string> {
+  const grants = new Set(patches.filter((patch) => patch.effect === 'grant').map((patch) => patch.capability))
+  return new Set(snapshot.items.filter((item) => isMessageTemplate(item.resource)).flatMap((item) =>
+    item.actions.filter((action) =>
+      ['edit', 'reset'].includes(action.action) &&
+      action.setting_capabilities.length > 1 &&
+      action.setting_capabilities.every((capability) => grants.has(capability)) &&
+      action.setting_capabilities.some((capability) => {
+        const patch = patches.find((entry) => entry.capability === capability)
+        return patch != null && !sameSetting(savedSetting(snapshot, capability), patch)
+      }),
+    ).flatMap((action) => action.setting_capabilities),
+  ))
+}

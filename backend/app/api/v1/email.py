@@ -38,7 +38,12 @@ from app.schemas.email import (
     HandoffAttachment,
 )
 from app.schemas.email_draft_template import EmailDraftTemplatePartsWrite, EmailDraftTemplatesRead
-from app.services import email_draft_template_service, email_service, scheduler_service
+from app.services import (
+    email_draft_template_service,
+    email_service,
+    perm_service,
+    scheduler_service,
+)
 
 log = logging.getLogger(__name__)
 
@@ -50,9 +55,12 @@ router = APIRouter(prefix="/email", tags=["email"])
 )
 def get_draft_templates(
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_template_action("email_template", "view"))],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> EmailDraftTemplatesRead:
-    return email_draft_template_service.get_templates(db)
+    return email_draft_template_service.visible_templates(
+        email_draft_template_service.get_templates(db),
+        perm_service.effective_caps(db, current_user),
+    )
 
 
 @router.put(
@@ -66,8 +74,11 @@ def put_draft_template(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(require_template_action("email_template", "edit"))],
 ) -> EmailDraftTemplatesRead:
-    return email_draft_template_service.set_template(
+    templates = email_draft_template_service.set_template(
         db, key, payload, actor=current_user.employee_id or current_user.email
+    )
+    return email_draft_template_service.visible_templates(
+        templates, perm_service.effective_caps(db, current_user)
     )
 
 
@@ -81,8 +92,11 @@ def delete_draft_template(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(require_template_action("email_template", "reset"))],
 ) -> EmailDraftTemplatesRead:
-    return email_draft_template_service.set_template(
+    templates = email_draft_template_service.set_template(
         db, key, None, actor=current_user.employee_id or current_user.email
+    )
+    return email_draft_template_service.visible_templates(
+        templates, perm_service.effective_caps(db, current_user)
     )
 
 

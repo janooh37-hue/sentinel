@@ -5408,6 +5408,11 @@
       "selectAction": "Select action",
       "lockedPolicy": "Policy-controlled. This action has no editable personal setting.",
       "residualView": "This action does not control viewing. Saved view access is allowed.",
+      "templateHidden": "Hidden from this person",
+      "templateViewRequired": "Editing and resetting are also unavailable while this template is hidden.",
+      "templateEditImpliesView": "Allow also grants viewing of this template. Both settings will be staged for review. Deny or Follow role changes editing and resetting only; viewing is controlled separately.",
+      "templateViewConsequence": "Deny hides this template from this person and also prevents editing or resetting it. Sending notifications is not affected.",
+      "templateViewConsequenceEmail": "Deny hides this template from this person and also prevents editing or resetting it. Emails they draft will use default wording or another visible template's wording.",
       "noMatches": "No matching access. Show all access.",
       "applySelected_one": "Apply to {{count}} selected action",
       "applySelected_other": "Apply to {{count}} selected actions",
@@ -6898,6 +6903,7 @@
   "msgTemplates": {
     "editor": {
       "readOnly": "Templates remain visible. Editing and resetting are not allowed.",
+      "unavailable": "This template is unavailable or you no longer have permission to view it.",
       "modified": "Modified",
       "dirty": "Unsaved changes",
       "save": "Save template",
@@ -6943,6 +6949,7 @@
       "error": "Message preview is unavailable. You can still save.",
       "empty": "No message is sent to the employee for this form.",
       "notSending": "Will not be sent",
+      "hidden": "Message preview isn't available for your account. Sending is not affected.",
       "segments_one": "{{count}} SMS segment",
       "segments_other": "{{count}} SMS segments",
       "timing": {

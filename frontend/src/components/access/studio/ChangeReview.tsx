@@ -246,23 +246,25 @@ export function ChangeReview({
                                 <p className="text-sm text-muted-foreground">
                                   {t('access.studio.review.before')}
                                 </p>
-                                <DecisionOutcome decision={impact.before} />
+                                <DecisionOutcome decision={impact.before} resource={impact.resource} />
                                 <WhyAccess
                                   decision={impact.before}
                                   snapshot={validPreview.current}
+                                  resource={impact.resource}
                                 />
                               </div>
                               <div className="min-w-0 space-y-2">
                                 <p className="text-sm text-muted-foreground">
                                   {t('access.studio.review.after')}
                                 </p>
-                                <DecisionOutcome decision={impact.after} />
+                                <DecisionOutcome decision={impact.after} resource={impact.resource} />
                                 <AccessWarnings
                                   warnings={impact.after.warnings}
                                 />
                                 <WhyAccess
                                   decision={impact.after}
                                   snapshot={validPreview.proposed}
+                                  resource={impact.resource}
                                 />
                               </div>
                             </div>
@@ -301,10 +303,11 @@ export function ChangeReview({
                               {localized(item.label, i18n.language)} ·{' '}
                               {t(`access.studio.actions.${decision.action}`)}
                             </p>
-                            <DecisionOutcome decision={decision} />
+                            <DecisionOutcome decision={decision} resource={item.resource} />
                             <WhyAccess
                               decision={decision}
                               snapshot={validPreview.proposed}
+                              resource={item.resource}
                             />
                           </li>
                         )),
