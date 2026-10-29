@@ -284,7 +284,8 @@ export function ActionRow({
           </label>
         )}
         <h4 id={destination} tabIndex={-1} title={`${actionLabel} · ${localized(item.label, i18n.language)}`} className="min-w-0 scroll-mt-24 truncate rounded-sm text-sm font-semibold text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
-          {actionLabel} · <bdi>{localized(item.label, i18n.language)}</bdi>
+          {/* The action word only distinguishes rows visually when one item has several actions (View / Edit / Reset); assistive tech always hears it. */}
+          <span className={item.actions.length > 1 ? undefined : 'sr-only'}>{actionLabel} ·</span>{' '}<bdi>{localized(item.label, i18n.language)}</bdi>
         </h4>
         {!editable && <LockKeyhole className="size-3.5 shrink-0 text-muted-foreground" aria-label={t('access.studio.lockedPolicy')} />}
       </div>
