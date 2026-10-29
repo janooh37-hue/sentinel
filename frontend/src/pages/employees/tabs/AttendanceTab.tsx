@@ -16,8 +16,10 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
+import { Printer } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 
 import { api } from '@/lib/api'
 import type { EmployeeAttendanceDay, EmployeeAttendanceHistoryDay } from '@/lib/api'
@@ -31,6 +33,7 @@ import {
   siteTime,
 } from '@/pages/employees/attendance/attendanceModel'
 import type { RowState } from '@/pages/employees/attendance/attendanceModel'
+import { attendancePrintPath } from '@/pages/employees/statement/statementModel'
 
 interface Props {
   employeeId: string
@@ -421,6 +424,13 @@ export function AttendanceTab({
             })}
           </h3>
           <div className="ms-auto flex gap-1.5">
+            <Link
+              to={attendancePrintPath(employeeId, `mode=month&y=${bounds.year}&m=${bounds.month}`)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-[0.78em] text-primary hover:bg-primary-soft"
+            >
+              <Printer className="size-3.5" aria-hidden="true" />
+              {t('statementPrint.attendanceAction')}
+            </Link>
             <button
               type="button"
               onClick={() => setMonth(shiftMonth(month, -1))}
