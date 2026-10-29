@@ -453,18 +453,9 @@ def get_employee_attendance(
     employee record, while a roster reader needs both ``workforce.people.view``
     and ``workforce.attendance.review`` and stays inside their resolved scope.
     """
-    own = _is_own_employee(user, employee_id)
-    if not (own and perm_service.has_capability(db, user, "workforce.self.view")):
-        for capability in ("workforce.people.view", "workforce.attendance.review"):
-            if not perm_service.has_capability(db, user, capability):
-                raise AppError(
-                    "FORBIDDEN",
-                    "Capability required.",
-                    http_status=status.HTTP_403_FORBIDDEN,
-                )
     return workforce_read_service.employee_attendance_range(
         db,
-        scope=_scope(db, user),
+        scope=workforce_access_service.employee_attendance_reader_scope(db, user, employee_id),
         employee_id=employee_id,
         from_date=from_date,
         to_date=to_date,

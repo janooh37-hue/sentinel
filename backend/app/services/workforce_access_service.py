@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.db.models import AuditLog, Employee, User, UserWorkforceScope
 from app.schemas.workforce import WorkforceScopeWrite
+from app.services import perm_service
 from app.services.workforce_etag import etag_for, require_if_match
 from app.services.workforce_scope_service import (
     WorkforceScope,
@@ -18,6 +19,7 @@ from app.services.workforce_scope_service import (
     intersect_workforce_scope,
     normalize_scope_entry,
     normalize_scope_value,
+    resolve_workforce_scope,
 )
 
 _EMPLOYEE_SCOPE_MESSAGE = "The employee is outside the assigned workforce scope."
@@ -105,6 +107,23 @@ def employee_in_scope(
         message=message,
     )
     return employee
+
+
+def employee_attendance_reader_scope(db: Session, user: User, employee_id: str) -> WorkforceScope:
+    """Authorize reading one employee's attendance; return the caller's scope.
+
+    Two separate doors: ``workforce.self.view`` opens only the caller's own linked
+    employee record, while a roster reader needs both ``workforce.people.view``
+    and ``workforce.attendance.review``. Callers still pass the returned scope
+    through ``employee_in_scope``.
+    """
+    linked = (user.employee_id or "").strip()
+    own = bool(linked) and linked == employee_id
+    if not (own and perm_service.has_capability(db, user, "workforce.self.view")):
+        for capability in ("workforce.people.view", "workforce.attendance.review"):
+            if not perm_service.has_capability(db, user, capability):
+                raise AppError("FORBIDDEN", "Capability required.", http_status=403)
+    return resolve_workforce_scope(db, user)
 
 
 def require_organization(scope: WorkforceScope, *, message: str) -> None:
