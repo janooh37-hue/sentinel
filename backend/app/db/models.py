@@ -2394,6 +2394,35 @@ class Absence(Base):
     )
 
 
+class EmployeeStatementPrint(Base):
+    """One issued employee-file statement print (migration 0115).
+
+    ``serial`` is a running number per employee shared by Activity and
+    Attendance prints; the printed reference is ``<employee id>/1/12/<serial>``.
+    ``options`` is the setup as printed, serialized JSON.
+    """
+
+    __tablename__ = "employee_statement_prints"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False
+    )
+    serial: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    from_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    to_date: Mapped[date] = mapped_column(Date, nullable=False)
+    language: Mapped[str] = mapped_column(String(2), nullable=False)
+    options: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    printed_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    printed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("employee_id", "serial", name="uq_employee_statement_prints_serial"),
+        Index("ix_employee_statement_prints_employee_id", "employee_id"),
+    )
+
+
 class TimesheetPeriod(Base):
     """One time-sheet month (migration 0070).
 
