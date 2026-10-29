@@ -1057,7 +1057,7 @@ export function AccessRequestsPage(): React.JSX.Element {
   // One-shot URL → state sync: ?tab=permission-requests deep-links into that tab.
   const [tab, setTab] = useState<TabId>(() => {
     const p = searchParams.get('tab')
-    if (p === 'permission-requests') return 'permission-requests'
+    if (p === 'permission-requests' || p === 'active' || p === 'suspended' || p === 'history') return p
     return 'pending'
   })
 
@@ -1105,6 +1105,7 @@ export function AccessRequestsPage(): React.JSX.Element {
   function invalidate(): void {
     void qc.invalidateQueries({ queryKey: ['auth-users'] })
     void qc.invalidateQueries({ queryKey: ['auth-audit'] })
+    void qc.invalidateQueries({ queryKey: ['permission-studio'] })
   }
   function onError(e: unknown): void {
     toast.error(apiErrorMessage(e))
@@ -1314,6 +1315,7 @@ export function AccessRequestsPage(): React.JSX.Element {
                 busyUserId={busyUserId}
                 onReset={setResetTarget}
                 onChangeRole={setRoleTarget}
+                onEditPermissions={(target) => navigate(`/permissions?user=${target.id}`)}
                 onSetDefaultManager={(u, enabled) => defaultManagerMut.mutate({ id: u.id, enabled })}
                 onDisable={setDisableTarget}
                 onUnlock={(u) => unlockMut.mutate(u.id)}

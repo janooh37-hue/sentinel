@@ -529,8 +529,6 @@ export interface RegisterRequest {
 
 // Granular permission system (2026-05-26). Hand-mirrored from
 // backend/app/schemas/auth.py + core/permissions.py.
-export type PermissionEffect = 'grant' | 'deny'
-
 export interface CapabilityRead {
   id: string
   domain: string
@@ -554,15 +552,6 @@ export interface PermissionRequestRead {
   status: PermissionRequestStatus
   decision: string | null
   created_at: string
-}
-
-export interface UserPermissionRead {
-  user_id: number
-  role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
-  is_admin: boolean
-  effective: string[]
-  role_defaults: string[]
-  overrides: Record<string, PermissionEffect>
 }
 
 // Phase 07 — Ledger

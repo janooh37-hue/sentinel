@@ -1,6 +1,6 @@
 # Permission Studio redesign
 
-Status: build-ready design, not implemented. Operate mode; preserve PRODUCT.md and DESIGN.md.
+Status: design approved; slice D register, transport, bilingual copy and existing-consumer alignment implemented on `build/perm-d`. A/B/C integration and release certification remain separate downstream gates. Operate mode; preserve PRODUCT.md and DESIGN.md.
 Scope: one-account access discovery, explained outcomes and reviewed personal changes, with truthful consumer guards.
 
 ## 1. Job, problem and measurable success
@@ -293,5 +293,23 @@ These override the recommendations above where they differ.
 - Question 4: presets and bulk onboarding are deferred until departments land. Add "Copy access from another account" now, in slice B: pick a source account, show the diff of personal exceptions plus a role-mismatch warning, stage the exact patch, preview it, then save with the conditional save. It copies personal exceptions only, never the role, and is unavailable for admin, self and disabled targets.
 
 ## Evidence and limits
+
+### Original design-phase evidence
+
 All six `.tmp/handoff-perm-{audit,roster,matrix,effective,scale,find}.md` research inputs were read fully. Parent inspected key template guards/editor, effective read/write schemas, resolver and expiry rules; independent read-only scouts cross-checked enforcement and department conflicts. This is a design deliverable: usability targets and proposed endpoints are not shipped or certified. Existing template gate regression and synthetic resolver/schema probe are current executable evidence; no UI implementation, production incident replay or deployment is claimed.
 Cross-check refinement: preserve pre/post-sweep expiry behavior rather than claiming equivalence. An expired opt-in dynamic grant ceases granting before cleanup, while sweep may convert it to a lasting deny affecting future default rollout (`perm_service.py:142-148,413-425`). Include both states in explanations and tests; changing this policy is not part of the redesign.
+
+### Slice D implementation evidence (2026-10-29)
+
+- Shared frozen contracts and conditional transport were committed first (`13a72c17`) for B/C consumption. Generated schema types remain A-owned; no shadow schemas were added.
+- Replaced the mirror with the Accounts register: authorized lifecycle roster, bilingual identity search before 25-row pagination, role/status filters, last sign-in, named selection, reviewed account-management links and Back continuity. Removed AdvancedPermissionsPanel, obsolete mirror tests/locales and unversioned permission override transports.
+- Implemented existing-consumer guards from the remediation inventory: employee gap editing; leave/absence tabs, query suppression, totals/activity/attendance masking; exact duty-letter prerequisites separate from silent employee PATCH; Ledger edit/delete/send/create/vault entry and submission guards including delayed Trash; rich-editor library Save/Load; read-only message/email wording; Services navigation and destination prerequisite parity. Kept ledger.view read/unread, direct-recipient/reviewer exceptions and employee message-history policy intact.
+- Current-session capabilities refresh on focus/visibility return and denied mutations, without claiming background-session instantaneous revocation.
+- Narrow changed-behavior run: **27 Vitest files / 328 tests passed**. Changed-source ESLint exited 0 with 13 hook warnings. TypeScript reported only the eight explicitly pending generated schemas: Resource, Action, AccessItem, AccessSnapshot, PreviewResponse, CheckResponse, CheckRequest and Patch.
+- Real cookie-authenticated browser regression against an isolated synthetic SQLite API: **4 Playwright tests passed**, EN/AR at 1280×900 and 390×844, covering register → keyboard-selected named account → Back, URL merging and restored filter/focus. No production data, sends, Word automation, scheduler or notification provider was used.
+- Actual register visual smoke additionally used 200 synthetic authorized account projections, EN/AR desktop/phone, light at 16px and dark at 24px. Confirmed Western dates, LTR-isolated identity fields, no entry autofocus, minimum 44px buttons and no page overflow. Overflow probes at 320px across 16/19/22/24 font stops and a 195px viewport equivalent to a 390px phone at 200% passed. These are Chromium observations, not a physical phone or screen-reader certification.
+- Required bilingual review resolved its missing-key findings. The visual review's Arabic identity alignment finding was corrected. No durable design convention changed; PRODUCT.md and DESIGN.md intentionally remain unchanged. No notification content/template formatting changed.
+- **Named integration point:** `PermissionStudioIntegration` on `PermissionsPage` / exported `PeoplePermissionsPanel`: supply B's `AccessWorkspace` through `renderWorkspace`, C's resource `StudioSearch` through `renderSearch`, and B's `requestWorkspaceNavigation` through `requestNavigation` so Back respects dirty drafts. The local branch has no department outer shell; the exported People panel preserves that future composition seam and URL updates preserve unrelated org parameters. Account-mode C search still needs a controlled query callback before replacing the native register filter/search-before-pagination path.
+- **Explicitly deferred by the slice brief:** do not merge A/B/C until instructed by the orchestrator. Until real integration, the register truthfully marks the workspace unavailable; no fake editor, locally reproduced resolver, generated API substitute or simulated merged branch is provided. Integrated explain/preview/save/conflict/copy/dependency behavior, catalog/summary timings, physical Arabic shortcut checks and full-inventory protected-operation/browser parity remain unclaimed downstream gates.
+- **Backend request to A:** independently authorized employee attendance responses still carry leave/absence facts (`/workforce/employees/{id}/attendance`, including `presence_state`, `on_leave`, `absence_due_at`). D masks those facts in its employee surface; backend payload privacy must match the approved leaves.view boundary without revoking unrelated raw attendance history.
+
