@@ -46,17 +46,17 @@ function propsFor(snapshot = fixture()): AccessGroupsProps {
 function groups(props: AccessGroupsProps) {
   return <I18nextProvider i18n={instance}><AccessGroups {...props} /></I18nextProvider>
 }
-function header(label: string) {
-  return screen.getByRole('button', { name: new RegExp(`^${label}`) })
+function header(group: string) {
+  return screen.getByRole('button', { name: new RegExp(`^${instance.t(`access.studio.groups.${group}`)}`) })
 }
 
 describe('compact access groups', () => {
   it('starts collapsed and orders groups by task frequency rather than incoming catalog order', () => {
     render(groups(propsFor()))
     const buttons = screen.getAllByRole('button')
-    expect(buttons.map((button) => button.textContent?.split('1 allowed')[0]?.trim())).toEqual([
-      'Services & Records', 'People & attendance', 'Templates & notifications', 'Correspondence', 'Administration',
-    ])
+    expect(buttons.map((button) => button.textContent?.split(instance.t('access.studio.groupSummary.allowed', { count: 1 }))[0]?.trim())).toEqual(
+      ['services', 'people', 'templates', 'correspondence', 'administration'].map((group) => instance.t(`access.studio.groups.${group}`)),
+    )
     for (const button of buttons) expect(button).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByRole('radio')).not.toBeInTheDocument()
   })
@@ -64,20 +64,20 @@ describe('compact access groups', () => {
   it('opens only live search-hit groups and preserves a separately opened group when search clears', () => {
     const props = propsFor()
     const rendered = render(groups(props))
-    fireEvent.click(header('People & attendance'))
+    fireEvent.click(header('people'))
     rendered.rerender(groups({ ...props, matchingGroups: ['templates'] }))
-    expect(header('Templates & notifications')).toHaveAttribute('aria-expanded', 'true')
-    expect(header('Administration')).toHaveAttribute('aria-expanded', 'false')
+    expect(header('templates')).toHaveAttribute('aria-expanded', 'true')
+    expect(header('administration')).toHaveAttribute('aria-expanded', 'false')
     expect(document.getElementById('capability:templates.view:view')).toBeVisible()
     rendered.rerender(groups({ ...props, matchingGroups: [] }))
-    expect(header('People & attendance')).toHaveAttribute('aria-expanded', 'true')
+    expect(header('people')).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('opens and focuses a collapsed search destination without changing any setting', async () => {
     const props = propsFor()
     const rendered = render(groups(props))
     rendered.rerender(groups({ ...props, focusDestination: 'capability:administration.view:view' }))
-    expect(header('Administration')).toHaveAttribute('aria-expanded', 'true')
+    expect(header('administration')).toHaveAttribute('aria-expanded', 'true')
     await waitFor(() => expect(document.getElementById('capability:administration.view:view')).toHaveFocus())
     expect(props.onStage).not.toHaveBeenCalled()
     expect(props.onSelect).not.toHaveBeenCalled()
@@ -90,23 +90,37 @@ describe('compact access groups', () => {
     template.actions.push({ ...template.actions[0], action: 'reset' })
     const props = propsFor(snapshot)
     const rendered = render(groups(props))
-    expect(header('Templates & notifications')).toHaveAttribute('aria-expanded', 'false')
-    expect(header('Templates & notifications')).toHaveTextContent('1 personal exception')
+    expect(header('templates')).toHaveAttribute('aria-expanded', 'false')
+    expect(header('templates')).toHaveTextContent(instance.t('access.studio.groupSummary.exceptions', { count: 1 }))
     rendered.rerender(groups({ ...props, filter: 'exceptions' }))
-    expect(header('Templates & notifications')).toHaveAttribute('aria-expanded', 'true')
-    expect(header('People & attendance')).toHaveAttribute('aria-expanded', 'false')
+    expect(header('templates')).toHaveAttribute('aria-expanded', 'true')
+    expect(header('people')).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it.each(['unknown', 'needs_context', 'warning', 'expired'] as const)('automatically opens %s attention items but lets the operator collapse them', (kind) => {
+  it.each(['unknown', 'warning', 'expired'] as const)('automatically opens %s attention items but lets the operator collapse them', (kind) => {
     const snapshot = fixture()
     const action = snapshot.items[0].actions[0]
     if (kind === 'warning') action.warnings = [{ code: 'PREREQUISITE_BLOCKED', severity: 'warning' }]
     else if (kind === 'expired') snapshot.overrides = [{ capability: 'administration.view', effect: 'grant', expires_at: '2020-01-01T00:00:00Z', state: 'expired' }]
     else action.authorization = kind
     render(groups(propsFor(snapshot)))
-    expect(header('Administration')).toHaveAttribute('aria-expanded', 'true')
-    expect(header('Services & Records')).toHaveAttribute('aria-expanded', 'false')
-    fireEvent.click(header('Administration'))
-    expect(header('Administration')).toHaveAttribute('aria-expanded', 'false')
+    expect(header('administration')).toHaveAttribute('aria-expanded', 'true')
+    expect(header('services')).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(header('administration'))
+    expect(header('administration')).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('keeps record-dependent outcomes neutral and omits zero counts', () => {
+    const snapshot = fixture()
+    snapshot.items[0].actions[0].authorization = 'needs_context'
+    snapshot.items[0].actions[0].executable_now = null
+    snapshot.items[0].actions[0].required_context = ['grade']
+    snapshot.items[0].actions[0].warnings = [{ code: 'EXACT_RECORD_REQUIRES_CONTEXT', severity: 'info' }]
+    render(groups(propsFor(snapshot)))
+    expect(header('administration')).toHaveAttribute('aria-expanded', 'false')
+    expect(header('administration')).not.toHaveTextContent(/\b0\b/)
+    fireEvent.click(header('administration'))
+    expect(screen.getAllByText(instance.t('access.studio.outcomes.depends_grade'))[0]).toBeVisible()
+    expect(header('administration')).not.toHaveTextContent(instance.t('access.studio.groupSummary.attention', { count: 1 }))
   })
 })

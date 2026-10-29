@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AdminUserRead } from '@/lib/api'
+import en from '@/locales/en.json'
 
 vi.mock('@/lib/api', () => ({ api: { listAuthUsers: vi.fn(), listPermissionRequests: vi.fn() }, apiErrorMessage: () => 'Unavailable' }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1 }, status: 'authed' }) }))
@@ -83,7 +84,7 @@ describe('Accounts register', () => {
     expect(screen.queryByText('person2@example.test')).not.toBeInTheDocument()
     expect(screen.getByText('person3@example.test')).toBeVisible()
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Role' }), 'operator')
-    expect(screen.getByText('No matching accounts. Clear the search or filters.')).toBeVisible()
+    expect(screen.getByText(en.access.studio.noMatchingAccounts)).toBeVisible()
     await userEvent.click(screen.getByRole('button', { name: 'Clear search and filters' }))
     expect(screen.getByText('person2@example.test')).toBeVisible()
   })
@@ -105,7 +106,7 @@ describe('Accounts register', () => {
   })
   it('keeps a disabled target identifiable and marks configured access unusable', async () => {
     mount([account(2, { status: 'disabled' })], '/permissions?user=2')
-    expect(await screen.findByText('Configured access is read-only and cannot be used until the account is activated.')).toBeVisible()
+    expect(await screen.findByText(en.access.studio.disabledReadOnly)).toBeVisible()
     expect(screen.getByText('person2@example.test')).toBeVisible()
   })
   it('preserves the selected workspace when a background roster refresh fails', async () => {
@@ -127,7 +128,7 @@ describe('Accounts register', () => {
   })
   it.each([
     ['Operator', '?tab=active&user=2'],
-    ['Pending requests (0)', '?tab=permission-requests'],
+    [en.access.studio.pendingRequests_other.replace('{{count}}', '0'), '?tab=permission-requests'],
   ])('keeps the selected account until leaving through %s is approved', async (link, expectedSearch) => {
     let proceed: (() => void) | undefined
     releaseNavigationGuard = registerWorkspaceNavigation((next) => { proceed = next; return true })

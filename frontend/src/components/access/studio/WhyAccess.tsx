@@ -21,25 +21,42 @@ type ReasonNode = Decision['reason_tree']
 
 export function DecisionOutcome({ decision, resource }: { decision: Decision; resource?: Resource }) {
   const { t } = useTranslation()
+  const context = decision.required_context ?? []
+  const dependency = context.includes('department_id') || context.includes('department') ? 'department'
+    : context.includes('unit_id') || context.includes('unit') ? 'unit'
+    : context.includes('category_id') ? 'category'
+    : context.includes('classification_id') ? 'classification'
+    : context.includes('employee_assignment') ? 'employee_assignment'
+    : context.includes('grade') ? 'grade' : undefined
   return (
-    <span className={cn('inline-flex flex-wrap items-center gap-x-1 rounded-md bg-surface-tinted px-2 py-1 text-xs font-semibold', decision.authorization === 'allowed' && 'text-success', (decision.authorization === 'unknown' || decision.authorization === 'needs_context') && 'text-warning')}>
-      {t(resource && isMessageTemplate(resource) && decision.action === 'view' && decision.authorization === 'denied' ? 'access.studio.templateHidden' : `access.studio.outcomes.${decision.authorization}`)}
-      {decision.authorization === 'allowed' && decision.executable_now === false && <span className="font-normal text-warning">· {t('access.studio.outcomes.not_ready')}</span>}
+    <span className={cn('inline-flex flex-wrap items-center gap-x-1 rounded-md bg-surface-tinted px-2 py-1 text-xs font-semibold', decision.authorization === 'allowed' && 'text-success', decision.authorization === 'unknown' && 'text-warning', decision.authorization === 'needs_context' && 'text-muted-foreground')}>
+      {t(resource && isMessageTemplate(resource) && decision.action === 'view' && decision.authorization === 'denied' ? 'access.studio.templateHidden' : decision.authorization === 'needs_context' && dependency ? `access.studio.outcomes.depends_${dependency}` : `access.studio.outcomes.${decision.authorization}`)}
     </span>
   )
 }
 
-export function AccessWarnings({ warnings = [] }: { warnings: Decision['warnings'] }) {
-  const { t } = useTranslation()
+export function AccessWarnings({ warnings = [], snapshot }: { warnings: Decision['warnings']; snapshot?: Snapshot }) {
+  const { t, i18n } = useTranslation()
   if (!warnings.length) return null
   return (
     <ul className="space-y-2 text-sm" aria-label={t('access.studio.warnings')}>
-      {warnings.map((warning, index) => (
-        <li key={`${warning.code}:${index}`} className={cn('flex min-w-0 items-start gap-2', warning.severity === 'error' ? 'text-accent' : warning.severity === 'warning' ? 'text-warning' : 'text-muted-foreground')}>
+      {warnings.map((warning, index) => {
+        const labels = (warning.capabilities ?? []).map((capability) => {
+          const catalog = snapshot?.items.find((item) => item.resource.kind === 'capability' && item.resource.id === capability)
+          return catalog ? localized(catalog.label, i18n.language).trim() : ''
+        })
+        const prerequisite = ['PREREQUISITE_BLOCKED', 'CONDITIONAL_PREREQUISITE_BLOCKED'].includes(warning.code)
+        const unnamedPrerequisite = prerequisite && (!labels.length || labels.some((label) => !label))
+        return <li key={`${warning.code}:${index}`} className={cn('flex min-w-0 items-start gap-2', warning.severity === 'error' ? 'text-accent' : warning.severity === 'warning' ? 'text-warning' : 'text-muted-foreground')}>
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <p className="min-w-0 [overflow-wrap:anywhere]">{String(t(`access.studio.issueCodes.${warning.code}`, { defaultValue: t('access.studio.issueCode'), returnObjects: false }))}</p>
+          <p className="min-w-0 [overflow-wrap:anywhere]">{unnamedPrerequisite
+            ? t(warning.code === 'CONDITIONAL_PREREQUISITE_BLOCKED' && warning.params?.category_exists === false ? 'access.studio.attention.conditionalCategoryMissing' : 'access.studio.attention.prerequisiteUnknown')
+            : String(t(`access.studio.issueCodes.${warning.code}`, {
+              permission: new Intl.ListFormat(i18n.language).format(labels),
+              defaultValue: t('access.studio.attention.unknownWarning'), returnObjects: false,
+            }))}</p>
         </li>
-      ))}
+      })}
     </ul>
   )
 }
@@ -74,7 +91,7 @@ function SourceList({ reasons }: { reasons: Reason[] }) {
       {reasons.map((reason, index) => (
         <li key={`${reason.code}:${reason.source.kind}:${reason.source.id}:${index}`} className="min-w-0 space-y-1 [overflow-wrap:anywhere]">
           <p className="font-medium"><ReasonText reason={reason} /></p>
-          <p className="text-muted-foreground">{localized(reason.source.label, i18n.language)} · {t(`access.studio.sourceKinds.${reason.source.kind}`)} · {t(`access.studio.contributions.${reason.source.contribution}`)}</p>
+          <p className="text-muted-foreground">{reason.source.kind === 'role' ? `${t('access.studio.sourceKinds.role')}: ${t(`access.roleName.${reason.source.id}`, { defaultValue: localized(reason.source.label, i18n.language) })}` : reason.source.kind === 'department' ? localized(reason.source.label, i18n.language) : t(`access.studio.sourceKinds.${reason.source.kind}`)} · {t(`access.studio.contributions.${reason.source.contribution}`)}</p>
           {reason.source.expires_at && <p className="text-muted-foreground">{t('access.studio.expiry.label')}: <LocalDateTime value={reason.source.expires_at} /></p>}
         </li>
       ))}
@@ -115,7 +132,7 @@ export function WhyAccess({ decision, snapshot, resource, baseline, children, te
         <DecisionOutcome decision={decision} resource={resource} />
         {decision.setting_capabilities.length > 0 && <p><span className="text-muted-foreground">{t('access.studio.roleBaseline')}: </span><span className="font-medium">{t(`access.studio.baseline.${roleBaseline}`)}</span></p>}
         {children}
-        <AccessWarnings warnings={decision.warnings} />
+        <AccessWarnings warnings={decision.warnings} snapshot={snapshot} />
         {sections.filter((section) => section.reasons.length).map((section) => <section key={section.key} className="space-y-2"><h5 className="font-semibold">{t(`access.studio.why.${section.key}`)}</h5><SourceList reasons={section.reasons} /></section>)}
         <section className="space-y-2"><h5 className="font-semibold">{t('access.studio.why.logic')}</h5><ReasonTree node={decision.reason_tree} reasons={decision.reasons} /></section>
         {!!requiredContext.length && <div><p>{t('access.studio.why.requiredContext')}</p><ul>{requiredContext.map((key) => <li key={key}>{t(`access.studio.context.${key}`, { defaultValue: t('access.studio.diagnosticContext') })}</li>)}</ul></div>}

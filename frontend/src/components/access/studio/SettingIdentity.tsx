@@ -1,14 +1,10 @@
 import { useTranslation } from 'react-i18next'
-import { localized, type Snapshot } from './studioModel'
+import { settingLabel, type Snapshot } from './studioModel'
+
 
 export function SettingLabel({ snapshot, capability }: { snapshot: Snapshot; capability: string }) {
   const { t, i18n } = useTranslation()
-  const catalogItem = snapshot.items.find((item) => item.resource.kind === 'capability' && item.resource.id === capability)
-  if (catalogItem) return <>{localized(catalogItem.label, i18n.language)}</>
-  const bindings = snapshot.items.flatMap((item) => item.actions.filter((action) => action.setting_capabilities.includes(capability)).map((action) => ({ item, action })))
-  if (bindings.length !== 1) return <>{t('access.studio.accountSetting')}</>
-  const { item, action } = bindings[0]
-  return <>{t(`access.studio.actions.${action.action}`)} · {localized(item.label, i18n.language)}</>
+  return <>{settingLabel(snapshot, capability, i18n.language, t)}</>
 }
 
 /** Keep reviewed patches identifiable without making canonical IDs the label. */

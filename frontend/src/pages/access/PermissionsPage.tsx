@@ -169,7 +169,7 @@ export function PeoplePermissionsPanel(): React.JSX.Element {
             : selected.id === user?.id ? <p role="status">{t('access.studio.selfLocked')}</p>
             : <>
               {selected.status !== 'active' && <p role="status" className="rounded-lg bg-warning-soft p-3 text-warning">{t('access.studio.disabledReadOnly')}</p>}
-              <AccessWorkspace key={selected.id} subjectId={selected.id}
+              <AccessWorkspace key={selected.id} subjectId={selected.id} subjectName={nameOf(selected, arabic)}
                 initialResource={resourceFromParam(params.get('psResource'))}
                 onNavigate={navigate} renderSearch={(props) => <StudioSearch {...props} />} />
             </>}

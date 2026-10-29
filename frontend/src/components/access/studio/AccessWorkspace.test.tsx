@@ -181,6 +181,7 @@ function mount(id = 42, props: Partial<AccessWorkspaceProps> = {}) {
     >
       <AccessWorkspace
         subjectId={id}
+        subjectName="Ahmed"
         onNavigate={vi.fn()}
         renderSearch={() => <input aria-label="Find resource" />}
         {...props}
@@ -325,18 +326,16 @@ describe('AccessWorkspace', () => {
     mount()
     const row = document.getElementById('notification_template:wording:edit')!.closest('article')!
     openWhy(row)
-    expect(within(row).getByText('access.studio.issueCodes.VISIBILITY_CONTROL_UNAVAILABLE')).toBeVisible()
+    expect(within(row).getAllByText('access.studio.issueCodes.VISIBILITY_CONTROL_UNAVAILABLE')[0]).toBeVisible()
     expect(screen.queryByText('VISIBILITY_CONTROL_UNAVAILABLE')).not.toBeInTheDocument()
     fireEvent.click(
       screen.getByRole('button', { name: 'access.studio.filter.attention' }),
     )
-    expect(
-      document.getElementById('notification_template:wording:edit'),
-    ).toBeInTheDocument()
+    expect(document.getElementById('notification_template:wording:edit')).toBeNull()
     expect(document.getElementById('service:demo:create')).toBeNull()
-    expect(screen.queryByText('access.studio.why.requiredContext')).toBeNull()
+    expect(screen.getByText('access.studio.filter.attentionHelp')).toBeVisible()
     fireEvent.click(
-      screen.getByRole('button', { name: 'access.studio.filter.all' }),
+      within(screen.getByRole('group', { name: 'access.studio.filters' })).getByRole('button', { name: 'access.studio.filter.all' }),
     )
     expect(document.getElementById('service:demo:create')).toBeInTheDocument()
   })
@@ -350,8 +349,53 @@ describe('AccessWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'access.studio.filter.attention' }))
     const row = document.getElementById('notification_template:wording:edit')!.closest('article')!
     expect(row).toBeVisible()
-    expect(within(row).getByText('access.studio.filter.attention')).toBeVisible()
+    expect(within(row).getByText(kind === 'expired' ? 'access.studio.attention.expired' : 'access.studio.attention.notReady')).toBeVisible()
     expect(document.getElementById('service:demo:create')).toBeNull()
+  })
+
+  it('excludes record-dependent access from the action filter and explains what the filter includes', () => {
+    const snapshot = fixture()
+    snapshot.items[0].actions[1].authorization = 'needs_context'
+    snapshot.items[0].actions[1].executable_now = null
+    snapshot.items[0].actions[1].required_context = ['grade']
+    snapshot.items[0].actions[1].warnings = [{ code: 'EXACT_RECORD_REQUIRES_CONTEXT', severity: 'info' }]
+    state.snapshot = snapshot
+    mount()
+    expect(screen.getByText('access.studio.choicesHelp')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.filter.attention' }))
+    expect(document.getElementById('notification_template:wording:edit')).toBeNull()
+    expect(screen.getByText('access.studio.filter.attentionHelp')).toBeVisible()
+    expect(screen.getByText('access.studio.noMatches')).toBeVisible()
+  })
+
+  it('reviews the exact one-click prerequisite patch before saving it', async () => {
+    const snapshot = fixture()
+    snapshot.items[0].actions[1].authorization = 'denied'
+    snapshot.items[0].actions[1].executable_now = false
+    snapshot.items[0].actions[1].warnings = [{ code: 'PREREQUISITE_BLOCKED', severity: 'warning', capabilities: ['employees.view'] }]
+    snapshot.items.push({
+      resource: { kind: 'capability', id: 'employees.view' }, group_id: 'people',
+      label: { en: 'View employee records', ar: 'عرض سجلات الموظفين' },
+      description: { en: 'Open employee records', ar: 'فتح سجلات الموظفين' },
+      aliases: { en: [], ar: [] }, actions: [decision('view', 'employees.view', false)],
+    })
+    state.snapshot = snapshot
+    mount()
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.attention.alsoAllow' }))
+    expect(state.save).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.reviewAction' }))
+    const acknowledge = await screen.findByRole('button', { name: 'access.studio.review.acknowledge' })
+    expect(state.preview).toHaveBeenCalledExactlyOnceWith({
+      expected_revision: 'r1',
+      items: [{ capability: 'employees.view', effect: 'grant', expires_at: null }],
+    })
+    expect(screen.getByRole('button', { name: 'access.studio.save' })).toBeDisabled()
+    fireEvent.click(acknowledge)
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.save' }))
+    await waitFor(() => expect(state.save).toHaveBeenCalledExactlyOnceWith({
+      revision: 'r1',
+      items: [{ capability: 'employees.view', effect: 'grant', expires_at: null }],
+    }))
   })
   it('requires review for a new warning when the current warning list was omitted', async () => {
     const snapshot = fixture()

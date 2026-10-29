@@ -22,7 +22,7 @@ export interface AccessGroupsProps {
   disabled: boolean
   selected: ReadonlySet<string>
   onSelect: (destination: string, selected: boolean) => void
-  onStage: (patches: Patch[]) => void
+  onStage: (patches: Patch[], requireReview?: boolean) => void
   focusDestination?: string
   expandMatches?: boolean
   filter?: 'all' | 'exceptions' | 'attention'
@@ -184,7 +184,11 @@ function Group({
   const allowed = actions.filter((action) => action.authorization === 'allowed').length
   const exceptions = new Set(actions.flatMap((action) => action.setting_capabilities).filter((capability) => props.snapshot.overrides.some((override) => override.capability === capability) || props.patches.some((patch) => patch.capability === capability && patch.effect != null))).size
   const attention = actions.filter((action) => needsAttention(action, props.snapshot)).length
-  const summary = `${t('access.studio.groupSummary.allowed', { count: allowed })} · ${t('access.studio.groupSummary.exceptions', { count: exceptions })} · ${t('access.studio.groupSummary.attention', { count: attention })}`
+  const summary = [
+    allowed > 0 ? t('access.studio.groupSummary.allowed', { count: allowed }) : '',
+    exceptions > 0 ? t('access.studio.groupSummary.exceptions', { count: exceptions }) : '',
+    attention > 0 ? t('access.studio.groupSummary.attention', { count: attention }) : '',
+  ].filter(Boolean).join(' · ')
   const contentId = useId()
   return (
     <section
