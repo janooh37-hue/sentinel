@@ -6,6 +6,7 @@ import { api, apiErrorMessage } from '@/lib/api'
 import { useAccessSnapshot } from '@/lib/permissionStudioApi'
 import { savedSetting, type Patch, type Snapshot } from './studioModel'
 import { buildCopyPatch } from './copyAccessModel'
+import { LocalDateTime, SettingIdentity } from './SettingIdentity'
 
 export interface CopyAccessProps {
   target: Snapshot
@@ -257,9 +258,7 @@ function CopySource({
                 const before = savedSetting(target, patch.capability)
                 return (
                   <li key={patch.capability} className="min-w-0 py-3 text-sm">
-                    <p className="break-all font-mono">
-                      <bdi dir="ltr">{patch.capability}</bdi>
-                    </p>
+                    <SettingIdentity snapshot={target} capability={patch.capability} />
                     <dl className="mt-2 grid min-w-0 gap-3 sm:grid-cols-2">
                       {[
                         { label: 'before', value: before },
@@ -282,13 +281,7 @@ function CopySource({
                             <dd className="mt-1 break-words text-muted-foreground">
                               {t('access.studio.review.expiry')}:{' '}
                               {value.expires_at ? (
-                                <time
-                                  dateTime={value.expires_at}
-                                  dir="ltr"
-                                  className="break-all font-mono tabular-nums"
-                                >
-                                  {value.expires_at}
-                                </time>
+                                <LocalDateTime value={value.expires_at} />
                               ) : (
                                 t('access.studio.review.noExpiry')
                               )}
@@ -313,9 +306,7 @@ function CopySource({
               <ul className="mt-2 space-y-2 text-sm">
                 {diff.exclusions.map((entry) => (
                   <li key={entry.capability} className="break-words">
-                    <bdi dir="ltr" className="break-all font-mono">
-                      {entry.capability}
-                    </bdi>{' '}
+                    <SettingIdentity snapshot={target} capability={entry.capability} />
                     — {t(`access.studio.copy.exclusion.${entry.reason}`)}
                   </li>
                 ))}

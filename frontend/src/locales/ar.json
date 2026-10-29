@@ -5854,6 +5854,8 @@
       "access": "صلاحيات الوصول",
       "account": "الحساب",
       "evaluated": "وقت التقييم",
+      "checkedAt": "تم التحقق في {{time}}",
+      "accountSetting": "إعداد الحساب",
       "loading": "جارٍ تحميل الصلاحيات…",
       "loadError": "تعذر تحميل صلاحيات هذا الحساب. أعد المحاولة.",
       "retry": "إعادة المحاولة",
@@ -6075,6 +6077,8 @@
         "LEDGER_BOOK_CHAIN_ONLY": "تقتصر هذه العملية على سلسلة إصدارات دفتر المراسلات.",
         "CONDITIONAL_PREREQUISITE_MISSING": "أحد المتطلبات المسبقة مفقود لمسار التكليف الحالي. يُقيّم التعيين الأولي بصورة مستقلة.",
         "EXISTING_ASSIGNMENT_REQUIRES_RECORD_TYPE": "يتطلب تغيير التكليف الحالي صلاحيات نوع المعاملة الاعتيادية.",
+        "INMATE_REPORTER_ROUTE_FORBIDDEN": "لا يسمح دور مسجل مخالفات النزلاء بهذا الإجراء.",
+        "TEMPLATE_NOT_FOUND": "هذا القالب غير متاح لهذا الحساب.",
         "PROPOSED_RECORD_ACCESS_LOST": "تُلغي الإعدادات المقترحة وصول هذا الحساب إلى المعاملة."
       },
       "issueCodes": {
@@ -6083,9 +6087,27 @@
         "TEMPLATES_REMAIN_VISIBLE": "تبقى القوالب ظاهرة بموجب سياسة العرض الحالية. ويخضع التعديل وإعادة الضبط لتحكم مستقل.",
         "PREREQUISITE_BLOCKED": "يمنع شرط أساسي مفقود هذا الإجراء. راجع الإعدادات المحددة؛ لا تتغير الصلاحيات المرتبطة تلقائيًا.",
         "CONDITIONAL_PREREQUISITE_BLOCKED": "يمنع متطلب مسبق مسار التكليف الحالي. قد يظل التعيين الأولي مسموحًا؛ ولا تتغيّر الإعدادات المرتبطة تلقائيًا.",
+        "VISIBILITY_CONTROL_UNAVAILABLE": "لا يمكن تغيير ظهور هذا المورد.",
         "MISSING_ARABIC_TRANSLATION": "لا تتوفر ترجمة عربية لحقول دليل الصلاحيات المذكورة. تُعرض النصوص المتاحة في الدليل."
       },
+      "groupSummary": {
+        "allowed": "مسموح: {{count}}",
+        "exceptions_zero": "استثناءات فردية: {{count}}",
+        "exceptions_one": "استثناءات فردية: {{count}}",
+        "exceptions_two": "استثناءات فردية: {{count}}",
+        "exceptions_few": "استثناءات فردية: {{count}}",
+        "exceptions_many": "استثناءات فردية: {{count}}",
+        "exceptions_other": "استثناءات فردية: {{count}}",
+        "attention_zero": "تحتاج إلى انتباه: {{count}}",
+        "attention_one": "تحتاج إلى انتباه: {{count}}",
+        "attention_two": "تحتاج إلى انتباه: {{count}}",
+        "attention_few": "تحتاج إلى انتباه: {{count}}",
+        "attention_many": "تحتاج إلى انتباه: {{count}}",
+        "attention_other": "تحتاج إلى انتباه: {{count}}"
+      },
       "why": {
+        "short": "السبب؟",
+        "technical": "التفاصيل التقنية",
         "title": "سبب هذا الوصول",
         "decisive": "المصادر الحاسمة",
         "contributing": "المصادر المساهمة",

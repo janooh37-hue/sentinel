@@ -13,8 +13,10 @@ export interface SearchEntry {
   text: string[]
   aliases: string[]
   destination: StudioDestination
+  groupId?: string
+  actions?: SearchEntry[]
 }
-export interface SearchMatch { entry: SearchEntry; rank: number; suggestion: boolean }
+export interface SearchMatch { entry: SearchEntry; rank: number; suggestion: boolean; actions?: SearchEntry[] }
 
 export function accountSearchIndex(accounts: AdminUserRead[], arabic = false): SearchEntry[] {
   return accounts.map((account) => {
@@ -38,15 +40,28 @@ export function accountSearchIndex(accounts: AdminUserRead[], arabic = false): S
 }
 
 export function resourceSearchIndex({ subjectId, items }: ResourceSearchProps, arabic: boolean, actionLabels: (action: string) => string[] = () => []): SearchEntry[] {
-  return items.flatMap((item) => item.actions.map((decision: ResourceSearchProps['items'][number]['actions'][number]) => ({
-    key: `${item.resource.kind}:${item.resource.id}:${decision.action}`,
-    label: arabic ? item.label.ar : item.label.en,
-    alternateLabel: arabic ? item.label.en : item.label.ar,
-    identifiers: [item.resource.id, `${item.resource.kind}:${item.resource.id}:${decision.action}`, ...decision.setting_capabilities],
-    text: [item.label.en, item.label.ar, item.description.en, item.description.ar, decision.action, ...actionLabels(decision.action)],
-    aliases: [...item.aliases.en, ...item.aliases.ar],
-    destination: { userId: subjectId, resource: item.resource, action: decision.action },
-  })))
+  return items.map((item) => {
+    const actions = item.actions.map((decision) => ({
+      key: `${item.resource.kind}:${item.resource.id}:${decision.action}`,
+      label: arabic ? item.label.ar : item.label.en,
+      alternateLabel: arabic ? item.label.en : item.label.ar,
+      identifiers: [item.resource.id, `${item.resource.kind}:${item.resource.id}:${decision.action}`, ...decision.setting_capabilities],
+      text: [item.label.en, item.label.ar, item.description.en, item.description.ar, decision.action, ...actionLabels(decision.action)],
+      aliases: [...item.aliases.en, ...item.aliases.ar],
+      destination: { userId: subjectId, resource: item.resource, action: decision.action },
+    }))
+    return {
+      key: `${item.resource.kind}:${item.resource.id}`,
+      label: arabic ? item.label.ar : item.label.en,
+      alternateLabel: arabic ? item.label.en : item.label.ar,
+      identifiers: [...new Set(actions.flatMap((action) => action.identifiers))],
+      text: [item.label.en, item.label.ar, item.description.en, item.description.ar],
+      aliases: [...item.aliases.en, ...item.aliases.ar],
+      destination: { userId: subjectId, resource: item.resource },
+      groupId: item.group_id,
+      actions,
+    }
+  })
 }
 
 /** Tiered matching keeps strict Arabic ahead of relaxed spelling and suggestions. */
@@ -58,6 +73,18 @@ export function searchEntries(entries: SearchEntry[], query: string): SearchMatc
   const numeric = /\d/.test(q)
   const matches: SearchMatch[] = []
   for (const entry of entries) {
+    if (entry.actions) {
+      const actionMatches = searchEntries(entry.actions, query)
+      const best = actionMatches[0]
+      if (best) {
+        const ranked = new Set(actionMatches.map((match) => match.entry.key))
+        matches.push({
+          entry, rank: best.rank, suggestion: best.suggestion,
+          actions: [...actionMatches.map((match) => match.entry), ...entry.actions.filter((action) => !ranked.has(action.key))],
+        })
+      }
+      continue
+    }
     const ids = [...entry.identifiers, ...entry.numericIdentifiers ?? []].map((value) => normalizeSearchText(value)).filter(Boolean)
     const texts = entry.text.map((value) => normalizeSearchText(value)).filter(Boolean)
     const aliases = entry.aliases.map((value) => normalizeSearchText(value)).filter(Boolean)

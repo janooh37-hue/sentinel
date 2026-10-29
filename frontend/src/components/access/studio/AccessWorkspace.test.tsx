@@ -173,7 +173,7 @@ function previewFor(snapshot: Snapshot, patches: Patch[]): PreviewResponse {
   return { current: snapshot, proposed, impacts: [], validation: [] }
 }
 function mount(id = 42, props: Partial<AccessWorkspaceProps> = {}) {
-  return render(
+  const rendered = render(
     <QueryClientProvider
       client={
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -187,6 +187,16 @@ function mount(id = 42, props: Partial<AccessWorkspaceProps> = {}) {
       />
     </QueryClientProvider>,
   )
+  // Most workspace cases exercise editing; explicitly open its task group.
+  const templates = screen.queryByRole('button', { name: /access.studio.groups.templates/ })
+  if (templates?.getAttribute('aria-expanded') === 'false') fireEvent.click(templates)
+  return rendered
+}
+
+function openWhy(row: HTMLElement, technical = false) {
+  const why = row.querySelector('details')!
+  fireEvent.click(within(why).getByText('access.studio.why.short'))
+  if (technical) fireEvent.click(within(why).getByText('access.studio.why.technical'))
 }
 afterEach(() => vi.clearAllMocks())
 beforeEach(() => {
@@ -209,12 +219,13 @@ describe('AccessWorkspace', () => {
     mount()
     const viewRow = document.getElementById(`${kind}:wording:view`)!.closest('article')!
     expect(within(viewRow).getAllByText('access.studio.templateHidden').length).toBeGreaterThan(0)
+    openWhy(viewRow)
     expect(within(viewRow).getByText('access.studio.templateViewRequired')).toBeVisible()
-    expect(within(viewRow).getByText('access.studio.why.title')).toBeVisible()
     expect(within(viewRow).getByText(kind === 'email_template'
       ? 'access.studio.templateViewConsequenceEmail'
       : 'access.studio.templateViewConsequence')).toBeVisible()
     const editRow = document.getElementById(`${kind}:wording:edit`)!.closest('article')!
+    openWhy(editRow)
     expect(within(editRow).getByText('access.studio.templateEditImpliesView')).toBeVisible()
     fireEvent.click(within(editRow).getByRole('radio', { name: 'access.studio.settings.allow' }))
     expect(screen.getByText('access.studio.unsaved 2')).toBeVisible()
@@ -312,9 +323,10 @@ describe('AccessWorkspace', () => {
     ]
     state.snapshot = snapshot
     mount()
-    expect(
-      screen.getByText('VISIBILITY_CONTROL_UNAVAILABLE'),
-    ).toBeInTheDocument()
+    const row = document.getElementById('notification_template:wording:edit')!.closest('article')!
+    openWhy(row)
+    expect(within(row).getByText('access.studio.issueCodes.VISIBILITY_CONTROL_UNAVAILABLE')).toBeVisible()
+    expect(screen.queryByText('VISIBILITY_CONTROL_UNAVAILABLE')).not.toBeInTheDocument()
     fireEvent.click(
       screen.getByRole('button', { name: 'access.studio.filter.attention' }),
     )
@@ -327,6 +339,19 @@ describe('AccessWorkspace', () => {
       screen.getByRole('button', { name: 'access.studio.filter.all' }),
     )
     expect(document.getElementById('service:demo:create')).toBeInTheDocument()
+  })
+
+  it.each(['not_ready', 'expired'] as const)('keeps %s attention items discoverable through the attention filter', (kind) => {
+    const snapshot = fixture()
+    if (kind === 'not_ready') snapshot.items[0].actions[1].executable_now = false
+    else snapshot.overrides = [{ capability: 'messages.templates', effect: 'grant', expires_at: '2020-01-01T00:00:00Z', state: 'expired' }]
+    state.snapshot = snapshot
+    mount()
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.filter.attention' }))
+    const row = document.getElementById('notification_template:wording:edit')!.closest('article')!
+    expect(row).toBeVisible()
+    expect(within(row).getByText('access.studio.filter.attention')).toBeVisible()
+    expect(document.getElementById('service:demo:create')).toBeNull()
   })
   it('requires review for a new warning when the current warning list was omitted', async () => {
     const snapshot = fixture()
@@ -597,6 +622,7 @@ describe('AccessWorkspace', () => {
     ]
     state.snapshot = snapshot
     mount()
+    openWhy(document.getElementById('notification_template:wording:edit')!.closest('article')!, true)
     const expiry = screen.getByRole('textbox', {
       name: /access.studio.expiry.label/,
     })
@@ -650,6 +676,7 @@ describe('AccessWorkspace', () => {
   it('does not persist the previously staged value while a new expiry field is invalid', () => {
     mount()
     fireEvent.click(screen.getAllByRole('radio', { name: /deny/i })[0])
+    openWhy(document.getElementById('notification_template:wording:edit')!.closest('article')!, true)
     const expiry = screen.getByRole('textbox', {
       name: /access.studio.expiry.label/,
     })
@@ -724,9 +751,10 @@ describe('AccessWorkspace', () => {
     expect(
       await screen.findByText('access.studio.error.validation'),
     ).toBeInTheDocument()
-    expect(
-      screen.getByRole('link', { name: 'messages.templates' }),
-    ).toHaveAttribute('href', '#notification_template:wording:edit')
+    const validationLink = within(screen.getByRole('alert')).getByRole('link')
+    expect(validationLink).toHaveAttribute('href', '#notification_template:wording:edit')
+    fireEvent.click(validationLink)
+    await waitFor(() => expect(document.getElementById('notification_template:wording:edit')).toHaveFocus())
     expect(screen.getByText('access.studio.unsaved 1')).toBeInTheDocument()
   })
   it('keeps a blocked prerequisite as an explicit reviewed consequence without a cascade', async () => {

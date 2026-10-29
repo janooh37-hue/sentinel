@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import {
   destinationId,
   localized,
+  needsAttention,
   personalSetting,
   type AccessItem,
   type Decision,
@@ -24,6 +25,8 @@ export interface AccessGroupsProps {
   onStage: (patches: Patch[]) => void
   focusDestination?: string
   expandMatches?: boolean
+  filter?: 'all' | 'exceptions' | 'attention'
+  matchingGroups?: string[]
 }
 
 function ServicePresets({
@@ -81,14 +84,12 @@ function ServicePresets({
     { key: 'removeOrdinary', create: 'deny', browse: 'deny' },
   ]
   return (
-    <div className="space-y-3 px-4 pb-4 text-sm sm:px-5">
-      <p className="text-muted-foreground">
-        {t(proposed ? 'access.studio.proposed' : 'access.studio.current')} ·{' '}
-        {t('access.studio.services.configuration')}:{' '}
-        <span className="font-medium text-foreground">
-          {t(`access.studio.services.${state}`)}
-        </span>
-      </p>
+    <div className="px-3 pb-2 text-sm sm:px-4">
+      <details className="group/service">
+        <summary className="flex min-h-11 cursor-pointer items-center gap-2 text-xs text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+          {t('access.studio.services.configuration')}: {t(`access.studio.services.${state}`)}
+        </summary>
+        <div className="space-y-3 pb-3">
       {createAuthorization === 'allowed' &&
         browseAuthorization === 'denied' && (
           <p className="text-muted-foreground">
@@ -108,14 +109,13 @@ function ServicePresets({
             <p className="text-muted-foreground">
               {t('access.studio.services.exactPair')}
             </p>
-            <ul className="space-y-1 font-mono text-xs" dir="ltr">
-              <li className="[overflow-wrap:anywhere]">
-                {create.setting_capabilities[0]}
-              </li>
-              <li className="[overflow-wrap:anywhere]">
-                {browse.setting_capabilities[0]}
-              </li>
-            </ul>
+            <details>
+              <summary className="min-h-11 cursor-pointer text-xs">{t('access.studio.why.technical')}</summary>
+              <ul className="space-y-1 font-mono text-xs" dir="ltr">
+                <li className="[overflow-wrap:anywhere]">{create.setting_capabilities[0]}</li>
+                <li className="[overflow-wrap:anywhere]">{browse.setting_capabilities[0]}</li>
+              </ul>
+            </details>
             <div className="flex flex-wrap gap-2">
               {presets
                 .filter(
@@ -160,6 +160,8 @@ function ServicePresets({
           </div>
         </details>
       )}
+        </div>
+      </details>
     </div>
   )
 }
@@ -177,7 +179,12 @@ function Group({
   open: boolean
   onToggle: () => void
 }) {
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const actions = items.flatMap((item) => item.actions)
+  const allowed = actions.filter((action) => action.authorization === 'allowed').length
+  const exceptions = new Set(actions.flatMap((action) => action.setting_capabilities).filter((capability) => props.snapshot.overrides.some((override) => override.capability === capability) || props.patches.some((patch) => patch.capability === capability && patch.effect != null))).size
+  const attention = actions.filter((action) => needsAttention(action, props.snapshot)).length
+  const summary = `${t('access.studio.groupSummary.allowed', { count: allowed })} · ${t('access.studio.groupSummary.exceptions', { count: exceptions })} · ${t('access.studio.groupSummary.attention', { count: attention })}`
   const contentId = useId()
   return (
     <section
@@ -190,7 +197,7 @@ function Group({
           aria-expanded={open}
           aria-controls={contentId}
           onClick={onToggle}
-          className="flex min-h-11 w-full min-w-0 items-center gap-3 bg-surface-raised px-4 py-4 text-start font-semibold text-foreground hover:bg-surface-tinted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:px-5"
+          className="flex min-h-11 w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1 bg-surface-raised px-3 py-3 text-start font-semibold text-foreground hover:bg-surface-tinted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:px-4"
         >
           <ChevronDown
             className={cn(
@@ -199,14 +206,9 @@ function Group({
             )}
             aria-hidden="true"
           />
-          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-            {label}
-          </span>
-          <span className="shrink-0 font-mono text-xs font-normal tabular-nums text-muted-foreground">
-            {items.reduce(
-              (count: number, item: AccessItem) => count + item.actions.length,
-              0,
-            )}
+          <span className="min-w-0 text-sm [overflow-wrap:anywhere]">{label}</span>
+          <span title={summary} className="min-w-0 basis-full truncate ps-7 text-xs font-normal tabular-nums text-muted-foreground sm:ms-auto sm:basis-auto sm:ps-0">
+            {summary}
           </span>
         </button>
       </h3>
@@ -260,12 +262,17 @@ function Group({
   )
 }
 
+
+const groupOrder: Record<string, number> = {
+  services: 0, services_records: 0,
+  people: 1, people_attendance: 1,
+  templates: 2, templates_notifications: 2,
+  correspondence: 3, administration: 4,
+}
+
 export function AccessGroups(props: AccessGroupsProps) {
   const { t } = useTranslation()
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  )
-  const [dismissedFocus, setDismissedFocus] = useState<string>()
+  const [expansions, setExpansions] = useState<ReadonlyMap<string, { trigger: string; open: boolean }>>(() => new Map())
   const groups = useMemo(() => {
     const grouped = new Map<string, AccessItem[]>()
     for (const item of props.items) {
@@ -273,57 +280,37 @@ export function AccessGroups(props: AccessGroupsProps) {
       if (group) group.push(item)
       else grouped.set(item.group_id, [item])
     }
-    return grouped
+    return [...grouped].sort(([a], [b]) => (groupOrder[a] ?? 5) - (groupOrder[b] ?? 5))
   }, [props.items])
-  const focusedGroup = props.focusDestination
-    ? props.items.find((item: AccessItem) =>
-        item.actions.some(
-          (decision: Decision) =>
-            destinationId(item.resource, decision.action) ===
-            props.focusDestination,
-        ),
-      )?.group_id
-    : undefined
+  const focusedGroup = props.focusDestination ? props.items.find((item) => item.actions.some((decision) => destinationId(item.resource, decision.action) === props.focusDestination))?.group_id : undefined
   useEffect(() => {
     if (!props.focusDestination || !focusedGroup) return
-    const frame = requestAnimationFrame(() =>
-      document.getElementById(props.focusDestination!)?.focus(),
-    )
+    const frame = requestAnimationFrame(() => document.getElementById(props.focusDestination!)?.focus())
     return () => cancelAnimationFrame(frame)
   }, [props.focusDestination, focusedGroup])
   return (
-    <div className="min-w-0 space-y-4">
-      {[...groups].map(([id, items]) => (
-        <Group
+    <div className="min-w-0 space-y-2">
+      {groups.map(([id, items]) => {
+        const attention = items.some((item) => item.actions.some((action) => {
+          const proposedAction = props.proposed?.items.find((candidate) => candidate.resource.kind === item.resource.kind && candidate.resource.id === item.resource.id)?.actions.find((candidate) => candidate.action === action.action)
+          return needsAttention(proposedAction ?? action, props.proposed ?? props.snapshot)
+        }))
+        const exception = props.filter === 'exceptions' && items.some((item) => item.actions.some((action) => action.setting_capabilities.some((capability) => props.snapshot.overrides.some((override) => override.capability === capability) || props.patches.some((patch) => patch.capability === capability && patch.effect != null))))
+        const matched = !!props.expandMatches || (props.matchingGroups?.includes(id) ?? false)
+        const trigger = `${focusedGroup === id ? props.focusDestination : ''}:${matched ? 'matches' : ''}:${exception ? 'exceptions' : ''}:${attention ? 'attention' : ''}`
+        const expansion = expansions.get(id)
+        const automatic = matched || focusedGroup === id || exception || attention
+        const open = expansion?.trigger === trigger ? expansion.open : automatic || expansion?.open === true
+        return <Group
           key={id}
           {...props}
           id={id}
           items={items}
-          label={t(`access.studio.groups.${id}`, {
-            defaultValue: t('access.studio.groups.other'),
-          })}
-          open={
-            props.expandMatches ||
-            (focusedGroup === id &&
-              dismissedFocus !== props.focusDestination) ||
-            !collapsed.has(id)
-          }
-          onToggle={() => {
-            const currentlyOpen =
-              props.expandMatches ||
-              (focusedGroup === id &&
-                dismissedFocus !== props.focusDestination) ||
-              !collapsed.has(id)
-            if (focusedGroup === id) setDismissedFocus(props.focusDestination)
-            setCollapsed((previous) => {
-              const next = new Set(previous)
-              if (currentlyOpen) next.add(id)
-              else next.delete(id)
-              return next
-            })
-          }}
+          label={t(`access.studio.groups.${id}`, { defaultValue: t('access.studio.groups.other') })}
+          open={open}
+          onToggle={() => setExpansions((previous) => new Map(previous).set(id, { trigger, open: !open }))}
         />
-      ))}
+      })}
     </div>
   )
 }

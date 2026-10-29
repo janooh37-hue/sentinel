@@ -16,6 +16,7 @@ import {
   destinationId,
   savedSetting,
   localized,
+  needsAttention,
   isMessageTemplate,
   stageActionSetting,
   type AccessItem,
@@ -27,6 +28,7 @@ import {
 } from './studioModel'
 import { useAccessDraft } from './useAccessDraft'
 import { registerWorkspaceNavigation } from './workspaceNavigation'
+import { LocalDateTime, SettingIdentity, SettingLabel } from './SettingIdentity'
 
 export interface AccessWorkspaceProps {
   subjectId: number
@@ -112,8 +114,9 @@ function WorkspaceSession({
   const workspaceRef = useRef<HTMLElement>(null)
   const searchRef = useRef<HTMLDivElement>(null)
   const [receipt, setReceipt] = useState(false)
-  const [filter, setFilter] = useState('all')
+  const [filter, setFilter] = useState<'all' | 'exceptions' | 'attention'>('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [searchMatches, setSearchMatches] = useState<Resource[]>([])
   const initialItem = initialResource
     ? snapshot.items.find(
         (item: AccessItem) =>
@@ -377,9 +380,7 @@ function WorkspaceSession({
                   override.capability === id,
               ),
             )
-          : action.authorization === 'unknown' ||
-            action.authorization === 'needs_context' ||
-            (action.warnings?.length ?? 0) > 0,
+          : needsAttention(action, draft.baseline),
       ),
   )
   const selectedActions: { item: AccessItem; action: Decision }[] =
@@ -393,24 +394,19 @@ function WorkspaceSession({
   return (
     <section
       ref={workspaceRef}
-      className="min-w-0 space-y-5 pb-[max(1rem,env(safe-area-inset-bottom))] [overflow-wrap:anywhere]"
+      className="min-w-0 space-y-3 pb-[max(1rem,env(safe-area-inset-bottom))] [overflow-wrap:anywhere]"
       aria-busy={busy}
     >
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-semibold">{t('access.studio.access')}</h2>
-        <p>
-          {t('access.studio.account')} <bdi dir="ltr">{subjectId}</bdi> ·{' '}
-          {t(`access.roleName.${snapshot.subject.role}`)} ·{' '}
-          {t(`access.studio.status.${snapshot.subject.status}`)}
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-semibold">{t('access.studio.access')}</h2>
+        <p className="text-xs text-muted-foreground">
+          <time dateTime={draft.baseline.evaluated_at}
+            title={new Intl.DateTimeFormat(i18n.language, { dateStyle: 'full', timeStyle: 'long', numberingSystem: 'latn' }).format(new Date(draft.baseline.evaluated_at))}>
+            {t('access.studio.checkedAt', { time: new Intl.DateTimeFormat(i18n.language, { hour: 'numeric', minute: '2-digit', numberingSystem: 'latn' }).format(new Date(draft.baseline.evaluated_at)) })}
+          </time>
+          {draft.baseline.scope.mode !== 'current' && <> · {t(`access.studio.scope.${draft.baseline.scope.mode}`)}</>}
         </p>
       </header>
-      <p className="text-sm text-muted-foreground">
-        {t('access.studio.evaluated')}{' '}
-        <time dir="ltr" dateTime={draft.baseline.evaluated_at}>
-          {draft.baseline.evaluated_at}
-        </time>{' '}
-        · {t(`access.studio.scope.${draft.baseline.scope.mode}`)}
-      </p>
       {locked && !awaitingRefresh && (
         <p role="status">
           {t(
@@ -487,6 +483,7 @@ function WorkspaceSession({
           subjectId,
           items: snapshot.items,
           onNavigate: navigate,
+          onMatchesChange: setSearchMatches,
         })}
       </div>
       {focusDestination && (
@@ -501,14 +498,14 @@ function WorkspaceSession({
         </button>
       )}
       <div
-        className="flex flex-wrap gap-2"
+        className="flex gap-2 overflow-x-auto pb-1 [&_button]:shrink-0 [&_button]:whitespace-nowrap"
         role="group"
         aria-label={t('access.studio.filters')}
       >
-        {['all', 'exceptions', 'attention'].map((value) => (
+        {(['all', 'exceptions', 'attention'] as const).map((value) => (
           <button
             key={value}
-            className={control}
+            className={`${control} ${filter === value ? 'bg-primary-soft font-semibold text-primary' : 'text-muted-foreground'}`}
             aria-pressed={filter === value}
             onClick={() => setFilter(value)}
           >
@@ -538,16 +535,11 @@ function WorkspaceSession({
                     {t('access.studio.templateEditImpliesView')}
                   </p>
                 )}
-                <bdi dir="ltr" className="block text-xs">
-                  {destinationId(item.resource, action.action)}
-                </bdi>
-                <ul className="text-xs">
-                  {action.setting_capabilities.map((id: string) => (
-                    <li key={id}>
-                      <bdi dir="ltr">{id}</bdi>
-                    </li>
-                  ))}
-                </ul>
+                <details className="text-xs text-muted-foreground">
+                  <summary className="inline-flex min-h-11 cursor-pointer items-center focus-visible:outline-2 focus-visible:outline-ring">{t('access.studio.why.technical')}</summary>
+                  <p><bdi dir="ltr">{destinationId(item.resource, action.action)}</bdi></p>
+                  <ul>{action.setting_capabilities.map((id: string) => <li key={id}><bdi dir="ltr">{id}</bdi></li>)}</ul>
+                </details>
               </li>
             ))}
           </ul>
@@ -592,9 +584,10 @@ function WorkspaceSession({
                             >
                               <bdi>{localized(item.label, i18n.language)}</bdi>{' '}
                               · {t(`access.studio.actions.${action.action}`)}{' '}
-                              <bdi dir="ltr">
-                                {destinationId(item.resource, action.action)}
-                              </bdi>
+                              <details className="text-xs text-muted-foreground">
+                                <summary className="inline-flex min-h-11 cursor-pointer items-center focus-visible:outline-2 focus-visible:outline-ring">{t('access.studio.why.technical')}</summary>
+                                <bdi dir="ltr">{destinationId(item.resource, action.action)}</bdi>
+                              </details>
                             </li>
                           ))}
                         </ul>
@@ -617,6 +610,8 @@ function WorkspaceSession({
       )}
       <AccessGroups
         items={items}
+        filter={filter}
+        matchingGroups={snapshot.items.filter((item) => searchMatches.some((resource) => resource.kind === item.resource.kind && resource.id === item.resource.id)).map((item) => item.group_id)}
         snapshot={draft.baseline}
         proposed={currentPreview?.proposed}
         patches={draft.patches}
@@ -685,10 +680,10 @@ function WorkspaceSession({
                           )
                         }}
                       >
-                        <bdi dir="ltr">{patch.capability}</bdi>
+                        <SettingLabel snapshot={snapshot} capability={patch.capability} />
                       </a>
                     ) : (
-                      <bdi dir="ltr">{patch.capability}</bdi>
+                      <SettingIdentity snapshot={snapshot} capability={patch.capability} />
                     )}
                   </li>
                 )
@@ -786,15 +781,16 @@ function BaselineComparison({
             {t(`access.roleName.${snapshot.subject.role}`)} ·{' '}
             {t(`access.studio.status.${snapshot.subject.status}`)}
           </p>
-          <bdi dir="ltr" className="block text-xs">
-            {snapshot.revision}
-          </bdi>
+          <details className="text-xs text-muted-foreground">
+            <summary className="inline-flex min-h-11 cursor-pointer items-center focus-visible:outline-2 focus-visible:outline-ring">{t('access.studio.why.technical')}</summary>
+            <bdi dir="ltr">{snapshot.revision}</bdi>
+          </details>
           <ul className="space-y-3">
             {patches.map((patch) => {
               const setting = savedSetting(snapshot, patch.capability)
               return (
                 <li key={patch.capability}>
-                  <bdi dir="ltr">{patch.capability}</bdi>
+                  <SettingIdentity snapshot={snapshot} capability={patch.capability} />
                   <p>
                     {t('access.studio.roleBaseline')}:{' '}
                     {t(
@@ -806,9 +802,7 @@ function BaselineComparison({
                     {t(`access.studio.setting.${setting.effect ?? 'role'}`)}
                   </p>
                   {setting.expires_at && (
-                    <time dir="ltr" className="block text-xs">
-                      {setting.expires_at}
-                    </time>
+                    <LocalDateTime value={setting.expires_at} />
                   )}
                 </li>
               )

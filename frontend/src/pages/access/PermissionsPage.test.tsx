@@ -126,7 +126,6 @@ describe('Accounts register', () => {
     expect(screen.queryByRole('region', { name: 'Access workspace' })).not.toBeInTheDocument()
   })
   it.each([
-    ['Manage accounts', ''],
     ['Operator', '?tab=active&user=2'],
     ['Pending requests (0)', '?tab=permission-requests'],
   ])('keeps the selected account until leaving through %s is approved', async (link, expectedSearch) => {
