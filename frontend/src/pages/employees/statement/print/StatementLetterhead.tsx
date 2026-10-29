@@ -61,9 +61,16 @@ export function Mono({ children }: { children: ReactNode }): React.JSX.Element {
   )
 }
 
-function Letterhead({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.Element {
+/**
+ * The one masthead, repeated on every page: letterhead (wordmark, office
+ * block, red rule) and one line under the rule naming the document. Sized to
+ * stay well under Chrome's repeat threshold (head <= 40 mm) whatever the
+ * name length: the name line never wraps, it ellipsizes.
+ */
+function Masthead({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.Element {
+  const e = frame.employee
   return (
-    <>
+    <div className="st-head" data-testid="statement-head">
       <div className="st-lh">
         <img src="/brand/gssg-wordmark.png" alt="GSSG" />
         <dl className="st-office">
@@ -91,10 +98,17 @@ function Letterhead({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JS
         <i />
         <i />
       </div>
-    </>
+      <div className="st-docline">
+        <h1>{frame.title}</h1>
+        <bdi className="st-who">{frame.lang === 'ar' ? (e.name_ar ?? e.name_en) : e.name_en}</bdi>
+        <Mono>{e.id}</Mono>
+        <span className="st-period">{frame.period}</span>
+      </div>
+    </div>
   )
 }
 
+/** Page 1 only: who the statement is about, beyond what the head already says. */
 function Identity({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.Element {
   const e = frame.employee
   const job = frame.lang === 'ar' ? (e.position_ar ?? e.position) : (e.position ?? e.position_ar)
@@ -113,77 +127,30 @@ function Identity({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.
       : []),
   ]
   if (frame.lang === 'ar') names.reverse()
+  const rows: [string, ReactNode][] = [
+    [
+      t('statementPrint.paper.name'),
+      names.map((name, i) => (
+        <span key={i}>
+          {i > 0 && ' | '}
+          {name}
+        </span>
+      )),
+    ],
+    [t('statementPrint.paper.jobTitle'), <bdi key="j">{job ?? '-'}</bdi>],
+    [t('statementPrint.paper.departmentField'), <bdi key="d">{e.department ?? '-'}</bdi>],
+    [t('statementPrint.paper.unitPost'), <bdi key="u">{placement || '-'}</bdi>],
+    [t('statementPrint.paper.joined'), e.doj ? formatStatementDate(e.doj, frame.lang) : '-'],
+  ]
   return (
-    <>
-      <div className="st-title">
-        <h1>{frame.title}</h1>
-        <p>{frame.period}</p>
-      </div>
-      <table className="st-meta">
-        <tbody>
-          <tr>
-            <td className="k">{t('statementPrint.paper.name')}</td>
-            <td className="v">
-              {names.map((name, i) => (
-                <span key={i}>
-                  {i > 0 && ' | '}
-                  {name}
-                </span>
-              ))}
-            </td>
-            <td className="k">{t('statementPrint.paper.employeeNo')}</td>
-            <td className="v">
-              <Mono>{e.id}</Mono>
-            </td>
-          </tr>
-          <tr>
-            <td className="k">{t('statementPrint.paper.jobTitle')}</td>
-            <td className="v">
-              <bdi>{job ?? '-'}</bdi>
-            </td>
-            <td className="k">{t('statementPrint.paper.departmentField')}</td>
-            <td className="v">
-              <bdi>{e.department ?? '-'}</bdi>
-            </td>
-          </tr>
-          <tr>
-            <td className="k">{t('statementPrint.paper.unitPost')}</td>
-            <td className="v">
-              <bdi>{placement || '-'}</bdi>
-            </td>
-            <td className="k">{t('statementPrint.paper.joined')}</td>
-            <td className="v">{e.doj ? formatStatementDate(e.doj, frame.lang) : '-'}</td>
-          </tr>
-        </tbody>
-      </table>
-    </>
-  )
-}
-
-function Masthead({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.Element {
-  return (
-    <>
-      <Letterhead frame={frame} t={t} />
-      <Identity frame={frame} t={t} />
-    </>
-  )
-}
-
-function CompactHead({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.Element {
-  const e = frame.employee
-  return (
-    <div className="st-compact" data-testid="statement-compact-head">
-      <img src="/brand/gssg-wordmark.png" alt="GSSG" />
-      <b>{frame.title}</b>
-      <span className="g">
-        <bdi>{frame.lang === 'ar' ? (e.name_ar ?? e.name_en) : e.name_en}</bdi> · <Mono>{e.id}</Mono>
-      </span>
-      <span>
-        {t('statementPrint.paper.ref')}{' '}
-        {frame.issue.reference ? <Mono>{frame.issue.reference}</Mono> : t('statementPrint.paper.refPending')}
-      </span>
-      <span>{frame.period}</span>
-    </div>
+    <dl className="st-identity" data-testid="statement-identity">
+      {rows.map(([k, v]) => (
+        <div key={k}>
+          <dt>{k}</dt>
+          <dd>{v}</dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 
@@ -238,7 +205,7 @@ export function StatementSheet({
         <thead>
           <tr>
             <td>
-              <CompactHead frame={frame} t={t} />
+              <Masthead frame={frame} t={t} />
             </td>
           </tr>
         </thead>
@@ -252,9 +219,7 @@ export function StatementSheet({
         <tbody>
           <tr className="st-row">
             <td>
-              <div className="st-first">
-                <Masthead frame={frame} t={t} />
-              </div>
+              <Identity frame={frame} t={t} />
             </td>
           </tr>
           {blocks.map((block, index) => (
@@ -268,14 +233,29 @@ export function StatementSheet({
   )
 }
 
-/** "Not included: ..." Printed only when something is left out. */
-export function ScopeLine({ t, items }: { t: TFunction; items: string[] }): React.JSX.Element | null {
+/** A single quiet line ("Not included: ...", "No records in this period: ..."). Nothing when empty. */
+export function NoteLine({
+  label,
+  items,
+  testId,
+  t,
+}: {
+  label: string
+  items: string[]
+  testId: string
+  t: TFunction
+}): React.JSX.Element | null {
   if (items.length === 0) return null
   return (
-    <p className="st-scope" data-testid="statement-scope">
-      <b>{t('statementPrint.paper.notIncluded')}:</b> {items.join(t('statementPrint.paper.listJoin'))}.
+    <p className="st-note" data-testid={testId}>
+      <b>{label}:</b> {items.join(t('statementPrint.paper.listJoin'))}.
     </p>
   )
+}
+
+/** "Not included: ..." Printed only when something is left out. */
+export function ScopeLine({ t, items }: { t: TFunction; items: string[] }): React.JSX.Element | null {
+  return <NoteLine label={t('statementPrint.paper.notIncluded')} items={items} testId="statement-scope" t={t} />
 }
 
 export function SignatureBlocks({

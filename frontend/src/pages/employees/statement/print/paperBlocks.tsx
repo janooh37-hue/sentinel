@@ -16,9 +16,16 @@ export function usePaperT(lang: PaperLanguage): TFunction {
   return i18n.getFixedT(lang)
 }
 
+/**
+ * How a column sets: `date` fixed width, never wraps; `num` end-aligned
+ * (right in LTR, left in RTL); `ref` mono, never wraps; `short` never wraps;
+ * `text` (default) wraps within the remaining width.
+ */
+export type ColumnKind = 'date' | 'num' | 'ref' | 'short' | 'text'
+
 export interface Column {
   label: string
-  num?: boolean
+  kind?: ColumnKind
 }
 
 export interface TableRow {
@@ -28,7 +35,7 @@ export interface TableRow {
 }
 
 /** Rows per unbreakable chunk: small enough that a part-filled page still takes the next one. */
-const CHUNK = 8
+const CHUNK = 5
 
 /**
  * A titled table as body blocks: the heading rides with the first chunk, and
@@ -54,7 +61,7 @@ export function tableBlocks({
     <thead>
       <tr>
         {columns.map((c, i) => (
-          <th key={i} className={c.num ? 'num' : undefined}>
+          <th key={i} className={`k-${c.kind ?? 'text'}`}>
             {c.label}
           </th>
         ))}
@@ -67,20 +74,12 @@ export function tableBlocks({
       {count !== undefined && <span className="c">{count}</span>}
     </h2>
   )
+  // An empty table says nothing its heading cannot: print one quiet line.
   if (rows.length === 0) {
     return [
       <section className="st-sec" key={id} data-section={id}>
         {title}
-        <table className="st-dt">
-          {head}
-          <tbody>
-            <tr>
-              <td className="none" colSpan={columns.length}>
-                {emptyText}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <p className="st-none">{emptyText}</p>
       </section>,
     ]
   }
@@ -96,7 +95,7 @@ export function tableBlocks({
             {rows.slice(start, start + size).map((row) => (
               <tr key={row.key} className={row.total ? 'tot' : undefined}>
                 {row.cells.map((cell, i) => (
-                  <td key={i} className={columns[i]?.num ? 'num' : undefined}>
+                  <td key={i} className={`k-${columns[i]?.kind ?? 'text'}`}>
                     {cell}
                   </td>
                 ))}

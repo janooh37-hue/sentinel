@@ -356,7 +356,8 @@ describe('fix round', () => {
         .find((c) => c.querySelector('.dn')?.textContent === day) as HTMLElement
     expect(cell('2').dataset.state).toBe('withheld')
     expect(cell('3').dataset.state).toBe('withheld')
-    expect(cell('3')).toHaveTextContent('Withheld')
+    // The cell is glyph + times; the legend names the withheld glyph.
+    expect(within(sheet()).getByText(/Withheld: leave or absence/)).toBeInTheDocument()
     const summary = sheet().querySelector('[data-section="summary"]') as HTMLElement
     const value = (label: string): string | null | undefined =>
       Array.from(summary.querySelectorAll('td.k')).find((k) => k.textContent === label)?.nextElementSibling?.textContent
@@ -364,5 +365,78 @@ describe('fix round', () => {
     expect(value('Rest days')).toBe('28')
     expect(value('Absent')).toBe('Withheld')
     expect(value('Punctuality')).toMatch(/^Withheld/)
+  })
+})
+
+describe('fix round 3: say each fact once', () => {
+  it('prints one masthead and keeps title, period and G-number out of the page-1 identity', async () => {
+    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const head = sheet().querySelector('thead') as HTMLElement
+    expect(within(head).getAllByTestId('statement-head')).toHaveLength(1)
+    expect(head).toHaveTextContent('Activity statement')
+    expect(head).toHaveTextContent('G3190')
+    expect(sheet().querySelectorAll('h1')).toHaveLength(1)
+    const identity = within(sheet()).getByTestId('statement-identity')
+    expect(identity).toHaveTextContent('Ahmed Mansour')
+    expect(identity).not.toHaveTextContent('G3190')
+    expect(identity).not.toHaveTextContent('Activity statement')
+    expect(identity).not.toHaveTextContent('2026')
+  })
+
+  it('summarises only categories with entries and names the empty ones on one line', async () => {
+    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const summary = sheet().querySelector('[data-section="summary"]') as HTMLElement
+    expect(summary).toHaveTextContent('Leaves1 (28 days)')
+    expect(summary).not.toHaveTextContent('Absences')
+    expect(summary).not.toHaveTextContent('Total days')
+    expect(within(sheet()).getByTestId('statement-empty-categories')).toHaveTextContent(
+      'No records in this period: Absences, Placement and status history.',
+    )
+    expect(sheet().querySelector('[data-section="absence"]')).toBeNull()
+    expect(sheet().querySelector('[data-section="placement"]')).toBeNull()
+  })
+
+  it("strips the employee's own name from subjects, prints a shared party once, and localizes system", async () => {
+    getActivityStatement.mockResolvedValue({
+      employee_id: 'G3190',
+      from_date: '2026-01-01',
+      to_date: '2026-10-27',
+      truncated: false,
+      items: [
+        item('ledger', 20, {
+          subject: 'Administrative Leave Form — AHMED MANSOUR',
+          direction: 'outgoing',
+          counterparty: 'G3095',
+          actor_name: 'G3095',
+        }),
+        item('ledger', 21, {
+          subject: 'Leave Application Form - أحمد منصور',
+          direction: 'incoming',
+          counterparty: 'system',
+          actor_name: 'Mariam Al Kaabi',
+        }),
+      ],
+    })
+    renderAt('/employees/G3190/activity/print?period=year&lang=ar')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const rows = Array.from(sheet().querySelectorAll('[data-section="ledger"] tbody tr'))
+    const cells = (row: Element): string[] => Array.from(row.querySelectorAll('td')).map((td) => td.textContent ?? '')
+    const [first, second] = rows.map(cells)
+    expect(first[1]).toBe('Administrative Leave Form')
+    expect(first[3]).toBe('G3095')
+    expect(first[5]).toBe('')
+    expect(second[1]).toBe('Leave Application Form')
+    expect(second[3]).toBe('النظام')
+    expect(sheet()).not.toHaveTextContent(/\bsystem\b/)
+  })
+
+  it('prints an empty exceptions list as one line, not an empty table', async () => {
+    renderAt('/employees/G3190/attendance/print?mode=month&y=2026&m=9&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const section = sheet().querySelector('[data-section="exceptions"]') as HTMLElement
+    expect(section.querySelector('table')).toBeNull()
+    expect(section).toHaveTextContent('No exceptions in this period')
   })
 })

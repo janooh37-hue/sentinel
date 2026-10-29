@@ -8,7 +8,6 @@
  * the first and last punch of the day, never in/out.
  */
 
-import type { TFunction } from 'i18next'
 import type { ReactNode } from 'react'
 
 import { formatStatementDate, formatStatementMonth, statementLocale } from '../statementModel'
@@ -126,14 +125,14 @@ export function AttendancePaper({ frame, settings, days, shiftWindows, leaveHidd
   const blocks: ReactNode[] = []
   if (leaveHidden) {
     blocks.push(
-      <p className="st-scope" key="privacy">
+      <p className="st-note" key="privacy">
         {t('statementPrint.paper.leaveHidden')}
       </p>,
     )
   }
   if (days.every((day) => day.cases.length === 0)) {
     blocks.push(
-      <p className="st-scope" key="nodata">
+      <p className="st-note" key="nodata">
         {t('statementPrint.paper.noData')}
       </p>,
     )
@@ -218,7 +217,7 @@ export function AttendancePaper({ frame, settings, days, shiftWindows, leaveHidd
                   </div>
                 )
               }
-              return <CalendarCell key={date} day={day} dn={dn} t={t} letter={letter} punches={settings.punches} />
+              return <CalendarCell key={date} day={day} dn={dn} letter={letter} punches={settings.punches} />
             })}
           </div>
         </section>,
@@ -250,14 +249,17 @@ export function AttendancePaper({ frame, settings, days, shiftWindows, leaveHidd
 
   if (settings.exceptions) {
     const columns = [
-      { label: t('statementPrint.paper.col.date') },
-      { label: t('statementPrint.paper.col.shift') },
+      { label: t('statementPrint.paper.col.date'), kind: 'date' as const },
+      { label: t('statementPrint.paper.col.shift'), kind: 'short' as const },
       { label: t('statementPrint.paper.col.exception') },
       ...(settings.punches
-        ? [{ label: t('statementPrint.paper.col.firstPunch') }, { label: t('statementPrint.paper.col.lastPunch') }]
+        ? [
+            { label: t('statementPrint.paper.col.firstPunch'), kind: 'short' as const },
+            { label: t('statementPrint.paper.col.lastPunch'), kind: 'short' as const },
+          ]
         : []),
-      { label: t('statementPrint.paper.col.punches'), num: true },
-      { label: t('statementPrint.paper.col.pastGrace'), num: true },
+      { label: t('statementPrint.paper.col.punches'), kind: 'num' as const },
+      { label: t('statementPrint.paper.col.pastGrace'), kind: 'num' as const },
     ]
     const rows: TableRow[] = exceptions.map((c, i) => ({
       key: `${c.date}-${c.shiftCode}-${i}`,
@@ -299,15 +301,19 @@ export function AttendancePaper({ frame, settings, days, shiftWindows, leaveHidd
       )
     }
     const columns = [
-      { label: t('statementPrint.paper.col.date') },
-      { label: t('statementPrint.paper.col.day') },
-      { label: t('statementPrint.paper.col.shift') },
+      { label: t('statementPrint.paper.col.date'), kind: 'date' as const },
+      { label: t('statementPrint.paper.col.day'), kind: 'short' as const },
+      { label: t('statementPrint.paper.col.shift'), kind: 'short' as const },
+      // The one column allowed to wrap: everything else in this table is short.
       { label: t('statementPrint.paper.col.state') },
       ...(settings.punches
-        ? [{ label: t('statementPrint.paper.col.firstPunch') }, { label: t('statementPrint.paper.col.lastPunch') }]
+        ? [
+            { label: t('statementPrint.paper.col.firstPunch'), kind: 'short' as const },
+            { label: t('statementPrint.paper.col.lastPunch'), kind: 'short' as const },
+          ]
         : []),
-      { label: t('statementPrint.paper.col.punches'), num: true },
-      { label: t('statementPrint.paper.col.pastGrace'), num: true },
+      { label: t('statementPrint.paper.col.punches'), kind: 'num' as const },
+      { label: t('statementPrint.paper.col.pastGrace'), kind: 'num' as const },
     ]
     const rows: TableRow[] = shown.flatMap((day) => {
       const cases: (PaperCase | null)[] = day.cases.length > 0 ? day.cases : [null]
@@ -384,25 +390,17 @@ function Pair({ k, v }: { k: string; v: ReactNode }): React.JSX.Element {
 function CalendarCell({
   day,
   dn,
-  t,
   letter,
   punches,
 }: {
   day: PaperDay
   dn: ReactNode
-  t: TFunction
   letter: (code: string | null) => string
   punches: boolean
 }): React.JSX.Element {
   const s = day.state
-  const lead = day.cases.find((c) => c.state === s) ?? day.cases[0]
-  // On-time and inside-grace days carry only their glyph; everything else says what it is.
-  const tag =
-    s === 'late'
-      ? t('statementPrint.paper.tag.late', { minutes: lead?.pastGrace ?? 0 })
-      : s === 'verified' || s === 'grace'
-        ? ''
-        : t(`statementPrint.paper.tag.${s}`)
+  // Glyph and times only: what an exception was, and by how much, is said
+  // once, in the exceptions list. The legend names every glyph.
   const letters = day.cases.map((c) => letter(c.shiftCode)).filter(Boolean)
   const first = day.cases.find((c) => c.firstPunch)
   return (
@@ -411,7 +409,6 @@ function CalendarCell({
       <span className="sh">{letters.length > 0 ? letters.join(' ') : ''}</span>
       <span className="gx">
         <Glyph state={s} />
-        {tag && <span>{tag}</span>}
       </span>
       {punches && first && (
         <span className="pn">

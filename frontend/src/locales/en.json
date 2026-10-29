@@ -6305,7 +6305,6 @@
       "activityTitle": "Activity statement",
       "attendanceTitle": "Attendance statement",
       "name": "Name",
-      "employeeNo": "Employee no.",
       "jobTitle": "Job title",
       "departmentField": "Department",
       "unitPost": "Unit / Post",
@@ -6314,7 +6313,10 @@
       "listJoin": ", ",
       "periodSummary": "Period summary",
       "total": "Total",
-      "none": "None in this period",
+      "noRecords": "No records in this period",
+      "entriesWithDays_one": "{{count}} ({{days}} days)",
+      "entriesWithDays_other": "{{count}} ({{days}} days)",
+      "system": "System",
       "deduction_one": "Deduction: {{count}} day",
       "deduction_other": "Deduction: {{count}} days",
       "fromTo": "{{from}} to {{to}}",
@@ -6341,7 +6343,6 @@
       "col": {
         "category": "Category",
         "entries": "Entries",
-        "totalDays": "Total days",
         "type": "Type",
         "from": "From",
         "to": "To",
@@ -6395,15 +6396,6 @@
         "pending": "Not judged yet",
         "rest": "Rest day or not rostered",
         "withheld": "Withheld: leave or absence not visible to this account"
-      },
-      "tag": {
-        "late": "+{{minutes}} min",
-        "absent": "Absent",
-        "unpaired": "1 punch",
-        "leave": "Leave",
-        "pending": "Pending",
-        "rest": "Rest",
-        "withheld": "Withheld"
       },
       "shiftLetter": {
         "morning": "M",

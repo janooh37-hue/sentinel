@@ -1,20 +1,23 @@
 /**
- * The printed activity statement (mockup frame 3): period summary, one titled
- * table per included category, and the "Prepared by" box. Only what is left
- * out is named on the paper; a complete statement carries no scope line.
+ * The printed activity statement (mockup frame 3). Each fact is said once:
+ * the summary lists only categories with entries, included-but-empty
+ * categories share one quiet line, and only categories with entries get a
+ * table. Every table reads Date, what, detail, reference, who.
  */
 
 import type { TFunction } from 'i18next'
 import type { ReactNode } from 'react'
 
+import type { EmployeeRead } from '@/lib/api'
 import { englishPart, splitBilingual } from '@/lib/bilingualValue'
 import { displayViolationValue } from '@/lib/violationTypes'
 
 import type { ActivityStatementItem } from '../statementTypes'
 import { categoryOf, formatStatementDate, type StatementCategory } from '../statementModel'
+import { paperActor, stripOwnName } from './paperText'
 import type { ActivitySettings } from './printSettings'
-import { tableBlocks, usePaperT, type TableRow } from './paperBlocks'
-import { Mono, ScopeLine, SignatureBlocks, StatementSheet, type PaperFrame } from './StatementLetterhead'
+import { tableBlocks, usePaperT, type Column, type ColumnKind, type TableRow } from './paperBlocks'
+import { Mono, NoteLine, ScopeLine, SignatureBlocks, StatementSheet, type PaperFrame } from './StatementLetterhead'
 
 interface Props {
   frame: Omit<PaperFrame, 'title' | 'lineTotal' | 'lang' | 'orient'>
@@ -25,15 +28,12 @@ interface Props {
   categories: readonly StatementCategory[]
 }
 
-/** Leave and absence carry days; the other categories have none to total. */
-function daysOf(category: StatementCategory, items: ActivityStatementItem[]): number | null {
-  if (category === 'leave') return items.reduce((sum, item) => sum + (item.days ?? 0), 0)
-  if (category === 'absence') return items.length
-  return null
-}
-
 function Sub({ children }: { children: ReactNode }): React.JSX.Element {
   return <span className="st-sub">{children}</span>
+}
+
+function leaveDays(items: ActivityStatementItem[]): number {
+  return items.reduce((sum, item) => sum + (item.days ?? 0), 0)
 }
 
 function sectionRows(
@@ -41,24 +41,28 @@ function sectionRows(
   items: ActivityStatementItem[],
   lang: 'ar' | 'en',
   t: TFunction,
-): { columns: { label: string; num?: boolean }[]; rows: TableRow[] } {
+  employee: EmployeeRead,
+): { columns: Column[]; rows: TableRow[] } {
   const date = (iso: string | null): string => (iso ? formatStatementDate(iso.slice(0, 10), lang) : '-')
-  const by = (item: ActivityStatementItem): ReactNode => <bdi>{item.actor_name ?? '-'}</bdi>
-  const col = (key: string, num = false): { label: string; num?: boolean } => ({
+  const by = (item: ActivityStatementItem): ReactNode => <bdi>{paperActor(item.actor_name, t) || '-'}</bdi>
+  const col = (key: string, kind: ColumnKind = 'text'): Column => ({
     label: t(`statementPrint.paper.col.${key}`),
-    num,
+    kind,
   })
+  const key = (item: ActivityStatementItem): string => `${item.kind}-${item.source_id}`
   switch (category) {
     case 'leave': {
-      const rows: TableRow[] = items.map((item) => ({
-        key: `${item.kind}-${item.source_id}`,
+      // Newest first, by when the leave starts.
+      const sorted = [...items].sort((a, b) => (b.start_date ?? '').localeCompare(a.start_date ?? ''))
+      const rows: TableRow[] = sorted.map((item) => ({
+        key: key(item),
         cells: [
+          date(item.start_date),
+          date(item.end_date),
           // Legacy rows store "Annual Leave - <ar>"; the key is the English side.
           item.leave_type
             ? t(`leaves.type.${englishPart(item.leave_type)}`, { defaultValue: splitBilingual(item.leave_type, lang) })
             : '-',
-          date(item.start_date),
-          date(item.end_date),
           String(item.days ?? '-'),
           item.leave_status
             ? t(`leaves.status.${englishPart(item.leave_status)}`, {
@@ -70,15 +74,18 @@ function sectionRows(
       rows.push({
         key: 'total',
         total: true,
-        cells: [t('statementPrint.paper.total'), '', '', String(daysOf('leave', items)), ''],
+        cells: [t('statementPrint.paper.total'), '', '', String(leaveDays(items)), ''],
       })
-      return { columns: [col('type'), col('from'), col('to'), col('days', true), col('status')], rows }
+      return {
+        columns: [col('from', 'date'), col('to', 'date'), col('type'), col('days', 'num'), col('status', 'short')],
+        rows,
+      }
     }
     case 'violation':
       return {
-        columns: [col('date'), col('violation'), col('penalty'), col('recordedBy')],
+        columns: [col('date', 'date'), col('violation'), col('penalty'), col('recordedBy', 'short')],
         rows: items.map((item) => ({
-          key: `${item.kind}-${item.source_id}`,
+          key: key(item),
           cells: [
             date(item.occurred_at),
             <>
@@ -97,17 +104,17 @@ function sectionRows(
       }
     case 'absence':
       return {
-        columns: [col('date'), col('note'), col('recordedBy')],
+        columns: [col('date', 'date'), col('note'), col('recordedBy', 'short')],
         rows: items.map((item) => ({
-          key: `${item.kind}-${item.source_id}`,
+          key: key(item),
           cells: [date(item.occurred_at), <bdi key="n">{item.note ?? '-'}</bdi>, by(item)],
         })),
       }
     case 'document':
       return {
-        columns: [col('date'), col('document'), col('reference'), col('recordedBy')],
+        columns: [col('date', 'date'), col('document'), col('reference', 'ref'), col('recordedBy', 'short')],
         rows: items.map((item) => ({
-          key: `${item.kind}-${item.source_id}`,
+          key: key(item),
           cells: [
             date(item.occurred_at),
             <bdi key="d">
@@ -123,30 +130,38 @@ function sectionRows(
       }
     case 'ledger':
       return {
-        columns: [col('date'), col('direction'), col('subject'), col('counterparty'), col('recordedBy')],
-        rows: items.map((item) => ({
-          key: `${item.kind}-${item.source_id}`,
-          cells: [
-            date(item.occurred_at),
-            item.direction ? t(`ledger.direction.${item.direction}`, { defaultValue: item.direction }) : '-',
-            <>
-              <bdi>{item.subject ?? '-'}</bdi>
-              {item.reference && (
-                <Sub>
-                  <Mono>{item.reference}</Mono>
-                </Sub>
-              )}
-            </>,
-            <bdi key="c">{item.counterparty ?? '-'}</bdi>,
-            by(item),
-          ],
-        })),
+        columns: [
+          col('date', 'date'),
+          col('subject'),
+          col('direction', 'short'),
+          col('counterparty', 'short'),
+          col('reference', 'ref'),
+          col('recordedBy', 'short'),
+        ],
+        rows: items.map((item) => {
+          const counterparty = paperActor(item.counterparty, t)
+          const actor = paperActor(item.actor_name, t)
+          // Said once: when the counterparty is also who recorded it, the
+          // recorded-by cell stays empty (the column keeps its place).
+          const sameParty = !!counterparty && counterparty.toLowerCase() === actor.toLowerCase()
+          return {
+            key: key(item),
+            cells: [
+              date(item.occurred_at),
+              <bdi key="s">{item.subject ? stripOwnName(item.subject, employee) : '-'}</bdi>,
+              item.direction ? t(`ledger.direction.${item.direction}`, { defaultValue: item.direction }) : '-',
+              <bdi key="c">{counterparty || '-'}</bdi>,
+              item.reference ? <Mono>{item.reference}</Mono> : '-',
+              sameParty ? '' : <bdi key="b">{actor || '-'}</bdi>,
+            ],
+          }
+        }),
       }
     case 'placement':
       return {
-        columns: [col('date'), col('event'), col('detail'), col('recordedBy')],
+        columns: [col('date', 'date'), col('event', 'short'), col('detail'), col('recordedBy', 'short')],
         rows: items.map((item) => ({
-          key: `${item.kind}-${item.source_id}`,
+          key: key(item),
           cells: [date(item.occurred_at), ...placementCells(item, lang, t), by(item)],
         })),
       }
@@ -218,45 +233,60 @@ export function ActivityPaper({ frame, settings, items, categories }: Props): Re
     byCategory.set(c, [...(byCategory.get(c) ?? []), item])
   }
   const itemsOf = (c: StatementCategory): ActivityStatementItem[] => byCategory.get(c) ?? []
-  const entryCount = included.reduce((sum, c) => sum + itemsOf(c).length, 0)
+  const withEntries = included.filter((c) => itemsOf(c).length > 0)
+  const empty = included.filter((c) => itemsOf(c).length === 0)
+  const entryCount = withEntries.reduce((sum, c) => sum + itemsOf(c).length, 0)
   const sectionName = (c: StatementCategory): string => t(`statement.section.${c}`)
 
   const blocks: ReactNode[] = []
-  if (excluded.length > 0) {
-    blocks.push(<ScopeLine key="scope" t={t} items={excluded.map(sectionName)} />)
-  }
-  if (settings.summary) {
-    const totalDays = included.reduce((sum, c) => sum + (daysOf(c, itemsOf(c)) ?? 0), 0)
+  if (settings.summary && withEntries.length > 0) {
     blocks.push(
       ...tableBlocks({
         id: 'summary',
         heading: t('statementPrint.paper.periodSummary'),
         columns: [
           { label: t('statementPrint.paper.col.category') },
-          { label: t('statementPrint.paper.col.entries'), num: true },
-          { label: t('statementPrint.paper.col.totalDays'), num: true },
+          { label: t('statementPrint.paper.col.entries'), kind: 'num' },
         ],
         rows: [
-          ...included.map((c) => {
-            const days = daysOf(c, itemsOf(c))
-            return { key: c, cells: [sectionName(c), String(itemsOf(c).length), days === null ? '-' : String(days)] }
-          }),
-          { key: 'total', total: true, cells: [t('statementPrint.paper.total'), String(entryCount), String(totalDays)] },
+          ...withEntries.map((c) => ({
+            key: c,
+            cells: [
+              sectionName(c),
+              c === 'leave'
+                ? t('statementPrint.paper.entriesWithDays', { count: itemsOf(c).length, days: leaveDays(itemsOf(c)) })
+                : String(itemsOf(c).length),
+            ],
+          })),
+          { key: 'total', total: true, cells: [t('statementPrint.paper.total'), String(entryCount)] },
         ],
-        emptyText: t('statementPrint.paper.none'),
+        emptyText: '',
       }),
     )
   }
-  for (const c of included) {
-    const { columns, rows } = sectionRows(c, itemsOf(c), settings.lang, t)
+  // Left out on purpose, then included but empty: two short lines, never empty tables.
+  if (excluded.length > 0) blocks.push(<ScopeLine key="scope" t={t} items={excluded.map(sectionName)} />)
+  if (empty.length > 0) {
+    blocks.push(
+      <NoteLine
+        key="empty"
+        label={t('statementPrint.paper.noRecords')}
+        items={empty.map(sectionName)}
+        testId="statement-empty-categories"
+        t={t}
+      />,
+    )
+  }
+  for (const c of withEntries) {
+    const { columns, rows } = sectionRows(c, itemsOf(c), settings.lang, t, frame.employee)
     blocks.push(
       ...tableBlocks({
         id: c,
         heading: sectionName(c),
         count: String(itemsOf(c).length),
         columns,
-        rows: itemsOf(c).length === 0 ? [] : rows,
-        emptyText: t('statementPrint.paper.none'),
+        rows,
+        emptyText: '',
       }),
     )
   }

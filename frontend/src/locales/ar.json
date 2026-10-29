@@ -6837,7 +6837,6 @@
       "activityTitle": "كشف النشاط",
       "attendanceTitle": "كشف الدوام",
       "name": "الاسم",
-      "employeeNo": "الرقم الوظيفي",
       "jobTitle": "المسمى الوظيفي",
       "departmentField": "القسم",
       "unitPost": "الوحدة / نقطة العمل",
@@ -6846,7 +6845,9 @@
       "listJoin": "، ",
       "periodSummary": "ملخص الفترة",
       "total": "الإجمالي",
-      "none": "لا يوجد في هذه الفترة",
+      "noRecords": "لا توجد سجلات في هذه الفترة",
+      "entriesWithDays": "{{count}} (الأيام: {{days}})",
+      "system": "النظام",
       "deduction": "الخصم (أيام): {{count}}",
       "fromTo": "من {{from}} إلى {{to}}",
       "statusChange": "تغيير الحالة",
@@ -6871,7 +6872,6 @@
       "col": {
         "category": "الفئة",
         "entries": "السجلات",
-        "totalDays": "إجمالي الأيام",
         "type": "النوع",
         "from": "من",
         "to": "إلى",
@@ -6925,15 +6925,6 @@
         "pending": "لم يُقيَّم بعد",
         "rest": "يوم راحة أو غير مجدول",
         "withheld": "محجوب: إجازة أو غياب لا يطّلع عليه هذا الحساب"
-      },
-      "tag": {
-        "late": "تأخر {{minutes}} د",
-        "absent": "غياب",
-        "unpaired": "بصمة واحدة",
-        "leave": "إجازة",
-        "pending": "قيد التقييم",
-        "rest": "راحة",
-        "withheld": "محجوب"
       },
       "shiftLetter": {
         "morning": "ص",
