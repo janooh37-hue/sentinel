@@ -18,13 +18,14 @@ import i18n from 'i18next'
 import type { components, paths } from './api.types'
 import type { ExtractedFieldOut } from './extraction'
 import type { LockLayout } from './useLockState'
-// Employee-file statements. Hand-written contract until the backend schemas land
-// and api.types.ts is regenerated; then these become components['schemas'] aliases.
-import type {
-  ActivityStatement,
-  StatementPrint,
-  StatementPrintCreate,
-} from '@/pages/employees/statement/statementTypes'
+// Employee-file statements (Activity statement view, Activity / Attendance prints).
+export type ActivityStatement = components['schemas']['ActivityStatementRead']
+export type ActivityStatementItem = components['schemas']['ActivityStatementItemRead']
+export type StatementLinkedDocument = components['schemas']['LinkedDocumentRead']
+export type StatementKind = ActivityStatementItem['kind']
+export type StatementPrintCreate = components['schemas']['StatementPrintCreate']
+export type StatementPrint = components['schemas']['StatementPrintRead']
+export type StatementPrintKind = StatementPrint['kind']
 
 // Passport OCR extract (Task 8).
 // Re-exported from the generated schema; declared here so consumers import from
