@@ -208,3 +208,58 @@ def test_transfer_refuses_a_user_denied_the_letter_record_type(db_session, monke
 
     assert err.value.code == "RECORD_TYPE_FORBIDDEN"
     assert db_session.get(Employee, "G800").duty_unit == "السرية الخامسة"
+
+
+@pytest.mark.parametrize("initial_placement", [False, True])
+def test_transfer_does_not_invent_view_or_employee_edit_prerequisites(
+    db_session, monkeypatch, initial_placement
+):
+    from app.services.action_guard_service import duty_transfer_decision
+
+    employee = _seed(db_session, duty_unit=None if initial_placement else "Unit A")
+    operator = make_user(db_session, email="transfer-no-view@test.ae")
+    for capability in ("books.view", "employees.edit", "books.servicerecords.General Book"):
+        perm_service.set_user_override(db_session, operator.id, capability, "deny")
+    if initial_placement:
+        for capability in ("books.category.GS", "books.service.General Book", "books.category.12/1"):
+            perm_service.set_user_override(db_session, operator.id, capability, "deny")
+    caps = perm_service.effective_caps(db_session, operator)
+    assert duty_transfer_decision(caps, initial_placement=initial_placement).allowed
+    if initial_placement:
+        assert not duty_transfer_decision(caps, initial_placement=False).allowed
+
+    def generate(*args, **kwargs):
+        if initial_placement:
+            raise AssertionError("Initial placement must not generate a letter")
+        return types.SimpleNamespace(book_id=17, ref_number="TRANSFER-17", document_id=19)
+
+    monkeypatch.setattr(duty_service.document_service, "generate_document", generate)
+    result = duty_service.transfer(
+        db_session,
+        moves=[DutyTransferMove(employee_id=employee.id, to_unit="Unit B")],
+        current_user=operator,
+    )
+    assert employee.duty_unit == "Unit B"
+    assert result.book_id == (None if initial_placement else 17)
+
+
+@pytest.mark.parametrize("capability", ["documents.generate", "documents.duty_transfer"])
+def test_initial_placement_denied_action_does_not_move_employee(db_session, capability):
+    from app.services.action_guard_service import duty_transfer_decision
+
+    employee = _seed(db_session, duty_unit=None)
+    operator = make_user(db_session, email="transfer-action-denied@test.ae")
+    perm_service.set_user_override(db_session, operator.id, capability, "deny")
+    decision = duty_transfer_decision(
+        perm_service.effective_caps(db_session, operator), initial_placement=True
+    )
+    assert not decision.allowed
+    assert capability in decision.blockers
+    with pytest.raises(AppError) as error:
+        duty_service.transfer(
+            db_session,
+            moves=[DutyTransferMove(employee_id=employee.id, to_unit="Unit B")],
+            current_user=operator,
+        )
+    assert error.value.code == "FORBIDDEN"
+    assert employee.duty_unit is None

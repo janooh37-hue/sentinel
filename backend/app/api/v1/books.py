@@ -30,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
+from app.api.action_guards import require_template_action
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, ValidationFailedError
 from app.core import form_policy
@@ -242,7 +243,7 @@ def book_facets(
 
 @router.get("/word-templates", response_model=list[WordTemplateRead])
 def list_word_templates(
-    _user: Annotated[User, Depends(require_capability("books.edit"))],
+    _user: Annotated[User, Depends(require_template_action("word_template", "view"))],
 ) -> list[WordTemplateRead]:
     """Shared General Book boilerplate library (Word path). Readable by record
     composers; renaming/deleting stays on ``books.templates``."""
@@ -260,7 +261,7 @@ def list_word_templates(
 def create_template_session(
     payload: SaveAsTemplateRequest,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.templates"))],
+    user: Annotated[User, Depends(require_template_action("word_template", "create"))],
 ) -> TemplateSessionRead:
     """Open an empty General Book letterhead in Word without reserving a book/ref."""
     return word_book_service.create_template_session(db, user=user, name=payload.name)
@@ -270,7 +271,7 @@ def create_template_session(
 def get_template_session(
     session_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.templates"))],
+    user: Annotated[User, Depends(require_template_action("word_template", "manage"))],
 ) -> TemplateSessionRead:
     session = word_book_service.get_template_session(db, user=user, session_id=session_id)
     return word_book_service.template_session_info(session)
@@ -280,7 +281,7 @@ def get_template_session(
 def template_session_preview(
     session_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.templates"))],
+    user: Annotated[User, Depends(require_template_action("word_template", "manage"))],
     encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
 ) -> Response:
     session = word_book_service.get_template_session(db, user=user, session_id=session_id)
@@ -300,7 +301,7 @@ def template_session_preview(
 def finish_template_session(
     session_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.templates"))],
+    user: Annotated[User, Depends(require_template_action("word_template", "manage"))],
 ) -> WordTemplateRead:
     info = word_book_service.finish_template_session(db, user=user, session_id=session_id)
     return WordTemplateRead(name=info.name, modified_at=info.modified_at)
@@ -310,7 +311,7 @@ def finish_template_session(
 def discard_template_session(
     session_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.templates"))],
+    user: Annotated[User, Depends(require_template_action("word_template", "manage"))],
 ) -> Response:
     word_book_service.discard_template_session(db, user=user, session_id=session_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -320,7 +321,7 @@ def discard_template_session(
 def rename_word_template(
     name: str,
     payload: RenameTemplateRequest,
-    _user: Annotated[User, Depends(require_capability("books.templates"))],
+    _user: Annotated[User, Depends(require_template_action("word_template", "edit"))],
 ) -> WordTemplateRead:
     """Rename a template in the shared General Book library."""
     info = book_template_service.rename_template(name, payload.new_name)
@@ -330,7 +331,7 @@ def rename_word_template(
 @router.get("/word-templates/{name}/table", response_model=WordTemplateTableRead)
 def get_word_template_table_schema(
     name: str,
-    _user: Annotated[User, Depends(require_capability("books.edit"))],
+    _user: Annotated[User, Depends(require_template_action("word_template", "read"))],
 ) -> WordTemplateTableRead:
     """Return table detection result for a shared General Book template
     (read — same gate as the template list)."""
@@ -341,7 +342,7 @@ def get_word_template_table_schema(
 @router.delete("/word-templates/{name}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_word_template(
     name: str,
-    _user: Annotated[User, Depends(require_capability("books.templates"))],
+    _user: Annotated[User, Depends(require_template_action("word_template", "delete"))],
 ) -> Response:
     """Delete a template from the shared General Book library."""
     book_template_service.delete_template(name)
@@ -750,7 +751,7 @@ def save_book_as_template(
     book_id: int,
     payload: SaveAsTemplateRequest,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.templates"))],
+    user: Annotated[User, Depends(require_template_action("word_template", "create"))],
 ) -> WordTemplateRead:
     """Copy a saved draft or finished General Book into the shared template library."""
     _require_full_book(db, user, book_id, write=True)
@@ -2068,7 +2069,10 @@ def update_book(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> BookRead:
-    _require_full_book(db, user, book_id, write=True)
+    from app.services.action_guard_service import book_edit_decision
+
+    row = book_service.get_book(db, book_id)
+    book_edit_decision(db, user, row).require()
     row = book_service.update_book(db, book_id, payload)
     return _build_book_response(db, row, user)
 

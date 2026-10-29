@@ -659,18 +659,14 @@ def require_record_type_access(
             f"Book category {category_id!r} does not exist",
             category_id=category_id,
         )
-    caps = perm_service.effective_caps(db, user)
-    category_denied = category_id is not None and f"books.category.{category_id}" not in caps
-    service_denied = service_id is not None and f"books.service.{service_id}" not in caps
-    classification_denied = (
-        classification_code is not None and f"books.category.{classification_code}" not in caps
-    )
-    if category_denied or service_denied or classification_denied:
-        raise AppError(
-            "RECORD_TYPE_FORBIDDEN",
-            "You don't have access to this record type.",
-            http_status=403,
-        )
+    from app.services.action_guard_service import record_type_decision
+
+    record_type_decision(
+        perm_service.effective_caps(db, user),
+        category_id=category_id,
+        service_id=service_id,
+        classification_code=classification_code,
+    ).require()
 
 
 def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
@@ -710,9 +706,10 @@ class BookReadAccess(NamedTuple):
     full_access: bool
     allowed_version_ids: frozenset[int]
     selected_version_id: int | None
+    read_path: str = "ordinary"
 
 
-def resolve_book_read_access(
+def _resolve_book_read_access(
     db: Session,
     user: User,
     book: Book,
@@ -742,7 +739,7 @@ def resolve_book_read_access(
                 http_status=403,
             )
         allowed_ids = frozenset({current_id}) if current_id is not None else frozenset()
-        return BookReadAccess(True, allowed_ids, current_id)
+        return BookReadAccess(True, allowed_ids, current_id, "reporter_current_revision")
     has_view = perm_service.has_capability(db, user, "books.view")
     existing = has_view
     record_type_error: AppError | None = None
@@ -755,7 +752,13 @@ def resolve_book_read_access(
             existing = False
             record_type_error = exc
     if _grade_allows(db, user, book, existing=existing):
-        return BookReadAccess(True, ids, version_id or (versions[-1].id if versions else None))
+        if book.grade in grades.RESTRICTED_GRADES or book.distribution == grades.NAMED:
+            read_path = "named_creator" if book.created_by_user_id == user.id else "direct_recipient"
+        else:
+            read_path = "ordinary" if existing else "direct_recipient"
+        return BookReadAccess(
+            True, ids, version_id or (versions[-1].id if versions else None), read_path
+        )
     level_hidden = _hidden_by_grade(user, book, existing=existing)
     allowed = set(
         db.scalars(
@@ -806,7 +809,20 @@ def resolve_book_read_access(
     selected = version_id or next(
         version.id for version in reversed(versions) if version.id in allowed
     )
-    return BookReadAccess(False, frozenset(allowed), selected)
+    return BookReadAccess(False, frozenset(allowed), selected, "assigned_or_retained_revision")
+
+
+def resolve_book_read_access(
+    db: Session,
+    user: User,
+    book: Book,
+    *,
+    version_id: int | None = None,
+) -> BookReadAccess:
+    """Enforce the same exact-revision decision used by diagnostics."""
+    from app.services.action_guard_service import book_read_decision
+
+    return book_read_decision(db, user, book, version_id=version_id).require()
 
 
 def require_full_book_access(db: Session, user: User, row: Book, *, write: bool = False) -> None:
@@ -1054,7 +1070,7 @@ def require_inmate_report_word_access(db: Session, user: User, book_id: int) -> 
     return row
 
 
-def require_revise_access(db: Session, user: User, book: Book | None) -> BookVersion | None:
+def _require_revise_authority(db: Session, user: User, book: Book | None) -> BookVersion | None:
     """Require revise authority; ``None`` skips only the non-reporter book check."""
     if user.role == INMATE_REPORTER_ROLE:
         if book is None:
@@ -1075,6 +1091,13 @@ def require_revise_access(db: Session, user: User, book: Book | None) -> BookVer
         # template/fields (or append a DOCX version) outside its chain.
         require_not_ledger_book(book)
     return None
+
+
+def require_revise_access(db: Session, user: User, book: Book | None) -> BookVersion | None:
+    """Require resource authority and workflow readiness before any rendering."""
+    from app.services.action_guard_service import book_revise_decision
+
+    return book_revise_decision(db, user, book).require()
 
 
 class ServiceCount(NamedTuple):

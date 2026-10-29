@@ -143,6 +143,15 @@ def test_restricted_reviewer_reaches_only_own_revision_signed_artifact(api_db, t
     book.versions.append(v2)
     api_db.commit()
 
+    from app.services.action_guard_service import book_read_decision
+
+    decision = book_read_decision(api_db, reviewer, book, version_id=v1.id)
+    assert decision.allowed
+    assert decision.access.read_path == "assigned_or_retained_revision"
+    assert decision.access.allowed_version_ids == frozenset({v1.id})
+    assert not book_read_decision(api_db, reviewer, book, version_id=v2.id).allowed
+    assert not api_db.new and not api_db.dirty and not api_db.deleted
+
     client = _client(api_db, reviewer)
     own = client.get(f"/api/v1/books/{book.id}/versions/{v1.id}/signed-document")
     assert own.status_code == 200, own.text
@@ -303,3 +312,35 @@ def test_revoke_revokes_every_role_grant_for_same_user_and_revision(api_db):
     body = response.json()
     assert len(body) == 2
     assert all(row["revoked_at"] is not None for row in body)
+
+
+def test_signed_ledger_edit_decision_matches_patch_and_keeps_read_access(api_db):
+    from app.core.constants import LEDGER_BOOK_TEMPLATE_ID
+    from app.services.action_guard_service import book_edit_decision, book_read_decision
+
+    manager = _user(api_db, "signed-ledger-manager@x.ae", role="manager")
+    api_db.add(BookCategory(id="GS", prefix="GS"))
+    book = Book(category_id="GS", ref_number="LEDGER-GUARD-1", approval_state="approved")
+    api_db.add(book)
+    api_db.flush()
+    version = BookVersion(
+        book_id=book.id,
+        version_no=1,
+        template_id=LEDGER_BOOK_TEMPLATE_ID,
+        fields={},
+        status="approved",
+        signed_at=datetime.now(UTC).replace(tzinfo=None),
+    )
+    book.versions.append(version)
+    api_db.commit()
+
+    decision = book_edit_decision(api_db, manager, book, version_id=version.id)
+    assert not decision.allowed
+    assert decision.error.code == "REVISION_LOCKED"
+    assert book_read_decision(api_db, manager, book, version_id=version.id).allowed
+    client = _client(api_db, manager)
+    response = client.patch(f"/api/v1/books/{book.id}", json={"subject": "Cannot change"})
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == decision.error.code
+    assert client.get(f"/api/v1/books/{book.id}", params={"version_id": version.id}).status_code == 200
+    assert book.subject is None

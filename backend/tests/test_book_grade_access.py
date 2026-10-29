@@ -185,6 +185,12 @@ def test_grade_access_matrix(
     for (grade, distribution), book in books.items():
         want = expected(role, grade, distribution, relation, cleared)
         label = f"{role} {relation} cleared={cleared} {grade}/{distribution}"
+        from app.services.action_guard_service import book_read_decision
+
+        decision = book_read_decision(db, caller, book, version_id=book.versions[-1].id)
+        assert decision.allowed == (want in ("full", "revision")), label
+        if decision.allowed:
+            assert decision.access.full_access == (want == "full"), label
         assert _verdict(db, caller, book, listed) == want, label
         assert (book.id in open_ids) == (want == "full"), label
         # Admins list every Top Secret / Addressee Only record (metadata rows).

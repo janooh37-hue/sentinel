@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_capability
+from app.api.action_guards import require_template_action
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.editor_template import (
@@ -38,7 +38,7 @@ router = APIRouter(prefix="/editor-templates", tags=["editor-templates"])
 @router.get("", response_model=EditorTemplateListResponse)
 def list_templates(
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("editor_templates.manage"))],
+    _user: Annotated[User, Depends(require_template_action("editor_template", "view"))],
     q: str | None = None,
     include_deleted: bool = False,
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
@@ -63,7 +63,7 @@ def list_templates(
 def get_template(
     template_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("editor_templates.manage"))],
+    _user: Annotated[User, Depends(require_template_action("editor_template", "read"))],
     include_deleted: bool = False,
 ) -> EditorTemplateRead:
     row = editor_template_service.get_template(
@@ -78,7 +78,7 @@ def get_template(
 def create_template(
     payload: EditorTemplateCreate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("editor_templates.manage"))],
+    _user: Annotated[User, Depends(require_template_action("editor_template", "create"))],
 ) -> EditorTemplateRead:
     row = editor_template_service.create_template(db, payload)
     return EditorTemplateRead.model_validate(row)
@@ -89,7 +89,7 @@ def update_template(
     template_id: int,
     payload: EditorTemplateUpdate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("editor_templates.manage"))],
+    _user: Annotated[User, Depends(require_template_action("editor_template", "edit"))],
 ) -> EditorTemplateRead:
     row = editor_template_service.update_template(db, template_id, payload)
     return EditorTemplateRead.model_validate(row)
@@ -99,7 +99,7 @@ def update_template(
 def delete_template(
     template_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("editor_templates.manage"))],
+    _user: Annotated[User, Depends(require_template_action("editor_template", "delete"))],
 ) -> Response:
     editor_template_service.soft_delete_template(db, template_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

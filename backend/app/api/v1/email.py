@@ -25,6 +25,7 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
+from app.api.action_guards import require_template_action
 from app.api.deps import get_current_user, require_capability
 from app.db.models import User
 from app.db.session import get_db
@@ -49,7 +50,7 @@ router = APIRouter(prefix="/email", tags=["email"])
 )
 def get_draft_templates(
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_template_action("email_template", "view"))],
 ) -> EmailDraftTemplatesRead:
     return email_draft_template_service.get_templates(db)
 
@@ -63,7 +64,7 @@ def put_draft_template(
     key: str,
     payload: EmailDraftTemplatePartsWrite,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("messages.templates"))],
+    current_user: Annotated[User, Depends(require_template_action("email_template", "edit"))],
 ) -> EmailDraftTemplatesRead:
     return email_draft_template_service.set_template(
         db, key, payload, actor=current_user.employee_id or current_user.email
@@ -78,7 +79,7 @@ def put_draft_template(
 def delete_draft_template(
     key: str,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("messages.templates"))],
+    current_user: Annotated[User, Depends(require_template_action("email_template", "reset"))],
 ) -> EmailDraftTemplatesRead:
     return email_draft_template_service.set_template(
         db, key, None, actor=current_user.employee_id or current_user.email
