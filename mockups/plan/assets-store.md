@@ -109,7 +109,7 @@ Errors use `STORE_*` codes. Every mutation writes an `AuditLog` row
 
 ## Opening stock
 
-`scripts/store_import_opening.py` + `scripts/data/store_opening_2026-10-29.json`
+`scripts/store_import_opening.py` + `scripts/store_opening_2026-10-29.json`
 create the 13 items and the October Stock count from the WhatsApp count (Red
 Label expiry 2029-01, Green tea packets, water/gloves/masks undated). Idempotent:
 refuses if any Store item exists.
