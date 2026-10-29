@@ -1919,7 +1919,10 @@
       "Others": "أخرى",
       "National Service": "الخدمة الوطنية",
       "Administrative Leave": "إجازة إدارية",
-      "Leave Permit": "تصريح خروج (٨ ساعات)"
+      "Leave Permit": "تصريح خروج (8 ساعات)",
+      "Passport Release": "تسليم جواز السفر",
+      "Duty Resumption": "مباشرة العمل",
+      "Unknown": "نوع غير محدد"
     },
     "filters": {
       "employee": "الموظف…",
