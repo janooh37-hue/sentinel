@@ -172,7 +172,7 @@ export function PrintSetupShell({
           ref={canvasRef}
           role="region"
           aria-label={t('statementPrint.previewLabel')}
-          className="statement-canvas min-w-0 bg-[#cdcbc4] px-4 pb-12 pt-6 md:px-7 lg:overflow-auto dark:bg-[#2a2f3a]"
+          className="statement-canvas min-w-0 bg-border-strong px-4 pb-12 pt-6 md:px-7 lg:overflow-auto"
         >
           {notices && (
             <div data-print-hide className="mx-auto mb-4 grid max-w-[210mm] gap-2">

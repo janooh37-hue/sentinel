@@ -1783,7 +1783,10 @@
       "Others": "Others",
       "National Service": "National Service",
       "Administrative Leave": "Administrative Leave",
-      "Leave Permit": "Permit (8 hours)"
+      "Leave Permit": "Permit (8 hours)",
+      "Passport Release": "Passport Release",
+      "Duty Resumption": "Duty Resumption",
+      "Unknown": "Unknown"
     },
     "filters": {
       "employee": "Employee…",

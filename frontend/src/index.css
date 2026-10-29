@@ -2426,7 +2426,8 @@ body {
 .statement-sheet .st-compact {
   display: flex;
   align-items: center;
-  gap: 6mm;
+  flex-wrap: wrap;
+  gap: 1mm 5mm;
   padding-bottom: 2mm;
   margin-bottom: 3mm;
   border-bottom: 0.3mm solid var(--st-navy);
