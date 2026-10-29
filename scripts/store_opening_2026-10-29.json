@@ -1,0 +1,111 @@
+{
+  "counted_on": "2026-10-29",
+  "note": "Opening count, transcribed from the store's WhatsApp count of 2026-10-29.",
+  "items": [
+    {
+      "name_en": "Nescafe Classic 12×190g",
+      "category": "Pantry",
+      "counting_unit_en": "Carton",
+      "counting_unit_ar": "كرتون",
+      "batches": [
+        { "expiry": "2028-03-01", "quantity": 3 },
+        { "expiry": "2027-10-01", "quantity": 6 },
+        { "expiry": "2027-11-01", "quantity": 5 }
+      ]
+    },
+    {
+      "name_en": "Coffee-mate 15×400g",
+      "category": "Pantry",
+      "counting_unit_en": "Carton",
+      "counting_unit_ar": "كرتون",
+      "batches": [
+        { "expiry": "2028-03-19", "quantity": 4 },
+        { "expiry": "2028-02-13", "quantity": 3 },
+        { "expiry": "2028-02-23", "quantity": 1 },
+        { "expiry": "2027-03-25", "quantity": 1 },
+        { "expiry": "2027-04-26", "quantity": 5 },
+        { "expiry": "2027-04-12", "quantity": 1 },
+        { "expiry": "2027-04-25", "quantity": 1 },
+        { "expiry": "2026-12-02", "quantity": 3 },
+        { "expiry": "2026-11-30", "quantity": 2 }
+      ]
+    },
+    {
+      "name_en": "Lipton Yellow Label Tea 24×400g",
+      "category": "Pantry",
+      "counting_unit_en": "Carton",
+      "counting_unit_ar": "كرتون",
+      "batches": [{ "expiry": "2028-09", "quantity": 10 }]
+    },
+    {
+      "name_en": "Green tea",
+      "category": "Pantry",
+      "counting_unit_en": "Packet",
+      "counting_unit_ar": "علبة",
+      "batches": [{ "expiry": null, "quantity": 9 }]
+    },
+    {
+      "name_en": "Lipton Red Label 36×100 teabags",
+      "category": "Pantry",
+      "counting_unit_en": "Carton",
+      "counting_unit_ar": "كرتون",
+      "batches": [{ "expiry": "2029-01", "quantity": 9 }]
+    },
+    {
+      "name_en": "Rainbow milk 96×170g",
+      "category": "Pantry",
+      "counting_unit_en": "Carton",
+      "counting_unit_ar": "كرتون",
+      "batches": [{ "expiry": "2027-05", "quantity": 8 }]
+    },
+    {
+      "name_en": "Liwa Water",
+      "category": "Pantry",
+      "counting_unit_en": "Carton",
+      "counting_unit_ar": "كرتون",
+      "batches": [{ "expiry": null, "quantity": 88 }]
+    },
+    {
+      "name_en": "Coffee cup 50×40pc",
+      "category": "Pantry",
+      "counting_unit_en": "Carton",
+      "counting_unit_ar": "كرتون",
+      "batches": [{ "expiry": null, "quantity": 12 }]
+    },
+    {
+      "name_en": "Big coffee cup",
+      "category": "Pantry",
+      "counting_unit_en": "Carton",
+      "counting_unit_ar": "كرتون",
+      "batches": [{ "expiry": null, "quantity": 9 }]
+    },
+    {
+      "name_en": "Masafi Pure Soft café tissues 150×2",
+      "category": "Pantry",
+      "counting_unit_en": "Carton",
+      "counting_unit_ar": "كرتون",
+      "batches": [{ "expiry": null, "quantity": 8 }]
+    },
+    {
+      "name_en": "Nitrile gloves",
+      "category": "Protective",
+      "counting_unit_en": "Carton",
+      "counting_unit_ar": "كرتون",
+      "batches": [{ "expiry": null, "quantity": 10 }]
+    },
+    {
+      "name_en": "Vinyl gloves 10×100",
+      "category": "Protective",
+      "counting_unit_en": "Carton",
+      "counting_unit_ar": "كرتون",
+      "batches": [{ "expiry": null, "quantity": 3 }]
+    },
+    {
+      "name_en": "Face mask 3-ply blue",
+      "category": "Protective",
+      "counting_unit_en": "Carton",
+      "counting_unit_ar": "كرتون",
+      "batches": [{ "expiry": null, "quantity": 26 }]
+    }
+  ]
+}
