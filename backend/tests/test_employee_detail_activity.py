@@ -177,6 +177,8 @@ def test_linked_document_lookup_avoids_queries_for_empty_ids(db_session, count_q
 def test_detail_leave_privacy_preserves_internal_reads_and_unrelated_history(db_session):
     viewer = make_user(db_session, email="leave-private@test.ae")
     employee = Employee(id="G-LEAVE-DETAIL", name_en="Private Leave Employee", status="Active")
+    db_session.add(employee)
+    db_session.flush()
     today = date.today()
     leave = Leave(
         employee_id=employee.id,
@@ -195,7 +197,6 @@ def test_detail_leave_privacy_preserves_internal_reads_and_unrelated_history(db_
     )
     db_session.add_all(
         [
-            employee,
             leave,
             absence,
             violation,
