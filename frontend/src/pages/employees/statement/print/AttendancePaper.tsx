@@ -67,6 +67,12 @@ const GLYPH: Record<PaperState, ReactNode> = {
   ),
   pending: <circle cx="6" cy="6" r="4.6" strokeDasharray="1.6 1.6" />,
   rest: <path d="M3 6h6" />,
+  withheld: (
+    <>
+      <circle cx="6" cy="6" r="4.6" />
+      <path d="M3.2 8.8 8.8 3.2" />
+    </>
+  ),
 }
 
 function Glyph({ state }: { state: PaperState }): React.JSX.Element {
@@ -144,19 +150,29 @@ export function AttendancePaper({ frame, settings, days, shiftWindows, leaveHidd
           {String(stats.late)} <small>{t('statementPrint.paper.sum.lateMinutes', { minutes: stats.lateMinutes })}</small>
         </>,
       ],
-      [t('statementPrint.paper.sum.absent'), String(stats.absent)],
+      // Withheld exactly as the Attendance tab withholds it: absence and
+      // punctuality depend on leave facts this reader may not see.
+      [
+        t('statementPrint.paper.sum.absent'),
+        leaveHidden ? t('statementPrint.paper.withheld') : String(stats.absent),
+      ],
       [t('statementPrint.paper.sum.single'), String(stats.single)],
       [t('statementPrint.paper.sum.rest'), String(stats.restDays)],
       [
         t('statementPrint.paper.sum.punctuality'),
         <>
-          {stats.punctuality === null ? '-' : `${stats.punctuality}%`}{' '}
+          {leaveHidden
+            ? t('statementPrint.paper.withheld')
+            : stats.punctuality === null
+              ? '-'
+              : `${stats.punctuality}%`}{' '}
           <small>{t('statementPrint.paper.sum.punctualityHint')}</small>
         </>,
       ],
     ]
     if (stats.leaveDays > 0) pairs.push([t('statementPrint.paper.sum.leave'), String(stats.leaveDays)])
     if (stats.pending > 0) pairs.push([t('statementPrint.paper.sum.pending'), String(stats.pending)])
+    if (stats.withheld > 0) pairs.push([t('statementPrint.paper.sum.withheld'), String(stats.withheld)])
     if (pairs.length % 2) pairs.push(['', ''])
     const rows: [string, ReactNode][][] = []
     for (let i = 0; i < pairs.length; i += 2) rows.push([pairs[i], pairs[i + 1]])
@@ -215,7 +231,7 @@ export function AttendancePaper({ frame, settings, days, shiftWindows, leaveHidd
     blocks.push(
       <section className="st-leg" key="legend">
         <h3>{t('statementPrint.paper.legend')}</h3>
-        {LEGEND_STATES.map((state) => (
+        {(leaveHidden ? [...LEGEND_STATES, 'withheld' as const] : LEGEND_STATES).map((state) => (
           <div key={state}>
             <Glyph state={state} />
             {stateLabel(state)}

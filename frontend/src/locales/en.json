@@ -6722,7 +6722,8 @@
     "loadFailed": "The activity record could not be loaded.",
     "employeeFailed": "The employee file could not be loaded.",
     "retry": "Retry",
-    "truncated": "This period holds more entries than one statement prints. Only the newest 2000 are shown; choose a shorter period.",
+    "truncated": "This period holds more entries than one statement can print, so it cannot be printed as a complete record. Choose a shorter period.",
+    "printStale": "The settings changed while the reference was being issued, so nothing was printed. Press Print again.",
     "notAllowed": "You do not have access to this employee's attendance, so the attendance statement cannot be printed.",
     "recordStart": "Start of record",
     "period": "Period",
@@ -6793,6 +6794,11 @@
       "deduction_other": "Deduction: {{count}} days",
       "fromTo": "{{from}} to {{to}}",
       "statusChange": "Status change",
+      "statusScheduled": "Scheduled status change",
+      "statusCancelled": "Scheduled change cancelled",
+      "statusCancelledDetail": "{{to}} did not take effect",
+      "scheduledFor": "Scheduled for {{date}}",
+      "withheld": "Withheld",
       "effective": "Effective {{date}}",
       "returnDate": "Return {{date}}",
       "preparedBy": "Prepared by",
@@ -6850,7 +6856,8 @@
         "punctuality": "Punctuality",
         "punctualityHint": "on time and inside grace, of judged shifts",
         "leave": "On leave (days)",
-        "pending": "Not judged yet"
+        "pending": "Not judged yet",
+        "withheld": "Leave or absence days (withheld)"
       },
       "legend": "Legend",
       "state": {
@@ -6861,7 +6868,8 @@
         "unpaired": "Single punch",
         "leave": "On leave",
         "pending": "Not judged yet",
-        "rest": "Rest day or not rostered"
+        "rest": "Rest day or not rostered",
+        "withheld": "Withheld: leave or absence not visible to this account"
       },
       "tag": {
         "late": "+{{minutes}} min",
@@ -6869,7 +6877,8 @@
         "unpaired": "1 punch",
         "leave": "Leave",
         "pending": "Pending",
-        "rest": "Rest"
+        "rest": "Rest",
+        "withheld": "Withheld"
       },
       "shiftLetter": {
         "morning": "M",

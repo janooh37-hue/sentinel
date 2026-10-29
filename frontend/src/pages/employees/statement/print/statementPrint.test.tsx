@@ -7,11 +7,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import ar from '@/locales/ar.json'
 
-const { getEmployeeDetail, getActivityStatement, createStatementPrint, getEmployeeAttendance } = vi.hoisted(() => ({
+const { getEmployeeDetail, getActivityStatement, createStatementPrint, getEmployeeAttendance, denied } = vi.hoisted(() => ({
   getEmployeeDetail: vi.fn(),
   getActivityStatement: vi.fn(),
   createStatementPrint: vi.fn(),
   getEmployeeAttendance: vi.fn(),
+  denied: new Set<string>(),
 }))
 
 vi.mock('@/lib/api', async (orig) => {
@@ -23,7 +24,7 @@ vi.mock('@/lib/api', async (orig) => {
 })
 
 vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({ capabilities: new Set<string>(), isLoading: false, has: () => true }),
+  useCapabilities: () => ({ capabilities: new Set<string>(), isLoading: false, has: (cap: string) => !denied.has(cap) }),
 }))
 
 vi.mock('@/components/employees/useAttendanceAttention', () => ({ siteToday: () => '2026-10-27' }))
@@ -100,6 +101,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks()
+  denied.clear()
   vi.restoreAllMocks()
 })
 
@@ -243,5 +245,124 @@ describe('attendance print setup', () => {
     expect(await screen.findByText(/Attendance for August 2026 could not be loaded/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Print' })).toBeDisabled()
     expect(sheet()).toBeNull()
+  })
+})
+
+/** A promise resolved from outside (the lib target predates `Promise.withResolvers`). */
+function deferred(): { promise: Promise<unknown>; resolve: (value: unknown) => void } {
+  let resolve: (value: unknown) => void = () => undefined
+  const promise = new Promise((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
+describe('fix round', () => {
+  it('prints a cancelled scheduled change as cancelled, never as an effective change', async () => {
+    getActivityStatement.mockResolvedValue({
+      employee_id: 'G3190',
+      from_date: '2026-01-01',
+      to_date: '2026-10-27',
+      truncated: false,
+      items: [
+        item('status', 9, {
+          from_status: 'Active',
+          to_status: 'Resigned',
+          effective_date: '2026-11-30',
+          status_event_kind: 'scheduled_cancelled',
+        }),
+        item('status', 10, {
+          from_status: 'Active',
+          to_status: 'Transferred',
+          effective_date: '2026-12-01',
+          status_event_kind: 'scheduled',
+        }),
+      ],
+    })
+    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const section = sheet().querySelector('[data-section="placement"]') as HTMLElement
+    expect(section).toHaveTextContent('Scheduled change cancelled')
+    expect(section).toHaveTextContent('Resigned did not take effect')
+    expect(section).not.toHaveTextContent('Active to Resigned')
+    expect(section).not.toHaveTextContent('Effective 30 Nov 2026')
+    expect(section).toHaveTextContent('Scheduled status change')
+    expect(section).toHaveTextContent('Scheduled for 1 Dec 2026')
+  })
+
+  it('freezes the settings while the reference is being issued', async () => {
+    const user = userEvent.setup()
+    const pending = deferred()
+    createStatementPrint.mockReturnValue(pending.promise)
+    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Print' }))
+
+    expect(screen.getByRole('checkbox', { name: /^Violations/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'English' })).toBeDisabled()
+    pending.resolve({ id: 1, reference: 'G3190/1/12/1', printed_at: '2026-10-27T11:20:00', printed_by_name: null })
+    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /^Violations/ })).toBeEnabled())
+  })
+
+  it('does not print a changed setup with a reference issued for the old one', async () => {
+    const user = userEvent.setup()
+    const pending = deferred()
+    createStatementPrint.mockReturnValue(pending.promise)
+    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Print' }))
+    // The column is frozen; force a change anyway to model any other path
+    // that moves the setup (URL navigation) while the request is in flight.
+    const checkbox = screen.getByRole('checkbox', { name: /^Violations/ })
+    const fieldset = checkbox.closest('aside')?.querySelector('fieldset') as HTMLFieldSetElement
+    fieldset.disabled = false
+    fieldset.removeAttribute('inert')
+    await user.click(checkbox)
+    pending.resolve({ id: 1, reference: 'G3190/1/12/1', printed_at: '2026-10-27T11:20:00', printed_by_name: null })
+
+    expect(await screen.findByText(/settings changed while the reference was being issued/)).toBeInTheDocument()
+    expect(window.print).not.toHaveBeenCalled()
+    expect(within(sheet()).getByTestId('statement-reference')).toHaveTextContent('Assigned when printed')
+  })
+
+  it('refuses to print a truncated activity list and says why', async () => {
+    getActivityStatement.mockResolvedValue({ employee_id: 'G3190', from_date: null, to_date: '2026-10-27', items: ITEMS, truncated: true })
+    renderAt('/employees/G3190/activity/print?period=all&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Print' })).toBeDisabled()
+    expect(screen.getByTestId('print-blocked')).toHaveTextContent('Choose a shorter period')
+  })
+
+  it('marks withheld leave and absence as withheld, not rest, and withholds absence and punctuality', async () => {
+    denied.add('leaves.view')
+    getEmployeeAttendance.mockImplementation((_id: string, params: { from_date: string; to_date: string }) =>
+      Promise.resolve({
+        employee_id: 'G3190',
+        from_date: params.from_date,
+        to_date: params.to_date,
+        days: [
+          { operational_date: '2026-09-02', shift_code: 'noon', presence_state: 'excused_leave', punch_count: 0, punches: [] },
+          { operational_date: '2026-09-03', shift_code: 'noon', presence_state: 'absent', punch_count: 0, punches: [] },
+        ],
+      }),
+    )
+    renderAt('/employees/G3190/attendance/print?mode=month&y=2026&m=9&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const cell = (day: string): HTMLElement =>
+      within(sheet())
+        .getAllByTestId('calendar-day')
+        .find((c) => c.querySelector('.dn')?.textContent === day) as HTMLElement
+    expect(cell('2').dataset.state).toBe('withheld')
+    expect(cell('3').dataset.state).toBe('withheld')
+    expect(cell('3')).toHaveTextContent('Withheld')
+    const summary = sheet().querySelector('[data-section="summary"]') as HTMLElement
+    const value = (label: string): string | null | undefined =>
+      Array.from(summary.querySelectorAll('td.k')).find((k) => k.textContent === label)?.nextElementSibling?.textContent
+    // 30 days, 2 withheld: 28 rest days, not 30.
+    expect(value('Rest days')).toBe('28')
+    expect(value('Absent')).toBe('Withheld')
+    expect(value('Punctuality')).toMatch(/^Withheld/)
   })
 })
