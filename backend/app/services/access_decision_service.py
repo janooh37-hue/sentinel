@@ -279,7 +279,15 @@ def _catalog(
     for entry in catalog:
         resource = Resource(kind="capability", id=entry.id)
         decision = _evaluate(
-            db, user, actor, resource, _action(entry.id), Context(), resolution, known_entry=entry, category_ids=category_ids
+            db,
+            user,
+            actor,
+            resource,
+            _action(entry.id),
+            Context(),
+            resolution,
+            known_entry=entry,
+            category_ids=category_ids,
         )
         if entry.id == "employees.notify":
             decision.warnings.append(
@@ -318,7 +326,16 @@ def _catalog(
                     en=[service_id, f"books.servicerecords.{service_id}"], ar=[]
                 ),
                 actions=[
-                    _evaluate(db, user, actor, resource, action, Context(), resolution, category_ids=category_ids)
+                    _evaluate(
+                        db,
+                        user,
+                        actor,
+                        resource,
+                        action,
+                        Context(),
+                        resolution,
+                        category_ids=category_ids,
+                    )
                     for action in actions
                 ],
             )
@@ -601,11 +618,46 @@ def _guard_decision(
 
 
 def _category_exists(db: Session, category: str, category_ids: frozenset[str] | None) -> bool:
-    return category in category_ids if category_ids is not None else db.get(BookCategory, category) is not None
+    return (
+        category in category_ids
+        if category_ids is not None
+        else db.get(BookCategory, category) is not None
+    )
+
+
+def _ordinary_read_capabilities(book: Book) -> list[str]:
+    from app.core import grades
+    from app.core.form_kind import resolve_service
+
+    latest = max(book.versions, key=lambda version: version.version_no, default=None)
+    service_id = resolve_service(
+        book.subject, latest.template_id if latest else None, versioned=latest is not None
+    )
+    capabilities = [
+        "books.view",
+        f"books.category.{book.category_id}",
+        f"books.servicerecords.{service_id}",
+    ]
+    if book.classification_code:
+        capabilities.append(f"books.category.{book.classification_code}")
+    if book.grade == grades.SECRET:
+        capabilities.append("books.secret")
+    return capabilities
 
 
 def _evaluate_action(
-    db, user, actor, resource, action, context, resolution, *, known_entry=None, word_templates=None, category_ids=None, allow_read_loss=False
+    db,
+    user,
+    actor,
+    resource,
+    action,
+    context,
+    resolution,
+    *,
+    known_entry=None,
+    word_templates=None,
+    category_ids=None,
+    allow_read_loss=False,
 ) -> Decision:
     from app.core import grades
     from app.core.classifications import get_classification
@@ -636,27 +688,43 @@ def _evaluate_action(
                 caps, initial_placement=False, category_exists=category_exists
             )
             decision = _guard_decision(
-                user, actor, resolution, action, [resource.id], initial,
-                required=["employee_assignment"], prerequisites=["documents.generate"],
+                user,
+                actor,
+                resolution,
+                action,
+                [resource.id],
+                initial,
+                required=["employee_assignment"],
+                prerequisites=["documents.generate"],
             )
             prerequisite_tree = decision.reason_tree
             initial_index = len(decision.reasons)
             decision.reasons.append(
                 _reason(
-                    "INITIAL_PLACEMENT_BYPASSES_RECORD_TYPE", applied=False, decisive=False,
-                    condition="initial_placement", authorization="allowed" if initial.allowed else "denied",
+                    "INITIAL_PLACEMENT_BYPASSES_RECORD_TYPE",
+                    applied=False,
+                    decisive=False,
+                    condition="initial_placement",
+                    authorization="allowed" if initial.allowed else "denied",
                 )
             )
             existing_index = len(decision.reasons)
             decision.reasons.append(
                 _reason(
-                    "EXISTING_ASSIGNMENT_REQUIRES_RECORD_TYPE", applied=False, decisive=False,
-                    condition="existing_assignment", authorization="allowed" if existing.allowed else "denied",
+                    "EXISTING_ASSIGNMENT_REQUIRES_RECORD_TYPE",
+                    applied=False,
+                    decisive=False,
+                    condition="existing_assignment",
+                    authorization="allowed" if existing.allowed else "denied",
                     error_code=existing.error.code if existing.error else None,
                 )
             )
             conditional_indices = []
-            conditional_caps = ["books.category.GS", "books.service.General Book", "books.category.12/1"]
+            conditional_caps = [
+                "books.category.GS",
+                "books.service.General Book",
+                "books.category.12/1",
+            ]
             for capability in conditional_caps:
                 for reason in _cap_reasons(user, resolution, capability):
                     reason.applied = False
@@ -668,17 +736,24 @@ def _evaluate_action(
             if missing or not category_exists:
                 decision.reasons.append(
                     _reason(
-                        "CONDITIONAL_PREREQUISITE_MISSING", applied=False, decisive=False,
-                        condition="existing_assignment", capabilities=missing,
+                        "CONDITIONAL_PREREQUISITE_MISSING",
+                        applied=False,
+                        decisive=False,
+                        condition="existing_assignment",
+                        capabilities=missing,
                         category_exists=category_exists,
                     )
                 )
                 conditional_indices.append(len(decision.reasons) - 1)
                 decision.warnings.append(
                     Issue(
-                        code="CONDITIONAL_PREREQUISITE_BLOCKED", severity="warning",
+                        code="CONDITIONAL_PREREQUISITE_BLOCKED",
+                        severity="warning",
                         capabilities=missing,
-                        params={"condition": "existing_assignment", "category_exists": category_exists},
+                        params={
+                            "condition": "existing_assignment",
+                            "category_exists": category_exists,
+                        },
                     )
                 )
             decision.reason_tree = ReasonNode(
@@ -693,7 +768,10 @@ def _evaluate_action(
                                 op="all",
                                 children=[
                                     ReasonReference(reason_index=existing_index),
-                                    *(ReasonReference(reason_index=index) for index in conditional_indices),
+                                    *(
+                                        ReasonReference(reason_index=index)
+                                        for index in conditional_indices
+                                    ),
                                 ],
                             ),
                         ],
@@ -833,10 +911,16 @@ def _evaluate_action(
         if not readable.allowed:
             if allow_read_loss:
                 return _guard_decision(
-                    user, actor, resolution, action,
-                    ["books.edit"] if action in (Action.edit, Action.create) and user.role != "inmate_reporter" else [],
+                    user,
+                    actor,
+                    resolution,
+                    action,
+                    ["books.edit"]
+                    if action in (Action.edit, Action.create) and user.role != "inmate_reporter"
+                    else [],
                     readable,
                     extra=[_reason("PROPOSED_RECORD_ACCESS_LOST", kind="resource")],
+                    prerequisites=_ordinary_read_capabilities(book),
                 )
             raise AppError("NOT_FOUND", "Resource not found.", http_status=404)
         path = readable.access.read_path
@@ -910,21 +994,7 @@ def _evaluate_action(
             return _guard_decision(
                 user, actor, resolution, action, ["books.edit"], guard, extra=extra
             )
-        from app.core.form_kind import resolve_service
-
-        latest = max(book.versions, key=lambda version: version.version_no, default=None)
-        service_id = resolve_service(
-            book.subject, latest.template_id if latest else None, versioned=latest is not None
-        )
-        ordinary_caps = [
-            "books.view",
-            f"books.category.{book.category_id}",
-            f"books.servicerecords.{service_id}",
-        ]
-        if book.classification_code:
-            ordinary_caps.append(f"books.category.{book.classification_code}")
-        if book.grade == grades.SECRET:
-            ordinary_caps.append("books.secret")
+        ordinary_caps = _ordinary_read_capabilities(book)
         ordinary_reasons = [
             reason
             for capability in ordinary_caps
@@ -1008,7 +1078,18 @@ def _resource_action_route(resource: Resource, action: Action) -> tuple[str, str
 
 
 def _evaluate(
-    db, user, actor, resource, action, context, resolution, *, known_entry=None, word_templates=None, category_ids=None, allow_read_loss=False
+    db,
+    user,
+    actor,
+    resource,
+    action,
+    context,
+    resolution,
+    *,
+    known_entry=None,
+    word_templates=None,
+    category_ids=None,
+    allow_read_loss=False,
 ) -> Decision:
     decision = _evaluate_action(
         db,
@@ -1090,7 +1171,14 @@ def check(db: Session, user: User, actor: User, body: CheckRequest) -> CheckResp
     if body.proposed:
         patch = validate_patch(db, user, actor, body.proposed)
         proposed = evaluate(
-            db, user, actor, body.resource, body.action, body.context, proposed=patch, allow_read_loss=True
+            db,
+            user,
+            actor,
+            body.resource,
+            body.action,
+            body.context,
+            proposed=patch,
+            allow_read_loss=True,
         )
         if current != proposed:
             changes = [

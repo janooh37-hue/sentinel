@@ -756,16 +756,44 @@ def test_proposed_record_read_loss_is_a_denied_impact_not_a_missing_record(api_d
     admin, target, c = setup(api_db, role="manager")
     api_db.add(BookCategory(id="HR", prefix="HR"))
     api_db.flush()
-    book = Book(category_id="HR", ref_number="HR-PROPOSED-LOSS", approval_state="none", created_by_user_id=admin.id)
+    book = Book(
+        category_id="HR",
+        ref_number="HR-PROPOSED-LOSS",
+        approval_state="none",
+        created_by_user_id=admin.id,
+    )
     api_db.add(book)
     api_db.flush()
-    api_db.add(BookVersion(book_id=book.id, version_no=1, template_id="Leave Application Form", status="pending", fields={}, created_by_user_id=admin.id))
+    api_db.add(
+        BookVersion(
+            book_id=book.id,
+            version_no=1,
+            template_id="Leave Application Form",
+            status="pending",
+            fields={},
+            created_by_user_id=admin.id,
+        )
+    )
     api_db.commit()
-    response = check(c, target, "book", str(book.id), "read", proposed=[{"capability": "books.view", "effect": "deny"}])
+    response = check(
+        c,
+        target,
+        "book",
+        str(book.id),
+        "read",
+        proposed=[{"capability": "books.view", "effect": "deny"}],
+    )
     assert response.status_code == 200, response.text
     assert response.json()["current"]["authorization"] == "allowed"
     assert response.json()["proposed"]["authorization"] == "denied"
     assert response.json()["proposed"]["executable_now"] is False
+    assert any(
+        reason["code"] == "PERSONAL_DENY"
+        and reason["capability"] == "books.view"
+        and reason["applied"]
+        and reason["decisive"]
+        for reason in response.json()["proposed"]["reasons"]
+    )
     assert len(response.json()["impacts"]) == 1
     assert perm_service.get_user_overrides(api_db, target.id) == {}
     perm_service.set_user_override(api_db, target.id, "books.view", "deny")
@@ -780,10 +808,22 @@ def test_reporter_existing_category_create_and_own_revision_match_real_authority
     api_db.add_all([employee, BookCategory(id="INV", prefix="INV")])
     api_db.flush()
     target.employee_id = employee.id
-    book = Book(category_id="INV", ref_number="INV-ACCESS-REVISE", approval_state="none", created_by_user_id=target.id)
+    book = Book(
+        category_id="INV",
+        ref_number="INV-ACCESS-REVISE",
+        approval_state="none",
+        created_by_user_id=target.id,
+    )
     api_db.add(book)
     api_db.flush()
-    version = BookVersion(book_id=book.id, version_no=1, template_id="Inmate Conduct Violations", status="pending", fields={"reporter_id": employee.id}, created_by_user_id=target.id)
+    version = BookVersion(
+        book_id=book.id,
+        version_no=1,
+        template_id="Inmate Conduct Violations",
+        status="pending",
+        fields={"reporter_id": employee.id},
+        created_by_user_id=target.id,
+    )
     api_db.add(version)
     api_db.commit()
     # These are the production generation/revision guards, with no rendering,
@@ -791,7 +831,14 @@ def test_reporter_existing_category_create_and_own_revision_match_real_authority
     document_service.authorize_interactive_generation(api_db, target, "Inmate Conduct Violations")
     action_guard_service.book_revise_decision(api_db, target, book).require()
     assert book_service.require_revise_access(api_db, target, book).id == version.id
-    new_record = check(c, target, "service", "Inmate Conduct Violations", "create", context={"grade": "unclassified"})
+    new_record = check(
+        c,
+        target,
+        "service",
+        "Inmate Conduct Violations",
+        "create",
+        context={"grade": "unclassified"},
+    )
     revise = check(c, target, "book", str(book.id), "create")
     assert new_record.status_code == revise.status_code == 200
     assert new_record.json()["current"]["authorization"] == "allowed"
@@ -821,8 +868,14 @@ def test_duty_transfer_explains_conditional_record_gates_without_denying_initial
     assert decision["authorization"] == "needs_context"
     assert decision["executable_now"] is None
     assert decision["required_context"] == ["employee_assignment"]
-    warning = next(warning for warning in decision["warnings"] if warning["code"] == "CONDITIONAL_PREREQUISITE_BLOCKED")
+    warning = next(
+        warning
+        for warning in decision["warnings"]
+        if warning["code"] == "CONDITIONAL_PREREQUISITE_BLOCKED"
+    )
     assert warning["capabilities"] == conditional
     assert warning["params"]["condition"] == "existing_assignment"
     assert decision["reason_tree"]["children"][1]["op"] == "any"
-    assert any(reason["code"] == "INITIAL_PLACEMENT_BYPASSES_RECORD_TYPE" for reason in decision["reasons"])
+    assert any(
+        reason["code"] == "INITIAL_PLACEMENT_BYPASSES_RECORD_TYPE" for reason in decision["reasons"]
+    )
