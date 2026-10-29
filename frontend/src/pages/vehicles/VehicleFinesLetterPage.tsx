@@ -69,7 +69,7 @@ import {
 import { useSearchParam } from '@/lib/urlState'
 import { PaperNote, PaperPlateBox, PaperSheet, PaperTable } from './components/PaperSheet'
 import { PlateChip } from './components/PlateChip'
-import { VehicleFormAlert } from './components/VehicleDialogShell'
+import { FormAlert } from '@/components/forms/DialogShell'
 import { VehicleStatusBadge } from './components/VehicleStatusBadge'
 
 /** What the reference line shows before the book exists. The real ref
@@ -281,7 +281,7 @@ function FinesLetterWizard(): React.JSX.Element {
             )}
 
             <div className="mt-3">
-              <VehicleFormAlert id={ERROR_ID} message={error} />
+              <FormAlert id={ERROR_ID} message={error} />
             </div>
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2">

@@ -24,14 +24,14 @@ import {
 } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'
 import {
-  VehicleDialogBody,
-  VehicleDialogFooter,
-  VehicleDialogShell,
-  VehicleEmployeeField,
-  VehicleField,
-  VehicleFieldGrid,
-  VehicleFormAlert,
-} from './VehicleDialogShell'
+  DialogBody,
+  DialogFooter,
+  DialogShell,
+  Field,
+  FieldGrid,
+  FormAlert,
+} from '@/components/forms/DialogShell'
+import { VehicleEmployeeField } from './VehicleEmployeeField'
 
 const schema = z.object({
   type: z.enum(['service', 'repair', 'tires', 'other']),
@@ -51,9 +51,9 @@ export function MaintenanceRequestDialog({ vehicle, lastMaintenance, open, onOpe
   const { t } = useTranslation()
   const [busy, setBusy] = useState(false)
   return (
-    <VehicleDialogShell open={open} onOpenChange={onOpenChange} title={t('vehicles.requestMaintenance')} description={t('vehicles.maintenanceRequestDesc')} busy={busy}>
+    <DialogShell open={open} onOpenChange={onOpenChange} title={t('vehicles.requestMaintenance')} description={t('vehicles.maintenanceRequestDesc')} busy={busy}>
       <MaintenanceRequestForm vehicle={vehicle} lastMaintenance={lastMaintenance} onOpenChange={onOpenChange} onBusyChange={setBusy} />
-    </VehicleDialogShell>
+    </DialogShell>
   )
 }
 
@@ -110,8 +110,8 @@ function MaintenanceRequestForm({ vehicle, lastMaintenance, onOpenChange, onBusy
       setServerError(null)
       mutation.mutate(values)
     })}>
-      <VehicleDialogBody>
-        <VehicleFormAlert id={alertId} message={alert} />
+      <DialogBody>
+        <FormAlert id={alertId} message={alert} />
         <PlateChip plate={plateLabel(vehicle)} className="self-start" />
         <section aria-labelledby={`${fieldId}-last`} className="rounded-lg bg-surface-tinted p-3">
           <h3 id={`${fieldId}-last`} className="text-sm font-semibold">{t('vehicles.lastMaintenance')}</h3>
@@ -125,29 +125,29 @@ function MaintenanceRequestForm({ vehicle, lastMaintenance, onOpenChange, onBusy
           ) : <p className="mt-1 text-xs text-muted-foreground">{t('vehicles.noPreviousMaintenance')}</p>}
         </section>
         <fieldset disabled={mutation.isPending} className="contents">
-          <VehicleFieldGrid>
-            <VehicleField id={`${fieldId}-type`} label={t('vehicles.maintenanceType')} required>
+          <FieldGrid>
+            <Field id={`${fieldId}-type`} label={t('vehicles.maintenanceType')} required>
               <Controller control={control} name="type" render={({ field }) => (
                 <Select value={field.value} onValueChange={field.onChange}>
                   <SelectTrigger id={`${fieldId}-type`} {...flag('type')}><SelectValue /></SelectTrigger>
                   <SelectContent>{MAINTENANCE_TYPES.map((type) => <SelectItem key={type} value={type}>{t(`vehicles.${type}`)}</SelectItem>)}</SelectContent>
                 </Select>
               )} />
-            </VehicleField>
-            <VehicleField id={`${fieldId}-odometer`} label={t('vehicles.currentOdometer')}>
+            </Field>
+            <Field id={`${fieldId}-odometer`} label={t('vehicles.currentOdometer')}>
               <Input id={`${fieldId}-odometer`} inputMode="numeric" dir="ltr" className="font-mono" {...register('odometer_km')} {...flag('odometer_km')} />
-            </VehicleField>
-            <VehicleField id={`${fieldId}-description`} label={t('vehicles.requestedWork')} required full>
+            </Field>
+            <Field id={`${fieldId}-description`} label={t('vehicles.requestedWork')} required full>
               <Textarea id={`${fieldId}-description`} dir="auto" rows={3} {...register('description')} {...flag('description')} />
-            </VehicleField>
+            </Field>
             <VehicleEmployeeField employeeId={employeeId} onChange={setEmployeeId} hint={t('vehicles.maintenanceRequestDriverHint')} />
-          </VehicleFieldGrid>
+          </FieldGrid>
         </fieldset>
-      </VehicleDialogBody>
-      <VehicleDialogFooter>
+      </DialogBody>
+      <DialogFooter>
         <Button type="button" variant="outline" disabled={mutation.isPending} onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
         <Button type="submit" disabled={mutation.isPending}>{t(mutation.isPending ? 'vehicles.odometerSaving' : 'vehicles.saveLetter')}</Button>
-      </VehicleDialogFooter>
+      </DialogFooter>
     </form>
   )
 }

@@ -8,7 +8,11 @@ import { Button } from '@/components/ui/button'
 import { api, type OdometerRowRead } from '@/lib/api'
 import { localized, vehicleErrorMessage } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'
-import { VehicleDialogBody, VehicleDialogFooter, VehicleDialogShell } from './VehicleDialogShell'
+import {
+  DialogBody,
+  DialogFooter,
+  DialogShell,
+} from '@/components/forms/DialogShell'
 
 export function OdometerFormDialog({ month, rows, open, onOpenChange }: {
   month: string
@@ -19,9 +23,9 @@ export function OdometerFormDialog({ month, rows, open, onOpenChange }: {
   const { t } = useTranslation()
   const [busy, setBusy] = useState(false)
   return (
-    <VehicleDialogShell open={open} onOpenChange={onOpenChange} title={t('vehicles.printOdometerForm')} description={t('vehicles.odometerFormDesc')} size="md" busy={busy}>
+    <DialogShell open={open} onOpenChange={onOpenChange} title={t('vehicles.printOdometerForm')} description={t('vehicles.odometerFormDesc')} size="md" busy={busy}>
       <OdometerForm month={month} rows={rows} onClose={() => onOpenChange(false)} onBusyChange={setBusy} />
-    </VehicleDialogShell>
+    </DialogShell>
   )
 }
 
@@ -48,7 +52,7 @@ function OdometerForm({ month, rows, onClose, onBusyChange }: { month: string; r
       event.preventDefault()
       if (!mutation.isPending && (scope === 'all' || selected.length > 0)) mutation.mutate()
     }}>
-      <VehicleDialogBody>
+      <DialogBody>
         <fieldset disabled={mutation.isPending} className="flex flex-col gap-3">
           <legend className="sr-only">{t('vehicles.odometerFormVehicles')}</legend>
           <label className="flex items-center gap-2 text-sm"><input type="radio" name="vehicle-scope" value="all" checked={scope === 'all'} onChange={() => setScope('all')} />{t('vehicles.allVehicles')}</label>
@@ -64,11 +68,11 @@ function OdometerForm({ month, rows, onClose, onBusyChange }: { month: string; r
             </div>
           </>}
         </fieldset>
-      </VehicleDialogBody>
-      <VehicleDialogFooter>
+      </DialogBody>
+      <DialogFooter>
         <Button type="button" variant="outline" disabled={mutation.isPending} onClick={onClose}>{t('common.cancel')}</Button>
         <Button type="submit" disabled={mutation.isPending || rows.length === 0 || (scope === 'selected' && selected.length === 0)}>{t(mutation.isPending ? 'vehicles.odometerSaving' : 'vehicles.saveLetter')}</Button>
-      </VehicleDialogFooter>
+      </DialogFooter>
     </form>
   )
 }

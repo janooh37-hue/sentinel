@@ -14,7 +14,7 @@ import {
   plateLabel,
   vehicleErrorMessage,
 } from '../vehicleUtils'
-import { UploadSlot } from './VehicleDialogShell'
+import { UploadSlot } from '@/components/forms/DialogShell'
 
 export interface VehicleLicenceScanControlProps {
   currentValues: Partial<VehicleFormValues>

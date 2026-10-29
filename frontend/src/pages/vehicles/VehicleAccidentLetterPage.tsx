@@ -66,7 +66,7 @@ import {
 } from './vehicleUtils'
 import { PaperFacts, PaperSheet } from './components/PaperSheet'
 import { PlateChip } from './components/PlateChip'
-import { VehicleFormAlert } from './components/VehicleDialogShell'
+import { FormAlert } from '@/components/forms/DialogShell'
 
 /** What the reference line shows before the book exists. The real ref
  *  (`VA-0232`) is minted server-side and announced in the save toast. */
@@ -264,7 +264,7 @@ function AccidentLetter(): React.JSX.Element {
               </p>
             )}
 
-            <VehicleFormAlert id={ERROR_ID} message={error} />
+            <FormAlert id={ERROR_ID} message={error} />
 
             <section className="mt-3 overflow-hidden rounded-xl border border-border bg-surface">
               <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-hairline px-3.5 py-2.5">

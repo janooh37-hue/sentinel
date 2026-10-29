@@ -29,13 +29,13 @@ import {
   vehicleErrorMessage,
 } from '../vehicleUtils'
 import {
-  VehicleDialogBody,
-  VehicleDialogFooter,
-  VehicleDialogShell,
-  VehicleField,
-  VehicleFieldGrid,
-  VehicleFormAlert,
-} from './VehicleDialogShell'
+  DialogBody,
+  DialogFooter,
+  DialogShell,
+  Field,
+  FieldGrid,
+  FormAlert,
+} from '@/components/forms/DialogShell'
 
 interface Props {
   open: boolean
@@ -47,7 +47,7 @@ export function SitesDialog({ open, onOpenChange }: Props): React.JSX.Element {
   // The panel owns the mutations; the shell owns dismissal.
   const [busy, setBusy] = useState(false)
   return (
-    <VehicleDialogShell
+    <DialogShell
       open={open}
       onOpenChange={onOpenChange}
       title={t('vehicles.manageSites')}
@@ -56,7 +56,7 @@ export function SitesDialog({ open, onOpenChange }: Props): React.JSX.Element {
       busy={busy}
     >
       <SitesPanel onClose={() => onOpenChange(false)} onBusyChange={setBusy} />
-    </VehicleDialogShell>
+    </DialogShell>
   )
 }
 
@@ -131,8 +131,8 @@ function SitesPanel({
 
   return (
     <>
-      <VehicleDialogBody>
-        <VehicleFormAlert id={alertId} message={error} />
+      <DialogBody>
+        <FormAlert id={alertId} message={error} />
 
         <div className="overflow-hidden rounded-lg border border-border">
           {!sites ? (
@@ -177,8 +177,8 @@ function SitesPanel({
             createSite.mutate({ name_ar: nameAr.trim(), name_en: nameEn.trim() })
           }}
         >
-          <VehicleFieldGrid>
-            <VehicleField id={`${fieldId}-ar`} label={t('vehicles.siteNameAr')} required>
+          <FieldGrid>
+            <Field id={`${fieldId}-ar`} label={t('vehicles.siteNameAr')} required>
               <Input
                 id={`${fieldId}-ar`}
                 dir="rtl"
@@ -186,8 +186,8 @@ function SitesPanel({
                 onChange={(event) => setNameAr(event.target.value)}
                 disabled={busy}
               />
-            </VehicleField>
-            <VehicleField id={`${fieldId}-en`} label={t('vehicles.siteNameEn')} required>
+            </Field>
+            <Field id={`${fieldId}-en`} label={t('vehicles.siteNameEn')} required>
               <Input
                 id={`${fieldId}-en`}
                 dir="ltr"
@@ -195,20 +195,20 @@ function SitesPanel({
                 onChange={(event) => setNameEn(event.target.value)}
                 disabled={busy}
               />
-            </VehicleField>
-          </VehicleFieldGrid>
+            </Field>
+          </FieldGrid>
           <Button type="submit" size="sm" className="self-start" disabled={busy}>
             <Plus className="h-3.5 w-3.5" aria-hidden />
             {createSite.isPending ? t('common.saving') : t('vehicles.addSite')}
           </Button>
         </form>
-      </VehicleDialogBody>
+      </DialogBody>
 
-      <VehicleDialogFooter>
+      <DialogFooter>
         <Button type="button" variant="secondary" onClick={onClose}>
           {t('vehicles.close')}
         </Button>
-      </VehicleDialogFooter>
+      </DialogFooter>
     </>
   )
 }

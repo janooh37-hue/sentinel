@@ -71,11 +71,11 @@ import {
 } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'
 import {
-  VehicleDialogBody,
-  VehicleDialogFooter,
-  VehicleDialogShell,
-  VehicleFormAlert,
-} from './VehicleDialogShell'
+  DialogBody,
+  DialogFooter,
+  DialogShell,
+  FormAlert,
+} from '@/components/forms/DialogShell'
 
 type ConfirmRow = EvgConfirmRequest['rows'][number]
 type MatchState = EvgPreviewRow['match']
@@ -125,7 +125,7 @@ export function EvgFetchDialog({ open, onOpenChange }: Props): React.JSX.Element
   // refuses it while either is in flight.
   const [busy, setBusy] = useState(false)
   return (
-    <VehicleDialogShell
+    <DialogShell
       open={open}
       onOpenChange={onOpenChange}
       title={t('vehicles.evg.title')}
@@ -134,7 +134,7 @@ export function EvgFetchDialog({ open, onOpenChange }: Props): React.JSX.Element
       busy={busy}
     >
       <EvgPanel onClose={() => onOpenChange(false)} onBusyChange={setBusy} />
-    </VehicleDialogShell>
+    </DialogShell>
   )
 }
 
@@ -391,7 +391,7 @@ function EvgPanel({
 
   const errorRegion = (
     <>
-      <VehicleFormAlert id={alertId} message={error} />
+      <FormAlert id={alertId} message={error} />
       {errorDetail && (
         <p
           dir="auto"
@@ -407,7 +407,7 @@ function EvgPanel({
   if (!preview) {
     return (
       <>
-        <VehicleDialogBody>
+        <DialogBody>
           {errorRegion}
 
           {fleetQuery.isError ? (
@@ -485,9 +485,9 @@ function EvgPanel({
               )}
             </>
           )}
-        </VehicleDialogBody>
+        </DialogBody>
 
-        <VehicleDialogFooter>
+        <DialogFooter>
           <Button type="button" variant="secondary" onClick={closePanel} disabled={busy}>
             {t('vehicles.cancel')}
           </Button>
@@ -508,7 +508,7 @@ function EvgPanel({
                   : t('vehicles.evg.fetch')}
             </Button>
           )}
-        </VehicleDialogFooter>
+        </DialogFooter>
       </>
     )
   }
@@ -516,7 +516,7 @@ function EvgPanel({
   // ── Step 2: what the gate returned ────────────────────────────────────────
   return (
     <>
-      <VehicleDialogBody>
+      <DialogBody>
         {errorRegion}
 
         {rows.length === 0 ? (
@@ -595,9 +595,9 @@ function EvgPanel({
             )}
           </>
         )}
-      </VehicleDialogBody>
+      </DialogBody>
 
-      <VehicleDialogFooter>
+      <DialogFooter>
         <Button type="button" variant="ghost" onClick={backToCodes} disabled={busy}>
           {t('common.previous')}
         </Button>
@@ -615,7 +615,7 @@ function EvgPanel({
               : t('vehicles.evg.willAdd', { count: selectedRows.length })}
           </Button>
         )}
-      </VehicleDialogFooter>
+      </DialogFooter>
     </>
   )
 }
