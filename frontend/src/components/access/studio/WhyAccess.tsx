@@ -37,7 +37,7 @@ export function DecisionOutcome({ decision }: { decision: Decision }) {
 }
 
 export function AccessWarnings({
-  warnings,
+  warnings = [],
 }: {
   warnings: Decision['warnings']
 }) {
@@ -45,7 +45,7 @@ export function AccessWarnings({
   if (!warnings.length) return null
   return (
     <ul className="space-y-2 text-sm" aria-label={t('access.studio.warnings')}>
-      {warnings.map((warning: Decision['warnings'][number], index: number) => (
+      {warnings.map((warning, index) => (
         <li
           key={`${warning.code}:${index}`}
           className={cn(
@@ -73,14 +73,14 @@ export function AccessWarnings({
                 <code className="text-xs">{warning.code}</code>
               </bdi>
             </p>
-            {!!warning.capabilities.length && (
+            {!!warning.capabilities?.length && (
               <p className="font-mono text-xs" dir="ltr">
                 {warning.capabilities.join(', ')}
               </p>
             )}
-            {Object.keys(warning.params).length > 0 && (
+            {Object.keys(warning.params ?? {}).length > 0 && (
               <dl className="mt-1 space-y-1 text-xs">
-                {Object.entries(warning.params).map(([key, value]) => (
+                {Object.entries(warning.params ?? {}).map(([key, value]) => (
                   <div key={key} className="flex flex-wrap gap-x-2">
                     <dt>
                       {t(`access.studio.reasonParams.${key}`, {
@@ -163,9 +163,9 @@ function SourceList({ reasons }: { reasons: Reason[] }) {
               t('access.studio.expiry.none')
             )}
           </p>
-          {Object.keys(reason.params).length > 0 && (
+          {Object.keys(reason.params ?? {}).length > 0 && (
             <dl className="grid gap-1 text-xs text-muted-foreground">
-              {Object.entries(reason.params).map(([key, value]) => (
+              {Object.entries(reason.params ?? {}).map(([key, value]) => (
                 <div key={key} className="flex flex-wrap gap-x-2">
                   <dt>
                     {t(`access.studio.reasonParams.${key}`, {
@@ -223,6 +223,7 @@ function ReasonTree({
 export function WhyAccess({ decision, snapshot }: WhyAccessProps) {
   const { t } = useTranslation()
   const id = useId()
+  const requiredContext = decision.required_context ?? []
   const sections: { key: string; reasons: Reason[] }[] = [
     {
       key: 'decisive',
@@ -269,22 +270,20 @@ export function WhyAccess({ decision, snapshot }: WhyAccessProps) {
           <h5 className="font-semibold">{t('access.studio.why.logic')}</h5>
           <ReasonTree node={decision.reason_tree} reasons={decision.reasons} />
         </section>
-        {!!decision.required_context.length && (
+        {!!requiredContext.length && (
           <div>
             <p>{t('access.studio.why.requiredContext')}</p>
             <ul>
-              {decision.required_context.map(
-                (key: Decision['required_context'][number]) => (
-                  <li key={key}>
-                    {t(`access.studio.context.${key}`, {
-                      defaultValue: t('access.studio.diagnosticContext'),
-                    })}{' '}
-                    <bdi dir="ltr">
-                      <code className="text-xs">{key}</code>
-                    </bdi>
-                  </li>
-                ),
-              )}
+              {requiredContext.map((key) => (
+                <li key={key}>
+                  {t(`access.studio.context.${key}`, {
+                    defaultValue: t('access.studio.diagnosticContext'),
+                  })}{' '}
+                  <bdi dir="ltr">
+                    <code className="text-xs">{key}</code>
+                  </bdi>
+                </li>
+              ))}
             </ul>
           </div>
         )}

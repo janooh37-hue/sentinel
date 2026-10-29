@@ -119,9 +119,9 @@ function CheckAccessForm({
       },
       action,
       context: {
-        ...(categoryId ? { category_id: Number(categoryId) } : {}),
-        ...(classificationId
-          ? { classification_id: Number(classificationId) }
+        ...(categoryId.trim() ? { category_id: categoryId.trim() } : {}),
+        ...(classificationId.trim()
+          ? { classification_id: classificationId.trim() }
           : {}),
         ...(grade.trim() ? { grade: grade.trim() } : {}),
       },
@@ -248,9 +248,7 @@ function CheckAccessForm({
             <Input
               id={`${id}-category`}
               className="min-h-[44px]"
-              type="number"
-              min={1}
-              step={1}
+              type="text"
               dir="ltr"
               value={categoryId}
               onChange={(event) => setCategoryId(event.target.value)}
@@ -264,9 +262,7 @@ function CheckAccessForm({
             <Input
               id={`${id}-classification`}
               className="min-h-[44px]"
-              type="number"
-              min={1}
-              step={1}
+              type="text"
               dir="ltr"
               value={classificationId}
               onChange={(event) => setClassificationId(event.target.value)}

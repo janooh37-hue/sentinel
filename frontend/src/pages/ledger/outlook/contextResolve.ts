@@ -105,7 +105,8 @@ export function expiryAlert(emp: EmployeeRead): ExpiryAlert | null {
  * (the API has no dedicated "balance" field; `stats` is already in the single
  * detail call, so no extra fetch).
  */
-export function leaveBalanceLabel(stats: EmployeeStatsRead): string {
+export function leaveBalanceLabel(stats: EmployeeStatsRead): string | null {
+  if (stats.leaves_allowed_days === null || stats.leaves_taken_days === null) return null
   const balance = stats.leaves_allowed_days - stats.leaves_taken_days
   return String(Math.max(0, balance))
 }

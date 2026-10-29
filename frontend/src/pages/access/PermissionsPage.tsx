@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useIsMutating, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import type { StudioDestination, Resource, ResourceSearchProps } from '@/components/access/studio/contracts'
+import type { StudioDestination, Resource } from '@/components/access/studio/contracts'
+import { AccessWorkspace } from '@/components/access/studio/AccessWorkspace'
+import { StudioSearch } from '@/components/access/studio/search/StudioSearch'
+import { accountSearchIndex, searchEntries } from '@/components/access/studio/search/searchIndex'
+import { requestWorkspaceNavigation } from '@/components/access/studio/workspaceNavigation'
 import { api, apiErrorMessage, type AdminUserRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { accessSnapshotKey } from '@/lib/permissionStudioApi'
@@ -19,12 +23,6 @@ function findScrollContainer(element: HTMLElement | null): HTMLElement | null {
   return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null
 }
 
-// Search only the authorized account projection; never fetch the employee directory.
-function searchableText(value: string): string {
-  return value.normalize('NFKC').toLowerCase().replace(/[\u064b-\u065f\u0670\u0640]/g, '')
-    .replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - 0x660))
-    .replace(/\s+/g, ' ').trim()
-}
 function nameOf(account: AdminUserRead, arabic: boolean): string {
   return (arabic && account.name_ar) || account.display_name || account.name_en || account.email
 }
@@ -43,19 +41,8 @@ function resourceFromParam(value: string | null): Resource | undefined {
   } catch { return undefined }
 }
 
-export interface PermissionStudioIntegration {
-  renderWorkspace: (props: {
-    subjectId: number
-    initialResource?: Resource
-    onNavigate: (destination: StudioDestination) => void
-    renderSearch: (props: ResourceSearchProps) => ReactNode
-  }) => ReactNode
-  renderSearch: (props: ResourceSearchProps) => ReactNode
-  requestNavigation: (proceed: () => void) => boolean
-}
-
 /** People subsection integration point. The department branch owns the outer people/org shell. */
-export function PeoplePermissionsPanel({ studio }: { studio?: PermissionStudioIntegration } = {}): React.JSX.Element {
+export function PeoplePermissionsPanel(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const { user } = useAuth()
   const [params, setParams] = useSearchParams()
@@ -66,6 +53,7 @@ export function PeoplePermissionsPanel({ studio }: { studio?: PermissionStudioIn
   const [page, setPage] = useState(1)
   const openedAccount = useRef<number | null>(null)
   const registerRef = useRef<HTMLElement>(null)
+  const identityRef = useRef<HTMLElement>(null)
   const scrollPosition = useRef(0)
   const arabic = i18n.language.startsWith('ar')
   const usersQuery = useQuery({ queryKey: ['auth-users'], queryFn: api.listAuthUsers })
@@ -75,12 +63,14 @@ export function PeoplePermissionsPanel({ studio }: { studio?: PermissionStudioIn
   const selectedId = selectedParam !== null && /^\d+$/.test(selectedParam) ? Number(selectedParam) : null
   const selected = accounts.find((account) => account.id === selectedId)
   const saving = useIsMutating({ mutationKey: selectedId === null ? ['permission-studio', user?.id, -1, 'save'] : [...accessSnapshotKey(user?.id, selectedId), 'save'] }) > 0
+  const eligibleAccounts = useMemo(() => accounts.filter((account) =>
+    (!role || account.role === role) && (!status || account.status === status)), [accounts, role, status])
+  const accountIndex = useMemo(() => accountSearchIndex(eligibleAccounts, arabic), [eligibleAccounts, arabic])
   const filtered = useMemo(() => {
-    const needle = searchableText(query)
-    return accounts.filter((account) => (!role || account.role === role) && (!status || account.status === status)
-      && (!needle || searchableText([account.display_name, account.name_en,
-        account.name_ar, account.email, account.employee_id].join(' ')).includes(needle)))
-  }, [accounts, query, role, status])
+    if (!query.trim()) return eligibleAccounts
+    const matchingIds = new Set(searchEntries(accountIndex, query).map(({ entry }) => entry.destination.userId))
+    return eligibleAccounts.filter((account) => matchingIds.has(account.id))
+  }, [eligibleAccounts, accountIndex, query])
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
   const rows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
@@ -89,8 +79,28 @@ export function PeoplePermissionsPanel({ studio }: { studio?: PermissionStudioIn
   const statuses = [...new Set(accounts.map((account) => account.status))].sort()
 
   useEffect(() => {
+    const header = identityRef.current
+    const section = registerRef.current
+    if (!selected || !header || !section) return
+    const scroller = section.closest<HTMLElement>('[data-permission-studio-scroll]') ?? findScrollContainer(section)
+    if (!scroller) return
+    const previousPadding = scroller.style.scrollPaddingBlockStart
+    const updatePadding = () => {
+      scroller.style.scrollPaddingBlockStart = `${header.getBoundingClientRect().height + 16}px`
+    }
+    updatePadding()
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(updatePadding)
+    observer?.observe(header)
+    return () => {
+      observer?.disconnect()
+      scroller.style.scrollPaddingBlockStart = previousPadding
+    }
+  }, [selected])
+
+  useEffect(() => {
     if (selectedParam !== null || openedAccount.current === null) return
-    const trigger = registerRef.current?.querySelector<HTMLButtonElement>(`[data-account-id="${openedAccount.current}"]`)
+    const trigger = registerRef.current?.querySelector<HTMLElement>(`[data-account-id="${openedAccount.current}"]`)
+      ?? registerRef.current?.querySelector<HTMLElement>('input[role="combobox"]')
     trigger?.focus({ preventScroll: true })
     const scroller = findScrollContainer(registerRef.current)
     if (scroller) scroller.scrollTop = scrollPosition.current
@@ -119,7 +129,7 @@ export function PeoplePermissionsPanel({ studio }: { studio?: PermissionStudioIn
       next.delete('user'); next.delete('psResource'); next.delete('psFilter')
       return next
     })
-    if (!studio?.requestNavigation(proceed)) proceed()
+    if (!requestWorkspaceNavigation(proceed)) proceed()
   }
   function guardManagementNavigation(event: MouseEvent<HTMLAnchorElement>): void {
     if (saving) { event.preventDefault(); return }
@@ -128,7 +138,7 @@ export function PeoplePermissionsPanel({ studio }: { studio?: PermissionStudioIn
     const destination = event.currentTarget.getAttribute('href')
     if (!destination) return
     const proceed = () => routeNavigate(destination)
-    if (!studio?.requestNavigation(proceed)) proceed()
+    if (!requestWorkspaceNavigation(proceed)) proceed()
   }
   const managementLink = <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline underline-offset-4" to="/access-requests">{t('access.studio.manageAccounts')}</Link>
   return <section ref={registerRef} className="min-w-0 space-y-5 [&_button]:min-h-11" aria-busy={usersQuery.isPending || saving}>
@@ -137,27 +147,37 @@ export function PeoplePermissionsPanel({ studio }: { studio?: PermissionStudioIn
       {managementLink}
     </header>
     {usersQuery.isPending ? <p role="status">{t('common.loading')}</p>
-      : usersQuery.isError ? <div role="alert"><p>{t('access.loadError')}: {apiErrorMessage(usersQuery.error)}</p><Button onClick={() => void usersQuery.refetch()}>{t('common.retry')}</Button></div>
+      : usersQuery.isLoadingError ? <div role="alert"><p>{t('access.loadError')}: {apiErrorMessage(usersQuery.error)}</p><Button onClick={() => void usersQuery.refetch()}>{t('common.retry')}</Button></div>
       : selectedParam !== null ? <>
-        <Button variant="ghost" onClick={back} disabled={saving}>{t('access.studio.backToAccounts')}</Button>
-        {!selected ? <p role="alert">{t('access.studio.accountUnavailable')}</p> : <>
-          <header className="space-y-2 border-b border-border pb-4">
-            <h2 className="break-words text-xl font-semibold"><bdi>{nameOf(selected, arabic)}</bdi></h2>
-            <p className="flex flex-wrap gap-3 text-sm"><bdi dir="ltr" className="break-all">{selected.email}</bdi><bdi dir="ltr">{selected.employee_id}</bdi><Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to={`/access-requests?tab=${selected.status === 'active' ? 'active' : 'suspended'}&user=${selected.id}`}>{t(`access.roleName.${selected.role}`)}</Link><span>{t(`access.status.${selected.status}`)}</span></p>
-            <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to="/access-requests?tab=permission-requests">{t('access.studio.pendingRequests', { count: pendingCount })}</Link>
+        {!selected ? <><Button variant="ghost" onClick={back} disabled={saving}>{t('access.studio.backToAccounts')}</Button><p role="alert">{t('access.studio.accountUnavailable')}</p></> : <>
+          <header ref={identityRef} className="sticky top-0 z-30 space-y-2 border-b border-border bg-background py-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button variant="ghost" onClick={back} disabled={saving}>{t('access.studio.backToAccounts')}</Button>
+              <h2 className="min-w-0 break-words text-xl font-semibold"><bdi>{nameOf(selected, arabic)}</bdi></h2>
+            </div>
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              <bdi dir="ltr" className="break-all">{selected.email}</bdi>
+              <bdi dir="ltr">{selected.employee_id}</bdi>
+              <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to={`/access-requests?tab=${selected.status === 'active' ? 'active' : 'suspended'}&user=${selected.id}`}>{t(`access.roleName.${selected.role}`)}</Link>
+              <span>{t(`access.status.${selected.status}`)}</span>
+              <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to="/access-requests?tab=permission-requests">{t('access.studio.pendingRequests', { count: pendingCount })}</Link>
+            </p>
           </header>
           {selected.status === 'pending' ? <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to={`/access-requests?user=${selected.id}`}>{t('access.studio.reviewAccount')}</Link>
             : selected.role === 'admin' ? <p role="status">{t('access.studio.adminLocked')}</p>
             : selected.id === user?.id ? <p role="status">{t('access.studio.selfLocked')}</p>
             : <>
               {selected.status !== 'active' && <p role="status" className="rounded-lg bg-warning-soft p-3 text-warning">{t('access.studio.disabledReadOnly')}</p>}
-              {/* Orchestrator wires AccessWorkspace and StudioSearch public exports here after B/C merge. */}
-              {studio ? <div key={selected.id}>{studio.renderWorkspace({ subjectId: selected.id, initialResource: resourceFromParam(params.get('psResource')), onNavigate: navigate, renderSearch: studio.renderSearch })}</div> : <p role="status">{t('access.studio.workspaceUnavailable')}</p>}
+              <AccessWorkspace key={selected.id} subjectId={selected.id}
+                initialResource={resourceFromParam(params.get('psResource'))}
+                onNavigate={navigate} renderSearch={(props) => <StudioSearch {...props} />} />
             </>}
         </>}
       </> : <>
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-          <label className="flex min-w-0 flex-col gap-1 text-sm">{t('access.studio.searchAccounts')}<input type="search" dir="auto" value={query} className={controlClass} onChange={(event) => { setQuery(event.target.value); setPage(1) }} /></label>
+          <StudioSearch mode="accounts" accounts={eligibleAccounts} query={query}
+            onQueryChange={(value) => { setQuery(value); setPage(1) }}
+            onNavigate={(destination) => { if (destination.userId !== undefined) openAccount(destination.userId) }} />
           <label className="flex flex-col gap-1 text-sm">{t('access.studio.role')}<select value={role} className={controlClass} onChange={(event) => { setRole(event.target.value); setPage(1) }}><option value="">{t('access.studio.allRoles')}</option>{roles.map((value) => <option key={value} value={value}>{t(`access.roleName.${value}`)}</option>)}</select></label>
           <label className="flex flex-col gap-1 text-sm">{t('access.studio.statusLabel')}<select value={status} className={controlClass} onChange={(event) => { setStatus(event.target.value); setPage(1) }}><option value="">{t('access.studio.allStatuses')}</option>{statuses.map((value) => <option key={value} value={value}>{t(`access.status.${value}`)}</option>)}</select></label>
         </div>
@@ -177,7 +197,7 @@ export function PeoplePermissionsPanel({ studio }: { studio?: PermissionStudioIn
   </section>
 }
 
-export function PermissionsPage({ studio }: { studio?: PermissionStudioIntegration } = {}): React.JSX.Element {
-  return <div className="min-w-0 flex-1 overflow-auto bg-background"><div className="mx-auto w-full max-w-[1440px] px-4 pb-12 pt-6 md:px-7"><PeoplePermissionsPanel studio={studio} /></div></div>
+export function PermissionsPage(): React.JSX.Element {
+  return <div data-permission-studio-scroll className="min-w-0 flex-1 overflow-auto bg-background"><div className="mx-auto w-full max-w-[1440px] px-4 pb-12 pt-6 md:px-7"><PeoplePermissionsPanel /></div></div>
 }
 export default PermissionsPage

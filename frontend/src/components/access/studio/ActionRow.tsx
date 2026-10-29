@@ -30,7 +30,7 @@ export interface ActionRowProps {
   onStage: (patches: Patch[]) => void
 }
 
-type Effect = Patch['effect']
+type Effect = Decision['editable_effects'][number]
 
 function validExpiry(
   value: string,
@@ -94,7 +94,7 @@ function ExpiryField({
         type="text"
         dir="ltr"
         value={value}
-        disabled={disabled || patch.effect === null}
+        disabled={disabled || patch.effect == null}
         placeholder={t('access.studio.expiry.placeholder')}
         aria-invalid={invalid}
         aria-describedby={`${id}-help`}
@@ -167,8 +167,11 @@ export function ActionRow({
   )
   const effect =
     settings.length &&
-    settings.every((setting: Patch) => setting.effect === settings[0].effect)
-      ? settings[0].effect
+    settings.every(
+      (setting: Patch) =>
+        (setting.effect ?? null) === (settings[0].effect ?? null),
+    )
+      ? (settings[0].effect ?? null)
       : 'mixed'
   const baselineCount = decision.setting_capabilities.filter(
     (capability: Decision['setting_capabilities'][number]) =>
@@ -212,7 +215,7 @@ export function ActionRow({
           <h4
             id={destination}
             tabIndex={-1}
-            className="scroll-mt-24 rounded-sm font-semibold text-foreground [overflow-wrap:anywhere] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+            className="scroll-mt-24 w-fit max-w-full rounded-sm font-semibold text-foreground [overflow-wrap:anywhere] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
           >
             {actionLabel} · <bdi>{localized(item.label, i18n.language)}</bdi>
           </h4>
@@ -252,8 +255,8 @@ export function ActionRow({
           (proposed &&
             (proposed.authorization !== decision.authorization ||
               proposed.executable_now !== decision.executable_now ||
-              JSON.stringify(proposed.warnings) !==
-                JSON.stringify(decision.warnings)))) && (
+              JSON.stringify(proposed.warnings ?? []) !==
+                JSON.stringify(decision.warnings ?? [])))) && (
           <div className="space-y-1" aria-live="polite">
             <p className="text-xs font-medium text-primary">
               {t('access.studio.proposed')}
@@ -361,7 +364,7 @@ export function ActionRow({
                 >
                   <bdi className="font-mono">{setting.capability}</bdi> ·{' '}
                   {t(
-                    `access.studio.settings.${setting.effect === null ? 'followRole' : setting.effect === 'grant' ? 'allow' : 'deny'}`,
+                    `access.studio.settings.${setting.effect == null ? 'followRole' : setting.effect === 'grant' ? 'allow' : 'deny'}`,
                   )}
                   {saved?.state === 'expired' &&
                     !patches.some(
@@ -376,7 +379,7 @@ export function ActionRow({
             })}
           </ul>
           {settings
-            .filter((setting: Patch) => setting.effect !== null)
+            .filter((setting: Patch) => setting.effect != null)
             .map((setting: Patch) => (
               <ExpiryField
                 key={`${setting.capability}:${setting.expires_at ?? ''}:${setting.effect}`}

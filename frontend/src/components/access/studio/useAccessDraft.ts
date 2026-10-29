@@ -16,9 +16,14 @@ export function useAccessDraft(snapshot: Snapshot) {
     setPatches((previous) => {
       const next = new Map(previous.map((patch) => [patch.capability, patch]))
       for (const patch of items) {
-        if (sameSetting(savedSetting(baseline, patch.capability), patch))
+        const normalized: Patch = {
+          capability: patch.capability,
+          effect: patch.effect ?? null,
+          expires_at: patch.effect == null ? null : (patch.expires_at ?? null),
+        }
+        if (sameSetting(savedSetting(baseline, patch.capability), normalized))
           next.delete(patch.capability)
-        else next.set(patch.capability, patch)
+        else next.set(patch.capability, normalized)
       }
       return [...next.values()].sort((a, b) =>
         a.capability.localeCompare(b.capability),

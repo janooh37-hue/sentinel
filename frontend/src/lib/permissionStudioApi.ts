@@ -48,9 +48,13 @@ export function useSaveAccess(id: number): UseMutationResult<UserPermissionRead,
       const response = await requestVersioned<UserPermissionRead>('PUT', `/auth/users/${id}/permissions/bulk`, { items }, revision)
       return response.data
     },
-    onSuccess: async () => {
-      await Promise.all([
-        client.invalidateQueries({ queryKey: accessSnapshotKey(user?.id, id) }),
+    onSuccess: () => {
+      // A server-confirmed save must not wait for unrelated consumer refetches.
+      // The workspace separately awaits its authoritative post-save snapshot.
+      void Promise.all([
+        // The workspace performs the authoritative post-save read. Mark this
+        // cache stale without issuing a competing read before that refresh.
+        client.invalidateQueries({ queryKey: accessSnapshotKey(user?.id, id), refetchType: 'none' }),
         client.invalidateQueries({ queryKey: ['user-permissions', id] }),
         client.invalidateQueries({ queryKey: ['departments'] }),
         client.invalidateQueries({ queryKey: ['my-capabilities'] }),

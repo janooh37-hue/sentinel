@@ -20,8 +20,7 @@ export function CopyAccess(props: CopyAccessProps) {
     props.disabled ||
     props.target.subject.user_id === props.operatorId ||
     props.target.subject.role === 'admin' ||
-    props.target.subject.status !== 'active' ||
-    !props.target.subject.authentication_eligible
+    props.target.subject.status !== 'active'
   ) {
     return (
       <p className="border-t border-border py-4 text-sm text-muted-foreground">

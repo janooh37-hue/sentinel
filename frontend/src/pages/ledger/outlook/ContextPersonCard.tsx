@@ -203,6 +203,7 @@ function PersonDetail({
   const emp = data.employee
   const tone = STATUS_TONE[emp.status] ?? 'active'
   const alert = expiryAlert(emp)
+  const leaveBalance = canViewLeaves ? leaveBalanceLabel(data.stats) : null
   const activity = data.recent_activity
     .filter((item) => canViewLeaves || (item.kind !== 'leave' && item.kind !== 'absence'))
     .slice(0, 5)
@@ -225,7 +226,7 @@ function PersonDetail({
         <Fact testid="cx-fact-joined" label={t('ledger.outlook.facts.joined')} value={joined} />
         <Fact testid="cx-fact-mobile" label={t('ledger.outlook.facts.mobile')} value={orDash(emp.contact)} mono />
         <Fact testid="cx-fact-nationality" label={t('ledger.outlook.facts.nationality')} value={orDash(emp.nationality)} />
-        <Fact testid="cx-fact-leave" label={t('ledger.outlook.facts.leave')} value={canViewLeaves ? t('ledger.outlook.facts.days', { count: Number(leaveBalanceLabel(data.stats)) }) : DASH} />
+        <Fact testid="cx-fact-leave" label={t('ledger.outlook.facts.leave')} value={leaveBalance === null ? DASH : t('ledger.outlook.facts.days', { count: Number(leaveBalance) })} />
       </div>
 
       {/* Document-expiry alert — only within the window */}

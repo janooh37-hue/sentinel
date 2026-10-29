@@ -73,8 +73,8 @@ function ServicePresets({
     browse.configurable
   const presets: {
     key: string
-    create: Patch['effect']
-    browse: Patch['effect']
+    create: Decision['editable_effects'][number]
+    browse: Decision['editable_effects'][number]
   }[] = [
     { key: 'createBrowse', create: 'grant', browse: 'grant' },
     { key: 'browseOnly', create: 'deny', browse: 'grant' },

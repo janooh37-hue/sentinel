@@ -34,7 +34,8 @@ export function savedSetting(snapshot: Snapshot, capability: string): Patch {
 
 export function sameSetting(a: Patch, b: Patch): boolean {
   return (
-    a.effect === b.effect && (a.expires_at ?? null) === (b.expires_at ?? null)
+    (a.effect ?? null) === (b.effect ?? null) &&
+    (a.expires_at ?? null) === (b.expires_at ?? null)
   )
 }
 export function personalSetting(

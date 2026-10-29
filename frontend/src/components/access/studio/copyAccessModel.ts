@@ -75,14 +75,14 @@ export function buildCopyPatch(
     }
     if (
       !decisions.every((decision: Decision) =>
-        decision.editable_effects.includes(next.effect),
+        decision.editable_effects.includes(next.effect ?? null),
       )
     ) {
       exclusions.push({ capability, reason: 'unsafeEffect' })
       continue
     }
     const expirationTime =
-      next.expires_at === null ? undefined : Date.parse(next.expires_at)
+      next.expires_at == null ? undefined : Date.parse(next.expires_at)
     if (
       sourceOverride?.state === 'expired' ||
       (expirationTime !== undefined &&

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AdminUserRead } from '@/lib/api'
@@ -100,6 +101,29 @@ describe('StudioSearch', () => {
     query('G124')
     fireEvent.click(screen.getByRole('option'))
     expect(navigate).toHaveBeenCalledExactlyOnceWith({ userId: 2 })
+  })
+  it('restores the filtered account query and exact result when returning to the register', () => {
+    function RegisterSearch() {
+      const [value, setValue] = useState('G124')
+      const [visible, setVisible] = useState(true)
+      return <>
+        <button onClick={() => setVisible((previous) => !previous)}>Switch account view</button>
+        {visible && <StudioSearch mode="accounts" accounts={accounts} query={value} onQueryChange={setValue} onNavigate={vi.fn()} />}
+      </>
+    }
+    render(<RegisterSearch />)
+    let field = screen.getByRole('combobox')
+    expect(field).toHaveValue('G124')
+    fireEvent.focus(field)
+    expect(screen.getByRole('option')).toHaveTextContent('G124')
+    fireEvent.change(field, { target: { value: 'G123' } })
+    expect(screen.getByRole('option')).toHaveTextContent('G123')
+    fireEvent.click(screen.getByRole('button', { name: 'Switch account view' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch account view' }))
+    field = screen.getByRole('combobox')
+    expect(field).toHaveValue('G123')
+    fireEvent.focus(field)
+    expect(screen.getByRole('option')).toHaveTextContent('G123')
   })
 })
 

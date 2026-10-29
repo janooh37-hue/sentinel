@@ -113,9 +113,25 @@ function WorkspaceSession({
   const [receipt, setReceipt] = useState(false)
   const [filter, setFilter] = useState('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [focusDestination, setFocusDestination] = useState<string>()
+  const initialItem = initialResource
+    ? snapshot.items.find(
+        (item: AccessItem) =>
+          item.resource.kind === initialResource.kind &&
+          item.resource.id === initialResource.id,
+      )
+    : undefined
+  const initialAction = initialItem?.actions[0]?.action
+  const initialDestination =
+    initialItem && initialAction
+      ? destinationId(initialItem.resource, initialAction)
+      : undefined
+  const [focusDestination, setFocusDestination] = useState<string | undefined>(initialDestination)
   const [leave, setLeave] = useState<StudioDestination>()
   const [pendingNavigation, setPendingNavigation] = useState<() => void>()
+  const navigationPromptRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (leave || pendingNavigation) navigationPromptRef.current?.focus()
+  }, [leave, pendingNavigation])
   const [conflictBaseline, setConflictBaseline] = useState<Snapshot>()
   const alive = useRef(true)
   const generation = useRef(0)
@@ -139,13 +155,12 @@ function WorkspaceSession({
     status !== 'authed' ||
     user?.id === subjectId ||
     snapshot.subject.role === 'admin' ||
-    !snapshot.subject.authentication_eligible
+    snapshot.subject.status !== 'active'
   const busy = submitting || saveMutation.isPending || previewMutation.isPending
   useEffect(
     () =>
       registerWorkspaceNavigation((proceed) => {
-        if (busy) return true
-        if (!draft.dirty) return false
+        if (!draft.dirty) return busy
         setPendingNavigation(() => proceed)
         return true
       }),
@@ -166,7 +181,9 @@ function WorkspaceSession({
         (impact: PreviewResponse['impacts'][number]) =>
           !impact.after.setting_capabilities.some((id: string) =>
             draft.patches.some((patch) => patch.capability === id),
-          ) || impact.after.warnings.length > impact.before.warnings.length,
+          ) ||
+          (impact.after.warnings?.length ?? 0) >
+            (impact.before.warnings?.length ?? 0),
       ) === true
     )
   }
@@ -293,6 +310,8 @@ function WorkspaceSession({
       setRenewedReview(false)
       setAwaitingRefresh(false)
       setRefreshFailed(false)
+      setPendingNavigation(undefined)
+      setLeave(undefined)
       if (pendingNavigation) pendingNavigation()
       else if (leave) onNavigate(leave)
     } catch (cause) {
@@ -315,6 +334,8 @@ function WorkspaceSession({
       setAwaitingRefresh(false)
       setRenewedReview(false)
       setError(undefined)
+      setPendingNavigation(undefined)
+      setLeave(undefined)
     } else if (error === 'conflict') setConflictBaseline(next)
   }
   function navigate(destination: StudioDestination) {
@@ -357,7 +378,7 @@ function WorkspaceSession({
             )
           : action.authorization === 'unknown' ||
             action.authorization === 'needs_context' ||
-            action.warnings.length > 0,
+            (action.warnings?.length ?? 0) > 0,
       ),
   )
   const selectedActions: { item: AccessItem; action: Decision }[] =
@@ -368,18 +389,6 @@ function WorkspaceSession({
         )
         .map((action: Decision) => ({ item, action })),
     )
-  const initialItem = initialResource
-    ? snapshot.items.find(
-        (item: AccessItem) =>
-          item.resource.kind === initialResource.kind &&
-          item.resource.id === initialResource.id,
-      )
-    : undefined
-  const initialAction = initialItem?.actions[0]?.action
-  const initialDestination =
-    initialItem && initialAction
-      ? destinationId(initialItem.resource, initialAction)
-      : undefined
   return (
     <section
       ref={workspaceRef}
@@ -410,7 +419,7 @@ function WorkspaceSession({
                 ? 'access.studio.selfLocked'
                 : snapshot.subject.role === 'admin'
                   ? 'access.studio.adminLocked'
-                  : !snapshot.subject.authentication_eligible
+                  : snapshot.subject.status !== 'active'
                     ? 'access.studio.inactiveLocked'
                     : 'access.studio.readOnly',
           )}
@@ -437,6 +446,40 @@ function WorkspaceSession({
       )}
       {status !== 'authed' && draft.dirty && (
         <p role="alert">{t('access.studio.authLost')}</p>
+      )}
+      {(leave || pendingNavigation) && (
+        <div ref={navigationPromptRef} tabIndex={-1} role="alert" className="space-y-2 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
+          <p>{t('access.studio.leaveDirty')}</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className={control}
+              disabled={busy}
+              onClick={() => void save()}
+            >
+              {t('access.studio.save')}
+            </button>
+            <button
+              className={control}
+              disabled={busy}
+              onClick={() => {
+                draft.discard()
+                if (pendingNavigation) pendingNavigation()
+                else if (leave) onNavigate(leave)
+              }}
+            >
+              {t('access.studio.discard')}
+            </button>
+            <button
+              className={control}
+              onClick={() => {
+                setLeave(undefined)
+                setPendingNavigation(undefined)
+              }}
+            >
+              {t('access.studio.stay')}
+            </button>
+          </div>
+        </div>
       )}
       <div ref={searchRef}>
         {renderSearch({
@@ -595,7 +638,7 @@ function WorkspaceSession({
           })
         }
         onStage={stage}
-        focusDestination={focusDestination ?? initialDestination}
+        focusDestination={focusDestination}
       />
       <CheckAccess
         subjectId={subjectId}
@@ -680,40 +723,6 @@ function WorkspaceSession({
               </button>
             </div>
           )}
-        </div>
-      )}
-      {(leave || pendingNavigation) && (
-        <div role="alert" className="space-y-2">
-          <p>{t('access.studio.leaveDirty')}</p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              className={control}
-              disabled={busy}
-              onClick={() => void save()}
-            >
-              {t('access.studio.save')}
-            </button>
-            <button
-              className={control}
-              disabled={busy}
-              onClick={() => {
-                draft.discard()
-                if (pendingNavigation) pendingNavigation()
-                else if (leave) onNavigate(leave)
-              }}
-            >
-              {t('access.studio.discard')}
-            </button>
-            <button
-              className={control}
-              onClick={() => {
-                setLeave(undefined)
-                setPendingNavigation(undefined)
-              }}
-            >
-              {t('access.studio.stay')}
-            </button>
-          </div>
         </div>
       )}
       <footer

@@ -96,4 +96,17 @@ describe('ContextPersonCard leave privacy', () => {
     expect(screen.getByText('Private leave dates')).toBeInTheDocument()
     expect(screen.getByTestId('cx-fact-leave')).toHaveTextContent('ledger.outlook.facts.days:23')
   })
+  it('does not turn a server-redacted leave projection into a zero balance', async () => {
+    capabilities.add('employees.view')
+    capabilities.add('leaves.view')
+    vi.mocked(api.getEmployeeDetail).mockResolvedValue({
+      ...detail,
+      stats: { ...detail.stats, leaves_allowed_days: null, leaves_taken_days: null },
+    })
+    mount()
+    await userEvent.click(screen.getByTestId('cx-person-header'))
+    const balance = await screen.findByTestId('cx-fact-leave')
+    expect(within(balance).getByText('—')).toBeInTheDocument()
+    expect(balance).not.toHaveTextContent('ledger.outlook.facts.days:0')
+  })
 })

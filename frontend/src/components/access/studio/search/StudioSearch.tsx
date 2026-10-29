@@ -8,6 +8,8 @@ import { accountSearchIndex, resourceSearchIndex, searchEntries, type SearchEntr
 export type StudioSearchProps = ({ mode?: 'resources' } & ResourceSearchProps) | {
   mode: 'accounts'
   accounts: AdminUserRead[]
+  query?: string
+  onQueryChange?: (query: string) => void
   onNavigate: (destination: StudioDestination) => void
 }
 
@@ -21,7 +23,8 @@ function ScopedSearch(props: StudioSearchProps): React.JSX.Element {
   const input = useRef<HTMLInputElement>(null)
   const root = useRef<HTMLDivElement>(null)
   const id = useId()
-  const [query, setQuery] = useState('')
+  const [localQuery, setLocalQuery] = useState('')
+  const query = props.mode === 'accounts' ? props.query ?? localQuery : localQuery
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState<string | null>(null)
   const [unavailable, setUnavailable] = useState(false)
@@ -63,7 +66,14 @@ function ScopedSearch(props: StudioSearchProps): React.JSX.Element {
       aria-controls={`${id}-results`} aria-activedescendant={expanded && activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined}
       dir="auto" autoComplete="off" value={query} placeholder={label}
       className={`min-h-11 w-full min-w-0 rounded-lg border border-border bg-surface px-3 py-2 text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${props.mode !== 'accounts' ? 'sm:px-28' : ''}`}
-      onFocus={() => setOpen(true)} onChange={(event) => { setQuery(event.target.value); setActive(null); setUnavailable(false); setOpen(true) }}
+      onFocus={() => setOpen(true)} onChange={(event) => {
+        const next = event.target.value
+        if (props.mode === 'accounts') {
+          if (props.query === undefined) setLocalQuery(next)
+          props.onQueryChange?.(next)
+        } else setLocalQuery(next)
+        setActive(null); setUnavailable(false); setOpen(true)
+      }}
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing || event.keyCode === 229 || event.altKey || event.ctrlKey || event.metaKey) return
         if (event.key === 'Escape' && expanded) { event.preventDefault(); event.stopPropagation(); setOpen(false); return }

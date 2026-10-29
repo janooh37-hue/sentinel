@@ -3,6 +3,7 @@ import {
   act,
   fireEvent,
   render,
+  renderHook,
   screen,
   waitFor,
   within,
@@ -10,8 +11,17 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AccessWorkspace, type AccessWorkspaceProps } from './AccessWorkspace'
 import { buildCopyPatch } from './copyAccessModel'
+import { CheckAccess } from './CheckAccess'
 import { requestWorkspaceNavigation } from './workspaceNavigation'
-import type { Snapshot, Decision, Patch, PreviewResponse } from './studioModel'
+import { useAccessDraft } from './useAccessDraft'
+import type {
+  Snapshot,
+  Decision,
+  Patch,
+  PreviewResponse,
+  CheckRequest,
+  CheckResponse,
+} from './studioModel'
 
 const state = vi.hoisted(() => ({
   snapshot: undefined as unknown,
@@ -30,13 +40,12 @@ vi.mock('@/lib/permissionStudioApi', () => ({
   }),
   usePreviewAccess: () => ({ mutateAsync: state.preview, isPending: false }),
   useSaveAccess: () => ({ mutateAsync: state.save, isPending: false }),
-  useCheckAccess: () => ({ mutateAsync: state.check, isPending: false }),
+  useCheckAccess: () => ({ mutate: state.check, isPending: false }),
 }))
 vi.mock('@/lib/authContext', () => ({
   useAuth: () => ({ user: { id: 1 }, status: 'authed' }),
 }))
 vi.mock('@/lib/api', () => ({ api: { listAuthUsers: async () => [] } }))
-// Keys intentionally remain keys until integration owner D supplies the bilingual catalog.
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, values?: Record<string, unknown>) =>
@@ -166,6 +175,7 @@ function mount(id = 42, props: Partial<AccessWorkspaceProps> = {}) {
 }
 afterEach(() => vi.clearAllMocks())
 beforeEach(() => {
+  state.check.mockReset()
   state.snapshot = fixture()
   state.preview.mockImplementation(async ({ items }: { items: Patch[] }) =>
     previewFor(state.snapshot as Snapshot, items),
@@ -178,6 +188,100 @@ beforeEach(() => {
 })
 
 describe('AccessWorkspace', () => {
+  it('renders and filters server diagnostics with omitted default fields', () => {
+    const snapshot = fixture()
+    for (const item of snapshot.items) {
+      for (const action of item.actions) {
+        delete action.warnings
+        delete action.required_context
+        for (const reason of action.reasons) delete reason.params
+      }
+    }
+    snapshot.items[0].actions[1].warnings = [
+      { code: 'VISIBILITY_CONTROL_UNAVAILABLE', severity: 'info' },
+    ]
+    state.snapshot = snapshot
+    mount()
+    expect(
+      screen.getByText('VISIBILITY_CONTROL_UNAVAILABLE'),
+    ).toBeInTheDocument()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'access.studio.filter.attention' }),
+    )
+    expect(
+      document.getElementById('notification_template:wording:edit'),
+    ).toBeInTheDocument()
+    expect(document.getElementById('service:demo:create')).toBeNull()
+    expect(screen.queryByText('access.studio.why.requiredContext')).toBeNull()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'access.studio.filter.all' }),
+    )
+    expect(document.getElementById('service:demo:create')).toBeInTheDocument()
+  })
+  it('requires review for a new warning when the current warning list was omitted', async () => {
+    const snapshot = fixture()
+    delete snapshot.items[0].actions[1].warnings
+    state.snapshot = snapshot
+    state.preview.mockImplementation(async ({ items }: { items: Patch[] }) => {
+      const response = previewFor(snapshot, items)
+      const before = snapshot.items[0].actions[1]
+      const after: Decision = {
+        ...response.proposed.items[0].actions[1],
+        warnings: [{ code: 'PREREQUISITE_BLOCKED', severity: 'warning' }],
+      }
+      response.proposed.items[0].actions[1] = after
+      response.impacts = [{
+        resource: snapshot.items[0].resource,
+        action: 'edit',
+        before,
+        after,
+      }]
+      return response
+    })
+    mount()
+    fireEvent.click(screen.getAllByRole('radio', { name: /deny/i })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.save' }))
+    const acknowledge = await screen.findByRole('button', {
+      name: 'access.studio.review.acknowledge',
+    })
+    expect(state.save).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('button', { name: 'access.studio.save' }),
+    ).toBeDisabled()
+    fireEvent.click(acknowledge)
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.save' }))
+    await waitFor(() => expect(state.save).toHaveBeenCalledOnce())
+  })
+  it('allows personal settings and Copy for active accounts awaiting first password setup', async () => {
+    const snapshot = fixture()
+    snapshot.subject.authentication_eligible = false
+    state.snapshot = snapshot
+    mount()
+    expect(screen.getByRole('heading', { name: 'access.studio.copy.title' })).toBeVisible()
+    const deny = screen.getAllByRole('radio', { name: /deny/i })[0]
+    expect(deny).toBeEnabled()
+    fireEvent.click(deny)
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.save' }))
+    await waitFor(() => expect(state.save).toHaveBeenCalledOnce())
+    expect(state.save.mock.calls[0][0].items).toEqual([
+      { capability: 'messages.templates', effect: 'deny', expires_at: null },
+    ])
+  })
+  it('clears a late navigation prompt once the saved draft finishes reloading', async () => {
+    let finishRefresh: (value: { data: Snapshot }) => void = () => {}
+    state.refresh.mockImplementation(() => new Promise<{ data: Snapshot }>((resolve) => { finishRefresh = resolve }))
+    mount()
+    fireEvent.click(screen.getAllByRole('radio', { name: /deny/i })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.save' }))
+    await waitFor(() => expect(state.refresh).toHaveBeenCalledOnce())
+    const proceed = vi.fn()
+    act(() => { requestWorkspaceNavigation(proceed) })
+    expect(screen.getByText('access.studio.leaveDirty')).toBeInTheDocument()
+    await act(async () => { finishRefresh({ data: { ...fixture(), revision: 'r2' } }) })
+    expect(screen.queryByText('access.studio.leaveDirty')).not.toBeInTheDocument()
+    expect(screen.getByText('access.studio.saved')).toBeInTheDocument()
+    expect(proceed).not.toHaveBeenCalled()
+  })
   it('keeps the signed-in view policy visible while staging an edit deny and confirms only server save', async () => {
     mount()
     const row =
@@ -343,6 +447,7 @@ describe('AccessWorkspace', () => {
       expect(requestWorkspaceNavigation(proceed)).toBe(true)
     })
     expect(screen.getByText('access.studio.leaveDirty')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveFocus()
     fireEvent.click(screen.getByRole('button', { name: 'access.studio.stay' }))
     expect(proceed).not.toHaveBeenCalled()
     expect(screen.getByText('access.studio.unsaved 1')).toBeInTheDocument()
@@ -471,6 +576,23 @@ describe('AccessWorkspace', () => {
       screen.getByText('access.studio.destinationUnavailable'),
     ).toBeInTheDocument()
   })
+  it('keeps focus on search after returning from an action in a deep-linked resource', async () => {
+    mount(42, {
+      initialResource: { kind: 'notification_template', id: 'wording' },
+      renderSearch: ({ onNavigate }) => <>
+        <input aria-label="Find resource" />
+        <button onClick={() => onNavigate({
+          resource: { kind: 'notification_template', id: 'wording' }, action: 'edit',
+        })}>Open edit result</button>
+      </>,
+    })
+    await waitFor(() => expect(document.getElementById('notification_template:wording:view')).toHaveFocus())
+    fireEvent.click(screen.getByRole('button', { name: 'Open edit result' }))
+    await waitFor(() => expect(document.getElementById('notification_template:wording:edit')).toHaveFocus())
+    fireEvent.click(screen.getByRole('button', { name: 'access.studio.backToResults' }))
+    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+    expect(screen.getByRole('textbox', { name: 'Find resource' })).toHaveFocus()
+  })
   it('retains a draft but disables mutation controls after a permission-denied save', async () => {
     state.save.mockRejectedValue({ status: 403 })
     mount()
@@ -501,7 +623,7 @@ describe('AccessWorkspace', () => {
     state.preview.mockImplementation(async ({ items }: { items: Patch[] }) => {
       const response = previewFor(fixture(), items)
       const before = decision('create', 'books.service.demo')
-      const after = {
+      const after: Decision = {
         ...before,
         authorization: 'denied',
         executable_now: false,
@@ -541,6 +663,120 @@ describe('AccessWorkspace', () => {
     expect(state.save.mock.calls[0][0].items).toEqual([
       { capability: 'messages.templates', effect: 'deny', expires_at: null },
     ])
+  })
+})
+
+describe('draft patch defaults', () => {
+  it('normalizes an omitted effect to Follow role without creating a phantom draft', () => {
+    const { result } = renderHook(() => useAccessDraft(fixture()))
+    act(() => result.current.stage([{ capability: 'messages.templates' }]))
+    expect(result.current.dirty).toBe(false)
+    expect(result.current.patches).toEqual([])
+  })
+  it('clears a saved personal override and its expiry when the patch effect is omitted', () => {
+    const snapshot = fixture()
+    snapshot.overrides = [{
+      capability: 'messages.templates',
+      effect: 'grant',
+      expires_at: '2026-11-01T00:00:00Z',
+      state: 'active',
+    }]
+    const { result } = renderHook(() => useAccessDraft(snapshot))
+    act(() => result.current.stage([{ capability: 'messages.templates' }]))
+    expect(result.current.patches).toEqual([{
+      capability: 'messages.templates',
+      effect: null,
+      expires_at: null,
+    }])
+    expect(result.current.dirty).toBe(true)
+  })
+})
+
+describe('Check access context', () => {
+  it('accepts real string category and classification IDs and displays the server decision', async () => {
+    const snapshot = fixture()
+    const response: CheckResponse = {
+      snapshot,
+      current: decision('create', 'books.service.General Book'),
+      proposed: null,
+      impacts: [],
+    }
+    state.check.mockImplementation(
+      (
+        _request: CheckRequest,
+        options: { onSuccess: (value: CheckResponse) => void },
+      ) => options.onSuccess(response),
+    )
+    render(
+      <CheckAccess
+        subjectId={42}
+        snapshot={snapshot}
+        patches={[]}
+        initialResource={{ kind: 'service', id: 'General Book' }}
+        initialAction="create"
+      />,
+    )
+    const category = screen.getByRole('textbox', {
+      name: 'access.studio.check.categoryId',
+    })
+    const classification = screen.getByRole('textbox', {
+      name: 'access.studio.check.classificationId',
+    })
+    fireEvent.change(category, { target: { value: ' GS ' } })
+    fireEvent.change(classification, { target: { value: ' 12/1 ' } })
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'access.studio.check.grade' }),
+      { target: { value: 'unclassified' } },
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'access.studio.check.submit' }),
+    )
+    expect(state.check.mock.calls[0][0]).toEqual({
+      resource: { kind: 'service', id: 'General Book' },
+      action: 'create',
+      context: {
+        category_id: 'GS',
+        classification_id: '12/1',
+        grade: 'unclassified',
+      },
+      proposed: [],
+      expected_revision: snapshot.revision,
+    })
+    expect(
+      await screen.findByText('access.studio.check.current'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getAllByText('access.studio.outcomes.allowed').length,
+    ).toBeGreaterThan(0)
+    expect(state.preview).not.toHaveBeenCalled()
+    expect(state.save).not.toHaveBeenCalled()
+    fireEvent.change(classification, { target: { value: '12/2' } })
+    expect(
+      screen.queryByText('access.studio.check.current'),
+    ).not.toBeInTheDocument()
+  })
+  it('omits blank context identifiers rather than converting them to zero', () => {
+    render(
+      <CheckAccess
+        subjectId={42}
+        snapshot={fixture()}
+        patches={[]}
+        initialResource={{ kind: 'service', id: 'General Book' }}
+        initialAction="create"
+      />,
+    )
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'access.studio.check.categoryId' }),
+      { target: { value: ' ' } },
+    )
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'access.studio.check.classificationId' }),
+      { target: { value: ' ' } },
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'access.studio.check.submit' }),
+    )
+    expect(state.check.mock.calls[0][0].context).toEqual({})
   })
 })
 
