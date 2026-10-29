@@ -122,11 +122,11 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
         {/* Hand this record to Outlook. Same one-item basket prefill the
             tray builds, so subject/body/reference PDF and the book link
             are identical whether you email one record or a whole basket. */}
-        {!isInmateReporter && (
+        {!isInmateReporter && has('ledger.send') && (
           <DropdownMenuItem
             reason={recordHasPapers ? undefined : t('books.reason.emailNoDoc')}
             pending={emailingRecord}
-            onSelect={() => void emailViaOutlook()}
+            onSelect={() => { if (has('ledger.send')) void emailViaOutlook() }}
           >
             <Mail className="h-3.5 w-3.5" aria-hidden="true" />
             {t('books.record.emailViaOutlook')}

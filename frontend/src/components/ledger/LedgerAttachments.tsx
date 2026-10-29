@@ -20,6 +20,7 @@ import { SendToVaultDialog } from '@/components/ledger/SendToVaultDialog'
 import { AttachmentPreviewDialog } from '@/components/ledger/AttachmentPreviewDialog'
 import { FileTypeIcon } from '@/components/ledger/FileTypeIcon'
 import { fileKindFromName, fileMeta, formatBytes } from '@/lib/fileTypes'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 interface LedgerAttachmentsProps {
   entryId: number
@@ -33,6 +34,7 @@ export function LedgerAttachments({
   attachments,
 }: LedgerAttachmentsProps): React.JSX.Element | null {
   const { t } = useTranslation()
+  const { has } = useCapabilities()
   const [vaultDialog, setVaultDialog] = useState<{
     index: number
     filename: string
@@ -135,9 +137,10 @@ export function LedgerAttachments({
                   >
                     <Download className="h-4 w-4" strokeWidth={1.7} />
                   </a>
+                  {has('employees.vault.manage') && (
                   <button
                     type="button"
-                    onClick={() => setVaultDialog({ index: att.index, filename: att.name })}
+                    onClick={() => { if (has('employees.vault.manage')) setVaultDialog({ index: att.index, filename: att.name }) }}
                     className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-foreground"
                     aria-label={t('ledger.vault.sendToVault', {
                       defaultValue: 'Send to vault',
@@ -148,6 +151,7 @@ export function LedgerAttachments({
                   >
                     <FolderInput className="h-4 w-4" strokeWidth={1.6} />
                   </button>
+                  )}
                 </div>
               </li>
             )

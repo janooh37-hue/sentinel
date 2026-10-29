@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 interface RenameSmartFolderDialogProps {
   folder: SmartFolder
@@ -34,6 +35,7 @@ export function RenameSmartFolderDialog({
 }: RenameSmartFolderDialogProps): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const { has } = useCapabilities()
   const [nameEn, setNameEn] = useState(folder.name_en)
   const [nameAr, setNameAr] = useState(folder.name_ar)
 
@@ -61,7 +63,7 @@ export function RenameSmartFolderDialog({
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
-  const canSave = nameEn.trim().length > 0 && nameAr.trim().length > 0
+  const canSave = has('ledger.edit') && nameEn.trim().length > 0 && nameAr.trim().length > 0
 
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
@@ -73,7 +75,7 @@ export function RenameSmartFolderDialog({
           className="flex flex-col gap-3 px-4 py-3.5"
           onSubmit={(e) => {
             e.preventDefault()
-            if (canSave) renameMut.mutate()
+            if (canSave && !renameMut.isPending) renameMut.mutate()
           }}
         >
           <div className="flex flex-col gap-1.5">

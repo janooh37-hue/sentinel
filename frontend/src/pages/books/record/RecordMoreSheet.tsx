@@ -166,7 +166,7 @@ export function RecordMoreSheet({
       onSelect: print,
     },
   ]
-  if (!isInmateReporter) {
+  if (!isInmateReporter && caps.has('ledger.send')) {
     documentRows.push({
       id: 'email',
       icon: iconOf(Mail),
@@ -174,7 +174,7 @@ export function RecordMoreSheet({
       hint: t('books.record.hint.email'),
       reason: recordHasPapers ? undefined : reasonOf(nextStep.disabled?.email ?? 'books.reason.emailNoDoc'),
       pending: emailingRecord,
-      onSelect: () => void emailViaOutlook(),
+      onSelect: () => { if (caps.has('ledger.send')) void emailViaOutlook() },
     })
   }
   if (canManageIncludedPapers) {

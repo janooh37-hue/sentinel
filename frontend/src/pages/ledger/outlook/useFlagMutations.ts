@@ -13,6 +13,7 @@ import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import type { LedgerListItem } from '@/lib/api'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 type LedgerListData = { items: LedgerListItem[]; total: number; limit: number; offset: number }
 
@@ -46,6 +47,7 @@ export interface FlagMutations {
 
 export function useFlagMutations(): FlagMutations {
   const qc = useQueryClient()
+  const { has } = useCapabilities()
 
   const set = useMutation({
     mutationFn: ({ id, due }: { id: number; due: string | null }) =>
@@ -73,8 +75,8 @@ export function useFlagMutations(): FlagMutations {
   })
 
   return {
-    setFlag: (id, due) => set.mutate({ id, due }),
-    clearFlag: (id) => clear.mutate(id),
+    setFlag: (id, due) => { if (has('ledger.edit')) set.mutate({ id, due }) },
+    clearFlag: (id) => { if (has('ledger.edit')) clear.mutate(id) },
     isPending: set.isPending || clear.isPending,
   }
 }

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, useLocation } from 'react-router-dom'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LedgerEntryRead, LedgerListItem } from '@/lib/api'
 import { api } from '@/lib/api'
@@ -34,6 +34,17 @@ vi.mock('react-i18next', () => ({
 vi.mock('@/lib/useIdentity', () => ({
   useIdentity: () => ({ identity: { email: 'me@gssg.ae' }, isAdmin: false }),
 }))
+const { capabilities, capabilityStatus } = vi.hoisted(() => ({
+  capabilities: new Set<string>(), capabilityStatus: { loading: false },
+}))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ has: (cap: string) => capabilities.has(cap), isLoading: capabilityStatus.loading }),
+}))
+beforeEach(() => {
+  capabilities.clear()
+  capabilityStatus.loading = false
+  for (const cap of ['ledger.view', 'ledger.edit', 'ledger.send', 'ledger.delete', 'ledger.create']) capabilities.add(cap)
+})
 // HugeRTE can't mount in jsdom — sentinel div (repo-wide convention).
 vi.mock('@/components/ui/rich-editor', () => ({
   RichEditor: ({ name }: { name: string }) => <div data-testid={`rich-editor-${name}`} />,
@@ -110,13 +121,20 @@ const entry = (id: number): LedgerListItem => ({
 
 function LocationProbe(): React.JSX.Element {
   const location = useLocation()
-  return <output data-testid="location">{location.search}</output>
+  const navigate = useNavigate()
+  return <>
+    <output data-testid="location">{location.search}</output>
+    <output data-testid="route-state">{JSON.stringify(location.state)}</output>
+    <button type="button" onClick={() => navigate('/ledger?tab=email', {
+      state: { composePrefill: { subject: 'Next record draft', to: ['next@gssg.ae'] } },
+    })}>Incoming prefill</button>
+  </>
 }
 
-function renderShell(initialEntry: string, state?: Record<string, unknown>): void {
+function renderShell(initialEntry: string, state?: Record<string, unknown>): { refresh: () => void } {
   const [pathname, search] = initialEntry.split('?')
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(
+  const tree = () => (
     <QueryClientProvider client={queryClient}>
       <MemoryRouter
         initialEntries={[{ pathname, search: search ? `?${search}` : '', state: state ?? null }]}
@@ -124,8 +142,10 @@ function renderShell(initialEntry: string, state?: Record<string, unknown>): voi
         <LedgerOutlookShell />
         <LocationProbe />
       </MemoryRouter>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+  const view = render(tree())
+  return { refresh: () => view.rerender(tree()) }
 }
 
 describe('LedgerOutlookShell mail URLs', () => {
@@ -260,6 +280,38 @@ describe('LedgerOutlookShell Outlook handoff surface', () => {
     expect(screen.getAllByTestId('compose-window')).toHaveLength(1)
   })
 
+  it('cancels a pushed compose without reopening and accepts the next prefill on the same shell', async () => {
+    const view = renderShell('/ledger')
+    await userEvent.click(screen.getByRole('button', { name: 'ledger.outlook.newEmail' }))
+    await screen.findByTestId('compose-window')
+    const reopened: Element[] = []
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (node instanceof Element && (node.matches('[data-testid="compose-window"]') || node.querySelector('[data-testid="compose-window"]'))) {
+            reopened.push(node)
+          }
+        }
+      }
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+    try {
+      await userEvent.click(screen.getByRole('button', { name: 'common.cancel' }))
+      await waitFor(() => expect(screen.getByTestId('location').textContent).toBe(''))
+      view.refresh()
+      expect(screen.queryByTestId('compose-window')).not.toBeInTheDocument()
+      expect(reopened).toHaveLength(0)
+    } finally {
+      observer.disconnect()
+    }
+    vi.mocked(toast).mockClear()
+    await userEvent.click(screen.getByRole('button', { name: 'Incoming prefill' }))
+    expect(await screen.findByDisplayValue('Next record draft')).toBeInTheDocument()
+    expect(screen.getByText('next@gssg.ae')).toBeInTheDocument()
+    expect(toast).not.toHaveBeenCalledWith('ledger.outlook.composeBusy')
+    expect(screen.getAllByTestId('compose-window')).toHaveLength(1)
+  })
+
   it('consumes a route-state basket prefill into the handoff surface', async () => {
     // Exactly what BookRecordPage / EmailBasketTray push through navigate state.
     renderShell('/ledger', {
@@ -277,6 +329,68 @@ describe('LedgerOutlookShell Outlook handoff surface', () => {
     expect(screen.getByText('hr@gssg.ae')).toBeInTheDocument()
     expect(screen.getByText('GS-0048')).toBeInTheDocument()
   })
+
+  it('waits for initial capabilities before consuming an incoming prefill', async () => {
+    capabilities.delete('ledger.send')
+    capabilityStatus.loading = true
+    const view = renderShell('/ledger', { composePrefill: { subject: 'Loading permissions' } })
+    expect(screen.getByTestId('route-state')).toHaveTextContent('Loading permissions')
+    expect(screen.queryByTestId('compose-window')).not.toBeInTheDocument()
+    capabilities.add('ledger.send')
+    capabilityStatus.loading = false
+    view.refresh()
+    expect(await screen.findByDisplayValue('Loading permissions')).toBeInTheDocument()
+  })
+
+  it('rejects New email, direct compose URLs and prefills without ledger.send even with ledger.create', async () => {
+    capabilities.delete('ledger.send')
+    const view = renderShell('/ledger?action=compose&keep=1', { composePrefill: { to: ['hr@gssg.ae'], subject: 'Blocked' } })
+    await userEvent.click(screen.getByRole('button', { name: 'ledger.outlook.newEmail' }))
+    expect(screen.queryByTestId('compose-window')).not.toBeInTheDocument()
+    expect(screen.queryByDisplayValue('Blocked')).not.toBeInTheDocument()
+    expect(api.emailHandoff).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.getByTestId('route-state')).toHaveTextContent('null'))
+    expect(screen.getByTestId('location')).toHaveTextContent('?keep=1')
+    expect(toast.error).toHaveBeenCalledWith('common.forbidden')
+    capabilities.add('ledger.send')
+    view.refresh()
+    expect(screen.queryByTestId('compose-window')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'ledger.outlook.newEmail' }))
+    expect(await screen.findByLabelText('compose.subject')).toHaveValue('')
+  })
+
+  it('consumes a denied bare compose URL instead of opening it on regrant', async () => {
+    capabilities.delete('ledger.send')
+    const view = renderShell('/ledger?action=compose&keep=1')
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?keep=1'))
+    capabilities.add('ledger.send')
+    view.refresh()
+    expect(screen.queryByTestId('compose-window')).not.toBeInTheDocument()
+  })
+
+  it.each([false, true])('retains an open draft and disables handoff after send revocation (mobile=%s)', async (mobile) => {
+    isMobile.value = mobile
+    try {
+      const view = renderShell('/ledger?action=compose')
+      const subject = await screen.findByLabelText('compose.subject')
+      await userEvent.type(subject, 'Keep my unsent draft')
+      capabilities.delete('ledger.send')
+      view.refresh()
+      expect(screen.getByLabelText('compose.subject')).toBe(subject)
+      expect(subject).toHaveValue('Keep my unsent draft')
+      const submit = screen.getByRole('button', { name: 'ledger.outlook.handoff.submit' })
+      expect(submit).toBeDisabled()
+      fireEvent.submit(submit.closest('form')!)
+      expect(api.emailHandoff).not.toHaveBeenCalled()
+      capabilities.add('ledger.send')
+      view.refresh()
+      expect(screen.getByLabelText('compose.subject')).toBe(subject)
+      expect(subject).toHaveValue('Keep my unsent draft')
+      expect(screen.getByRole('button', { name: 'ledger.outlook.handoff.submit' })).toBeEnabled()
+    } finally {
+      isMobile.value = false
+    }
+  })
 })
 
 describe('activityEmoji', () => {
@@ -293,6 +407,12 @@ describe('LedgerOutlookShell deferred Trash', () => {
     vi.mocked(api.deleteLedgerEntry).mockClear()
     vi.mocked(api.listLedger).mockResolvedValue({ items: [entry(42), entry(7)], total: 2, limit: 500, offset: 0 })
     vi.mocked(api.getSmartFolderSuggestions).mockResolvedValue([])
+    vi.mocked(api.getLedgerEntry).mockResolvedValue({
+      ...entry(42),
+      notes_html: null,
+      attachment_paths: [],
+      created_by: null,
+    })
   })
 
   afterEach(() => vi.useRealTimers())
@@ -324,5 +444,31 @@ describe('LedgerOutlookShell deferred Trash', () => {
     expect(toast.dismiss).toHaveBeenCalledWith('trash-toast-id')
     act(() => undo?.())
     expect(toast.error).toHaveBeenCalledWith('ledger.outlook.undoTooLate')
+  })
+
+  it.each(['Trash 42', 'Trash all'])('does not schedule %s or hide rows without ledger.delete', async (action) => {
+    capabilities.delete('ledger.delete')
+    renderShell('/ledger?mail=42')
+    await screen.findByRole('button', { name: '42' })
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: action }))
+    expect(screen.getByRole('button', { name: '42' })).toBeInTheDocument()
+    expect(screen.getByTestId('reading-pane')).toHaveTextContent('42')
+    expect(toast).not.toHaveBeenCalled()
+    await act(() => vi.advanceTimersByTimeAsync(6000))
+    expect(api.deleteLedgerEntry).not.toHaveBeenCalled()
+  })
+
+  it('rechecks ledger.delete when the Undo window expires', async () => {
+    const shell = renderShell('/ledger')
+    await screen.findByRole('button', { name: '42' })
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: 'Trash 42' }))
+    expect(screen.queryByRole('button', { name: '42' })).not.toBeInTheDocument()
+    capabilities.delete('ledger.delete')
+    shell.refresh()
+    await act(() => vi.advanceTimersByTimeAsync(6000))
+    expect(api.deleteLedgerEntry).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: '42' })).toBeInTheDocument()
   })
 })

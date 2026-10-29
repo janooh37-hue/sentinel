@@ -97,4 +97,27 @@ describe('TopNav', () => {
 
     expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument()
   })
+
+  it.each(['documents.generate', 'books.view'])(
+    'hides Services when its %s prerequisite is denied',
+    (capability) => {
+      capabilityState.denied.add(capability)
+      renderNav()
+
+      expect(screen.queryByRole('link', { name: 'Services' })).not.toBeInTheDocument()
+    },
+  )
+
+  it.each([
+    { denied: ['ledger.view'], visible: true },
+    { denied: ['books.view'], visible: true },
+    { denied: ['ledger.view', 'books.view'], visible: false },
+  ])('preserves Ledger alternative read paths: $denied', ({ denied, visible }) => {
+    capabilityState.denied = new Set(denied)
+    renderNav()
+
+    const link = screen.queryByRole('link', { name: 'Ledger' })
+    if (visible) expect(link).toBeVisible()
+    else expect(link).not.toBeInTheDocument()
+  })
 })

@@ -16,9 +16,10 @@ import { useTranslation } from 'react-i18next'
 import { ChevronUp, X } from 'lucide-react'
 
 import type { EmployeeLookupItem } from '@/lib/api'
-import { UNASSIGNED, groupByUnit } from '@/lib/dutyUnits'
+import { canIssueDutyTransfer, UNASSIGNED, groupByUnit } from '@/lib/dutyUnits'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { cn } from '@/lib/utils'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 export interface SelectionTrayProps {
   /** The resolved selection — may span any number of duty units. */
@@ -36,6 +37,8 @@ export function SelectionTray({
 }: SelectionTrayProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
+  const { has } = useCapabilities()
+  const canTransfer = employees.every((employee) => canIssueDutyTransfer(employee, has))
 
   // Esc collapses the panel. It never clears the basket — that's what Clear is
   // for, and losing a cross-unit selection to a stray keypress would hurt.
@@ -135,11 +138,13 @@ export function SelectionTray({
           </button>
           <button
             type="button"
-            onClick={onTransfer}
-            className="ms-auto rounded-md bg-white px-4 py-1.5 text-sm font-semibold text-primary hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+            disabled={!canTransfer}
+            onClick={() => { if (canTransfer) onTransfer() }}
+            className="ms-auto rounded-md bg-white px-4 py-1.5 text-sm font-semibold text-primary hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t('dutyLocations.selection.transfer')}
           </button>
+          {!canTransfer && <p role="status" className="w-full text-sm">{t('common.forbidden')}</p>}
         </div>
       </div>
     </div>

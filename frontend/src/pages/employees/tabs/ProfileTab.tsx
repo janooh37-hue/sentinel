@@ -21,6 +21,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { TransferEmployeeDialog } from '../TransferEmployeeDialog'
+import { canIssueDutyTransfer } from '@/lib/dutyUnits'
 
 // ── Module-level constants ───────────────────────────────────────────────────
 
@@ -134,6 +135,7 @@ interface InlineFieldEditorProps {
  *  get a date picker), single-field PATCH, Escape/cancel to close. */
 function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps): React.JSX.Element {
   const { t } = useTranslation()
+  const { has } = useCapabilities()
   const qc = useQueryClient()
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -145,8 +147,10 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
   }, [])
 
   const save = useMutation({
-    mutationFn: () =>
-      api.updateEmployee(employeeId, { [field]: value.trim() } as EmployeeUpdate),
+    mutationFn: () => {
+      if (!has('employees.edit')) throw new Error(t('common.forbidden'))
+      return api.updateEmployee(employeeId, { [field]: value.trim() } as EmployeeUpdate)
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employee-detail', employeeId] })
       void qc.invalidateQueries({ queryKey: ['employees'] })
@@ -158,7 +162,7 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
     },
   })
 
-  const canSave = value.trim().length > 0 && !save.isPending
+  const canSave = has('employees.edit') && value.trim().length > 0 && !save.isPending
 
   return (
     <form
@@ -223,7 +227,7 @@ function FieldRow({
   const isMiss = missingSet.has(field)
   const isMono = MONO_FIELDS.has(field)
   const isFeminine = FEMININE_FIELDS.has(field)
-  const isFixing = isMiss && fixingField === field
+  const isFixing = canEdit && isMiss && fixingField === field
   const val = getFieldValue(field, employee, uaeExpiryDays, t, i18n.language)
 
   return (
@@ -368,7 +372,7 @@ export function ProfileTab({
   const [lastRequested, setLastRequested] = useState<string | null>(null)
   if (requested !== lastRequested) {
     setLastRequested(requested)
-    if (requested) setFixingField(requested)
+    if (requested && canEdit) setFixingField(requested)
   }
 
   // External-system half of the handoff: scroll the row into view, then tell
@@ -399,7 +403,7 @@ export function ProfileTab({
   const missingSet = new Set(missing)
   const uaeExpiryDays = nearExpiryDays(employee.uae_id_expiry)
 
-  const transferFooter = canEdit && has('documents.duty_transfer') ? (
+  const transferFooter = canEdit || canIssueDutyTransfer(employee, has) ? (
     <div className="mt-3 flex justify-end">
       <Button
         type="button"

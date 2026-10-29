@@ -14,6 +14,7 @@ import { toast } from '@/lib/toast'
 import { api, apiErrorMessage } from '@/lib/api'
 import type { LedgerEntryRead, LedgerListItem } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 interface StarButtonProps {
   entryId: number
@@ -24,6 +25,8 @@ interface StarButtonProps {
 export function StarButton({ entryId, starred, className }: StarButtonProps): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const { has } = useCapabilities()
+  const canEdit = has('ledger.edit')
 
   const mutation = useMutation({
     mutationFn: () => api.toggleLedgerStar(entryId),
@@ -80,10 +83,11 @@ export function StarButton({ entryId, starred, className }: StarButtonProps): Re
       type="button"
       onClick={(e) => {
         e.stopPropagation()
-        mutation.mutate()
+        if (canEdit) mutation.mutate()
       }}
       aria-label={t('ledger.star.toggle')}
       aria-pressed={starred}
+      disabled={!canEdit || mutation.isPending}
       title={t('ledger.star.toggle')}
       className={cn(
         'inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',

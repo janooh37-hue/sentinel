@@ -18,6 +18,7 @@ import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import type { LedgerAddress, LedgerEntryRead } from '@/lib/api'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 const CONTACTS_KEY = ['ledger-contacts'] as const
 
@@ -30,6 +31,7 @@ export function RecipientChips({
 }: RecipientChipsProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const { has } = useCapabilities()
 
   // Addresses the user added in this session before the query re-settles —
   // keeps the ★ flip instant even though the contacts list refetches.
@@ -68,7 +70,7 @@ export function RecipientChips({
   }
 
   function handleSave(addr: LedgerAddress): void {
-    if (isSaved(addr.address)) return
+    if (!has('ledger.create') || isSaved(addr.address)) return
     setOptimistic((prev) => new Set(prev).add(addr.address.toLowerCase()))
     addMutation.mutate({
       display_name: addr.name || addr.address,
@@ -106,11 +108,13 @@ export function RecipientChips({
                 }
               >
                 <span dir="auto">{r.name || r.address}</span>
+                {(saved || has('ledger.create')) && (
                 <button
                   type="button"
                   title={addr_title(saved)}
                   aria-label={r.address}
                   onClick={() => handleSave(r)}
+                  disabled={saved || addMutation.isPending}
                   className={
                     saved
                       ? 'grid h-[17px] w-[17px] flex-none place-items-center rounded-full text-[11px] leading-none text-success'
@@ -119,6 +123,7 @@ export function RecipientChips({
                 >
                   {saved ? '★' : '＋'}
                 </button>
+                )}
               </span>
             )
           })}

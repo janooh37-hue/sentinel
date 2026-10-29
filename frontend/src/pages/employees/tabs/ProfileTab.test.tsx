@@ -13,6 +13,7 @@
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { vi, test, expect, beforeEach } from 'vitest'
+import type * as TransferModule from '../TransferEmployeeDialog'
 
 const updateEmployee = vi.fn().mockResolvedValue({})
 const hasCapability = vi.fn<(cap: string) => boolean>()
@@ -49,7 +50,10 @@ vi.mock('@/components/employees/SignaturePad', () => ({ SignaturePad: () => null
 // ProfileTab imports './PassportField' — mock the same specifier (test lives in the same dir).
 vi.mock('./PassportField', () => ({ PassportField: () => null }))
 vi.mock('@/components/employees/IdentityDocCard', () => ({ IdentityDocCard: () => null }))
-vi.mock('../TransferEmployeeDialog', () => ({ TransferEmployeeDialog: () => null }))
+vi.mock('../TransferEmployeeDialog', async (importOriginal) => ({
+  ...(await importOriginal<typeof TransferModule>()),
+  TransferEmployeeDialog: () => null,
+}))
 
 import { ProfileTab } from './ProfileTab'
 import type { EmployeeRead } from '@/lib/api'
@@ -102,10 +106,10 @@ test('shows Transfer button for editors', () => {
   expect(screen.getByText('employee.profile.transfer')).toBeInTheDocument()
 })
 
-test('hides Transfer when duty transfer is denied but employee editing is allowed', () => {
-  hasCapability.mockImplementation((cap) => cap !== 'documents.duty_transfer')
+test('keeps silent reassignment available when letter generation is denied', () => {
+  hasCapability.mockImplementation((cap) => cap === 'employees.edit')
   render(<ProfileTab employee={baseEmployee} missing={[]} />)
-  expect(screen.queryByText('employee.profile.transfer')).not.toBeInTheDocument()
+  expect(screen.getByText('employee.profile.transfer')).toBeInTheDocument()
 })
 
 test('nationality row shows notSetF text and add button when nationality is missing', () => {
@@ -188,3 +192,39 @@ test('requestedFixField opens the editor for that field and reports handled', ()
   expect(screen.getByLabelText('employee.field.nationality')).toBeInTheDocument()
   expect(onFixHandled).toHaveBeenCalled()
 })
+
+test('read-only missing fields and requested fixes never expose an inline editor', () => {
+  hasCapability.mockImplementation((cap) => cap === 'employees.view')
+  render(<ProfileTab employee={baseEmployee} missing={['nationality']} requestedFixField="nationality" />)
+  expect(screen.getByText('employee.gaps.notSetF')).toBeInTheDocument()
+  expect(screen.queryByText('employee.gaps.addNow')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('employee.field.nationality')).not.toBeInTheDocument()
+  expect(updateEmployee).not.toHaveBeenCalled()
+})
+
+test('revoking employee edit removes an already open missing-field editor', () => {
+  const { rerender } = render(<ProfileTab employee={baseEmployee} missing={['nationality']} />)
+  fireEvent.click(screen.getByText('employee.gaps.addNow'))
+  expect(screen.getByLabelText('employee.field.nationality')).toBeInTheDocument()
+  hasCapability.mockImplementation((cap) => cap !== 'employees.edit')
+  rerender(<ProfileTab employee={baseEmployee} missing={['nationality']} />)
+  expect(screen.queryByLabelText('employee.field.nationality')).not.toBeInTheDocument()
+  expect(screen.queryByText('common.save')).not.toBeInTheDocument()
+  expect(updateEmployee).not.toHaveBeenCalled()
+})
+
+test('letter-only operators can enter transfer without employee editing or books viewing', () => {
+  hasCapability.mockImplementation((cap) => !['employees.edit', 'books.view'].includes(cap))
+  render(<ProfileTab employee={baseEmployee} missing={[]} />)
+  expect(screen.getByText('employee.profile.transfer')).toBeInTheDocument()
+  expect(screen.queryByText('employee.gaps.addNow')).not.toBeInTheDocument()
+})
+
+test.each(['documents.generate', 'documents.duty_transfer', 'books.category.GS', 'books.service.General Book', 'books.category.12/1'])(
+  'an assigned employee has no transfer entry without %s or employee edit',
+  (denied) => {
+    hasCapability.mockImplementation((cap) => cap !== denied && cap !== 'employees.edit')
+    render(<ProfileTab employee={baseEmployee} missing={[]} />)
+    expect(screen.queryByText('employee.profile.transfer')).not.toBeInTheDocument()
+  },
+)

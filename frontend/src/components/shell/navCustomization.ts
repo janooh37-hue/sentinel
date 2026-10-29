@@ -19,13 +19,14 @@ export interface DockEntry {
 
 export const SECTION_ENTRIES: readonly DockEntry[] = [
   ...NAV_ITEMS.map(
-    ({ to, key, Icon, cap, anyCaps }): DockEntry => ({
+    ({ to, key, Icon, cap, caps, anyCaps }): DockEntry => ({
       id: `sec:${to}`,
       kind: 'section',
       labelKey: key,
       Icon,
       to,
       cap,
+      caps,
       anyCaps,
     }),
   ),

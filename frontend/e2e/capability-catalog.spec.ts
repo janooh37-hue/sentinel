@@ -42,7 +42,6 @@ interface LocalizedCopy {
   lang: Locale
   dir: 'ltr' | 'rtl'
   permissionStudio: string
-  advancedPermissions: string
   knownCatalogLabel: string
   requestAccess: string
   requestTitle: string
@@ -57,8 +56,7 @@ const COPY: Record<Locale, LocalizedCopy> = {
   en: {
     lang: 'en',
     dir: 'ltr',
-    permissionStudio: 'Permissions studio',
-    advancedPermissions: 'Advanced permissions',
+    permissionStudio: 'Accounts',
     knownCatalogLabel: 'View records',
     requestAccess: 'Request access',
     requestTitle: 'Request permission',
@@ -71,8 +69,7 @@ const COPY: Record<Locale, LocalizedCopy> = {
   ar: {
     lang: 'ar',
     dir: 'rtl',
-    permissionStudio: 'استوديو الصلاحيات',
-    advancedPermissions: 'الصلاحيات المتقدمة',
+    permissionStudio: 'الحسابات',
     knownCatalogLabel: 'عرض السجلات',
     requestAccess: 'طلب الوصول',
     requestTitle: 'طلب إذن',
@@ -196,8 +193,8 @@ async function expectAuthorizedCatalog(page: Page, locale: Locale): Promise<void
   await expect(page.getByRole('heading', { name: copy.permissionStudio })).toBeVisible({
     timeout: 20_000,
   })
-  await expect(page.getByText(copy.advancedPermissions, { exact: true })).toBeVisible()
-  await expect(page.getByText(copy.knownCatalogLabel, { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('searchbox')).toBeVisible()
+  await expect(page.getByRole('table')).toBeVisible()
 }
 
 async function expectLocalizedDenialDialog(page: Page, locale: Locale): Promise<void> {

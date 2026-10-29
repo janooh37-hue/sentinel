@@ -379,3 +379,18 @@ describe('AttendanceTab', () => {
     await waitFor(() => expect(getEmployeeAttendance).not.toHaveBeenCalled())
   })
 })
+
+it.each(['leaves.view', 'employees.view'])('masks leave and absence judgments without %s but keeps authorized punches', async (denied) => {
+  hasCapability.mockImplementation((cap) => cap !== denied)
+  renderTab()
+  const cells = await screen.findAllByTestId('attendance-month-cell')
+  expect(cells.some((cell) => ['leave', 'absent'].includes(cell.dataset.outcome ?? ''))).toBe(false)
+  expect(screen.getByTestId('attendance-kpi-absent')).toHaveTextContent('—')
+  expect(screen.getByTestId('attendance-kpi-punctuality')).not.toHaveTextContent('1/3')
+  expect(screen.getByTestId('attendance-kpi-shifts-worked')).toHaveTextContent('2')
+  await userEvent.click(cells[18])
+  expect(await screen.findByTestId('attendance-day-timeline')).toBeInTheDocument()
+  expect(screen.getAllByTestId('attendance-day-punch')).toHaveLength(2)
+  expect(screen.queryByTestId('attendance-day-absence')).not.toBeInTheDocument()
+  expect(getEmployeeAttendanceHistory).toHaveBeenCalled()
+})

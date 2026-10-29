@@ -8,7 +8,13 @@
  *  - Returns nothing (empty DOM) when missing.length === 0
  */
 import { render, screen, fireEvent } from '@testing-library/react'
-import { vi, test, expect } from 'vitest'
+import { vi, test, expect, beforeEach } from 'vitest'
+
+const hasCapability = vi.hoisted(() => vi.fn(() => true))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ has: hasCapability }),
+}))
+beforeEach(() => hasCapability.mockReturnValue(true))
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -71,4 +77,12 @@ test('renders nothing when no gaps', () => {
     />,
   )
   expect(container).toBeEmptyDOMElement()
+})
+
+test('read-only users see missing fields without Add or Complete actions', () => {
+  hasCapability.mockReturnValue(false)
+  render(<EmployeeGapsCard missing={['nationality']} completeness={completeness} onFix={vi.fn()} />)
+  expect(screen.getByText('employee.field.nationality')).toBeInTheDocument()
+  expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  expect(screen.queryByText('employee.gaps.hint')).not.toBeInTheDocument()
 })

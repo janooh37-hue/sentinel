@@ -6,6 +6,7 @@
  */
 
 import { useTranslation } from 'react-i18next'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 interface CompletenessShape {
   filled: number
@@ -20,6 +21,8 @@ interface Props {
 
 export function EmployeeGapsCard({ missing, completeness, onFix }: Props): React.JSX.Element | null {
   const { t } = useTranslation()
+  const { has } = useCapabilities()
+  const canEdit = has('employees.edit')
 
   if (missing.length === 0) return null
 
@@ -35,30 +38,30 @@ export function EmployeeGapsCard({ missing, completeness, onFix }: Props): React
           tracked: completeness.tracked,
         })}
       </div>
-      <p className="mb-3 text-[0.78em] text-muted-foreground">{t('employee.gaps.hint')}</p>
+      {canEdit && <p className="mb-3 text-[0.78em] text-muted-foreground">{t('employee.gaps.hint')}</p>}
       <ul className="space-y-1.5">
         {missing.map((f) => (
           <li key={f}>
-            <button
+            {canEdit ? <button
               type="button"
-              onClick={() => onFix(f)}
+              onClick={() => { if (has('employees.edit')) onFix(f) }}
               className="flex w-full items-center justify-between rounded-lg bg-white/60 px-3 py-2 text-start text-[0.8em] transition-colors hover:bg-white/80"
             >
               <span>{t(`employee.field.${f}`)}</span>
               <span className="opacity-80" style={{ color: 'var(--warning)' }}>
                 {t('employee.gaps.add')}
               </span>
-            </button>
+            </button> : <span className="block px-3 py-2 text-[0.8em]">{t(`employee.field.${f}`)}</span>}
           </li>
         ))}
       </ul>
-      <button
+      {canEdit && <button
         type="button"
-        onClick={() => onFix()}
+        onClick={() => { if (has('employees.edit')) onFix() }}
         className="mt-3 w-full rounded-lg bg-white/60 px-3 py-2 text-[0.8em] font-semibold text-foreground transition-colors hover:bg-white/80"
       >
         {t('employee.gaps.fixAll')}
-      </button>
+      </button>}
     </div>
   )
 }

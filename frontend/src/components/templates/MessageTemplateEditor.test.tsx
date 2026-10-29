@@ -27,7 +27,9 @@ const template: MessageTemplateRead = {
 
 function mount(value = template) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><MessageTemplateEditor template={value} /></QueryClientProvider>)
+  const editor = <QueryClientProvider client={client}><MessageTemplateEditor template={value} /></QueryClientProvider>
+  const view = render(editor)
+  return { ...view, refresh: () => view.rerender(<QueryClientProvider client={client}><MessageTemplateEditor template={value} /></QueryClientProvider>) }
 }
 
 beforeEach(() => {
@@ -54,6 +56,53 @@ describe('MessageTemplateEditor', () => {
     expect(screen.getByText('عزيزي Ahmed')).toHaveAttribute('dir', 'rtl')
     expect(screen.getByText('Sent after manager approval')).toBeVisible()
     expect(screen.getAllByText(/1 SMS segments/)).toHaveLength(2)
+  })
+
+  it('removes save and a pending reset confirmation when editing access is revoked', async () => {
+    const view = mount()
+    fireEvent.change(screen.getByRole('textbox', { name: 'English message' }), { target: { value: 'Unsaved wording' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
+    expect(screen.getByRole('button', { name: 'Confirm reset' })).toBeVisible()
+    has.mockReturnValue(false)
+    view.refresh()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Confirm reset' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save template' })).not.toBeInTheDocument()
+    expect(screen.getByText(template.override!.en)).toBeVisible()
+    expect(screen.queryByText('Unsaved wording')).not.toBeInTheDocument()
+    expect(messageTemplatesApi.save).not.toHaveBeenCalled()
+    expect(messageTemplatesApi.reset).not.toHaveBeenCalled()
+  })
+
+  it.each([403, 500])('shows saved fields and preview after a rejected save (%s) and capability revocation', async (status) => {
+    vi.mocked(messageTemplatesApi.save).mockRejectedValue(new ApiError(status, 'FORBIDDEN', 'Save rejected'))
+    const view = mount()
+    await screen.findByText('Dear Ahmed')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Arabic message' }), { target: { value: 'مسودة {name}' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'English message' }), { target: { value: 'Unsaved {name}' } })
+    await screen.findByText('Unsaved Ahmed')
+    fireEvent.click(screen.getByRole('button', { name: 'Save template' }))
+    await screen.findByRole('alert')
+    expect(screen.getByRole('textbox', { name: 'English message' })).toHaveValue('Unsaved {name}')
+    expect(screen.getByText('Unsaved changes')).toBeVisible()
+
+    has.mockReturnValue(false)
+    view.refresh()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.getByText(template.override!.ar)).toBeVisible()
+    expect(screen.getByText(template.override!.en)).toBeVisible()
+    expect(await screen.findByText('Dear Ahmed')).toBeVisible()
+    expect(screen.getByText('عزيزي Ahmed')).toBeVisible()
+    expect(screen.queryByText(/Unsaved|مسودة/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save template' })).not.toBeInTheDocument()
+
+    has.mockReturnValue(true)
+    view.refresh()
+    expect(screen.getByRole('textbox', { name: 'Arabic message' })).toHaveValue('مسودة {name}')
+    expect(screen.getByRole('textbox', { name: 'English message' })).toHaveValue('Unsaved {name}')
+    expect(screen.getByText('Unsaved changes')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Save template' })).toBeEnabled()
+    expect(await screen.findByText('Unsaved Ahmed')).toBeVisible()
   })
 
   it('inserts a variable at the selection of the last-focused language and restores its caret', () => {

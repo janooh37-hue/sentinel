@@ -42,9 +42,10 @@ function DraftEditor({ draftKey, label, data }: { draftKey: string; label: strin
   const reset = useResetDraftTemplate()
   const pending = save.isPending || reset.isPending
   const dirty = fields.some((field) => values[field] !== baseline[field])
-  const unsaved: DraftTemplateFields = {}
-  for (const field of fields) if (values[field].trim()) unsaved[field] = values[field]
-  const preview = renderDraftSample(draftKey, { ...(data.overrides ?? {}), [draftKey]: unsaved })
+  const displayedValues = canEdit ? values : baseline
+  const previewOverride: DraftTemplateFields = {}
+  for (const field of fields) if (displayedValues[field].trim()) previewOverride[field] = displayedValues[field]
+  const preview = renderDraftSample(draftKey, { ...(data.overrides ?? {}), [draftKey]: previewOverride })
   const error = save.error ?? reset.error
   const accept = (next: DraftTemplatesRead) => {
     setCurrentOverride(next.overrides?.[draftKey])
@@ -60,6 +61,7 @@ function DraftEditor({ draftKey, label, data }: { draftKey: string; label: strin
         {currentOverride !== undefined && <span className="rounded-full bg-primary-soft px-2 py-1 text-xs text-primary">{t('msgTemplates.editor.modified')}</span>}
         {canEdit && dirty && <span className="text-xs text-muted-foreground">{t('msgTemplates.editor.dirty')}</span>}
       </header>
+      {!canEdit && <p role="status" className="text-sm text-muted-foreground">{t('msgTemplates.editor.readOnly')}</p>}
       <div className="space-y-4">
         {fields.map((field) => (
           <div key={field} className="min-w-0 space-y-2">
@@ -68,8 +70,8 @@ function DraftEditor({ draftKey, label, data }: { draftKey: string; label: strin
               <Input {...insertion.field(field)} id={`${id}-${field}`} dir="rtl" lang="ar" className="min-h-11" value={values[field]} placeholder={defaults[field]} disabled={pending} onChange={(event) => { setValues((previous) => ({ ...previous, [field]: event.target.value })); save.reset(); reset.reset() }} />
             ) : (
               <Textarea {...insertion.field(field)} id={`${id}-${field}`} dir="rtl" lang="ar" rows={4} value={values[field]} placeholder={defaults[field]} disabled={pending} onChange={(event) => { setValues((previous) => ({ ...previous, [field]: event.target.value })); save.reset(); reset.reset() }} />
-            ) : <p dir="rtl" lang="ar" className="whitespace-pre-wrap break-words rounded-md bg-surface-tinted p-3 text-sm">{values[field].trim() ? values[field] : defaults[field]}</p>}
-            {!values[field].trim() && <p className="text-xs text-muted-foreground">{t('msgTemplates.editor.defaultNote')}</p>}
+            ) : <p dir="rtl" lang="ar" className="whitespace-pre-wrap break-words rounded-md bg-surface-tinted p-3 text-sm">{baseline[field].trim() ? baseline[field] : defaults[field]}</p>}
+            {!displayedValues[field].trim() && <p className="text-xs text-muted-foreground">{t('msgTemplates.editor.defaultNote')}</p>}
           </div>
         ))}
       </div>
@@ -86,9 +88,9 @@ function DraftEditor({ draftKey, label, data }: { draftKey: string; label: strin
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             {confirmReset ? <>
               <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={pending} onClick={() => setConfirmReset(false)}>{t('msgTemplates.editor.cancel')}</Button>
-              <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={pending} onClick={() => { save.reset(); reset.mutate(draftKey, { onSuccess: accept }) }}>{t('msgTemplates.editor.confirmReset')}</Button>
+              <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={pending} onClick={() => { if (!canEdit || pending) return; save.reset(); reset.mutate(draftKey, { onSuccess: accept }) }}>{t('msgTemplates.editor.confirmReset')}</Button>
             </> : <Button type="button" variant="outline" className="min-h-11 w-full sm:me-auto sm:w-auto" disabled={pending || currentOverride === undefined} onClick={() => setConfirmReset(true)}>{t('msgTemplates.editor.reset')}</Button>}
-            <Button type="button" className="min-h-11 w-full sm:w-auto" disabled={pending || !dirty || confirmReset} onClick={() => { reset.reset(); save.mutate({ key: draftKey, body: values }, { onSuccess: accept }) }}>{t(pending ? 'msgTemplates.editor.saving' : 'msgTemplates.editor.save')}</Button>
+            <Button type="button" className="min-h-11 w-full sm:w-auto" disabled={pending || !dirty || confirmReset} onClick={() => { if (!canEdit || pending) return; reset.reset(); save.mutate({ key: draftKey, body: values }, { onSuccess: accept }) }}>{t(pending ? 'msgTemplates.editor.saving' : 'msgTemplates.editor.save')}</Button>
           </div>
         </div>
       )}

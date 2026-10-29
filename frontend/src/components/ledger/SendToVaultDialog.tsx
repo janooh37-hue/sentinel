@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { EmployeePicker } from '@/pages/application/EmployeePicker'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 const KIND_OPTIONS: readonly VaultKind[] = [
   'uae_id',
@@ -49,6 +50,7 @@ export function SendToVaultDialog({
 }: SendToVaultDialogProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const { has } = useCapabilities()
   // The parent re-mounts this dialog on every open, so initial state is fresh
   // without needing a reset effect.
   const [employeeId, setEmployeeId] = useState<string | null>(null)
@@ -134,8 +136,8 @@ export function SendToVaultDialog({
           </Button>
           <Button
             type="button"
-            onClick={() => sendMutation.mutate()}
-            disabled={!employeeId || sendMutation.isPending}
+            onClick={() => { if (has('employees.vault.manage') && employeeId && !sendMutation.isPending) sendMutation.mutate() }}
+            disabled={!has('employees.vault.manage') || !employeeId || sendMutation.isPending}
           >
             {sendMutation.isPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />

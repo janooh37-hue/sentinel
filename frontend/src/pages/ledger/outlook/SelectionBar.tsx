@@ -22,6 +22,7 @@ import { CheckCheck, Flag, Mail, Star, Trash2, X } from 'lucide-react'
 
 import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 interface SelectionBarProps {
   /** Selected entry ids. */
@@ -47,6 +48,7 @@ export function SelectionBar({ ids, onClear, onTrash }: SelectionBarProps): Reac
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [busy, setBusy] = useState(false)
+  const { has } = useCapabilities()
 
   const invalidate = (): void => {
     void qc.invalidateQueries({ queryKey: ['ledger'] })
@@ -54,8 +56,8 @@ export function SelectionBar({ ids, onClear, onTrash }: SelectionBarProps): Reac
     void qc.invalidateQueries({ queryKey: ['ledger-flag-count'] })
   }
 
-  const apply = async (op: (id: number) => Promise<unknown>): Promise<void> => {
-    if (busy || ids.length === 0) return
+  const apply = async (capability: string, op: (id: number) => Promise<unknown>): Promise<void> => {
+    if (!has(capability) || busy || ids.length === 0) return
     setBusy(true)
     try {
       await runBatch(ids, op)
@@ -81,32 +83,33 @@ export function SelectionBar({ ids, onClear, onTrash }: SelectionBarProps): Reac
       <Action
         icon={CheckCheck}
         label={t('ledger.bulk.read')}
-        disabled={busy}
-        onClick={() => void apply((id) => api.markLedgerEntryRead(id))}
+        disabled={busy || !has('ledger.view')}
+        onClick={() => void apply('ledger.view', (id) => api.markLedgerEntryRead(id))}
       />
       <Action
         icon={Mail}
         label={t('ledger.bulk.unread')}
-        disabled={busy}
-        onClick={() => void apply((id) => api.markLedgerEntryUnread(id))}
+        disabled={busy || !has('ledger.view')}
+        onClick={() => void apply('ledger.view', (id) => api.markLedgerEntryUnread(id))}
       />
       <Action
         icon={Star}
         label={t('ledger.bulk.star')}
-        disabled={busy}
-        onClick={() => void apply((id) => api.toggleLedgerStar(id))}
+        disabled={busy || !has('ledger.edit')}
+        onClick={() => void apply('ledger.edit', (id) => api.toggleLedgerStar(id))}
       />
       <Action
         icon={Flag}
         label={t('ledger.bulk.flag')}
-        disabled={busy}
-        onClick={() => void apply((id) => api.flagLedgerEntry(id, null))}
+        disabled={busy || !has('ledger.edit')}
+        onClick={() => void apply('ledger.edit', (id) => api.flagLedgerEntry(id, null))}
       />
       <Action
         icon={Trash2}
         label={t('ledger.bulk.trash')}
-        disabled={busy}
+        disabled={busy || !has('ledger.delete')}
         onClick={() => {
+          if (!has('ledger.delete') || busy) return
           onTrash(ids)
           onClear()
         }}

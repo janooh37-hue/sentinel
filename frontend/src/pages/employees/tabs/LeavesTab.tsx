@@ -9,11 +9,12 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import type { LeaveRead, RecentLeaveRead } from '@/lib/api'
 import { splitBilingual } from '@/lib/bilingualValue'
 import { StatusBadge } from '@/pages/leaves/StatusBadge'
 import type { PreviewDoc } from '@/lib/docPreview'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 /** Shared leave row shape used by both LeaveRead and RecentLeaveRead. */
 type LeaveRow = Pick<
@@ -34,6 +35,8 @@ export function LeavesTab({
   onPreviewDocs,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const { has } = useCapabilities()
+  const canView = has('employees.view') && has('leaves.view')
   const dateFmt = useMemo(
     () =>
       new Intl.DateTimeFormat(i18n.language, {
@@ -44,11 +47,18 @@ export function LeavesTab({
     [i18n.language],
   )
 
-  const { data: fullLeaves } = useQuery({
+  const { data: fullLeaves, error, isLoading } = useQuery({
     queryKey: ['employee-leaves', employeeId],
     queryFn: () => api.listEmployeeLeaves(employeeId),
+    enabled: canView,
   })
 
+
+  if (!canView || (error instanceof ApiError && error.status === 403)) {
+    return <p role="alert" className="p-4 text-muted-foreground">{t('common.forbidden')}</p>
+  }
+  if (error) return <p role="alert" className="p-4 text-accent">{t('common.loadError')}</p>
+  if (isLoading && leaves.length === 0) return <p role="status">{t('common.loading')}</p>
   const rows: LeaveRow[] = fullLeaves ?? leaves
 
   if (rows.length === 0) {

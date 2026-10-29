@@ -58,6 +58,7 @@ import {
   type QuickFilters,
 } from './mailboxQuery'
 import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 type NavigatePage =
   | 'employees'
@@ -112,6 +113,9 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   const { t } = useTranslation()
   const isMobile = useIsMobile()
   const queryClient = useQueryClient()
+  const { has, isLoading: capabilitiesLoading } = useCapabilities()
+  const canSend = has('ledger.send')
+  const canDelete = has('ledger.delete')
 
   const location = useLocation()
   const navigate = useNavigate()
@@ -138,7 +142,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   const [compose, setCompose] = useState<ComposeState | null>(null)
   const composePage = useUrlOverlay('action')
   const activeCompose: ComposeState | null =
-    composePage.value === 'compose' ? compose ?? { mode: 'new' } : null
+    composePage.value === 'compose' ? compose : null
   const [search, setSearch] = useState('')
   const [searchResponse, setSearchResponse] = useState<LedgerSearchResponse | null>(null)
   const [searchPending, setSearchPending] = useState(false)
@@ -259,9 +263,10 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   // Phase 3 — review → create flow. Opening the create dialog closes the sheet
   // so the modal isn't stacked under it.
   const handleCreateFromSuggestion = useCallback((s: SmartFolderSuggestion) => {
+    if (!has('ledger.create')) return
     setReviewOpen(false)
     setCreateSuggestion(s)
-  }, [])
+  }, [has])
   // On create: jump straight into the new folder so the operator sees it work.
   const handleSmartFolderCreated = useCallback((folder: SmartFolder) => {
     setActiveView({ kind: 'smart', folderId: folder.id })
@@ -284,10 +289,10 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
 
   // ONE compose window at a time (spec: keep the existing compose instead of
   // replacing it — replacing silently destroys an in-progress draft).
-  // Guard directly on `compose` state; put it in deps so the closure is always
-  // fresh (these are user-event callbacks, never batched render-phase calls).
+  // Busy means a visible compose, not a payload left behind by URL navigation.
   const openCompose = useCallback(
     (next: ComposeState) => {
+      if (!canSend) return
       if (activeCompose) {
         toast(
           t('ledger.outlook.composeBusy', {
@@ -300,7 +305,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
       composePage.open('compose')
       setFolderDrawerOpen(false)
     },
-    [activeCompose, composePage.open, t],
+    [activeCompose, canSend, composePage.open, t],
   )
 
   // Reply / Reply All / Forward open the compose over the pane.
@@ -321,27 +326,47 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   // triggered from the folder drawer; openCompose already closes the drawer.
   const handleNewEmail = useCallback(() => openCompose({ mode: 'new' }), [openCompose])
 
-  // Consume a compose prefill from `location.state.composePrefill` once on
-  // mount (or when the shell re-renders after a navigate-with-state from
-  // another page, e.g. the Absences email dialog). The ref guard
-  // makes repeated renders harmless; `navigate` clears the state so Back/F5
-  // don't re-open the compose window.
-  const consumedPrefill = useRef(false)
+  // Admit route-state and URL composes once. Revoking send must not unmount
+  // an admitted draft; the handoff form independently disables submission.
+  // Denied payloads are consumed too, so regranting cannot resurrect them.
+  const consumedPrefill = useRef<string | null>(null)
+  const admittedComposeLocation = useRef<string | null>(null)
   useEffect(() => {
-    if (consumedPrefill.current) return
+    if (capabilitiesLoading) return
     const prefill = (
       location.state as { composePrefill?: ComposeState['prefill'] } | null
     )?.composePrefill
-    if (!prefill) return
-    consumedPrefill.current = true
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot navigation-state hydration (the BooksPage pattern)
-    setCompose({ mode: 'new', prefill })
-    // Swap the state for the URL in place: refresh keeps the compose open
-    // (blank — the prefill is not shareable) and Close stays on the ledger.
     const params = new URLSearchParams(location.search)
-    params.set('action', 'compose')
-    navigate({ search: `?${params}` }, { replace: true, state: null })
-  }, [location, navigate])
+    if (params.get('action') === 'compose' && activeCompose) {
+      admittedComposeLocation.current = location.key
+    }
+    if (prefill && consumedPrefill.current !== location.key) {
+      consumedPrefill.current = location.key
+      if (!canSend) {
+        toast.error(t('common.forbidden'))
+        if (!activeCompose) params.delete('action')
+      } else if (activeCompose) {
+        toast(t('ledger.outlook.composeBusy'))
+      } else {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot navigation-state hydration
+        setCompose({ mode: 'new', prefill })
+        params.set('action', 'compose')
+      }
+      navigate({ search: params.size ? `?${params}` : '' }, { replace: true, state: null })
+      return
+    }
+    if (params.get('action') !== 'compose' || admittedComposeLocation.current === location.key) return
+    // Closing clears form state before history navigation settles. Never
+    // rehydrate that same history entry during the intervening render.
+    admittedComposeLocation.current = location.key
+    if (!canSend) {
+      toast.error(t('common.forbidden'))
+      params.delete('action')
+      navigate({ search: params.size ? `?${params}` : '' }, { replace: true, state: location.state })
+      return
+    }
+    setCompose({ mode: 'new' })
+  }, [activeCompose, canSend, capabilitiesLoading, location, navigate, t])
 
   // A URL may open compose, nothing else.
   useEffect(() => {
@@ -424,6 +449,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
     delayMs: UNDO_DELAY_MS,
     onCommit: async (p) => {
       try {
+        if (!canDelete) return
         await api.deleteLedgerEntry(p.id)
       } finally {
         await queryClient.invalidateQueries({ queryKey: ['ledger'] })
@@ -436,6 +462,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   })
 
   const scheduleTrash = useCallback((ids: number[]) => {
+    if (!canDelete) return
     const fresh = [...new Set(ids)].filter((id) => !pendingIds.has(id))
     if (fresh.length === 0) return
     const batch: TrashBatch = { toastId: '', undos: [] }
@@ -458,24 +485,26 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
         },
       },
     )
-  }, [pendingIds, scheduleDelete, t])
+  }, [canDelete, pendingIds, scheduleDelete, t])
 
   const handleDelete = useCallback(
     (entry: { id: number }) => {
+      if (!canDelete) return
       scheduleTrash([entry.id])
       // If the deleted entry is the one open in the pane, clear the selection.
       if (selectedId === entry.id) setSelectedId(null)
     },
-    [scheduleTrash, selectedId, setSelectedId],
+    [canDelete, scheduleTrash, selectedId, setSelectedId],
   )
 
   // Bulk Trash shares one commit window and one Undo action for all selected rows.
   const handleBulkTrash = useCallback(
     (ids: number[]) => {
+      if (!canDelete) return
       scheduleTrash(ids)
       if (selectedId != null && ids.includes(selectedId)) setSelectedId(null)
     },
-    [scheduleTrash, selectedId, setSelectedId],
+    [canDelete, scheduleTrash, selectedId, setSelectedId],
   )
 
   // Hide optimistically-deleted rows from the list until the timer commits.

@@ -14,7 +14,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, vi, test, expect } from 'vitest'
 
-const { mockHasCapability } = vi.hoisted(() => ({ mockHasCapability: vi.fn(() => true) }))
+const { mockHasCapability } = vi.hoisted(() => ({ mockHasCapability: vi.fn<(cap: string) => boolean>(() => true) }))
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ has: mockHasCapability }),
 }))
@@ -316,4 +316,20 @@ test('the card time-sheet action exports that employee, with the span the card c
       expect.stringContaining('G100'),
     ),
   )
+})
+
+test.each(['leaves', 'absences'])('a direct %s tab link is forbidden, not an empty employee history', async (tab) => {
+  mockHasCapability.mockImplementation((cap: string) => cap !== 'leaves.view')
+  vi.mocked(api.getEmployeeDetail).mockResolvedValue(detail as never)
+  renderPage(`/employees/G100?tab=${tab}`)
+  expect(await screen.findByRole('alert')).toHaveTextContent('common.forbidden')
+  expect(screen.getByTestId('location')).toHaveTextContent(`/employees/G100?tab=${tab}`)
+})
+
+test('employee-view denial suppresses detail requests instead of showing an empty file', () => {
+  mockHasCapability.mockImplementation((cap: string) => cap !== 'employees.view')
+  vi.mocked(api.getEmployeeDetail).mockClear()
+  renderPage()
+  expect(screen.getByRole('alert')).toHaveTextContent('common.forbidden')
+  expect(api.getEmployeeDetail).not.toHaveBeenCalled()
 })

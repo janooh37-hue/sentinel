@@ -16,6 +16,7 @@ import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage, type SmartFolderSuggestion } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 interface SuggestionBannerProps {
   /** The top suggestion to surface (the highest-count cluster). */
@@ -33,6 +34,7 @@ export function SuggestionBanner({
 }: SuggestionBannerProps): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const { has } = useCapabilities()
 
   const dismissMut = useMutation({
     mutationFn: () => api.dismissSmartFolderSuggestion(suggestion.cluster_key),
@@ -70,8 +72,8 @@ export function SuggestionBanner({
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => dismissMut.mutate()}
-          disabled={dismissMut.isPending}
+          onClick={() => { if (has('ledger.edit')) dismissMut.mutate() }}
+          disabled={!has('ledger.edit') || dismissMut.isPending}
         >
           {t('ledger.smart.dismiss')}
         </Button>

@@ -32,6 +32,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 interface CreateSmartFolderDialogProps {
   /** The cluster being confirmed, or null when the dialog is closed. */
@@ -50,6 +51,7 @@ export function CreateSmartFolderDialog({
 }: CreateSmartFolderDialogProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const { has } = useCapabilities()
   const [nameEn, setNameEn] = useState('')
   const [nameAr, setNameAr] = useState('')
 
@@ -85,7 +87,7 @@ export function CreateSmartFolderDialog({
 
   if (!suggestion) return null
 
-  const canCreate = nameEn.trim().length > 0 && nameAr.trim().length > 0
+  const canCreate = has('ledger.create') && nameEn.trim().length > 0 && nameAr.trim().length > 0
   const samples = suggestion.sample_subjects
 
   return (
@@ -98,7 +100,7 @@ export function CreateSmartFolderDialog({
           className="flex min-h-0 flex-col gap-3 overflow-y-auto px-4 py-3.5"
           onSubmit={(e) => {
             e.preventDefault()
-            if (canCreate) createMut.mutate()
+            if (canCreate && !createMut.isPending) createMut.mutate()
           }}
         >
           <p className="text-xs text-muted-foreground" dir="auto">

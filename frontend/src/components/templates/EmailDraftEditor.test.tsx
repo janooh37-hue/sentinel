@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from 'i18next'
 
@@ -8,6 +8,7 @@ import en from '@/locales/en.json'
 
 import { ApiError } from '@/lib/api'
 import { messageTemplatesApi } from '@/lib/messageTemplates'
+import type * as DraftTemplatesModule from '@/lib/draftTemplates'
 import type * as MessageTemplatesModule from '@/lib/messageTemplates'
 import { EmailDraftEditor } from './EmailDraftEditor'
 
@@ -26,7 +27,8 @@ vi.mock('@/lib/messageTemplates', async (importOriginal) => {
 
 function mount(draftKey = 'leave:Annual') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><EmailDraftEditor draftKey={draftKey} label="Annual leave" /></QueryClientProvider>)
+  const view = render(<QueryClientProvider client={client}><EmailDraftEditor draftKey={draftKey} label="Annual leave" /></QueryClientProvider>)
+  return { ...view, refresh: () => view.rerender(<QueryClientProvider client={client}><EmailDraftEditor draftKey={draftKey} label="Annual leave" /></QueryClientProvider>) }
 }
 
 beforeEach(() => {
@@ -43,6 +45,66 @@ afterEach(async () => {
 })
 
 describe('EmailDraftEditor', () => {
+  it('keeps wording visible but removes edit and reset controls after capability loss', async () => {
+    vi.mocked(messageTemplatesApi.drafts).mockResolvedValue({
+      overrides: { 'leave:Annual': { subject: 'عنوان خاص' } }, tokens: { leave: ['names'] },
+    })
+    const view = mount()
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Subject' }), { target: { value: 'عنوان غير محفوظ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
+    expect(screen.getByRole('button', { name: 'Confirm reset' })).toBeVisible()
+    has.mockReturnValue(false)
+    view.refresh()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Confirm reset' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save template' })).not.toBeInTheDocument()
+    expect(screen.getByText('عنوان خاص')).toBeVisible()
+    expect(screen.queryByText('عنوان غير محفوظ')).not.toBeInTheDocument()
+    expect(messageTemplatesApi.saveDraft).not.toHaveBeenCalled()
+    expect(messageTemplatesApi.resetDraft).not.toHaveBeenCalled()
+  })
+
+  it.each([403, 500])('shows saved fields and real preview after a rejected save (%s) and capability revocation', async (status) => {
+    const { renderDraftSample } = await vi.importActual<typeof DraftTemplatesModule>('@/lib/draftTemplates')
+    sample.mockImplementation(renderDraftSample)
+    vi.mocked(messageTemplatesApi.drafts).mockResolvedValue({
+      overrides: { 'leave:Annual': { subject: 'عنوان محفوظ', intro: 'مقدمة محفوظة', closing: 'خاتمة محفوظة' } },
+      tokens: { leave: ['names'] },
+    })
+    vi.mocked(messageTemplatesApi.saveDraft).mockRejectedValue(new ApiError(status, 'FORBIDDEN', 'Save rejected'))
+    const view = mount()
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Subject' }), { target: { value: 'عنوان غير محفوظ' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Introduction' }), { target: { value: 'مقدمة غير محفوظة' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Closing' }), { target: { value: 'خاتمة غير محفوظة' } })
+    const preview = () => within(screen.getByRole('heading', { name: 'Preview with sample data' }).parentElement!)
+    expect(preview().getByText('عنوان غير محفوظ')).toBeVisible()
+    expect(preview().getByText('مقدمة غير محفوظة')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Save template' }))
+    await screen.findByRole('alert')
+    expect(screen.getByRole('textbox', { name: 'Subject' })).toHaveValue('عنوان غير محفوظ')
+    expect(screen.getByText('Unsaved changes')).toBeVisible()
+
+    has.mockReturnValue(false)
+    view.refresh()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    for (const value of ['عنوان محفوظ', 'مقدمة محفوظة', 'خاتمة محفوظة']) {
+      expect(screen.getAllByText(value)).toHaveLength(2)
+      expect(preview().getByText(value)).toBeVisible()
+    }
+    expect(screen.queryByText(/غير محفوظ/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save template' })).not.toBeInTheDocument()
+
+    has.mockReturnValue(true)
+    view.refresh()
+    expect(screen.getByRole('textbox', { name: 'Subject' })).toHaveValue('عنوان غير محفوظ')
+    expect(screen.getByRole('textbox', { name: 'Introduction' })).toHaveValue('مقدمة غير محفوظة')
+    expect(screen.getByRole('textbox', { name: 'Closing' })).toHaveValue('خاتمة غير محفوظة')
+    expect(screen.getByText('Unsaved changes')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Save template' })).toBeEnabled()
+    expect(preview().getByText('عنوان غير محفوظ')).toBeVisible()
+  })
+
   it.each(['en', 'ar'] as const)('labels every draft variable in %s and inserts its raw token', async (language) => {
     i18n.addResourceBundle('ar', 'translation', ar, true, true)
     await i18n.changeLanguage(language)

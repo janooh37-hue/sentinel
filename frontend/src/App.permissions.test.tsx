@@ -94,6 +94,8 @@ vi.mock('@/lib/routeLoaders', () => ({
 }))
 
 import App from './App'
+import { NAV_ITEMS } from '@/components/shell/navItems'
+import { isNavEntryAllowed } from '@/components/shell/navCustomization'
 
 const routes = [
   ['/employees', ['employees.view'], 'employees-page'],
@@ -163,17 +165,25 @@ describe('App route capability gates', () => {
     expect(await screen.findByText(pageText)).toBeVisible()
   })
 
-  it.each(['documents.generate', 'books.view'])(
-    'denies /services when %s is the only granted capability',
-    async (capability) => {
-      capabilityState.allowed = new Set([capability])
-      window.history.pushState({}, '', '/services')
-      render(<App />)
+  it.each([
+    ['/services', ['documents.generate']],
+    ['/services', ['books.view']],
+    ['/services/general_book', ['documents.generate', 'books.service.General Book']],
+    ['/services/general_book', ['books.view', 'books.service.General Book']],
+    ['/application?form=General%20Book', ['documents.generate']],
+    ['/application?form=General%20Book', ['books.view']],
+  ] as const)('denies direct or delivered Services link %s with only %j', async (path, capabilities) => {
+    capabilityState.allowed = new Set(capabilities)
+    window.history.pushState({}, '', path)
+    render(<App />)
 
-      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
-      expect(screen.queryByText('application-page')).not.toBeInTheDocument()
-    },
-  )
+    expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+    expect(screen.queryByText('application-page')).not.toBeInTheDocument()
+    expect(isNavEntryAllowed(
+      NAV_ITEMS.find((item) => item.to === '/services')!,
+      (capability) => capabilityState.allowed.has(capability),
+    )).toBe(false)
+  })
 
   it.each(['books.view', 'books.edit'])(
     'denies /scan-back when %s is the only granted capability',

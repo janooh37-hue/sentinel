@@ -9,6 +9,11 @@ import type { EmployeeActivityItemRead, EmployeeListItem } from '@/lib/api'
 import { api } from '@/lib/api'
 import { EmployeeActivitySection } from './EmployeeActivitySection'
 
+const hasCapability = vi.hoisted(() => vi.fn<(cap: string) => boolean>(() => true))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ has: hasCapability }),
+}))
+
 vi.mock('@/lib/api', async (orig) => {
   const real = await orig<typeof import('@/lib/api')>()
   return { ...real, api: { ...real.api, listEmployeeActivity: vi.fn() } }
@@ -125,6 +130,7 @@ function wrap(ui: React.ReactElement) {
 describe('EmployeeActivitySection', () => {
   beforeEach(() => {
     testLanguage.value = 'en'
+    hasCapability.mockReturnValue(true)
     vi.mocked(api.listEmployeeActivity).mockReset()
     vi.mocked(api.listEmployeeActivity).mockResolvedValue({ items, total: items.length, limit: 25, offset: 0 })
   })
@@ -393,4 +399,23 @@ describe('EmployeeActivitySection', () => {
     const row = await screen.findByRole('link', { name: /open document/i })
     expect(row).toHaveClass('flex', 'items-center', 'border-b')
   })
+})
+
+it('keeps unrelated activity but masks leave rows, filters and aggregate counts when leaves.view is denied', async () => {
+  hasCapability.mockImplementation((cap) => cap !== 'leaves.view')
+  vi.mocked(api.listEmployeeActivity).mockResolvedValue({ items, total: items.length, limit: 25, offset: 0 })
+  wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+  expect(await screen.findByText('Employment Certificate')).toBeInTheDocument()
+  expect(screen.getByText('Incoming letter')).toBeInTheDocument()
+  expect(screen.queryByText('Annual')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Leave' })).not.toBeInTheDocument()
+  expect(screen.queryByText(/Showing .* recent entries/)).not.toBeInTheDocument()
+})
+
+it('suppresses activity queries when employee viewing is denied', () => {
+  hasCapability.mockReturnValue(false)
+  vi.mocked(api.listEmployeeActivity).mockClear()
+  wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+  expect(screen.getByRole('alert')).toHaveTextContent('common.forbidden')
+  expect(api.listEmployeeActivity).not.toHaveBeenCalled()
 })

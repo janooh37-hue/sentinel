@@ -11,6 +11,10 @@ import { toast } from '@/lib/toast'
 import type * as ApiModule from '@/lib/api'
 
 const navigate = vi.hoisted(() => vi.fn())
+const hasCapability = vi.hoisted(() => vi.fn<(cap: string) => boolean>(() => true))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ has: hasCapability }),
+}))
 vi.mock('react-router-dom', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   useNavigate: () => navigate,
@@ -36,7 +40,7 @@ vi.mock('@/components/application/fields/RecipientPickerField', () => ({ Recipie
 vi.mock('@/components/application/fields/ManagerPickerField', () => ({ ManagerPickerField: () => null }))
 vi.mock('@/components/application/fields/MultiRecipientPickerField', () => ({ MultiRecipientPickerField: () => null }))
 
-beforeEach(() => { vi.clearAllMocks() })
+beforeEach(() => { vi.clearAllMocks(); hasCapability.mockReturnValue(true) })
 
 import { api } from '@/lib/api'
 import type { EmployeeRead } from '@/lib/api'
@@ -49,11 +53,11 @@ const employee = {
   duty_post: null,
 } as unknown as EmployeeRead
 
-function renderDialog(): void {
-  render(
+function renderDialog(record = employee) {
+  return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter>
-        <TransferEmployeeDialog open employee={employee} onOpenChange={vi.fn()} />
+        <TransferEmployeeDialog open employee={record} onOpenChange={vi.fn()} />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -125,4 +129,47 @@ test.each([true, false])('a rejected transfer resolves loading (issue letter: %s
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Something went wrong', { id: 'loading-toast-id' }))
   expect(toast.loading).toHaveBeenCalledWith(issueLetter ? 'dutyLocations.transfer.generating' : 'common.saving')
   expect(toast.success).not.toHaveBeenCalled()
+})
+
+test('letter generation does not require employee editing or books.view', async () => {
+  hasCapability.mockImplementation((cap) => !['employees.edit', 'books.view'].includes(cap))
+  vi.mocked(api.transferDuty).mockResolvedValue({ moved: ['G100'], book_id: null, ref: null, document_id: null })
+  renderDialog()
+  expect(screen.getByLabelText('dutyLocations.transfer.issueLetter')).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: 'dutyLocations.transfer.generate' }))
+  await waitFor(() => expect(api.transferDuty).toHaveBeenCalled())
+  expect(api.updateEmployee).not.toHaveBeenCalled()
+})
+
+test.each(['documents.generate', 'documents.duty_transfer', 'books.category.GS', 'books.service.General Book', 'books.category.12/1'])(
+  'without %s only the independently authorized silent PATCH is offered',
+  async (denied) => {
+    hasCapability.mockImplementation((cap) => cap !== denied)
+    vi.mocked(api.updateEmployee).mockResolvedValue({} as never)
+    renderDialog()
+    expect(screen.getByLabelText('dutyLocations.transfer.issueLetter')).not.toBeChecked()
+    expect(screen.getByLabelText('dutyLocations.transfer.issueLetter')).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'common.save' }))
+    await waitFor(() => expect(api.updateEmployee).toHaveBeenCalled())
+    expect(api.transferDuty).not.toHaveBeenCalled()
+  },
+)
+
+test('initial placement bypasses General Book capabilities, not route prerequisites', async () => {
+  hasCapability.mockImplementation((cap) => cap === 'documents.generate' || cap === 'documents.duty_transfer')
+  vi.mocked(api.transferDuty).mockResolvedValue({ moved: ['G100'], book_id: null, ref: null, document_id: null })
+  renderDialog({ ...employee, duty_unit: '  ' })
+  fireEvent.change(screen.getByLabelText('dutyLocations.transfer.destUnit'), { target: { value: 'Unit 2' } })
+  fireEvent.click(screen.getByRole('button', { name: 'dutyLocations.transfer.generate' }))
+  await waitFor(() => expect(api.transferDuty).toHaveBeenCalled())
+  expect(api.updateEmployee).not.toHaveBeenCalled()
+})
+
+test('revocation before submit cannot issue a transfer or silently PATCH', async () => {
+  renderDialog()
+  hasCapability.mockReturnValue(false)
+  fireEvent.click(screen.getByRole('button', { name: 'dutyLocations.transfer.generate' }))
+  await waitFor(() => expect(toast.error).toHaveBeenCalled())
+  expect(api.transferDuty).not.toHaveBeenCalled()
+  expect(api.updateEmployee).not.toHaveBeenCalled()
 })

@@ -19,8 +19,8 @@
  * that cannot act right now returns `false` to let a lower one try.
  *
  * Two key layers:
- *   * Modifier layer — Ctrl/⌘ + K, /, N (matched on `e.key`, `ctrlKey || metaKey`
- *     so Windows and Mac both work) and Ctrl/⌘ + Enter.
+ *   * Modifier layer — Ctrl/⌘ + K, /, N (matched on `e.key`, with a physical
+ *     KeyK fallback for search) and Ctrl/⌘ + Enter.
  *   * Bare-key layer — J K C F S M = - 0 Enter ? Esc, matched on
  *     `KeyboardEvent.code` so they work on any keyboard layout (Arabic included).
  *     They never fire with Ctrl/Meta/Alt held, during IME composition, from an
@@ -132,8 +132,18 @@ export function KeyboardShortcutsProvider({
 
       if (mod) {
         const key = e.key.toLowerCase()
-        // Ctrl+K — always allowed (including from inputs); navigation shortcut.
-        if (key === 'k') {
+        // Search may take focus from inputs, but never from composition or
+        // another modal interaction. Physical KeyK also works on Arabic layouts.
+        if (key === 'k' || (e.code === 'KeyK' && !/^[a-z]$/.test(key))) {
+          if (
+            e.isComposing ||
+            e.keyCode === 229 ||
+            e.altKey ||
+            e.getModifierState('AltGraph') ||
+            document.querySelector(OVERLAY_SELECTOR)
+          ) {
+            return
+          }
           if (dispatch('focusSearch')) e.preventDefault()
           return
         }
@@ -196,7 +206,7 @@ export function KeyboardShortcutsProvider({
   )
 }
 
-/** Guards shared by every non-Ctrl+K/N// key: IME, editable target, open overlay. */
+/** Guards for the bare-key layer and Ctrl/⌘+Enter. */
 function bareLayerAllowed(e: KeyboardEvent): boolean {
   if (e.isComposing) return false
   const target = e.target

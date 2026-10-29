@@ -1,1502 +1,203 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  AlertTriangle,
-  Check,
-  ChevronDown,
-  Eye,
-  EyeOff,
-  LockKeyhole,
-  Search,
-  ShieldCheck,
-} from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { useIsMutating, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
-import { toast } from '@/lib/toast'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import type { StudioDestination, Resource } from '@/components/access/studio/contracts'
+import { AccessWorkspace } from '@/components/access/studio/AccessWorkspace'
+import { StudioSearch } from '@/components/access/studio/search/StudioSearch'
+import { accountSearchIndex, searchEntries } from '@/components/access/studio/search/searchIndex'
+import { requestWorkspaceNavigation } from '@/components/access/studio/workspaceNavigation'
+import { api, apiErrorMessage, type AdminUserRead } from '@/lib/api'
+import { useAuth } from '@/lib/authContext'
+import { accessSnapshotKey } from '@/lib/permissionStudioApi'
+import { formatDmy } from '@/lib/formatDmy'
+import { Button } from '@/components/ui/button'
 
-import { AdvancedPermissionsPanel } from '@/components/access/AdvancedPermissionsPanel'
-import { ServiceArtwork, type ServiceArtworkId } from '@/components/ui/service-artwork'
-import { EmptyState } from '@/components/ui/empty-state'
-import { Skeleton } from '@/components/ui/skeleton'
-import {
-  api,
-  apiErrorMessage,
-  type AdminUserRead,
-  type PermissionEffect,
-  type PermissionRequestRead,
-  type TemplateMeta,
-  type UserPermissionRead,
-} from '@/lib/api'
-import { QUICK_ACTION_IDS } from '@/lib/dashboardLayout'
-import {
-  localizeCapability,
-  type CapabilityCatalog,
-  useCapabilityCatalog,
-} from '@/lib/useCapabilityCatalog'
-import { cn } from '@/lib/utils'
-import { artworkForTemplate, emojiForTemplate } from '@/pages/application/formEmoji'
+const PAGE_SIZE = 25
+const controlClass = 'min-h-11 min-w-0 rounded-lg border border-border bg-surface px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
 
-type BlueprintKind = 'page' | 'service' | 'category'
-
-/**
- * A service is gated by a pair of capabilities: `books.service.<id>` decides
- * whether it can be created, `books.servicerecords.<id>` whether its records
- * stay readable. The three states are the only combinations worth offering.
- */
-type ServiceAccessState = 'full' | 'records' | 'hidden'
-
-const SERVICE_STATE_ORDER: readonly ServiceAccessState[] = ['full', 'records', 'hidden']
-
-const SERVICE_STATE_KEY: Record<ServiceAccessState, string> = {
-  full: 'svcFull',
-  records: 'svcRecordsOnly',
-  hidden: 'svcHidden',
-}
-
-// Selection is never hue-only: the active segment fills solid (luminance shift
-// + AA-safe foreground) and carries a check glyph, per PRODUCT.md's WCAG rule.
-const SERVICE_STATE_TONE: Record<ServiceAccessState, string> = {
-  full: 'border-primary bg-primary text-primary-foreground',
-  records: 'border-warning bg-warning text-warning-foreground',
-  // text-background, not white: white on the dark accent (#ef4858) is ~3.7:1.
-  hidden: 'border-accent bg-accent text-background',
-}
-
-// One legend explains all three states; every radiogroup describes itself with
-// it, so screen-reader users reach the explanation from the control.
-const SERVICE_LEGEND_ID = 'permissions-service-legend'
-
-const SERVICE_CAPTION_KEY: Record<ServiceAccessState, string> = {
-  full: 'svcFullCaption',
-  records: 'svcRecordsOnlyCaption',
-  hidden: 'svcHiddenCaption',
-}
-
-interface PageBlueprintItem {
-  key: string
-  capability: string | null
-  locked?: boolean
-}
-
-interface BlueprintItem {
-  id: string
-  capability: string | null
-  label: string
-  kind: BlueprintKind
-  locked?: boolean
-  glyph?: string
-  artwork?: ServiceArtworkId
-  /** Legacy categories: which services file records into it. */
-  description?: string
-}
-
-interface Beam {
-  x1: number
-  y1: number
-  x2: number
-  y2: number
-}
-
-const PAGE_BLUEPRINT: readonly PageBlueprintItem[] = [
-  { key: 'nav.dashboard', capability: null, locked: true },
-  { key: 'nav.employees', capability: 'employees.view' },
-  { key: 'nav.ledger', capability: 'ledger.view' },
-  { key: 'nav.leaves', capability: 'leaves.view' },
-  { key: 'nav.services', capability: 'documents.generate' },
-  { key: 'nav.records', capability: 'books.view' },
-  { key: 'nav.permits', capability: 'permits.view' },
-  { key: 'nav.vehicles', capability: 'vehicles.view' },
-  { key: 'access.permissions.pages.settings', capability: 'settings.view' },
-  { key: 'access.permissions.pages.expiry', capability: 'expiry.view' },
-]
-
-const MIRROR_MOBILE_QUERY = '(max-width: 759px)'
-
-const RECORD_CAPABILITIES_REQUIRING_VIEW = [
-  'books.create',
-  'books.edit',
-  'books.approve',
-  'books.submit',
-  'books.delete',
-  'books.override_state',
-  'documents.generate',
-] as const
-
-function userLabel(user: AdminUserRead): string {
-  return (user.display_name || user.name_en || user.email.split('@')[0]) ?? user.email
-}
-
-function initialsOf(user: AdminUserRead): string {
-  const parts = userLabel(user).trim().split(/\s+/).filter(Boolean)
-  return (parts[0]?.[0] ?? user.email[0] ?? '?') + (parts[1]?.[0] ?? '')
-}
-
-function roleTone(role: AdminUserRead['role']): string {
-  if (role === 'admin') return 'bg-accent-soft text-accent'
-  if (role === 'manager') return 'bg-info-soft text-info'
-  return 'bg-surface-tinted text-muted-foreground'
-}
-
-function useMirrorMobile(): boolean {
-  const [mobile, setMobile] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia(MIRROR_MOBILE_QUERY).matches,
-  )
-  useEffect(() => {
-    const media = window.matchMedia(MIRROR_MOBILE_QUERY)
-    const update = (): void => setMobile(media.matches)
-    media.addEventListener('change', update)
-    return () => media.removeEventListener('change', update)
-  }, [])
-  return mobile
-}
-
-function updatePermissionOptimistically(
-  current: UserPermissionRead,
-  capability: string,
-  effect: PermissionEffect | null,
-): UserPermissionRead {
-  const effective = new Set(current.effective)
-  const overrides = { ...current.overrides }
-  if (effect === 'deny') {
-    effective.delete(capability)
-    overrides[capability] = 'deny'
-  } else if (effect === 'grant') {
-    effective.add(capability)
-    overrides[capability] = 'grant'
-  } else {
-    delete overrides[capability]
-    if (current.role_defaults.includes(capability)) effective.add(capability)
-    else effective.delete(capability)
+function findScrollContainer(element: HTMLElement | null): HTMLElement | null {
+  for (let node = element?.parentElement; node; node = node.parentElement) {
+    if (/(auto|scroll)/.test(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight) return node
   }
-  return { ...current, effective: [...effective], overrides }
+  return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null
 }
 
-function BlueprintButton({
-  item,
-  denied,
-  saving,
-  describedBy,
-  onFocus,
-  onToggle,
-}: {
-  item: BlueprintItem
-  denied: boolean
-  saving: boolean
-  describedBy?: string
-  onFocus: () => void
-  onToggle: (event: React.MouseEvent<HTMLButtonElement>) => void
-}): React.JSX.Element {
-  const { t } = useTranslation()
-  return (
-    <button
-      type="button"
-      aria-disabled={Boolean(item.locked || saving)}
-      aria-busy={saving}
-      onMouseDown={(event) => {
-        if (item.locked || saving) event.preventDefault()
-      }}
-      aria-pressed={!denied}
-      aria-describedby={describedBy}
-      onFocus={onFocus}
-      onClick={(event) => {
-        if (!item.locked && !saving) onToggle(event)
-      }}
-      className={cn(
-        'group flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-center text-[0.82em] font-medium transition-[background-color,border-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface motion-reduce:transition-none',
-        denied
-          ? 'border-accent/40 bg-accent-soft text-accent'
-          : 'border-primary/70 bg-surface text-primary',
-        item.locked && 'cursor-default border-primary/30 bg-primary-soft text-primary',
-        saving && 'cursor-wait opacity-60',
-      )}
-    >
-      {item.locked ? (
-        <LockKeyhole className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} aria-hidden />
-      ) : denied ? (
-        <EyeOff className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} aria-hidden />
-      ) : (
-        <Eye className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} aria-hidden />
-      )}
-      {item.artwork ? (
-        <ServiceArtwork artwork={item.artwork} size="row" />
-      ) : item.glyph ? (
-        <span aria-hidden>{item.glyph}</span>
-      ) : null}
-      <bdi className="min-w-0 flex-1 break-words whitespace-normal text-center leading-snug" dir="auto">
-        {item.label}
-      </bdi>
-      {' '}
-      <span className="sr-only">
-        {item.locked
-          ? t('access.permissions.mirror.always')
-          : denied
-            ? t('access.permissions.state.deny')
-            : t('access.permissions.state.grant')}
-      </span>
-    </button>
-  )
+function nameOf(account: AdminUserRead, arabic: boolean): string {
+  return (arabic && account.name_ar) || account.display_name || account.name_en || account.email
+}
+function resourceFromParam(value: string | null): Resource | undefined {
+  if (!value) return undefined
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (typeof parsed !== 'object' || parsed === null || !('kind' in parsed) || !('id' in parsed)) return undefined
+    const { kind, id } = parsed
+    if (typeof id !== 'string') return undefined
+    switch (kind) {
+      case 'capability': case 'service': case 'book': case 'notification_template':
+      case 'email_template': case 'word_template': case 'editor_template': return { kind, id }
+      default: return undefined
+    }
+  } catch { return undefined }
 }
 
-function ServiceTriState({
-  item,
-  state,
-  saving,
-  legendId,
-  onFocus,
-  onSelect,
-}: {
-  item: BlueprintItem
-  state: ServiceAccessState
-  saving: boolean
-  legendId: string
-  onFocus: () => void
-  onSelect: (state: ServiceAccessState, event: React.MouseEvent<HTMLButtonElement>) => void
-}): React.JSX.Element {
-  const { t } = useTranslation()
-  // Service ids contain spaces ("General Book"), which aria-labelledby would
-  // read as a list of two ids — generate the label id instead.
-  const nameId = useId()
-  const groupRef = useRef<HTMLDivElement>(null)
-  // Arrow keys walk the segments (mirrored in RTL); selection stays manual
-  // because every choice is a write, not a local toggle.
-  const moveFocus = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    const radios = Array.from(
-      groupRef.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? [],
-    )
-    const index = radios.indexOf(document.activeElement as HTMLButtonElement)
-    if (index === -1) return
-    const rtl = getComputedStyle(event.currentTarget).direction === 'rtl'
-    const step =
-      event.key === 'ArrowDown'
-        ? 1
-        : event.key === 'ArrowUp'
-          ? -1
-          : event.key === 'ArrowRight'
-            ? rtl
-              ? -1
-              : 1
-            : event.key === 'ArrowLeft'
-              ? rtl
-                ? 1
-                : -1
-              : 0
-    if (step === 0) return
-    event.preventDefault()
-    radios[(index + step + radios.length) % radios.length]?.focus()
-  }
-  return (
-    <div className="rounded-lg border border-hairline bg-surface p-3">
-      <div className="mb-2 flex min-h-8 items-center gap-2 px-1">
-        {item.artwork ? (
-          <ServiceArtwork artwork={item.artwork} size="row" />
-        ) : item.glyph ? (
-          <span aria-hidden>{item.glyph}</span>
-        ) : null}
-        <bdi
-          id={nameId}
-          className="min-w-0 flex-1 break-words whitespace-normal text-[0.84em] font-medium leading-snug text-foreground"
-          dir="auto"
-        >
-          {item.label}
-        </bdi>
-      </div>
-      <div
-        ref={groupRef}
-        role="radiogroup"
-        aria-labelledby={nameId}
-        aria-describedby={legendId}
-        onKeyDown={moveFocus}
-        className="grid grid-cols-3 gap-1.5"
-      >
-        {SERVICE_STATE_ORDER.map((option) => (
-          <button
-            key={option}
-            type="button"
-            role="radio"
-            aria-checked={option === state}
-            tabIndex={option === state ? 0 : -1}
-            aria-disabled={saving}
-            aria-busy={saving}
-            onFocus={onFocus}
-            onMouseDown={(event) => {
-              if (saving) event.preventDefault()
-            }}
-            onClick={(event) => {
-              if (!saving) onSelect(option, event)
-            }}
-            className={cn(
-              'flex min-h-10 flex-col items-center justify-center gap-0.5 rounded-md border px-2 text-[0.74em] font-medium leading-tight transition-[background-color,border-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface motion-reduce:transition-none',
-              option === state
-                ? SERVICE_STATE_TONE[option]
-                : 'border-hairline bg-surface text-muted-foreground hover:bg-surface-tinted',
-              saving && 'cursor-wait opacity-60',
-            )}
-          >
-            {option === state ? (
-              <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} aria-hidden />
-            ) : null}
-            {t(`access.permissions.mirror.${SERVICE_STATE_KEY[option]}`)}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function MirrorDevice({
-  user,
-  roleLabel,
-  hiddenCount,
-  pages,
-  services,
-  categories,
-  showCreation,
-  showRecords,
-  expanded,
-  mobile,
-  onExpandedChange,
-}: {
-  user: AdminUserRead
-  roleLabel: string
-  hiddenCount: number
-  pages: BlueprintItem[]
-  services: BlueprintItem[]
-  categories: BlueprintItem[]
-  showCreation: boolean
-  showRecords: boolean
-  expanded: boolean
-  mobile: boolean
-  onExpandedChange: (expanded: boolean) => void
-}): React.JSX.Element {
-  const { t } = useTranslation()
-  const content = (
-    <aside
-      data-testid="mirror-device"
-      aria-label={t('access.permissions.mirror.viewingAs', { name: userLabel(user) })}
-      className={cn(
-        'mirror-device flex flex-col rounded-[1.9rem] bg-primary p-2 text-primary-foreground shadow-xl min-[900px]:sticky min-[900px]:top-4 min-[900px]:self-start',
-        mobile &&
-          'fixed inset-x-3 z-[45] max-h-[min(68vh,620px)] shadow-2xl [bottom:calc(4.875rem+var(--safe-bottom))]',
-      )}
-    >
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] bg-primary text-primary-foreground">
-      {mobile ? (
-        <button
-          type="button"
-          className="flex min-h-12 w-full items-center gap-3 border-b border-primary-foreground/15 px-4 py-2 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-foreground"
-          aria-expanded={expanded}
-          aria-controls="mirror-device-screen"
-          onClick={() => onExpandedChange(!expanded)}
-        >
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary-foreground/10 text-[0.78em] font-bold">
-            {initialsOf(user)}
-          </span>
-          <span className="min-w-0 flex-1">
-            <bdi className="block truncate text-[0.82em] font-semibold" dir="auto">
-              {t('access.permissions.mirror.viewingAs', { name: userLabel(user) })}
-            </bdi>
-            <span className="block text-[0.7em] text-primary-foreground">
-              {roleLabel} · {t('access.permissions.mirror.hiddenCount', { count: hiddenCount })}
-            </span>
-          </span>
-          <ChevronDown
-            className={cn(
-              'h-4 w-4 transition-transform motion-reduce:transition-none',
-              expanded && 'rotate-180',
-            )}
-            strokeWidth={1.8}
-            aria-hidden
-          />
-        </button>
-      ) : (
-        <div className="flex items-center gap-3 border-b border-primary-foreground/15 px-5 py-4">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-foreground/10 text-sm font-bold">
-            {initialsOf(user)}
-          </span>
-          <span className="min-w-0">
-            <bdi className="block truncate text-[0.86em] font-semibold" dir="auto">
-              {t('access.permissions.mirror.viewingAs', { name: userLabel(user) })}
-            </bdi>
-            <span className="block text-[0.72em] text-primary-foreground">
-              {roleLabel} · {t('access.permissions.mirror.hiddenCount', { count: hiddenCount })}
-            </span>
-          </span>
-        </div>
-      )}
-
-      {!mobile || expanded ? (
-        <div
-          id="mirror-device-screen"
-          className={cn(
-            'max-h-[calc(100dvh-8rem)] space-y-5 overflow-y-auto p-4',
-            mobile && 'min-h-0 flex-1',
-          )}
-        >
-          <section data-mirror-region="page">
-            <h3 className="mb-2 text-[0.68em] font-semibold uppercase tracking-[0.08em] text-primary-foreground">
-              {t('access.permissions.mirror.blueprintPages')}
-            </h3>
-            <div className="flex flex-wrap gap-1.5">
-              {pages.map((page) => (
-                <span key={page.id} className="rounded-md bg-primary-foreground/10 px-2 py-1 text-[0.68em]">
-                  {page.label}
-                </span>
-              ))}
-            </div>
-          </section>
-
-          {showCreation ? (
-            <section data-mirror-region="service">
-              <div className="mb-2 flex items-center justify-between gap-3 text-[0.68em] font-semibold uppercase tracking-[0.08em] text-primary-foreground">
-                <h3>{t('access.permissions.mirror.blueprintServices')}</h3>
-                <span>{t('access.permissions.mirror.availableCount', { count: services.length })}</span>
-              </div>
-              {services.length === 0 ? (
-                <p className="text-[0.7em] text-primary-foreground">
-                  {t('access.permissions.mirror.nothingVisible')}
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {services.map((service) => (
-                    <span
-                      key={service.id}
-                      className="rounded-lg border border-primary-foreground/10 bg-primary-foreground/10 px-2.5 py-2 text-[0.7em]"
-                    >
-                      {service.artwork ? (
-                        <ServiceArtwork
-                          artwork={service.artwork}
-                          size="inline"
-                          className="me-1 align-text-bottom"
-                        />
-                      ) : (
-                        <span className="me-1" aria-hidden>{service.glyph}</span>
-                      )}
-                      <bdi dir="auto">{service.label}</bdi>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </section>
-          ) : null}
-
-          {showRecords ? (
-            <section data-mirror-region="category">
-              <h3 className="mb-2 text-[0.68em] font-semibold uppercase tracking-[0.08em] text-primary-foreground">
-                {t('access.permissions.mirror.blueprintCategories')}
-              </h3>
-              {categories.length === 0 ? (
-                <p className="text-[0.7em] text-primary-foreground">
-                  {t('access.permissions.mirror.nothingVisible')}
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {categories.map((category) => (
-                    <span key={category.id} className="rounded-full border border-primary-foreground/15 px-2.5 py-1 text-[0.68em]">
-                      <bdi dir="auto">{category.label}</bdi>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </section>
-          ) : null}
-
-          {showCreation ? (
-            <section>
-              <h3 className="mb-2 text-[0.68em] font-semibold uppercase tracking-[0.08em] text-primary-foreground">
-                {t('access.permissions.mirror.quickActions')}
-              </h3>
-              {services.length === 0 ? (
-                <p className="text-[0.7em] text-primary-foreground">
-                  {t('access.permissions.mirror.nothingVisible')}
-                </p>
-              ) : (
-                <div className="grid grid-cols-3 gap-1.5">
-                  {services.slice(0, 6).map((service) => (
-                    <span key={service.id} className="rounded-md bg-primary-foreground/10 px-2 py-1.5 text-center text-[0.64em]">
-                      {service.artwork ? (
-                        <ServiceArtwork
-                          artwork={service.artwork}
-                          size="row"
-                          className="mx-auto mb-0.5"
-                        />
-                      ) : (
-                        <span className="block text-base" aria-hidden>{service.glyph}</span>
-                      )}
-                      <bdi dir="auto">{service.label}</bdi>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </section>
-          ) : null}
-        </div>
-      ) : null}
-      </div>
-    </aside>
-  )
-
-  if (!mobile) return content
-  return createPortal(
-    <div dir={document.documentElement.dir || 'ltr'} data-print-hide>
-      {content}
-    </div>,
-    document.body,
-  )
-}
-
-function RequestStrip({
-  requests,
-  catalog,
-  decidingId,
-  onDecide,
-}: {
-  requests: PermissionRequestRead[]
-  catalog: Pick<CapabilityCatalog, 'byId'>
-  decidingId: number | null
-  onDecide: (id: number, userId: number, decision: 'permanent' | 'refused') => void
-}): React.JSX.Element | null {
+/** People subsection integration point. The department branch owns the outer people/org shell. */
+export function PeoplePermissionsPanel(): React.JSX.Element {
   const { t, i18n } = useTranslation()
-  if (requests.length === 0) return null
-  const formatter = new Intl.DateTimeFormat(i18n.language, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  })
-  return (
-    <div className="border-t border-warning/25 bg-warning-soft px-4 py-3 text-foreground">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <strong className="text-[0.82em]">{t('access.permissions.mirror.requestedAccess')}</strong>
-        <Link
-          to="/access-requests?tab=permission-requests"
-          className="inline-flex min-h-11 items-center rounded-sm px-2 text-[0.72em] font-medium text-warning underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {t('access.permReq.tab')}
-        </Link>
-      </div>
-      <div className="space-y-2">
-        {requests.map((request) => {
-          const text = localizeCapability(
-            catalog.byId.get(request.capability),
-            request.capability,
-            i18n.language,
-          )
-          return (
-            <div
-              key={request.id}
-              className="flex flex-col gap-2 rounded-lg bg-surface/70 p-3 sm:flex-row sm:items-center"
-            >
-              <span className="min-w-0 flex-1">
-                <bdi className="block text-[0.82em] font-semibold" dir="auto">
-                  {text.label}
-                </bdi>
-                {text.description ? (
-                  <bdi className="block text-[0.72em] text-muted-foreground" dir="auto">
-                    {text.description}
-                  </bdi>
-                ) : null}
-                <span className="block font-mono text-[0.68em] text-muted-foreground">
-                  {formatter.format(new Date(request.created_at))}
-                </span>
-              </span>
-              <span className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={decidingId !== null}
-                  onClick={() => onDecide(request.id, request.user_id, 'permanent')}
-                  className="min-h-11 rounded-full bg-primary px-4 text-[0.78em] font-semibold text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                >
-                  {t('access.permissions.mirror.approve')}
-                </button>
-                <button
-                  type="button"
-                  disabled={decidingId !== null}
-                  onClick={() => onDecide(request.id, request.user_id, 'refused')}
-                  className="min-h-11 rounded-full border border-accent/30 bg-surface px-4 text-[0.78em] font-semibold text-accent hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                >
-                  {t('access.permissions.mirror.refuse')}
-                </button>
-              </span>
+  const { user } = useAuth()
+  const [params, setParams] = useSearchParams()
+  const routeNavigate = useNavigate()
+  const [query, setQuery] = useState('')
+  const [role, setRole] = useState('')
+  const [status, setStatus] = useState('')
+  const [page, setPage] = useState(1)
+  const openedAccount = useRef<number | null>(null)
+  const registerRef = useRef<HTMLElement>(null)
+  const identityRef = useRef<HTMLElement>(null)
+  const scrollPosition = useRef(0)
+  const arabic = i18n.language.startsWith('ar')
+  const usersQuery = useQuery({ queryKey: ['auth-users'], queryFn: api.listAuthUsers })
+  const requestsQuery = useQuery({ queryKey: ['permission-requests'], queryFn: api.listPermissionRequests })
+  const accounts = useMemo(() => usersQuery.data ?? [], [usersQuery.data])
+  const selectedParam = params.get('user')
+  const selectedId = selectedParam !== null && /^\d+$/.test(selectedParam) ? Number(selectedParam) : null
+  const selected = accounts.find((account) => account.id === selectedId)
+  const saving = useIsMutating({ mutationKey: selectedId === null ? ['permission-studio', user?.id, -1, 'save'] : [...accessSnapshotKey(user?.id, selectedId), 'save'] }) > 0
+  const eligibleAccounts = useMemo(() => accounts.filter((account) =>
+    (!role || account.role === role) && (!status || account.status === status)), [accounts, role, status])
+  const accountIndex = useMemo(() => accountSearchIndex(eligibleAccounts, arabic), [eligibleAccounts, arabic])
+  const filtered = useMemo(() => {
+    if (!query.trim()) return eligibleAccounts
+    const matchingIds = new Set(searchEntries(accountIndex, query).map(({ entry }) => entry.destination.userId))
+    return eligibleAccounts.filter((account) => matchingIds.has(account.id))
+  }, [eligibleAccounts, accountIndex, query])
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  const rows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const pendingCount = (requestsQuery.data ?? []).filter((request) => request.user_id === selectedId && request.status === 'pending').length
+  const roles = [...new Set(accounts.map((account) => account.role))].sort()
+  const statuses = [...new Set(accounts.map((account) => account.status))].sort()
+
+  useEffect(() => {
+    const header = identityRef.current
+    const section = registerRef.current
+    if (!selected || !header || !section) return
+    const scroller = section.closest<HTMLElement>('[data-permission-studio-scroll]') ?? findScrollContainer(section)
+    if (!scroller) return
+    const previousPadding = scroller.style.scrollPaddingBlockStart
+    const updatePadding = () => {
+      scroller.style.scrollPaddingBlockStart = `${header.getBoundingClientRect().height + 16}px`
+    }
+    updatePadding()
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(updatePadding)
+    observer?.observe(header)
+    return () => {
+      observer?.disconnect()
+      scroller.style.scrollPaddingBlockStart = previousPadding
+    }
+  }, [selected])
+
+  useEffect(() => {
+    if (selectedParam !== null || openedAccount.current === null) return
+    const trigger = registerRef.current?.querySelector<HTMLElement>(`[data-account-id="${openedAccount.current}"]`)
+      ?? registerRef.current?.querySelector<HTMLElement>('input[role="combobox"]')
+    trigger?.focus({ preventScroll: true })
+    const scroller = findScrollContainer(registerRef.current)
+    if (scroller) scroller.scrollTop = scrollPosition.current
+  }, [selectedParam])
+
+  function navigate(destination: StudioDestination): void {
+    if (saving) return
+    setParams((previous) => {
+      const next = new URLSearchParams(previous)
+      if (destination.userId !== undefined) next.set('user', String(destination.userId))
+      if (destination.resource) next.set('psResource', JSON.stringify(destination.resource))
+      return next
+    })
+  }
+  function openAccount(id: number): void {
+    if (saving) return
+    openedAccount.current = id
+    const scroller = findScrollContainer(registerRef.current)
+    scrollPosition.current = scroller?.scrollTop ?? 0
+    navigate({ userId: id })
+  }
+  function back(): void {
+    if (saving) return
+    const proceed = () => setParams((previous) => {
+      const next = new URLSearchParams(previous)
+      next.delete('user'); next.delete('psResource'); next.delete('psFilter')
+      return next
+    })
+    if (!requestWorkspaceNavigation(proceed)) proceed()
+  }
+  function guardManagementNavigation(event: MouseEvent<HTMLAnchorElement>): void {
+    if (saving) { event.preventDefault(); return }
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return
+    event.preventDefault()
+    const destination = event.currentTarget.getAttribute('href')
+    if (!destination) return
+    const proceed = () => routeNavigate(destination)
+    if (!requestWorkspaceNavigation(proceed)) proceed()
+  }
+  const managementLink = <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline underline-offset-4" to="/access-requests">{t('access.studio.manageAccounts')}</Link>
+  return <section ref={registerRef} className="min-w-0 space-y-5 [&_button]:min-h-11" aria-busy={usersQuery.isPending || saving}>
+    <header className="flex flex-wrap items-start justify-between gap-3">
+      <h1 className="text-2xl font-semibold tracking-tight">{t('access.studio.accounts')}</h1>
+      {managementLink}
+    </header>
+    {usersQuery.isPending ? <p role="status">{t('common.loading')}</p>
+      : usersQuery.isLoadingError ? <div role="alert"><p>{t('access.loadError')}: {apiErrorMessage(usersQuery.error)}</p><Button onClick={() => void usersQuery.refetch()}>{t('common.retry')}</Button></div>
+      : selectedParam !== null ? <>
+        {!selected ? <><Button variant="ghost" onClick={back} disabled={saving}>{t('access.studio.backToAccounts')}</Button><p role="alert">{t('access.studio.accountUnavailable')}</p></> : <>
+          <header ref={identityRef} className="sticky top-0 z-30 space-y-2 border-b border-border bg-background py-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button variant="ghost" onClick={back} disabled={saving}>{t('access.studio.backToAccounts')}</Button>
+              <h2 className="min-w-0 break-words text-xl font-semibold"><bdi>{nameOf(selected, arabic)}</bdi></h2>
             </div>
-          )
-        })}
-      </div>
-    </div>
-  )
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              <bdi dir="ltr" className="break-all">{selected.email}</bdi>
+              <bdi dir="ltr">{selected.employee_id}</bdi>
+              <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to={`/access-requests?tab=${selected.status === 'active' ? 'active' : 'suspended'}&user=${selected.id}`}>{t(`access.roleName.${selected.role}`)}</Link>
+              <span>{t(`access.status.${selected.status}`)}</span>
+              <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to="/access-requests?tab=permission-requests">{t('access.studio.pendingRequests', { count: pendingCount })}</Link>
+            </p>
+          </header>
+          {selected.status === 'pending' ? <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to={`/access-requests?user=${selected.id}`}>{t('access.studio.reviewAccount')}</Link>
+            : selected.role === 'admin' ? <p role="status">{t('access.studio.adminLocked')}</p>
+            : selected.id === user?.id ? <p role="status">{t('access.studio.selfLocked')}</p>
+            : <>
+              {selected.status !== 'active' && <p role="status" className="rounded-lg bg-warning-soft p-3 text-warning">{t('access.studio.disabledReadOnly')}</p>}
+              <AccessWorkspace key={selected.id} subjectId={selected.id}
+                initialResource={resourceFromParam(params.get('psResource'))}
+                onNavigate={navigate} renderSearch={(props) => <StudioSearch {...props} />} />
+            </>}
+        </>}
+      </> : <>
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <StudioSearch mode="accounts" accounts={eligibleAccounts} query={query}
+            onQueryChange={(value) => { setQuery(value); setPage(1) }}
+            onNavigate={(destination) => { if (destination.userId !== undefined) openAccount(destination.userId) }} />
+          <label className="flex flex-col gap-1 text-sm">{t('access.studio.role')}<select value={role} className={controlClass} onChange={(event) => { setRole(event.target.value); setPage(1) }}><option value="">{t('access.studio.allRoles')}</option>{roles.map((value) => <option key={value} value={value}>{t(`access.roleName.${value}`)}</option>)}</select></label>
+          <label className="flex flex-col gap-1 text-sm">{t('access.studio.statusLabel')}<select value={status} className={controlClass} onChange={(event) => { setStatus(event.target.value); setPage(1) }}><option value="">{t('access.studio.allStatuses')}</option>{statuses.map((value) => <option key={value} value={value}>{t(`access.status.${value}`)}</option>)}</select></label>
+        </div>
+        <p role="status" className="text-sm text-muted-foreground">{t('access.studio.accountCount', { count: filtered.length })}</p>
+        {filtered.length === 0 ? <div className="space-y-3 py-8"><p>{t(accounts.length ? 'access.studio.noMatchingAccounts' : 'access.studio.noAccounts')}</p>{accounts.length > 0 && <Button variant="outline" onClick={() => { setQuery(''); setRole(''); setStatus(''); setPage(1) }}>{t('access.studio.clearFilters')}</Button>}</div>
+          : <table className="w-full table-fixed text-start text-sm">
+            <thead className="hidden border-b border-border md:table-header-group"><tr>{['account', 'role', 'statusLabel', 'lastSignIn', 'editAccess'].map((key) => <th key={key} scope="col" className="px-3 py-3 text-start font-medium text-muted-foreground">{t(`access.studio.${key}`)}</th>)}</tr></thead>
+            <tbody className="block md:table-row-group">{rows.map((account) => <tr key={account.id} className="mb-3 block border-b border-border py-3 md:table-row md:py-0">
+              <th scope="row" className="block min-w-0 px-3 py-2 text-start font-medium md:table-cell"><bdi className="block break-words">{nameOf(account, arabic)}</bdi><span className="block text-xs font-normal text-muted-foreground [overflow-wrap:anywhere]"><bdi dir="ltr">{account.email}</bdi></span><span className="block text-xs font-normal"><bdi dir="ltr">{account.employee_id}</bdi></span></th>
+              <td className="inline-block px-3 py-2 align-top md:table-cell">{t(`access.roleName.${account.role}`)}</td><td className="inline-block px-3 py-2 align-top md:table-cell">{t(`access.status.${account.status}`)}</td>
+              <td className="block px-3 py-2 align-top md:table-cell"><span className="md:hidden">{t('access.studio.lastSignIn')}: </span>{account.last_login_at ? <time className="inline-block font-mono tabular-nums" dateTime={account.last_login_at} dir="ltr">{formatDmy(account.last_login_at.slice(0, 10))}</time> : t('access.studio.neverSignedIn')}</td>
+              <td className="block px-3 py-2 align-top md:table-cell">{account.status === 'pending' ? <Link className="inline-flex min-h-11 items-center text-primary underline" to={`/access-requests?user=${account.id}`}>{t('access.studio.reviewAccount')}</Link> : <Button variant="outline" className="h-auto max-w-full whitespace-normal py-3" data-account-id={account.id} onClick={() => openAccount(account.id)}>{t(account.status === 'active' && account.role !== 'admin' && account.id !== user?.id ? 'access.studio.editAccess' : 'access.studio.viewAccess')}</Button>}</td>
+            </tr>)}</tbody>
+          </table>}
+        <nav aria-label={t('access.studio.pagination')} className="flex flex-wrap items-center justify-end gap-3"><Button variant="outline" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>{t('common.previous')}</Button><span dir="ltr" className="tabular-nums">{currentPage} / {pageCount}</span><Button variant="outline" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>{t('common.next')}</Button></nav>
+      </>}
+  </section>
 }
 
 export function PermissionsPage(): React.JSX.Element {
-  const { t, i18n } = useTranslation()
-  const queryClient = useQueryClient()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const requestedUserParam = searchParams.get('user')
-  const requestedUserId = requestedUserParam === null ? null : Number(requestedUserParam)
-  const [captionItem, setCaptionItem] = useState<BlueprintItem | null>(null)
-  const [mirrorExpanded, setMirrorExpanded] = useState(false)
-  const [previewOpen, setPreviewOpen] = useState(false)
-  const [peopleOpen, setPeopleOpen] = useState(true)
-  const [peopleQuery, setPeopleQuery] = useState('')
-  const [decidingId, setDecidingId] = useState<number | null>(null)
-  const [beam, setBeam] = useState<Beam | null>(null)
-  const workspaceRef = useRef<HTMLElement>(null)
-  const beamTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const mobile = useMirrorMobile()
-  const isAr = i18n.language.startsWith('ar')
-  const capabilityCatalog = useCapabilityCatalog()
-
-  const usersQuery = useQuery({ queryKey: ['auth-users'], queryFn: api.listAuthUsers })
-  const templatesQuery = useQuery({
-    queryKey: ['templates'],
-    queryFn: api.listTemplates,
-    staleTime: Infinity,
-  })
-  const classificationsQuery = useQuery({
-    queryKey: ['books', 'classifications'],
-    queryFn: () => api.listBookClassifications(),
-    staleTime: Infinity,
-  })
-  const requestsQuery = useQuery({
-    queryKey: ['permission-requests'],
-    queryFn: api.listPermissionRequests,
-  })
-
-  const users = useMemo(
-    () => (usersQuery.data ?? []).filter((user) => user.status === 'active'),
-    [usersQuery.data],
-  )
-  // The rail filter narrows who is listed, never who is being edited: the
-  // selection lives in `?user=` so a filtered-out person keeps their workspace.
-  const filteredUsers = useMemo(() => {
-    const needle = peopleQuery.trim().toLowerCase()
-    if (!needle) return users
-    return users.filter((user) => userLabel(user).toLowerCase().includes(needle))
-  }, [peopleQuery, users])
-  const selectedUser =
-    requestedUserId === null
-      ? (users.find((user) => user.role !== 'admin') ?? null)
-      : (users.find(
-          (user) => user.id === requestedUserId && user.role !== 'admin',
-        ) ?? null)
-  const requestedAdmin =
-    requestedUserId !== null &&
-    users.some((user) => user.id === requestedUserId && user.role === 'admin')
-  const requestedUserMissing =
-    requestedUserParam !== null &&
-    (usersQuery.data ?? []).length > 0 &&
-    selectedUser == null &&
-    !requestedAdmin
-  const selectedId = selectedUser?.id ?? null
-  const permissionWritesPending =
-    useIsMutating({ mutationKey: ['user-permission-write', selectedId] }) > 0
-
-  const permissionsQuery = useQuery({
-    queryKey: ['user-permissions', selectedUser?.id],
-    queryFn: () => api.getUserPermissions(selectedUser!.id),
-    enabled: selectedUser != null,
-  })
-  const permissions = permissionsQuery.data
-  const effective = useMemo(() => new Set(permissions?.effective ?? []), [permissions?.effective])
-
-  const templatesById = useMemo(() => {
-    const byId: Record<string, TemplateMeta> = {}
-    for (const template of templatesQuery.data?.items ?? []) byId[template.id] = template
-    return byId
-  }, [templatesQuery.data?.items])
-
-  const pageItems = useMemo<BlueprintItem[]>(
-    () =>
-      PAGE_BLUEPRINT.map((page) => ({
-        id: page.capability ?? 'dashboard',
-        capability: page.capability,
-        label: t(page.key),
-        kind: 'page',
-        locked: page.locked,
-      })),
-    [t],
-  )
-  // Every manually created service, most-used first; feature-minted forms
-  // (vehicle fines/accidents) have no Services tile and stay in Advanced.
-  const serviceItems = useMemo<BlueprintItem[]>(() => {
-    const ids: string[] = [...QUICK_ACTION_IDS]
-    for (const template of templatesQuery.data?.items ?? []) {
-      if (!template.feature_minted && !ids.includes(template.id)) ids.push(template.id)
-    }
-    return [
-      ...ids.map((id) => {
-        const template = templatesById[id]
-        return {
-          id,
-          capability: `books.service.${id}`,
-          label: (isAr ? template?.name_ar : template?.name_en) || id,
-          kind: 'service' as const,
-          glyph: emojiForTemplate(id),
-          artwork: artworkForTemplate(id),
-        }
-      }),
-      {
-        id: 'other',
-        capability: 'books.service.other',
-        label: t('access.permissions.mirror.serviceOther'),
-        kind: 'service',
-      },
-    ]
-  }, [isAr, t, templatesById, templatesQuery.data?.items])
-  const dutyTransferItem: BlueprintItem = {
-    id: 'duty-transfer',
-    capability: 'documents.duty_transfer',
-    label: t('access.permissions.mirror.dutyTransfer'),
-    kind: 'service',
-    artwork: 'duty-locations',
-  }
-  const mirroredServiceIds = useMemo(
-    () => new Set(serviceItems.map((item) => item.id)),
-    [serviceItems],
-  )
-  const categoryItems = useMemo<BlueprintItem[]>(
-    () =>
-      capabilityCatalog.entries
-        .filter((entry) => entry.id.startsWith('books.category.'))
-        .map((entry) => {
-          const { label, description } = localizeCapability(entry, entry.id, i18n.language)
-          return {
-            id: entry.id.slice('books.category.'.length),
-            capability: entry.id,
-            label,
-            kind: 'category',
-            description,
-          }
-        }),
-    [capabilityCatalog.entries, i18n.language],
-  )
-  const categoryGroups = useMemo(() => {
-    if (!classificationsQuery.isSuccess) return [categoryItems]
-    const codes = new Set(classificationsQuery.data.items.map((item) => item.code))
-    const classifications: BlueprintItem[] = []
-    const legacy: BlueprintItem[] = []
-    for (const item of categoryItems) {
-      (codes.has(item.id) ? classifications : legacy).push(item)
-    }
-    return legacy.length > 0 ? [classifications, legacy] : [classifications]
-  }, [categoryItems, classificationsQuery.data, classificationsQuery.isSuccess])
-  const coverageIdPrefix = useId()
-
-  // Records visibility is the stronger gate: without it the service is gone
-  // from Records too, so a stray create-allowed/records-denied pair reads as
-  // Hidden until the next choice rewrites the canonical pair.
-  const serviceStates = useMemo(() => {
-    const states: Record<string, ServiceAccessState> = {}
-    for (const item of serviceItems) {
-      const recordsDenied = !effective.has(`books.servicerecords.${item.id}`)
-      const createDenied = item.capability == null || !effective.has(item.capability)
-      states[item.id] = recordsDenied ? 'hidden' : createDenied ? 'records' : 'full'
-    }
-    return states
-  }, [effective, serviceItems])
-
-  const editableItems = [
-    ...pageItems.filter((item) => !item.locked),
-    ...serviceItems,
-    dutyTransferItem,
-    ...categoryItems,
-  ]
-  const hiddenCount = permissions
-    ? editableItems.reduce(
-        (count, item) => count + (item.capability && !effective.has(item.capability) ? 1 : 0),
-        0,
-      )
-    : 0
-  const canViewRecords = effective.has('books.view')
-  const canCreateRecords = canViewRecords && effective.has('documents.generate')
-  const showViewPrereqWarning =
-    !canViewRecords &&
-    RECORD_CAPABILITIES_REQUIRING_VIEW.some((capability) => effective.has(capability))
-  const visiblePages = pageItems.filter(
-    (item) => item.locked || (item.capability != null && effective.has(item.capability)),
-  )
-  const visibleServices = canCreateRecords
-    ? [
-        ...serviceItems.filter(
-          (item) =>
-            item.id !== 'other' && item.capability != null && effective.has(item.capability),
-        ),
-        ...(effective.has('documents.duty_transfer') && effective.has('books.service.General Book')
-          ? [dutyTransferItem]
-          : []),
-      ]
-    : []
-  const visibleCategories = canViewRecords
-    ? categoryItems.filter(
-        (item) => item.capability != null && effective.has(item.capability),
-      )
-    : []
-  const selectedRequests = (requestsQuery.data ?? []).filter(
-    (request) => request.user_id === selectedUser?.id && request.status === 'pending',
-  )
-
-  const toggleMutation = useMutation({
-    mutationKey: ['user-permission-write', selectedId],
-    scope: { id: `user-permission-write:${selectedId ?? 'none'}` },
-    mutationFn: ({
-      userId,
-      capability,
-      effect,
-    }: {
-      userId: number
-      capability: string
-      effect: PermissionEffect | null
-    }) => api.setUserPermission(userId, capability, effect),
-    onMutate: async ({ userId, capability, effect }) => {
-      const queryKey = ['user-permissions', userId] as const
-      await queryClient.cancelQueries({ queryKey })
-      const previous = queryClient.getQueryData<UserPermissionRead>(queryKey)
-      if (previous) {
-        queryClient.setQueryData(queryKey, updatePermissionOptimistically(previous, capability, effect))
-      }
-      return { previous, queryKey }
-    },
-    onError: (error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(context.queryKey, context.previous)
-      toast.error(
-        typeof error === 'object' && error !== null && 'code' in error
-          ? apiErrorMessage(error)
-          : t('access.permissions.saveError'),
-      )
-    },
-    onSuccess: (data, variables) => {
-      queryClient.setQueryData(['user-permissions', variables.userId], data)
-    },
-  })
-
-  const serviceTriMutation = useMutation({
-    mutationKey: ['user-permission-write', selectedId],
-    scope: { id: `user-permission-write:${selectedId ?? 'none'}` },
-    mutationFn: ({
-      userId,
-      items,
-    }: {
-      userId: number
-      items: Array<{ capability: string; effect: PermissionEffect | null }>
-    }) => api.setUserPermissionsBulk(userId, items),
-    onMutate: async ({ userId, items }) => {
-      const queryKey = ['user-permissions', userId] as const
-      await queryClient.cancelQueries({ queryKey })
-      const previous = queryClient.getQueryData<UserPermissionRead>(queryKey)
-      if (previous) {
-        let next = previous
-        for (const item of items) {
-          next = updatePermissionOptimistically(next, item.capability, item.effect)
-        }
-        queryClient.setQueryData(queryKey, next)
-      }
-      return { previous, queryKey }
-    },
-    onError: (error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(context.queryKey, context.previous)
-      toast.error(
-        typeof error === 'object' && error !== null && 'code' in error
-          ? apiErrorMessage(error)
-          : t('access.permissions.saveError'),
-      )
-    },
-    onSuccess: (data, variables) => {
-      queryClient.setQueryData(['user-permissions', variables.userId], data)
-    },
-  })
-
-  const decideMutation = useMutation({
-    mutationFn: ({
-      id,
-      decision,
-    }: {
-      id: number
-      userId: number
-      decision: 'permanent' | 'refused'
-    }) => api.decidePermissionRequest(id, { decision }),
-    onMutate: ({ id }) => setDecidingId(id),
-    onError: () => toast.error(t('access.permissions.saveError')),
-    onSettled: (_data, _error, variables) => {
-      setDecidingId(null)
-      void queryClient.invalidateQueries({ queryKey: ['permission-requests'] })
-      void queryClient.invalidateQueries({
-        queryKey: ['user-permissions', variables.userId],
-      })
-    },
-  })
-
-  useEffect(
-    () => () => {
-      clearTimeout(beamTimer.current ?? undefined)
-    },
-    [],
-  )
-
-  const flashBeam = (source: HTMLButtonElement, kind: BlueprintKind): void => {
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
-    const workspace = workspaceRef.current
-    const target = workspace?.querySelector<HTMLElement>(`[data-mirror-region="${kind}"]`)
-    if (!workspace || !target) return
-    const rootRect = workspace.getBoundingClientRect()
-    const sourceRect = source.getBoundingClientRect()
-    const targetRect = target.getBoundingClientRect()
-    setBeam({
-      x1: sourceRect.left + sourceRect.width / 2 - rootRect.left,
-      y1: sourceRect.top + sourceRect.height / 2 - rootRect.top,
-      x2: targetRect.left + targetRect.width / 2 - rootRect.left,
-      y2: targetRect.top + targetRect.height / 2 - rootRect.top,
-    })
-    clearTimeout(beamTimer.current ?? undefined)
-    beamTimer.current = setTimeout(() => setBeam(null), 300)
-  }
-
-  const toggleItem = (
-    item: BlueprintItem,
-    event: React.MouseEvent<HTMLButtonElement>,
-  ): void => {
-    setCaptionItem(item)
-    if (!permissions || !selectedUser || !item.capability || item.locked) return
-    flashBeam(event.currentTarget, item.kind)
-    const denied = !effective.has(item.capability)
-    const effect: PermissionEffect | null = denied
-      ? permissions.overrides[item.capability] === 'deny'
-        ? null
-        : 'grant'
-      : 'deny'
-    toggleMutation.mutate({ userId: selectedUser.id, capability: item.capability, effect })
-  }
-
-  // One atomic write per choice: creation first, records second, so a partial
-  // failure can never leave the person with records they cannot reach.
-  //
-  // "Clear the override" (effect: null) only reproduces the intended state
-  // for a LEGACY service, whose default is granted. A 2026-09-21 opt-in
-  // service (catalog default_roles === ["admin"] — see
-  // capability_catalog_service._service_entries) defaults to DENIED, so
-  // "Full"/"Records only" must write an explicit grant there instead, or
-  // clearing the override would silently leave the form denied.
-  const selectServiceState = (
-    item: BlueprintItem,
-    next: ServiceAccessState,
-    event: React.MouseEvent<HTMLButtonElement>,
-  ): void => {
-    setCaptionItem(item)
-    if (!permissions || !selectedUser || !item.capability) return
-    flashBeam(event.currentTarget, item.kind)
-    const recordsCapability = `books.servicerecords.${item.id}`
-    const isOptIn =
-      (capabilityCatalog.byId.get(item.capability)?.default_roles.length ?? 0) === 1
-    serviceTriMutation.mutate({
-      userId: selectedUser.id,
-      items: [
-        {
-          capability: item.capability,
-          effect: next === 'full' ? (isOptIn ? 'grant' : null) : 'deny',
-        },
-        {
-          capability: recordsCapability,
-          effect:
-            next === 'hidden' ? 'deny' : isOptIn ? 'grant' : null,
-        },
-      ],
-    })
-  }
-
-  const caption = (() => {
-    if (!captionItem || !permissions) return t('access.permissions.mirror.hint')
-    if (captionItem.locked) return t('access.permissions.mirror.always')
-    if (!captionItem.capability) return t('access.permissions.mirror.always')
-    if (captionItem.capability.startsWith('books.service.')) {
-      const state = serviceStates[captionItem.id] ?? 'full'
-      return t(`access.permissions.mirror.${SERVICE_CAPTION_KEY[state]}`, {
-        name: captionItem.label,
-      })
-    }
-    const denied = !effective.has(captionItem.capability)
-    if (denied && captionItem.capability === 'books.view') {
-      return t('access.permissions.mirror.consequenceRecords')
-    }
-    if (denied && captionItem.kind === 'category') {
-      return t('access.permissions.mirror.consequence')
-    }
-    if (denied) return t('access.permissions.mirror.deniedForUser')
-    if (permissions.overrides[captionItem.capability] === 'grant') {
-      return t('access.permissions.mirror.explicitGrant')
-    }
-    return t('access.permissions.mirror.roleCaption', {
-      role: t(`access.roleName.${permissions.role}`),
-    })
-  })()
-
-  const selectUser = (user: AdminUserRead): void => {
-    if (user.role === 'admin') return
-    setCaptionItem(null)
-    setSearchParams({ user: String(user.id) }, { replace: true })
-  }
-
-  if (usersQuery.isLoading) {
-    return (
-      <div className="flex flex-1 flex-col overflow-auto bg-background p-6">
-        <Skeleton className="mx-auto h-10 w-full max-w-[1680px]" />
-        <Skeleton className="mx-auto mt-5 h-[520px] w-full max-w-[1680px] rounded-2xl" />
-      </div>
-    )
-  }
-
-  if (usersQuery.isError) {
-    return (
-      <div className="flex flex-1 items-center justify-center bg-background p-8">
-        <EmptyState message={t('access.permissions.loadError')} />
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-1 flex-col overflow-auto bg-background">
-      <div className="mx-auto w-full max-w-[1680px] flex-1 px-4 pb-24 pt-5 sm:px-8 sm:pb-12">
-        <header className="mb-5">
-          <h1 className="text-[1.7em] font-bold tracking-tight text-foreground">
-            {t('access.permissions.mirror.title')}
-          </h1>
-          <p className="mt-1 max-w-[72ch] text-[0.86em] leading-relaxed text-muted-foreground">
-            {t('access.permissions.mirror.help')}
-          </p>
-        </header>
-        <div className="grid grid-cols-1 gap-4 min-[1100px]:gap-6 min-[1100px]:[grid-template-columns:280px_minmax(0,1fr)_360px]">
-          <aside
-            aria-label={t('access.permissions.mirror.people')}
-            className="rounded-2xl border border-hairline bg-surface p-4 min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:self-start"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-muted-foreground">
-                {t('access.permissions.mirror.people')}
-              </h2>
-              <button
-                type="button"
-                aria-label={t('access.permissions.mirror.people')}
-                aria-expanded={peopleOpen}
-                aria-controls="permissions-people-list"
-                onClick={() => setPeopleOpen((value) => !value)}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-[1100px]:hidden"
-              >
-                <ChevronDown
-                  className={cn(
-                    'h-4 w-4 transition-transform motion-reduce:transition-none',
-                    peopleOpen && 'rotate-180',
-                  )}
-                  strokeWidth={1.8}
-                  aria-hidden
-                />
-              </button>
-            </div>
-
-            <div
-              id="permissions-people-list"
-              className={cn('mt-2.5', !peopleOpen && 'hidden min-[1100px]:block')}
-            >
-              <div className="flex min-h-11 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10">
-                <Search
-                  className="h-4 w-4 shrink-0 text-muted-foreground"
-                  strokeWidth={1.8}
-                  aria-hidden
-                />
-                <input
-                  value={peopleQuery}
-                  onChange={(event) => setPeopleQuery(event.target.value)}
-                  placeholder={t('access.permissions.mirror.searchPeople')}
-                  aria-label={t('access.permissions.mirror.searchPeople')}
-                  className="min-w-0 flex-1 bg-transparent text-[0.82em] outline-none placeholder:text-muted-foreground"
-                />
-              </div>
-
-              {filteredUsers.length === 0 ? (
-                <p role="status" className="px-1 py-4 text-[0.78em] text-muted-foreground">
-                  {t('common.noResults')}
-                </p>
-              ) : (
-                <div
-                  role="group"
-                  aria-label={t('access.permissions.mirror.pickUser')}
-                  className="mt-2 flex flex-col gap-1.5 min-[1100px]:max-h-[min(60vh,32rem)] min-[1100px]:overflow-y-auto min-[1100px]:[scrollbar-width:thin]"
-                >
-                  {filteredUsers.map((user) => {
-                    const selected = user.id === selectedUser?.id
-                    const adminUser = user.role === 'admin'
-                    return (
-                      <button
-                        key={user.id}
-                        type="button"
-                        disabled={adminUser}
-                        onClick={() => selectUser(user)}
-                        aria-pressed={selected}
-                        title={adminUser ? t('access.permissions.mirror.adminNote') : undefined}
-                        className={cn(
-                          'flex min-h-12 w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                          selected
-                            ? 'border-primary bg-primary-soft'
-                            : 'border-transparent hover:border-border hover:bg-surface-tinted',
-                          adminUser && 'cursor-not-allowed opacity-60',
-                        )}
-                      >
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary text-[0.72em] font-bold text-primary-foreground">
-                          {initialsOf(user)}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <bdi
-                            className="block truncate text-[0.82em] font-semibold text-foreground"
-                            dir="auto"
-                          >
-                            {userLabel(user)}
-                          </bdi>
-                          <span
-                            className={cn(
-                              'mt-0.5 inline-flex rounded-full px-2 py-0.5 text-[0.62em] font-semibold',
-                              roleTone(user.role),
-                            )}
-                          >
-                            {t(`access.roleName.${user.role}`)}
-                          </span>
-                          {adminUser ? (
-                            <span className="ms-1 text-[0.62em] text-muted-foreground">
-                              {t('access.permissions.mirror.adminNote')}
-                            </span>
-                          ) : null}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-
-              <p className="mt-2.5 border-t border-hairline pt-2.5 text-[0.7em] text-muted-foreground">
-                {t('access.permissions.mirror.peopleCount', { count: users.length })}
-              </p>
-            </div>
-          </aside>
-
-          <div className="min-w-0">
-            {!selectedUser ? (
-              requestedAdmin ? (
-                <EmptyState
-                  icon={ShieldCheck}
-                  message={t('access.permissions.mirror.adminNote')}
-                />
-              ) : requestedUserMissing ? (
-                <div className="flex flex-col items-center gap-3">
-                  <EmptyState
-                    icon={ShieldCheck}
-                    message={t('access.permissions.mirror.userNotFound')}
-                  />
-                  <Link
-                    to="/access-requests"
-                    className="inline-flex min-h-11 items-center rounded-full border border-hairline bg-surface px-4 text-[0.82em] font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {t('access.title')}
-                  </Link>
-                </div>
-              ) : (
-                <EmptyState icon={ShieldCheck} message={t('access.permissions.empty')} />
-              )
-            ) : permissionsQuery.isError || capabilityCatalog.status === 'error' ? (
-              <EmptyState message={t('access.permissions.loadError')} />
-            ) : permissionsQuery.isLoading || !permissions ? (
-              <Skeleton className="h-[520px] w-full rounded-2xl" />
-            ) : (
-              <>
-                <section
-                  ref={workspaceRef}
-                  className="relative overflow-hidden rounded-2xl border border-hairline bg-surface shadow-sm"
-                >
-                  <div className="flex flex-col gap-3 border-b border-hairline px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary text-[0.74em] font-bold text-primary-foreground">
-                        {initialsOf(selectedUser)}
-                      </span>
-                      <span className="min-w-0">
-                        <bdi
-                          className="block truncate text-[0.84em] font-semibold text-foreground"
-                          dir="auto"
-                        >
-                          {userLabel(selectedUser)}
-                        </bdi>
-                        <span
-                          className={cn(
-                            'mt-0.5 inline-flex rounded-full px-2 py-0.5 text-[0.62em] font-semibold',
-                            roleTone(selectedUser.role),
-                          )}
-                        >
-                          {t(`access.roleName.${selectedUser.role}`)}
-                        </span>
-                      </span>
-                    </div>
-                    {showViewPrereqWarning ? (
-                      <div
-                        role="note"
-                        className="flex min-w-0 items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-start text-[0.78em] leading-relaxed text-foreground"
-                      >
-                        <AlertTriangle
-                          className="mt-0.5 h-4 w-4 shrink-0 text-warning"
-                          strokeWidth={1.8}
-                          aria-hidden
-                        />
-                        <span className="min-w-0">
-                          {t('access.permissions.mirror.viewPrereqWarning')}
-                        </span>
-                      </div>
-                    ) : null}
-                    <span
-                      className={cn(
-                        'shrink-0 self-start rounded-full px-3 py-1.5 text-[0.72em] sm:self-auto',
-                        hiddenCount > 0
-                          ? 'bg-accent-soft text-accent'
-                          : 'bg-surface-tinted text-muted-foreground',
-                      )}
-                    >
-                      <strong className="font-mono">{hiddenCount}</strong>{' '}
-                      {t('access.permissions.mirror.hiddenLabel', { count: hiddenCount })}
-                    </span>
-                  </div>
-
-                  <div className="p-5 sm:p-6">
-                    <section
-                      aria-label={t('access.permissions.mirror.blueprintLabel')}
-                      className="overflow-hidden rounded-xl border-[1.5px] border-primary bg-surface text-foreground"
-                    >
-                      <div className="space-y-7 p-5 sm:p-6">
-                        <div>
-                          <h3 className="mb-3 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
-                            {t('access.permissions.mirror.blueprintPages')}
-                          </h3>
-                          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                            {pageItems.map((item) => (
-                              <BlueprintButton
-                                key={item.id}
-                                item={item}
-                                denied={item.capability != null && !effective.has(item.capability)}
-                                saving={permissionWritesPending}
-                                onFocus={() => setCaptionItem(item)}
-                                onToggle={(event) => toggleItem(item, event)}
-                              />
-                            ))}
-                          </div>
-                        </div>
-
-                        <div>
-                          <h3 className="mb-3 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
-                            {t('access.permissions.mirror.blueprintServices')}
-                          </h3>
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            {serviceItems.map((item) => (
-                              <div key={item.id}>
-                                <ServiceTriState
-                                  item={item}
-                                  state={serviceStates[item.id] ?? 'full'}
-                                  legendId={SERVICE_LEGEND_ID}
-                                  saving={permissionWritesPending}
-                                  onFocus={() => setCaptionItem(item)}
-                                  onSelect={(next, event) => selectServiceState(item, next, event)}
-                                />
-                                {item.id === 'other' ? (
-                                  <div className="mt-2 space-y-2 text-[0.72em] leading-relaxed text-muted-foreground">
-                                    <ul className="list-disc space-y-1 ps-5">
-                                      <li>{t('access.permissions.mirror.otherManual')}</li>
-                                      <li>{t('access.permissions.mirror.otherDrafts')}</li>
-                                      <li>{t('access.permissions.mirror.otherRetired')}</li>
-                                    </ul>
-                                    <Link
-                                      to="/books?service=other"
-                                      className="inline-flex min-h-9 items-center text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                    >
-                                      {t('access.permissions.mirror.viewOtherRecords')}
-                                    </Link>
-                                  </div>
-                                ) : null}
-                              </div>
-                            ))}
-                            <div className="grid self-start">
-                              <BlueprintButton
-                                item={dutyTransferItem}
-                                denied={!effective.has('documents.duty_transfer')}
-                                saving={permissionWritesPending}
-                                onFocus={() => setCaptionItem(dutyTransferItem)}
-                                onToggle={(event) => toggleItem(dutyTransferItem, event)}
-                              />
-                            </div>
-                          </div>
-                          <p
-                            id={SERVICE_LEGEND_ID}
-                            className="mt-3 text-[0.72em] leading-relaxed text-muted-foreground"
-                          >
-                            {t('access.permissions.mirror.svcLegend')}
-                          </p>
-                        </div>
-
-                        <div>
-                          <h3 className="mb-3 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
-                            {t('access.permissions.mirror.blueprintCategories')}
-                          </h3>
-                          <p className="mb-3 text-[0.72em] text-muted-foreground">
-                            {t('access.permissions.mirror.categoryHint')}
-                          </p>
-                          {categoryGroups.map((items, index) => (
-                            <div key={index === 0 ? 'classifications' : 'legacy'}>
-                              {index === 1 ? (
-                                <h4 className="mb-3 mt-6 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
-                                  {t('access.permissions.mirror.legacyCategories')}
-                                </h4>
-                              ) : null}
-                              <div
-                                className={cn(
-                                  'grid gap-2.5',
-                                  index === 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3',
-                                )}
-                              >
-                                {items.map((item, itemIndex) => {
-                                  const coverageId = `${coverageIdPrefix}-${itemIndex}`
-                                  const showCoverage = index === 1 && Boolean(item.description)
-                                  const button = (
-                                    <BlueprintButton
-                                      key={item.id}
-                                      item={item}
-                                      denied={item.capability != null && !effective.has(item.capability)}
-                                      saving={permissionWritesPending}
-                                      describedBy={showCoverage ? coverageId : undefined}
-                                      onFocus={() => setCaptionItem(item)}
-                                      onToggle={(event) => toggleItem(item, event)}
-                                    />
-                                  )
-                                  return showCoverage ? (
-                                    <div key={item.id} className="grid content-start gap-1">
-                                      {button}
-                                      <p
-                                        id={coverageId}
-                                        className="px-1 text-[0.7em] leading-snug text-muted-foreground"
-                                      >
-                                        <bdi dir="auto">{item.description}</bdi>
-                                      </p>
-                                    </div>
-                                  ) : (
-                                    button
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <RequestStrip
-                        requests={selectedRequests}
-                        catalog={capabilityCatalog}
-                        decidingId={decidingId}
-                        onDecide={(id, userId, decision) =>
-                          decideMutation.mutate({ id, userId, decision })
-                        }
-                      />
-                      <div
-                        aria-live="polite"
-                        className="border-t border-primary/15 bg-primary-soft px-4 py-3 text-[0.74em] leading-relaxed text-foreground"
-                      >
-                        {caption}
-                      </div>
-                    </section>
-                  </div>
-
-                  {!mobile ? (
-                    <div className="border-t border-hairline px-4 py-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="inline-flex min-w-0 items-center gap-2 text-[0.74em] text-muted-foreground">
-                          <Eye className="h-4 w-4 shrink-0" strokeWidth={1.7} aria-hidden />
-                          <bdi className="truncate" dir="auto">
-                            {t('access.permissions.mirror.viewingAs', {
-                              name: userLabel(selectedUser),
-                            })}
-                          </bdi>
-                        </span>
-                        <button
-                          type="button"
-                          aria-expanded={previewOpen}
-                          aria-controls="permissions-mirror-preview"
-                          onClick={() => setPreviewOpen((value) => !value)}
-                          className="inline-flex min-h-9 shrink-0 items-center rounded-full border border-hairline bg-surface-tinted px-3.5 text-[0.74em] font-medium text-primary transition-colors hover:bg-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          {previewOpen
-                            ? t('access.permissions.mirror.closePreview')
-                            : t('access.permissions.mirror.openPreview')}
-                        </button>
-                      </div>
-
-                      {previewOpen ? (
-                        <div id="permissions-mirror-preview" className="mt-3">
-                          <MirrorDevice
-                            user={selectedUser}
-                            roleLabel={t(`access.roleName.${selectedUser.role}`)}
-                            hiddenCount={hiddenCount}
-                            pages={visiblePages}
-                            services={visibleServices}
-                            categories={visibleCategories}
-                            showCreation={canCreateRecords}
-                            showRecords={canViewRecords}
-                            expanded
-                            mobile={false}
-                            onExpandedChange={() => {}}
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  {beam ? (
-                    <svg
-                      className="pointer-events-none absolute inset-0 z-20 h-full w-full text-accent"
-                      aria-hidden
-                    >
-                      <line
-                        x1={beam.x1}
-                        y1={beam.y1}
-                        x2={beam.x2}
-                        y2={beam.y2}
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeDasharray="5 5"
-                      />
-                    </svg>
-                  ) : null}
-                </section>
-
-                {mobile ? (
-                  <MirrorDevice
-                    user={selectedUser}
-                    roleLabel={t(`access.roleName.${selectedUser.role}`)}
-                    hiddenCount={hiddenCount}
-                    pages={visiblePages}
-                    services={visibleServices}
-                    categories={visibleCategories}
-                    showCreation={canCreateRecords}
-                    showRecords={canViewRecords}
-                    expanded={mirrorExpanded}
-                    mobile
-                    onExpandedChange={setMirrorExpanded}
-                  />
-                ) : null}
-              </>
-            )}
-          </div>
-
-          {selectedUser != null &&
-          permissions != null &&
-          !permissionsQuery.isError &&
-          capabilityCatalog.status !== 'error' ? (
-            <aside className="min-w-0 min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:self-start">
-              <AdvancedPermissionsPanel
-                user={selectedUser}
-                perms={permissions}
-                capabilities={capabilityCatalog.entries}
-                mirroredServiceIds={mirroredServiceIds}
-              />
-            </aside>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  )
+  return <div data-permission-studio-scroll className="min-w-0 flex-1 overflow-auto bg-background"><div className="mx-auto w-full max-w-[1440px] px-4 pb-12 pt-6 md:px-7"><PeoplePermissionsPanel /></div></div>
 }
-
 export default PermissionsPage

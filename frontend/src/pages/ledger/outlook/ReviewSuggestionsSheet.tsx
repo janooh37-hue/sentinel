@@ -21,6 +21,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 interface ReviewSuggestionsSheetProps {
   open: boolean
@@ -74,6 +75,7 @@ interface SuggestionRowProps {
 function SuggestionRow({ suggestion, onCreate }: SuggestionRowProps): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const { has } = useCapabilities()
 
   const dismissMut = useMutation({
     mutationFn: () => api.dismissSmartFolderSuggestion(suggestion.cluster_key),
@@ -120,14 +122,14 @@ function SuggestionRow({ suggestion, onCreate }: SuggestionRowProps): React.JSX.
       </div>
 
       <div className="flex gap-1.5">
-        <Button size="sm" onClick={() => onCreate(suggestion)}>
+        <Button size="sm" disabled={!has('ledger.create')} onClick={() => { if (has('ledger.create')) onCreate(suggestion) }}>
           {t('ledger.smart.createDots')}
         </Button>
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => dismissMut.mutate()}
-          disabled={dismissMut.isPending}
+          onClick={() => { if (has('ledger.edit')) dismissMut.mutate() }}
+          disabled={!has('ledger.edit') || dismissMut.isPending}
         >
           {t('ledger.smart.dismiss')}
         </Button>

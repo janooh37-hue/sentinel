@@ -1,10 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from 'i18next'
 import ar from '@/locales/ar.json'
 import { EmployeeSearchHero } from './EmployeeSearchHero'
+
+const hasCapability = vi.hoisted(() => vi.fn<(cap: string) => boolean>(() => true))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ has: hasCapability }),
+}))
+beforeEach(() => hasCapability.mockReturnValue(true))
 
 vi.mock('@/lib/api', async (orig) => ({
   ...(await orig()),
@@ -91,4 +97,12 @@ describe('EmployeeSearchHero transferred pill', () => {
     expect(pill.textContent).toContain('15/11/2026')
     expect(pill.textContent).not.toContain('Transferred')
   })
+})
+
+it('does not expose an on-leave pill from previously cached leave IDs when access is denied', async () => {
+  hasCapability.mockImplementation((cap) => cap !== 'leaves.view')
+  wrap(<EmployeeSearchHero onSelect={vi.fn()} onCreate={vi.fn()} onLeaveIds={new Set(['G3190'])} />)
+  await userEvent.type(screen.getByRole('searchbox'), 'ABD')
+  expect(await screen.findByText(/G3190/)).toBeInTheDocument()
+  expect(screen.queryByText(/On leave|في إجازة/)).not.toBeInTheDocument()
 })

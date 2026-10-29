@@ -34,12 +34,13 @@ function MessageEditor({ template }: { template: MessageTemplateRead }) {
   const pending = save.isPending || reset.isPending
   const dirty = values.ar !== baseline.ar || values.en !== baseline.en
   const debounced = useDebouncedValue(values, 400)
+  const previewValues = canEdit ? debounced : baseline
   const preview = useQuery({
-    queryKey: ['notify-template-render', template.event, debounced],
-    queryFn: () => messageTemplatesApi.render(template.event, debounced),
+    queryKey: ['notify-template-render', template.event, previewValues],
+    queryFn: () => messageTemplatesApi.render(template.event, previewValues),
     retry: false,
   })
-  const previewCurrent = values.ar === debounced.ar && values.en === debounced.en
+  const previewCurrent = !canEdit || (values.ar === debounced.ar && values.en === debounced.en)
   const error = save.error ?? reset.error
   const accept = (next: MessageTemplateRead) => {
     setCurrent(next)
@@ -58,6 +59,7 @@ function MessageEditor({ template }: { template: MessageTemplateRead }) {
         </div>
         <p className="text-sm text-muted-foreground">{t(`msgTemplates.editor.timing.${template.timing}`)}</p>
       </header>
+      {!canEdit && <p role="status" className="text-sm text-muted-foreground">{t('msgTemplates.editor.readOnly')}</p>}
       <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         {(['ar', 'en'] as const).map((lang: MsgLang) => (
           <div key={lang} className="min-w-0 space-y-2">
@@ -69,7 +71,7 @@ function MessageEditor({ template }: { template: MessageTemplateRead }) {
                 reset.reset()
               }} />
             ) : (
-              <p dir={lang === 'ar' ? 'rtl' : 'ltr'} lang={lang} className="whitespace-pre-wrap break-words rounded-md bg-surface-tinted p-3 text-sm">{values[lang]}</p>
+              <p dir={lang === 'ar' ? 'rtl' : 'ltr'} lang={lang} className="whitespace-pre-wrap break-words rounded-md bg-surface-tinted p-3 text-sm">{baseline[lang]}</p>
             )}
           </div>
         ))}
@@ -96,9 +98,9 @@ function MessageEditor({ template }: { template: MessageTemplateRead }) {
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             {confirmReset ? <>
               <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={pending} onClick={() => setConfirmReset(false)}>{t('msgTemplates.editor.cancel')}</Button>
-              <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={pending} onClick={() => { save.reset(); reset.mutate(template.event, { onSuccess: accept }) }}>{t('msgTemplates.editor.confirmReset')}</Button>
+              <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={pending} onClick={() => { if (!canEdit || pending) return; save.reset(); reset.mutate(template.event, { onSuccess: accept }) }}>{t('msgTemplates.editor.confirmReset')}</Button>
             </> : <Button type="button" variant="outline" className="min-h-11 w-full sm:me-auto sm:w-auto" disabled={pending || current.override === null} onClick={() => setConfirmReset(true)}>{t('msgTemplates.editor.reset')}</Button>}
-            <Button type="button" className="min-h-11 w-full sm:w-auto" disabled={pending || !dirty || confirmReset} onClick={() => { reset.reset(); save.mutate({ event: template.event, body: values }, { onSuccess: accept }) }}>{t(pending ? 'msgTemplates.editor.saving' : 'msgTemplates.editor.save')}</Button>
+            <Button type="button" className="min-h-11 w-full sm:w-auto" disabled={pending || !dirty || confirmReset} onClick={() => { if (!canEdit || pending) return; reset.reset(); save.mutate({ event: template.event, body: values }, { onSuccess: accept }) }}>{t(pending ? 'msgTemplates.editor.saving' : 'msgTemplates.editor.save')}</Button>
           </div>
         </div>
       )}

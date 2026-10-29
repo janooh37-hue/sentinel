@@ -18,6 +18,7 @@ export interface NavItem {
   Icon: LucideIcon
   /** Optional capability gate. When set, only users with this capability see the item. */
   cap?: string
+  caps?: readonly string[]
   anyCaps?: readonly string[]
 }
 
@@ -27,7 +28,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/vehicles', key: 'nav.vehicles', Icon: Car, cap: 'vehicles.view' },
   { to: '/ledger', key: 'nav.ledger', Icon: Mail, anyCaps: ['ledger.view', 'books.view'] },
   { to: '/leaves', key: 'nav.leaves', Icon: CalendarDays, cap: 'leaves.view' },
-  { to: '/services', key: 'nav.services', Icon: FileText, cap: 'documents.generate' },
+  { to: '/services', key: 'nav.services', Icon: FileText, caps: ['documents.generate', 'books.view'] },
   { to: '/books', key: 'nav.records', Icon: BookText, cap: 'books.view' },
   // Scan-back is deliberately NOT here: it lives inside Records (its entry
   // point is ScanBackEntry in the Records header), not in the top nav.

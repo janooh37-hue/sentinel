@@ -29,6 +29,7 @@ import { pickPosition } from '@/lib/employeePosition'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { activityEmoji, expiryAlert, leaveBalanceLabel } from './contextResolve'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 /** Coarse page targets the shell's `onNavigate` seam understands. */
 type NavPage = 'employees' | 'services'
@@ -182,6 +183,8 @@ function PersonDetail({
   onEmail,
 }: PersonDetailProps): React.JSX.Element {
   const { t } = useTranslation()
+  const { has } = useCapabilities()
+  const canViewLeaves = has('employees.view') && has('leaves.view')
 
   if (isLoading) {
     return (
@@ -200,7 +203,10 @@ function PersonDetail({
   const emp = data.employee
   const tone = STATUS_TONE[emp.status] ?? 'active'
   const alert = expiryAlert(emp)
-  const activity = data.recent_activity.slice(0, 5)
+  const leaveBalance = canViewLeaves ? leaveBalanceLabel(data.stats) : null
+  const activity = data.recent_activity
+    .filter((item) => canViewLeaves || (item.kind !== 'leave' && item.kind !== 'absence'))
+    .slice(0, 5)
 
   const joined = emp.doj
     ? `${dateFmt.format(new Date(emp.doj))} · ${t('ledger.outlook.facts.years', { count: data.stats.tenure_years })}`
@@ -220,7 +226,7 @@ function PersonDetail({
         <Fact testid="cx-fact-joined" label={t('ledger.outlook.facts.joined')} value={joined} />
         <Fact testid="cx-fact-mobile" label={t('ledger.outlook.facts.mobile')} value={orDash(emp.contact)} mono />
         <Fact testid="cx-fact-nationality" label={t('ledger.outlook.facts.nationality')} value={orDash(emp.nationality)} />
-        <Fact testid="cx-fact-leave" label={t('ledger.outlook.facts.leave')} value={t('ledger.outlook.facts.days', { count: Number(leaveBalanceLabel(data.stats)) })} />
+        <Fact testid="cx-fact-leave" label={t('ledger.outlook.facts.leave')} value={leaveBalance === null ? DASH : t('ledger.outlook.facts.days', { count: Number(leaveBalance) })} />
       </div>
 
       {/* Document-expiry alert — only within the window */}
@@ -254,7 +260,7 @@ function PersonDetail({
       <div className="mt-3 flex gap-2">
         <QuickAction testid="cx-qa-record" emoji={<UserRound className="h-4 w-4" aria-hidden />} label={t('ledger.outlook.quick.record')} onClick={() => onNavigate?.('employees', emp.id)} />
         <QuickAction testid="cx-qa-generate" emoji={<FilePlus className="h-4 w-4" aria-hidden />} label={t('ledger.outlook.quick.generate')} onClick={() => onNavigate?.('services')} />
-        <QuickAction testid="cx-qa-email" emoji={<Mail className="h-4 w-4" aria-hidden />} label={t('ledger.outlook.quick.email')} onClick={() => onEmail?.(emp.id)} />
+        {has('ledger.send') && <QuickAction testid="cx-qa-email" emoji={<Mail className="h-4 w-4" aria-hidden />} label={t('ledger.outlook.quick.email')} onClick={() => { if (has('ledger.send')) onEmail?.(emp.id) }} />}
       </div>
 
       {/* Recent activity mini-list */}

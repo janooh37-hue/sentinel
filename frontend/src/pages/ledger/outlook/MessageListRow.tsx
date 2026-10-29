@@ -29,6 +29,8 @@ import { FlagPopover } from './FlagPopover'
 import { isOverdue } from './useFlagMutations'
 import { OUTLOOK_PENDING_TAG } from './mailboxTypes'
 
+import { useCapabilities } from '@/lib/useCapabilities'
+
 /** Direction → avatar gradient (matches the prototype's `.av.in/.out/.int`). */
 const AVATAR_GRAD: Record<string, string> = {
   incoming: 'from-green-grad-a to-green-grad-b',
@@ -68,6 +70,7 @@ export function MessageListRow({
   indent,
 }: MessageListRowProps): React.JSX.Element {
   const { i18n, t } = useTranslation()
+  const { has } = useCapabilities()
 
   // Unread is driven solely by `read_at`: null/absent = unread.
   const unread = entry.read_at == null
@@ -201,13 +204,13 @@ export function MessageListRow({
             />
           )}
           <FlagPopover entryId={entry.id} flagged={flagged} overdue={overdue} />
-          {onDelete && (
+          {onDelete && has('ledger.delete') && (
             <button
               type="button"
               aria-label={t('ledger.outlook.delete', { defaultValue: 'Delete' })}
               onClick={(e) => {
                 e.stopPropagation()
-                onDelete(entry)
+                if (has('ledger.delete')) onDelete(entry)
               }}
               className="grid h-5 w-5 place-items-center rounded text-faint opacity-0 transition-opacity hover:text-accent focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
             >

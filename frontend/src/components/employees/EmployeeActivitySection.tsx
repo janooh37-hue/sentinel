@@ -8,6 +8,7 @@ import { StatusActivity } from './StatusActivity'
 import { EmployeeActivityLookup } from './EmployeeActivityLookup'
 import { api, type EmployeeActivityItemRead, type EmployeeActivityKind, type EmployeeListItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 const PAGE_SIZE = 25
 
@@ -69,15 +70,19 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
   const { t, i18n } = useTranslation()
   const lang = i18n.language.startsWith('ar') ? 'ar' : 'en'
   const queryClient = useQueryClient()
+  const { has } = useCapabilities()
+  const canViewEmployee = has('employees.view')
+  const canViewLeaves = canViewEmployee && has('leaves.view')
   const [employee, setEmployee] = useState<EmployeeListItem | null>(null)
   const [kind, setKind] = useState<EmployeeActivityKind | 'all'>('all')
+  const visibleKind = kind === 'leave' && !canViewLeaves ? 'all' : kind
 
   const activityQuery = useInfiniteQuery({
-    queryKey: ['employee-activity', employee?.id ?? null, kind],
+    queryKey: ['employee-activity', employee?.id ?? null, visibleKind, canViewLeaves],
     initialPageParam: 0,
     queryFn: ({ pageParam }) => api.listEmployeeActivity({
       ...(employee ? { employee_id: employee.id } : {}),
-      ...(kind === 'all' ? {} : { kind }),
+      ...(visibleKind === 'all' ? {} : { kind: visibleKind }),
       limit: PAGE_SIZE,
       offset: pageParam,
     }),
@@ -87,6 +92,7 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
     },
     staleTime: 30_000,
     refetchOnMount: 'always',
+    enabled: canViewEmployee,
   })
 
   const dayFormatter = useMemo(
@@ -98,9 +104,11 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
     [lang],
   )
   const pages = activityQuery.data?.pages
-  const items = useMemo(() => pages?.flatMap((page) => page.items) ?? [], [pages])
+  const items = useMemo(() => pages?.flatMap((page) => page.items).filter((item) =>
+    canViewLeaves || item.kind !== 'leave',
+  ) ?? [], [pages, canViewLeaves])
   const total = pages?.[0]?.total ?? 0
-  const filtered = employee != null || kind !== 'all'
+  const filtered = employee != null || visibleKind !== 'all'
   const dayGroups = useMemo(() => {
     const groups: Array<{ day: string; items: EmployeeActivityItemRead[] }> = []
     for (const item of items) {
@@ -117,7 +125,7 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
 
   function removeDestinationCache(employeeId: string | null, nextKind: EmployeeActivityKind | 'all'): void {
     queryClient.removeQueries({
-      queryKey: ['employee-activity', employeeId, nextKind],
+      queryKey: ['employee-activity', employeeId, nextKind, canViewLeaves],
       exact: true,
     })
   }
@@ -143,6 +151,8 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
     setKind('all')
   }
 
+  if (!canViewEmployee) return <p role="alert">{t('common.forbidden')}</p>
+
   return (
     <section className="w-full border-y border-hairline bg-background px-4 py-8 md:px-8 lg:py-10" aria-labelledby="employee-activity-title">
       <div className="mx-auto w-full max-w-[1440px]">
@@ -152,7 +162,7 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
             <h2 id="employee-activity-title" className="mt-2 text-2xl font-bold tracking-tight text-foreground md:text-3xl">{t('employees.activity.title')}</h2>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t('employees.activity.subtitle')}</p>
           </div>
-          {!activityQuery.isPending && !activityQuery.isError && (
+          {canViewLeaves && !activityQuery.isPending && !activityQuery.isError && (
             <p className="text-sm font-medium text-muted-foreground">
               {t('employees.activity.resultCount', { count: total })} · {t('employees.activity.showing', { shown: items.length, total })}
             </p>
@@ -167,14 +177,14 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
             <div className="mb-6 flex flex-wrap items-center gap-2.5">
               <EmployeeActivityLookup onSelect={handleEmployeeSelect} onOpenProfile={onOpenProfile} />
               <div role="group" aria-label={t('employees.activity.typeLabel')} className="flex flex-wrap gap-1.5">
-                {(['all', 'document', 'leave', 'violation', 'ledger', 'duty_location', 'status'] as const).map((value) => (
+                {(['all', 'document', 'leave', 'violation', 'ledger', 'duty_location', 'status'] as const).filter((value) => canViewLeaves || value !== 'leave').map((value) => (
                   <button
                     key={value}
                     type="button"
-                    aria-pressed={kind === value}
+                    aria-pressed={visibleKind === value}
                     onClick={() => handleKindChange(value)}
                     className={
-                      kind === value
+                      visibleKind === value
                         ? 'rounded-full bg-primary px-4 py-2.5 text-[12.5px] font-bold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2'
                         : 'rounded-full border border-border bg-surface px-4 py-2.5 text-[12.5px] font-bold text-muted-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
                     }
