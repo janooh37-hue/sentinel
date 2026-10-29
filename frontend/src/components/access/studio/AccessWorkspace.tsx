@@ -32,6 +32,7 @@ import { LocalDateTime, SettingIdentity, SettingLabel } from './SettingIdentity'
 
 export interface AccessWorkspaceProps {
   subjectId: number
+  subjectName: string
   initialResource?: Resource
   onNavigate: (destination: StudioDestination) => void
   renderSearch: (props: ResourceSearchProps) => ReactNode
@@ -79,6 +80,7 @@ export function AccessWorkspace(props: AccessWorkspaceProps) {
 
 function WorkspaceSession({
   subjectId,
+  subjectName,
   initialResource,
   onNavigate,
   renderSearch,
@@ -192,10 +194,11 @@ function WorkspaceSession({
     )
   }
   const needsReview = requiresReview(currentPreview)
-  function stage(patches: Patch[]) {
+  function stage(patches: Patch[], requireReview = false) {
     if (busy || locked) return
     generation.current++
     draft.stage(patches)
+    if (requireReview) setRenewedReview(true)
     setPreview(undefined)
     setReviewed(undefined)
     setAcknowledged(false)
@@ -407,6 +410,9 @@ function WorkspaceSession({
           {draft.baseline.scope.mode !== 'current' && <> · {t(`access.studio.scope.${draft.baseline.scope.mode}`)}</>}
         </p>
       </header>
+      <p className="max-w-prose text-sm text-muted-foreground">
+        {t('access.studio.choicesHelp', { role: t(`access.roleName.${snapshot.subject.role}`) })}
+      </p>
       {locked && !awaitingRefresh && (
         <p role="status">
           {t(
@@ -507,12 +513,14 @@ function WorkspaceSession({
             key={value}
             className={`${control} ${filter === value ? 'bg-primary-soft font-semibold text-primary' : 'text-muted-foreground'}`}
             aria-pressed={filter === value}
+            aria-describedby={value === 'attention' && filter === 'attention' ? `attention-help-${subjectId}` : undefined}
             onClick={() => setFilter(value)}
           >
             {t(`access.studio.filter.${value}`)}
           </button>
         ))}
       </div>
+      {filter === 'attention' && <p id={`attention-help-${subjectId}`} className="max-w-prose text-sm text-muted-foreground">{t('access.studio.filter.attentionHelp')}</p>}
       {selectedActions.length > 0 && (
         <fieldset
           className="space-y-3 rounded-md border border-border p-3"
@@ -719,7 +727,7 @@ function WorkspaceSession({
       >
         <span role="status" aria-live="polite">
           {receipt
-            ? t('access.studio.saved', { id: subjectId })
+            ? t('access.studio.saved', { name: subjectName })
             : t('access.studio.unsaved', { count: draft.patches.length })}
         </span>
         {draft.dirty && !awaitingRefresh && (

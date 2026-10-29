@@ -354,7 +354,7 @@ function CheckAccessForm({
                             · {t(`access.studio.actions.${impact.action}`)}
                           </p>
                           <DecisionOutcome decision={impact.after} resource={impact.resource} />
-                          <AccessWarnings warnings={impact.after.warnings} />
+                          <AccessWarnings warnings={impact.after.warnings} snapshot={response.snapshot} />
                           <WhyAccess
                             decision={impact.after}
                             snapshot={response.snapshot}

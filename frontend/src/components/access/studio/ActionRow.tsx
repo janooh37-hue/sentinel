@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils'
 import {
   destinationId,
   localized,
-  needsAttention,
+  missingPrerequisites,
+  settingLabel,
   isMessageTemplate,
   personalSetting,
   personalSettingBindings,
@@ -27,7 +28,7 @@ export interface ActionRowProps {
   disabled: boolean
   selected: boolean
   onSelect: (selected: boolean) => void
-  onStage: (patches: Patch[]) => void
+  onStage: (patches: Patch[], requireReview?: boolean) => void
 }
 
 type Effect = Decision['editable_effects'][number]
@@ -137,6 +138,58 @@ function ExpiryField({
   )
 }
 
+function ActionProblems({ decision, snapshot, patches, disabled, onStage }: Pick<ActionRowProps, 'decision' | 'snapshot' | 'patches' | 'disabled' | 'onStage'>) {
+  const { t, i18n } = useTranslation()
+  const missing = decision.authorization === 'needs_context' ? [] : missingPrerequisites(decision)
+  const expired = snapshot.overrides.filter((override) =>
+    override.state === 'expired' && decision.setting_capabilities.includes(override.capability),
+  )
+  const otherWarnings = decision.authorization === 'needs_context' ? [] : (decision.warnings ?? []).filter((warning) =>
+    !['PREREQUISITE_BLOCKED', 'CONDITIONAL_PREREQUISITE_BLOCKED'].includes(warning.code),
+  )
+  const blocked = decision.authorization === 'allowed' && decision.executable_now === false
+  const prerequisiteWarnings = decision.authorization === 'needs_context' ? [] : (decision.warnings ?? []).filter((warning) =>
+    ['PREREQUISITE_BLOCKED', 'CONDITIONAL_PREREQUISITE_BLOCKED'].includes(warning.code),
+  )
+  if (!expired.length && !missing.length && !otherWarnings.length && !prerequisiteWarnings.length && !blocked) return null
+  return (
+    <div className="col-span-full space-y-2 pb-2 text-xs">
+      {expired.map((override) => {
+        const staged = patches.some((patch) => patch.capability === override.capability)
+        const setting = settingLabel(snapshot, override.capability, i18n.language, t)
+        return <div key={override.capability} className="space-y-1">
+          <p className="text-warning">{t(override.expires_at ? 'access.studio.attention.expired' : 'access.studio.attention.expiredUnknownDate', {
+            setting, type: t(`access.studio.settings.${override.effect === 'grant' ? 'allow' : 'deny'}`),
+            time: override.expires_at ? new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short', numberingSystem: 'latn' }).format(new Date(override.expires_at)) : '',
+          })}</p>
+          {decision.configurable && !staged ? <div className="flex flex-wrap gap-2">
+            {decision.editable_effects.includes(override.effect) && <button type="button" disabled={disabled} className="min-h-11 rounded px-2 font-medium text-primary hover:bg-surface-tinted focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50" onClick={() => onStage([{ capability: override.capability, effect: override.effect, expires_at: null }], true)}>{t('access.studio.attention.setAgain', { type: t(`access.studio.settings.${override.effect === 'grant' ? 'allow' : 'deny'}`) })}</button>}
+            {decision.editable_effects.includes(null) && <button type="button" disabled={disabled} className="min-h-11 rounded px-2 font-medium text-primary hover:bg-surface-tinted focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50" onClick={() => onStage([{ capability: override.capability, effect: null, expires_at: null }], true)}>{t('access.studio.attention.followRole')}</button>}
+          </div> : !staged && <p className="text-muted-foreground">{t('access.studio.attention.expiredFix')}</p>}
+        </div>
+      })}
+      {missing.map((capability) => {
+        const catalog = snapshot.items.find((item) => item.resource.kind === 'capability' && item.resource.id === capability)
+        const permission = catalog ? localized(catalog.label, i18n.language).trim() : ''
+        const canGrant = catalog?.actions.some((action) =>
+          permission !== '' && action.configurable && action.editable_effects.includes('grant') && action.setting_capabilities.includes(capability),
+        )
+        const setting = personalSetting(capability, snapshot, patches)
+        const staged = patches.some((patch) => patch.capability === capability && patch.effect === 'grant')
+        const expiry = snapshot.overrides.some((override) => override.capability === capability && override.state === 'expired') ? null : setting.expires_at
+        return <div key={capability} className="flex flex-wrap items-center gap-x-2">
+          <p className="text-warning">{permission ? t(prerequisiteWarnings.some((warning) => warning.code === 'CONDITIONAL_PREREQUISITE_BLOCKED' && warning.capabilities?.includes(capability)) ? 'access.studio.issueCodes.CONDITIONAL_PREREQUISITE_BLOCKED' : 'access.studio.attention.prerequisite', { permission }) : t('access.studio.attention.prerequisiteUnknown')}</p>
+          {canGrant && !staged && <button type="button" disabled={disabled} className="min-h-11 rounded px-2 font-medium text-primary hover:bg-surface-tinted focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50" onClick={() => onStage([{ capability, effect: 'grant', expires_at: expiry }], true)}>{t('access.studio.attention.alsoAllow', { permission })}</button>}
+        </div>
+      })}
+      {prerequisiteWarnings.some((warning) => warning.code === 'CONDITIONAL_PREREQUISITE_BLOCKED' && warning.params?.category_exists === false) && <p className="text-warning">{t('access.studio.attention.conditionalCategoryMissing')}</p>}
+      {!missing.length && prerequisiteWarnings.length > 0 && !prerequisiteWarnings.some((warning) => warning.params?.category_exists === false) && <p className="text-warning">{t('access.studio.attention.prerequisiteUnknown')}</p>}
+      {blocked && !missing.length && <p className="text-warning">{t(decision.reasons.some((reason) => reason.code === 'ACCOUNT_INELIGIBLE') ? 'access.studio.attention.accountUnavailable' : 'access.studio.attention.notReady')}</p>}
+      <AccessWarnings warnings={otherWarnings} snapshot={snapshot} />
+    </div>
+  )
+}
+
 export function ActionRow({
   item,
   decision,
@@ -240,7 +293,6 @@ export function ActionRow({
         <span title={t('access.studio.current')}><DecisionOutcome decision={decision} resource={item.resource} /></span>
         {showProposed && <span className="sr-only">{t('access.studio.proposed')}</span>}
         {showProposed && (proposed ? <span title={t('access.studio.proposed')}><span aria-hidden="true">› </span><DecisionOutcome decision={proposed} resource={item.resource} /></span> : <span className="text-xs text-muted-foreground">{t('access.studio.previewPending')}</span>)}
-        {needsAttention(decision, snapshot) && <span className="text-xs font-medium text-warning">{t('access.studio.filter.attention')}</span>}
       </div>
       {editable ? (
         <fieldset disabled={disabled} className="col-span-full min-w-0 lg:col-span-1">
@@ -275,7 +327,7 @@ export function ActionRow({
         }
       >
         <p className="text-muted-foreground lg:hidden">{localized(item.description, i18n.language)}</p>
-        {showProposed && <div className="space-y-1"><p className="font-medium">{t('access.studio.proposed')}</p>{proposed ? <><DecisionOutcome decision={proposed} resource={item.resource} /><AccessWarnings warnings={proposed.warnings} /></> : <p>{t('access.studio.previewPending')}</p>}</div>}
+        {showProposed && <div className="space-y-1"><p className="font-medium">{t('access.studio.proposed')}</p>{proposed ? <><DecisionOutcome decision={proposed} resource={item.resource} /><AccessWarnings warnings={proposed.warnings} snapshot={snapshot} /></> : <p>{t('access.studio.previewPending')}</p>}</div>}
         {effect === 'mixed' && <p className="text-warning">{t('access.studio.personalSetting')}: {t('access.studio.mixed')}</p>}
         {settings.some((setting) => setting.effect != null) && <ul className="space-y-1 text-muted-foreground">{settings.filter((setting) => setting.effect != null).map((setting) => <li key={setting.capability}>{t('access.studio.expiry.label')}: {setting.expires_at ? <LocalDateTime value={setting.expires_at} /> : t('access.studio.expiry.none')}</li>)}</ul>}
         {template && decision.action === 'view' && decision.authorization === 'denied' && <p>{t('access.studio.templateViewRequired')}</p>}
@@ -284,6 +336,7 @@ export function ActionRow({
         {!editable && <p className="text-muted-foreground">{t('access.studio.lockedPolicy')}</p>}
         {residualView && !editImpliesView && <p>{t('access.studio.residualView')}</p>}
       </WhyAccess>
+      <ActionProblems decision={decision} snapshot={snapshot} patches={patches} disabled={disabled} onStage={onStage} />
     </article>
   )
 }

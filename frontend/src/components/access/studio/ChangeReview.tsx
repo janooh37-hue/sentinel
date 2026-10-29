@@ -177,7 +177,7 @@ export function ChangeReview({
                   {t('access.studio.review.validation')}
                 </h4>
                 {validPreview.validation.length ? (
-                  <AccessWarnings warnings={validPreview.validation} />
+                  <AccessWarnings warnings={validPreview.validation} snapshot={validPreview.proposed} />
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     {t('access.studio.review.noValidation')}
@@ -246,6 +246,7 @@ export function ChangeReview({
                                 <DecisionOutcome decision={impact.after} resource={impact.resource} />
                                 <AccessWarnings
                                   warnings={impact.after.warnings}
+                                  snapshot={validPreview.proposed}
                                 />
                                 <WhyAccess
                                   decision={impact.after}

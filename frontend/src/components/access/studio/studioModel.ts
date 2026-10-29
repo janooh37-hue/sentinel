@@ -1,4 +1,5 @@
 import type { components } from '@/lib/api.types'
+import type { TFunction } from 'i18next'
 
 export type Snapshot = components['schemas']['AccessSnapshot']
 export type Decision = components['schemas']['Decision']
@@ -15,6 +16,14 @@ export function localized(
   language: string,
 ): string {
   return language.startsWith('ar') ? value.ar : value.en
+}
+export function settingLabel(snapshot: Snapshot, capability: string, language: string, t: TFunction): string {
+  const catalogItem = snapshot.items.find((item) => item.resource.kind === 'capability' && item.resource.id === capability)
+  if (catalogItem) return localized(catalogItem.label, language)
+  const bindings = snapshot.items.flatMap((item) => item.actions.filter((action) => action.setting_capabilities.includes(capability)).map((action) => ({ item, action })))
+  if (bindings.length !== 1) return t('access.studio.accountSetting')
+  const { item, action } = bindings[0]
+  return `${t(`access.studio.actions.${action.action}`)} · ${localized(item.label, language)}`
 }
 
 export function destinationId(resource: Resource, action: Action): string {
@@ -93,11 +102,31 @@ export function reviewedTemplateGrants(snapshot: Snapshot, patches: Patch[]): Se
   ))
 }
 
+/** Missing permissions come from the guard, never from capability naming conventions. */
+export function missingPrerequisites(action: Decision): string[] {
+  return [...new Set([
+    ...(action.warnings ?? []).filter((warning) =>
+      ['PREREQUISITE_BLOCKED', 'CONDITIONAL_PREREQUISITE_BLOCKED'].includes(warning.code),
+    ).flatMap((warning) => warning.capabilities ?? []),
+    ...action.reasons.filter((reason) => reason.code === 'PREREQUISITE_MISSING' && reason.capability && !action.setting_capabilities.includes(reason.capability))
+      .map((reason) => reason.capability!),
+  ])]
+}
+
+/** Informational notes about records and intentional access splits are not faults. */
+export function actionableWarnings(action: Decision): NonNullable<Decision['warnings']> {
+  return (action.warnings ?? []).filter((warning) =>
+    warning.severity !== 'info' ||
+    ['PREREQUISITE_BLOCKED', 'CONDITIONAL_PREREQUISITE_BLOCKED'].includes(warning.code),
+  )
+}
+
 /** The summary, filter and row marker must describe the same attention set. */
 export function needsAttention(action: Decision, snapshot: Snapshot): boolean {
+  const expired = action.setting_capabilities.some((capability) => snapshot.overrides.some((override) => override.capability === capability && override.state === 'expired'))
+  if (expired) return true
+  if (action.authorization === 'needs_context') return false
   return action.authorization === 'unknown' ||
-    action.authorization === 'needs_context' ||
     (action.authorization === 'allowed' && action.executable_now === false) ||
-    (action.warnings?.length ?? 0) > 0 ||
-    action.setting_capabilities.some((capability) => snapshot.overrides.some((override) => override.capability === capability && override.state === 'expired'))
+    actionableWarnings(action).length > 0
 }

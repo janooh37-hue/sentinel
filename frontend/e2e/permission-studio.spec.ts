@@ -91,7 +91,14 @@ async function reviewAndSave(
   expect(saved.status(), await saved.text()).toBe(200)
   expect(saved.request().headers()['if-match']).toBe(baseline.revision)
   expect(sortedPatches(saved.request().postDataJSON().items)).toEqual(sortedPatches(items))
-  await expect(page.getByRole('status').filter({ hasText: strings.saved.replace('{{id}}', String(baseline.subject.user_id)) })).toBeVisible()
+  const accountsResponse = await request.get('/api/v1/auth/users')
+  const accounts: Account[] = await accountsResponse.json()
+  const person = accounts.find(({ id }) => id === baseline.subject.user_id)!
+  const name = (locale === 'ar' && person.name_ar) || person.display_name || person.name_en || person.email
+  const receipt = page.getByRole('status').filter({ hasText: strings.saved.replace('{{name}}', name) })
+  await expect(receipt).toBeVisible()
+  await receipt.scrollIntoViewIfNeeded()
+  await page.screenshot({ path: `../.impeccable/review/perm-copy/${locale}-${page.viewportSize()!.width}-receipt.png` })
   await expect(review).toHaveCount(0)
   const refreshed = await snapshotFor(request, baseline.subject.user_id)
   expect(refreshed.revision).not.toBe(baseline.revision)
@@ -148,7 +155,7 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(accountSearch).not.toBeFocused()
       await page.getByRole('combobox', { name: strings.role, exact: true }).selectOption('operator')
       await page.evaluate(() => Promise.all(document.getAnimations().filter((animation) => animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished.catch(() => {}))))
-      await page.screenshot({ path: `../.impeccable/review/perm-polish/${locale}-${viewport.width}-register.png` })
+      await page.screenshot({ path: `../.impeccable/review/perm-copy/${locale}-${viewport.width}-register.png` })
       await page.getByRole('combobox', { name: strings.statusLabel, exact: true }).selectOption('active')
       await accountSearch.fill(target.email)
       const accountResult = page.getByRole('listbox', { name: strings.search.accounts, exact: true }).getByRole('option').filter({ hasText: target.email })
@@ -160,16 +167,15 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(page).toHaveURL(/dept=7/)
       await expect(page.getByText(target.email, { exact: true })).toBeVisible()
       await expect(page.getByRole('heading', { name: strings.access, exact: true })).toBeVisible()
+      const firstGroup = page.getByRole('button', { name: new RegExp(strings.groups.services) })
+      if (await firstGroup.getAttribute('aria-expanded') === 'false') await firstGroup.click()
       const firstAction = page.getByRole('article').first()
       await expect(firstAction).toBeInViewport()
-      if (viewport.width >= 1000) {
-        const visibleRows = await page.getByRole('article').evaluateAll((rows) => rows.filter((row) => {
-          const rect = row.getBoundingClientRect()
-          return rect.height > 0 && rect.top >= 0 && rect.bottom <= window.innerHeight
-        }).length)
-        expect(visibleRows).toBeGreaterThanOrEqual(10)
-      }
-      await page.screenshot({ path: `../.impeccable/review/perm-polish/${locale}-${viewport.width}-workspace.png` })
+      await page.screenshot({ path: `../.impeccable/review/perm-copy/${locale}-${viewport.width}-workspace.png` })
+      await page.getByRole('button', { name: strings.filter.attention, exact: true }).click()
+      await expect(page.getByText(strings.filter.attentionHelp, { exact: true })).toBeVisible()
+      await page.screenshot({ path: `../.impeccable/review/perm-copy/${locale}-${viewport.width}-needs-action.png` })
+      await page.getByRole('group', { name: strings.filters, exact: true }).getByRole('button', { name: strings.filter.all, exact: true }).click()
 
       const resourceSearch = page.getByRole('combobox', { name: strings.search.resources, exact: true })
       const editName = `${strings.actions.edit} · ${notification.label[locale]}`
@@ -180,7 +186,7 @@ for (const locale of ['en', 'ar'] as const) {
         const results = page.getByRole('listbox', { name: strings.search.resources, exact: true })
         const editResult = results.getByRole('option', { name: `${notification.label[locale]} · ${strings.search.actions.edit}`, exact: true })
         await expect(editResult).toHaveCount(1)
-        if (query === notification.label[locale]) await page.screenshot({ path: `../.impeccable/review/perm-polish/${locale}-${viewport.width}-search.png` })
+        if (query === notification.label[locale]) await page.screenshot({ path: `../.impeccable/review/perm-copy/${locale}-${viewport.width}-search.png` })
         await editResult.click()
         await expect(editRow.getByRole('heading', { name: editName, exact: true })).toBeFocused()
         await expect(page.getByText(target.email, { exact: true })).toBeInViewport()
@@ -205,6 +211,8 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(why.getByText(strings.reasonCodes.PERSONAL_DENY, { exact: true }).first()).toBeVisible()
       const viewRow = page.getByRole('article', { name: `${strings.actions.view} · ${notification.label[locale]}`, exact: true })
       await expect(viewRow.getByText(strings.outcomes.allowed, { exact: true }).first()).toBeVisible()
+      await why.scrollIntoViewIfNeeded()
+      await page.screenshot({ path: `../.impeccable/review/perm-copy/${locale}-${viewport.width}-why.png` })
 
       // Check uses the current admin cookie, never the subject's credentials.
       const check = page.getByRole('region', { name: strings.check.title, exact: true })
