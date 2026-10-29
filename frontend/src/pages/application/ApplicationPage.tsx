@@ -30,6 +30,7 @@
  * The RHF useForm instance is reset whenever the selected template changes.
  */
 
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -756,6 +757,7 @@ function StandardApplicationPage(): React.JSX.Element {
         )
         void qc.invalidateQueries({ queryKey: ['employee-absences'] })
         void qc.invalidateQueries({ queryKey: ['employee-detail'] })
+        void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
         void qc.invalidateQueries({ queryKey: ['absence-register'] })
       }
       if (pendingCommitRef.current && selectedTemplate) {

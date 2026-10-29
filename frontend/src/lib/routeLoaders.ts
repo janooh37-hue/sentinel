@@ -67,6 +67,14 @@ export const loadEmployeesOrgTreePage = () =>
   }))
 export const loadEmployeeDetailPage = () =>
   import('@/pages/employees/EmployeeDetailPage').then((m) => ({ default: m.EmployeeDetailPage }))
+export const loadActivityPrintPage = () =>
+  import('@/pages/employees/statement/print/ActivityPrintPage').then((m) => ({
+    default: m.ActivityPrintPage,
+  }))
+export const loadAttendancePrintPage = () =>
+  import('@/pages/employees/statement/print/AttendancePrintPage').then((m) => ({
+    default: m.AttendancePrintPage,
+  }))
 export const loadTimesheetPage = () =>
   import('@/pages/timesheet/TimesheetPage').then((m) => ({ default: m.TimesheetPage }))
 export const loadAccessRequestsPage = () =>

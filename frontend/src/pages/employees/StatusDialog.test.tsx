@@ -18,10 +18,14 @@ vi.mock('@/lib/api', () => ({
 import { api } from '@/lib/api'
 import type { EmployeeRead } from '@/lib/api'
 import { StatusDialog } from './StatusDialog'
+import { ACTIVITY_STATEMENT_QUERY } from './statement/statementModel'
 
-function renderDialog(employee: Partial<EmployeeRead>): void {
+function renderDialog(
+  employee: Partial<EmployeeRead>,
+  client: QueryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+): void {
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <StatusDialog open employee={employee as EmployeeRead} onOpenChange={vi.fn()} />
     </QueryClientProvider>,
   )
@@ -101,4 +105,13 @@ test('Transferred: expected return not after the effective date blocks save', ()
   })
   expect(screen.getByText('employees.validation.returnAfterEffective')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'common.save' })).toBeDisabled()
+})
+
+test('a status change invalidates the activity statement query', async () => {
+  vi.mocked(api.updateEmployee).mockResolvedValue({} as never)
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const invalidate = vi.spyOn(client, 'invalidateQueries')
+  renderDialog({ id: 'G100', name_en: 'John', status: 'Active', end_date: null }, client)
+  fireEvent.click(screen.getByRole('button', { name: 'common.save' }))
+  await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: [ACTIVITY_STATEMENT_QUERY] }))
 })

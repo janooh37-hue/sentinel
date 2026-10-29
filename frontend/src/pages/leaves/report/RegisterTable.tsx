@@ -12,6 +12,7 @@
  * Escape, post-mutation collapse), focus returns to the button that opened it
  * (chevron / name button), tracked via refs at click time.
  */
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { Fragment, useEffect, useId, useMemo, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -140,6 +141,7 @@ export function RegisterTable({
       api.updateLeave(row.id, { status }),
     onSuccess: (_data, { row, status }) => {
       void qc.invalidateQueries({ queryKey: ['leaves-list'] })
+      void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
       void qc.invalidateQueries({ queryKey: ['leave-balance', row.employee_id] })
       toast.success(status === 'Approved' ? t('leaves.toast.approved') : t('leaves.toast.rejected'))
     },

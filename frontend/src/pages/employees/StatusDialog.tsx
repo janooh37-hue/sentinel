@@ -9,6 +9,7 @@
  * date; reactivating a non-working employee (to Active/Loaned) asks for the
  * return date (today by default), sent as the write-only `effective_date`.
  */
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -99,6 +100,7 @@ export function StatusDialog({ open, employee, onOpenChange }: Props): React.JSX
       ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employee-detail', employee.id] })
+      void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
       void qc.invalidateQueries({ queryKey: ['employees'] })
       toast.success(t('employees.toast.updated'))
       onOpenChange(false)

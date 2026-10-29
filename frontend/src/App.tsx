@@ -29,9 +29,11 @@ import { serviceHref } from '@/lib/quickActions'
 import { INMATE_REPORTER_ALLOWED_DESTINATIONS } from '@/components/shell/navItems'
 import {
   loadAccessRequestsPage,
+  loadActivityPrintPage,
   loadApplicationPage,
   loadApprovalsPage,
   loadAttendancePage,
+  loadAttendancePrintPage,
   loadBookRecordPage,
   loadBooksPage,
   loadDashboardPage,
@@ -107,6 +109,9 @@ const AbsencesPage = lazy(() =>
 )
 const EmployeesOrgTreePage = lazy(loadEmployeesOrgTreePage)
 const EmployeeDetailPage = lazy(loadEmployeeDetailPage)
+// Statement print setups: full pages beside the file, so Back leaves the preview.
+const ActivityPrintPage = lazy(loadActivityPrintPage)
+const AttendancePrintPage = lazy(loadAttendancePrintPage)
 // The monthly time sheet is a subpage of Employees, not a top-nav entry, so it
 // is code-split here and routed beside the employee routes below.
 const TimesheetPage = lazy(loadTimesheetPage)
@@ -322,6 +327,22 @@ function Shell(): React.JSX.Element {
                 element={
                   <RequireCapability cap="employees.view">
                     <EmployeeDetailPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/employees/:id/activity/print"
+                element={
+                  <RequireCapability cap="employees.view">
+                    <ActivityPrintPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/employees/:id/attendance/print"
+                element={
+                  <RequireCapability cap="employees.view">
+                    <AttendancePrintPage />
                   </RequireCapability>
                 }
               />

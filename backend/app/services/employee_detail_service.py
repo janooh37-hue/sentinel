@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.core.employee_completeness import completeness as _completeness
@@ -53,6 +53,35 @@ DEFAULT_LEAVE_ALLOWANCE_DAYS = 30
 _APPROVED_STATUS = "Approved"
 
 
+def document_filters(employee_id: str) -> list[ColumnElement[bool]]:
+    """SQL: the employee's committed documents (preview drafts excluded).
+
+    Callers still pass the rows through ``document_service.readable_documents``.
+    """
+    return [models.Document.employee_id == employee_id, models.Document.ref_number != "DRAFT"]
+
+
+def ledger_filters_for(
+    db: Session, employee_id: str, user: models.User | None
+) -> list[ColumnElement[bool]]:
+    """SQL: live correspondence about the employee that ``user`` may see."""
+    filters: list[ColumnElement[bool]] = [
+        models.LedgerEntry.related_employee_id == employee_id,
+        models.LedgerEntry.deleted_at.is_(None),
+    ]
+    ledger_visible = ledger_service.related_book_visible(db, user)
+    if ledger_visible is not None:
+        filters.append(ledger_visible)
+    if user is not None:
+        filters.append(ledger_service.email_owned_by(user.id))
+    return filters
+
+
+def user_display_name() -> ColumnElement[str | None]:
+    """SQL: a user's display name, falling back to their email."""
+    return func.coalesce(func.nullif(models.User.display_name, ""), models.User.email)
+
+
 def get_employee_detail(
     db: Session, employee_id: str, *, user: models.User | None = None
 ) -> sx.EmployeeDetailRead | None:
@@ -65,16 +94,8 @@ def get_employee_detail(
     tenure_years = _tenure_years(emp.doj)
     can_view_violations = user is None or perm_service.has_capability(db, user, "violations.view")
     can_view_leaves = user is None or perm_service.has_capability(db, user, "leaves.view")
-    ledger_visible = ledger_service.related_book_visible(db, user)
-    doc_filters = [models.Document.employee_id == emp.id, models.Document.ref_number != "DRAFT"]
-    ledger_filters = [
-        models.LedgerEntry.related_employee_id == emp.id,
-        models.LedgerEntry.deleted_at.is_(None),
-    ]
-    if ledger_visible is not None:
-        ledger_filters.append(ledger_visible)
-    if user is not None:
-        ledger_filters.append(ledger_service.email_owned_by(user.id))
+    doc_filters = document_filters(emp.id)
+    ledger_filters = ledger_filters_for(db, emp.id, user)
 
     doc_rows = document_service.readable_documents(
         db,
@@ -242,7 +263,7 @@ def get_employee_detail(
         db.execute(
             select(
                 models.EmployeeStatusEvent,
-                func.coalesce(func.nullif(models.User.display_name, ""), models.User.email),
+                user_display_name(),
             )
             .outerjoin(models.User, models.EmployeeStatusEvent.actor_user_id == models.User.id)
             .where(models.EmployeeStatusEvent.employee_id == emp.id)

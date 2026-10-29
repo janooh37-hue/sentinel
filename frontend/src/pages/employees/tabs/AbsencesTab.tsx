@@ -7,6 +7,7 @@
  * build drops the `AB` cells it covered.
  */
 
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -58,6 +59,7 @@ export function AbsencesTab({ employeeId }: Props): React.JSX.Element {
       void qc.invalidateQueries({ queryKey: ['employee-absence-episodes', employeeId] })
       void qc.invalidateQueries({ queryKey: ['employee-absences', employeeId] })
       void qc.invalidateQueries({ queryKey: ['employee-detail', employeeId] })
+      void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
       void qc.invalidateQueries({ queryKey: ['absence-register'] })
       toast.success(t('absences.deleted'))
     },
