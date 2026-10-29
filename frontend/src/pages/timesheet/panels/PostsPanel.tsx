@@ -1,31 +1,32 @@
 /**
- * The contracted post count, what the month actually implies, and the two-block
- * rule that connects them (UI spec §16.2, §9's "implied posts above contract").
+ * The contracted posts and how the month fills them.
  *
- * Implied posts is the mean daily manned headcount — every working-day cell on
- * the ATTENDANCE sheet divided by the days the month has. At or below the
- * contract is correct; above it means block-2 rows are still carrying the
- * working-day code instead of a filler, and the client would be billed for posts
- * nobody staffed.
+ * Main sheet: the contract is the designation quotas (Settings → Designation
+ * order), the same for every month, so the count is read-only here. The table is
+ * `grid.quotas` — per designation and nationality, the posts filled by their own
+ * holders, by spare Security Guards, and left empty (not billed). A sealed month
+ * carries no quota lines: it is frozen as printed.
  *
- * It is counted from the attendance array in BOTH variants, so on the statistics
- * sheet it does not match the grid's headcount footer, which follows the
- * variant. That is deliberate: the drift asks whether block-2 rows are still
- * marked as working days, and only the attendance sheet can answer it — block 1
- * of the statistics sheet is `row_no <= post_count` by construction, so counted
- * there the flag could never fire at all.
- *
- * Writing the count is `timesheet.edit` and is refused on a sealed month, so on
- * either of those the field is not rendered at all — a disabled control still
+ * Drivers: the per-month post count, with implied posts beside it — the mean
+ * daily manned headcount, every working-day cell on the ATTENDANCE sheet divided
+ * by the days the month has. At or below the contract is correct; above it means
+ * block-2 rows are still carrying the working-day code instead of a filler, and
+ * the client would be billed for posts nobody staffed. It is counted from the
+ * attendance array in both variants, because only the attendance sheet can answer
+ * that. Writing the count is `timesheet.edit` and is refused on a sealed month, so
+ * on either of those the field is not rendered at all — a disabled control still
  * answers Enter and Space (UI spec §14) — and the reason is stated in its place.
  */
 
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import type { TimesheetQuotaLine } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 export interface PostsPanelProps {
+  sheet: string
+  quotas: TimesheetQuotaLine[]
   postCount: number
   /** Mean daily manned headcount across the days the month has. */
   impliedPosts: number
@@ -34,7 +35,72 @@ export interface PostsPanelProps {
   onSetPostCount: (postCount: number) => void
 }
 
-export function PostsPanel({
+export function PostsPanel(props: PostsPanelProps): React.JSX.Element {
+  return props.sheet === 'drivers' ? <DriverPostsPanel {...props} /> : <ContractPostsPanel {...props} />
+}
+
+function ContractPostsPanel({ postCount, quotas, closed }: PostsPanelProps): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+  const totals = quotas.reduce((sum, line) => ({
+    quota: sum.quota + line.quota,
+    own: sum.own + line.own,
+    guards: sum.guards + line.from_guards,
+  }), { quota: 0, own: 0, guards: 0 })
+  const numberClass = 'px-3 py-2 font-mono tabular-nums [unicode-bidi:isolate]'
+  const emptyClass = (empty: number): string => cn(numberClass, empty > 0 && 'bg-warning-soft font-semibold text-warning')
+  return (
+    <div className="space-y-3">
+      <p className="text-[0.88em] font-semibold">
+        {t('timesheet.designations.contractTotal', { count: postCount })}
+      </p>
+      {closed && quotas.length === 0 ? (
+        <p className="text-[0.78em] text-muted-foreground">{t('timesheet.quotas.sealed')}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-start text-[0.78em]">
+            <caption className="sr-only">{t('timesheet.quotas.table')}</caption>
+            <thead className="text-muted-foreground">
+              <tr>
+                <th scope="col" className="px-3 py-2 text-start">{t('timesheet.quotas.designation')}</th>
+                <th scope="col" className="px-3 py-2 text-start">{t('timesheet.quotas.nationality')}</th>
+                <th scope="col" className="px-3 py-2 text-start">{t('timesheet.quotas.filled')}</th>
+                <th scope="col" className="px-3 py-2 text-start">{t('timesheet.quotas.empty')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {quotas.map((line) => {
+                const empty = line.quota - line.own - line.from_guards
+                return (
+                  <tr key={`${line.designation_id}-${line.nationality}`} className="border-t border-hairline">
+                    <th scope="row" className="px-3 py-2 text-start font-medium">
+                      {i18n.language.startsWith('ar') ? line.name_ar : line.name_en}
+                    </th>
+                    <td className="px-3 py-2">{t(`timesheet.quotas.${line.nationality}`)}</td>
+                    <td className={numberClass}><span dir="ltr">{line.own} + {line.from_guards} / {line.quota}</span></td>
+                    <td className={emptyClass(empty)}><span dir="ltr">{empty}</span></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            <tfoot className="border-t border-border-strong font-semibold">
+              <tr>
+                <th scope="row" colSpan={2} className="px-3 py-2 text-start">{t('timesheet.quotas.total')}</th>
+                <td className={numberClass}><span dir="ltr">{totals.own} + {totals.guards} / {totals.quota}</span></td>
+                <td className={emptyClass(totals.quota - totals.own - totals.guards)}>
+                  <span dir="ltr">{totals.quota - totals.own - totals.guards}</span>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+      <p className="max-w-[68ch] text-[0.74em] text-muted-foreground">{t('timesheet.quotas.filledHint')}</p>
+      <p className="text-[0.74em] text-muted-foreground">{t('timesheet.quotas.settingsHint')}</p>
+    </div>
+  )
+}
+
+function DriverPostsPanel({
   postCount,
   impliedPosts,
   canEdit,

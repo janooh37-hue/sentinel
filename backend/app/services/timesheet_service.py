@@ -1,12 +1,14 @@
 """The monthly time-sheet grid: one month of one site resolved to printable rows.
 
-Two deliverables come off the same grid. The HR attendance sheet prints
-``GridRow.codes`` — the truth about each day — while the Main client statistics
-sheet transfers real ``AL``/``SL``/``AB``/``TR`` cells from higher-ranked
-contracted rows into available lower-ranked ``P`` cells. A contracted row reads
-as manned only when a lower row actually carries its code, so the client view
-neither invents leave nor hides leave that nobody compensated. Drivers retains
-its historical per-row filler transform.
+Two deliverables come off the same grid, in the same designation rank order.
+The HR attendance sheet prints ``GridRow.codes`` — the truth about each day —
+for everyone. The Main client statistics sheet bills a fixed number of posts per
+designation and nationality (:func:`_allocate_posts`): the billed rows print
+first and read as manned, everyone else prints below the line, and every leave
+day of the month is packed into those lower rows, row by row, ``AL`` then ``SL``
+then ``AB`` then ``TR`` and ``P`` after them (:func:`_packed_statistics`) — the
+shape the finance office sends. Drivers retains its historical post-count split
+and per-row filler transform.
 
 Day codes themselves are not decided here. :mod:`app.core.timesheet_codes` owns
 that as a pure function of dates, leave rows, absences and manual overrides; this
@@ -23,7 +25,7 @@ from __future__ import annotations
 
 import calendar
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
@@ -34,7 +36,15 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
-from app.core.constants import DESIGNATION_SEED, TIMESHEET_SHEETS, nationality_en
+from app.core.constants import (
+    ARAB_NATIONALITIES_EN,
+    DESIGNATION_QUOTA_SEED,
+    DESIGNATION_SEED,
+    SECURITY_GUARD_KEY,
+    TIMESHEET_SHEETS,
+    UAE_NATIONALITY_EN,
+    nationality_en,
+)
 from app.core.leave_lifecycle import canonical_status, english_part
 from app.core.timesheet_codes import (
     CODE_ABSENT,
@@ -76,7 +86,8 @@ from app.services.employee_status_history import KIND_APPLIED, KIND_CHANGED, KIN
 #: blocks, because forcing it to ``P`` would put the day back on the invoice.
 CODE_BLOCKED: Final[str] = "X"
 
-#: Contracted posts for a month with no ``TimesheetPeriod`` row.
+#: Contracted posts on the drivers sheet for a month with no ``TimesheetPeriod``
+#: row. The main sheet bills the designation quotas instead.
 DEFAULT_POST_COUNT: Final[int] = 249
 
 #: Block 2's code when nobody ever chose one for that employee.
@@ -97,17 +108,23 @@ CELL_CODES: Final[frozenset[str]] = frozenset({*EMITTED_CODES, CODE_BLOCKED})
 STAT_KEEP_BLOCK_1: Final[frozenset[str]] = frozenset({CODE_NEW, CODE_OFF_ROSTER, CODE_BLOCKED})
 STAT_KEEP_BLOCK_2: Final[frozenset[str]] = STAT_KEEP_BLOCK_1 | {CODE_ABSENT}
 
-#: The lower block is printed in this order after rank-first source selection.
-_STAT_TRANSFER_ORDER: Final[dict[str, int]] = {
-    CODE_ANNUAL: 0,
-    CODE_SICK: 1,
-    CODE_ABSENT: 2,
-    CODE_NATIONAL: 3,
-}
+#: Block 2 of the Main statistics holds the month's leave days in this order,
+#: then ``P`` — the order the finance office's July to September 2026 files print.
+_STAT_PACK_ORDER: Final[tuple[str, ...]] = (CODE_ANNUAL, CODE_SICK, CODE_ABSENT, CODE_NATIONAL)
+_STAT_PACKED: Final[frozenset[str]] = frozenset(_STAT_PACK_ORDER)
 
 
 #: Sorts a row with no rank behind every ranked one.
 _UNRANKED: Final[int] = 10**9
+
+#: The nationality classes a billed post is reserved for.
+NATIONALITY_UAE: Final[str] = "uae"
+NATIONALITY_ARAB: Final[str] = "arab"
+
+#: ``TimesheetDesignation.quota_fill`` values.
+FILL_OWN: Final[str] = "own"
+FILL_OWN_THEN_GUARDS: Final[str] = "own_then_guards"
+FILL_GUARDS_ONLY: Final[str] = "guards_only"
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +139,7 @@ class GridRow:
     codes: list[str | None]  # 31 entries, None past month end
     stat_codes: list[str | None]  # the client variant of the same row
     stat_block: int  # 1 = billable block, 2 = surplus
+    stat_row_no: int  # position on the statistics sheet: billed rows, then the rest
     stat_filler: str | None  # block 2's assigned code, None in block 1
     joined_day: int | None  # doj falls inside this month -> NG head
     left_day: int | None  # end_date falls inside this month -> `-` tail
@@ -144,6 +162,7 @@ class Issue:
 @dataclass(frozen=True, slots=True)
 class CellEdit:
     """A persisted manual cell: the override or absence row behind it."""
+
     code: str
     by: str | None
     at: datetime
@@ -178,6 +197,20 @@ class MonthGrid:
     removed: list[Removed]  # departures that took effect before this month
     closed_at: datetime | None
     closed_by: str | None  # the display name behind TimesheetPeriod.closed_by
+    quotas: list[QuotaLine] = field(default_factory=list)  # main sheet, open month
+
+
+@dataclass(frozen=True, slots=True)
+class QuotaLine:
+    """One designation's billed posts for one nationality class, as filled."""
+
+    designation_id: int
+    name_en: str
+    name_ar: str
+    nationality: str  # NATIONALITY_UAE | NATIONALITY_ARAB
+    quota: int
+    own: int  # holders of the designation itself
+    from_guards: int  # spare Security Guards filling a gap
 
 
 # --------------------------------------------------------------------------- #
@@ -217,43 +250,43 @@ def _statistics_codes(codes: list[str | None], *, block: int, filler: str) -> li
     return [None if c is None else (c if c in keep else replacement) for c in codes]
 
 
-def _compensated_day(codes: Sequence[str | None], post_count: int) -> list[str | None]:
-    """Move real above-contract codes into available lower ``P`` cells."""
+def _packed_statistics(rows: Sequence[Sequence[str | None]], billed: int) -> list[list[str | None]]:
+    """The Main client statistics codes, for ``rows`` given in statistics order.
 
-    result = list(codes)
-    boundary = min(post_count, len(codes))
-    sources: list[tuple[int, str]] = []
-    for index, code in enumerate(codes[:boundary]):
-        if code is not None and code in _STAT_TRANSFER_ORDER:
-            sources.append((index, code))
-    targets = [
-        index for index, code in enumerate(codes[boundary:], start=boundary) if code == CODE_PRESENT
+    Block 1 — the first ``billed`` rows — is billed as manned, so each of its
+    leave days moves down and leaves a ``P`` behind. Block 2 then carries every
+    leave day of the month, its own included, laid row by row across the days in
+    :data:`_STAT_PACK_ORDER`, with ``P`` filling the rest. ``NG``, ``-``, ``X``
+    and days past month end never move, and the fill steps over them.
+
+    Block 2 has a fixed number of cells. Leave that does not fit stays on its
+    block-1 row, and the highest-ranked rows move first, so the sheet never
+    invents a leave day nor drops one: per code, the totals equal the attendance
+    sheet's.
+    """
+
+    result = [list(codes) for codes in rows]
+    boundary = min(billed, len(result))
+    slots = [
+        (row, day)
+        for row in range(boundary, len(result))
+        for day, code in enumerate(result[row])
+        if code == CODE_PRESENT or code in _STAT_PACKED
     ]
+    pool = Counter(code for row, day in slots if (code := result[row][day]) in _STAT_PACKED)
+    room = len(slots) - pool.total()
+    for row in range(boundary):
+        for day, code in enumerate(result[row]):
+            if room > 0 and code in _STAT_PACKED:
+                pool[code] += 1
+                result[row][day] = CODE_PRESENT
+                room -= 1
 
-    moved = sources[: len(targets)]
-    for index, _code in moved:
-        result[index] = CODE_PRESENT
-    moved_codes = sorted(
-        (code for _index, code in moved),
-        key=_STAT_TRANSFER_ORDER.__getitem__,
-    )
-    for index, code in zip(targets, moved_codes, strict=False):
-        result[index] = code
+    fill = [code for code in _STAT_PACK_ORDER for _ in range(pool[code])]
+    fill.extend([CODE_PRESENT] * (len(slots) - len(fill)))
+    for (row, day), code in zip(slots, fill, strict=True):
+        result[row][day] = code
     return result
-
-
-def _apply_main_statistics(rows: Sequence[GridRow], post_count: int) -> None:
-    """Derive Main statistics independently for each wire day."""
-
-    if not rows:
-        return
-    for day_index in range(len(rows[0].codes)):
-        compensated = _compensated_day(
-            [row.codes[day_index] for row in rows],
-            post_count,
-        )
-        for row, code in zip(rows, compensated, strict=True):
-            row.stat_codes[day_index] = code
 
 
 def _edge_day(value: date | None, year: int, month: int) -> int | None:
@@ -339,6 +372,96 @@ def _row_sort_key(
     return (_UNRANKED if rank is None else rank, _id_sort_key(employee.id))
 
 
+def _nationality_class(employee: Employee) -> str | None:
+    """Which billed posts the employee may fill: UAE, Arab, or none (Nepal)."""
+
+    label = nationality_en(employee.nationality)
+    if label == UAE_NATIONALITY_EN:
+        return NATIONALITY_UAE
+    if label in ARAB_NATIONALITIES_EN:
+        return NATIONALITY_ARAB
+    return None
+
+
+def _allocate_posts(
+    members: Sequence[tuple[Employee, TimesheetDesignation | None]],
+    catalog: Sequence[TimesheetDesignation],
+) -> tuple[set[str], list[QuotaLine]]:
+    """Who the client statistics bill, and how each quota was filled.
+
+    The contract fixes the billed posts per designation, split into posts for
+    U.A.E nationals and posts for Arab nationals of other countries; nobody
+    else (Nepal) fills a billed post. Two passes, ``catalog`` in rank order:
+
+    1. Holders fill their own designation's posts, oldest G-number first, so
+       when there are more holders than posts the newest drop below the line.
+       A ``guards_only`` designation's holders are company-paid and never fill.
+    2. Gaps left in an ``own_then_guards`` or ``guards_only`` designation are
+       filled from spare Security Guards, oldest first, never more than one
+       grade up: a UAE post takes a spare UAE guard and an Arab post a spare
+       Arab guard, except the Security Guard's own UAE posts, which take spare
+       Arab guards, and its Arab posts, which nobody else may fill.
+
+    A gap no spare guard can fill stays empty: the client is billed fewer posts.
+    """
+
+    holders: dict[tuple[int, str], list[str]] = defaultdict(list)
+    for employee, designation in sorted(members, key=lambda m: _id_sort_key(m[0].id)):
+        nationality = _nationality_class(employee)
+        if designation is not None and nationality is not None:
+            holders[(designation.id, nationality)].append(employee.id)
+
+    def quota_of(designation: TimesheetDesignation, nationality: str) -> int:
+        return designation.quota_uae if nationality == NATIONALITY_UAE else designation.quota_arab
+
+    classes = (NATIONALITY_UAE, NATIONALITY_ARAB)
+    billed: set[str] = set()
+    own: dict[tuple[int, str], int] = {}
+    spare: dict[str, list[str]] = {NATIONALITY_UAE: [], NATIONALITY_ARAB: []}
+    for designation in catalog:
+        for nationality in classes:
+            people = holders[(designation.id, nationality)]
+            filled = (
+                []
+                if designation.quota_fill == FILL_GUARDS_ONLY
+                else people[: quota_of(designation, nationality)]
+            )
+            own[(designation.id, nationality)] = len(filled)
+            billed.update(filled)
+            if designation.system_key == SECURITY_GUARD_KEY:
+                spare[nationality] = people[len(filled) :]
+
+    lines: list[QuotaLine] = []
+    for designation in catalog:
+        guard = designation.system_key == SECURITY_GUARD_KEY
+        for nationality in classes:
+            quota = quota_of(designation, nationality)
+            if quota == 0:
+                continue
+            gap = quota - own[(designation.id, nationality)]
+            donors: list[str] = []
+            if gap > 0 and designation.quota_fill != FILL_OWN:
+                if not guard:
+                    donors = spare[nationality]
+                elif nationality == NATIONALITY_UAE:
+                    donors = spare[NATIONALITY_ARAB]
+            taken = donors[:gap]
+            del donors[:gap]  # the guard leaves the spare pool he was drawn from
+            billed.update(taken)
+            lines.append(
+                QuotaLine(
+                    designation_id=designation.id,
+                    name_en=designation.name_en,
+                    name_ar=designation.name_ar,
+                    nationality=nationality,
+                    quota=quota,
+                    own=own[(designation.id, nationality)],
+                    from_guards=len(taken),
+                )
+            )
+    return billed, lines
+
+
 def _leave_spans(leaves: Iterable[Leave]) -> list[LeaveSpan]:
     return [LeaveSpan(row.leave_type, row.start_date, row.end_date, row.status) for row in leaves]
 
@@ -385,10 +508,27 @@ def _designation_for(
     assignments: Mapping[str, TimesheetRosterAssignment],
     designations: Mapping[int, TimesheetDesignation],
 ) -> TimesheetDesignation | None:
+    """The employee's designation this month; Security Guard when he has none.
+
+    New staff are counted as Security Guards until someone assigns them, so an
+    unassigned employee neither blocks the download nor drops off the bill —
+    his nationality still decides which posts he may fill. ``None`` only when
+    the catalog itself has no active Security Guard designation.
+    """
+
     assignment = assignments.get(employee_id)
-    if assignment is None or assignment.designation_id is None:
-        return None
-    return designations.get(assignment.designation_id)
+    if assignment is not None and assignment.designation_id is not None:
+        assigned = designations.get(assignment.designation_id)
+        if assigned is not None:
+            return assigned
+    return next(
+        (
+            row
+            for row in designations.values()
+            if row.system_key == SECURITY_GUARD_KEY and row.active
+        ),
+        None,
+    )
 
 
 def _period(db: Session, year: int, month: int) -> TimesheetPeriod | None:
@@ -933,16 +1073,31 @@ def _live_rows(
     members: Sequence[tuple[Employee, TimesheetDesignation | None]],
     leaves_by_employee: Mapping[str, list[Leave]],
     post_count: int,
+    billed: set[str] | None,
     absences: Mapping[str, list[Absence]],
     overrides: Mapping[str, list[TimesheetOverride]],
     names: Mapping[int, str],
     fillers: Mapping[str, str],
     acks: set[str],
 ) -> list[GridRow]:
-    """Recompute the whole sheet from the live records."""
+    """Recompute the whole sheet from the live records.
+
+    ``members`` arrives in rank order, which fixes ``row_no`` on both sheets.
+    The statistics print the billed members first and everyone else below the
+    line, each part still in rank order. ``billed`` comes from
+    :func:`_allocate_posts` on the main sheet; ``None`` keeps the drivers sheet's
+    historical rule, the first ``post_count`` rows.
+    """
+
+    if billed is None:
+        billed = {employee.id for employee, _ in members[:post_count]}
+    stat_order = [i for i, (e, _) in enumerate(members) if e.id in billed] + [
+        i for i, (e, _) in enumerate(members) if e.id not in billed
+    ]
+    stat_row_nos = {index: position for position, index in enumerate(stat_order, start=1)}
 
     rows: list[GridRow] = []
-    for row_no, (employee, designation) in enumerate(members, start=1):
+    for index, (employee, designation) in enumerate(members):
         employee_absences = absences.get(employee.id, [])
         employee_overrides = overrides.get(employee.id, [])
         codes = month_codes(
@@ -954,12 +1109,13 @@ def _live_rows(
             absences=[row.date for row in employee_absences],
             overrides={row.day: row.code for row in employee_overrides},
         )
-        block = 1 if row_no <= post_count else 2
+        stat_row_no = stat_row_nos[index]
+        block = 1 if employee.id in billed else 2
         filler = fillers.get(employee.id, DEFAULT_STAT_FILLER)
         rows.append(
             GridRow(
                 employee_id=employee.id,
-                row_no=row_no,
+                row_no=index + 1,
                 name_en=employee.name_en,
                 nationality_en=nationality_en(employee.nationality),
                 designation_en=designation.name_en if designation is not None else None,
@@ -972,6 +1128,7 @@ def _live_rows(
                     else _statistics_codes(codes, block=block, filler=filler)
                 ),
                 stat_block=block,
+                stat_row_no=stat_row_no,
                 stat_filler=filler if block == 2 else None,
                 joined_day=_edge_day(employee.doj, year, month),
                 left_day=_edge_day(employee.end_date, year, month),
@@ -983,7 +1140,9 @@ def _live_rows(
         )
 
     if sheet == "main":
-        _apply_main_statistics(rows, post_count)
+        packed = _packed_statistics([rows[index].codes for index in stat_order], len(billed))
+        for index, stat_codes in zip(stat_order, packed, strict=True):
+            rows[index].stat_codes[:] = stat_codes
 
     return rows
 
@@ -999,15 +1158,17 @@ def _sealed_rows(
     fillers: Mapping[str, str],
     acks: set[str],
 ) -> list[GridRow]:
-    """The frozen sheet, plus the five fields the snapshot deliberately omits.
+    """The frozen sheet, plus the fields the snapshot deliberately omits.
 
-    ``TimesheetSnapshotRow`` stores identity, ``codes``, ``stat_codes`` and
-    ``stat_block`` — the part that was printed and must never move. The rest is
+    ``TimesheetSnapshotRow`` stores identity, ``codes``, ``stat_codes``,
+    ``stat_block`` and ``stat_row_no`` — the part that was printed and must never
+    move. A row sealed before ``stat_row_no`` existed was printed in attendance
+    order, so its ``row_no`` is its statistics position. The rest is
     recomputed from sources that are either immutable history (``doj`` /
-    ``end_date``) or deliberately still mutable: absence notes and the filler are
-    display-only, and ``start_confirmed`` **must** stay live because a joiner's
-    starting point may be acknowledged after the month closed. Freezing that flag
-    into the snapshot would strand it forever.
+    ``end_date``) or deliberately still mutable: absence notes, the filler and
+    the company-paid mark are display-only, and ``start_confirmed`` **must** stay
+    live because a joiner's starting point may be acknowledged after the month
+    closed. Freezing that flag into the snapshot would strand it forever.
     """
 
     snapshot = list(
@@ -1039,6 +1200,7 @@ def _sealed_rows(
                 codes=list(frozen.codes),
                 stat_codes=list(frozen.stat_codes),
                 stat_block=frozen.stat_block,
+                stat_row_no=frozen.row_no if frozen.stat_row_no is None else frozen.stat_row_no,
                 stat_filler=(
                     fillers.get(frozen.employee_id, DEFAULT_STAT_FILLER)
                     if frozen.stat_block == 2
@@ -1070,6 +1232,11 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
     stay live. ``blocking`` is the one thing the seal freezes, precisely because it
     *does* gate a download — see :func:`_sealed_issues`.
 
+    ``post_count`` is the contracted total: on the main sheet the sum of the
+    active designations' quotas, which apply to every month; on the drivers
+    sheet the per-month ``TimesheetPeriod.post_count``. ``quotas`` reports how
+    the live main sheet filled them and is empty once the month is sealed.
+
     Never writes: no ``TimesheetPeriod`` row is created for a month that has none,
     because this runs against the live database on every page load and on the
     golden-file test.
@@ -1080,7 +1247,14 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
     assignments = _roster_assignments_on(db, month_start)
     departed_from_loaned = _departed_from_loaned(db)
     period = _period(db, year, month)
-    post_count = DEFAULT_POST_COUNT if period is None else period.post_count
+    catalog = sorted(
+        (row for row in designations.values() if row.sheet == SHEETS[0] and row.active),
+        key=lambda row: row.rank_order,
+    )
+    if sheet == SHEETS[0]:
+        post_count = sum(row.quota_uae + row.quota_arab for row in catalog)
+    else:
+        post_count = DEFAULT_POST_COUNT if period is None else period.post_count
 
     absences = _absences_by_employee(db, month_start, month_end)
     overrides = _overrides_by_employee(db, year, month)
@@ -1124,7 +1298,12 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
         blocking = _sealed_issues(rows)
         closed_at: datetime | None = period.closed_at
         closed_by = _display_name(db, period.closed_by)
+        quotas: list[QuotaLine] = []
     else:
+        billed: set[str] | None = None
+        quotas = []
+        if sheet == SHEETS[0]:
+            billed, quotas = _allocate_posts(members, catalog)
         rows = _live_rows(
             db,
             year,
@@ -1133,6 +1312,7 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
             members=members,
             leaves_by_employee=leaves_by_employee,
             post_count=post_count,
+            billed=billed,
             absences=absences,
             overrides=overrides,
             names=names,
@@ -1173,6 +1353,7 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
         ),
         closed_at=closed_at,
         closed_by=closed_by,
+        quotas=quotas,
     )
 
 
@@ -1186,10 +1367,11 @@ def seed_designations(db: Session) -> None:
 
     Called at startup and from the test fixtures, because the suite builds schema
     with ``metadata.create_all`` and never runs the migration that first inserted
-    these rows. ``rank_order`` and all printable fields belong to the operator
-    once the catalog exists, so a re-seed only fills in a missing row. A restored
-    row takes its seed rank when that rank is free and the next one after the last
-    otherwise, because the rank is uniquely constrained.
+    these rows. ``rank_order``, the quotas and all printable fields belong to the
+    operator once the catalog exists, so a re-seed only fills in a missing row.
+    A restored row takes its seed rank when that rank is free and the next one
+    after the last otherwise, because the rank is uniquely constrained; it takes
+    the contract quotas of :data:`DESIGNATION_QUOTA_SEED`.
     """
 
     rows = list(db.execute(select(TimesheetDesignation)).scalars())
@@ -1200,12 +1382,16 @@ def seed_designations(db: Session) -> None:
             continue
         rank_order = rank if rank not in taken else max(taken, default=0) + 1
         taken.add(rank_order)
+        quota_uae, quota_arab, quota_fill = DESIGNATION_QUOTA_SEED.get(system_key, (0, 0, FILL_OWN))
         db.add(
             TimesheetDesignation(
                 system_key=system_key,
                 name_en=name_en,
                 name_ar=name_ar,
                 rank_order=rank_order,
+                quota_uae=quota_uae,
+                quota_arab=quota_arab,
+                quota_fill=quota_fill,
                 sheet=sheet,
             )
         )
@@ -1283,8 +1469,34 @@ def rename_designation(
     return row
 
 
+def set_designation_quota(
+    db: Session, designation_id: int, *, quota_uae: int, quota_arab: int, quota_fill: str
+) -> TimesheetDesignation:
+    """Set a designation's billed posts on the client statistics.
+
+    The contract applies to every month, so this needs no open month: a month
+    already sealed keeps the rows it froze, and every open month recomputes.
+    """
+
+    row = db.get(TimesheetDesignation, designation_id)
+    if row is None:
+        raise NotFoundError(
+            "DESIGNATION_NOT_FOUND",
+            f"No designation {designation_id}.",
+            designation_id=designation_id,
+        )
+    row.quota_uae = quota_uae
+    row.quota_arab = quota_arab
+    row.quota_fill = quota_fill
+    db.commit()
+    return row
+
+
 def reorder_designations(db: Session, ids: list[int]) -> None:
     """Rewrite ``rank_order`` to the given order.
+
+    The one order both workbooks print in: the attendance sheet groups by it,
+    and the client statistics order each block by it.
 
     Two passes with a flush between them: ``rank_order`` is uniquely constrained,
     so writing the final ranks directly collides with the ranks still held by the
@@ -1743,6 +1955,7 @@ def close_month(db: Session, year: int, month: int, *, user_id: int | None = Non
                     codes=list(row.codes),
                     stat_codes=list(row.stat_codes),
                     stat_block=row.stat_block,
+                    stat_row_no=row.stat_row_no,
                 )
             )
     period.closed_at = _utcnow()

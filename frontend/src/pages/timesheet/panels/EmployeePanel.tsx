@@ -85,12 +85,13 @@ export function EmployeePanel({
   const statistics = variant === 'statistics'
 
   const found = useMemo(() => {
+    const ordered = statistics ? [...rows].sort((a, b) => a.stat_row_no - b.stat_row_no) : rows
     const needle = query.trim().toLowerCase()
-    if (!needle) return rows
+    if (!needle) return ordered
     // `g7141` and `7141` both mean the same G-number; the digits are matched
     // from the start so `41` does not find every row ending in it.
     const digits = needle.replace(/^g/, '')
-    return rows.filter((row) => {
+    return ordered.filter((row) => {
       const id = row.employee_id.toLowerCase()
       return (
         id.includes(needle) ||
@@ -100,7 +101,7 @@ export function EmployeePanel({
         (row.designation_ar ?? '').includes(needle)
       )
     })
-  }, [query, rows])
+  }, [query, rows, statistics])
 
   const at = found.length === 0 ? 0 : Math.min(cursor, found.length - 1)
   /**
@@ -319,7 +320,7 @@ export function EmployeePanel({
               {designationOf(target)}
               {target.nationality_en ? ` · ${target.nationality_en}` : ''} ·{' '}
               <span className="[unicode-bidi:isolate]">
-                {t('timesheet.employee.printedRow', { no: target.row_no })}
+                {t('timesheet.employee.printedRow', { no: statistics ? target.stat_row_no : target.row_no })}
               </span>
             </div>
             {rosterLine(target) && (

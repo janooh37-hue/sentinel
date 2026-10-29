@@ -5,6 +5,7 @@ Routes:
   POST   /timesheet/designations                              — add a catalog row
   PATCH  /timesheet/designations/{id}                         — rename a catalog row
   PUT    /timesheet/designations/order                        — re-rank it
+  PUT    /timesheet/designations/{id}/quota                   — set its billed posts
   PUT    /timesheet/{year}/{month}/roster                     — replace assignments
   GET    /timesheet/{year}/{month}                            — the grid
   PUT    /timesheet/{year}/{month}/cell                       — force one cell
@@ -43,6 +44,7 @@ from app.schemas.timesheet import (
     TimesheetCellUpdate,
     TimesheetDesignationCreate,
     TimesheetDesignationOrder,
+    TimesheetDesignationQuota,
     TimesheetDesignationRead,
     TimesheetDesignationUpdate,
     TimesheetGridResponse,
@@ -210,6 +212,22 @@ def reorder_designations(
 ) -> list[TimesheetDesignation]:
     svc.reorder_designations(db, payload.ids)
     return svc.list_designations(db)
+
+
+@router.put("/designations/{designation_id}/quota", response_model=TimesheetDesignationRead)
+def set_designation_quota(
+    designation_id: int,
+    payload: TimesheetDesignationQuota,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("timesheet.edit"))],
+) -> TimesheetDesignation:
+    return svc.set_designation_quota(
+        db,
+        designation_id,
+        quota_uae=payload.quota_uae,
+        quota_arab=payload.quota_arab,
+        quota_fill=payload.quota_fill,
+    )
 
 
 @router.put("/{year}/{month}/roster", status_code=status.HTTP_204_NO_CONTENT)

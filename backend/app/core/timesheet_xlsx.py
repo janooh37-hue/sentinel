@@ -3,9 +3,11 @@
 One template, two variants. ``attendance`` is HR's sheet: column E prints the
 English designation and the day cells print :attr:`GridRow.codes`, the truth
 about each day. ``statistics`` is the client's: column E prints the Arabic
-designation, the day cells print :attr:`GridRow.stat_codes`, and the roster is
-split into the contracted posts and the surplus above them, separated by two
-empty rows while column A keeps counting straight through.
+designation marked ``(مواطن)`` for a U.A.E national and ``(مقيم)`` for everyone
+else, the day cells print :attr:`GridRow.stat_codes`, the rows run in
+:attr:`GridRow.stat_row_no` order, and the roster is split into the contracted
+posts and the surplus above them, separated by two empty rows while column A
+keeps counting straight through.
 
 Nothing here reads a database. A :class:`MonthGrid` plus the committed template
 is the whole input, so the same grid always renders the same workbook.
@@ -70,7 +72,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
-from app.core.constants import ARABIC_MONTHS, TIMESHEET_DRIVERS
+from app.core.constants import ARABIC_MONTHS, TIMESHEET_DRIVERS, UAE_NATIONALITY_EN
 from app.core.timesheet_codes import (
     CODE_ABSENT,
     CODE_ANNUAL,
@@ -173,6 +175,12 @@ _CELL_RULES: Final[tuple[tuple[str, str, str | None], ...]] = (
 #: because that is how openpyxl passes an inline list to Excel.
 _CODE_LIST: Final[str] = '"P,AL,SL ,AB,TR,NG,-,R,S ,OFF,X"'
 
+#: Column E of the client statistics tells citizens from residents, as the
+#: finance office's September 2026 file does: the nationality label the sheet
+#: already prints in column D decides it.
+_CITIZEN_SUFFIX: Final[str] = " (مواطن)"
+_RESIDENT_SUFFIX: Final[str] = " (مقيم)"
+
 
 # --------------------------------------------------------------------------- #
 # Loading
@@ -267,12 +275,25 @@ def _style_row(sheet: Any, specimens: tuple[_Specimen, _Specimen], row: int) -> 
         sheet.cell(row, column)._style = copy(style)
 
 
+def _statistics_designation(entry: GridRow) -> str | None:
+    """The Arabic designation with its citizen/resident mark.
+
+    No mark without a nationality: an unmapped one blocks the download anyway,
+    and guessing "resident" would print a claim nobody made.
+    """
+
+    if entry.designation_ar is None or entry.nationality_en is None:
+        return entry.designation_ar
+    citizen = entry.nationality_en == UAE_NATIONALITY_EN
+    return entry.designation_ar + (_CITIZEN_SUFFIX if citizen else _RESIDENT_SUFFIX)
+
+
 def _write_row(sheet: Any, row: int, entry: GridRow, *, statistics: bool, days: int) -> None:
-    sheet.cell(row, 1, entry.row_no)
+    sheet.cell(row, 1, entry.stat_row_no if statistics else entry.row_no)
     sheet.cell(row, 2, entry.employee_id)
     sheet.cell(row, 3, entry.name_en)
     sheet.cell(row, 4, entry.nationality_en)
-    sheet.cell(row, 5, entry.designation_ar if statistics else entry.designation_en)
+    sheet.cell(row, 5, _statistics_designation(entry) if statistics else entry.designation_en)
 
     codes = entry.stat_codes if statistics else entry.codes
     for day, code in enumerate(codes[:days], start=1):
@@ -454,7 +475,9 @@ def render(grid: MonthGrid, *, variant: str = VARIANT_ATTENDANCE) -> bytes:
 
     _require_variant(variant)
     workbook, sheet, parts = _load()
-    _fill(sheet, parts, grid, grid.rows, statistics=variant == VARIANT_STATISTICS)
+    statistics = variant == VARIANT_STATISTICS
+    rows = sorted(grid.rows, key=lambda entry: entry.stat_row_no) if statistics else grid.rows
+    _fill(sheet, parts, grid, rows, statistics=statistics)
     return _finish(workbook)
 
 

@@ -11,25 +11,22 @@
  * synchronously) because every move control's accessible name interpolates the
  * row it moves; a `t: (k) => k` stub would assert the key and prove nothing.
  */
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/api', () => ({
-  api: {
-    listDesignations: vi.fn(),
-    reorderDesignations: vi.fn(),
-  },
-  apiErrorMessage: (e: unknown) => String(e),
-  ApiError: class ApiError extends Error {
-    readonly code: string
-    constructor(_status: number, code: string, message: string) {
-      super(message)
-      this.code = code
-    }
-  },
-}))
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>()
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      listDesignations: vi.fn(),
+      reorderDesignations: vi.fn(),
+    },
+  }
+})
 
 import { toast } from '@/lib/toast'
 import { api, ApiError, type TimesheetDesignationRead } from '@/lib/api'
@@ -63,6 +60,9 @@ const CATALOG: TimesheetDesignationRead[] = SEED.map(([name_en, name_ar, sheet],
   name_en,
   name_ar,
   rank_order: i + 1,
+  quota_uae: 1,
+  quota_arab: 2,
+  quota_fill: 'own',
   sheet,
   active: true,
   system_key: null,
@@ -89,6 +89,8 @@ beforeEach(() => {
   vi.mocked(api.reorderDesignations).mockResolvedValue(CATALOG)
 })
 
+afterEach(() => vi.unstubAllGlobals())
+
 describe('DesignationCatalog', () => {
   it('lists all sixteen designations in rank order, both names, and the sheet each prints on', async () => {
     wrap()
@@ -104,6 +106,8 @@ describe('DesignationCatalog', () => {
     // The badge names the workbook the designation lists on.
     expect(rows[15]).toHaveTextContent('Drivers')
     expect(rows[0]).toHaveTextContent('All staff')
+    expect(within(rows[15]!).queryByRole('spinbutton')).not.toBeInTheDocument()
+    expect(screen.getByText('Contract total: 45 posts')).toBeInTheDocument()
   })
 
   it('sends every id exactly once when an order is saved', async () => {
@@ -120,6 +124,39 @@ describe('DesignationCatalog', () => {
     expect([...sent].sort((a, b) => a - b)).toEqual([...IDS].sort((a, b) => a - b))
     expect(sent).toEqual([102, 101, ...IDS.slice(2)])
     expect(toast.success).toHaveBeenCalled()
+  })
+
+  it.each([
+    ['UAE posts', '4', { quota_uae: 4, quota_arab: 2, quota_fill: 'own' }],
+    ['Arab posts', '5', { quota_uae: 1, quota_arab: 5, quota_fill: 'own' }],
+    ['Filled by', 'guards_only', { quota_uae: 1, quota_arab: 2, quota_fill: 'guards_only' }],
+  ])('saves %s for this designation with the complete quota payload', async (label, value, payload) => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...CATALOG[0], ...payload })))
+    vi.stubGlobal('fetch', fetch)
+    wrap()
+    const row = (await screen.findAllByRole('listitem'))[0]!
+    const field = within(row).getByLabelText(label)
+    fireEvent.change(field, { target: { value } })
+    if (label !== 'Filled by') fireEvent.blur(field)
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    expect(fetch).toHaveBeenCalledWith('/api/v1/timesheet/designations/101/quota', expect.objectContaining({
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Billed posts saved.'))
+  })
+
+  it.each(['UAE posts', 'Arab posts'])('refuses an empty %s instead of saving zero', async (label) => {
+    const fetch = vi.fn()
+    vi.stubGlobal('fetch', fetch)
+    wrap()
+    const rows = await screen.findAllByRole('listitem')
+    const field = within(rows[0]!).getByLabelText(label)
+    fireEvent.change(field, { target: { value: '' } })
+    fireEvent.blur(field)
+    expect(fetch).not.toHaveBeenCalled()
+    expect(field).toHaveValue(label === 'UAE posts' ? 1 : 2)
+    expect(toast.error).toHaveBeenCalledWith('Enter a whole number from 0 to 1000 in both post fields.')
   })
 
   it('offers nothing to save until a row actually moves, and nothing to save after a revert', async () => {

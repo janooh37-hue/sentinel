@@ -2255,6 +2255,20 @@ class TimesheetDesignation(Base):
     name_ar: Mapped[str] = mapped_column(String(128), nullable=False)
     system_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     rank_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    #: The contracted posts the client statistics bill for this designation
+    #: (migration 0110): posts for U.A.E nationals and for Arab nationals of
+    #: other countries. ``quota_fill`` says who fills them — ``own`` holders only,
+    #: ``own_then_guards`` (gaps from spare Security Guards), or ``guards_only``
+    #: (spare Security Guards only; the holders themselves are company-paid).
+    quota_uae: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    quota_arab: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    quota_fill: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="own", server_default="own"
+    )
     sheet: Mapped[str] = mapped_column(String(16), default="main", server_default="main")
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("1"))
 
@@ -2263,6 +2277,11 @@ class TimesheetDesignation(Base):
         UniqueConstraint("rank_order", name="uq_timesheet_designations_rank"),
         Index("ux_timesheet_designations_system_key", "system_key", unique=True),
         CheckConstraint("sheet IN ('main', 'drivers')", name="ck_timesheet_desig_sheet"),
+        CheckConstraint(
+            "quota_uae >= 0 AND quota_arab >= 0 "
+            "AND quota_fill IN ('own', 'own_then_guards', 'guards_only')",
+            name="ck_timesheet_desig_quota",
+        ),
     )
 
 
@@ -2404,6 +2423,9 @@ class TimesheetSnapshotRow(Base):
     codes: Mapped[list[str | None]] = mapped_column(JSON, nullable=False)
     stat_codes: Mapped[list[str | None]] = mapped_column(JSON, nullable=False)
     stat_block: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    #: Position on the statistics sheet (migration 0110). ``None`` on rows sealed
+    #: before it, which were printed in attendance order — ``row_no``.
+    stat_row_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     period: Mapped[TimesheetPeriod] = relationship(back_populates="snapshot_rows")
 

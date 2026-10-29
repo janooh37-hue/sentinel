@@ -46,6 +46,7 @@ function row(
   return {
     employee_id: employeeId,
     row_no: rowNo,
+    stat_row_no: rowNo,
     name_en: 'TEST GUARD',
     nationality_en: 'Oman',
     designation_en: 'Security Guard',
@@ -90,6 +91,15 @@ describe('buildTimesheetCodeIndex', () => {
     const index = buildTimesheetCodeIndex(rows, 'attendance', 30)
 
     expect(index.employeeIds.AL).toEqual(['G7068', 'G7014'])
+  })
+
+  it('cycles statistics matches in statistics position order rather than attendance order', () => {
+    const rows = [
+      { ...row('G7014', { stat_codes: days({ 1: 'AL' }) }, 1), stat_row_no: 2 },
+      { ...row('G7068', { stat_codes: days({ 2: 'AL' }) }, 2), stat_row_no: 1 },
+    ]
+    expect(buildTimesheetCodeIndex(rows, 'statistics', 30).employeeIds.AL)
+      .toEqual(['G7068', 'G7014'])
   })
 
   it('reads codes on attendance and stat_codes on statistics', () => {

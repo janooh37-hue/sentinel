@@ -110,7 +110,9 @@ def test_grid_reports_persisted_edits_with_the_editor(db_session, guards):
     assert sealed.edits[15] == expected_override
 
 
-def test_effective_roster_assignment_wins_by_month_and_explicit_null_unassigns(db_session, guards):
+def test_effective_roster_assignment_wins_by_month_and_unassigned_counts_as_a_guard(
+    db_session, guards
+):
     guard = db_session.query(TimesheetDesignation).filter_by(name_en="Security Guard").one()
     supervisor = (
         db_session.query(TimesheetDesignation).filter_by(name_en="Security Supervisor").one()
@@ -125,11 +127,9 @@ def test_effective_roster_assignment_wins_by_month_and_explicit_null_unassigns(d
 
     assert (july.designation_en, july.designation_id) == ("Security Guard", guard.id)
     assert (august.designation_en, august.designation_id) == ("Security Supervisor", supervisor.id)
-    assert (september.designation_en, september.designation_id) == (None, None)
-    assert any(
-        issue.employee_id == "G1001" and issue.kind == "no_designation"
-        for issue in svc.build_month(db_session, 2026, 9).blocking
-    )
+    # Unassigned again: counted as a Security Guard rather than blocking the month.
+    assert (september.designation_en, september.designation_id) == ("Security Guard", guard.id)
+    assert not svc.build_month(db_session, 2026, 9).blocking
 
 
 def test_sealed_rows_keep_frozen_designation_after_later_assignment_and_catalog_edit(
@@ -295,43 +295,156 @@ def test_departed_loaned_employee_stays_off_live_salary_sheet_and_removed(
     assert "G1001" in {row.employee_id for row in svc.build_month(db_session, 2026, 8).removed}
 
 
-def test_main_statistics_compensates_by_rank_then_groups_codes():
-    assert svc._compensated_day(
-        [CODE_SICK, CODE_ANNUAL, CODE_PRESENT, CODE_PRESENT, CODE_PRESENT], 3
-    ) == [CODE_PRESENT, CODE_PRESENT, CODE_PRESENT, CODE_ANNUAL, CODE_SICK]
-
-
-def test_main_statistics_does_not_invent_leave_when_targets_outnumber_sources():
-    assert svc._compensated_day(
-        [CODE_ANNUAL, CODE_PRESENT, CODE_PRESENT, CODE_PRESENT, CODE_PRESENT], 3
-    ) == [CODE_PRESENT, CODE_PRESENT, CODE_PRESENT, CODE_ANNUAL, CODE_PRESENT]
-
-
-def test_main_statistics_keeps_unmatched_and_fixed_codes():
-    assert svc._compensated_day(
+def test_main_statistics_pack_all_leave_into_block_two_row_by_row():
+    """The finance office's shape: block 1 manned, block 2 AL, SL, AB, TR, then P."""
+    P, AL, SL, AB, TR = CODE_PRESENT, CODE_ANNUAL, CODE_SICK, CODE_ABSENT, CODE_NATIONAL
+    assert svc._packed_statistics(
         [
-            CODE_SICK,
-            CODE_ANNUAL,
-            CODE_NEW,
-            CODE_PRESENT,
-            CODE_ABSENT,
-            CODE_OFF_ROSTER,
-            svc.CODE_BLOCKED,
+            [AL, SL, AL],
+            [TR, P, P],
+            [P, P, P],
+            [P, AB, P],  # block 2's own leave joins the pool
         ],
-        3,
+        2,
     ) == [
-        CODE_PRESENT,
-        CODE_ANNUAL,
-        CODE_NEW,
-        CODE_SICK,
-        CODE_ABSENT,
-        CODE_OFF_ROSTER,
-        svc.CODE_BLOCKED,
+        [P, P, P],
+        [P, P, P],
+        [AL, AL, SL],
+        [AB, TR, P],
     ]
 
 
-def test_main_statistics_moves_real_leave_without_filling_unused_targets(db_session, guards):
-    svc.set_post_count(db_session, 2026, 7, 2)
+def test_main_statistics_never_move_roster_edges_or_the_red_block():
+    P, AL = CODE_PRESENT, CODE_ANNUAL
+    blocked = svc.CODE_BLOCKED
+    assert svc._packed_statistics(
+        [
+            [AL, CODE_NEW, blocked],
+            [CODE_OFF_ROSTER, P, None],
+        ],
+        1,
+    ) == [
+        [P, CODE_NEW, blocked],
+        [CODE_OFF_ROSTER, AL, None],
+    ]
+
+
+def test_main_statistics_leave_that_does_not_fit_stays_on_the_lower_ranked_row():
+    """No leave day is invented or dropped; the highest-ranked rows move first."""
+    P, AL, SL = CODE_PRESENT, CODE_ANNUAL, CODE_SICK
+    assert svc._packed_statistics([[AL, AL], [SL, SL], [P, P]], 2) == [
+        [P, P],
+        [SL, SL],
+        [AL, AL],
+    ]
+
+
+#: The guards fixture's supervisor and the older of its two UAE guards are billed;
+#: the newer guard, G1002, falls below the line.
+ONE_GUARD = {"Security Supervisor": (1, 0), "Security Guard": (1, 0)}
+
+
+def _contract(db, posts):
+    """Bill exactly ``posts`` (name_en -> (UAE, Arab)); every other designation none.
+
+    Setting one quota alone is not enough: an empty Control Room or Messengers
+    post would pull a spare UAE guard straight back above the line.
+    """
+
+    for designation in db.query(TimesheetDesignation).all():
+        uae, arab = posts.get(designation.name_en, (0, 0))
+        svc.set_designation_quota(
+            db, designation.id, quota_uae=uae, quota_arab=arab, quota_fill="own_then_guards"
+        )
+
+
+UAE, OMAN, NEPAL = "الإمارات", "سلطنة عمان", "نيبال"
+
+
+def _post(designation_id, key, *, uae=0, arab=0, fill="own_then_guards"):
+    return TimesheetDesignation(
+        id=designation_id,
+        system_key=key,
+        name_en=key,
+        name_ar=key,
+        rank_order=designation_id,
+        sheet="main",
+        quota_uae=uae,
+        quota_arab=arab,
+        quota_fill=fill,
+    )
+
+
+def _staff(*people):
+    return [
+        (Employee(id=e, name_en=e, nationality=nat), designation) for e, nat, designation in people
+    ]
+
+
+def _lines(lines):
+    return [
+        (line.name_en, line.nationality, line.quota, line.own, line.from_guards) for line in lines
+    ]
+
+
+def test_quotas_fill_own_posts_oldest_first_then_gaps_from_spare_guards():
+    control = _post(1, "control_room_security_guard", uae=2)
+    clinic = _post(2, "clinic_security_guard", arab=1, fill="own")
+    escort = _post(3, "escort_security_guard", arab=1, fill="guards_only")
+    guard = _post(4, "security_guard", uae=3, arab=1)
+    members = _staff(
+        ("G104", UAE, guard),  # the newest UAE guard: over quota, so spare
+        ("G101", UAE, guard),
+        ("G102", UAE, guard),
+        ("G103", UAE, guard),
+        ("G201", OMAN, guard),
+        ("G202", OMAN, guard),
+        ("G203", OMAN, guard),
+        ("G301", NEPAL, guard),  # fills no billed post
+        ("G401", UAE, control),
+        ("G501", OMAN, escort),  # escort staff are company-paid
+    )
+    billed, lines = svc._allocate_posts(members, [control, clinic, escort, guard])
+
+    assert billed == {"G101", "G102", "G103", "G104", "G201", "G202", "G401"}
+    assert _lines(lines) == [
+        ("control_room_security_guard", "uae", 2, 1, 1),  # gap: spare UAE guard G104
+        ("clinic_security_guard", "arab", 1, 0, 0),  # own holders only: stays empty
+        ("escort_security_guard", "arab", 1, 0, 1),  # spare Arab guard G202, oldest first
+        ("security_guard", "uae", 3, 3, 0),
+        ("security_guard", "arab", 1, 1, 0),
+    ]
+
+
+def test_arab_guards_fill_uae_guard_posts_but_never_the_other_way():
+    guard = _post(1, "security_guard", uae=3, arab=2)
+    one_up = _staff(
+        ("G101", UAE, guard),
+        *((f"G20{i}", OMAN, guard) for i in range(1, 5)),
+    )
+    billed, lines = svc._allocate_posts(one_up, [guard])
+    assert billed == {"G101", "G201", "G202", "G203", "G204"}
+    assert _lines(lines) == [
+        ("security_guard", "uae", 3, 1, 2),
+        ("security_guard", "arab", 2, 2, 0),
+    ]
+
+    # An Arab gap is filled neither by a Nepal guard nor by a spare UAE guard.
+    down = _staff(
+        ("G101", UAE, guard),
+        ("G102", UAE, guard),
+        ("G103", UAE, guard),
+        ("G104", UAE, guard),
+        ("G201", OMAN, guard),
+        ("G301", NEPAL, guard),
+    )
+    billed, lines = svc._allocate_posts(down, [guard])
+    assert billed == {"G101", "G102", "G103", "G201"}
+    assert _lines(lines)[1] == ("security_guard", "arab", 2, 1, 0)
+
+
+def test_main_statistics_move_billed_leave_to_the_head_of_the_lower_rows(db_session, guards):
+    _contract(db_session, ONE_GUARD)
     db_session.add(
         Leave(
             employee_id="G1001",
@@ -346,10 +459,61 @@ def test_main_statistics_moves_real_leave_without_filling_unused_targets(db_sess
 
     source = _row(db_session, 2026, 7, "G1001")
     target = _row(db_session, 2026, 7, "G1002")
+    assert (source.stat_block, target.stat_block) == (1, 2)
     assert source.codes[4:9] == [CODE_ANNUAL] * 5
     assert source.stat_codes[4:9] == [CODE_PRESENT] * 5
-    assert target.stat_codes[4:9] == [CODE_ANNUAL] * 5
-    assert target.stat_codes[0] == CODE_PRESENT
+    assert target.stat_codes[:6] == [CODE_ANNUAL] * 5 + [CODE_PRESENT]
+
+
+def test_statistics_print_billed_rows_first_while_attendance_keeps_everyone_in_rank_order(
+    db_session, guards
+):
+    guard = db_session.query(TimesheetDesignation).filter_by(name_en="Security Guard").one()
+    db_session.add(Employee(id="G0400", name_en="Nepal", nationality=NEPAL, doj=date(2020, 1, 1)))
+    db_session.commit()
+    _add_assignment(db_session, "G0400", guard.id, date(2026, 1, 1))
+    db_session.commit()
+    _contract(db_session, {"Security Supervisor": (1, 0), "Security Guard": (1, 38)})
+
+    grid = svc.build_month(db_session, 2026, 7)
+    rows = {row.employee_id: row for row in grid.rows}
+    order = ("G0999", "G0400", "G1001", "G1002")
+    assert [rows[e].row_no for e in order] == [1, 2, 3, 4]
+    assert [rows[e].stat_row_no for e in order] == [1, 3, 2, 4]
+    assert [rows[e].stat_block for e in order] == [1, 2, 1, 2]
+    assert grid.post_count == 40  # the contract total: the sum of the quotas
+    line = next(q for q in grid.quotas if q.designation_id == guard.id and q.nationality == "uae")
+    assert (line.quota, line.own, line.from_guards) == (1, 1, 0)
+
+
+def test_an_unassigned_employee_fills_a_guard_post_by_his_nationality(db_session, guards):
+    db_session.add(Employee(id="G0300", name_en="New", nationality=OMAN, doj=date(2020, 1, 1)))
+    db_session.commit()
+
+    grid = svc.build_month(db_session, 2026, 7)
+    row = next(r for r in grid.rows if r.employee_id == "G0300")
+    assert row.designation_en == "Security Guard"
+    assert row.stat_block == 1  # an Arab Security Guard post
+    assert not grid.blocking
+
+
+def test_sealed_statistics_keep_their_frozen_blocks_and_position(db_session, guards):
+    _contract(db_session, ONE_GUARD)
+    svc.close_month(db_session, 2026, 7)
+    _contract(db_session, {"Security Supervisor": (1, 0), "Security Guard": (55, 0)})
+
+    grid = svc.build_month(db_session, 2026, 7)
+    rows = {row.employee_id: row for row in grid.rows}
+    assert [rows[e].stat_row_no for e in ("G0999", "G1001", "G1002")] == [1, 2, 3]
+    assert rows["G1002"].stat_block == 2
+    assert grid.quotas == []
+
+    # A month sealed before the position was frozen printed in attendance order.
+    for frozen in db_session.query(TimesheetSnapshotRow).filter_by(sheet="main"):
+        frozen.stat_row_no = None
+    db_session.commit()
+    rows = {row.employee_id: row for row in svc.build_month(db_session, 2026, 7).rows}
+    assert all(row.stat_row_no == row.row_no for row in rows.values())
 
 
 def test_drivers_keep_existing_filler_derivation(db_session, guards):
@@ -411,16 +575,6 @@ def test_a_sick_certificate_supersedes_the_absence(db_session, guards):
     )
     assert removed == [date(2026, 7, 14)]
     assert db_session.query(Absence).count() == 0
-
-
-def test_an_employee_without_a_designation_blocks_the_download(db_session, guards):
-    db_session.add(
-        Employee(id="G9999", name_en="No Designation", nationality="الإمارات", doj=date(2020, 1, 1))
-    )
-    db_session.commit()
-    grid = svc.build_month(db_session, 2026, 7)
-    assert [i.kind for i in grid.blocking] == ["no_designation"]
-    assert grid.rows[-1].employee_id == "G9999"
 
 
 def test_an_unmapped_nationality_blocks_the_download(db_session, guards):
@@ -650,7 +804,6 @@ def test_removal_notice_uses_the_departure_month_assignment(db_session):
 
 def test_the_red_block_is_accepted_manually_and_survives_the_statistics(db_session):
     _guard(db_session, "G8004")
-    svc.set_post_count(db_session, 2026, 7, 249)  # G8004 lands in block 1
     for day in range(1, 23):
         svc.set_cell(db_session, 2026, 7, "G8004", day, "X")
     row = _row(db_session, 2026, 7, "G8004")
@@ -717,9 +870,10 @@ def test_set_post_count_updates_the_single_period_in_place(db_session, guards):
     svc.set_post_count(db_session, 2026, 7, 200)
     svc.set_post_count(db_session, 2026, 7, 210)
     assert db_session.query(TimesheetPeriod).count() == 1
-    grid = svc.build_month(db_session, 2026, 7)
-    assert grid.post_count == 210
-    assert (grid.year, grid.month, grid.sheet) == (2026, 7, "main")
+    grid = svc.build_month(db_session, 2026, 7, sheet="drivers")
+    assert grid.post_count == 210  # the drivers sheet; the main sheet bills the quotas
+    assert (grid.year, grid.month, grid.sheet) == (2026, 7, "drivers")
+    assert svc.build_month(db_session, 2026, 7).post_count == 249
 
 
 def test_a_non_numeric_id_sorts_last(db_session, guards):
@@ -753,21 +907,21 @@ def test_the_filler_lookback_takes_the_most_recent_earlier_month(db_session, gua
 
 
 def test_a_month_with_no_filler_anywhere_falls_back_to_annual_leave(db_session, guards):
-    svc.set_post_count(db_session, 2026, 7, 2)
+    _contract(db_session, ONE_GUARD)
     grid = svc.build_month(db_session, 2026, 7)
     assert grid.rows[2].stat_filler == CODE_ANNUAL
 
 
-def test_the_red_block_and_a_real_absence_survive_block_two(db_session, guards):
-    """Rule 12: ``X`` is kept in BOTH keep sets, and rule 6 keeps a real ``AB``."""
-    svc.set_post_count(db_session, 2026, 7, 2)
+def test_the_red_block_survives_block_two_and_a_real_absence_joins_the_pack(db_session, guards):
+    """Rule 12: ``X`` never moves. A real ``AB`` is leave like any other in the pack."""
+    _contract(db_session, ONE_GUARD)
     svc.set_cell(db_session, 2026, 7, "G1002", 5, "X")
     svc.set_cell(db_session, 2026, 7, "G1002", 6, "AB")
     row = _row(db_session, 2026, 7, "G1002")
     assert row.stat_block == 2
     assert row.stat_codes[4] == "X"  # outside the billing window, never filled over
-    assert row.stat_codes[5] == CODE_ABSENT  # a real absence is not filled over
-    assert row.stat_codes[6] == CODE_PRESENT  # no real code above needs this P target
+    assert row.stat_codes[0] == CODE_ABSENT  # packed to the head of block 2
+    assert row.stat_codes[5] == CODE_PRESENT
 
 
 def test_a_filler_code_the_legend_does_not_carry_is_rejected(db_session, guards):
@@ -983,10 +1137,10 @@ def test_clearing_a_cell_outside_the_roster_window_is_allowed(db_session):
     assert db_session.query(TimesheetOverride).count() == 0
 
 
-# --- ruling 2: no designation means the main sheet only ----------------------
+# --- ruling 2: no designation means a Security Guard on the main sheet --------
 
 
-def test_a_designation_less_employee_is_absent_from_the_drivers_sheet(db_session, guards):
+def test_a_designation_less_employee_is_a_main_sheet_guard_only(db_session, guards):
     db_session.add(
         Employee(id="G9999", name_en="No Designation", nationality="الإمارات", doj=date(2020, 1, 1))
     )
@@ -994,8 +1148,8 @@ def test_a_designation_less_employee_is_absent_from_the_drivers_sheet(db_session
 
     main = svc.build_month(db_session, 2026, 7)
     assert main.rows[-1].employee_id == "G9999"
-    assert (main.rows[-1].rank_order, main.rows[-1].designation_en) == (None, None)
-    assert [i.kind for i in main.blocking] == ["no_designation"]
+    assert (main.rows[-1].rank_order, main.rows[-1].designation_en) == (15, "Security Guard")
+    assert main.blocking == []
 
     drivers = svc.build_month(db_session, 2026, 7, sheet="drivers")
     assert [r.employee_id for r in drivers.rows] == ["G2000"]
@@ -1121,7 +1275,8 @@ def test_a_void_or_deleted_leave_never_reaches_the_sheet(db_session, guards):
 # --- rule 14: who is reported as having dropped off -------------------------
 
 
-def test_a_departure_without_a_designation_is_never_reported_as_removed(db_session):
+def test_a_departure_without_a_designation_is_reported_off_the_main_sheet(db_session):
+    """Unassigned, he was printed as a Security Guard, so the main sheet lost him."""
     db_session.add(
         Employee(
             id="G8201",
@@ -1135,7 +1290,8 @@ def test_a_departure_without_a_designation_is_never_reported_as_removed(db_sessi
     db_session.commit()
     august = svc.build_month(db_session, 2026, 8)
     assert august.rows == []
-    assert august.removed == []
+    assert [r.employee_id for r in august.removed] == ["G8201"]
+    assert svc.build_month(db_session, 2026, 8, sheet="drivers").removed == []
 
 
 def test_a_driver_who_left_is_reported_on_the_drivers_sheet_only(db_session):
@@ -1189,7 +1345,7 @@ def test_a_closed_month_recomputes_the_five_unfrozen_fields(db_session, guards):
     employee.doj = date(2026, 7, 3)
     employee.end_date = date(2026, 7, 20)
     db_session.commit()
-    svc.set_post_count(db_session, 2026, 7, 2)  # G1002 is row 3 -> block 2
+    _contract(db_session, ONE_GUARD)  # G1002, the newer guard -> block 2
     svc.close_month(db_session, 2026, 7)
 
     # Everything below happens after the seal.
@@ -1240,16 +1396,12 @@ def test_a_closed_month_survives_live_drift(db_session, guards):
 
 def test_a_gap_sealed_into_the_month_is_still_reported(db_session, guards):
     """The seal's preflight is the frozen row, not an empty list."""
-    _add_assignment(db_session, "G1001", None, date(2026, 7, 1))
     db_session.get(Employee, "G1002").nationality = "فرنسا"
     db_session.commit()
     svc.close_month(db_session, 2026, 7)
 
     grid = svc.build_month(db_session, 2026, 7)
-    assert {(i.employee_id, i.kind) for i in grid.blocking} == {
-        ("G1001", "no_designation"),
-        ("G1002", "no_nationality"),
-    }
+    assert {(i.employee_id, i.kind) for i in grid.blocking} == {("G1002", "no_nationality")}
 
 
 def test_the_seal_carries_the_closing_user_and_reopening_clears_it(db_session, guards):
@@ -1284,7 +1436,7 @@ def test_a_certificate_may_still_be_filed_against_a_closed_month(db_session, gua
 
 def test_build_month_does_not_query_once_per_row(db_session, guards, count_queries):
     """275 rows must not become 1,100 round trips, including fillers and status history."""
-    svc.set_post_count(db_session, 2026, 7, 1)  # everyone but row 1 falls into block 2
+    _contract(db_session, {"Security Supervisor": (1, 0)})  # every guard falls below the line
     with count_queries() as small:
         svc.build_month(db_session, 2026, 7)
 
@@ -1325,12 +1477,13 @@ def test_an_acknowledgement_records_the_actor_when_one_is_supplied(db_session):
 
 def test_a_closed_month_refuses_a_post_count_change_but_not_a_filler(db_session, guards):
     """post_count would disagree with the frozen stat_block; the filler is display-only."""
+    _contract(db_session, ONE_GUARD)  # G1002 below the line
     svc.set_post_count(db_session, 2026, 7, 2)
     svc.close_month(db_session, 2026, 7)
 
     with pytest.raises(ConflictError, match="closed"):
         svc.set_post_count(db_session, 2026, 7, 200)
-    assert svc.build_month(db_session, 2026, 7).post_count == 2
+    assert svc.build_month(db_session, 2026, 7, sheet="drivers").post_count == 2
 
     svc.set_filler(db_session, 2026, 7, "G1002", CODE_SICK)  # still permitted
     row = _row(db_session, 2026, 7, "G1002")

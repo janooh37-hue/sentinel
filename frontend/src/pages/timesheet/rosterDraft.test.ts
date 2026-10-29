@@ -47,7 +47,7 @@ function designation(
   name_ar: string,
   sheet: string,
 ): TimesheetDesignationRead {
-  return frozen({ id, name_en, name_ar, rank_order: rank, sheet, active: true, system_key: null })
+  return frozen({ id, name_en, name_ar, rank_order: rank, quota_uae: 0, quota_arab: 0, quota_fill: 'own', sheet, active: true, system_key: null })
 }
 
 // Three real catalog rows: two ranks apart on the main sheet, plus the one
@@ -70,6 +70,7 @@ function row(
   return frozen({
     employee_id: employeeId,
     row_no: rowNo,
+    stat_row_no: rowNo,
     name_en: `GUARD ${employeeId}`,
     nationality_en: 'Oman',
     designation_id: from?.id ?? null,

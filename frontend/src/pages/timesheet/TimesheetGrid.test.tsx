@@ -63,6 +63,7 @@ const ruleBody = (selector: string): string => {
 const row: TimesheetRow = {
   employee_id: 'G1001',
   row_no: 1,
+  stat_row_no: 1,
   name_en: 'TEST GUARD',
   nationality_en: 'U.A.E',
   designation_en: 'Security Guard',
@@ -734,6 +735,23 @@ describe('TimesheetGrid', () => {
     expect(cell('G1001', 15)).not.toHaveAttribute('title')
   })
 
+  it('orders and numbers client statistics by statistics position without changing attendance', () => {
+    const rows: TimesheetRow[] = [
+      { ...row, employee_id: 'G1001', row_no: 1, stat_row_no: 3, stat_block: 2 },
+      { ...row, employee_id: 'G1002', row_no: 2, stat_row_no: 1, stat_block: 1 },
+      { ...row, employee_id: 'G1003', row_no: 3, stat_row_no: 2, stat_block: 1 },
+    ]
+    const view = render(<TimesheetGrid {...props} rows={rows} variant="statistics" />)
+    const printed = screen.getAllByTestId('timesheet-row')
+    expect(printed.map((each) => each.dataset.employee)).toEqual(['G1002', 'G1003', 'G1001'])
+    expect(printed.map((each) => each.children[0]?.textContent)).toEqual(['1', '2', '3'])
+    expect(screen.getAllByTestId('timesheet-block-gap')).toHaveLength(1)
+
+    view.rerender(<TimesheetGrid {...props} rows={rows} />)
+    expect(screen.getAllByTestId('timesheet-row').map((each) => each.dataset.employee))
+      .toEqual(['G1001', 'G1002', 'G1003'])
+  })
+
   it('reads stat_codes and draws the two blocks in the statistics variant', () => {
     render(
       <TimesheetGrid
@@ -925,6 +943,7 @@ const filterRow = (
   ...row,
   employee_id,
   row_no,
+  stat_row_no: row_no,
   name_en: employee_id,
   designation_en,
   designation_ar: designation_en,
@@ -999,6 +1018,9 @@ describe('TimesheetGrid roster edit', () => {
     name_en: 'Duty In charge',
     name_ar: 'مناوب عام',
     rank_order: 5,
+    quota_uae: 0,
+    quota_arab: 0,
+    quota_fill: 'own',
     sheet: 'main',
     active: true,
     system_key: null,
@@ -1011,6 +1033,7 @@ describe('TimesheetGrid roster edit', () => {
     ...row,
     employee_id,
     row_no,
+    stat_row_no: row_no,
     designation_id: GUARD.id,
   })
   /** Rank 5, one man; rank 14 empty; rank 15, two guards; then nobody's man. */

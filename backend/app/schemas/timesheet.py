@@ -30,6 +30,8 @@ from app.schemas._base import ORMBase
 #: a ``Literal``, so ``test_timesheet_api`` pins these against them.
 Sheet = Literal["main", "drivers"]
 Variant = Literal["attendance", "statistics"]
+#: Who fills a designation's billed posts; see ``TimesheetDesignation.quota_fill``.
+QuotaFill = Literal["own", "own_then_guards", "guards_only"]
 
 
 class TimesheetIssue(ORMBase):
@@ -47,6 +49,7 @@ class TimesheetIssue(ORMBase):
 
 class TimesheetCellEdit(ORMBase):
     """A persisted manual cell and who set it."""
+
     code: str
     by: str | None
     at: datetime
@@ -76,6 +79,9 @@ class TimesheetRow(ORMBase):
     codes: list[str | None]
     stat_codes: list[str | None]
     stat_block: int
+    #: 1-based position on the client statistics sheet, counted straight across
+    #: the gap. Pay-grade order, so it differs from ``row_no``.
+    stat_row_no: int
     stat_filler: str | None
     joined_day: int | None
     left_day: int | None
@@ -83,6 +89,22 @@ class TimesheetRow(ORMBase):
     notes: dict[int, str]
     edits: dict[int, TimesheetCellEdit]
     designation_id: int | None = None
+
+
+class TimesheetQuotaLine(ORMBase):
+    """One designation's billed posts for one nationality class, as filled.
+
+    ``own`` are holders of the designation itself; ``from_guards`` are spare
+    Security Guards filling a gap; ``quota - own - from_guards`` posts are empty.
+    """
+
+    designation_id: int
+    name_en: str
+    name_ar: str
+    nationality: Literal["uae", "arab"]
+    quota: int
+    own: int
+    from_guards: int
 
 
 class TimesheetGridResponse(ORMBase):
@@ -99,6 +121,9 @@ class TimesheetGridResponse(ORMBase):
     removed: list[TimesheetRemoved]
     closed_at: datetime | None
     closed_by: str | None
+    #: Main sheet, open month: how each designation's quota was filled. Empty on
+    #: a closed month (the sheet is frozen as printed) and on the drivers sheet.
+    quotas: list[TimesheetQuotaLine]
 
 
 class TimesheetDesignationRead(ORMBase):
@@ -108,6 +133,9 @@ class TimesheetDesignationRead(ORMBase):
     name_en: str
     name_ar: str
     rank_order: int
+    quota_uae: int
+    quota_arab: int
+    quota_fill: QuotaFill
     sheet: str
     active: bool
     system_key: str | None
@@ -126,6 +154,14 @@ class TimesheetDesignationUpdate(BaseModel):
 
     name_en: str = Field(min_length=1, max_length=128)
     name_ar: str = Field(min_length=1, max_length=128)
+
+
+class TimesheetDesignationQuota(BaseModel):
+    """A designation's billed posts on the client statistics, for every month."""
+
+    quota_uae: int = Field(ge=0, le=1000)
+    quota_arab: int = Field(ge=0, le=1000)
+    quota_fill: QuotaFill
 
 
 class TimesheetRosterAssignmentWrite(BaseModel):

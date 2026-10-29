@@ -2,12 +2,8 @@
  * The G-number picker, the two-month extract and the red-block helper
  * (UI spec §16.3, §15 changes 5 and 6).
  *
- * No shared helper exists. The panel links to the employee record (UI spec §9),
- * so the wrapper is `MemoryRouter` + `QueryClientProvider` — the navigating
- * pattern in `components/employees/EmployeeActivitySection.test.tsx:112-118`, not the
- * provider-only one this file used before the record link existed.
+ * The panel links to the employee record, so the wrapper supplies a router.
  */
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
@@ -17,15 +13,8 @@ import type { TimesheetRow } from '@/lib/api'
 
 import { EmployeePanel } from './EmployeePanel'
 
-function wrap(ui: React.ReactNode, qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
-  // The panels link to the employee record now (UI spec §9), so the wrapper
-  // needs a router — the navigating-page pattern from
-  // components/employees/EmployeeActivitySection.test.tsx:112-118.
-  return (
-    <MemoryRouter>
-      <QueryClientProvider client={qc}>{ui}</QueryClientProvider>
-    </MemoryRouter>
-  )
+function wrap(ui: React.ReactNode) {
+  return <MemoryRouter>{ui}</MemoryRouter>
 }
 
 function renderPanel(ui: React.ReactNode) {
@@ -45,6 +34,8 @@ const rows: TimesheetRow[] = [
     designation_ar: 'حارس امن',
     nationality_en: 'Oman',
     row_no: 19,
+    stat_row_no: 11,
+    designation_id: 115,
     codes: [...Array<string>(17).fill('P'), ...Array<string>(14).fill('-')],
     stat_codes: [],
     stat_block: 1,
@@ -63,6 +54,8 @@ const rows: TimesheetRow[] = [
     designation_ar: 'مساعد مشرف',
     nationality_en: 'U.A.E',
     row_no: 7,
+    stat_row_no: 3,
+    designation_id: 108,
     codes: Array<string>(31).fill('P'),
     stat_codes: [],
     stat_block: 1,
@@ -94,6 +87,12 @@ const props = {
 }
 
 describe('EmployeePanel', () => {
+  it('uses statistics positions for the employee list and printed row readout', () => {
+    renderPanel(<EmployeePanel {...props} variant="statistics" />)
+    expect(screen.getAllByRole('option')[0]).toHaveTextContent('G7057')
+    expect(screen.getByText('printed row 3')).toBeInTheDocument()
+  })
+
   it('finds an employee by bare G-number digits', async () => {
     renderPanel(<EmployeePanel {...props} query="7141" />)
     expect(await screen.findByRole('option', { name: /MD RASEL HOWLADER/ })).toBeInTheDocument()

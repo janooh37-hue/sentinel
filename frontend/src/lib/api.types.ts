@@ -1391,6 +1391,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/timesheet/designations/{designation_id}/quota": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Designation Quota */
+        put: operations["set_designation_quota_api_v1_timesheet_designations__designation_id__quota_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/timesheet/{year}/{month}/roster": {
         parameters: {
             query?: never;
@@ -14921,6 +14938,21 @@ export interface components {
             ids: number[];
         };
         /**
+         * TimesheetDesignationQuota
+         * @description A designation's billed posts on the client statistics, for every month.
+         */
+        TimesheetDesignationQuota: {
+            /** Quota Uae */
+            quota_uae: number;
+            /** Quota Arab */
+            quota_arab: number;
+            /**
+             * Quota Fill
+             * @enum {string}
+             */
+            quota_fill: "own" | "own_then_guards" | "guards_only";
+        };
+        /**
          * TimesheetDesignationRead
          * @description One printable designation from the catalog.
          */
@@ -14933,6 +14965,15 @@ export interface components {
             name_ar: string;
             /** Rank Order */
             rank_order: number;
+            /** Quota Uae */
+            quota_uae: number;
+            /** Quota Arab */
+            quota_arab: number;
+            /**
+             * Quota Fill
+             * @enum {string}
+             */
+            quota_fill: "own" | "own_then_guards" | "guards_only";
             /** Sheet */
             sheet: string;
             /** Active */
@@ -14987,6 +15028,8 @@ export interface components {
             closed_at: string | null;
             /** Closed By */
             closed_by: string | null;
+            /** Quotas */
+            quotas: components["schemas"]["TimesheetQuotaLine"][];
         };
         /**
          * TimesheetIssue
@@ -15013,6 +15056,32 @@ export interface components {
             post_count?: number | null;
             /** Fillers */
             fillers?: components["schemas"]["TimesheetFillerUpdate"][];
+        };
+        /**
+         * TimesheetQuotaLine
+         * @description One designation's billed posts for one nationality class, as filled.
+         *
+         *     ``own`` are holders of the designation itself; ``from_guards`` are spare
+         *     Security Guards filling a gap; ``quota - own - from_guards`` posts are empty.
+         */
+        TimesheetQuotaLine: {
+            /** Designation Id */
+            designation_id: number;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /**
+             * Nationality
+             * @enum {string}
+             */
+            nationality: "uae" | "arab";
+            /** Quota */
+            quota: number;
+            /** Own */
+            own: number;
+            /** From Guards */
+            from_guards: number;
         };
         /**
          * TimesheetRemoved
@@ -15078,6 +15147,8 @@ export interface components {
             stat_codes: (string | null)[];
             /** Stat Block */
             stat_block: number;
+            /** Stat Row No */
+            stat_row_no: number;
             /** Stat Filler */
             stat_filler: string | null;
             /** Joined Day */
@@ -20266,6 +20337,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TimesheetDesignationRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_designation_quota_api_v1_timesheet_designations__designation_id__quota_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                designation_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetDesignationQuota"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetDesignationRead"];
                 };
             };
             /** @description Validation Error */
