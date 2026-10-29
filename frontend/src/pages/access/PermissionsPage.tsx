@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { useIsMutating, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import type { StudioDestination, Resource, ResourceSearchProps } from '@/components/access/studio/contracts'
 import { api, apiErrorMessage, type AdminUserRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
@@ -11,6 +11,13 @@ import { Button } from '@/components/ui/button'
 
 const PAGE_SIZE = 25
 const controlClass = 'min-h-11 min-w-0 rounded-lg border border-border bg-surface px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+
+function findScrollContainer(element: HTMLElement | null): HTMLElement | null {
+  for (let node = element?.parentElement; node; node = node.parentElement) {
+    if (/(auto|scroll)/.test(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight) return node
+  }
+  return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null
+}
 
 // Search only the authorized account projection; never fetch the employee directory.
 function searchableText(value: string): string {
@@ -52,6 +59,7 @@ export function PeoplePermissionsPanel({ studio }: { studio?: PermissionStudioIn
   const { t, i18n } = useTranslation()
   const { user } = useAuth()
   const [params, setParams] = useSearchParams()
+  const routeNavigate = useNavigate()
   const [query, setQuery] = useState('')
   const [role, setRole] = useState('')
   const [status, setStatus] = useState('')
@@ -84,7 +92,7 @@ export function PeoplePermissionsPanel({ studio }: { studio?: PermissionStudioIn
     if (selectedParam !== null || openedAccount.current === null) return
     const trigger = registerRef.current?.querySelector<HTMLButtonElement>(`[data-account-id="${openedAccount.current}"]`)
     trigger?.focus({ preventScroll: true })
-    const scroller = registerRef.current?.closest('[data-ptr-scroller]') ?? registerRef.current?.parentElement
+    const scroller = findScrollContainer(registerRef.current)
     if (scroller) scroller.scrollTop = scrollPosition.current
   }, [selectedParam])
 
@@ -100,7 +108,7 @@ export function PeoplePermissionsPanel({ studio }: { studio?: PermissionStudioIn
   function openAccount(id: number): void {
     if (saving) return
     openedAccount.current = id
-    const scroller = registerRef.current?.closest('[data-ptr-scroller]') ?? registerRef.current?.parentElement
+    const scroller = findScrollContainer(registerRef.current)
     scrollPosition.current = scroller?.scrollTop ?? 0
     navigate({ userId: id })
   }
@@ -113,7 +121,16 @@ export function PeoplePermissionsPanel({ studio }: { studio?: PermissionStudioIn
     })
     if (!studio?.requestNavigation(proceed)) proceed()
   }
-  const managementLink = <Link className="inline-flex min-h-11 items-center text-primary underline underline-offset-4" to="/access-requests">{t('access.studio.manageAccounts')}</Link>
+  function guardManagementNavigation(event: MouseEvent<HTMLAnchorElement>): void {
+    if (saving) { event.preventDefault(); return }
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return
+    event.preventDefault()
+    const destination = event.currentTarget.getAttribute('href')
+    if (!destination) return
+    const proceed = () => routeNavigate(destination)
+    if (!studio?.requestNavigation(proceed)) proceed()
+  }
+  const managementLink = <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline underline-offset-4" to="/access-requests">{t('access.studio.manageAccounts')}</Link>
   return <section ref={registerRef} className="min-w-0 space-y-5 [&_button]:min-h-11" aria-busy={usersQuery.isPending || saving}>
     <header className="flex flex-wrap items-start justify-between gap-3">
       <h1 className="text-2xl font-semibold tracking-tight">{t('access.studio.accounts')}</h1>
@@ -126,10 +143,10 @@ export function PeoplePermissionsPanel({ studio }: { studio?: PermissionStudioIn
         {!selected ? <p role="alert">{t('access.studio.accountUnavailable')}</p> : <>
           <header className="space-y-2 border-b border-border pb-4">
             <h2 className="break-words text-xl font-semibold"><bdi>{nameOf(selected, arabic)}</bdi></h2>
-            <p className="flex flex-wrap gap-3 text-sm"><bdi dir="ltr" className="break-all">{selected.email}</bdi><bdi dir="ltr">{selected.employee_id}</bdi><Link className="text-primary underline" to={`/access-requests?tab=${selected.status === 'active' ? 'active' : 'suspended'}&user=${selected.id}`}>{t(`access.roleName.${selected.role}`)}</Link><span>{t(`access.status.${selected.status}`)}</span></p>
-            <Link className="inline-flex min-h-11 items-center text-primary underline" to="/access-requests?tab=permission-requests">{t('access.studio.pendingRequests', { count: pendingCount })}</Link>
+            <p className="flex flex-wrap gap-3 text-sm"><bdi dir="ltr" className="break-all">{selected.email}</bdi><bdi dir="ltr">{selected.employee_id}</bdi><Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to={`/access-requests?tab=${selected.status === 'active' ? 'active' : 'suspended'}&user=${selected.id}`}>{t(`access.roleName.${selected.role}`)}</Link><span>{t(`access.status.${selected.status}`)}</span></p>
+            <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to="/access-requests?tab=permission-requests">{t('access.studio.pendingRequests', { count: pendingCount })}</Link>
           </header>
-          {selected.status === 'pending' ? <Link className="inline-flex min-h-11 items-center text-primary underline" to={`/access-requests?user=${selected.id}`}>{t('access.studio.reviewAccount')}</Link>
+          {selected.status === 'pending' ? <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to={`/access-requests?user=${selected.id}`}>{t('access.studio.reviewAccount')}</Link>
             : selected.role === 'admin' ? <p role="status">{t('access.studio.adminLocked')}</p>
             : selected.id === user?.id ? <p role="status">{t('access.studio.selfLocked')}</p>
             : <>

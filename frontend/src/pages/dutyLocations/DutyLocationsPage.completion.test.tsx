@@ -10,6 +10,7 @@ import ar from '@/locales/ar.json'
 import { api } from '@/lib/api'
 import type { DutyTransferResult } from '@/lib/api'
 import { DutyLocationsPage } from './DutyLocationsPage'
+vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
 
 const DOCUMENT_RESULT = {
   book_id: 42,

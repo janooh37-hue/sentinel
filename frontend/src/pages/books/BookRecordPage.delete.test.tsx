@@ -20,6 +20,7 @@ import { BookRecordPage } from './BookRecordPage'
 import { RecordDeleteProvider } from './RecordDeleteProvider'
 
 const mockHas = vi.fn<(cap: string) => boolean>(() => false)
+const { mobile } = vi.hoisted(() => ({ mobile: { value: false } }))
 
 vi.mock('@/lib/api', async (orig) => {
   const real = await orig<typeof ApiModule>()
@@ -51,7 +52,7 @@ vi.mock('@/lib/useCapabilities', () => ({
     has: (cap: string) => mockHas(cap),
   }),
 }))
-vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
+vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => mobile.value }))
 vi.mock('@/lib/toast', () => ({
   toast: Object.assign(vi.fn(), {
     success: vi.fn(),
@@ -122,20 +123,23 @@ function LocationProbe(): React.JSX.Element {
 
 const FROM_LIST = { from: '/books?status=draft', queue: [48], scrollY: 30 }
 
-function renderRecord(): void {
+function renderRecord() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(
+  const tree = () => (
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[{ pathname: '/books/48', state: FROM_LIST }]}>
         <RecordDeleteProvider>
           <Routes>
             <Route path="/books/:id" element={<BookRecordPage />} />
             <Route path="/books" element={<LocationProbe />} />
+            <Route path="/ledger" element={<LocationProbe />} />
           </Routes>
         </RecordDeleteProvider>
       </MemoryRouter>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+  const view = render(tree())
+  return () => view.rerender(tree())
 }
 
 async function openTools(): Promise<void> {
@@ -246,5 +250,45 @@ describe('BookRecordPage — Delete', () => {
     expect(await screen.findByRole('button', { name: 'Tools' })).toBeInTheDocument()
     expect(screen.queryByTestId('record-pending-delete')).not.toBeInTheDocument()
     expect(api.deleteBook).not.toHaveBeenCalled()
+  })
+})
+
+describe('BookRecordPage — external email', () => {
+  beforeEach(() => {
+    mockHas.mockImplementation((cap) => cap === 'books.view' || cap === 'ledger.create')
+    vi.mocked(api.getBook).mockResolvedValue(fixture() as never)
+  })
+  afterEach(() => {
+    mobile.value = false
+  })
+
+  it.each([false, true])('hides Outlook without send, then opens the real record prefill on grant (mobile=%s)', async (isMobile) => {
+    mobile.value = isMobile
+    const refresh = renderRecord()
+    await userEvent.click(await screen.findByRole('button', { name: isMobile ? 'More' : 'Tools' }))
+    expect(screen.queryByRole(isMobile ? 'button' : 'menuitem', { name: /Email via Outlook/ })).not.toBeInTheDocument()
+    expect(screen.getByRole(isMobile ? 'button' : 'menuitem', { name: /^Print/ })).toBeInTheDocument()
+    mockHas.mockImplementation((cap) => cap === 'books.view' || cap === 'ledger.send')
+    refresh()
+    await userEvent.click(await screen.findByRole(isMobile ? 'button' : 'menuitem', { name: /Email via Outlook/ }))
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/ledger?tab=email'))
+    const state = JSON.parse(screen.getByTestId('loc-state').textContent ?? 'null')
+    expect(state.composePrefill.references).toEqual([
+      expect.objectContaining({ kind: 'book', id: 48, docId: 900, label: 'GS-0048' }),
+    ])
+    expect(state.composePrefill).not.toHaveProperty('basketKey')
+  })
+
+  it.each([false, true])('does not act on an already-rendered email action after revoke (mobile=%s)', async (isMobile) => {
+    mobile.value = isMobile
+    mockHas.mockImplementation((cap) => cap === 'books.view' || cap === 'ledger.send')
+    renderRecord()
+    await userEvent.click(await screen.findByRole('button', { name: isMobile ? 'More' : 'Tools' }))
+    const email = await screen.findByRole(isMobile ? 'button' : 'menuitem', { name: /Email via Outlook/ })
+    const fieldsCalls = vi.mocked(api.getBookVersionFields).mock.calls.length
+    mockHas.mockImplementation((cap) => cap === 'books.view')
+    await userEvent.click(email)
+    expect(screen.queryByTestId('loc')).not.toBeInTheDocument()
+    expect(api.getBookVersionFields).toHaveBeenCalledTimes(fieldsCalls)
   })
 })

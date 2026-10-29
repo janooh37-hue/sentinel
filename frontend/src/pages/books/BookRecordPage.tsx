@@ -719,7 +719,7 @@ function BookRecordPageBody(): React.JSX.Element {
   const [emailingRecord, setEmailingRecord] = useState(false)
 
   const handleEmailViaOutlook = useCallback(async (): Promise<void> => {
-    if (!book || !recordHasPapers || emailingRecord) return
+    if (!has('ledger.send') || !book || !recordHasPapers || emailingRecord) return
     setEmailingRecord(true)
     try {
       const item = await buildRecordBasketItem(book)
@@ -745,7 +745,7 @@ function BookRecordPageBody(): React.JSX.Element {
     } finally {
       setEmailingRecord(false)
     }
-  }, [book, recordHasPapers, emailingRecord, navigate, t, draftOverrides])
+  }, [has, book, recordHasPapers, emailingRecord, navigate, t, draftOverrides])
 
   const busy = decideMutation.isPending || signMutation.isPending
   const canRevise = Boolean(

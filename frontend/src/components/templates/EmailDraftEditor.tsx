@@ -42,9 +42,10 @@ function DraftEditor({ draftKey, label, data }: { draftKey: string; label: strin
   const reset = useResetDraftTemplate()
   const pending = save.isPending || reset.isPending
   const dirty = fields.some((field) => values[field] !== baseline[field])
-  const unsaved: DraftTemplateFields = {}
-  for (const field of fields) if (values[field].trim()) unsaved[field] = values[field]
-  const preview = renderDraftSample(draftKey, { ...(data.overrides ?? {}), [draftKey]: unsaved })
+  const displayedValues = canEdit ? values : baseline
+  const previewOverride: DraftTemplateFields = {}
+  for (const field of fields) if (displayedValues[field].trim()) previewOverride[field] = displayedValues[field]
+  const preview = renderDraftSample(draftKey, { ...(data.overrides ?? {}), [draftKey]: previewOverride })
   const error = save.error ?? reset.error
   const accept = (next: DraftTemplatesRead) => {
     setCurrentOverride(next.overrides?.[draftKey])
@@ -69,8 +70,8 @@ function DraftEditor({ draftKey, label, data }: { draftKey: string; label: strin
               <Input {...insertion.field(field)} id={`${id}-${field}`} dir="rtl" lang="ar" className="min-h-11" value={values[field]} placeholder={defaults[field]} disabled={pending} onChange={(event) => { setValues((previous) => ({ ...previous, [field]: event.target.value })); save.reset(); reset.reset() }} />
             ) : (
               <Textarea {...insertion.field(field)} id={`${id}-${field}`} dir="rtl" lang="ar" rows={4} value={values[field]} placeholder={defaults[field]} disabled={pending} onChange={(event) => { setValues((previous) => ({ ...previous, [field]: event.target.value })); save.reset(); reset.reset() }} />
-            ) : <p dir="rtl" lang="ar" className="whitespace-pre-wrap break-words rounded-md bg-surface-tinted p-3 text-sm">{values[field].trim() ? values[field] : defaults[field]}</p>}
-            {!values[field].trim() && <p className="text-xs text-muted-foreground">{t('msgTemplates.editor.defaultNote')}</p>}
+            ) : <p dir="rtl" lang="ar" className="whitespace-pre-wrap break-words rounded-md bg-surface-tinted p-3 text-sm">{baseline[field].trim() ? baseline[field] : defaults[field]}</p>}
+            {!displayedValues[field].trim() && <p className="text-xs text-muted-foreground">{t('msgTemplates.editor.defaultNote')}</p>}
           </div>
         ))}
       </div>

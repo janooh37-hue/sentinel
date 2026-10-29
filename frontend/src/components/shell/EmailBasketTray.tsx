@@ -25,6 +25,7 @@ import { buildBasketPrefill } from '@/lib/basketEmail'
 import { useDraftTemplates } from '@/lib/messageTemplates'
 import { buildRecordBasketItem } from '@/pages/books/recordsBasket'
 import { getRecentRecipientsForForm } from '@/lib/recentRecipients'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 export function EmailBasketTray(): React.JSX.Element | null {
   const { t: tRaw, i18n } = useTranslation()
@@ -33,10 +34,13 @@ export function EmailBasketTray(): React.JSX.Element | null {
   const navigate = useNavigate()
   const { baskets, remove, clear, totalCount } = useEmailBasket()
   const draftOverrides = useDraftTemplates().data?.overrides
+  const { has } = useCapabilities()
+  const canSend = has('ledger.send')
 
   if (totalCount === 0) return null
 
   const send = async (key: BasketKey, items: EmailBasketItem[]): Promise<void> => {
+    if (!has('ledger.send')) return
     // Re-enrich each item fresh at send time. A basket entry's employee/leave
     // data (designation, nationality, dates, …) is captured when it's ADDED, so
     // items added before the enrichment fix — or before the employee record was
@@ -123,6 +127,8 @@ export function EmailBasketTray(): React.JSX.Element | null {
                 <Button
                   type="button"
                   size="sm"
+                  disabled={!canSend}
+                  title={!canSend ? t('common.forbidden') : undefined}
                   onClick={() => void send(key, items)}
                 >
                   {t('basket.tray.send')}

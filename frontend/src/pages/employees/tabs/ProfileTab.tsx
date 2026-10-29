@@ -20,7 +20,8 @@ import { pickPosition } from '@/lib/employeePosition'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { canIssueDutyTransfer, TransferEmployeeDialog } from '../TransferEmployeeDialog'
+import { TransferEmployeeDialog } from '../TransferEmployeeDialog'
+import { canIssueDutyTransfer } from '@/lib/dutyUnits'
 
 // ── Module-level constants ───────────────────────────────────────────────────
 

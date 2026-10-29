@@ -20,6 +20,8 @@ vi.mock('./AssignPopover', () => ({ AssignPopover: () => null }))
 vi.mock('./SupervisorDesignations', () => ({ SupervisorDesignations: () => null }))
 vi.mock('./LeaveDigestPanel', () => ({ LeaveDigestPanel: () => null }))
 vi.mock('./TransferDialog', () => ({ TransferDialog: () => null }))
+const denied = vi.hoisted(() => new Set<string>())
+vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => !denied.has(cap) }) }))
 
 const ROSTER = [
   { id: 'G3309', name_en: 'Mohammed Saeed', name_ar: null, duty_unit: 'السرية الأولى', duty_post: 'البوابة الرئيسية' },
@@ -28,6 +30,7 @@ const ROSTER = [
 ]
 
 beforeEach(() => {
+  denied.clear()
   vi.mocked(api.lookupEmployees).mockResolvedValue({ items: ROSTER, total: ROSTER.length } as never)
 })
 
@@ -82,4 +85,14 @@ test('selection survives switching units and the tray drops an off-screen pick',
     expect(within(screen.getByTestId('duty-selection-panel')).queryByText('G3309')).toBeNull(),
   )
   expect(screen.getByRole('button', { name: /2 selected/ })).toBeInTheDocument()
+})
+
+test('transfer remains unavailable without its document prerequisite while selection remains usable', async () => {
+  denied.add('documents.duty_transfer')
+  renderPage()
+  await userEvent.click(await screen.findByLabelText('Select Mohammed Saeed'))
+  expect(screen.getByRole('button', { name: /Transfer selected/ })).toBeDisabled()
+  expect(screen.getByRole('status')).toHaveTextContent('You do not have permission')
+  await userEvent.click(screen.getByRole('button', { name: /Clear/ }))
+  expect(screen.queryByRole('button', { name: /Transfer selected/ })).not.toBeInTheDocument()
 })

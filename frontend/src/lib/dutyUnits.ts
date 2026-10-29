@@ -24,6 +24,20 @@ export const UNASSIGNED = '__unassigned__'
 
 type DutyEmployee = Pick<EmployeeListItem, 'duty_unit' | 'duty_post'>
 
+/** Mirrors /duty/transfer: initial placement does not create a General Book. */
+export function canIssueDutyTransfer(
+  employee: Pick<DutyEmployee, 'duty_unit'>,
+  has: (capability: string) => boolean,
+): boolean {
+  return has('documents.generate') && has('documents.duty_transfer') && (
+    !employee.duty_unit?.trim() || (
+      has('books.category.GS') &&
+      has('books.service.General Book') &&
+      has('books.category.12/1')
+    )
+  )
+}
+
 function unitKey(emp: DutyEmployee): string {
   const u = emp.duty_unit?.trim()
   return u ? u : UNASSIGNED

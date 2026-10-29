@@ -113,7 +113,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   const { t } = useTranslation()
   const isMobile = useIsMobile()
   const queryClient = useQueryClient()
-  const { has } = useCapabilities()
+  const { has, isLoading: capabilitiesLoading } = useCapabilities()
   const canSend = has('ledger.send')
   const canDelete = has('ledger.delete')
 
@@ -142,7 +142,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   const [compose, setCompose] = useState<ComposeState | null>(null)
   const composePage = useUrlOverlay('action')
   const activeCompose: ComposeState | null =
-    composePage.value === 'compose' ? compose ?? { mode: 'new' } : null
+    composePage.value === 'compose' ? compose : null
   const [search, setSearch] = useState('')
   const [searchResponse, setSearchResponse] = useState<LedgerSearchResponse | null>(null)
   const [searchPending, setSearchPending] = useState(false)
@@ -289,8 +289,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
 
   // ONE compose window at a time (spec: keep the existing compose instead of
   // replacing it — replacing silently destroys an in-progress draft).
-  // Guard directly on `compose` state; put it in deps so the closure is always
-  // fresh (these are user-event callbacks, never batched render-phase calls).
+  // Busy means a visible compose, not a payload left behind by URL navigation.
   const openCompose = useCallback(
     (next: ComposeState) => {
       if (!canSend) return
@@ -327,28 +326,47 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   // triggered from the folder drawer; openCompose already closes the drawer.
   const handleNewEmail = useCallback(() => openCompose({ mode: 'new' }), [openCompose])
 
-  // Consume a compose prefill from `location.state.composePrefill` once on
-  // mount (or when the shell re-renders after a navigate-with-state from
-  // another page, e.g. the Absences email dialog). The ref guard
-  // makes repeated renders harmless; `navigate` clears the state so Back/F5
-  // don't re-open the compose window.
-  const consumedPrefill = useRef(false)
+  // Admit route-state and URL composes once. Revoking send must not unmount
+  // an admitted draft; the handoff form independently disables submission.
+  // Denied payloads are consumed too, so regranting cannot resurrect them.
+  const consumedPrefill = useRef<string | null>(null)
+  const admittedComposeLocation = useRef<string | null>(null)
   useEffect(() => {
-    if (consumedPrefill.current) return
-    if (!canSend) return
+    if (capabilitiesLoading) return
     const prefill = (
       location.state as { composePrefill?: ComposeState['prefill'] } | null
     )?.composePrefill
-    if (!prefill) return
-    consumedPrefill.current = true
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot navigation-state hydration (the BooksPage pattern)
-    setCompose({ mode: 'new', prefill })
-    // Swap the state for the URL in place: refresh keeps the compose open
-    // (blank — the prefill is not shareable) and Close stays on the ledger.
     const params = new URLSearchParams(location.search)
-    params.set('action', 'compose')
-    navigate({ search: `?${params}` }, { replace: true, state: null })
-  }, [canSend, location, navigate])
+    if (params.get('action') === 'compose' && activeCompose) {
+      admittedComposeLocation.current = location.key
+    }
+    if (prefill && consumedPrefill.current !== location.key) {
+      consumedPrefill.current = location.key
+      if (!canSend) {
+        toast.error(t('common.forbidden'))
+        if (!activeCompose) params.delete('action')
+      } else if (activeCompose) {
+        toast(t('ledger.outlook.composeBusy'))
+      } else {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot navigation-state hydration
+        setCompose({ mode: 'new', prefill })
+        params.set('action', 'compose')
+      }
+      navigate({ search: params.size ? `?${params}` : '' }, { replace: true, state: null })
+      return
+    }
+    if (params.get('action') !== 'compose' || admittedComposeLocation.current === location.key) return
+    // Closing clears form state before history navigation settles. Never
+    // rehydrate that same history entry during the intervening render.
+    admittedComposeLocation.current = location.key
+    if (!canSend) {
+      toast.error(t('common.forbidden'))
+      params.delete('action')
+      navigate({ search: params.size ? `?${params}` : '' }, { replace: true, state: location.state })
+      return
+    }
+    setCompose({ mode: 'new' })
+  }, [activeCompose, canSend, capabilitiesLoading, location, navigate, t])
 
   // A URL may open compose, nothing else.
   useEffect(() => {
@@ -560,7 +578,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   // Desktop: a non-modal Outlook-style window docked bottom-right (the mailbox
   // behind stays clickable); the render-prop hands min/max/restore controls to
   // the handoff surface. Mobile: full-screen page chrome (header + Back).
-  const composeOverlay = activeCompose && canSend && (
+  const composeOverlay = activeCompose && (
     <ComposeWindow fullScreen={isMobile}>
       {(win) => (
         <OutlookHandoffDialog

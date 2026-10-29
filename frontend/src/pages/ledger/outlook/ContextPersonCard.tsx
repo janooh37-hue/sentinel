@@ -184,6 +184,7 @@ function PersonDetail({
 }: PersonDetailProps): React.JSX.Element {
   const { t } = useTranslation()
   const { has } = useCapabilities()
+  const canViewLeaves = has('employees.view') && has('leaves.view')
 
   if (isLoading) {
     return (
@@ -202,7 +203,9 @@ function PersonDetail({
   const emp = data.employee
   const tone = STATUS_TONE[emp.status] ?? 'active'
   const alert = expiryAlert(emp)
-  const activity = data.recent_activity.slice(0, 5)
+  const activity = data.recent_activity
+    .filter((item) => canViewLeaves || (item.kind !== 'leave' && item.kind !== 'absence'))
+    .slice(0, 5)
 
   const joined = emp.doj
     ? `${dateFmt.format(new Date(emp.doj))} · ${t('ledger.outlook.facts.years', { count: data.stats.tenure_years })}`
@@ -222,7 +225,7 @@ function PersonDetail({
         <Fact testid="cx-fact-joined" label={t('ledger.outlook.facts.joined')} value={joined} />
         <Fact testid="cx-fact-mobile" label={t('ledger.outlook.facts.mobile')} value={orDash(emp.contact)} mono />
         <Fact testid="cx-fact-nationality" label={t('ledger.outlook.facts.nationality')} value={orDash(emp.nationality)} />
-        <Fact testid="cx-fact-leave" label={t('ledger.outlook.facts.leave')} value={t('ledger.outlook.facts.days', { count: Number(leaveBalanceLabel(data.stats)) })} />
+        <Fact testid="cx-fact-leave" label={t('ledger.outlook.facts.leave')} value={canViewLeaves ? t('ledger.outlook.facts.days', { count: Number(leaveBalanceLabel(data.stats)) }) : DASH} />
       </div>
 
       {/* Document-expiry alert — only within the window */}

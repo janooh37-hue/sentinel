@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within, waitFor } from '@testing-library/react'
+import { act, render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,16 +10,16 @@ vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1 }, status:
 vi.mock('@/lib/permissionStudioApi', () => ({ accessSnapshotKey: (operator: number, id: number) => ['permission-studio', operator, id] }))
 import { api } from '@/lib/api'
 import i18n from '@/lib/i18n'
-import { PermissionsPage } from './PermissionsPage'
+import { PermissionsPage, type PermissionStudioIntegration } from './PermissionsPage'
 
 function account(id: number, extra: Partial<AdminUserRead> = {}): AdminUserRead {
   return { id, email: `person${id}@example.test`, employee_id: `G${id}`, display_name: `Person ${id}`, name_en: `Person ${id}`, role: 'operator', status: 'active', failed_attempts: 0, is_default_manager: false, password_change_required: false, last_login_at: null, created_at: null, ...extra }
 }
 function Location() { return <output aria-label="Current URL">{useLocation().search}</output> }
-function mount(users: AdminUserRead[], url = '/permissions') {
+function mount(users: AdminUserRead[], url = '/permissions', studio?: PermissionStudioIntegration) {
   vi.mocked(api.listAuthUsers).mockResolvedValue(users)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[url]}><PermissionsPage /><Location /></MemoryRouter></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[url]}><PermissionsPage studio={studio} /><Location /></MemoryRouter></QueryClientProvider>)
 }
 
 beforeEach(async () => {
@@ -94,5 +94,25 @@ describe('Accounts register', () => {
     mount([account(2)], '/permissions?user=999')
     expect(await screen.findByText('This account is unavailable.')).toBeVisible()
     expect(screen.queryByRole('region', { name: 'Access workspace' })).not.toBeInTheDocument()
+  })
+  it.each([
+    ['Manage accounts', ''],
+    ['Operator', '?tab=active&user=2'],
+    ['Pending requests (0)', '?tab=permission-requests'],
+  ])('keeps the account draft mounted until leaving through %s is approved', async (link, expectedSearch) => {
+    let proceed: (() => void) | undefined
+    const studio: PermissionStudioIntegration = {
+      renderWorkspace: () => <p>In-memory account draft</p>,
+      renderSearch: () => null,
+      requestNavigation: (next) => { proceed = next; return true },
+    }
+    mount([account(2)], '/permissions?user=2', studio)
+    await screen.findByText('In-memory account draft')
+    await userEvent.click(screen.getByRole('link', { name: link }))
+    expect(screen.getByLabelText('Current URL')).toHaveTextContent('?user=2')
+    expect(screen.getByText('In-memory account draft')).toBeVisible()
+    expect(proceed).toBeDefined()
+    act(() => proceed?.())
+    expect(screen.getByLabelText('Current URL').textContent).toBe(expectedSearch)
   })
 })

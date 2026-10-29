@@ -12,7 +12,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage, type DutyTransferResult, type EmployeeRead } from '@/lib/api'
-import { unitOptions, postsForUnit } from '@/lib/dutyUnits'
+import { canIssueDutyTransfer, unitOptions, postsForUnit } from '@/lib/dutyUnits'
 import { buildTransferRequest } from '@/pages/dutyLocations/transferRequest'
 import { loadTransferDefaults, saveTransferDefaults } from '@/pages/dutyLocations/transferDefaults'
 import { RecipientPickerField } from '@/components/application/fields/RecipientPickerField'
@@ -35,20 +35,6 @@ interface Props {
   onOpenChange: (open: boolean) => void
 }
 
-/** Mirrors /duty/transfer: initial placement does not create a General Book. */
-// eslint-disable-next-line react-refresh/only-export-components -- shared exact route predicate for the profile entry
-export function canIssueDutyTransfer(
-  employee: Pick<EmployeeRead, 'duty_unit'>,
-  has: (capability: string) => boolean,
-): boolean {
-  return has('documents.generate') && has('documents.duty_transfer') && (
-    !employee.duty_unit?.trim() || (
-      has('books.category.GS') &&
-      has('books.service.General Book') &&
-      has('books.category.12/1')
-    )
-  )
-}
 
 export function TransferEmployeeDialog({ open, employee, onOpenChange }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()

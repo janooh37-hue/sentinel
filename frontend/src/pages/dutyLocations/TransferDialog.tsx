@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage, type DutyTransferResult, type EmployeeLookupItem } from '@/lib/api'
-import { unitOptions, postsForUnit } from '@/lib/dutyUnits'
+import { canIssueDutyTransfer, unitOptions, postsForUnit } from '@/lib/dutyUnits'
 import { buildTransferRequest } from './transferRequest'
 import { loadTransferDefaults, saveTransferDefaults } from './transferDefaults'
 import { RecipientPickerField } from '@/components/application/fields/RecipientPickerField'
@@ -35,6 +35,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 // ─── component ───────────────────────────────────────────────────────────────
 
@@ -71,6 +72,8 @@ export function TransferDialog({
   const navigate = useNavigate()
   const unitListId = useId()
   const postListId = useId()
+  const { has } = useCapabilities()
+  const canIssueLetter = employees.every((employee) => canIssueDutyTransfer(employee, has))
 
   // The bulk row is a shortcut, not a source of truth: it only writes into the
   // rows when "apply to all" is pressed, so a later per-row edit is never
@@ -98,6 +101,7 @@ export function TransferDialog({
 
   const mutation = useMutation({
     mutationFn: () => {
+      if (!employees.every((employee) => canIssueDutyTransfer(employee, has))) throw new Error(t('common.forbidden'))
       const v = methods.getValues()
       return api.transferDuty(
         buildTransferRequest({
@@ -133,7 +137,7 @@ export function TransferDialog({
     onError: (err, _variables, toastId) => toast.error(apiErrorMessage(err), { id: toastId }),
   })
 
-  const canSubmit = employees.length > 0 && missing === 0 && !mutation.isPending
+  const canSubmit = canIssueLetter && employees.length > 0 && missing === 0 && !mutation.isPending
 
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
@@ -145,6 +149,7 @@ export function TransferDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {!canIssueLetter && <p role="status" className="px-4 text-sm text-muted-foreground">{t('common.forbidden')}</p>}
         <FormProvider {...methods}>
           <div className="flex flex-col gap-4 overflow-y-auto px-4 py-4 text-sm">
             {/* Bulk destination — the mass-move shortcut */}

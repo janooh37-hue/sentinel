@@ -34,12 +34,13 @@ function MessageEditor({ template }: { template: MessageTemplateRead }) {
   const pending = save.isPending || reset.isPending
   const dirty = values.ar !== baseline.ar || values.en !== baseline.en
   const debounced = useDebouncedValue(values, 400)
+  const previewValues = canEdit ? debounced : baseline
   const preview = useQuery({
-    queryKey: ['notify-template-render', template.event, debounced],
-    queryFn: () => messageTemplatesApi.render(template.event, debounced),
+    queryKey: ['notify-template-render', template.event, previewValues],
+    queryFn: () => messageTemplatesApi.render(template.event, previewValues),
     retry: false,
   })
-  const previewCurrent = values.ar === debounced.ar && values.en === debounced.en
+  const previewCurrent = !canEdit || (values.ar === debounced.ar && values.en === debounced.en)
   const error = save.error ?? reset.error
   const accept = (next: MessageTemplateRead) => {
     setCurrent(next)
@@ -70,7 +71,7 @@ function MessageEditor({ template }: { template: MessageTemplateRead }) {
                 reset.reset()
               }} />
             ) : (
-              <p dir={lang === 'ar' ? 'rtl' : 'ltr'} lang={lang} className="whitespace-pre-wrap break-words rounded-md bg-surface-tinted p-3 text-sm">{values[lang]}</p>
+              <p dir={lang === 'ar' ? 'rtl' : 'ltr'} lang={lang} className="whitespace-pre-wrap break-words rounded-md bg-surface-tinted p-3 text-sm">{baseline[lang]}</p>
             )}
           </div>
         ))}

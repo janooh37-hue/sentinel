@@ -17,6 +17,8 @@ import type * as ReactRouter from 'react-router-dom'
 import { toast } from '@/lib/toast'
 
 const navigate = vi.hoisted(() => vi.fn())
+const denied = vi.hoisted(() => new Set<string>())
+vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => !denied.has(cap) }) }))
 vi.mock('react-router-dom', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   useNavigate: () => navigate,
@@ -43,6 +45,7 @@ const A = { id: 'G3309', name_en: 'Mohammed Saeed', name_ar: null, duty_unit: '�
 const B = { id: 'G4030', name_en: 'Saif Mubarak', name_ar: null, duty_unit: 'السرية الثانية', duty_post: 'التفتيش' }
 
 beforeEach(() => {
+  denied.clear()
   vi.mocked(api.transferDuty).mockResolvedValue({
     moved: ['G3309', 'G4030'], book_id: 7, ref: 'GB-1', document_id: 9,
   } as never)
@@ -67,6 +70,17 @@ function renderDialog(): void {
     </QueryClientProvider>,
   )
 }
+
+test('an existing assignment cannot issue a letter without its classification access', async () => {
+  denied.add('books.category.12/1')
+  renderDialog()
+  await userEvent.type(screen.getByLabelText('Destination unit'), 'السرية الرابعة')
+  await userEvent.click(screen.getByRole('button', { name: 'Apply to all' }))
+  expect(generateBtn()).toBeDisabled()
+  expect(screen.getByRole('status')).toHaveTextContent('You do not have permission')
+  await userEvent.click(generateBtn())
+  expect(api.transferDuty).not.toHaveBeenCalled()
+})
 
 const generateBtn = () => screen.getByRole('button', { name: /Generate General Book letter/ })
 
