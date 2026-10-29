@@ -76,6 +76,34 @@
   "app": {
     "title": "إدارة GSSG"
   },
+  "statement": {
+    "category": {
+      "leave": "إجازة",
+      "violation": "مخالفة",
+      "absence": "غياب",
+      "document": "مستند",
+      "ledger": "مراسلات",
+      "placement": "موقع العمل والحالة"
+    },
+    "section": {
+      "leave": "الإجازات",
+      "violation": "المخالفات",
+      "absence": "الغيابات",
+      "document": "المستندات الصادرة",
+      "ledger": "المراسلات",
+      "placement": "سجل موقع العمل والحالة"
+    },
+    "period": {
+      "month": "هذا الشهر",
+      "last3": "آخر 3 أشهر",
+      "year": "هذه السنة",
+      "all": "الكل",
+      "custom": "نطاق مخصص",
+      "lastMonth": "الشهر الماضي",
+      "quarter": "ربع سنة",
+      "ytd": "منذ بداية السنة"
+    }
+  },
   "branding": {
     "tagline": "المجموعة العالمية للخدمات الأمنية"
   },
@@ -4290,6 +4318,9 @@
       "finance": "البيانات المالية"
     }
   },
+  "activityStatement": {
+    "printAction": "طباعة كشف النشاط"
+  },
   "application": {
     "title": "النماذج",
     "eyebrow": "المستندات",
@@ -7075,6 +7106,9 @@
     "empty": "لا سجلات حضور لهذا اليوم بعد.",
     "notStartedHint": "لم تبدأ هذه الوردية، فلا شيء ناقص.",
     "loadFailed": "تعذر تحميل الحضور."
+  },
+  "statementPrint": {
+    "print": "طباعة"
   },
   "inmateStats": {
     "title": "الإحصائية الشهرية",

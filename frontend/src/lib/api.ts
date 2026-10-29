@@ -18,6 +18,13 @@ import i18n from 'i18next'
 import type { components, paths } from './api.types'
 import type { ExtractedFieldOut } from './extraction'
 import type { LockLayout } from './useLockState'
+// Employee-file statements. Hand-written contract until the backend schemas land
+// and api.types.ts is regenerated; then these become components['schemas'] aliases.
+import type {
+  ActivityStatement,
+  StatementPrint,
+  StatementPrintCreate,
+} from '@/pages/employees/statement/statementTypes'
 
 // Passport OCR extract (Task 8).
 // Re-exported from the generated schema; declared here so consumers import from
@@ -1416,6 +1423,14 @@ export const api = {
     ),
   getEmployeeDetail: (id: string) =>
     request<EmployeeDetailRead>('GET', `/employees/${encodeURIComponent(id)}/detail`),
+  /** Omit `from_date` for "from the start of the record". */
+  getActivityStatement: (employeeId: string, params: { from_date?: string; to_date?: string }) =>
+    request<ActivityStatement>(
+      'GET',
+      `/employees/${encodeURIComponent(employeeId)}/statement/activity${qs({ ...params })}`,
+    ),
+  createStatementPrint: (employeeId: string, payload: StatementPrintCreate) =>
+    request<StatementPrint>('POST', `/employees/${encodeURIComponent(employeeId)}/statement/prints`, payload),
   getEmployeesCompleteness: () =>
     request<CompletenessSummaryOut>('GET', '/employees/completeness'),
   createEmployee: (payload: EmployeeCreate) =>

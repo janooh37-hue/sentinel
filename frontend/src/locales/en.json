@@ -76,6 +76,34 @@
   "app": {
     "title": "GSSG Manager"
   },
+  "statement": {
+    "category": {
+      "leave": "Leave",
+      "violation": "Violation",
+      "absence": "Absence",
+      "document": "Document",
+      "ledger": "Correspondence",
+      "placement": "Placement and status"
+    },
+    "section": {
+      "leave": "Leaves",
+      "violation": "Violations",
+      "absence": "Absences",
+      "document": "Documents issued",
+      "ledger": "Correspondence",
+      "placement": "Placement and status history"
+    },
+    "period": {
+      "month": "This month",
+      "last3": "Last 3 months",
+      "year": "This year",
+      "all": "All",
+      "custom": "Custom range",
+      "lastMonth": "Last month",
+      "quarter": "Quarter",
+      "ytd": "Year to date"
+    }
+  },
   "branding": {
     "tagline": "Global Security Services Group"
   },
@@ -3964,6 +3992,9 @@
       "finance": "Financial data"
     }
   },
+  "activityStatement": {
+    "printAction": "Print activity statement"
+  },
   "application": {
     "title": "Application",
     "eyebrow": "Documents",
@@ -6569,6 +6600,9 @@
     "empty": "No attendance rows for this day yet.",
     "notStartedHint": "This window has not opened yet, so nothing is missing.",
     "loadFailed": "Attendance could not be loaded."
+  },
+  "statementPrint": {
+    "print": "Print"
   },
   "inmateStats": {
     "title": "Monthly statistics",
