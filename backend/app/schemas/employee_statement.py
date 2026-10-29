@@ -30,11 +30,12 @@ StatementLanguage = Literal["ar", "en"]
 MAX_PRINT_OPTIONS_BYTES = 4096
 
 
-class ActivityStatementItemRead(BaseModel):
+class ActivityStatementItemRead(ORMBase):
     """One fact in the employee's record. Only the fields of its kind are set.
 
     ``occurred_at`` is site-local (Asia/Dubai) and carries its offset, so the
     wall-clock time is the string's ``HH:MM`` and the instant is unambiguous.
+    ORMBase tags only naive values, so the aware site instant passes through.
     """
 
     # Every field is always sent (null when not of this kind): the contract

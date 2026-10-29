@@ -26,6 +26,22 @@ export function categoryOf(kind: StatementKind): StatementCategory {
 export type ActivityPreset = 'month' | 'last3' | 'year' | 'all' | 'custom'
 export const ACTIVITY_PRESETS: readonly ActivityPreset[] = ['month', 'last3', 'year', 'all', 'custom']
 
+/**
+ * Query-key prefix for `api.getActivityStatement`, shared by the Activity tab
+ * and the print setup: `[ACTIVITY_STATEMENT_QUERY, employeeId, from, to]`.
+ * Invalidate `[ACTIVITY_STATEMENT_QUERY]` wherever `employee-detail` is
+ * invalidated, since both read the same sources.
+ */
+export const ACTIVITY_STATEMENT_QUERY = 'employee-activity-statement'
+
+/** A real Gregorian `YYYY-MM-DD` (rejects shapes like `2026-02-30`). */
+export function isIsoDate(value: string | null | undefined): value is string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const [y, m, d] = value.split('-').map(Number)
+  const date = new Date(Date.UTC(y, m - 1, d))
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d
+}
+
 export interface Period {
   /** Inclusive ISO date; null means from the start of the record. */
   from: string | null
