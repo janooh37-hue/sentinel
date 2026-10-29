@@ -9833,7 +9833,7 @@ export interface components {
             /** Category Id */
             category_id?: string | number | null;
             /** Classification Id */
-            classification_id?: number | null;
+            classification_id?: string | number | null;
             /** Grade */
             grade?: string | null;
         };

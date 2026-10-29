@@ -75,6 +75,7 @@ def test_put_permission_with_expires_at_stores_expiry(api_db):
     c = _client(api_db, admin)
     r = c.put(
         f"/api/v1/auth/users/{op.id}/permissions",
+        headers={"If-Match": c.get(f"/api/v1/auth/users/{op.id}/permissions").headers["ETag"]},
         json={
             "capability": "leaves.edit",
             "effect": "grant",
@@ -104,6 +105,7 @@ def test_put_permission_without_expires_at_is_permanent(api_db):
     c = _client(api_db, admin)
     r = c.put(
         f"/api/v1/auth/users/{op.id}/permissions",
+        headers={"If-Match": c.get(f"/api/v1/auth/users/{op.id}/permissions").headers["ETag"]},
         json={"capability": "leaves.edit", "effect": "grant"},
     )
     assert r.status_code == 200, r.text

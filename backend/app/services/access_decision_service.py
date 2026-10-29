@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict
+from copy import copy
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -15,14 +16,13 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
 from app.core.permissions import INMATE_REPORTER_CAPS, SENSITIVE_CAPABILITY_IDS
-from app.db.models import BookApprovalStep, User, UserPermission
+from app.db.models import Book, BookApprovalStep, EditorTemplate, User, UserPermission
 from app.schemas.access import (
     AccessItem, AccessSnapshot, Action, AssignmentSource, CheckRequest, CheckResponse,
     Context, Decision, Impact, Issue, LocalizedAliases, LocalizedText, Override, Patch,
     PreviewResponse, Reason, ReasonNode, ReasonReference, Resource, Scope, Subject, SubjectFacts,
 )
-from app.services import capability_catalog_service, perm_service
-
+from app.services import action_guard_service, capability_catalog_service, perm_service
 RULE_VERSION = "permission-studio-2026-10-29.1"
 
 
@@ -60,7 +60,16 @@ def validate_patch(db: Session, user: User, actor: User, items: list[Patch]) -> 
 
 
 def _source(kind: str, id: str, contribution: str, *, expiry=None, destination=None) -> AssignmentSource:
-    return AssignmentSource(kind=kind, id=id, label=LocalizedText(en=id, ar=id), contribution=contribution, expires_at=expiry, edit_destination=destination)
+    labels = {
+        "role": {"operator": ("Operator role", "دور المشغّل"), "manager": ("Manager role", "دور المدير"), "admin": ("Administrator role", "دور المسؤول"), "inmate_reporter": ("Inmate reporter role", "دور مسجل مخالفات النزلاء")}.get(id, (id, id)),
+        "personal": ("Personal exception", "استثناء فردي"),
+        "policy": ("Application policy", "سياسة التطبيق"),
+        "resource": ("Record policy", "سياسة السجل"),
+    }
+    en, ar = labels.get(kind, (id, id))
+    if kind == "personal":
+        destination = f"/permissions?user={id}"
+    return AssignmentSource(kind=kind, id=id, label=LocalizedText(en=en, ar=ar), contribution=contribution, expires_at=expiry.replace(tzinfo=UTC) if expiry is not None else None, edit_destination=destination)
 
 
 def _reason(code: str, *, kind="policy", id=None, contribution="eligibility", capability=None, applied=True, decisive=True, expiry=None, **params) -> Reason:
@@ -72,7 +81,7 @@ def _cap_reasons(user: User, resolution, capability: str) -> list[Reason]:
     rows = {cap: (effect, expiry) for cap, effect, expiry in resolution.overrides}
     override = rows.get(capability)
     ignored = user.role == "admin"
-    reasons = [_reason("ADMIN_POLICY" if ignored else "ROLE_DEFAULT" if capability in resolution.role_caps else "IMPLICIT_DEFAULT" if granted else "NOT_GRANTED", kind="role", id=user.role, contribution="grant" if granted else "deny", capability=capability, decisive=override is None or ignored)]
+    reasons = [_reason("ADMIN_POLICY" if ignored else "ROLE_DEFAULT" if capability in resolution.role_caps else "IMPLICIT_DEFAULT" if granted else "NOT_GRANTED", kind="role", id=user.role, contribution="grant" if granted else "deny", capability=capability, applied=override is None or ignored, decisive=override is None or ignored)]
     if override:
         effect, expiry = override
         expired = effect == "grant" and expiry is not None and expiry <= resolution.evaluated_at
@@ -80,7 +89,6 @@ def _cap_reasons(user: User, resolution, capability: str) -> list[Reason]:
     if user.role == "inmate_reporter" and capability not in INMATE_REPORTER_CAPS:
         reasons.append(_reason("REPORTER_CEILING", contribution="ceiling", capability=capability))
     return reasons
-
 
 def _decision(user: User, actor: User, resolution, action: Action, capabilities: list[str], rule: str, *, authorization=None, extra=(), required=(), warnings=(), editable=True) -> Decision:
     reasons = [reason for cap in capabilities for reason in _cap_reasons(user, resolution, cap)] + list(extra)
@@ -92,7 +100,7 @@ def _decision(user: User, actor: User, resolution, action: Action, capabilities:
     effects = [None, "deny"]
     if not any(cap in SENSITIVE_CAPABILITY_IDS for cap in capabilities) and not (user.role == "inmate_reporter" and any(cap not in INMATE_REPORTER_CAPS for cap in capabilities)):
         effects.insert(1, "grant")
-    return Decision(action=action, authorization=authorization, executable_now=(authorization == "allowed" and _eligible(user)) if authorization not in ("needs_context", "unknown") else None, configurable=configurable, setting_capabilities=capabilities if editable else [], editable_effects=effects if configurable else [], rule_id=rule, reasons=reasons, reason_tree=ReasonNode(op="all", children=[ReasonReference(reason_index=i) for i in range(len(reasons))]), required_context=list(required), warnings=list(warnings))
+    return Decision(action=action, authorization=authorization, executable_now=(authorization == "allowed" and _eligible(user)) if authorization not in ("needs_context", "unknown") else None, configurable=configurable, setting_capabilities=capabilities if editable else [], editable_effects=effects if configurable else [], rule_id=rule, reasons=reasons, reason_tree=ReasonNode(op="all", children=[ReasonReference(reason_index=i) for i, reason in enumerate(reasons) if reason.applied and reason.decisive]), required_context=list(required), warnings=list(warnings))
 
 
 def _action(capability: str) -> Action:
@@ -112,28 +120,52 @@ def _group(domain: str) -> str:
     return "administration"
 
 
-def _catalog(db: Session, user: User, actor: User, resolution) -> list[AccessItem]:
+def _catalog(db: Session, user: User, actor: User, resolution, catalog, word_templates) -> list[AccessItem]:
+    from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
+    from app.services import email_draft_template_service, sms_templates
+
     items = []
-    for entry in capability_catalog_service.list_catalog(db):
-        decision = _decision(user, actor, resolution, _action(entry.id), [entry.id], "capability")
+    for entry in catalog:
+        resource = Resource(kind="capability", id=entry.id)
+        decision = _evaluate(db, user, actor, resource, _action(entry.id), Context(), resolution, known_entry=entry)
         if entry.id == "employees.notify":
             decision.warnings.append(Issue(code="EMPLOYEE_HISTORY_USES_EMPLOYEES_VIEW", severity="info", capabilities=["employees.view"]))
-        items.append(AccessItem(resource=Resource(kind="capability", id=entry.id), group_id=_group(entry.domain), label=LocalizedText(en=entry.label_en, ar=entry.label_ar or entry.label_en), description=LocalizedText(en=entry.description_en, ar=entry.description_ar or entry.description_en), aliases=LocalizedAliases(en=[entry.id], ar=[]), actions=[decision]))
+        items.append(AccessItem(resource=resource, group_id=_group(entry.domain), label=LocalizedText(en=entry.label_en, ar=entry.label_ar or entry.label_en), description=LocalizedText(en=entry.description_en, ar=entry.description_ar or entry.description_en), aliases=LocalizedAliases(en=[entry.id], ar=[]), actions=[decision]))
+    by_id = {entry.id: entry for entry in catalog}
+    for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID):
+        entry = by_id[f"books.service.{service_id}"]
+        resource = Resource(kind="service", id=service_id)
+        actions = (Action.read,) if service_id == OTHER_SERVICE_ID else (Action.create, Action.read)
+        items.append(AccessItem(resource=resource, group_id="services", label=LocalizedText(en=entry.label_en, ar=entry.label_ar or entry.label_en), description=LocalizedText(en=entry.description_en, ar=entry.description_ar or entry.description_en), aliases=LocalizedAliases(en=[service_id, f"books.servicerecords.{service_id}"], ar=[]), actions=[_evaluate(db, user, actor, resource, action, Context(), resolution) for action in actions]))
+    families = [
+        ("notification_template", sms_templates.EVENTS, (Action.view, Action.edit, Action.reset)),
+        ("email_template", email_draft_template_service.KEY_FAMILIES, (Action.view, Action.edit, Action.reset)),
+        ("word_template", ("library", *(item.name for item in word_templates)), (Action.view, Action.edit, Action.delete)),
+        ("editor_template", ("library",), (Action.view, Action.create, Action.edit, Action.delete)),
+    ]
+    for kind, identifiers, actions in families:
+        for identifier in identifiers:
+            resource = Resource(kind=kind, id=str(identifier))
+            items.append(AccessItem(resource=resource, group_id="templates", label=LocalizedText(en=str(identifier), ar=str(identifier)), description=LocalizedText(en={"notification_template": "Notification wording", "email_template": "Email wording", "word_template": "Word document library", "editor_template": "Rich-editor library"}[kind], ar={"notification_template": "نص الإشعارات", "email_template": "نص البريد الإلكتروني", "word_template": "مكتبة مستندات وورد", "editor_template": "مكتبة المحرر النصي"}[kind]), aliases=LocalizedAliases(en=[kind, str(identifier)], ar=[]), actions=[_evaluate(db, user, actor, resource, action, Context(), resolution, word_templates=word_templates) for action in actions]))
     return items
 
 
 def snapshot(db: Session, user: User, actor: User, *, proposed=()) -> AccessSnapshot:
+    from app.services import book_template_service
+
     resolution = perm_service.resolve_capabilities(db, user, proposed=proposed)
     catalog = capability_catalog_service.list_catalog(db)
+    word_templates = book_template_service.list_templates(read_only=True)
     assignments = list(db.execute(select(BookApprovalStep.id, BookApprovalStep.book_id, BookApprovalStep.version_id, BookApprovalStep.state, BookApprovalStep.kind).where(BookApprovalStep.assignee_user_id == user.id).order_by(BookApprovalStep.id)))
     canonical = {
         "rules": RULE_VERSION, "subject": [user.id, user.role, user.status, user.employee_id, bool(user.password_change_required), user.signature_path],
         "role": sorted(resolution.role_caps), "dynamic": sorted(resolution.dynamic_caps),
         "overrides": [(cap, effect, expiry.isoformat() if expiry else None, effect == "grant" and expiry is not None and expiry <= resolution.evaluated_at) for cap, effect, expiry in resolution.overrides],
         "catalog": [asdict(entry) for entry in catalog], "assignments": [list(row) for row in assignments],
+        "word_templates": [(item.name, item.modified_at.isoformat(), item.kind) for item in word_templates],
     }
     revision = hashlib.sha256(json.dumps(canonical, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-    return AccessSnapshot(subject=Subject(user_id=user.id, role=user.role, status=user.status, authentication_eligible=_eligible(user)), revision=revision, evaluated_at=resolution.evaluated_at.replace(tzinfo=UTC), valid_until=resolution.valid_until.replace(tzinfo=UTC) if resolution.valid_until else None, effective=sorted(resolution.effective), role_defaults=sorted(resolution.role_defaults), overrides=[Override(capability=cap, effect=effect, expires_at=expiry.replace(tzinfo=UTC) if expiry else None, state="expired" if effect == "grant" and expiry is not None and expiry <= resolution.evaluated_at else "active") for cap, effect, expiry in resolution.overrides], items=_catalog(db, user, actor, resolution), subject_facts=SubjectFacts(has_approval_assignments=bool(assignments)), scope=Scope(mode="current", limits_enabled=None, kind="resource_specific", reason_codes=["RECORD_CONTEXT_REQUIRED", "DIRECT_RECIPIENT_REVIEWER_READ_RETAINED"]))
+    return AccessSnapshot(subject=Subject(user_id=user.id, role=user.role, status=user.status, authentication_eligible=_eligible(user)), revision=revision, evaluated_at=resolution.evaluated_at.replace(tzinfo=UTC), valid_until=resolution.valid_until.replace(tzinfo=UTC) if resolution.valid_until else None, effective=sorted(resolution.effective), role_defaults=sorted(resolution.role_defaults), overrides=[Override(capability=cap, effect=effect, expires_at=expiry.replace(tzinfo=UTC) if expiry else None, state="expired" if effect == "grant" and expiry is not None and expiry <= resolution.evaluated_at else "active") for cap, effect, expiry in resolution.overrides], items=_catalog(db, user, actor, resolution, catalog, word_templates), subject_facts=SubjectFacts(has_approval_assignments=bool(assignments)), scope=Scope(mode="current", limits_enabled=None, kind="resource_specific", reason_codes=["RECORD_CONTEXT_REQUIRED", "DIRECT_RECIPIENT_REVIEWER_READ_RETAINED"]))
 
 
 def require_revision(current: AccessSnapshot, expected: str | None) -> None:
@@ -154,17 +186,160 @@ def preview(db: Session, user: User, actor: User, expected: str, items: list[Pat
     patch = validate_patch(db, user, actor, items)
     proposed = snapshot(db, user, actor, proposed=patch)
     changes = impacts(current, proposed)
-    return PreviewResponse(current=current, proposed=proposed, impacts=changes, validation=[Issue(code="PREREQUISITE_BLOCKED", severity="warning", capabilities=change.after.setting_capabilities) for change in changes if change.after.authorization == "denied"])
+    validation = []
+    for change in changes:
+        for warning in change.after.warnings:
+            if warning.code == "PREREQUISITE_BLOCKED" and warning not in validation:
+                validation.append(warning)
+    return PreviewResponse(current=current, proposed=proposed, impacts=changes, validation=validation)
+
+
+def _unsupported() -> None:
+    raise AppError("UNSUPPORTED_ACCESS_CHECK", "Unsupported resource/action/context combination.", http_status=422)
+
+
+def _guard_decision(user, actor, resolution, action, bindings, guard, *, required=(), extra=(), warnings=(), prerequisites=()):
+    reasons = [reason for cap in prerequisites if cap not in bindings for reason in _cap_reasons(user, resolution, cap)] + list(extra)
+    for blocker in guard.blockers:
+        reasons.append(_reason("PREREQUISITE_MISSING", capability=blocker))
+    if not guard.allowed and not guard.blockers:
+        reasons.append(_reason(guard.error.code if guard.error else "RESOURCE_DENIED", kind="resource"))
+    warnings = list(warnings)
+    missing_prerequisites = [cap for cap in guard.blockers if cap not in bindings]
+    if missing_prerequisites and all(cap in resolution.effective for cap in bindings):
+        warnings.append(Issue(code="PREREQUISITE_BLOCKED", severity="warning", capabilities=missing_prerequisites))
+    authorization = "denied" if not guard.allowed else "needs_context" if required else "allowed"
+    return _decision(user, actor, resolution, action, bindings, guard.rule_id, authorization=authorization, extra=reasons, required=required, warnings=warnings)
+
+
+def _evaluate(db, user, actor, resource, action, context, resolution, *, known_entry=None, word_templates=None) -> Decision:
+    from app.core import grades
+    from app.core.classifications import get_classification
+    from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
+    from app.services import book_template_service, document_service, email_draft_template_service, sms_templates
+
+    caps = resolution.effective
+    values = context.model_dump(exclude_none=True)
+    if resource.kind != "book" and resource.revision_id is not None:
+        _unsupported()
+    if resource.kind not in ("service",) and values:
+        _unsupported()
+    if resource.kind == "capability":
+        entry = known_entry or capability_catalog_service.get_catalog_entry(db, resource.id)
+        if entry is None or action != _action(resource.id):
+            _unsupported()
+        if resource.id == "documents.duty_transfer":
+            guard = action_guard_service.capabilities_decision(caps, ("documents.generate", "documents.duty_transfer"), rule_id="duty.transfer")
+            return _guard_decision(user, actor, resolution, action, [resource.id], guard, required=["employee_assignment"], prerequisites=["documents.generate"], extra=[_reason("INITIAL_PLACEMENT_BYPASSES_RECORD_TYPE", decisive=False, applied=False)])
+        guard = action_guard_service.capability_decision(caps, resource.id)
+        return _guard_decision(user, actor, resolution, action, [resource.id], guard)
+    if resource.kind == "service":
+        if resource.id not in (*SERVICE_IDS, OTHER_SERVICE_ID) or action not in (Action.create, Action.read):
+            _unsupported()
+        if resource.id == OTHER_SERVICE_ID and action == Action.create:
+            _unsupported()
+        if action == Action.read:
+            if values:
+                _unsupported()
+            guard = action_guard_service.service_browse_decision(caps, resource.id)
+            return _guard_decision(user, actor, resolution, action, [f"books.servicerecords.{resource.id}"], guard, prerequisites=["books.view"], extra=[_reason("DIRECT_RECIPIENT_REVIEWER_READ_RETAINED", kind="resource", contribution="scope", decisive=False)], warnings=[Issue(code="EXACT_RECORD_REQUIRES_CONTEXT", severity="info")])
+        category = document_service.record_category_for_template(resource.id)
+        if context.category_id is not None and str(context.category_id) != category:
+            _unsupported()
+        classification = str(context.classification_id) if context.classification_id is not None else None
+        if context.grade is not None and context.grade not in grades.GRADE_CODES:
+            _unsupported()
+        if classification is not None and (resource.id != "General Book" or get_classification(classification) is None):
+            _unsupported()
+        if context.category_id is not None and f"books.category.{category}" not in perm_service.category_capability_ids(db):
+            _unsupported()
+        required = []
+        if resource.id == "General Book" and classification is None:
+            required.append("classification_id")
+        if context.grade is None:
+            required.append("grade")
+        guard = action_guard_service.service_create_decision(caps, resource.id, category_id=category, classification_code=classification, grade=context.grade, category_exists=f"books.category.{category}" in resolution.dynamic_caps)
+        prerequisites = ["documents.generate", "books.view", f"books.category.{category}"]
+        if classification is not None:
+            prerequisites.append(f"books.category.{classification}")
+        if context.grade == grades.SECRET:
+            prerequisites.append("books.secret")
+        return _guard_decision(user, actor, resolution, action, [f"books.service.{resource.id}"], guard, required=required, prerequisites=prerequisites)
+    if resource.kind.endswith("_template"):
+        if resource.kind == "word_template" and word_templates is None:
+            word_templates = book_template_service.list_templates(read_only=True)
+        identifiers = {
+            "notification_template": sms_templates.EVENTS,
+            "email_template": email_draft_template_service.KEY_FAMILIES,
+            "word_template": ("library", *(item.name for item in word_templates or ())),
+        }
+        if resource.kind in identifiers and resource.id not in identifiers[resource.kind]:
+            _unsupported()
+        if resource.kind == "editor_template" and resource.id != "library":
+            if not resource.id.isdecimal() or db.get(EditorTemplate, int(resource.id)) is None:
+                raise AppError("NOT_FOUND", "Resource not found.", http_status=404)
+        try:
+            guard = action_guard_service.template_decision(caps, resource.kind, action.value)
+        except ValueError:
+            _unsupported()
+        if resource.kind in ("notification_template", "email_template"):
+            bindings = [] if action in (Action.view, Action.read) else ["messages.templates"]
+            warnings = [Issue(code="TEMPLATES_REMAIN_VISIBLE", severity="info", capabilities=["messages.templates"])]
+            extra = [_reason("SIGNED_IN_TEMPLATE_VIEW", decisive=not bindings)]
+        elif resource.kind == "word_template":
+            bindings = ["books.edit" if action in (Action.view, Action.read) else "books.templates"]
+            warnings, extra = [], []
+        else:
+            bindings, warnings, extra = ["editor_templates.manage"], [], []
+        return _guard_decision(user, actor, resolution, action, bindings, guard, warnings=warnings, extra=extra)
+    if resource.kind == "book":
+        if action not in (Action.view, Action.read, Action.edit, Action.create) or not resource.id.isdecimal():
+            _unsupported()
+        book = db.get(Book, int(resource.id))
+        if book is None:
+            raise AppError("NOT_FOUND", "Resource not found.", http_status=404)
+        target = copy(user)
+        target._effective_caps_cache = frozenset(caps)
+        readable = action_guard_service.book_read_decision(db, target, book, version_id=resource.revision_id)
+        if not readable.allowed:
+            raise AppError("NOT_FOUND", "Resource not found.", http_status=404)
+        path = readable.access.read_path
+        resource_inputs = [
+            book.id, book.category_id, book.grade, book.distribution, book.classification_code,
+            book.approval_state, str(book.deleted_at), getattr(book, "created_by_user_id", None),
+            [(version.id, version.version_no, version.status, bool(version.signed_pdf_path)) for version in book.versions],
+            path, sorted(readable.access.allowed_version_ids), readable.access.selected_version_id,
+        ]
+        resource_revision = hashlib.sha256(json.dumps(resource_inputs, sort_keys=True).encode()).hexdigest()
+        extra = [_reason("RECORD_READ_" + path.upper(), kind="resource", contribution="scope", resource_revision=resource_revision)]
+        if action == Action.create:
+            from app.core.constants import TEMPLATE_FILES
+
+            current_version = max(book.versions, key=lambda version: version.version_no, default=None)
+            if current_version is None or current_version.template_id not in TEMPLATE_FILES:
+                _unsupported()
+            service_id = document_service.effective_document_service(current_version.template_id)
+            category = document_service.record_category_for_template(current_version.template_id)
+            guard = action_guard_service.service_create_decision(
+                caps, service_id, category_id=category, classification_code=book.classification_code,
+                grade=book.grade, category_exists=f"books.category.{category}" in resolution.dynamic_caps,
+            )
+            if guard.allowed:
+                guard = action_guard_service.book_edit_decision(db, target, book, version_id=resource.revision_id)
+            if guard.allowed:
+                guard = action_guard_service.book_revise_decision(db, target, book)
+            return _guard_decision(user, actor, resolution, action, ["books.edit"], guard, prerequisites=["documents.generate", "books.view", f"books.service.{service_id}", f"books.category.{category}"], extra=[*extra, _reason("CREATE_NEXT_REVISION", decisive=False)])
+        if action == Action.edit:
+            guard = action_guard_service.book_edit_decision(db, target, book, version_id=resource.revision_id)
+            return _guard_decision(user, actor, resolution, action, ["books.edit"], guard, extra=extra)
+        result = _guard_decision(user, actor, resolution, action, [], readable, extra=extra)
+        result.reason_tree = ReasonNode(op="any", children=[ReasonReference(reason_index=i) for i, reason in enumerate(result.reasons) if reason.applied and reason.decisive])
+        return result
+    _unsupported()
 
 
 def evaluate(db: Session, user: User, actor: User, resource: Resource, action: Action, context: Context, *, proposed=()) -> Decision:
-    if resource.kind != "capability" or resource.revision_id is not None or context.model_dump(exclude_none=True):
-        raise AppError("UNSUPPORTED_ACCESS_CHECK", "Unsupported resource/action/context combination.", http_status=422)
-    entry = capability_catalog_service.get_catalog_entry(db, resource.id)
-    if entry is None or action != _action(resource.id):
-        raise AppError("UNSUPPORTED_ACCESS_CHECK", "Unsupported resource/action combination.", http_status=422)
-    resolution = perm_service.resolve_capabilities(db, user, proposed=proposed)
-    return _decision(user, actor, resolution, action, [resource.id], "capability")
+    return _evaluate(db, user, actor, resource, action, context, perm_service.resolve_capabilities(db, user, proposed=proposed))
 
 
 def check(db: Session, user: User, actor: User, body: CheckRequest) -> CheckResponse:
@@ -200,7 +375,8 @@ def save(db: Session, user_id: int, actor: User, expected: str | None, items: li
         if actor.role != "admin" or not _eligible(actor):
             raise AppError("FORBIDDEN", "Administrator access required.", http_status=403)
         target = auth_service.require_user(db, user_id)
-        require_revision(snapshot(db, target, actor), expected)
+        current = snapshot(db, target, actor)
+        require_revision(current, expected)
         patch = validate_patch(db, target, actor, items)
         for capability, effect, expiry in patch:
             existing = db.get(UserPermission, (user_id, capability))
@@ -211,7 +387,10 @@ def save(db: Session, user_id: int, actor: User, expected: str | None, items: li
                 db.add(UserPermission(user_id=user_id, capability=capability, effect=effect, expires_at=expiry))
             else:
                 existing.effect, existing.expires_at = effect, expiry
-            auth_service.audit_permission_change(db, actor=actor.display_name or actor.email, user=target, capability=capability, effect=effect, commit=False)
+            auth_service.audit_permission_change(db, actor=actor.display_name or actor.email, user=target, capability=capability, effect=effect, expires_at=expiry, commit=False)
+        now = datetime.now(UTC)
+        if (current.valid_until is not None and current.valid_until <= now) or any(expiry is not None and expiry <= now.replace(tzinfo=None) for _, _, expiry in patch):
+            raise AppError("ACCESS_CHANGED", "The reviewed access evaluation expired.", http_status=412)
         db.commit()
         perm_service._invalidate_caps_cache(db, user_id)
         return target

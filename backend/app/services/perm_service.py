@@ -158,9 +158,10 @@ def resolve_capabilities(
             caps &= INMATE_REPORTER_CAPS
             baseline &= INMATE_REPORTER_CAPS
     expiries = [
-        expiry for effect, expiry in rows.values()
+        expiry for capability, (effect, expiry) in rows.items()
         if effect == "grant" and expiry is not None and expiry > now
         and user.role != ADMIN_ROLE
+        and (user.role != INMATE_REPORTER_ROLE or capability in INMATE_REPORTER_CAPS)
     ]
     return CapabilityResolution(
         frozenset(caps), frozenset(baseline), frozenset(role_caps),

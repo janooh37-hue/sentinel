@@ -33,12 +33,19 @@ def _client(db: Session, user: User) -> TestClient:
     return TestClient(app, raise_server_exceptions=True)
 
 
+def _headers(db: Session, admin: User, target: User) -> dict[str, str]:
+    current = _client(db, admin).get(f"/api/v1/auth/users/{target.id}/permissions")
+    assert current.status_code == 200, current.text
+    return {"If-Match": current.headers["ETag"]}
+
+
 def test_bulk_set_and_clear_overrides(api_db):
     admin = _user(api_db, "admin", "ad@x.ae")
     target = _user(api_db, "manager", "tgt@x.ae")
     c = _client(api_db, admin)
     r = c.put(
         f"/api/v1/auth/users/{target.id}/permissions/bulk",
+        headers=_headers(api_db, admin, target),
         json={
             "items": [
                 {"capability": "books.delete", "effect": "deny"},
@@ -60,6 +67,7 @@ def test_bulk_is_all_or_nothing(api_db):
     c = _client(api_db, admin)
     r = c.put(
         f"/api/v1/auth/users/{target.id}/permissions/bulk",
+        headers=_headers(api_db, admin, target),
         json={
             "items": [
                 {"capability": "books.delete", "effect": "deny"},
@@ -79,6 +87,7 @@ def test_bulk_duplicate_capability_keeps_last(api_db):
     target = _user(api_db, "manager", "tgt5@x.ae")
     r = _client(api_db, admin).put(
         f"/api/v1/auth/users/{target.id}/permissions/bulk",
+        headers=_headers(api_db, admin, target),
         json={
             "items": [
                 {"capability": "books.delete", "effect": "deny"},
@@ -103,6 +112,7 @@ def test_bulk_cannot_grant_sensitive(api_db):
     target = _user(api_db, "manager", "tgt3@x.ae")
     r = _client(api_db, admin).put(
         f"/api/v1/auth/users/{target.id}/permissions/bulk",
+        headers=_headers(api_db, admin, target),
         json={"items": [{"capability": "users.manage", "effect": "grant"}]},
     )
     assert r.status_code == 400
@@ -113,6 +123,7 @@ def test_bulk_rejects_self_target(api_db):
     admin = _user(api_db, "admin", "ad4@x.ae")
     r = _client(api_db, admin).put(
         f"/api/v1/auth/users/{admin.id}/permissions/bulk",
+        headers=_headers(api_db, admin, admin),
         json={"items": [{"capability": "books.delete", "effect": "deny"}]},
     )
     assert r.status_code == 400

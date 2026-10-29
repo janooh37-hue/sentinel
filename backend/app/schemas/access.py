@@ -33,9 +33,9 @@ class Resource(AccessModel):
 class Context(AccessModel):
     # Persisted categories use string identifiers (for example GS).
     category_id: str | int | None = None
-    classification_id: int | None = None
-    grade: str | None = None
+    classification_id: str | int | None = None
 
+    grade: str | None = None
 
 class Patch(AccessModel):
     capability: str = Field(min_length=1, max_length=64)

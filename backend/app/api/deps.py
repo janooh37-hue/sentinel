@@ -122,13 +122,11 @@ def require_capability(capability: str) -> Callable[..., User]:
         user: Annotated[User, Depends(get_current_user)],
         db: Annotated[Session, Depends(get_db)],
     ) -> User:
-        if not perm_service.has_capability(db, user, capability):
-            raise AppError(
-                "FORBIDDEN",
-                f"Missing capability: {capability}",
-                http_status=403,
-                details={"capability": capability},
-            )
+        from app.services.action_guard_service import capability_decision
+
+        if user.role == ADMIN_ROLE:
+            return user
+        capability_decision(perm_service.effective_caps(db, user), capability).require()
         return user
 
     return _dep

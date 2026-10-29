@@ -825,6 +825,7 @@ def audit_permission_change(
     capability: str,
     effect: str | None,
     commit: bool = True,
+    expires_at: datetime | None = None,
 ) -> None:
     """Record a per-user capability override change in the audit log."""
     _audit(
@@ -832,7 +833,7 @@ def audit_permission_change(
         actor,
         "set_permission",
         user,
-        {"capability": capability, "effect": effect or "default"},
+        {"capability": capability, "effect": effect or "default", "expires_at": expires_at.isoformat() if expires_at is not None else None},
     )
     if commit:
         db.commit()
