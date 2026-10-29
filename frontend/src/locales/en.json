@@ -4090,15 +4090,6 @@
       "openViolation": "Open violation",
       "openLedger": "Open in Ledger",
       "openAbsences": "Open in Absences"
-    },
-    "rail": {
-      "heading": "Current placement and status",
-      "status": "Status",
-      "department": "Department",
-      "unit": "Unit",
-      "post": "Post",
-      "joined": "Joined",
-      "since": "In this placement since"
     }
   },
   "application": {

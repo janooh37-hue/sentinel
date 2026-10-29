@@ -13,7 +13,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { siteToday } from '@/components/employees/useAttendanceAttention'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, apiErrorMessage, type EmployeeRead } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { PreviewDoc } from '@/lib/docPreview'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useServiceLabel } from '@/pages/books/serviceLabels'
@@ -21,7 +21,6 @@ import type { Tab } from '../EmployeeTabChips'
 import { ActivityCategoryFilter } from '../activity/ActivityCategoryFilter'
 import { ActivityEntry, type EntryActions } from '../activity/ActivityEntry'
 import { ActivityPeriodHeader } from '../activity/ActivityPeriodHeader'
-import { ActivityPlacementRail } from '../activity/ActivityPlacementRail'
 import { countActivity, documentName, summarySentence } from '../activity/activitySentence'
 import {
   ACTIVITY_STATEMENT_QUERY,
@@ -62,7 +61,6 @@ function periodFromSearch(params: URLSearchParams, today: string): PeriodState {
 
 interface Props {
   employeeId: string
-  employee: Pick<EmployeeRead, 'status' | 'department' | 'duty_unit' | 'duty_post' | 'doj_company' | 'doj'>
   onPreviewDocs: (docs: PreviewDoc[], index?: number) => void
   onOpenViolation: (id: number) => void
   onOpenTab: (tab: Tab) => void
@@ -70,7 +68,6 @@ interface Props {
 
 export function ActivityTab({
   employeeId,
-  employee,
   onPreviewDocs,
   onOpenViolation,
   onOpenTab,
@@ -120,10 +117,6 @@ export function ActivityTab({
     }
     return groups
   }, [visible])
-  const placedSince = useMemo(
-    () => items.find((item) => item.kind === 'duty_location')?.occurred_at.slice(0, 10) ?? null,
-    [items],
-  )
 
   const writePeriod = (next: { period: ActivityPreset; from?: string; to?: string }): void => {
     setSearchParams(
@@ -199,7 +192,7 @@ export function ActivityTab({
   const summary = summarySentence(countActivity(items), t, language)
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+    <div className="min-w-0">
       <div className="min-w-0 space-y-5">
         <ActivityPeriodHeader
           period={period}
@@ -207,6 +200,7 @@ export function ActivityTab({
           customFrom={customFrom}
           customTo={customTo}
           language={language}
+          onPrint={() => navigate(activityPrintPath(employeeId, printSearch.toString()))}
           onPreset={(next) =>
             writePeriod(next === 'custom' ? { period: next, from: period.from ?? '', to: period.to } : { period: next })
           }
@@ -276,12 +270,6 @@ export function ActivityTab({
           </>
         )}
       </div>
-      <ActivityPlacementRail
-        employee={employee}
-        placedSince={placedSince}
-        language={language}
-        onPrint={() => navigate(activityPrintPath(employeeId, printSearch.toString()))}
-      />
     </div>
   )
 }
