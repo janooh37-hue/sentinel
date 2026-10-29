@@ -67,6 +67,8 @@ vi.mock('@/lib/routeLoaders', () => ({
   loadDashboardPage: () => Promise.resolve({ default: () => <div>dashboard-page</div> }),
   loadDutyLocationsPage: () => Promise.resolve({ default: () => <div>duty-page</div> }),
   loadEmployeeDetailPage: () => Promise.resolve({ default: () => <div>employee-detail-page</div> }),
+  loadActivityPrintPage: () => Promise.resolve({ default: () => <div>activity-print-page</div> }),
+  loadAttendancePrintPage: () => Promise.resolve({ default: () => <div>attendance-print-page</div> }),
   loadEmployeesOrgTreePage: () => Promise.resolve({ default: () => <div>org-tree-page</div> }),
   loadExpiryPage: () => Promise.resolve({ default: () => <div>expiry-page</div> }),
   loadIntakePage: () => Promise.resolve({ default: () => <div>intake-page</div> }),
