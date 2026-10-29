@@ -48,6 +48,13 @@ describe('activity setup <-> URL query', () => {
     const parsed = parseActivitySettings(new URLSearchParams('period=custom&from=2026-10-01&to=2027-01-01'), TODAY, 'en')
     expect(parsed.to).toBe(TODAY)
   })
+
+  it('ignores impossible dates and falls back to the defaults', () => {
+    const activity = parseActivitySettings(new URLSearchParams('period=custom&from=2026-02-30&to=2026-13-01'), TODAY, 'en')
+    expect(activity).toMatchObject({ from: '2026-01-01', to: TODAY })
+    const attendance = parseAttendanceSettings(new URLSearchParams('mode=custom&from=2026-02-30'), TODAY, 'en')
+    expect(attendance).toMatchObject({ from: '2026-10-01', to: TODAY })
+  })
 })
 
 describe('attendance setup <-> URL query', () => {

@@ -348,6 +348,7 @@ export function AttendancePrintPage(): React.JSX.Element {
       canPrint={ready}
       printPending={flow.pending}
       printError={flow.error}
+      printStale={flow.stale}
       onPrint={() =>
         flow.print({
           kind: 'attendance',

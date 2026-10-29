@@ -14,15 +14,29 @@ import {
   type RowState,
 } from '@/pages/employees/attendance/attendanceModel'
 
-/** A case's printed state. `rest` is a day with no roster case, or one ruled off. */
-export type PaperState = RowState | 'rest'
+/**
+ * A case's printed state. `rest` is a day with no roster case, or one ruled
+ * off. `withheld` is a leave or absence verdict this reader may not see: it is
+ * neither a rest day nor a worked one.
+ */
+export type PaperState = RowState | 'rest' | 'withheld'
 
 /** Worst first: one day can hold two shifts, and trouble wins the cell. */
-const WORST_FIRST: readonly PaperState[] = ['absent', 'unpaired', 'late', 'grace', 'verified', 'pending', 'leave', 'rest']
+const WORST_FIRST: readonly PaperState[] = [
+  'withheld',
+  'absent',
+  'unpaired',
+  'late',
+  'grace',
+  'verified',
+  'pending',
+  'leave',
+  'rest',
+]
 
 export const EXCEPTION_STATES: readonly PaperState[] = ['late', 'absent', 'unpaired']
 
-/** Every glyph the paper can print, in legend order. */
+/** Every glyph the paper can print, in legend order (`withheld` only for readers without leave access). */
 export const LEGEND_STATES: readonly PaperState[] = ['verified', 'grace', 'late', 'absent', 'unpaired', 'leave', 'pending', 'rest']
 
 export interface PaperCase {
@@ -54,6 +68,8 @@ export interface AttendanceStats {
   absent: number
   single: number
   pending: number
+  /** Cases whose leave/absence verdict this reader may not see. */
+  withheld: number
   restDays: number
   leaveDays: number
   /** Share of judged shifts on time or inside grace; null with none judged. */
@@ -76,8 +92,8 @@ function paperCase(day: EmployeeAttendanceDay, now: Date, canViewLeaveFacts: boo
   if (day.presence_state === 'off') return null
   const state = rowState(day, { now })
   // Same privacy rule as the tab: without leave access, leave and absence
-  // verdicts are not this reader's to see.
-  if (!canViewLeaveFacts && (state === 'leave' || state === 'absent')) return null
+  // verdicts are not this reader's to see. The day stays a day, marked withheld.
+  const withheld = !canViewLeaveFacts && (state === 'leave' || state === 'absent')
   const punches = (day.punches ?? [])
     .map((punch) => ({ iso: punch.occurred_at, at: parseInstant(punch.occurred_at) }))
     .filter((punch): punch is { iso: string; at: number } => punch.at !== null)
@@ -87,7 +103,7 @@ function paperCase(day: EmployeeAttendanceDay, now: Date, canViewLeaveFacts: boo
   return {
     date: day.operational_date,
     shiftCode: day.shift_code ?? null,
-    state,
+    state: withheld ? 'withheld' : state,
     firstPunch: first ? siteTime(first.iso) : null,
     lastPunch: last ? siteTime(last.iso) : null,
     lastNextDay: last !== undefined && siteDate.format(new Date(last.at)) > day.operational_date,
@@ -132,6 +148,7 @@ export function attendanceStats(days: readonly PaperDay[]): AttendanceStats {
     absent: 0,
     single: 0,
     pending: 0,
+    withheld: 0,
     restDays: 0,
     leaveDays: 0,
     punctuality: null,
@@ -141,6 +158,10 @@ export function attendanceStats(days: readonly PaperDay[]): AttendanceStats {
     if (day.state === 'leave') stats.leaveDays += 1
     for (const c of day.cases) {
       if (c.state === 'leave') continue
+      if (c.state === 'withheld') {
+        stats.withheld += 1
+        continue
+      }
       stats.scheduled += 1
       if (c.state === 'verified') stats.onTime += 1
       else if (c.state === 'grace') stats.grace += 1

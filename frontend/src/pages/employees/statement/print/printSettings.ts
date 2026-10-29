@@ -16,6 +16,7 @@ import {
   ACTIVITY_PRESETS,
   STATEMENT_CATEGORIES,
   activityPeriod,
+  isIsoDate,
   monthPeriod,
   quarterPeriod,
   type ActivityPreset,
@@ -26,10 +27,9 @@ import {
 export type PaperLanguage = 'ar' | 'en'
 export type Orientation = 'portrait' | 'landscape'
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
-
+/** A real calendar date, else null so the documented default applies. */
 function isoDate(value: string | null): string | null {
-  return value !== null && ISO_DATE.test(value) ? value : null
+  return isIsoDate(value) ? value : null
 }
 
 function flag(params: URLSearchParams, key: string, fallback: boolean): boolean {

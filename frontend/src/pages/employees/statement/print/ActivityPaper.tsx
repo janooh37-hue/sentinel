@@ -8,6 +8,7 @@ import type { TFunction } from 'i18next'
 import type { ReactNode } from 'react'
 
 import { englishPart, splitBilingual } from '@/lib/bilingualValue'
+import { displayViolationValue } from '@/lib/violationTypes'
 
 import type { ActivityStatementItem } from '../statementTypes'
 import { categoryOf, formatStatementDate, type StatementCategory } from '../statementModel'
@@ -81,7 +82,7 @@ function sectionRows(
           cells: [
             date(item.occurred_at),
             <>
-              <bdi>{item.violation_type ?? '-'}</bdi>
+              <bdi>{item.violation_type ? displayViolationValue(item.violation_type, lang === 'ar') : '-'}</bdi>
               {item.description && <Sub>{item.description}</Sub>}
             </>,
             <>
@@ -174,15 +175,33 @@ function placementCells(item: ActivityStatementItem, lang: 'ar' | 'en', t: TFunc
   }
   const status = (value: string | null): string =>
     value ? t(`employees.status.${value}`, { defaultValue: value }) : '-'
+  const kind = item.status_event_kind ?? 'changed'
+  const date = (iso: string | null): string => (iso ? formatStatementDate(iso, lang) : '')
+  // Same dispatch as StatusActivity: a scheduled change has not happened yet,
+  // and a cancelled one never happened, so neither is printed as a change.
+  if (kind === 'scheduled_cancelled') {
+    return [
+      t('statementPrint.paper.statusCancelled'),
+      <>
+        {t('statementPrint.paper.statusCancelledDetail', { to: status(item.to_status) })}
+        {item.reason && <Sub>{item.reason}</Sub>}
+      </>,
+    ]
+  }
   const facts = [
-    item.effective_date && t('statementPrint.paper.effective', { date: formatStatementDate(item.effective_date, lang) }),
+    item.effective_date &&
+      t(kind === 'scheduled' ? 'statementPrint.paper.scheduledFor' : 'statementPrint.paper.effective', {
+        date: date(item.effective_date),
+      }),
     item.site,
-    item.return_date && t('statementPrint.paper.returnDate', { date: formatStatementDate(item.return_date, lang) }),
+    item.return_date && t('statementPrint.paper.returnDate', { date: date(item.return_date) }),
   ].filter(Boolean)
   return [
-    t('statementPrint.paper.statusChange'),
+    t(kind === 'scheduled' ? 'statementPrint.paper.statusScheduled' : 'statementPrint.paper.statusChange'),
     <>
-      {t('statementPrint.paper.fromTo', { from: status(item.from_status), to: status(item.to_status) })}
+      {item.from_status
+        ? t('statementPrint.paper.fromTo', { from: status(item.from_status), to: status(item.to_status) })
+        : status(item.to_status)}
       {facts.length > 0 && <Sub>{facts.join(' · ')}</Sub>}
       {item.reason && <Sub>{item.reason}</Sub>}
     </>,
