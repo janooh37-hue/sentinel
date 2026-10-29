@@ -332,8 +332,25 @@ def _evaluate(db, user, actor, resource, action, context, resolution, *, known_e
         if action == Action.edit:
             guard = action_guard_service.book_edit_decision(db, target, book, version_id=resource.revision_id)
             return _guard_decision(user, actor, resolution, action, ["books.edit"], guard, extra=extra)
-        result = _guard_decision(user, actor, resolution, action, [], readable, extra=extra)
-        result.reason_tree = ReasonNode(op="any", children=[ReasonReference(reason_index=i) for i, reason in enumerate(result.reasons) if reason.applied and reason.decisive])
+        from app.core.form_kind import resolve_service
+
+        latest = max(book.versions, key=lambda version: version.version_no, default=None)
+        service_id = resolve_service(book.subject, latest.template_id if latest else None, versioned=latest is not None)
+        ordinary_caps = ["books.view", f"books.category.{book.category_id}", f"books.servicerecords.{service_id}"]
+        if book.classification_code:
+            ordinary_caps.append(f"books.category.{book.classification_code}")
+        if book.grade == grades.SECRET:
+            ordinary_caps.append("books.secret")
+        ordinary_reasons = [reason for capability in ordinary_caps for reason in _cap_reasons(user, resolution, capability)]
+        if path != "ordinary":
+            for reason in ordinary_reasons:
+                reason.applied = False
+                reason.decisive = False
+        result = _guard_decision(user, actor, resolution, action, [], readable, extra=[*ordinary_reasons, *extra])
+        read_references = [ReasonReference(reason_index=i) for i, reason in enumerate(result.reasons) if reason.applied and reason.decisive and reason.code != "ACCOUNT_INELIGIBLE"]
+        alternatives = ReasonNode(op="any", children=[ReasonNode(op="all", children=read_references)] if path == "ordinary" else read_references)
+        eligibility = [ReasonReference(reason_index=i) for i, reason in enumerate(result.reasons) if reason.code == "ACCOUNT_INELIGIBLE"]
+        result.reason_tree = ReasonNode(op="all", children=[alternatives, *eligibility]) if eligibility else alternatives
         return result
     _unsupported()
 
