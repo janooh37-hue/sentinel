@@ -297,6 +297,87 @@ The replacement of a vehicle's current license validity period with a new period
 while retaining the ended period, renewal cost, and prior license scan in its history.
 _Avoid_: License edit, expiry reminder
 
+### Assets and store
+
+**Assets**:
+The product area (الأصول) for GSSG's physical holdings. The Store is its first
+part; equipment held on site is a separate, later part, and a Store item is never
+one of those site holdings.
+_Avoid_: Store as the area name, inventory
+
+**Store**:
+GSSG's one store (المخزن) of materials supplied by HQ, tracked by quantity and
+expiry only; HQ handles all money. It is one part of Assets.
+_Avoid_: Warehouse, inventory, Assets as a synonym
+
+**Store item**:
+One kind of material the store holds (صنف), identified by its Item code and
+filed under one category. The store holds only what HQ supplies.
+_Avoid_: Asset, product, SKU
+
+**Item code**:
+The code GSSG assigns to a Store item (رمز الصنف), a running number of the form
+`ST-0001` that never encodes the category. HQ issues no codes of its own, so this
+is the only code a Store item has, and it is the code a material request lists.
+_Avoid_: HQ code, stock number
+
+**HQ material request**:
+A request to HQ for Store items, made on the English Material Request Form.
+_Avoid_: MRF as a synonym for both papers, order
+
+**Client material request**:
+A request to the client for materials, made on the Arabic Material Request Form.
+It follows its own approval chain, separate from an HQ material request, and what
+the client supplies stays out of the store's stock.
+_Avoid_: Arabic MRF as the meaning, internal request
+
+**Monthly delivery**:
+The once-a-month arrival of Store items from HQ (الاستلام الشهري), logged as what
+actually arrived, optionally with HQ's delivery note attached.
+It often falls short of what was requested and is not reconciled against the HQ
+material request.
+_Avoid_: Receipt against order, fulfilment
+
+**Batch**:
+All of one Store item on the shelf that shares one expiry date (دفعة), whichever
+Monthly delivery brought it; a delivery with that date adds to the Batch. An
+expiry given only as a month expires at the end of that month. Stock with no
+expiry date forms the Store item's single undated Batch, which never expires.
+_Avoid_: Lot, shipment, delivery line
+
+**Counting unit**:
+The one unit a Store item is requested, delivered, counted, and disposed in,
+usually a carton. A Store item may also state how many smaller units one Counting
+unit contains, so an opened carton can be counted as whole units plus loose ones.
+_Avoid_: UOM, pack, piece
+
+**Stock count**:
+The monthly count of what is on the store's shelves (الجرد الشهري), taken
+shortly before the Monthly delivery arrives and recorded per Batch, read from
+the expiry date printed on the stock.
+_Avoid_: Inventory check, audit, stocktake
+
+**Disposal**:
+Stock removed from the store because it expired or was damaged (إتلاف), recorded
+against its Batch with the reason. A Disposal is not Monthly usage.
+_Avoid_: Write-off, loss, usage
+
+**Monthly usage**:
+The quantity of a Store item that left the store between two consecutive Stock
+counts (الاستهلاك الشهري): the earlier count plus the Monthly delivery received in
+between, minus Disposals in between, minus the later count. It is derived, never
+entered.
+_Avoid_: Consumption log, issues, handouts
+
+**Minimum level**:
+The quantity below which a Store item counts as low stock, set per Store item.
+_Avoid_: Reorder point, threshold
+
+**Suggested request quantity**:
+What the next HQ material request should ask for a Store item: its average
+Monthly usage less what is on the shelf. A suggestion the requester may change.
+_Avoid_: Auto-order, forecast
+
 ### Walker
 
 **Walker**:
