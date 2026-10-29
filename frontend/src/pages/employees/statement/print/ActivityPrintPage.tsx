@@ -211,8 +211,8 @@ export function ActivityPrintPage(): React.JSX.Element {
           <b className="text-[15px] text-primary">{t('statementPrint.resultEntries', { count: entries })}</b>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {t('statementPrint.resultActivity', {
-              sections: included.length,
-              pages,
+              sections: t('statementPrint.resultSections', { count: included.length }),
+              pages: t('statementPrint.resultPages', { count: pages }),
               orientation: t(`statementPrint.${settings.orient}`),
             })}
           </p>
