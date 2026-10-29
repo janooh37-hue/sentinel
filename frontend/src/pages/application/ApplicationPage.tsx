@@ -983,12 +983,14 @@ function StandardApplicationPage(): React.JSX.Element {
     }
     if (id === selectedTemplate) return
     // A two-paper service opens on the UI language's paper, unless the user is
-    // switching from its other paper or revising a book.
+    // switching from its other paper, revising a book, or the link asks for the
+    // English paper explicitly (?paper=en, e.g. the Store's HQ material request).
     const pair = PAPER_LANGUAGES.find((p) => p.en === id)
     if (
       pair &&
       isAr &&
       reviseBookId === null &&
+      searchParams.get('paper') !== 'en' &&
       selectedTemplate !== pair.ar &&
       templates.some((tpl) => tpl.id === pair.ar)
     ) {
@@ -1006,6 +1008,7 @@ function StandardApplicationPage(): React.JSX.Element {
     isAr,
     reviseBookId,
     location.search,
+    searchParams,
     handleSelectTemplate,
     resetToGallery,
     navigate,
