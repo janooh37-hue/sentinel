@@ -5,7 +5,7 @@ from app.db.models import BookCategory
 
 
 def test_static_catalog_has_complete_bilingual_request_policy_metadata():
-    assert len(CAPABILITIES) == 60
+    assert len(CAPABILITIES) == 63
     for cap in CAPABILITIES:
         assert cap.label_en.strip(), cap.id
         assert cap.label_ar.strip(), cap.id
@@ -39,8 +39,8 @@ def test_static_role_default_counts_are_preserved():
         role: len(caps) for role, caps in ROLE_DEFAULTS.items() if role != "inmate_reporter"
     } == {
         "operator": 19,
-        "manager": 43,
-        "admin": 60,
+        "manager": 44,
+        "admin": 63,
     }
 
 
@@ -84,7 +84,7 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     db_session.commit()
 
     catalog = capability_catalog_service.list_catalog(db_session)
-    assert len(catalog) == 60 + (2 * (len(SERVICE_IDS) + 1)) + 15 + 2
+    assert len(catalog) == 63 + (2 * (len(SERVICE_IDS) + 1)) + 15 + 2
     assert len({entry.id for entry in catalog}) == len(catalog)
 
     dynamic = catalog[len(CAPABILITIES) :]
