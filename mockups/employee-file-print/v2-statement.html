@@ -259,6 +259,7 @@ input,select{font:inherit;color:inherit}
 .leg .sw{display:inline-block;width:5mm;height:3.4mm;vertical-align:-.6mm;border:.2mm solid #666;margin-inline-end:1.4mm}
 .sign{display:grid;grid-template-columns:repeat(3,1fr);gap:8mm;margin:7mm 0 2mm;break-inside:avoid}
 .sign.two{grid-template-columns:repeat(2,1fr)}
+.sign.one{grid-template-columns:minmax(0,1fr) 2fr}
 .sign .b{padding-top:12mm;border-top:.3mm solid #222;font-size:8pt;line-height:1.4}
 .sign .b small{display:block;color:#555;font-size:7.4pt}
 .prov{border-top:.25mm solid #777;padding-top:1.8mm;font-size:7pt;line-height:1.5;color:#333;display:flex;justify-content:space-between;gap:6mm}
@@ -336,7 +337,8 @@ const U = (en,ar)=> S.ui==='ar' ? ar : en;
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const dt = iso => new Date(iso+'T00:00:00Z');
-const arFmt = (o)=> new Intl.DateTimeFormat('ar-EG',Object.assign({timeZone:'UTC'},o));
+// Arabic month and weekday names with Western digits (0-9), per the operator.
+const arFmt = (o)=> new Intl.DateTimeFormat('ar-u-nu-latn',Object.assign({timeZone:'UTC'},o));
 function dateStr(iso, lang, year=true){
   const d = dt(iso);
   if (lang==='ar') return arFmt(year?{day:'numeric',month:'long',year:'numeric'}:{day:'numeric',month:'long'}).format(d);
@@ -347,7 +349,11 @@ function monthStr(ym, lang){ // 'YYYY-MM'
   if (lang==='ar') return arFmt({month:'long',year:'numeric'}).format(new Date(Date.UTC(y,m-1,1)));
   return MONL[m-1]+' '+y;
 }
-function num(n, lang){ return lang==='ar' ? Number(n).toLocaleString('ar-EG',{useGrouping:false}) : String(n); }
+function num(n){ return String(n); }
+/* Print ref: employee G-number / 1 / 12 / print serial. The serial is one
+   running counter per employee, shared by activity and attendance prints;
+   the server issues it at print time (mock values here). */
+const printRef = serial => EMP.id+'/1/12/'+serial;
 function rangeStr(from,to,lang){
   const sameY = from.slice(0,4)===to.slice(0,4);
   const a = dateStr(from,lang,!sameY), b = dateStr(to,lang,true);
@@ -364,7 +370,7 @@ const daysBetween = (a,b)=>Math.round((dt(b)-dt(a))/864e5);
 /* ---------- periods ---------- */
 const PRESETS = {
   month:{en:'This month', ar:'هذا الشهر', f:()=>['2026-10-01',TODAY]},
-  last3:{en:'Last 3 months', ar:'آخر ٣ أشهر', f:()=>['2026-07-28',TODAY]},
+  last3:{en:'Last 3 months', ar:'آخر 3 أشهر', f:()=>['2026-07-28',TODAY]},
   year:{en:'This year', ar:'هذه السنة', f:()=>['2026-01-01',TODAY]},
   all:{en:'All', ar:'الكل', f:()=>[EMP.joined,TODAY]},
   custom:{en:'Custom range', ar:'نطاق مخصص', f:null}
@@ -433,21 +439,21 @@ const CATINFO = {
 };
 const SEN = {
   9811:['<b>Mariam Al Kaabi</b> issued a <b>salary certificate</b> to Emirates NBD','أصدرت <b>مريم الكعبي</b> <b>شهادة راتب</b> موجهة إلى بنك الإمارات دبي الوطني'],
-  312:['<b>Khalid Al Hammadi</b> recorded a <b>violation</b>: late arrival to post, written warning (2nd in 12 months)','سجّل <b>خالد الحمادي</b> <b>مخالفة</b>: التأخر عن الموقع، إنذار كتابي (الثانية خلال ١٢ شهرًا)'],
+  312:['<b>Khalid Al Hammadi</b> recorded a <b>violation</b>: late arrival to post, written warning (2nd in 12 months)','سجّل <b>خالد الحمادي</b> <b>مخالفة</b>: التأخر عن الموقع، إنذار كتابي (الثانية خلال 12 شهرًا)'],
   5520:['<b>Records desk</b> logged <b>incoming correspondence</b> from the employee: request for transfer to night rotation','سجّل <b>مكتب السجلات</b> <b>مراسلة واردة</b> من الموظف: طلب نقل إلى المناوبة الليلية'],
   77:['<b>Attendance desk</b> recorded an <b>absence</b>: unexcused, 1 day','سجّل <b>مكتب الدوام</b> <b>غيابًا</b> بدون عذر ليوم واحد'],
   41:['<b>Mariam Al Kaabi</b> confirmed the <b>return from leave</b> and duty resumption','أكدت <b>مريم الكعبي</b> <b>العودة من الإجازة</b> ومباشرة العمل'],
   9702:['<b>Mariam Al Kaabi</b> issued a <b>duty resumption form</b>, signed by the unit supervisor','أصدرت <b>مريم الكعبي</b> <b>نموذج مباشرة عمل</b> موقعًا من مشرف الوحدة'],
-  1440:['<b>Fatima Al Dhaheri</b> approved <b>annual leave</b> for 28 days, 1 Sep to 28 Sep','اعتمدت <b>فاطمة الظاهري</b> <b>إجازة سنوية</b> لمدة ٢٨ يومًا، من ١ سبتمبر إلى ٢٨ سبتمبر'],
-  40:['<b>System</b> marked the <b>departure on leave</b>, expected back 29 Sep','سجّل <b>النظام</b> <b>المغادرة في إجازة</b>، والعودة المتوقعة ٢٩ سبتمبر'],
-  9590:['<b>Fatima Al Dhaheri</b> filed a <b>leave application</b> for 28 days of annual leave','قدّمت <b>فاطمة الظاهري</b> <b>طلب إجازة</b> سنوية لمدة ٢٨ يومًا'],
+  1440:['<b>Fatima Al Dhaheri</b> approved <b>annual leave</b> for 28 days, 1 Sep to 28 Sep','اعتمدت <b>فاطمة الظاهري</b> <b>إجازة سنوية</b> لمدة 28 يومًا، من 1 سبتمبر إلى 28 سبتمبر'],
+  40:['<b>System</b> marked the <b>departure on leave</b>, expected back 29 Sep','سجّل <b>النظام</b> <b>المغادرة في إجازة</b>، والعودة المتوقعة 29 سبتمبر'],
+  9590:['<b>Fatima Al Dhaheri</b> filed a <b>leave application</b> for 28 days of annual leave','قدّمت <b>فاطمة الظاهري</b> <b>طلب إجازة</b> سنوية لمدة 28 يومًا'],
   210:['<b>Khalid Al Hammadi</b> <b>transferred</b> the employee to Al Wathba Site, Main Gate, from Mussafah Site, Patrol','نقل <b>خالد الحمادي</b> الموظف إلى <b>موقع الوثبة</b>، البوابة الرئيسية، من موقع مصفح، الدوريات'],
   5133:['<b>Records desk</b> sent <b>outgoing correspondence</b> to the Site Manager: transfer memo, Al Wathba Site','أصدر <b>مكتب السجلات</b> <b>مراسلة صادرة</b> إلى مدير الموقع: مذكرة نقل، موقع الوثبة'],
   288:['<b>Khalid Al Hammadi</b> recorded a <b>violation</b>: uniform not to standard, verbal notice','سجّل <b>خالد الحمادي</b> <b>مخالفة</b>: الزي غير مطابق، تنبيه شفهي'],
   1301:['<b>Fatima Al Dhaheri</b> approved <b>sick leave</b> for 2 days, medical report attached','اعتمدت <b>فاطمة الظاهري</b> <b>إجازة مرضية</b> لمدة يومين، والتقرير الطبي مرفق'],
   9100:['<b>Mariam Al Kaabi</b> issued an <b>experience certificate</b> to whom it may concern','أصدرت <b>مريم الكعبي</b> <b>شهادة خبرة</b> لمن يهمه الأمر'],
   4410:['<b>Records desk</b> sent <b>outgoing correspondence</b> to the Training Centre: training nomination, first aid','أصدر <b>مكتب السجلات</b> <b>مراسلة صادرة</b> إلى مركز التدريب: ترشيح لدورة الإسعافات الأولية'],
-  1180:['<b>Fatima Al Dhaheri</b> approved <b>emergency leave</b> for 3 days, 5 Jan to 7 Jan','اعتمدت <b>فاطمة الظاهري</b> <b>إجازة طارئة</b> لمدة ٣ أيام، من ٥ يناير إلى ٧ يناير']
+  1180:['<b>Fatima Al Dhaheri</b> approved <b>emergency leave</b> for 3 days, 5 Jan to 7 Jan','اعتمدت <b>فاطمة الظاهري</b> <b>إجازة طارئة</b> لمدة 3 أيام، من 5 يناير إلى 7 يناير']
 };
 const ACTOR_AR = {'Mariam Al Kaabi':'مريم الكعبي','Khalid Al Hammadi':'خالد الحمادي','Fatima Al Dhaheri':'فاطمة الظاهري','Records desk':'مكتب السجلات','Attendance desk':'مكتب الدوام','System':'النظام'};
 const actor = (it,lang)=> lang==='ar' ? (ACTOR_AR[it.actor]||it.actor) : it.actor;
@@ -504,7 +510,7 @@ function joinBits(bits, lang){
 function renderBar(){
   const names = [U('Activity','النشاط'),U('Print setup','إعداد الطباعة'),U('Activity paper','ورقة النشاط'),U('Attendance setup','إعداد الدوام'),U('Attendance paper','ورقة الدوام'),U('Build notes','متطلبات البناء')];
   const f = S.frame;
-  $('#mockbar').innerHTML = `<b>${U('Employee file print','طباعة ملف الموظف')}</b><span>${U('Version 2: Statement','النسخة ٢: الكشف')}</span>
+  $('#mockbar').innerHTML = `<b>${U('Employee file print','طباعة ملف الموظف')}</b><span>${U('Version 2: Statement','النسخة 2: الكشف')}</span>
    <nav aria-label="Frames">${names.map((n,i)=>`<button data-a="go" data-v="${i+1}" ${f===i+1?'aria-current="true"':''}>${i+1}. ${n}</button>`).join('')}</nav>
    <span class="grow"></span>
    <div class="lt" role="group" aria-label="Language"><button data-a="ui" data-v="en" aria-pressed="${S.ui==='en'}">EN</button><button data-a="ui" data-v="ar" aria-pressed="${S.ui==='ar'}" lang="ar">عربي</button></div>`;
@@ -656,9 +662,9 @@ function paperOut(land, f, title, from, to, refNo, body, lineTotal){
 }
 function signBlocks(f, kinds){
   const prep = `<div class="b">${f.L('Prepared by','أعدّه')}<small>${f.V(D.printedBy.name_en+', '+D.printedBy.role_en, D.printedBy.name_ar+'، '+D.printedBy.role_ar)}</small><small>${f.L('Signature and date','التوقيع والتاريخ')}</small></div>`;
-  const rev = `<div class="b">${f.L('Reviewed by','راجعه')}<small>${f.V('HR Manager','مدير الموارد البشرية')}</small><small>${f.L('Signature and date','التوقيع والتاريخ')}</small></div>`;
   const emp = `<div class="b">${f.L('Employee acknowledgement','إقرار الموظف')}<small>${f.V(EMP.name_en,EMP.name_ar)}</small><small>${f.L('Signature and date','التوقيع والتاريخ')}</small></div>`;
-  return kinds==='three' ? `<div class="sign">${prep}${rev}${emp}</div>` : `<div class="sign two">${prep}${rev}</div>`;
+  // Two parties only: the preparer and, on attendance, the employee. No reviewer box.
+  return kinds==='three' ? `<div class="sign two">${prep}${emp}</div>` : `<div class="sign one">${prep}</div>`;
 }
 
 /* ---------- activity paper ---------- */
@@ -694,14 +700,15 @@ function activityPaper(){
   const daysFor = c=> c==='leave' ? inP.filter(i=>i.kind==='leave').reduce((n,i)=>n+i.days,0) : c==='absence' ? inP.filter(i=>i.kind==='absence').length : null;
   const sumRows = secs.map(c=>`<tr><td>${f.V(CATINFO[c].sec_en,CATINFO[c].sec_ar)}</td><td class="num">${f.n(cnt(c))}</td><td class="num">${daysFor(c)==null?'-':f.n(daysFor(c))}</td></tr>`).join('');
   const sumTbl = A.summary ? `<div class="sec"><h2>${f.L('Period summary','ملخص الفترة')}</h2><table class="dt"><thead><tr><th>${f.S('Category','الفئة')}</th><th class="num">${f.S('Entries','السجلات')}</th><th class="num">${f.S('Total days','إجمالي الأيام')}</th></tr></thead><tbody>${sumRows}<tr class="tot"><td>${f.L('Total','الإجمالي')}</td><td class="num">${f.n(sel.length)}</td><td class="num">${f.n(daysFor('leave')!=null&&A.cats.has('leave')?daysFor('leave'):0)}</td></tr></tbody></table></div>` : '';
+  // Say only what is left out; a complete statement carries no scope line.
   const scope = excluded.length
-    ? `<div class="scope"><b>${f.L('Filtered statement','كشف مصفّى')}.</b> ${f.L('Includes','يشمل')}: ${secs.map(c=>f.V(CATINFO[c].sec_en,CATINFO[c].sec_ar)).join(', ')||'-'}. ${f.L('Left out','مستثنى')}: ${excluded.map(c=>f.V(CATINFO[c].sec_en,CATINFO[c].sec_ar)).join(', ')}. ${f.L('Entries shown','السجلات المعروضة')}: ${f.n(sel.length)} ${f.L('of','من')} ${f.n(inP.length)}.</div>`
-    : `<div class="scope"><b>${f.L('All categories included','جميع الفئات مشمولة')}.</b> ${f.L('Entries in this period','السجلات في هذه الفترة')}: ${f.n(inP.length)}.</div>`;
+    ? `<div class="scope"><b>${f.L('Not included','غير مشمول')}:</b> ${excluded.map(c=>f.V(CATINFO[c].sec_en,CATINFO[c].sec_ar)).join(', ')}.</div>`
+    : '';
   const secHtml = secs.map(c=>`<div class="sec"><h2>${f.V(CATINFO[c].sec_en,CATINFO[c].sec_ar)} <span class="c">${f.n(cnt(c))}</span></h2><table class="dt">${sections[c]()}</table></div>`).join('');
   const body = scope + sumTbl + secHtml + (A.sign?signBlocks(f,'two'):'');
   const title = f.L('Activity statement','كشف النشاط');
   const lineTotal = `${f.L('Line total','إجمالي السطور')}: ${f.n(sel.length)} ${f.L(sel.length===1?'entry':'entries','سجل')}`;
-  return paperOut(A.orient==='landscape', f, title, A.from, A.to, 'AS/'+EMP.id+'/'+TODAY, body, lineTotal);
+  return paperOut(A.orient==='landscape', f, title, A.from, A.to, printRef(7), body, lineTotal);
 }
 
 /* ---------- attendance data ---------- */
@@ -739,7 +746,7 @@ function attendancePaper(){
   const pairs = [
     [f.L('Scheduled shifts','الورديات المجدولة'), f.n(st.sched)],
     [f.L('On time','في الوقت'), f.n(st.ontime)],
-    [f.L('Inside grace (30 min)','داخل مدة السماح (٣٠ دقيقة)'), f.n(st.grace)],
+    [f.L('Inside grace (30 min)','داخل مدة السماح (30 دقيقة)'), f.n(st.grace)],
     [f.L('Late past grace','تأخر بعد السماح'), `${f.n(st.late)} <small>${f.L('days, total','أيام، المجموع')} ${f.n(st.lateMin)} ${f.L('min','دقيقة')}</small>`],
     [f.L('Absent','غائب'), f.n(st.absent)],
     [f.L('Single punch','بصمة واحدة'), f.n(st.single)],
@@ -780,18 +787,18 @@ function attendancePaper(){
   const legend = (A.calendar||A.daily) ? `<div class="leg"><h3>${f.L('Legend','دليل الرموز')}</h3>
     ${['verified','grace','late','absent','unpaired','leave','off'].map(s=>`<div>${gl(s)}${stName(s)}</div>`).join('')}
     ${Object.keys(SH).map(c=>`<div><span class="mn ltr" style="border:.2mm solid #444;padding:0 1mm;border-radius:.6mm;margin-inline-end:1.4mm">${sl(c)}</span>${f.V(SH[c].en,SH[c].ar)} ${win(c)}</div>`).join('')}
-    <div style="grid-column:1/-1;color:#444">${f.L('Devices record punches without direction: first punch and last punch of the day are shown. +1 marks a last punch after midnight.','الأجهزة تسجل البصمات دون تحديد الاتجاه: تظهر أول بصمة وآخر بصمة في اليوم. العلامة +١ تعني بصمة بعد منتصف الليل.')}</div></div>` : '';
+    <div style="grid-column:1/-1;color:#444">${f.L('Devices record punches without direction: first punch and last punch of the day are shown. +1 marks a last punch after midnight.','الأجهزة تسجل البصمات دون تحديد الاتجاه: تظهر أول بصمة وآخر بصمة في اليوم. العلامة +1 تعني بصمة بعد منتصف الليل.')}</div></div>` : '';
   const nodata = rows.length===0 ? `<div class="scope">${f.L('No attendance record in this period.','لا يوجد سجل دوام في هذه الفترة.')}</div>` : '';
   /* exceptions */
   const exc = st.exc;
   const excHtml = A.exceptions ? `<div class="sec"><h2>${f.L('Exceptions','الاستثناءات')} <span class="c">${f.L('late, absent and single-punch days','أيام التأخر والغياب والبصمة الواحدة')}: ${f.n(exc.length)}</span></h2><table class="dt"><thead><tr><th>${f.S('Date','التاريخ')}</th><th>${f.S('Shift','الوردية')}</th><th>${f.S('Exception','الاستثناء')}</th>${A.punches?`<th>${f.S('First punch','أول بصمة')}</th><th>${f.S('Last punch','آخر بصمة')}</th>`:''}<th class="num">${f.S('Punches','البصمات')}</th><th class="num">${f.S('Past grace (min)','بعد السماح (د)')}</th></tr></thead><tbody>${exc.length?exc.map(r=>`<tr><td>${f.d(r.date)}<span class="sub2">${wdName(dt(r.date).getUTCDay(),f.lang==='ar'?'ar':'en',true)}</span></td><td>${sl(r.shift_code)} ${f.V(SH[r.shift_code].en,SH[r.shift_code].ar)}</td><td>${gl(r.state)}${stName(r.state)}</td>${A.punches?`<td>${first(r)}</td><td>${last(r)}</td>`:''}<td class="num">${f.n(r.punch_count)}</td><td class="num">${r.state==='late'?f.n(r.minutes_past_grace):'-'}</td></tr>`).join(''):`<tr><td class="none" colspan="${A.punches?7:5}">${f.L('None in this period','لا يوجد في هذه الفترة')}</td></tr>`}</tbody></table></div>` : '';
   /* daily table */
   const dr = A.dailyEx ? rows.filter(r=>['late','absent','unpaired'].includes(r.state)) : rows;
-  const dailyHtml = A.daily ? `<div class="sec" style="break-inside:auto"><h2>${f.L('Daily record','السجل اليومي')}</h2>${A.dailyEx?`<div class="scope"><b>${f.L('Filtered','مصفّى')}.</b> ${f.L('Exception days only','أيام الاستثناء فقط')}: ${f.n(dr.length)} ${f.L('of','من')} ${f.n(rows.length)} ${f.L('days','يومًا')}.</div>`:''}<table class="dt"><thead><tr><th>${f.S('Date','التاريخ')}</th><th>${f.S('Day','اليوم')}</th><th>${f.S('Shift','الوردية')}</th><th>${f.S('State','الحالة')}</th>${A.punches?`<th>${f.S('First punch','أول بصمة')}</th><th>${f.S('Last punch','آخر بصمة')}</th>`:''}<th class="num">${f.S('Punches','البصمات')}</th><th class="num">${f.S('Past grace (min)','بعد السماح (د)')}</th></tr></thead><tbody>${dr.map(r=>`<tr><td>${f.d(r.date)}</td><td>${wdName(dt(r.date).getUTCDay(),f.lang==='ar'?'ar':'en',false)}</td><td>${r.shift_code?sl(r.shift_code)+' '+f.V(SH[r.shift_code].en,SH[r.shift_code].ar):'-'}</td><td>${gl(r.state)}${stName(r.state)}</td>${A.punches?`<td>${first(r)}</td><td>${last(r)}</td>`:''}<td class="num">${r.shift_code?f.n(r.punch_count):'-'}</td><td class="num">${r.state==='late'?f.n(r.minutes_past_grace):'-'}</td></tr>`).join('')}</tbody></table></div>` : '';
+  const dailyHtml = A.daily ? `<div class="sec" style="break-inside:auto"><h2>${f.L('Daily record','السجل اليومي')}</h2>${A.dailyEx?`<div class="scope"><b>${f.L('Not included','غير مشمول')}:</b> ${f.n(rows.length-dr.length)} ${f.L('days without exceptions','يومًا بلا استثناءات')}.</div>`:''}<table class="dt"><thead><tr><th>${f.S('Date','التاريخ')}</th><th>${f.S('Day','اليوم')}</th><th>${f.S('Shift','الوردية')}</th><th>${f.S('State','الحالة')}</th>${A.punches?`<th>${f.S('First punch','أول بصمة')}</th><th>${f.S('Last punch','آخر بصمة')}</th>`:''}<th class="num">${f.S('Punches','البصمات')}</th><th class="num">${f.S('Past grace (min)','بعد السماح (د)')}</th></tr></thead><tbody>${dr.map(r=>`<tr><td>${f.d(r.date)}</td><td>${wdName(dt(r.date).getUTCDay(),f.lang==='ar'?'ar':'en',false)}</td><td>${r.shift_code?sl(r.shift_code)+' '+f.V(SH[r.shift_code].en,SH[r.shift_code].ar):'-'}</td><td>${gl(r.state)}${stName(r.state)}</td>${A.punches?`<td>${first(r)}</td><td>${last(r)}</td>`:''}<td class="num">${r.shift_code?f.n(r.punch_count):'-'}</td><td class="num">${r.state==='late'?f.n(r.minutes_past_grace):'-'}</td></tr>`).join('')}</tbody></table></div>` : '';
   const body = nodata + sumHtml + monthTbl + cal + legend + excHtml + dailyHtml + (A.sign?signBlocks(f,'three'):'');
   const title = f.L('Attendance statement','كشف الدوام');
   const lineTotal = `${f.L('Line total','إجمالي السطور')}: ${f.n(rows.length)} ${f.L('days','يومًا')} · ${f.n(exc.length)} ${f.L('exceptions','استثناءات')}`;
-  return paperOut(A.orient==='landscape', f, title, from, to, 'AT/'+EMP.id+'/'+TODAY, body, lineTotal);
+  return paperOut(A.orient==='landscape', f, title, from, to, printRef(8), body, lineTotal);
 }
 
 /* ---------- setup frames ---------- */
@@ -829,7 +836,7 @@ function renderF2(){
        <div class="dates"><label>${U('From','من')}<input type="date" data-a="afrom" data-k="afrom" value="${A.from}" max="${TODAY}"></label><label>${U('To','إلى')}<input type="date" data-a="ato" data-k="ato" value="${A.to}" max="${TODAY}"></label></div></fieldset>
      <fieldset class="fs"><legend>${U('Sections to include','الأقسام المطلوبة')}</legend>${catsHtml}
        <p class="hint"><button class="btn sm" data-a="acats" data-v="all">${U('All','الكل')}</button> <button class="btn sm" data-a="acats" data-v="none">${U('None','لا شيء')}</button></p></fieldset>
-     <fieldset class="fs"><legend>${U('On the page','في الصفحة')}</legend>${chk('asummary',A.summary,U('Period summary table','جدول ملخص الفترة'))}${chk('asign',A.sign,U('Signature block (prepared by, reviewed by)','خانة التوقيع (أعدّه، راجعه)'))}</fieldset>
+     <fieldset class="fs"><legend>${U('On the page','في الصفحة')}</legend>${chk('asummary',A.summary,U('Period summary table','جدول ملخص الفترة'))}${chk('asign',A.sign,U('Signature (prepared by)','التوقيع (أعدّه)'))}</fieldset>
      <fieldset class="fs"><legend>${U('Language','اللغة')}</legend>${langSeg('alang',A.lang)}<p class="hint">${U('Default is the interface language (English now). Official copies are usually printed in Arabic.','الافتراضي لغة الواجهة (العربية الآن). النسخ الرسمية تُطبع عادةً بالعربية.')}</p></fieldset>
      <fieldset class="fs" style="border-bottom:0"><legend>${U('Paper','الورق')}</legend>${orientSeg('aorient',A.orient)}<p class="hint">A4</p></fieldset>
    </div><div class="result" aria-live="polite"><b>${num(sel.length,S.ui)} ${U(sel.length===1?'entry':'entries','سجلًا')}</b><div class="s">${U('in','في')} ${num(CATS.filter(c=>A.cats.has(c)).length,S.ui)} ${U('sections','أقسام')} · ${U('about','نحو')} ${pages} ${U('pages','صفحات')} · A4 ${A.orient==='landscape'?U('landscape','عرضي'):U('portrait','طولي')}</div></div></div>
@@ -847,7 +854,7 @@ function renderF4(){
   const canNext = !(A.y===2026&&A.m>=10), canPrev = !(A.y===2026&&A.m<=1);
   const opt = (k,label,extra)=>`<label class="opt" data-on="${A.mode===k}"><input type="radio" name="am" data-a="amode" data-v="${k}" data-k="am${k}" ${A.mode===k?'checked':''}><span class="grow">${label}</span>${extra||''}</label>`;
   const partial = from < '2026-09-01';
-  const warnNote = partial ? `<div class="note no-print">${U('Mockup data: day-level records exist for Sep and Oct 2026 only.','بيانات تجريبية: السجلات اليومية متوفرة لشهري سبتمبر وأكتوبر ٢٠٢٦ فقط.')}</div>` : '';
+  const warnNote = partial ? `<div class="note no-print">${U('Mockup data: day-level records exist for Sep and Oct 2026 only.','بيانات تجريبية: السجلات اليومية متوفرة لشهري سبتمبر وأكتوبر 2026 فقط.')}</div>` : '';
   $('#f4').innerHTML = appbar([U('Employees','الموظفون'),EMP.id,U('Attendance','الدوام'),U('Print','طباعة')]) +
    backBar(U('Print attendance statement','طباعة كشف الدوام'), `${U(EMP.name_en,EMP.name_ar)} · ${EMP.id}`).replace(U('Back to Activity','العودة إلى النشاط'),U('Back to Attendance','العودة إلى الدوام')) +
    `<div class="setup"><div class="settings"><div class="in">
@@ -855,7 +862,7 @@ function renderF4(){
        ${opt('month',U('Month','شهر'),`<span class="rng">${rangeStr(...(function(){const f=`${A.y}-${String(A.m).padStart(2,'0')}-01`;let t=addDays(f,32).slice(0,7)+'-01';t=addDays(t,-1);return [f,t>TODAY?TODAY:t]})(),S.ui)}</span>`)}
        <div class="mstep"><button class="ib" data-a="mprev" aria-label="${U('Previous month','الشهر السابق')}" ${canPrev?'':'disabled'}><span class="flip">${ic('chevl',16)}</span></button><span class="cur">${monthName}</span><button class="ib" data-a="mnext" aria-label="${U('Next month','الشهر التالي')}" ${canNext?'':'disabled'}><span class="flip">${ic('chev',16)}</span></button></div>
        <div class="shortcuts"><button class="btn sm" data-a="mthis">${U('This month','هذا الشهر')}</button><button class="btn sm" data-a="mlast">${U('Last month','الشهر الماضي')}</button></div>
-       ${opt('quarter',U('Quarter','ربع سنة'),`<select class="sel" data-a="aq" data-k="aq" aria-label="${U('Quarter','ربع سنة')}">${[1,2,3,4].map(q=>`<option value="${q}" ${A.q===q?'selected':''}>${U('Q'+q+' 2026','الربع '+num(q,'ar')+' ٢٠٢٦')}</option>`).join('')}</select>`)}
+       ${opt('quarter',U('Quarter','ربع سنة'),`<select class="sel" data-a="aq" data-k="aq" aria-label="${U('Quarter','ربع سنة')}">${[1,2,3,4].map(q=>`<option value="${q}" ${A.q===q?'selected':''}>${U('Q'+q+' 2026','الربع '+num(q,'ar')+' 2026')}</option>`).join('')}</select>`)}
        ${opt('ytd',U('Year to date','منذ بداية السنة'),`<span class="rng">${rangeStr('2026-01-01',TODAY,S.ui)}</span>`)}
        ${opt('custom',U('Custom range','نطاق مخصص'))}
        <div class="dates"><label>${U('From','من')}<input type="date" data-a="atfrom" data-k="atfrom" value="${from}" max="${TODAY}"></label><label>${U('To','إلى')}<input type="date" data-a="atto" data-k="atto" value="${to}" max="${TODAY}"></label></div>
@@ -864,8 +871,8 @@ function renderF4(){
        ${chk('csummary',A.summary,U('Summary table','جدول الملخص'))}${chk('ccalendar',A.calendar,U('Month calendar','تقويم الشهر'))}${chk('cexc',A.exceptions,U('Exceptions list (late, absent, single punch)','قائمة الاستثناءات (تأخر، غياب، بصمة واحدة)'))}${chk('cdaily',A.daily,U('Daily table','الجدول اليومي'))}
        <div style="padding-inline-start:26px">${chk('cdailyex',A.dailyEx,U('Exception days only','أيام الاستثناء فقط'))}</div>
        ${chk('cpunch',A.punches,U('Punch times (first and last)','أوقات البصمات (الأولى والأخيرة)'))}
-       <p class="hint">${U('A filtered daily table says so on the page.','الجدول اليومي المصفّى يذكر ذلك في الصفحة.')}</p></fieldset>
-     <fieldset class="fs"><legend>${U('Signatures','التوقيعات')}</legend>${chk('csign',A.sign,U('Prepared by, reviewed by, employee acknowledgement','أعدّه، راجعه، إقرار الموظف'))}</fieldset>
+       <p class="hint">${U('The page states what a filtered daily table leaves out.','تذكر الصفحة ما يستثنيه الجدول اليومي المصفّى.')}</p></fieldset>
+     <fieldset class="fs"><legend>${U('Signatures','التوقيعات')}</legend>${chk('csign',A.sign,U('Prepared by, employee acknowledgement','أعدّه، إقرار الموظف'))}</fieldset>
      <fieldset class="fs"><legend>${U('Language','اللغة')}</legend>${langSeg('tlang',A.lang)}<p class="hint">${U('Default is the interface language. The calendar starts on Sunday in English and Saturday in Arabic.','الافتراضي لغة الواجهة. يبدأ التقويم بالأحد في الإنجليزية وبالسبت في العربية.')}</p></fieldset>
      <fieldset class="fs" style="border-bottom:0"><legend>${U('Paper','الورق')}</legend>${orientSeg('torient',A.orient)}<p class="hint">A4</p></fieldset>
    </div><div class="result" aria-live="polite"><b>${num(rows.length,S.ui)} ${U('days','يومًا')} · ${num(st.exc.length,S.ui)} ${U(st.exc.length===1?'exception':'exceptions','استثناءات')}</b><div class="s">${rangeStr(from,to,S.ui)} · ${U('about','نحو')} <span id="pgcount">...</span> ${U('pages','صفحات')} · A4 ${A.orient==='landscape'?U('landscape','عرضي'):U('portrait','طولي')}</div></div></div>
@@ -884,13 +891,14 @@ function renderF6(){
      'Server-built sentence parts per entry in both languages: actor, verb, object, detail, reference and who recorded it. None of these exist on <code>ActivityItemRead</code> today; Arabic plurals and the summary sentence are built from counts, not translated strings.',
      'Month grouping and per-category totals (entries, leave days) returned with the list, so screen and paper cannot disagree.',
      'Attendance already accepts any range through <code>getEmployeeAttendance</code>. A multi-month paper needs the day rows for every month in range, plus rest days and leave days as rows, which the roster-only call omits.',
-     'Linked documents per entry (the file behind a certificate, leave form, violation notice or letter).'])}
+     'Linked documents per entry (the file behind a certificate, leave form, violation notice or letter).',
+     'Print serial: one running counter per employee, shared by activity and attendance statements. Issued by the server when the operator prints, stored with who printed, when, the period and the options, and printed as the ref <code>G3190/1/12/&lt;serial&gt;</code>.'])}
    <h3>Frontend</h3>${li([
      '<code>ActivityTab.tsx</code>: replace the timeline with <code>ActivityStatement</code> (period header, summary sentence, category toggles, month groups, expandable entries, rail). Keep <code>DutyLocationActivity</code> and <code>StatusActivity</code> for their detail panels.',
      'New route for print setup, for example <code>/employees/:id/activity/print</code>, and the same for attendance, so the browser Back button leaves the preview. Settings live in the URL query so a setup can be shared or reloaded.',
      'One paper component per document, modelled on <code>AttendancePrintSheet.tsx</code>: letterhead and identity in <code>thead</code>, provenance in <code>tfoot</code>, <code>@page { size: A4 }</code> injected for landscape. The month calendar is a 7-column CSS grid with logical properties.',
      'Letterhead component shared with the Ledger Book paper (ADR 0007): wordmark, office block, red rule, contact footer.',
-     'Both language dictionaries and Noto Naskh Arabic for paper. Weekday order flips with language.'])}
+     'Both language dictionaries and Noto Naskh Arabic for paper. Weekday order flips with language. Arabic uses Western digits (0-9) everywhere: format with the <code>ar-u-nu-latn</code> locale.'])}
    <h3>Risks</h3>${li([
      'Chrome repeats a table head on each printed page only while head + foot stay under about a third of the page. A4 portrait passes (letterhead and identity 64 mm + provenance 25 mm = 89 mm of 297 mm), but it costs a third of every page. A4 landscape (210 mm) would not, so the full masthead prints once as the first row and later pages carry one compact line. The paper body must be a list of table rows: a page break inside a single tall cell repeats nothing.',
      'Chrome cannot print page numbers. The paper states the line total instead; the page count in setup is a simulated pagination of the rendered rows, not a promise.',
