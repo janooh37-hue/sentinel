@@ -309,7 +309,11 @@ def get_employee_detail(
 # --- Leaves (read-only list + balance) ---------------------------------------
 
 
-@router.get("/{employee_id}/leaves", response_model=list[LeaveRead])
+@router.get(
+    "/{employee_id}/leaves",
+    response_model=list[LeaveRead],
+    dependencies=[Depends(require_capability("leaves.view"))],
+)
 def list_employee_leaves(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -327,7 +331,11 @@ def list_employee_leaves(
     ]
 
 
-@router.get("/{employee_id}/leave-balance", response_model=LeaveBalanceRead)
+@router.get(
+    "/{employee_id}/leave-balance",
+    response_model=LeaveBalanceRead,
+    dependencies=[Depends(require_capability("leaves.view"))],
+)
 def get_leave_balance(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -399,7 +407,11 @@ def delete_violation(
 # The time sheet only reads it; nothing here is timesheet-owned.             #
 
 
-@router.get("/{employee_id}/absences", response_model=list[AbsenceRead])
+@router.get(
+    "/{employee_id}/absences",
+    response_model=list[AbsenceRead],
+    dependencies=[Depends(require_capability("employees.view"))],
+)
 def list_employee_absences(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -409,7 +421,11 @@ def list_employee_absences(
     return [AbsenceRead.model_validate(r) for r in rows]
 
 
-@router.get("/{employee_id}/absences/episodes", response_model=AbsenceRecordRead)
+@router.get(
+    "/{employee_id}/absences/episodes",
+    response_model=AbsenceRecordRead,
+    dependencies=[Depends(require_capability("employees.view"))],
+)
 def list_employee_absence_episodes(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],

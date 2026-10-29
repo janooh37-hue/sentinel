@@ -197,3 +197,62 @@ def test_unknown_event_is_not_found(api_db, template_client):
     assert client.put(path, json={"ar": "نص", "en": "Text"}).status_code == 404
     assert client.delete(path).status_code == 404
     assert client.post(path + "/render", json={"ar": "نص", "en": "Text"}).status_code == 404
+
+
+@pytest.mark.parametrize(
+    "kind,capability,read_path,write_path,read_allowed",
+    [
+        (
+            "notification_template",
+            "messages.templates",
+            "/notify/templates",
+            "/notify/templates/violation",
+            True,
+        ),
+        (
+            "email_template",
+            "messages.templates",
+            "/email/draft-templates",
+            "/email/draft-templates/ledger.new",
+            True,
+        ),
+        (
+            "word_template",
+            "books.templates",
+            "/books/word-templates",
+            "/books/word-templates/missing",
+            False,
+        ),
+        (
+            "editor_template",
+            "editor_templates.manage",
+            "/editor-templates",
+            "/editor-templates/1",
+            False,
+        ),
+    ],
+)
+def test_template_family_decisions_match_denied_consumer_routes(
+    api_db, template_client, kind, capability, read_path, write_path, read_allowed
+):
+    from app.services.action_guard_service import template_decision
+
+    client, user = template_client
+    perm_service.set_user_override(api_db, user.id, capability, "deny")
+    if kind == "word_template":
+        perm_service.set_user_override(api_db, user.id, "books.edit", "deny")
+    caps = perm_service.effective_caps(api_db, user)
+    read = template_decision(caps, kind, "view")
+    assert read.allowed is read_allowed
+    assert client.get("/api/v1" + read_path).status_code == (200 if read_allowed else 403)
+    edit = template_decision(caps, kind, "reset" if read_allowed else "delete")
+    assert edit.allowed is False
+    assert client.delete("/api/v1" + write_path).status_code == 403
+    if kind == "notification_template":
+        assert (
+            client.post(
+                "/api/v1/notify/templates/violation/render",
+                json={"ar": "مرحبا {name}", "en": "Hello {name}"},
+            ).status_code
+            == 200
+        )

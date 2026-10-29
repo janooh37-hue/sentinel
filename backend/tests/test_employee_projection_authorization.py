@@ -10,6 +10,7 @@ from sqlalchemy import select
 from app.api.deps import get_current_user
 from app.config import get_settings
 from app.db.models import (
+    Absence,
     Book,
     BookApprovalStep,
     BookCategory,
@@ -18,6 +19,7 @@ from app.db.models import (
     Document,
     Employee,
     Leave,
+    OutboundMessage,
     UserPermission,
     Violation,
 )
@@ -70,7 +72,17 @@ def records(api_db, monkeypatch, tmp_path):
 
 
 def _state(records):
-    tables = (Book, BookVersion, Document, Leave, Violation, BookRevisionAccess, BookApprovalStep)
+    tables = (
+        Book,
+        BookVersion,
+        Document,
+        Leave,
+        Absence,
+        OutboundMessage,
+        Violation,
+        BookRevisionAccess,
+        BookApprovalStep,
+    )
     rows = tuple(
         (
             model.__tablename__,
@@ -124,6 +136,124 @@ def test_violation_deny_hides_detail_counts_and_both_activity_queries(records):
         assert response.json()["items"][0]["detail"] == "PROTECTED-VIOLATION-MARKER"
     finally:
         assert _state(records) == before
+
+
+@pytest.mark.parametrize("denied_capability", ["employees.view", "leaves.view"])
+def test_employee_leave_and_absence_reads_require_both_capabilities(records, denied_capability):
+    empty = Employee(id="G-EMPTY-PRIVATE", name_en="Empty Employee", status="Active")
+    records.db.add_all(
+        [
+            empty,
+            UserPermission(user_id=records.reader.id, capability=denied_capability, effect="deny"),
+        ]
+    )
+    records.db.commit()
+    before = _state(records)
+    try:
+        for employee_id in (records.employee.id, empty.id, "G-NOT-FOUND"):
+            for section in ("leaves", "leave-balance", "absences", "absences/episodes"):
+                response = records.client.get(f"/api/v1/employees/{employee_id}/{section}")
+                assert response.status_code == 403, response.text
+    finally:
+        assert _state(records) == before
+
+
+def test_leave_deny_masks_aggregate_facts_but_preserves_employee_and_message_history(records):
+    current_year = date.today().year
+    records.leave.start_date = date(current_year, 10, 1)
+    records.leave.end_date = date(current_year, 10, 2)
+    absence = Absence(
+        employee_id=records.employee.id,
+        date=date(current_year, 10, 3),
+        note="PROTECTED-ABSENCE-MARKER",
+    )
+    message = OutboundMessage(
+        employee_id=records.employee.id,
+        event_type="leave",
+        event_ref=str(records.leave.id),
+        language="en",
+        phone="0500000000",
+        channel="sms",
+        status="sent",
+        body="Retained employee message history",
+        provider_msg_id="existing-provider-id",
+    )
+    records.db.add_all(
+        [
+            absence,
+            message,
+            UserPermission(user_id=records.reader.id, capability="leaves.view", effect="deny"),
+            UserPermission(user_id=records.reader.id, capability="employees.notify", effect="deny"),
+        ]
+    )
+    records.db.commit()
+    before = _state(records)
+    try:
+        response = records.client.get(f"/api/v1/employees/{records.employee.id}/detail")
+        assert response.status_code == 200, response.text
+        detail = response.json()
+        assert detail["employee"]["id"] == records.employee.id
+        assert detail["stats"]["leaves_taken_days"] is None
+        assert detail["stats"]["leaves_allowed_days"] is None
+        assert detail["stats"]["absence_days"] is None
+        assert detail["recent_leaves"] == []
+        assert detail["recent_absences"] == []
+        assert {row["kind"] for row in detail["recent_activity"]} == {"violation"}
+        assert detail["stats"]["violations"] == 1
+        assert detail["recent_violations"][0]["id"] == records.violation.id
+        assert detail["recent_sms"][0]["id"] == message.id
+        assert detail["recent_sms"][0]["body"] == message.body
+        assert detail["recent_sms"][0]["provider_msg_id"] == message.provider_msg_id
+        assert detail["recent_sms"][0]["phone"] == message.phone
+        assert records.client.get(f"/api/v1/employees/{records.employee.id}").status_code == 200
+
+        for params in ({}, {"kind": "leave"}, {"employee_id": records.employee.id}):
+            response = records.client.get("/api/v1/employees/activity", params=params)
+            assert response.status_code == 200, response.text
+            body = response.json()
+            assert all(row["kind"] != "leave" for row in body["items"])
+            assert body["total"] == (0 if params.get("kind") == "leave" else 1)
+
+        records.actor["user"] = records.admin
+        response = records.client.get(f"/api/v1/employees/{records.employee.id}/detail")
+        assert response.status_code == 200, response.text
+        detail = response.json()
+        assert detail["stats"]["leaves_taken_days"] == 2
+        assert detail["stats"]["leaves_allowed_days"] == 30
+        assert detail["stats"]["absence_days"] == 1
+        assert detail["recent_leaves"][0]["id"] == records.leave.id
+        assert detail["recent_absences"][0]["id"] == absence.id
+        assert {row["kind"] for row in detail["recent_activity"]} == {
+            "leave",
+            "absence",
+            "violation",
+        }
+    finally:
+        assert _state(records) == before
+
+
+def test_authorized_empty_leave_history_is_not_forbidden(records):
+    empty = Employee(id="G-EMPTY-LEAVES", name_en="Empty Employee", status="Active")
+    records.db.add(empty)
+    records.db.commit()
+    for section in ("leaves", "absences"):
+        response = records.client.get(f"/api/v1/employees/{empty.id}/{section}")
+        assert response.status_code == 200, response.text
+        assert response.json() == []
+    response = records.client.get(f"/api/v1/employees/{empty.id}/absences/episodes")
+    assert response.status_code == 200, response.text
+    assert response.json()["episodes"] == []
+    response = records.client.get(f"/api/v1/employees/{empty.id}/leave-balance")
+    assert response.status_code == 200, response.text
+    assert response.json()["annual_taken"] == 0
+    response = records.client.get(f"/api/v1/employees/{empty.id}/detail")
+    assert response.status_code == 200, response.text
+    detail = response.json()
+    assert detail["stats"]["leaves_taken_days"] == 0
+    assert detail["stats"]["leaves_allowed_days"] == 30
+    assert detail["stats"]["absence_days"] == 0
+    assert detail["recent_leaves"] == []
+    assert detail["recent_absences"] == []
 
 
 def _revision(records, book, number):

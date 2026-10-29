@@ -152,24 +152,16 @@ def authorize_interactive_generation(
     classification_code: str | None = None,
 ) -> None:
     """Authorize interactive publication before rendering or allocating references."""
-    from app.services import book_service, perm_service
+    from app.services import perm_service
+    from app.services.action_guard_service import service_create_decision
 
-    for capability in ("documents.generate", "books.view"):
-        if not perm_service.has_capability(db, user, capability):
-            raise AppError(
-                "FORBIDDEN",
-                f"Missing capability: {capability}",
-                http_status=403,
-                details={"capability": capability},
-            )
-    service_id = effective_document_service(template_id)
-    book_service.require_record_type_access(
-        db,
-        user,
+    service_create_decision(
+        perm_service.effective_caps(db, user),
+        effective_document_service(template_id),
         category_id=record_category_for_template(template_id),
-        service_id=service_id,
-        classification_code=classification_code if service_id == "General Book" else None,
-    )
+        classification_code=classification_code,
+        category_exists=db.get(BookCategory, record_category_for_template(template_id)) is not None,
+    ).require()
 
 
 #: Inmate Conduct Violations — the fixed "إجراءات المشرف" bullets, in the order
@@ -2185,19 +2177,9 @@ def generate_document(
 
         if record_access_user is not None:
             book_service.require_revise_access(db, record_access_user, revise_book)
-        # A DOCX revision would reset a Ledger Book's approval_state outside its chain.
-        book_service.require_not_ledger_book(revise_book)
-        if revise_book.approval_state not in (
-            "returned",
-            "rejected",
-            "none",
-            "awaiting_scan",
-        ):
-            raise ValidationFailedError(
-                "BOOK_NOT_REVISABLE",
-                "Only a draft, returned, rejected, or awaiting-scan book can be revised",
-                state=revise_book.approval_state,
-            )
+        from app.services.action_guard_service import revision_workflow_decision
+
+        revision_workflow_decision(revise_book).require()
 
     # ------------------------------------------------------------------
     # 1c. Attachments (spec §6) — validate slots + resolve sources BEFORE

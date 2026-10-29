@@ -75,14 +75,18 @@ def safe_template_name(raw: str) -> str:
     return cleaned
 
 
-def list_templates() -> list[TemplateInfo]:
+def list_templates(*, read_only: bool = False) -> list[TemplateInfo]:
+    """List library metadata without creating storage during diagnostics."""
+    directory = get_settings().data_dir / "book_templates" if read_only else templates_dir()
+    if not directory.exists():
+        return []
     items = [
         TemplateInfo(
             name=p.name,
             modified_at=datetime.fromtimestamp(p.stat().st_mtime, tz=UTC).replace(tzinfo=None),
             kind="base" if p.name in _BASE_TEMPLATE_NAMES else "custom",
         )
-        for p in templates_dir().iterdir()
+        for p in directory.iterdir()
         if p.is_file() and p.suffix.lower() == ".docx"
     ]
     items.sort(key=lambda t: t.modified_at, reverse=True)

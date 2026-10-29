@@ -767,6 +767,7 @@ def admin_read(db: Session, user: User) -> AdminUserRead:
         employee_id=user.employee_id,
         display_name=user.display_name,
         name_en=employee.name_en if employee else None,
+        name_ar=employee.name_ar if employee else None,
         role=user.role,
         status=user.status,
         failed_attempts=user.failed_attempts,
@@ -823,6 +824,8 @@ def audit_permission_change(
     user: User,
     capability: str,
     effect: str | None,
+    commit: bool = True,
+    expires_at: datetime | None = None,
 ) -> None:
     """Record a per-user capability override change in the audit log."""
     _audit(
@@ -830,9 +833,14 @@ def audit_permission_change(
         actor,
         "set_permission",
         user,
-        {"capability": capability, "effect": effect or "default"},
+        {
+            "capability": capability,
+            "effect": effect or "default",
+            "expires_at": expires_at.isoformat() if expires_at is not None else None,
+        },
     )
-    db.commit()
+    if commit:
+        db.commit()
 
 
 def list_audit(db: Session, *, limit: int = 50) -> list[AuditEntryRead]:
