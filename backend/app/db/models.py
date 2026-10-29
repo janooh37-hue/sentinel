@@ -2632,6 +2632,216 @@ class InmateViolationManualRow(Base):
     )
 
 
+class StoreCategory(Base):
+    """A Store item category (migration 0110); seeded Pantry and Protective."""
+
+    __tablename__ = "store_categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name_en: Mapped[str] = mapped_column(String(128), nullable=False)
+    name_ar: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    __table_args__ = (UniqueConstraint("name_en", name="uq_store_categories_name_en"),)
+
+
+class StoreItem(Base):
+    """One kind of material the Store holds (migration 0110).
+
+    Quantities of the item are integers in base units: loose units when
+    ``contains_qty`` is set, otherwise Counting units. Items are archived,
+    never deleted, so an Item code is never reused.
+    """
+
+    __tablename__ = "store_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(16), nullable=False)
+    name_en: Mapped[str] = mapped_column(String(255), nullable=False)
+    name_ar: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey("store_categories.id"), nullable=False)
+    counting_unit_en: Mapped[str] = mapped_column(String(64), nullable=False)
+    counting_unit_ar: Mapped[str] = mapped_column(String(64), nullable=False)
+    contains_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    contains_unit_en: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    contains_unit_ar: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    minimum_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    category: Mapped[StoreCategory] = relationship()
+    batches: Mapped[list[StoreBatch]] = relationship(
+        back_populates="item", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_store_items_code"),
+        CheckConstraint(
+            "contains_qty IS NULL OR contains_qty >= 2", name="ck_store_items_contains_qty"
+        ),
+        CheckConstraint(
+            "(contains_qty IS NULL AND contains_unit_en IS NULL AND contains_unit_ar IS NULL)"
+            " OR (contains_qty IS NOT NULL AND contains_unit_en IS NOT NULL"
+            " AND contains_unit_ar IS NOT NULL)",
+            name="ck_store_items_contains_together",
+        ),
+        CheckConstraint(
+            "minimum_level IS NULL OR minimum_level >= 0", name="ck_store_items_minimum_level"
+        ),
+        Index("ix_store_items_category", "category_id"),
+    )
+
+
+class StoreBatch(Base):
+    """All of one Store item sharing one expiry date (migration 0110).
+
+    A null ``expiry_date`` is the item's single undated Batch. A month-only
+    expiry is stored as that month's last day with ``expiry_month_only``.
+    """
+
+    __tablename__ = "store_batches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    item_id: Mapped[int] = mapped_column(
+        ForeignKey("store_items.id", ondelete="CASCADE"), nullable=False
+    )
+    expiry_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    expiry_month_only: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    item: Mapped[StoreItem] = relationship(back_populates="batches")
+
+    __table_args__ = (
+        Index(
+            "uq_store_batches_item_expiry",
+            "item_id",
+            "expiry_date",
+            unique=True,
+            sqlite_where=text("expiry_date IS NOT NULL"),
+        ),
+        Index(
+            "uq_store_batches_item_undated",
+            "item_id",
+            unique=True,
+            sqlite_where=text("expiry_date IS NULL"),
+        ),
+    )
+
+
+class StoreDelivery(Base):
+    """One Monthly delivery from HQ (migration 0110), optionally with its note file."""
+
+    __tablename__ = "store_deliveries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    received_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    note_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    note_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    note_file_media_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    note_file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    lines: Mapped[list[StoreDeliveryLine]] = relationship(
+        back_populates="delivery", cascade="all, delete-orphan", order_by="StoreDeliveryLine.id"
+    )
+
+    __table_args__ = (Index("ix_store_deliveries_received_on", "received_on"),)
+
+
+class StoreDeliveryLine(Base):
+    __tablename__ = "store_delivery_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    delivery_id: Mapped[int] = mapped_column(
+        ForeignKey("store_deliveries.id", ondelete="CASCADE"), nullable=False
+    )
+    batch_id: Mapped[int] = mapped_column(ForeignKey("store_batches.id"), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    delivery: Mapped[StoreDelivery] = relationship(back_populates="lines")
+    batch: Mapped[StoreBatch] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("delivery_id", "batch_id", name="uq_store_delivery_lines_batch"),
+        CheckConstraint("quantity > 0", name="ck_store_delivery_lines_quantity"),
+        Index("ix_store_delivery_lines_batch", "batch_id"),
+    )
+
+
+class StoreCount(Base):
+    """One monthly Stock count (migration 0110); at most one per calendar month."""
+
+    __tablename__ = "store_counts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    month: Mapped[str] = mapped_column(String(7), nullable=False)
+    counted_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    lines: Mapped[list[StoreCountLine]] = relationship(
+        back_populates="count", cascade="all, delete-orphan", order_by="StoreCountLine.id"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("month", name="uq_store_counts_month"),
+        Index("ix_store_counts_counted_on", "counted_on"),
+    )
+
+
+class StoreCountLine(Base):
+    __tablename__ = "store_count_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    count_id: Mapped[int] = mapped_column(
+        ForeignKey("store_counts.id", ondelete="CASCADE"), nullable=False
+    )
+    batch_id: Mapped[int] = mapped_column(ForeignKey("store_batches.id"), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    count: Mapped[StoreCount] = relationship(back_populates="lines")
+    batch: Mapped[StoreBatch] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("count_id", "batch_id", name="uq_store_count_lines_batch"),
+        CheckConstraint("quantity >= 0", name="ck_store_count_lines_quantity"),
+        Index("ix_store_count_lines_batch", "batch_id"),
+    )
+
+
+class StoreDisposal(Base):
+    """Stock removed from a Batch because it expired or was damaged (migration 0110)."""
+
+    __tablename__ = "store_disposals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    batch_id: Mapped[int] = mapped_column(ForeignKey("store_batches.id"), nullable=False)
+    disposed_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(8), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    batch: Mapped[StoreBatch] = relationship()
+
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_store_disposals_quantity"),
+        CheckConstraint("reason IN ('expired', 'damaged')", name="ck_store_disposals_reason"),
+        Index("ix_store_disposals_batch", "batch_id"),
+        Index("ix_store_disposals_disposed_on", "disposed_on"),
+    )
+
+
 # Imported last on purpose: workforce models reference tables defined above, so
 # a top-of-module import would close a circular import at class-definition time.
 from app.db.workforce_models import (  # noqa: E402
