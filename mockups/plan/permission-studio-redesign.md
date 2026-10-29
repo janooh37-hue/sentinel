@@ -354,3 +354,9 @@ Cross-check refinement: preserve pre/post-sweep expiry behavior rather than clai
 - Twelve local register/workspace/search captures are retained under `.impeccable/review/perm-polish/`, not committed. Browser inspection confirmed readable EN/AR layouts and no raw reason codes, ISO timestamps or capability IDs in ordinary rows/Why; the explicit Technical details and exact-ID search paths remain available.
 - Required read-only i18n/RTL review against `dev` and an independent layout/behavior review had their actionable findings applied and confirmed. Mechanical detector returned `[]`. No backend, authorization semantics, production data, provider sends, merge, push or deployment changed. Chromium evidence does not certify physical Arabic keyboards, screen readers or real mobile browsers; existing shell styling remains outside this refinement.
 
+### Record email fixture correction (2026-10-29)
+
+- The record-page Outlook tests still denied every capability after slice D correctly gated desktop/mobile entry and submission on `ledger.send`. The real `POST /api/v1/email/handoff` endpoint requires that same capability; this was an outdated test fixture, not a product regression or slice-E wording-filter failure.
+- Granted only `ledger.send` in the email test group, preserving the existing generated-PDF prefill and no-papers-disabled assertions. Added a papers-present case that denies the capability and verifies the action is absent.
+- `pnpm -C frontend test src/pages/books`: **54 files / 565 tests passed**. Changed-test ESLint exited 0 with no output. No production code, UI wording, authorization policy or template filtering changed; no deployment or browser certification is claimed.
+
