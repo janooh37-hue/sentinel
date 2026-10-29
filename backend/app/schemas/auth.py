@@ -13,6 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.schemas._base import ORMBase
+from app.schemas.access import Patch
 
 
 class RegisterRequest(BaseModel):
@@ -84,6 +85,7 @@ class AdminUserRead(ORMBase):
     employee_id: str | None = None
     display_name: str | None = None
     name_en: str | None = None
+    name_ar: str | None = None
     role: str
     status: str
     failed_attempts: int
@@ -215,14 +217,14 @@ class SetPermissionRequest(BaseModel):
     """
 
     capability: str = Field(min_length=1, max_length=64)
-    effect: str | None = None
+    effect: Literal["grant", "deny"] | None = None
     expires_at: datetime | None = None
 
 
 class SetPermissionBulkRequest(BaseModel):
     """Apply several override changes in one all-or-nothing call."""
 
-    items: list[SetPermissionRequest] = Field(min_length=1, max_length=200)
+    items: list[Patch] = Field(min_length=1, max_length=200)
 
 
 __all__ = [

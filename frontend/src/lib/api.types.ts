@@ -566,6 +566,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/users/{user_id}/effective-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Effective Access */
+        get: operations["get_effective_access_api_v1_auth_users__user_id__effective_access_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/users/{user_id}/effective-access/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Effective Access */
+        post: operations["preview_effective_access_api_v1_auth_users__user_id__effective_access_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/users/{user_id}/check-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check Access */
+        post: operations["check_access_api_v1_auth_users__user_id__check_access_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/users/{user_id}/permissions": {
         parameters: {
             query?: never;
@@ -573,15 +624,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get User Permissions
-         * @description The target user's effective capabilities + per-capability overrides.
-         */
+        /** Get User Permissions */
         get: operations["get_user_permissions_api_v1_auth_users__user_id__permissions_get"];
-        /**
-         * Set User Permission
-         * @description Set or clear one per-user capability override (grant/deny/null).
-         */
+        /** Set User Permission */
         put: operations["set_user_permission_api_v1_auth_users__user_id__permissions_put"];
         post?: never;
         delete?: never;
@@ -598,10 +643,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /**
-         * Set User Permissions Bulk
-         * @description Apply several override changes in one all-or-nothing call.
-         */
+        /** Set User Permissions Bulk */
         put: operations["set_user_permissions_bulk_api_v1_auth_users__user_id__permissions_bulk_put"];
         post?: never;
         delete?: never;
@@ -7596,6 +7638,45 @@ export interface components {
             /** Notes */
             notes?: string | null;
         };
+        /** AccessItem */
+        AccessItem: {
+            resource: components["schemas"]["Resource"];
+            /** Group Id */
+            group_id: string;
+            label: components["schemas"]["LocalizedText"];
+            description: components["schemas"]["LocalizedText"];
+            aliases: components["schemas"]["LocalizedAliases"];
+            /** Actions */
+            actions: components["schemas"]["Decision"][];
+        };
+        /** AccessSnapshot */
+        AccessSnapshot: {
+            subject: components["schemas"]["Subject"];
+            /** Revision */
+            revision: string;
+            /**
+             * Evaluated At
+             * Format: date-time
+             */
+            evaluated_at: string;
+            /** Valid Until */
+            valid_until: string | null;
+            /** Effective */
+            effective: string[];
+            /** Role Defaults */
+            role_defaults: string[];
+            /** Overrides */
+            overrides: components["schemas"]["Override"][];
+            /** Items */
+            items: components["schemas"]["AccessItem"][];
+            subject_facts: components["schemas"]["SubjectFacts"];
+            scope: components["schemas"]["Scope"];
+        };
+        /**
+         * Action
+         * @enum {string}
+         */
+        Action: "view" | "create" | "read" | "edit" | "reset" | "delete" | "send" | "manage";
         /** ActivityItemRead */
         ActivityItemRead: {
             /**
@@ -7726,6 +7807,8 @@ export interface components {
             display_name?: string | null;
             /** Name En */
             name_en?: string | null;
+            /** Name Ar */
+            name_ar?: string | null;
             /** Role */
             role: string;
             /** Status */
@@ -8069,6 +8152,26 @@ export interface components {
             ref_number: string | null;
             /** Source Book Id */
             source_book_id: number | null;
+        };
+        /** AssignmentSource */
+        AssignmentSource: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "role" | "personal" | "policy" | "resource" | "department";
+            /** Id */
+            id: string;
+            label: components["schemas"]["LocalizedText"];
+            /**
+             * Contribution
+             * @enum {string}
+             */
+            contribution: "grant" | "deny" | "ceiling" | "eligibility" | "scope";
+            /** Expires At */
+            expires_at?: string | null;
+            /** Edit Destination */
+            edit_destination?: string | null;
         };
         /** AttachmentSlotRead */
         AttachmentSlotRead: {
@@ -9582,6 +9685,24 @@ export interface components {
              */
             description: string;
         };
+        /** CheckRequest */
+        CheckRequest: {
+            resource: components["schemas"]["Resource"];
+            action: components["schemas"]["Action"];
+            context?: components["schemas"]["Context"];
+            /** Proposed */
+            proposed?: components["schemas"]["Patch"][];
+            /** Expected Revision */
+            expected_revision?: string | null;
+        };
+        /** CheckResponse */
+        CheckResponse: {
+            snapshot: components["schemas"]["AccessSnapshot"];
+            current: components["schemas"]["Decision"];
+            proposed: components["schemas"]["Decision"] | null;
+            /** Impacts */
+            impacts: components["schemas"]["Impact"][];
+        };
         /** ClassificationListResponse */
         ClassificationListResponse: {
             /** Items */
@@ -9706,6 +9827,15 @@ export interface components {
             duty_event_retention_days?: number | null;
             /** Audit Retention Days */
             audit_retention_days?: number | null;
+        };
+        /** Context */
+        Context: {
+            /** Category Id */
+            category_id?: string | number | null;
+            /** Classification Id */
+            classification_id?: number | null;
+            /** Grade */
+            grade?: string | null;
         };
         /** CorrespondenceCategoryCreate */
         CorrespondenceCategoryCreate: {
@@ -10438,6 +10568,32 @@ export interface components {
             window?: string | null;
             /** Note */
             note?: string | null;
+        };
+        /** Decision */
+        Decision: {
+            action: components["schemas"]["Action"];
+            /**
+             * Authorization
+             * @enum {string}
+             */
+            authorization: "allowed" | "denied" | "unknown" | "needs_context" | "not_applicable";
+            /** Executable Now */
+            executable_now: boolean | null;
+            /** Configurable */
+            configurable: boolean;
+            /** Setting Capabilities */
+            setting_capabilities: string[];
+            /** Editable Effects */
+            editable_effects: (("grant" | "deny") | null)[];
+            /** Rule Id */
+            rule_id: string;
+            /** Reasons */
+            reasons: components["schemas"]["Reason"][];
+            reason_tree: components["schemas"]["ReasonNode"];
+            /** Required Context */
+            required_context?: string[];
+            /** Warnings */
+            warnings?: components["schemas"]["Issue"][];
         };
         /** DecisionNotice */
         DecisionNotice: {
@@ -11509,13 +11665,13 @@ export interface components {
             /** Documents */
             documents: number;
             /** Leaves Taken Days */
-            leaves_taken_days: number;
+            leaves_taken_days: number | null;
             /** Leaves Allowed Days */
-            leaves_allowed_days: number;
+            leaves_allowed_days: number | null;
             /** Violations */
             violations: number;
             /** Absence Days */
-            absence_days: number;
+            absence_days: number | null;
             /** Ledger Count */
             ledger_count: number;
             /** Tenure Years */
@@ -12002,6 +12158,13 @@ export interface components {
              */
             is_manager: boolean;
         };
+        /** Impact */
+        Impact: {
+            resource: components["schemas"]["Resource"];
+            action: components["schemas"]["Action"];
+            before: components["schemas"]["Decision"];
+            after: components["schemas"]["Decision"];
+        };
         /**
          * ImportedDocRead
          * @description The local vault file backing a v3-imported record.
@@ -12189,6 +12352,22 @@ export interface components {
             };
             /** Sync Running */
             sync_running: boolean;
+        };
+        /** Issue */
+        Issue: {
+            /** Code */
+            code: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "info" | "warning" | "error";
+            /** Capabilities */
+            capabilities?: string[];
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            };
         };
         /**
          * ItemPermitCreate
@@ -13099,6 +13278,20 @@ export interface components {
              */
             created_at: string;
         };
+        /** LocalizedAliases */
+        LocalizedAliases: {
+            /** En */
+            en: string[];
+            /** Ar */
+            ar: string[];
+        };
+        /** LocalizedText */
+        LocalizedText: {
+            /** En */
+            en: string;
+            /** Ar */
+            ar: string;
+        };
         /**
          * LockLayoutRequest
          * @description Set the signed-in user's lock-screen layout.
@@ -13714,6 +13907,23 @@ export interface components {
             /** Supervisor Id */
             supervisor_id?: string | null;
         };
+        /** Override */
+        Override: {
+            /** Capability */
+            capability: string;
+            /**
+             * Effect
+             * @enum {string}
+             */
+            effect: "grant" | "deny";
+            /** Expires At */
+            expires_at: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "active" | "expired";
+        };
         /** PassportSuggestion */
         PassportSuggestion: {
             /** Number */
@@ -13726,6 +13936,15 @@ export interface components {
             source_snippet: string | null;
             /** Scan Filename */
             scan_filename: string | null;
+        };
+        /** Patch */
+        Patch: {
+            /** Capability */
+            capability: string;
+            /** Effect */
+            effect?: ("grant" | "deny") | null;
+            /** Expires At */
+            expires_at?: string | null;
         };
         /** PermissionRequestRead */
         PermissionRequestRead: {
@@ -14220,6 +14439,22 @@ export interface components {
             /** Reviewer User Id */
             reviewer_user_id: number;
         };
+        /** PreviewRequest */
+        PreviewRequest: {
+            /** Expected Revision */
+            expected_revision: string;
+            /** Items */
+            items: components["schemas"]["Patch"][];
+        };
+        /** PreviewResponse */
+        PreviewResponse: {
+            current: components["schemas"]["AccessSnapshot"];
+            proposed: components["schemas"]["AccessSnapshot"];
+            /** Impacts */
+            impacts: components["schemas"]["Impact"][];
+            /** Validation */
+            validation: components["schemas"]["Issue"][];
+        };
         /** ProviderPersonMappingWrite */
         ProviderPersonMappingWrite: {
             /** Employee Id */
@@ -14276,6 +14511,37 @@ export interface components {
             keys: components["schemas"]["PushKeys"];
             /** Locale */
             locale?: string | null;
+        };
+        /** Reason */
+        Reason: {
+            /** Code */
+            code: string;
+            source: components["schemas"]["AssignmentSource"];
+            /** Capability */
+            capability?: string | null;
+            /** Applied */
+            applied: boolean;
+            /** Decisive */
+            decisive: boolean;
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            };
+        };
+        /** ReasonNode */
+        ReasonNode: {
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "all" | "any";
+            /** Children */
+            children: (components["schemas"]["ReasonNode"] | components["schemas"]["ReasonReference"])[];
+        };
+        /** ReasonReference */
+        ReasonReference: {
+            /** Reason Index */
+            reason_index: number;
         };
         /** RecentAbsenceRead */
         RecentAbsenceRead: {
@@ -14557,6 +14823,18 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** Resource */
+        Resource: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "capability" | "service" | "book" | "notification_template" | "email_template" | "word_template" | "editor_template";
+            /** Id */
+            id: string;
+            /** Revision Id */
+            revision_id?: number | null;
+        };
         /** RetainedDecisionRead */
         RetainedDecisionRead: {
             /** Kind */
@@ -14758,6 +15036,20 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** Scope */
+        Scope: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "current" | "configured_limits_on";
+            /** Limits Enabled */
+            limits_enabled: boolean | null;
+            /** Kind */
+            kind: string;
+            /** Reason Codes */
+            reason_codes: string[];
+        };
         /** SearchHit */
         SearchHit: {
             entry: components["schemas"]["LedgerEntryRead"];
@@ -14889,7 +15181,7 @@ export interface components {
          */
         SetPermissionBulkRequest: {
             /** Items */
-            items: components["schemas"]["SetPermissionRequest"][];
+            items: components["schemas"]["Patch"][];
         };
         /**
          * SetPermissionRequest
@@ -14905,7 +15197,7 @@ export interface components {
             /** Capability */
             capability: string;
             /** Effect */
-            effect?: string | null;
+            effect?: ("grant" | "deny") | null;
             /** Expires At */
             expires_at?: string | null;
         };
@@ -15264,6 +15556,22 @@ export interface components {
             filename: string;
             /** Size */
             size: number;
+        };
+        /** Subject */
+        Subject: {
+            /** User Id */
+            user_id: number;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
+            /** Authentication Eligible */
+            authentication_eligible: boolean;
+        };
+        /** SubjectFacts */
+        SubjectFacts: {
+            /** Has Approval Assignments */
+            has_approval_assignments: boolean;
         };
         /** SubmitterCreate */
         SubmitterCreate: {
@@ -18706,6 +19014,113 @@ export interface operations {
             };
         };
     };
+    get_effective_access_api_v1_auth_users__user_id__effective_access_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessSnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_effective_access_api_v1_auth_users__user_id__effective_access_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_access_api_v1_auth_users__user_id__check_access_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_user_permissions_api_v1_auth_users__user_id__permissions_get: {
         parameters: {
             query?: never;
@@ -18742,7 +19157,9 @@ export interface operations {
     set_user_permission_api_v1_auth_users__user_id__permissions_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "if-match"?: string | null;
+            };
             path: {
                 user_id: number;
             };
@@ -18779,7 +19196,9 @@ export interface operations {
     set_user_permissions_bulk_api_v1_auth_users__user_id__permissions_bulk_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "if-match"?: string | null;
+            };
             path: {
                 user_id: number;
             };

@@ -13,6 +13,7 @@ defaults so the gate works without a seed step.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import literal, select, union_all
@@ -112,51 +113,70 @@ def dynamic_capability_ids(db: Session) -> set[str]:
     )
 
 
-def effective_caps(db: Session, user: User) -> set[str]:
-    """Resolve the user's effective capabilities.
+@dataclass(frozen=True)
+class CapabilityResolution:
+    """One policy evaluation shared by guards and access explanations."""
 
-    Admins always get the full set (lockout protection). Everyone else gets
-    ``role_defaults plus grants minus denies``.
+    effective: frozenset[str]
+    role_defaults: frozenset[str]
+    role_caps: frozenset[str]
+    dynamic_caps: frozenset[str]
+    overrides: tuple[tuple[str, str, datetime | None], ...]
+    evaluated_at: datetime
+    valid_until: datetime | None
 
-    Memoized on the ``User`` instance (request-scoped — one instance per request
-    via ``get_current_user``) so the repeated ``has_capability`` checks a single
-    request makes don't re-run the two permission queries each time.
-    """
-    cached: frozenset[str] | None = getattr(user, "_effective_caps_cache", None)
-    if cached is not None:
-        return set(cached)
 
+def resolve_capabilities(
+    db: Session,
+    user: User,
+    *,
+    proposed: list[tuple[str, str | None, datetime | None]] = (),
+    now: datetime | None = None,
+) -> CapabilityResolution:
+    now = now or datetime.now(UTC).replace(tzinfo=None)
     role_caps, dynamic_caps = _role_and_dynamic_caps(db, user.role)
+    rows = {
+        row.capability: (row.effect, row.expires_at)
+        for row in db.scalars(select(UserPermission).where(UserPermission.user_id == user.id))
+    }
+    for capability, effect, expiry in proposed:
+        if effect is None:
+            rows.pop(capability, None)
+        else:
+            rows[capability] = (effect, expiry)
+    baseline = role_caps | dynamic_caps
     if user.role == ADMIN_ROLE:
-        # Admin gets every recognized dynamic capability (including opt-in
-        # new-form services), not just the auto-granted subset — lockout
-        # protection must never depend on an opt-in rollout.
-        caps = set(ALL_CAPABILITIES) | dynamic_capability_ids(db)
-    else:
-        caps = role_caps | dynamic_caps
-        overrides = (
-            db.execute(select(UserPermission).where(UserPermission.user_id == user.id))
-            .scalars()
-            .all()
-        )
-        now = datetime.now(UTC).replace(tzinfo=None)
-        for ov in overrides:
-            if ov.effect == "grant":
-                if ov.expires_at is not None and ov.expires_at <= now:
-                    if ov.capability in role_caps or ov.capability in dynamic_caps:
-                        caps.discard(ov.capability)
-                    continue
-                caps.add(ov.capability)
-            elif ov.effect == "deny":
-                caps.discard(ov.capability)
+        baseline = set(ALL_CAPABILITIES) | dynamic_capability_ids(db)
+    caps = set(baseline)
+    if user.role != ADMIN_ROLE:
+        for capability, (effect, expiry) in rows.items():
+            if effect == "deny" or (expiry is not None and expiry <= now):
+                caps.discard(capability)
+            elif effect == "grant":
+                caps.add(capability)
         if user.role == INMATE_REPORTER_ROLE:
-            # Hard ceiling: a grant override (or a stale/edited role_permissions
-            # default) can never widen this role past its fixed scope. A deny
-            # override still narrows it — it was already applied above.
             caps &= INMATE_REPORTER_CAPS
+            baseline &= INMATE_REPORTER_CAPS
+    expiries = [
+        expiry for effect, expiry in rows.values()
+        if effect == "grant" and expiry is not None and expiry > now
+        and user.role != ADMIN_ROLE
+    ]
+    return CapabilityResolution(
+        frozenset(caps), frozenset(baseline), frozenset(role_caps),
+        frozenset(dynamic_caps),
+        tuple((cap, effect, expiry) for cap, (effect, expiry) in sorted(rows.items())),
+        now, min(expiries, default=None),
+    )
 
-    user._effective_caps_cache = frozenset(caps)
-    return caps
+
+def effective_caps(db: Session, user: User) -> set[str]:
+    """Project structured resolution, preserving request-scoped guard caching."""
+    cached: frozenset[str] | None = getattr(user, "_effective_caps_cache", None)
+    if cached is None:
+        cached = resolve_capabilities(db, user).effective
+        user._effective_caps_cache = cached
+    return set(cached)
 
 
 def has_capability(db: Session, user: User, capability: str) -> bool:
