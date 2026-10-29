@@ -1,9 +1,18 @@
 from datetime import UTC, date, datetime
 
 from app.api.v1.employees import list_employee_leaves, list_employee_violations
-from app.db.models import Document, DutyAssignmentEvent, Employee, Leave, Violation
+from app.db.models import (
+    Absence,
+    Document,
+    DutyAssignmentEvent,
+    Employee,
+    Leave,
+    UserPermission,
+    Violation,
+)
 from app.services import document_service
 from app.services.employee_detail_service import get_employee_detail
+from tests.conftest import make_user
 
 
 def test_employee_detail_recent_activity_includes_recorded_duty_locations(db_session, admin_user):
@@ -163,3 +172,56 @@ def test_linked_document_lookup_avoids_queries_for_empty_ids(db_session, count_q
         assert document_service.documents_for_violations(db_session, []) == {}
 
     assert query_count.count == 0
+
+
+def test_detail_leave_privacy_preserves_internal_reads_and_unrelated_history(db_session):
+    viewer = make_user(db_session, email="leave-private@test.ae")
+    employee = Employee(id="G-LEAVE-DETAIL", name_en="Private Leave Employee", status="Active")
+    today = date.today()
+    leave = Leave(
+        employee_id=employee.id,
+        leave_type="Annual Leave",
+        start_date=today,
+        end_date=today,
+        days=1,
+        status="Approved",
+    )
+    absence = Absence(employee_id=employee.id, date=today, note="Private absence")
+    violation = Violation(
+        employee_id=employee.id,
+        date=today,
+        violation_type="Late Arrival",
+        status="Open",
+    )
+    db_session.add_all(
+        [
+            employee,
+            leave,
+            absence,
+            violation,
+            UserPermission(user_id=viewer.id, capability="leaves.view", effect="deny"),
+        ]
+    )
+    db_session.commit()
+
+    hidden = get_employee_detail(db_session, employee.id, user=viewer)
+    assert hidden is not None
+    assert hidden.stats.leaves_taken_days is None
+    assert hidden.stats.leaves_allowed_days is None
+    assert hidden.stats.absence_days is None
+    assert hidden.recent_leaves == hidden.recent_absences == []
+    assert {item.kind for item in hidden.recent_activity} == {"violation"}
+    assert hidden.stats.violations == 1
+
+    internal = get_employee_detail(db_session, employee.id)
+    assert internal is not None
+    assert internal.stats.leaves_taken_days == 1
+    assert internal.stats.leaves_allowed_days == 30
+    assert internal.stats.absence_days == 1
+    assert [row.id for row in internal.recent_leaves] == [leave.id]
+    assert [row.id for row in internal.recent_absences] == [absence.id]
+    assert {item.kind for item in internal.recent_activity} == {"leave", "absence", "violation"}
+    assert hidden.employee == internal.employee
+    assert hidden.recent_violations == internal.recent_violations
+    assert hidden.missing_fields == internal.missing_fields
+    assert hidden.completeness == internal.completeness

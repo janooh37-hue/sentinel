@@ -14,6 +14,11 @@ Filter rules:
   violation timeline events. ``stats.violations`` is then ``0``: the
   ``EmployeeStatsRead`` field is a plain ``int``, unlike the dashboard's
   nullable ``open_violations_count``, which reports a deny as ``null``.
+- Without ``leaves.view``, leave/absence stats are ``None``, recent lists are
+  empty, and their timeline events are omitted. Null distinguishes forbidden
+  facts from an authorized empty history; unrelated employee data stays visible.
+- Employee message history remains readable under ``employees.view``; sending
+  and delivery-status capabilities do not impose a history privacy boundary.
 - Tenure is derived from ``Employee.doj`` (the column v3 used; ``doj_company``
   is the start at this specific company, but historical data keeps it equal to
   ``doj`` for most rows — sticking with ``doj`` matches the dashboard service).
@@ -59,6 +64,7 @@ def get_employee_detail(
 
     tenure_years = _tenure_years(emp.doj)
     can_view_violations = user is None or perm_service.has_capability(db, user, "violations.view")
+    can_view_leaves = user is None or perm_service.has_capability(db, user, "leaves.view")
     ledger_visible = ledger_service.related_book_visible(db, user)
     doc_filters = [models.Document.employee_id == emp.id, models.Document.ref_number != "DRAFT"]
     ledger_filters = [
@@ -85,14 +91,18 @@ def get_employee_detail(
     # ``leaves_allowed_days`` (a 30-day annual allowance). Summing the
     # employee's entire tenure here would be misleading on the UI.
     current_year = date.today().year
-    leave_days = int(
-        db.execute(
-            select(func.coalesce(func.sum(models.Leave.days), 0))
-            .where(models.Leave.employee_id == emp.id)
-            .where(models.Leave.status == _APPROVED_STATUS)
-            .where(models.Leave.deleted_at.is_(None))
-            .where(func.extract("year", models.Leave.start_date) == current_year)
-        ).scalar_one()
+    leave_days = (
+        int(
+            db.execute(
+                select(func.coalesce(func.sum(models.Leave.days), 0))
+                .where(models.Leave.employee_id == emp.id)
+                .where(models.Leave.status == _APPROVED_STATUS)
+                .where(models.Leave.deleted_at.is_(None))
+                .where(func.extract("year", models.Leave.start_date) == current_year)
+            ).scalar_one()
+        )
+        if can_view_leaves
+        else None
     )
 
     violation_count = (
@@ -108,12 +118,16 @@ def get_employee_detail(
     )
     # Absence rows are day-level facts; the stat is the current calendar year,
     # same scoping as ``leaves_taken_days``.
-    absence_days = int(
-        db.execute(
-            select(func.count(models.Absence.id))
-            .where(models.Absence.employee_id == emp.id)
-            .where(func.extract("year", models.Absence.date) == current_year)
-        ).scalar_one()
+    absence_days = (
+        int(
+            db.execute(
+                select(func.count(models.Absence.id))
+                .where(models.Absence.employee_id == emp.id)
+                .where(func.extract("year", models.Absence.date) == current_year)
+            ).scalar_one()
+        )
+        if can_view_leaves
+        else None
     )
 
     ledger_count = int(
@@ -123,7 +137,7 @@ def get_employee_detail(
     stats = sx.EmployeeStatsRead(
         documents=doc_count,
         leaves_taken_days=leave_days,
-        leaves_allowed_days=DEFAULT_LEAVE_ALLOWANCE_DAYS,
+        leaves_allowed_days=DEFAULT_LEAVE_ALLOWANCE_DAYS if can_view_leaves else None,
         violations=violation_count,
         absence_days=absence_days,
         ledger_count=ledger_count,
@@ -147,16 +161,20 @@ def get_employee_detail(
             )
         )
 
-    recent_leaves = [
-        sx.RecentLeaveRead.model_validate(lv)
-        for lv in db.scalars(
-            select(models.Leave)
-            .where(models.Leave.employee_id == emp.id)
-            .where(models.Leave.deleted_at.is_(None))
-            .order_by(models.Leave.start_date.desc())
-            .limit(RECENT_LIMIT)
-        )
-    ]
+    recent_leaves = (
+        [
+            sx.RecentLeaveRead.model_validate(lv)
+            for lv in db.scalars(
+                select(models.Leave)
+                .where(models.Leave.employee_id == emp.id)
+                .where(models.Leave.deleted_at.is_(None))
+                .order_by(models.Leave.start_date.desc())
+                .limit(RECENT_LIMIT)
+            )
+        ]
+        if can_view_leaves
+        else []
+    )
 
     recent_violations = (
         [
@@ -186,15 +204,19 @@ def get_employee_detail(
         for violation in recent_violations
     ]
 
-    recent_absences = [
-        sx.RecentAbsenceRead.model_validate(a)
-        for a in db.scalars(
-            select(models.Absence)
-            .where(models.Absence.employee_id == emp.id)
-            .order_by(models.Absence.date.desc())
-            .limit(RECENT_LIMIT)
-        )
-    ]
+    recent_absences = (
+        [
+            sx.RecentAbsenceRead.model_validate(a)
+            for a in db.scalars(
+                select(models.Absence)
+                .where(models.Absence.employee_id == emp.id)
+                .order_by(models.Absence.date.desc())
+                .limit(RECENT_LIMIT)
+            )
+        ]
+        if can_view_leaves
+        else []
+    )
 
     recent_ledger = [
         sx.RecentLedgerRead.model_validate(le)

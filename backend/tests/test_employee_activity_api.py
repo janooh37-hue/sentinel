@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,6 +16,7 @@ from app.db.models import (
     BookVersion,
     Document,
     Employee,
+    Leave,
     User,
     UserPermission,
 )
@@ -413,3 +414,56 @@ def test_activity_omits_documents_of_soft_deleted_records_for_admins(api_db: Ses
     assert response.status_code == 200
     assert response.json()["items"] == []
     assert response.json()["total"] == 0
+
+
+@pytest.mark.parametrize("deny_leaves", [False, True])
+def test_activity_leave_privacy_applies_before_pagination_and_totals(
+    api_db: Session, manager_client: TestClient, deny_leaves: bool
+):
+    manager = api_db.query(User).filter_by(email="mgr@x.ae").one()
+    leaves = [
+        Leave(
+            employee_id="G100",
+            leave_type="Annual Leave",
+            start_date=date(2026, 10, day),
+            end_date=date(2026, 10, day),
+            days=1,
+            status="Approved",
+            created_at=datetime(2030, 10, day),
+        )
+        for day in range(1, 6)
+    ]
+    api_db.add_all(leaves)
+    if deny_leaves:
+        api_db.add(
+            UserPermission(user_id=manager.id, capability="leaves.view", effect="deny")
+        )
+    api_db.commit()
+
+    total = 1 if deny_leaves else 6
+    seen = []
+    for offset in range(total + 1):
+        response = manager_client.get(
+            "/api/v1/employees/activity",
+            params={"employee_id": "G100", "limit": 1, "offset": offset},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["total"] == total
+        assert len(body["items"]) == (1 if offset < total else 0)
+        seen.extend((row["kind"], row["source_id"]) for row in body["items"])
+    assert seen[-1] == ("document", 11)
+    assert {source_id for kind, source_id in seen if kind == "leave"} == (
+        set() if deny_leaves else {leave.id for leave in leaves}
+    )
+    for employee_filter in ({}, {"employee_id": "G100"}):
+        response = manager_client.get(
+            "/api/v1/employees/activity",
+            params={"kind": "leave", **employee_filter},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["total"] == (0 if deny_leaves else 5)
+        assert {row["source_id"] for row in body["items"]} == (
+            set() if deny_leaves else {leave.id for leave in leaves}
+        )

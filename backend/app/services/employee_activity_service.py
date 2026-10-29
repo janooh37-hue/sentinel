@@ -348,7 +348,11 @@ def list_employee_activity(
     # owner_user_id is the caller: rows about Records they cannot open are hidden.
     caller = db.get(User, owner_user_id)
     sources: list[tuple[list[EmployeeActivityItemRead], int]] = []
-    if kind in (None, "leave"):
+    if (
+        kind in (None, "leave")
+        and caller is not None
+        and perm_service.has_capability(db, caller, "leaves.view")
+    ):
         sources.append(_leaves(db, employee_id=employee_id, requested=requested))
     if (
         kind in (None, "violation")

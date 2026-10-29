@@ -26,12 +26,13 @@ from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
 
 class EmployeeStatsRead(BaseModel):
     documents: int
-    leaves_taken_days: int
-    leaves_allowed_days: int
+    #: Null means leave facts are forbidden, not an empty leave history.
+    leaves_taken_days: int | None
+    leaves_allowed_days: int | None
     violations: int
     #: Days marked absent in the current calendar year — the record-side count,
     #: scoped like ``leaves_taken_days`` so the figures stay comparable.
-    absence_days: int
+    absence_days: int | None
     ledger_count: int
     tenure_years: float
 
