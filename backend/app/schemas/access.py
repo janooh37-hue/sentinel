@@ -25,7 +25,15 @@ class Action(StrEnum):
 
 
 class Resource(AccessModel):
-    kind: Literal["capability", "service", "book", "notification_template", "email_template", "word_template", "editor_template"]
+    kind: Literal[
+        "capability",
+        "service",
+        "book",
+        "notification_template",
+        "email_template",
+        "word_template",
+        "editor_template",
+    ]
     id: str = Field(min_length=1, max_length=128)
     revision_id: int | None = Field(default=None, ge=1)
 
@@ -36,6 +44,7 @@ class Context(AccessModel):
     classification_id: str | int | None = None
 
     grade: str | None = None
+
 
 class Patch(AccessModel):
     capability: str = Field(min_length=1, max_length=64)

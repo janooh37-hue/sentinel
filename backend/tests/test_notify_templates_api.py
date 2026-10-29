@@ -202,10 +202,34 @@ def test_unknown_event_is_not_found(api_db, template_client):
 @pytest.mark.parametrize(
     "kind,capability,read_path,write_path,read_allowed",
     [
-        ("notification_template", "messages.templates", "/notify/templates", "/notify/templates/violation", True),
-        ("email_template", "messages.templates", "/email/draft-templates", "/email/draft-templates/ledger.new", True),
-        ("word_template", "books.templates", "/books/word-templates", "/books/word-templates/missing", False),
-        ("editor_template", "editor_templates.manage", "/editor-templates", "/editor-templates/1", False),
+        (
+            "notification_template",
+            "messages.templates",
+            "/notify/templates",
+            "/notify/templates/violation",
+            True,
+        ),
+        (
+            "email_template",
+            "messages.templates",
+            "/email/draft-templates",
+            "/email/draft-templates/ledger.new",
+            True,
+        ),
+        (
+            "word_template",
+            "books.templates",
+            "/books/word-templates",
+            "/books/word-templates/missing",
+            False,
+        ),
+        (
+            "editor_template",
+            "editor_templates.manage",
+            "/editor-templates",
+            "/editor-templates/1",
+            False,
+        ),
     ],
 )
 def test_template_family_decisions_match_denied_consumer_routes(
@@ -225,7 +249,10 @@ def test_template_family_decisions_match_denied_consumer_routes(
     assert edit.allowed is False
     assert client.delete("/api/v1" + write_path).status_code == 403
     if kind == "notification_template":
-        assert client.post(
-            "/api/v1/notify/templates/violation/render",
-            json={"ar": "مرحبا {name}", "en": "Hello {name}"},
-        ).status_code == 200
+        assert (
+            client.post(
+                "/api/v1/notify/templates/violation/render",
+                json={"ar": "مرحبا {name}", "en": "Hello {name}"},
+            ).status_code
+            == 200
+        )

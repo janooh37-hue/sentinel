@@ -1,4 +1,5 @@
 """Pure fixed-role route restrictions shared by auth and access diagnostics."""
+
 from __future__ import annotations
 
 from app.api.errors import AppError

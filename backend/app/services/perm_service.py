@@ -158,16 +158,22 @@ def resolve_capabilities(
             caps &= INMATE_REPORTER_CAPS
             baseline &= INMATE_REPORTER_CAPS
     expiries = [
-        expiry for capability, (effect, expiry) in rows.items()
-        if effect == "grant" and expiry is not None and expiry > now
+        expiry
+        for capability, (effect, expiry) in rows.items()
+        if effect == "grant"
+        and expiry is not None
+        and expiry > now
         and user.role != ADMIN_ROLE
         and (user.role != INMATE_REPORTER_ROLE or capability in INMATE_REPORTER_CAPS)
     ]
     return CapabilityResolution(
-        frozenset(caps), frozenset(baseline), frozenset(role_caps),
+        frozenset(caps),
+        frozenset(baseline),
+        frozenset(role_caps),
         frozenset(dynamic_caps),
         tuple((cap, effect, expiry) for cap, (effect, expiry) in sorted(rows.items())),
-        now, min(expiries, default=None),
+        now,
+        min(expiries, default=None),
     )
 
 

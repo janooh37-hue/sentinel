@@ -435,9 +435,7 @@ def test_activity_leave_privacy_applies_before_pagination_and_totals(
     ]
     api_db.add_all(leaves)
     if deny_leaves:
-        api_db.add(
-            UserPermission(user_id=manager.id, capability="leaves.view", effect="deny")
-        )
+        api_db.add(UserPermission(user_id=manager.id, capability="leaves.view", effect="deny"))
     api_db.commit()
 
     total = 1 if deny_leaves else 6

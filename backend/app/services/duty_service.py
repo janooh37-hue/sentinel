@@ -247,7 +247,6 @@ def transfer(
         db.commit()
         return DutyTransferResult(moved=[emp.id for emp, _, _ in rows])
 
-
     # Otherwise mint the transfer letter. Build the body from CURRENT (FROM)
     # locations BEFORE mutating.
     body_html = _build_body_html(rows)

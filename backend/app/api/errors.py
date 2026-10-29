@@ -104,7 +104,9 @@ def install_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError) -> JSONResponse:
-        return JSONResponse(status_code=exc.http_status, content=exc.envelope(), headers=_privacy_headers(request))
+        return JSONResponse(
+            status_code=exc.http_status, content=exc.envelope(), headers=_privacy_headers(request)
+        )
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:

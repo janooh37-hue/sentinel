@@ -833,7 +833,11 @@ def audit_permission_change(
         actor,
         "set_permission",
         user,
-        {"capability": capability, "effect": effect or "default", "expires_at": expires_at.isoformat() if expires_at is not None else None},
+        {
+            "capability": capability,
+            "effect": effect or "default",
+            "expires_at": expires_at.isoformat() if expires_at is not None else None,
+        },
     )
     if commit:
         db.commit()

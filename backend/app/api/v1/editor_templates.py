@@ -66,15 +66,11 @@ def get_template(
     _user: Annotated[User, Depends(require_template_action("editor_template", "read"))],
     include_deleted: bool = False,
 ) -> EditorTemplateRead:
-    row = editor_template_service.get_template(
-        db, template_id, include_deleted=include_deleted
-    )
+    row = editor_template_service.get_template(db, template_id, include_deleted=include_deleted)
     return EditorTemplateRead.model_validate(row)
 
 
-@router.post(
-    "", response_model=EditorTemplateRead, status_code=status.HTTP_201_CREATED
-)
+@router.post("", response_model=EditorTemplateRead, status_code=status.HTTP_201_CREATED)
 def create_template(
     payload: EditorTemplateCreate,
     db: Annotated[Session, Depends(get_db)],

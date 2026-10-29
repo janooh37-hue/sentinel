@@ -144,9 +144,7 @@ def test_employee_leave_and_absence_reads_require_both_capabilities(records, den
     records.db.add_all(
         [
             empty,
-            UserPermission(
-                user_id=records.reader.id, capability=denied_capability, effect="deny"
-            ),
+            UserPermission(user_id=records.reader.id, capability=denied_capability, effect="deny"),
         ]
     )
     records.db.commit()
@@ -185,9 +183,7 @@ def test_leave_deny_masks_aggregate_facts_but_preserves_employee_and_message_his
             absence,
             message,
             UserPermission(user_id=records.reader.id, capability="leaves.view", effect="deny"),
-            UserPermission(
-                user_id=records.reader.id, capability="employees.notify", effect="deny"
-            ),
+            UserPermission(user_id=records.reader.id, capability="employees.notify", effect="deny"),
         ]
     )
     records.db.commit()
@@ -228,7 +224,9 @@ def test_leave_deny_masks_aggregate_facts_but_preserves_employee_and_message_his
         assert detail["recent_leaves"][0]["id"] == records.leave.id
         assert detail["recent_absences"][0]["id"] == absence.id
         assert {row["kind"] for row in detail["recent_activity"]} == {
-            "leave", "absence", "violation"
+            "leave",
+            "absence",
+            "violation",
         }
     finally:
         assert _state(records) == before
@@ -256,7 +254,6 @@ def test_authorized_empty_leave_history_is_not_forbidden(records):
     assert detail["stats"]["absence_days"] == 0
     assert detail["recent_leaves"] == []
     assert detail["recent_absences"] == []
-
 
 
 def _revision(records, book, number):

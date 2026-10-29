@@ -24,7 +24,6 @@ from app.services import auth_service, perm_service, role_route_service
 COOKIE_NAME = "gssg_session"
 
 
-
 def settings_dep() -> Settings:
     return get_settings()
 

@@ -16,6 +16,18 @@ PATCH /auth/users/{id}/role
 PATCH /auth/users/{id}/link
 POST  /auth/users/{id}/disable | /unlock
 POST  /auth/users/{id}/default-manager
+GET   /auth/users/{id}/effective-access
+POST  /auth/users/{id}/effective-access/preview
+POST  /auth/users/{id}/check-access
+GET   /auth/users/{id}/permissions         (legacy projection with ETag)
+PUT   /auth/users/{id}/permissions[/bulk]  (If-Match required)
+
+Access diagnostics never impersonate the subject or perform business writes.
+Use the summary revision (or ETag) for conditional saves: a missing token is 428,
+a stale policy/expiry token is 412, and the entire patch plus audit is atomic.
+Record checks report a separate redacted resource revision in their reasons;
+that revision is not an account-policy save token. Direct-recipient/reviewer
+record reads and employee message history under employees.view remain intact.
 
 Admin or manager (require_admin_or_manager):
 GET /auth/secret-clearance
@@ -37,7 +49,14 @@ from app.core import ratelimit
 from app.core.roles import ADMIN_ROLE
 from app.db.models import User
 from app.db.session import get_db
-from app.schemas.access import AccessSnapshot, CheckRequest, CheckResponse, Patch, PreviewRequest, PreviewResponse
+from app.schemas.access import (
+    AccessSnapshot,
+    CheckRequest,
+    CheckResponse,
+    Patch,
+    PreviewRequest,
+    PreviewResponse,
+)
 from app.schemas.auth import (
     AdminUserCreateRequest,
     AdminUserCreateResult,
@@ -477,20 +496,26 @@ def set_secret_clearance(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-def _permission_read(db: Session, user: User, response: Response, actor: User) -> UserPermissionRead:
+def _permission_read(
+    db: Session, user: User, response: Response, actor: User
+) -> UserPermissionRead:
     current = access_decision_service.snapshot(db, user, actor)
     response.headers["ETag"] = f'"{current.revision}"'
     response.headers["Cache-Control"] = "no-store"
     return UserPermissionRead(
-        user_id=user.id, role=user.role, is_admin=user.role == ADMIN_ROLE,
-        effective=current.effective, role_defaults=current.role_defaults,
+        user_id=user.id,
+        role=user.role,
+        is_admin=user.role == ADMIN_ROLE,
+        effective=current.effective,
+        role_defaults=current.role_defaults,
         overrides={item.capability: item.effect for item in current.overrides},
     )
 
 
 @router.get("/users/{user_id}/effective-access", response_model=AccessSnapshot)
 def get_effective_access(
-    user_id: int, response: Response,
+    user_id: int,
+    response: Response,
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[Session, Depends(get_db)],
 ) -> AccessSnapshot:
@@ -502,17 +527,23 @@ def get_effective_access(
 
 @router.post("/users/{user_id}/effective-access/preview", response_model=PreviewResponse)
 def preview_effective_access(
-    user_id: int, body: PreviewRequest, response: Response,
+    user_id: int,
+    body: PreviewRequest,
+    response: Response,
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[Session, Depends(get_db)],
 ) -> PreviewResponse:
     response.headers["Cache-Control"] = "no-store"
-    return access_decision_service.preview(db, auth_service.require_user(db, user_id), admin, body.expected_revision, body.items)
+    return access_decision_service.preview(
+        db, auth_service.require_user(db, user_id), admin, body.expected_revision, body.items
+    )
 
 
 @router.post("/users/{user_id}/check-access", response_model=CheckResponse)
 def check_access(
-    user_id: int, body: CheckRequest, response: Response,
+    user_id: int,
+    body: CheckRequest,
+    response: Response,
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CheckResponse:
@@ -522,7 +553,8 @@ def check_access(
 
 @router.get("/users/{user_id}/permissions", response_model=UserPermissionRead)
 def get_user_permissions(
-    user_id: int, response: Response,
+    user_id: int,
+    response: Response,
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[Session, Depends(get_db)],
 ) -> UserPermissionRead:
@@ -531,7 +563,9 @@ def get_user_permissions(
 
 @router.put("/users/{user_id}/permissions", response_model=UserPermissionRead)
 def set_user_permission(
-    user_id: int, body: SetPermissionRequest, response: Response,
+    user_id: int,
+    body: SetPermissionRequest,
+    response: Response,
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[Session, Depends(get_db)],
     if_match: Annotated[str | None, Header()] = None,
@@ -542,7 +576,9 @@ def set_user_permission(
 
 @router.put("/users/{user_id}/permissions/bulk", response_model=UserPermissionRead)
 def set_user_permissions_bulk(
-    user_id: int, body: SetPermissionBulkRequest, response: Response,
+    user_id: int,
+    body: SetPermissionBulkRequest,
+    response: Response,
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[Session, Depends(get_db)],
     if_match: Annotated[str | None, Header()] = None,

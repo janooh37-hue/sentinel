@@ -221,7 +221,11 @@ def test_transfer_does_not_invent_view_or_employee_edit_prerequisites(
     for capability in ("books.view", "employees.edit", "books.servicerecords.General Book"):
         perm_service.set_user_override(db_session, operator.id, capability, "deny")
     if initial_placement:
-        for capability in ("books.category.GS", "books.service.General Book", "books.category.12/1"):
+        for capability in (
+            "books.category.GS",
+            "books.service.General Book",
+            "books.category.12/1",
+        ):
             perm_service.set_user_override(db_session, operator.id, capability, "deny")
     caps = perm_service.effective_caps(db_session, operator)
     assert duty_transfer_decision(caps, initial_placement=initial_placement).allowed
