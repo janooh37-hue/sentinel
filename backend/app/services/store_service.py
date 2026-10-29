@@ -14,7 +14,8 @@ import math
 import re
 import uuid
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -136,6 +137,43 @@ def _require_not_future(value: date, field_name: str) -> None:
         )
 
 
+@contextmanager
+def _write(
+    db: Session,
+    *,
+    commit: bool = True,
+    on_integrity: Callable[[], None] | None = None,
+) -> Iterator[None]:
+    """One Store write: lock first, then read, check, and write atomically.
+
+    Taking SQLite's write lock before the first read makes every check (first-use
+    Batch, archive with stock, contains lock, disposal limit) and its write one
+    serial step. With ``commit=False`` the caller owns the transaction: the work
+    is only flushed and nothing is rolled back here. A residual constraint
+    violation becomes a domain 409, never a 500.
+    """
+    if commit:
+        begin_immediate_if_idle(db)
+    try:
+        yield
+        if commit:
+            db.commit()
+        else:
+            db.flush()
+    except IntegrityError as exc:
+        if commit:
+            db.rollback()
+        if on_integrity is not None:
+            on_integrity()
+        raise ConflictError(
+            "STORE_WRITE_CONFLICT", "The Store changed meanwhile; refresh and retry."
+        ) from exc
+    except BaseException:
+        if commit:
+            db.rollback()
+        raise
+
+
 # ── Derived stock (counts + deliveries - disposals) ──────────────────────────
 
 
@@ -185,6 +223,24 @@ class _Ledger:
             None,
         )
         return self._balance(base, day, include_end=False)
+
+    def disposable(self, batch_id: int, day: date, *, as_of: date) -> int:
+        """Most a Disposal dated ``day`` may remove from one Batch.
+
+        The Batch's stock on ``day`` (after a count that day, with every event up
+        to and including ``day``), and at every later movement until the next
+        Stock count resets the shelf (or until ``as_of`` when none follows), so a
+        backdated Disposal can never drive a later balance below zero.
+        """
+        next_count = next((c.counted_on for c in self.counts if c.counted_on > day), None)
+        points = {day} | {
+            event.on
+            for event in self.events
+            if event.batch_id == batch_id
+            and day < event.on <= as_of
+            and (next_count is None or event.on < next_count)
+        }
+        return min(self.on_hand(point).get(batch_id, 0) for point in points)
 
     def usage_windows(self, item_of: dict[int, int]) -> list[tuple[str, dict[int, int | None]]]:
         """Monthly usage per item for each pair of consecutive Stock counts.
@@ -404,13 +460,17 @@ def _raise_category_exists(name_en: str) -> None:
 
 
 def create_category(
-    db: Session, payload: StoreCategoryCreate, *, actor: str | None = None
+    db: Session,
+    payload: StoreCategoryCreate,
+    *,
+    actor: str | None = None,
+    commit: bool = True,
 ) -> StoreCategoryRead:
     name_en = payload.name_en.strip()
-    if _category_name_taken(db, name_en):
-        _raise_category_exists(name_en)
-    row = StoreCategory(name_en=name_en, name_ar=payload.name_ar.strip())
-    try:
+    with _write(db, commit=commit, on_integrity=lambda: _raise_category_exists(name_en)):
+        if _category_name_taken(db, name_en):
+            _raise_category_exists(name_en)
+        row = StoreCategory(name_en=name_en, name_ar=payload.name_ar.strip())
         db.add(row)
         db.flush()
         _add_audit(
@@ -421,38 +481,24 @@ def create_category(
             actor,
             {"name_en": row.name_en, "name_ar": row.name_ar},
         )
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        _raise_category_exists(name_en)
-    except Exception:
-        db.rollback()
-        raise
     return StoreCategoryRead.model_validate(row)
 
 
 def update_category(
     db: Session, category_id: int, payload: StoreCategoryUpdate, *, actor: str | None = None
 ) -> StoreCategoryRead:
-    row = _get_category(db, category_id)
     data = payload.model_dump(exclude_unset=True, exclude_none=True)
     if "name_en" in data:
         data["name_en"] = data["name_en"].strip()
-        if _category_name_taken(db, data["name_en"], exclude_id=row.id):
-            _raise_category_exists(data["name_en"])
     if "name_ar" in data:
         data["name_ar"] = data["name_ar"].strip()
-    try:
+    with _write(db, on_integrity=lambda: _raise_category_exists(str(data.get("name_en")))):
+        row = _get_category(db, category_id)
+        if "name_en" in data and _category_name_taken(db, data["name_en"], exclude_id=row.id):
+            _raise_category_exists(data["name_en"])
         for key, value in data.items():
             setattr(row, key, value)
         _add_audit(db, "category.updated", "store_category", row.id, actor, data)
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        _raise_category_exists(str(data.get("name_en")))
-    except Exception:
-        db.rollback()
-        raise
     return StoreCategoryRead.model_validate(row)
 
 
@@ -528,10 +574,10 @@ def create_item(
     *,
     actor: str | None = None,
     actor_user_id: int | None = None,
+    commit: bool = True,
 ) -> StoreItem:
     _check_contains(payload.contains_qty, payload.contains_unit_en, payload.contains_unit_ar)
-    try:
-        begin_immediate_if_idle(db)
+    with _write(db, commit=commit):
         _get_category(db, payload.category_id)
         row = StoreItem(
             code=_next_code(db),
@@ -556,10 +602,6 @@ def create_item(
             actor,
             {"code": row.code, "name_en": row.name_en, "category_id": row.category_id},
         )
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
     return get_item(db, row.id)
 
 
@@ -590,8 +632,6 @@ def update_item(
     if_match: str | None,
     actor: str | None = None,
 ) -> StoreItem:
-    row = get_item(db, item_id)
-    require_if_match(if_match, _item_etag(row), code="STORE_ITEM_VERSION_CONFLICT")
     data = payload.model_dump(exclude_unset=True)
     cleared = sorted(key for key in _REQUIRED_ITEM_FIELDS if key in data and data[key] is None)
     if cleared:
@@ -601,66 +641,54 @@ def update_item(
     for key in ("name_en", "counting_unit_en", "counting_unit_ar"):
         if key in data:
             data[key] = data[key].strip()
-    if any(key in data for key in _CONTAINS_FIELDS):
-        new_contains = tuple(data.get(key, getattr(row, key)) for key in _CONTAINS_FIELDS)
-        _check_contains(*new_contains)
-        old_contains = tuple(getattr(row, key) for key in _CONTAINS_FIELDS)
-        if new_contains != old_contains and _item_has_lines(db, row.id):
-            raise ConflictError(
-                "STORE_ITEM_CONTAINS_LOCKED",
-                "What a Counting unit contains cannot change once the item has stock records.",
-                item_id=row.id,
-            )
-    if "category_id" in data:
-        _get_category(db, data["category_id"])
-    try:
+    with _write(db):
+        row = get_item(db, item_id)
+        require_if_match(if_match, _item_etag(row), code="STORE_ITEM_VERSION_CONFLICT")
+        if any(key in data for key in _CONTAINS_FIELDS):
+            new_contains = tuple(data.get(key, getattr(row, key)) for key in _CONTAINS_FIELDS)
+            _check_contains(*new_contains)
+            old_contains = tuple(getattr(row, key) for key in _CONTAINS_FIELDS)
+            if new_contains != old_contains and _item_has_lines(db, row.id):
+                raise ConflictError(
+                    "STORE_ITEM_CONTAINS_LOCKED",
+                    "What a Counting unit contains cannot change once the item has stock records.",
+                    item_id=row.id,
+                )
+        if "category_id" in data:
+            _get_category(db, data["category_id"])
         for key, value in data.items():
             setattr(row, key, value)
         row.updated_at = _utcnow()
         _add_audit(db, "item.updated", "store_item", row.id, actor, data)
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
     return get_item(db, row.id)
 
 
 def archive_item(db: Session, item_id: int, *, actor: str | None = None) -> StoreItem:
-    row = get_item(db, item_id)
-    if row.archived_at is not None:
-        return row
-    on_hand = _item_on_hand(db, _load_ledger(db), today()).get(row.id, 0)
-    if on_hand > 0:
-        raise ConflictError(
-            "STORE_ITEM_HAS_STOCK",
-            "A Store item with stock on hand cannot be archived.",
-            item_id=row.id,
-            on_hand=on_hand,
-        )
-    try:
-        row.archived_at = _utcnow()
-        row.updated_at = row.archived_at
-        _add_audit(db, "item.archived", "store_item", row.id, actor, {"code": row.code})
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    return get_item(db, row.id)
+    with _write(db):
+        row = get_item(db, item_id)
+        if row.archived_at is None:
+            on_hand = _item_on_hand(db, _load_ledger(db), today()).get(row.id, 0)
+            if on_hand > 0:
+                raise ConflictError(
+                    "STORE_ITEM_HAS_STOCK",
+                    "A Store item with stock on hand cannot be archived.",
+                    item_id=row.id,
+                    on_hand=on_hand,
+                )
+            row.archived_at = _utcnow()
+            row.updated_at = row.archived_at
+            _add_audit(db, "item.archived", "store_item", row.id, actor, {"code": row.code})
+    return get_item(db, item_id)
 
 
 def restore_item(db: Session, item_id: int, *, actor: str | None = None) -> StoreItem:
-    row = get_item(db, item_id)
-    if row.archived_at is None:
-        return row
-    try:
-        row.archived_at = None
-        row.updated_at = _utcnow()
-        _add_audit(db, "item.restored", "store_item", row.id, actor, {"code": row.code})
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    return get_item(db, row.id)
+    with _write(db):
+        row = get_item(db, item_id)
+        if row.archived_at is not None:
+            row.archived_at = None
+            row.updated_at = _utcnow()
+            _add_audit(db, "item.restored", "store_item", row.id, actor, {"code": row.code})
+    return get_item(db, item_id)
 
 
 # ── Batches ──────────────────────────────────────────────────────────────────
@@ -805,7 +833,7 @@ def create_delivery(
     actor_user_id: int | None = None,
 ) -> StoreDeliveryRead:
     _require_not_future(payload.received_on, "received_on")
-    try:
+    with _write(db):
         resolved = _resolve_lines(db, payload.lines)
         row = StoreDelivery(
             received_on=payload.received_on,
@@ -826,10 +854,6 @@ def create_delivery(
                 "lines": [{"batch_id": b.id, "quantity": q} for b, q in resolved],
             },
         )
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
     db.expire_all()
     return get_delivery(db, row.id)
 
@@ -847,10 +871,10 @@ def _resolve_stored_path(relative: str, delivery_id: int) -> Path:
 
 
 def delete_delivery(db: Session, delivery_id: int, *, actor: str | None = None) -> None:
-    row = _get_delivery(db, delivery_id)
-    batch_ids = [line.batch_id for line in row.lines]
-    old_file = row.note_file_path
-    try:
+    with _write(db):
+        row = _get_delivery(db, delivery_id)
+        batch_ids = [line.batch_id for line in row.lines]
+        old_file = row.note_file_path
         _add_audit(
             db,
             "delivery.deleted",
@@ -865,10 +889,6 @@ def delete_delivery(db: Session, delivery_id: int, *, actor: str | None = None) 
         db.delete(row)
         db.flush()
         _remove_orphan_batches(db, batch_ids)
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
     if old_file is not None:
         _resolve_stored_path(old_file, delivery_id).unlink(missing_ok=True)
 
@@ -915,64 +935,60 @@ def attach_note_file(
     media_type: str,
     actor: str | None = None,
 ) -> StoreDeliveryRead:
-    row = _get_delivery(db, delivery_id)
     safe_name, normalized_media = _validate_note_file(
         filename=filename, data=data, media_type=media_type
     )
     data_dir = get_settings().data_dir.resolve()
-    destination_dir = data_dir / "store_files" / str(row.id)
+    destination_dir = data_dir / "store_files" / str(delivery_id)
     destination = destination_dir / f"{uuid.uuid4().hex}-{safe_name}"
-    old_file = row.note_file_path
-    destination_dir.mkdir(parents=True, exist_ok=True)
-    destination.write_bytes(data)
     try:
-        row.note_file_path = destination.relative_to(data_dir).as_posix()
-        row.note_file_name = safe_name
-        row.note_file_media_type = normalized_media
-        row.note_file_size = len(data)
-        row.updated_at = _utcnow()
-        _add_audit(
-            db,
-            "delivery.note_file.attached",
-            "store_delivery",
-            row.id,
-            actor,
-            {"name": safe_name, "size": len(data), "replaced": old_file is not None},
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
+        with _write(db):
+            row = _get_delivery(db, delivery_id)
+            old_file = row.note_file_path
+            destination_dir.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(data)
+            row.note_file_path = destination.relative_to(data_dir).as_posix()
+            row.note_file_name = safe_name
+            row.note_file_media_type = normalized_media
+            row.note_file_size = len(data)
+            row.updated_at = _utcnow()
+            _add_audit(
+                db,
+                "delivery.note_file.attached",
+                "store_delivery",
+                row.id,
+                actor,
+                {"name": safe_name, "size": len(data), "replaced": old_file is not None},
+            )
+    except BaseException:
+        # A partially written or uncommitted file never outlives its failed write.
         destination.unlink(missing_ok=True)
         raise
     if old_file is not None:
-        _resolve_stored_path(old_file, row.id).unlink(missing_ok=True)
-    return get_delivery(db, row.id)
+        _resolve_stored_path(old_file, delivery_id).unlink(missing_ok=True)
+    return get_delivery(db, delivery_id)
 
 
 def delete_note_file(
     db: Session, delivery_id: int, *, actor: str | None = None
 ) -> StoreDeliveryRead:
-    row = _get_delivery(db, delivery_id)
-    old_file = row.note_file_path
-    if old_file is None:
-        raise NotFoundError(
-            "STORE_NOTE_FILE_NOT_FOUND",
-            "This delivery has no delivery note attached.",
-            delivery_id=delivery_id,
-        )
-    try:
+    with _write(db):
+        row = _get_delivery(db, delivery_id)
+        old_file = row.note_file_path
+        if old_file is None:
+            raise NotFoundError(
+                "STORE_NOTE_FILE_NOT_FOUND",
+                "This delivery has no delivery note attached.",
+                delivery_id=delivery_id,
+            )
         row.note_file_path = None
         row.note_file_name = None
         row.note_file_media_type = None
         row.note_file_size = None
         row.updated_at = _utcnow()
         _add_audit(db, "delivery.note_file.deleted", "store_delivery", row.id, actor, {})
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    _resolve_stored_path(old_file, row.id).unlink(missing_ok=True)
-    return get_delivery(db, row.id)
+    _resolve_stored_path(old_file, delivery_id).unlink(missing_ok=True)
+    return get_delivery(db, delivery_id)
 
 
 def resolve_note_file(db: Session, delivery_id: int) -> tuple[StoreDelivery, Path]:
@@ -1101,11 +1117,12 @@ def create_count(
     *,
     actor: str | None = None,
     actor_user_id: int | None = None,
+    commit: bool = True,
 ) -> StoreCountRead:
     _require_not_future(payload.counted_on, "counted_on")
     month = payload.counted_on.strftime("%Y-%m")
-    _require_month_free(db, month)
-    try:
+    with _write(db, commit=commit, on_integrity=lambda: _require_month_free(db, month)):
+        _require_month_free(db, month)
         resolved = _resolve_lines(db, payload.lines)
         _require_complete(db, payload.counted_on, resolved)
         row = StoreCount(
@@ -1128,14 +1145,6 @@ def create_count(
                 "lines": [{"batch_id": b.id, "quantity": q} for b, q in resolved],
             },
         )
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        _require_month_free(db, month)
-        raise
-    except Exception:
-        db.rollback()
-        raise
     db.expire_all()
     return get_count(db, row.id)
 
@@ -1147,12 +1156,12 @@ def update_count(
     *,
     actor: str | None = None,
 ) -> StoreCountRead:
-    row = _get_count(db, count_id)
     _require_not_future(payload.counted_on, "counted_on")
     month = payload.counted_on.strftime("%Y-%m")
-    _require_month_free(db, month, exclude_id=row.id)
-    old_batch_ids = [line.batch_id for line in row.lines]
-    try:
+    with _write(db, on_integrity=lambda: _require_month_free(db, month, exclude_id=count_id)):
+        row = _get_count(db, count_id)
+        _require_month_free(db, month, exclude_id=row.id)
+        old_batch_ids = [line.batch_id for line in row.lines]
         row.lines.clear()
         db.flush()
         resolved = _resolve_lines(db, payload.lines, reusable_batch_ids=old_batch_ids)
@@ -1175,12 +1184,8 @@ def update_count(
                 "lines": [{"batch_id": b.id, "quantity": q} for b, q in resolved],
             },
         )
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
     db.expire_all()
-    return get_count(db, row.id)
+    return get_count(db, count_id)
 
 
 # ── Disposals ────────────────────────────────────────────────────────────────
@@ -1207,32 +1212,32 @@ def create_disposal(
     actor_user_id: int | None = None,
 ) -> StoreDisposalRead:
     _require_not_future(payload.disposed_on, "disposed_on")
-    item = get_item(db, payload.item_id)
-    if item.archived_at is not None:
-        raise ConflictError(
-            "STORE_ITEM_ARCHIVED",
-            "An archived Store item takes no new stock records.",
-            item_id=item.id,
-        )
     expiry_date, _month_only = parse_expiry(payload.expiry)
-    batch = _find_batch(db, item.id, expiry_date)
-    if batch is None:
-        raise NotFoundError(
-            "STORE_BATCH_NOT_FOUND",
-            "This Store item has no Batch with that expiry.",
-            item_id=item.id,
-            expiry_date=expiry_date.isoformat() if expiry_date else None,
-        )
-    on_hand = _load_ledger(db).on_hand(today()).get(batch.id, 0)
-    if payload.quantity > on_hand:
-        raise ValidationFailedError(
-            "STORE_DISPOSAL_EXCEEDS_STOCK",
-            "A Disposal cannot remove more than the Batch has on hand.",
-            batch_id=batch.id,
-            on_hand=on_hand,
-            quantity=payload.quantity,
-        )
-    try:
+    with _write(db):
+        item = get_item(db, payload.item_id)
+        if item.archived_at is not None:
+            raise ConflictError(
+                "STORE_ITEM_ARCHIVED",
+                "An archived Store item takes no new stock records.",
+                item_id=item.id,
+            )
+        batch = _find_batch(db, item.id, expiry_date)
+        if batch is None:
+            raise NotFoundError(
+                "STORE_BATCH_NOT_FOUND",
+                "This Store item has no Batch with that expiry.",
+                item_id=item.id,
+                expiry_date=expiry_date.isoformat() if expiry_date else None,
+            )
+        on_hand = _load_ledger(db).disposable(batch.id, payload.disposed_on, as_of=today())
+        if payload.quantity > on_hand:
+            raise ValidationFailedError(
+                "STORE_DISPOSAL_EXCEEDS_STOCK",
+                "A Disposal cannot remove more than the Batch has on hand.",
+                batch_id=batch.id,
+                on_hand=on_hand,
+                quantity=payload.quantity,
+            )
         row = StoreDisposal(
             batch_id=batch.id,
             disposed_on=payload.disposed_on,
@@ -1256,10 +1261,6 @@ def create_disposal(
                 "reason": row.reason,
             },
         )
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
     return _disposal_read(
         db.scalars(
             select(StoreDisposal).where(StoreDisposal.id == row.id).options(_disposal_options())
@@ -1268,13 +1269,13 @@ def create_disposal(
 
 
 def delete_disposal(db: Session, disposal_id: int, *, actor: str | None = None) -> None:
-    row = db.get(StoreDisposal, disposal_id)
-    if row is None:
-        raise NotFoundError(
-            "STORE_DISPOSAL_NOT_FOUND", "Disposal not found.", disposal_id=disposal_id
-        )
-    batch_id = row.batch_id
-    try:
+    with _write(db):
+        row = db.get(StoreDisposal, disposal_id)
+        if row is None:
+            raise NotFoundError(
+                "STORE_DISPOSAL_NOT_FOUND", "Disposal not found.", disposal_id=disposal_id
+            )
+        batch_id = row.batch_id
         _add_audit(
             db,
             "disposal.deleted",
@@ -1286,10 +1287,6 @@ def delete_disposal(db: Session, disposal_id: int, *, actor: str | None = None) 
         db.delete(row)
         db.flush()
         _remove_orphan_batches(db, [batch_id])
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────────

@@ -3,20 +3,24 @@
 from __future__ import annotations
 
 import base64
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
+from threading import Barrier
 from typing import Any
+from urllib.parse import quote
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_current_user
 from app.config import get_settings
-from app.db.models import StoreBatch, StoreCategory, User, UserPermission
-from app.db.session import get_db
+from app.db.models import Base, StoreBatch, StoreCategory, StoreItem, User, UserPermission
+from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
+from app.schemas.store import StoreDeliveryCreate
 from app.services import store_service
 
 TODAY = date(2026, 12, 15)
@@ -472,3 +476,95 @@ def test_dashboard_expired_expiring_low_stock_and_suggestions(
         (s["average_usage"], s["on_hand"], s["suggested"], s["suggested_units"])
         for s in dashboard["suggestions"]
     ] == [(30.0, 12, 18, 2)]
+
+
+def test_backdated_disposal_is_checked_against_stock_on_its_own_day(
+    editor: TestClient, category: StoreCategory
+) -> None:
+    item = _item(editor, category)["id"]
+    assert _count(editor, date(2026, 10, 1), (item, None, 10)).status_code == 201
+    assert _count(editor, date(2026, 11, 1), (item, None, 0)).status_code == 201
+    # Today's on-hand is 0, but on Oct 15 the shelf held 10.
+    accepted = _dispose(editor, date(2026, 10, 15), item, None, 2)
+    assert accepted.status_code == 201, accepted.text
+    dashboard = editor.get("/api/v1/store/dashboard").json()
+    assert dashboard["usage"]["rows"][0]["values"] == [8]
+
+    other = _item(editor, category, "Tea")["id"]
+    _deliver(editor, date(2026, 11, 10), (other, None, 5))
+    before_delivery = _dispose(editor, date(2026, 11, 5), other, None, 1)
+    assert before_delivery.status_code == 422
+    assert _error(before_delivery)["code"] == "STORE_DISPOSAL_EXCEEDS_STOCK"
+    assert _error(before_delivery)["details"]["on_hand"] == 0
+
+    # Fine on its own day, but a later disposal would then exceed what was left.
+    assert _dispose(editor, date(2026, 11, 12), other, None, 3).status_code == 201
+    later_negative = _dispose(editor, date(2026, 11, 11), other, None, 3)
+    assert later_negative.status_code == 422
+    assert _error(later_negative)["details"]["on_hand"] == 2
+
+
+def test_delivery_note_with_arabic_filename_downloads_raw_and_base64(
+    editor: TestClient, category: StoreCategory
+) -> None:
+    item = _item(editor, category)["id"]
+    delivery = _deliver(editor, date(2026, 11, 1), (item, None, 1)).json()
+    url = f"/api/v1/store/deliveries/{delivery['id']}/note-file"
+    uploaded = editor.put(url, files={"file": ("استلام.pdf", _PDF, "application/pdf")})
+    assert uploaded.status_code == 200, uploaded.text
+    assert uploaded.json()["note_file"]["name"] == "استلام.pdf"
+
+    raw = editor.get(url)
+    assert raw.status_code == 200
+    assert raw.content == _PDF
+    assert raw.headers["content-disposition"] == (
+        f"attachment; filename=\".pdf\"; filename*=UTF-8''{quote('استلام.pdf')}"
+    )
+    encoded = editor.get(url, params={"encoding": "base64"})
+    assert encoded.status_code == 200
+    assert base64.b64decode(encoded.text) == _PDF
+
+
+def test_concurrent_first_use_of_a_batch_creates_it_once(tmp_path: Path) -> None:
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'store-race.db'}", connect_args={"check_same_thread": False}
+    )
+    attach_sqlite_pragmas(engine)
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    with factory() as setup:
+        category = StoreCategory(name_en="Pantry", name_ar="ضيافة")
+        setup.add(category)
+        setup.flush()
+        item = StoreItem(
+            code="ST-0001",
+            name_en="Coffee",
+            category_id=category.id,
+            counting_unit_en="Carton",
+            counting_unit_ar="كرتون",
+        )
+        setup.add(item)
+        setup.commit()
+        item_id = item.id
+    payload = StoreDeliveryCreate.model_validate(
+        {
+            "received_on": "2026-11-01",
+            "lines": [{"item_id": item_id, "expiry": "2027-05", "quantity": 2}],
+        }
+    )
+    barrier = Barrier(2)
+
+    def deliver() -> int:
+        with factory() as db:
+            barrier.wait()
+            return store_service.create_delivery(db, payload, actor="race@test.ae").id
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = [future.result() for future in [pool.submit(deliver) for _ in range(2)]]
+        assert len(set(results)) == 2
+        with factory() as check:
+            batches = check.scalars(select(StoreBatch)).all()
+            assert [(b.item_id, b.expiry_date) for b in batches] == [(item_id, date(2027, 5, 31))]
+    finally:
+        engine.dispose()
