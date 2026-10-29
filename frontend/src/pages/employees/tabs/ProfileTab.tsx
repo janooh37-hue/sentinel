@@ -4,6 +4,7 @@
  * → Signature pad. Photo upload lives on the hero (top), not here.
  */
 
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -153,6 +154,7 @@ function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employee-detail', employeeId] })
+      void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
       void qc.invalidateQueries({ queryKey: ['employees'] })
       toast.success(t('employees.toast.updated'))
       onDone()
@@ -398,6 +400,7 @@ export function ProfileTab({
 
   const invalidateEmployee = (): void => {
     void qc.invalidateQueries({ queryKey: ['employee-detail', employee.id] })
+    void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
   }
 
   const missingSet = new Set(missing)

@@ -7,6 +7,7 @@
  * stay consistent.
  */
 
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
@@ -64,6 +65,7 @@ export function useLeaveDecisionActions({
     void qc.invalidateQueries({ queryKey: ['leave', leaveId] })
     void qc.invalidateQueries({ queryKey: ['leaves-list'] })
     void qc.invalidateQueries({ queryKey: ['leave-balance', employeeId] })
+    void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
   }
 
   const updateMutation = useMutation({

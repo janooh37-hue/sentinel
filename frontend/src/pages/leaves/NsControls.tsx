@@ -4,6 +4,7 @@
  * LeaveDetailDrawer so the mutation logic and layout pattern are identical on
  * both surfaces.
  */
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -64,6 +65,7 @@ export function NsControls({
       api.updateLeave(row.id, { start_date, end_date }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['leaves-list'] })
+      void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
       void qc.invalidateQueries({ queryKey: ['leave', row.id] })
       void qc.invalidateQueries({ queryKey: ['leave-balance', row.employee_id] })
       toast.success(t('leaves.toast.datesChanged'))
@@ -77,6 +79,7 @@ export function NsControls({
     mutationFn: (file: File) => api.uploadLeaveCertificate(row.id, file),
     onSuccess: (_data, _vars, toastId) => {
       void qc.invalidateQueries({ queryKey: ['leaves-list'] })
+      void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
       void qc.invalidateQueries({ queryKey: ['leave', row.id] })
       void qc.invalidateQueries({ queryKey: ['leave-balance', row.employee_id] })
       toast.success(t('leaves.toast.certificateUploaded'), { id: toastId })

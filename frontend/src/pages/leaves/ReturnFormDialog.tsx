@@ -6,6 +6,7 @@
  * collected through the signing chain. On success the leave is Completed.
  */
 
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useEffect } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -89,6 +90,7 @@ export function ReturnFormDialog({
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['leaves-list'] })
+      void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
       void qc.invalidateQueries({ queryKey: ['leave', leave.id] })
       void qc.invalidateQueries({ queryKey: ['leave-balance', leave.employee_id] })
       void qc.invalidateQueries({ queryKey: ['books'] })

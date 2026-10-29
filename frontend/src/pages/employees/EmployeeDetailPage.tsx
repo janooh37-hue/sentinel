@@ -10,6 +10,7 @@
  * Calls recordRecentEmployee when data loads.
  */
 
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -166,6 +167,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employee-detail', id] })
+      void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
       void qc.invalidateQueries({ queryKey: ['employees'] })
       setInitialExtraction(undefined)
       editOverlay.close()

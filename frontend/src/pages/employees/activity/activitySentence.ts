@@ -125,7 +125,7 @@ export function entryFacts(item: ActivityStatementItem, t: TFunction, language: 
     case 'ledger':
       add('subject', item.subject)
       add('direction', item.direction && t(`activityStatement.direction.${item.direction}`, { defaultValue: item.direction }))
-      add('channel', item.channel)
+      add('channel', item.channel && t(`ledger.channel.${item.channel}`, { defaultValue: item.channel }))
       add('counterparty', item.counterparty)
       break
     case 'absence':

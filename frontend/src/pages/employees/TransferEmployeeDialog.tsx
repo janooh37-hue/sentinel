@@ -4,6 +4,7 @@
  * /duty/transfer — official letter + General Book record, identical to the
  * Duty Locations page. Unchecked does a silent PATCH (like AssignPopover).
  */
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useId, useState } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -91,6 +92,7 @@ export function TransferEmployeeDialog({ open, employee, onOpenChange }: Props):
     onMutate: () => toast.loading(t(issueLetter ? 'dutyLocations.transfer.generating' : 'common.saving')),
     onSuccess: (result, _variables, toastId) => {
       void qc.invalidateQueries({ queryKey: ['employee-detail', employee.id] })
+      void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
       void qc.invalidateQueries({ queryKey: ['employees'] })
       if (result == null) {
         toast.success(t('dutyLocations.assign.saved'), { id: toastId })

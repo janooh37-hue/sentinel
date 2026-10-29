@@ -17,9 +17,10 @@ vi.mock('@/lib/useCapabilities', () => ({
 }))
 vi.mock('@/components/employees/useAttendanceAttention', () => ({ siteToday: () => '2026-10-27' }))
 const getActivityStatement = vi.hoisted(() => vi.fn())
+const listTemplates = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof ApiModule>()
-  return { ...actual, api: { ...actual.api, getActivityStatement } }
+  return { ...actual, api: { ...actual.api, getActivityStatement, listTemplates } }
 })
 
 if (!i18n.hasResourceBundle('ar', 'translation')) i18n.addResourceBundle('ar', 'translation', ar)
@@ -36,6 +37,13 @@ const EMPLOYEE = {
 beforeEach(async () => {
   hasCapability.mockReturnValue(true)
   getActivityStatement.mockReset()
+  listTemplates.mockResolvedValue({
+    items: [
+      { id: 'leave_application', name_en: 'Leave Application', name_ar: 'طلب إجازة' },
+      { id: 'duty_resumption', name_en: 'Duty Resumption', name_ar: 'مباشرة عمل' },
+      { id: 'violation_notice', name_en: 'Violation Notice', name_ar: 'إشعار مخالفة' },
+    ],
+  })
   await i18n.changeLanguage('en')
 })
 afterEach(async () => {
@@ -161,6 +169,13 @@ describe('ActivityTab period', () => {
     await waitFor(() =>
       expect(getActivityStatement).toHaveBeenLastCalledWith('G100', { from_date: '2026-03-01', to_date: '2026-05-31' }),
     )
+  })
+
+  it('falls back to this year for an impossible or reversed custom date', async () => {
+    renderActivity([item('document', 1, { template_name_en: 'Salary Certificate' })], '?tab=activity&period=custom&from=2026-02-30&to=2026-04-30')
+    await screen.findByTestId('activity-summary')
+    expect(getActivityStatement).toHaveBeenCalledWith('G100', { from_date: '2026-01-01', to_date: '2026-10-27' })
+    expect(screen.getByLabelText('Period')).toHaveValue('year')
   })
 
   it('opens the print setup with the current period', async () => {
@@ -289,6 +304,18 @@ describe('ActivityTab entries', () => {
     )
   })
 
+  it('translates the correspondence channel and falls back to the raw value for unknown ones', async () => {
+    renderActivity([
+      item('ledger', 8, { direction: 'incoming', subject: 'A', channel: 'in_person' }),
+      item('ledger', 9, { direction: 'incoming', subject: 'B', channel: 'carrier_pigeon' }),
+    ])
+    const known = await expandEntry('activity-entry-ledger-8')
+    expect(known).toHaveTextContent('In person')
+    expect(known).not.toHaveTextContent('in_person')
+    const unknown = await expandEntry('activity-entry-ledger-9')
+    expect(unknown).toHaveTextContent('carrier_pigeon')
+  })
+
   it('expands in place with facts, recorded by and reference', async () => {
     renderActivity([item('violation', 3, { violation_type: 'Late arrival', description: 'Arrived 40 minutes late', reference: 'V-3' })])
     const row = await expandEntry('activity-entry-violation-3')
@@ -315,11 +342,11 @@ describe('ActivityTab entries', () => {
       }),
     ])
     const row = await expandEntry('activity-entry-leave-18')
-    fireEvent.click(within(row).getByRole('button', { name: 'duty_resumption' }))
+    fireEvent.click(within(row).getByRole('button', { name: 'Duty Resumption' }))
     expect(callbacks.onPreviewDocs).toHaveBeenCalledWith(
       [
-        { id: 81, name: 'leave_application' },
-        { id: 82, name: 'duty_resumption' },
+        { id: 81, name: 'Leave Application' },
+        { id: 82, name: 'Duty Resumption' },
       ],
       1,
     )
@@ -342,8 +369,8 @@ describe('ActivityTab entries', () => {
       }),
     ])
     const row = await expandEntry('activity-entry-violation-31')
-    fireEvent.click(within(row).getByRole('button', { name: 'violation_notice' }))
-    expect(linked.onPreviewDocs).toHaveBeenCalledWith([{ id: 91, name: 'violation_notice' }], 0)
+    fireEvent.click(within(row).getByRole('button', { name: 'Violation Notice' }))
+    expect(linked.onPreviewDocs).toHaveBeenCalledWith([{ id: 91, name: 'Violation Notice' }], 0)
     expect(linked.onOpenViolation).not.toHaveBeenCalled()
   })
 
