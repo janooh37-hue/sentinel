@@ -45,6 +45,12 @@ import {
   loadLeavesPage,
   loadLedgerPage,
   loadPermitsPage,
+  loadStoreCountPage,
+  loadStoreCountsPage,
+  loadStoreDashboardPage,
+  loadStoreDeliveriesPage,
+  loadStoreDisposalsPage,
+  loadStoreItemsPage,
   loadVehicleAccidentLetterPage,
   loadVehicleAccidentsPage,
   loadVehicleEditPage,
@@ -92,6 +98,12 @@ const VehicleFinesReportPage = lazy(loadVehicleFinesReportPage)
 const VehicleAccidentsPage = lazy(loadVehicleAccidentsPage)
 const VehicleAccidentLetterPage = lazy(loadVehicleAccidentLetterPage)
 const VehicleMaintenancePage = lazy(loadVehicleMaintenancePage)
+const StoreDashboardPage = lazy(loadStoreDashboardPage)
+const StoreItemsPage = lazy(loadStoreItemsPage)
+const StoreDeliveriesPage = lazy(loadStoreDeliveriesPage)
+const StoreCountsPage = lazy(loadStoreCountsPage)
+const StoreCountPage = lazy(loadStoreCountPage)
+const StoreDisposalsPage = lazy(loadStoreDisposalsPage)
 const LedgerPage = lazy(loadLedgerPage)
 const SettingsPage = lazy(loadSettingsPage)
 const DashboardPage = lazy(loadDashboardPage)
@@ -489,6 +501,67 @@ function Shell(): React.JSX.Element {
                 element={
                   <RequireCapability cap="vehicles.view">
                     <VehicleFinesLetterPage />
+                  </RequireCapability>
+                }
+              />
+              <Route path="/assets" element={<Navigate to="/assets/store" replace />} />
+              <Route
+                path="/assets/store"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreDashboardPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/assets/store/items"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreItemsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/assets/store/deliveries"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreDeliveriesPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/assets/store/counts"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreCountsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/assets/store/counts/new"
+                element={
+                  <RequireCapability cap="store.view">
+                    <RequireCapability cap="store.edit">
+                      <StoreCountPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/assets/store/counts/:id"
+                element={
+                  <RequireCapability cap="store.view">
+                    <RequireCapability cap="store.edit">
+                      <StoreCountPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/assets/store/disposals"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreDisposalsPage />
                   </RequireCapability>
                 }
               />

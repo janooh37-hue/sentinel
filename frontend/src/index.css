@@ -802,11 +802,14 @@
    widest-first, and every control stays clickable:
      Tier 1 (<1560px): the brand copy goes, the logo (still a labelled link to
        the dashboard) stays; gaps and padding tighten.
-     Tier 2 (<1240px): destinations collapse to their icons — the icon lives in
+     Tier 1b (<1520px): the two widest utilities shed their extras (the Aa
+       range, whose ± buttons remain; the language word, whose globe remains).
+       With all nine destinations (Assets added after Vehicles) the labelled
+       strip otherwise runs into the utilities from ~1510px down.
+     Tier 2 (<1280px): destinations collapse to their icons — the icon lives in
        the DOM at every width and is revealed here, with the accessible name
-       kept on the link — and the two widest utilities shed their extras (the
-       Aa range, whose ± buttons remain; the language word, whose globe
-       remains).
+       kept on the link. Measured with every destination granted: at 1280 the
+       labelled strip keeps ~30px (en) / ~60px (ar) clear of the utilities.
    Large content scales (20-24) get Tier 2 at any width, and keep the old cap
    on the header's OWN font so chrome stays usable while page content grows. */
 /* The link icon is decoration until a collapsed tier needs it as the only
@@ -833,10 +836,24 @@
   }
 }
 
-@media (max-width: 1239px) {
-  [data-topnav] .topnav-link-label,
+@media (max-width: 1519px) {
   [data-topnav] [data-topnav-aa-range],
   [data-topnav] [data-topnav-language-label] {
+    display: none;
+  }
+
+  [data-topnav] .topnav-utilities {
+    gap: 0.25rem;
+  }
+
+  [data-topnav] [data-topnav-aa] {
+    gap: 0.25rem;
+    padding-inline: 0.5rem;
+  }
+}
+
+@media (max-width: 1279px) {
+  [data-topnav] .topnav-link-label {
     display: none;
   }
 
@@ -847,15 +864,6 @@
   [data-topnav] .topnav-link {
     min-width: 42px;
     min-height: 42px;
-  }
-
-  [data-topnav] .topnav-utilities {
-    gap: 0.25rem;
-  }
-
-  [data-topnav] [data-topnav-aa] {
-    gap: 0.25rem;
-    padding-inline: 0.5rem;
   }
 }
 
