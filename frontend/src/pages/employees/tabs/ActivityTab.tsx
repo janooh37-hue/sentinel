@@ -16,17 +16,20 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { api, apiErrorMessage, type EmployeeRead } from '@/lib/api'
 import type { PreviewDoc } from '@/lib/docPreview'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useServiceLabel } from '@/pages/books/serviceLabels'
 import type { Tab } from '../EmployeeTabChips'
 import { ActivityCategoryFilter } from '../activity/ActivityCategoryFilter'
 import { ActivityEntry, type EntryActions } from '../activity/ActivityEntry'
 import { ActivityPeriodHeader } from '../activity/ActivityPeriodHeader'
 import { ActivityPlacementRail } from '../activity/ActivityPlacementRail'
-import { countActivity, summarySentence } from '../activity/activitySentence'
+import { countActivity, documentName, summarySentence } from '../activity/activitySentence'
 import {
+  ACTIVITY_STATEMENT_QUERY,
   activityPeriod,
   activityPrintPath,
   categoryOf,
   formatStatementMonth,
+  isIsoDate,
   STATEMENT_CATEGORIES,
   type ActivityPreset,
   type Period,
@@ -34,7 +37,6 @@ import {
 } from '../statement/statementModel'
 import type { ActivityStatementItem } from '../statement/statementTypes'
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 const PRESETS = new Set<string>(['month', 'last3', 'year', 'all', 'custom'])
 
 interface PeriodState {
@@ -51,9 +53,9 @@ function periodFromSearch(params: URLSearchParams, today: string): PeriodState {
   const customFrom = params.get('from') ?? ''
   const customTo = params.get('to') ?? ''
   if (preset === 'custom') {
-    const to = ISO_DATE.test(customTo) ? customTo : today
-    const from = ISO_DATE.test(customFrom) && customFrom <= to ? customFrom : null
-    return { preset, period: { from, to }, customFrom, customTo }
+    // Malformed or impossible dates (2026-02-30) are not a period: use this year.
+    if (!isIsoDate(customFrom) || !isIsoDate(customTo) || customFrom > customTo) return periodFromSearch(new URLSearchParams(), today)
+    return { preset, period: { from: customFrom, to: customTo }, customFrom, customTo }
   }
   return { preset, period: activityPeriod(preset, today) ?? { from: null, to: today }, customFrom: '', customTo: '' }
 }
@@ -76,6 +78,7 @@ export function ActivityTab({
   const { t, i18n } = useTranslation()
   const language = i18n.language
   const navigate = useNavigate()
+  const serviceLabel = useServiceLabel()
   const { has } = useCapabilities()
   const [searchParams, setSearchParams] = useSearchParams()
   const [hidden, setHidden] = useState<ReadonlySet<StatementCategory>>(new Set())
@@ -94,7 +97,7 @@ export function ActivityTab({
   const toDate = period.to
 
   const statement = useQuery({
-    queryKey: ['employee-activity-statement', employeeId, fromDate, toDate],
+    queryKey: [ACTIVITY_STATEMENT_QUERY, employeeId, fromDate, toDate],
     queryFn: () =>
       api.getActivityStatement(employeeId, { ...(fromDate ? { from_date: fromDate } : {}), to_date: toDate }),
     enabled: canViewEmployee,
@@ -160,7 +163,7 @@ export function ActivityTab({
     })
 
   const actionsFor = (item: ActivityStatementItem): EntryActions => {
-    const linked = item.linked_documents.map((doc) => ({ id: doc.id, name: doc.template_id }))
+    const linked = item.linked_documents.map((doc) => ({ id: doc.id, name: serviceLabel(doc.template_id) }))
     const previewLinked = (index: number): void => onPreviewDocs(linked, index)
     const none = { action: null, linkedDocuments: linked, previewLinked }
     switch (item.kind) {
@@ -170,7 +173,7 @@ export function ActivityTab({
           action: {
             label: 'previewDocument',
             run: () =>
-              onPreviewDocs([{ id: item.source_id, name: item.template_name_en ?? item.template_id ?? '' }]),
+              onPreviewDocs([{ id: item.source_id, name: documentName(item, language) }]),
           },
         }
       case 'leave':

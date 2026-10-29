@@ -3,7 +3,7 @@ import { Fragment, useId, type ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DutyLocationActivity } from '@/components/employees/DutyLocationActivity'
-import { StatusActivity, type StatusActivityValue } from '@/components/employees/StatusActivity'
+import { StatusActivity } from '@/components/employees/StatusActivity'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -82,8 +82,7 @@ export function ActivityEntry({ item, expanded, onToggle, language, actions }: P
           ) : item.kind === 'duty_location' ? (
             <DutyLocationActivity item={item} />
           ) : (
-            // The contract types the enums as plain strings until the generated types replace them.
-            <StatusActivity item={item as StatusActivityValue} />
+                        <StatusActivity item={item} />
           )}
         </div>
         <div className="col-start-2 row-start-2 flex items-center gap-2 text-xs text-muted-foreground sm:col-start-3 sm:row-start-1 sm:flex-col sm:items-end sm:gap-0.5">

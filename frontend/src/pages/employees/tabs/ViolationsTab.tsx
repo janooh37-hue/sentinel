@@ -7,6 +7,7 @@
  * response.
  */
 
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -242,7 +243,10 @@ function ViolationsManage({
 }): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['violations', employeeId] })
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
+    return qc.invalidateQueries({ queryKey: ['violations', employeeId] })
+  }
   const createMut = useMutation({
     mutationFn: (v: ViolationCreate) => api.createViolation(employeeId, v),
     onSuccess: () => {
