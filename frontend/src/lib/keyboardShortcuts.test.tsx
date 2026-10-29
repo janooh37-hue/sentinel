@@ -471,6 +471,103 @@ describe('existing modifier shortcuts', () => {
     expect(focus).toHaveBeenCalledTimes(2)
   })
 
+  it.each([{ ctrlKey: true }, { metaKey: true }])(
+    'focuses search with physical Arabic KeyK using %o',
+    (modifier) => {
+      const focus = vi.fn(() => screen.getByLabelText('search').focus())
+      renderWith(
+        <>
+          <Probe action="focusSearch" handler={focus} />
+          <input aria-label="search" />
+        </>,
+      )
+      expect(
+        press({ key: 'ن', code: 'KeyK', ...modifier }, screen.getByLabelText('search')),
+      ).toBe(false)
+      expect(screen.getByLabelText('search')).toHaveFocus()
+      expect(focus).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  it.each([
+    { isComposing: true },
+    { keyCode: 229 },
+    { altKey: true },
+    { metaKey: true, altKey: true },
+  ])('does not focus search or consume its key during %o', (guard) => {
+    const focus = vi.fn()
+    renderWith(<Probe action="focusSearch" handler={focus} />)
+    expect(press({ key: 'k', code: 'KeyK', ctrlKey: true, ...guard })).toBe(true)
+    expect(focus).not.toHaveBeenCalled()
+  })
+
+  it('does not treat AltGraph as a search shortcut even without altKey', () => {
+    const focus = vi.fn()
+    renderWith(<Probe action="focusSearch" handler={focus} />)
+    const event = new KeyboardEvent('keydown', {
+      key: 'ن',
+      code: 'KeyK',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    Object.defineProperty(event, 'getModifierState', {
+      value: (modifier: string) => modifier === 'AltGraph',
+    })
+    expect(fireEvent(document.body, event)).toBe(true)
+    expect(focus).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    <div role="dialog" data-state="open" />,
+    <div role="alertdialog" data-state="open" />,
+    <div role="menu" data-state="open" />,
+    <div role="listbox" data-state="open" />,
+    <div aria-modal="true" />,
+    <div data-anno-composer />,
+    <div data-lock-overlay />,
+  ])('does not steal focus while an unrelated overlay is mounted (%#)', (overlay) => {
+    const focus = vi.fn()
+    const { rerender } = renderWith(
+      <>
+        <Probe action="focusSearch" handler={focus} />
+        {overlay}
+      </>,
+    )
+    expect(press({ key: 'k', code: 'KeyK', ctrlKey: true })).toBe(true)
+    expect(press({ key: 'ن', code: 'KeyK', metaKey: true })).toBe(true)
+    expect(focus).not.toHaveBeenCalled()
+    rerender(
+      <KeyboardShortcutsProvider>
+        <Probe action="focusSearch" handler={focus} />
+      </KeyboardShortcutsProvider>,
+    )
+    expect(press({ key: 'k', code: 'KeyK', ctrlKey: true })).toBe(false)
+    expect(focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps search available in an opted-through drawer, unless another overlay opens', () => {
+    const focus = vi.fn()
+    renderWith(
+      <>
+        <Probe action="focusSearch" handler={focus} />
+        <div role="dialog" aria-modal="true" data-state="open" data-shortcuts-through />
+      </>,
+    )
+    expect(press({ key: 'k', code: 'KeyK', ctrlKey: true })).toBe(false)
+    render(<div role="menu" data-state="open" />)
+    expect(press({ key: 'k', code: 'KeyK', ctrlKey: true })).toBe(true)
+    expect(focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the browser shortcut alone when search declines or has no handler', () => {
+    const { unmount } = renderWith(<Probe action="focusSearch" handler={() => false} />)
+    expect(press({ key: 'k', code: 'KeyK', ctrlKey: true })).toBe(true)
+    unmount()
+    renderWith(null)
+    expect(press({ key: 'k', code: 'KeyK', metaKey: true })).toBe(true)
+  })
+
   it('Ctrl+N dispatches newItem but not from an editable target', () => {
     const create = vi.fn()
     renderWith(
