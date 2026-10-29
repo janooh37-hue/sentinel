@@ -27,6 +27,8 @@ DASHBOARD_WIDGET_IDS = (
     "violation_months",
     "inbox",
     "permits",
+    "store_expiring",
+    "store_low_stock",
 )
 DASHBOARD_QUICK_ACTION_IDS = (
     "General Book",
@@ -66,6 +68,8 @@ DashboardWidgetId = Literal[
     "violation_months",
     "inbox",
     "permits",
+    "store_expiring",
+    "store_low_stock",
 ]
 DashboardQuickActionId = Literal[
     "General Book",
