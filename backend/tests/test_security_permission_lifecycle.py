@@ -37,6 +37,12 @@ def _client(db: Session, user_id: int) -> TestClient:
     return client
 
 
+def _precondition(client: TestClient, url: str) -> dict[str, str]:
+    response = client.get(url)
+    assert response.status_code == 200, response.text
+    return {"If-Match": response.headers["ETag"]}
+
+
 @pytest.mark.parametrize("writer", ["request", "single", "bulk"])
 def test_employee_read_deny_returns_at_expiry_before_and_after_sweep(
     api_db: Session, writer: str
@@ -50,7 +56,12 @@ def test_employee_read_deny_returns_at_expiry_before_and_after_sweep(
     override_url = f"/api/v1/auth/users/{operator.id}/permissions"
     detail_url = f"/api/v1/employees/{employee.id}"
     denied = {"capability": "employees.view", "effect": "deny"}
-    assert admin_client.put(override_url, json=denied).status_code == 200
+    assert (
+        admin_client.put(
+            override_url, headers=_precondition(admin_client, override_url), json=denied
+        ).status_code
+        == 200
+    )
     assert operator_client.get(detail_url).status_code == 403
     api_db.expire_all()
     row = api_db.get(UserPermission, (operator.id, "employees.view"))
@@ -72,9 +83,15 @@ def test_employee_read_deny_returns_at_expiry_before_and_after_sweep(
             json={"decision": "once", "window": "2h"},
         )
     elif writer == "bulk":
-        issued = admin_client.put(override_url + "/bulk", json={"items": [grant]})
+        issued = admin_client.put(
+            override_url + "/bulk",
+            headers=_precondition(admin_client, override_url),
+            json={"items": [grant]},
+        )
     else:
-        issued = admin_client.put(override_url, json=grant)
+        issued = admin_client.put(
+            override_url, headers=_precondition(admin_client, override_url), json=grant
+        )
     assert issued.status_code == 200, issued.text
     assert operator_client.get(detail_url).status_code == 200
     api_db.expire_all()
@@ -110,7 +127,11 @@ def test_expiry_uses_current_role_not_grant_time_role(
     url = f"/api/v1/auth/users/{target.id}/permissions"
     # leaves.edit is a manager default but an additional operator grant.
     assert (
-        admin_client.put(url, json={"capability": "leaves.edit", "effect": "deny"}).status_code
+        admin_client.put(
+            url,
+            headers=_precondition(admin_client, url),
+            json={"capability": "leaves.edit", "effect": "deny"},
+        ).status_code
         == 200
     )
     grant = {
@@ -119,9 +140,11 @@ def test_expiry_uses_current_role_not_grant_time_role(
         "expires_at": (datetime.now(UTC) + timedelta(hours=2)).isoformat(),
     }
     issued = (
-        admin_client.put(url + "/bulk", json={"items": [grant]})
+        admin_client.put(
+            url + "/bulk", headers=_precondition(admin_client, url), json={"items": [grant]}
+        )
         if writer == "bulk"
-        else admin_client.put(url, json=grant)
+        else admin_client.put(url, headers=_precondition(admin_client, url), json=grant)
     )
     assert issued.status_code == 200, issued.text
     assert "leaves.edit" in target_client.get("/api/v1/auth/me/capabilities").json()

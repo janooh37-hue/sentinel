@@ -132,6 +132,22 @@ def test_list_filters_to_docx(tmp_path, monkeypatch):
     assert names == ["صيانة.docx"]
 
 
+def test_diagnostic_listing_never_creates_library_storage(tmp_path, monkeypatch):
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(svc, "get_settings", lambda: settings)
+    library = settings.data_dir / "book_templates"
+    assert svc.list_templates(read_only=True) == []
+    assert not settings.data_dir.exists()
+
+    library.mkdir(parents=True)
+    (library / "قاعدة.docx").write_bytes(b"metadata only")
+    (library / "ignore.txt").write_text("not a template")
+    items = svc.list_templates(read_only=True)
+    assert [item.name for item in items] == ["قاعدة.docx"]
+    assert items[0].modified_at is not None
+    assert sorted(path.name for path in library.iterdir()) == ["ignore.txt", "قاعدة.docx"]
+
+
 # ---------------------------------------------------------------------------
 # Tests: save flow
 # ---------------------------------------------------------------------------

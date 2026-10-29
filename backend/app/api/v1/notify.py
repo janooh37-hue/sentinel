@@ -14,6 +14,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.action_guards import require_template_action
 from app.api.deps import get_current_user, require_capability
 from app.config import get_settings
 from app.db.models import User
@@ -95,7 +96,7 @@ def refresh_delivery(
 @router.get("/templates", response_model=list[MessageTemplateRead])
 def templates(
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(get_current_user)],
+    _user: Annotated[User, Depends(require_template_action("notification_template", "view"))],
 ) -> list[dict[str, Any]]:
     return [message_template_service.read_template(db, event) for event in sms_templates.EVENTS]
 
@@ -105,7 +106,7 @@ def update_template(
     event: str,
     payload: MessageTextWrite,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("messages.templates"))],
+    user: Annotated[User, Depends(require_template_action("notification_template", "edit"))],
 ) -> dict[str, Any]:
     return message_template_service.save_template(
         db, event, payload, actor=user.employee_id or user.email
@@ -116,7 +117,7 @@ def update_template(
 def reset_template(
     event: str,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("messages.templates"))],
+    user: Annotated[User, Depends(require_template_action("notification_template", "reset"))],
 ) -> dict[str, Any]:
     return message_template_service.save_template(
         db, event, None, actor=user.employee_id or user.email
@@ -127,7 +128,7 @@ def reset_template(
 def render_template(
     event: str,
     payload: MessageTextWrite,
-    _user: Annotated[User, Depends(get_current_user)],
+    _user: Annotated[User, Depends(require_template_action("notification_template", "view"))],
 ) -> dict[str, Any]:
     return message_template_service.render_sample(event, payload)
 
@@ -153,7 +154,9 @@ def preview(
         revise_book = db.get(Book, payload.revise_of_book_id)
         if revise_book is not None and revise_book.deleted_at is not None:
             revise_book = None
-        book_service.require_revise_access(db, user, revise_book)
+        from app.services.action_guard_service import book_revise_decision
+
+        book_revise_decision(db, user, revise_book).require()
     return message_template_service.preview(db, payload)
 
 

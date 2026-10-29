@@ -92,15 +92,24 @@ def _envelope(code: str, message: str, **details: Any) -> dict[str, Any]:
     return {"error": {"code": code, "message": message, "details": details}}
 
 
+def _privacy_headers(request: Request) -> dict[str, str]:
+    """Never cache account access diagnostics, including rejected requests."""
+    if request.url.path.startswith("/api/v1/auth/users"):
+        return {"Cache-Control": "no-store"}
+    return {}
+
+
 def install_handlers(app: FastAPI) -> None:
     """Register the three handlers needed for a consistent error envelope."""
 
     @app.exception_handler(AppError)
-    async def _app_error(_: Request, exc: AppError) -> JSONResponse:
-        return JSONResponse(status_code=exc.http_status, content=exc.envelope())
+    async def _app_error(request: Request, exc: AppError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.http_status, content=exc.envelope(), headers=_privacy_headers(request)
+        )
 
     @app.exception_handler(RequestValidationError)
-    async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
+    async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
         # Pydantic v2 error dicts can contain ``ctx`` values that are raw
         # exception instances (e.g. our ValueError from ``model_validator``).
         # ``jsonable_encoder`` coerces those to strings so the response stays
@@ -112,6 +121,7 @@ def install_handlers(app: FastAPI) -> None:
             error.pop("input", None)
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            headers=_privacy_headers(request),
             content=_envelope(
                 "VALIDATION_ERROR",
                 "Request payload failed validation",
@@ -120,9 +130,10 @@ def install_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(StarletteHTTPException)
-    async def _http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:
+    async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
+            headers=_privacy_headers(request),
             content=_envelope(
                 f"HTTP_{exc.status_code}",
                 str(exc.detail) if exc.detail else "HTTP error",
@@ -139,6 +150,7 @@ def install_handlers(app: FastAPI) -> None:
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            headers=_privacy_headers(request),
             content=_envelope("INTERNAL_ERROR", "An unexpected error occurred."),
         )
 

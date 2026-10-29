@@ -5,6 +5,7 @@ Two scenarios:
   1. Admin PUTs with expires_at → stored UserPermission.expires_at matches.
   2. Admin PUTs without expires_at → permanent grant (expires_at is None).
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -35,9 +36,7 @@ def api_db(monkeypatch, tmp_path) -> Session:
     )
     attach_sqlite_pragmas(eng, wal=False)
     Base.metadata.create_all(eng)
-    TestSession = sessionmaker(
-        bind=eng, autoflush=False, expire_on_commit=False, future=True
-    )
+    TestSession = sessionmaker(bind=eng, autoflush=False, expire_on_commit=False, future=True)
     monkeypatch.setattr(session_mod, "engine", eng)
     monkeypatch.setattr(session_mod, "SessionLocal", TestSession)
     db = TestSession()
@@ -75,6 +74,7 @@ def test_put_permission_with_expires_at_stores_expiry(api_db):
     c = _client(api_db, admin)
     r = c.put(
         f"/api/v1/auth/users/{op.id}/permissions",
+        headers={"If-Match": c.get(f"/api/v1/auth/users/{op.id}/permissions").headers["ETag"]},
         json={
             "capability": "leaves.edit",
             "effect": "grant",
@@ -104,6 +104,7 @@ def test_put_permission_without_expires_at_is_permanent(api_db):
     c = _client(api_db, admin)
     r = c.put(
         f"/api/v1/auth/users/{op.id}/permissions",
+        headers={"If-Match": c.get(f"/api/v1/auth/users/{op.id}/permissions").headers["ETag"]},
         json={"capability": "leaves.edit", "effect": "grant"},
     )
     assert r.status_code == 200, r.text

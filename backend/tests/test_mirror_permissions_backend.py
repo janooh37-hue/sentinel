@@ -2671,6 +2671,7 @@ def test_classification_denial_blocks_general_book_generation_and_word_creation(
     mirror_api: ApiHarness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from app.api.v1 import documents as documents_api
+    from app.services.action_guard_service import service_create_decision
 
     _category(mirror_api.db, "GS", name_en="General Services")
     manager = _user(mirror_api.db, role="manager", email="classified-create@test.ae")
@@ -2678,6 +2679,14 @@ def test_classification_denial_blocks_general_book_generation_and_word_creation(
     perm_service.set_user_override(
         mirror_api.db, manager.id, "books.category.5/1", "deny", actor=admin
     )
+    decision = service_create_decision(
+        perm_service.effective_caps(mirror_api.db, manager),
+        "General Book",
+        category_id="GS",
+        classification_code="5/1",
+    )
+    assert not decision.allowed
+    assert decision.blockers == ("books.category.5/1",)
     mirror_api.as_user(manager)
     payload = {"template_id": "General Book", "fields": {}, "classification_code": "5/1"}
     generated = mirror_api.client.post("/api/v1/documents/generate", json=payload)
@@ -2733,3 +2742,32 @@ def test_duty_transfer_requires_both_capabilities(
     denied = mirror_api.client.post("/api/v1/duty/transfer", json=payload)
     assert denied.status_code == 403, denied.text
     assert calls == [operator.id]
+
+
+def test_opt_in_creation_grant_does_not_grant_record_browsing(mirror_api: ApiHarness):
+    from app.services.action_guard_service import service_browse_decision, service_create_decision
+
+    db = mirror_api.db
+    _category(db, "HR", name_en="Human Resources")
+    operator = _user(db, role="operator", email="opt-in-create-only@test.ae")
+    service_id = "Manpower Requisition Form"
+    record = _book(db, ref_number="HR-OPT-IN", category_id="HR", service_id=service_id)
+    caps = perm_service.effective_caps(db, operator)
+    assert not service_create_decision(caps, service_id, category_id="HR").allowed
+    with pytest.raises(AppError) as error:
+        document_service.authorize_interactive_generation(db, operator, service_id)
+    assert error.value.code == "RECORD_TYPE_FORBIDDEN"
+
+    perm_service.set_user_override(db, operator.id, f"books.service.{service_id}", "grant")
+    caps = perm_service.effective_caps(db, operator)
+    assert service_create_decision(caps, service_id, category_id="HR").allowed
+    document_service.authorize_interactive_generation(db, operator, service_id)
+    assert not service_browse_decision(caps, service_id).allowed
+    mirror_api.as_user(operator)
+    hidden = mirror_api.client.get(f"/api/v1/books/{record.id}")
+    assert hidden.status_code == 403
+    assert _error_code(hidden) == "RECORD_TYPE_FORBIDDEN"
+
+    perm_service.set_user_override(db, operator.id, f"books.servicerecords.{service_id}", "grant")
+    assert service_browse_decision(perm_service.effective_caps(db, operator), service_id).allowed
+    assert mirror_api.client.get(f"/api/v1/books/{record.id}").status_code == 200

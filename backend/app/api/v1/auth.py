@@ -16,6 +16,18 @@ PATCH /auth/users/{id}/role
 PATCH /auth/users/{id}/link
 POST  /auth/users/{id}/disable | /unlock
 POST  /auth/users/{id}/default-manager
+GET   /auth/users/{id}/effective-access
+POST  /auth/users/{id}/effective-access/preview
+POST  /auth/users/{id}/check-access
+GET   /auth/users/{id}/permissions         (legacy projection with ETag)
+PUT   /auth/users/{id}/permissions[/bulk]  (If-Match required)
+
+Access diagnostics never impersonate the subject or perform business writes.
+Use the summary revision (or ETag) for conditional saves: a missing token is 428,
+a stale policy/expiry token is 412, and the entire patch plus audit is atomic.
+Record checks report a separate redacted resource revision in their reasons;
+that revision is not an account-policy save token. Direct-recipient/reviewer
+record reads and employee message history under employees.view remain intact.
 
 Admin or manager (require_admin_or_manager):
 GET /auth/secret-clearance
@@ -26,7 +38,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Request, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, Request, Response, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -37,6 +49,14 @@ from app.core import ratelimit
 from app.core.roles import ADMIN_ROLE
 from app.db.models import User
 from app.db.session import get_db
+from app.schemas.access import (
+    AccessSnapshot,
+    CheckRequest,
+    CheckResponse,
+    Patch,
+    PreviewRequest,
+    PreviewResponse,
+)
 from app.schemas.auth import (
     AdminUserCreateRequest,
     AdminUserCreateResult,
@@ -62,6 +82,7 @@ from app.schemas.auth import (
     VerifyPasswordRequest,
 )
 from app.services import (
+    access_decision_service,
     auth_service,
     book_send_service,
     capability_catalog_service,
@@ -475,73 +496,95 @@ def set_secret_clearance(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/users/{user_id}/permissions", response_model=UserPermissionRead)
-def get_user_permissions(
-    user_id: int,
-    _admin: Annotated[User, Depends(require_admin)],
-    db: Annotated[Session, Depends(get_db)],
+def _permission_read(
+    db: Session, user: User, response: Response, actor: User
 ) -> UserPermissionRead:
-    """The target user's effective capabilities + per-capability overrides."""
-    user = auth_service.require_user(db, user_id)
+    current = access_decision_service.snapshot(db, user, actor)
+    response.headers["ETag"] = f'"{current.revision}"'
+    response.headers["Cache-Control"] = "no-store"
     return UserPermissionRead(
         user_id=user.id,
         role=user.role,
-        is_admin=user.role == "admin",
-        effective=sorted(perm_service.effective_caps(db, user)),
-        role_defaults=sorted(perm_service.role_default_caps_with_dynamic(db, user.role)),
-        overrides=perm_service.get_user_overrides(db, user.id),
+        is_admin=user.role == ADMIN_ROLE,
+        effective=current.effective,
+        role_defaults=current.role_defaults,
+        overrides={item.capability: item.effect for item in current.overrides},
     )
+
+
+@router.get("/users/{user_id}/effective-access", response_model=AccessSnapshot)
+def get_effective_access(
+    user_id: int,
+    response: Response,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> AccessSnapshot:
+    current = access_decision_service.snapshot(db, auth_service.require_user(db, user_id), admin)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["ETag"] = f'"{current.revision}"'
+    return current
+
+
+@router.post("/users/{user_id}/effective-access/preview", response_model=PreviewResponse)
+def preview_effective_access(
+    user_id: int,
+    body: PreviewRequest,
+    response: Response,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> PreviewResponse:
+    response.headers["Cache-Control"] = "no-store"
+    return access_decision_service.preview(
+        db, auth_service.require_user(db, user_id), admin, body.expected_revision, body.items
+    )
+
+
+@router.post("/users/{user_id}/check-access", response_model=CheckResponse)
+def check_access(
+    user_id: int,
+    body: CheckRequest,
+    response: Response,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CheckResponse:
+    response.headers["Cache-Control"] = "no-store"
+    return access_decision_service.check(db, auth_service.require_user(db, user_id), admin, body)
+
+
+@router.get("/users/{user_id}/permissions", response_model=UserPermissionRead)
+def get_user_permissions(
+    user_id: int,
+    response: Response,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> UserPermissionRead:
+    return _permission_read(db, auth_service.require_user(db, user_id), response, admin)
 
 
 @router.put("/users/{user_id}/permissions", response_model=UserPermissionRead)
 def set_user_permission(
     user_id: int,
     body: SetPermissionRequest,
+    response: Response,
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[Session, Depends(get_db)],
+    if_match: Annotated[str | None, Header()] = None,
 ) -> UserPermissionRead:
-    """Set or clear one per-user capability override (grant/deny/null)."""
-    user = auth_service.require_user(db, user_id)
-    perm_service.set_user_override(
-        db, user.id, body.capability, body.effect, actor=admin, expires_at=body.expires_at
-    )
-    auth_service.audit_permission_change(
-        db, actor=_actor(admin), user=user, capability=body.capability, effect=body.effect
-    )
-    return UserPermissionRead(
-        user_id=user.id,
-        role=user.role,
-        is_admin=user.role == "admin",
-        effective=sorted(perm_service.effective_caps(db, user)),
-        role_defaults=sorted(perm_service.role_default_caps_with_dynamic(db, user.role)),
-        overrides=perm_service.get_user_overrides(db, user.id),
-    )
+    user = access_decision_service.save(db, user_id, admin, if_match, [Patch(**body.model_dump())])
+    return _permission_read(db, user, response, admin)
 
 
 @router.put("/users/{user_id}/permissions/bulk", response_model=UserPermissionRead)
 def set_user_permissions_bulk(
     user_id: int,
     body: SetPermissionBulkRequest,
+    response: Response,
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[Session, Depends(get_db)],
+    if_match: Annotated[str | None, Header()] = None,
 ) -> UserPermissionRead:
-    """Apply several override changes in one all-or-nothing call."""
-    user = auth_service.require_user(db, user_id)
-    perm_service.set_user_overrides(
-        db, user.id, [(i.capability, i.effect, i.expires_at) for i in body.items], actor=admin
-    )
-    for item in body.items:
-        auth_service.audit_permission_change(
-            db, actor=_actor(admin), user=user, capability=item.capability, effect=item.effect
-        )
-    return UserPermissionRead(
-        user_id=user.id,
-        role=user.role,
-        is_admin=user.role == "admin",
-        effective=sorted(perm_service.effective_caps(db, user)),
-        role_defaults=sorted(perm_service.role_default_caps_with_dynamic(db, user.role)),
-        overrides=perm_service.get_user_overrides(db, user.id),
-    )
+    user = access_decision_service.save(db, user_id, admin, if_match, body.items)
+    return _permission_read(db, user, response, admin)
 
 
 __all__ = ["router"]
