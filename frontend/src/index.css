@@ -2306,6 +2306,26 @@ body {
 .statement-sheet > tbody > tr.st-row {
   break-inside: avoid;
 }
+/* A section table may break between its rows: its own header-group repeats
+   on the page it continues, and the sheet's head and foot still repeat. */
+.statement-sheet > tbody > tr.st-row:has(.st-flow) {
+  break-inside: auto;
+}
+.statement-sheet .st-flow h2 {
+  break-after: avoid;
+}
+.statement-sheet .st-dt thead {
+  display: table-header-group;
+}
+.statement-sheet .st-dt tbody.lead,
+.statement-sheet .st-dt tr {
+  break-inside: avoid;
+}
+/* A long number header ("Past grace (min)") may wrap so its narrow column
+   does not squeeze the one text column. */
+.statement-sheet .st-dt th.k-num {
+  white-space: normal;
+}
 .statement-sheet > tfoot > tr > td {
   padding: 0 14mm 6mm;
   vertical-align: bottom;

@@ -17,6 +17,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { apiErrorMessage } from '@/lib/api'
 
+import { paginate, type PageUnit } from './paperBlocks'
 import type { Orientation } from './printSettings'
 
 const PX_PER_MM = 96 / 25.4
@@ -74,16 +75,29 @@ export function PrintSetupShell({
       if (!canvas || !sheet || !sheet.tHead || !sheet.tFoot) return
       const page = (orient === 'landscape' ? 210 : 297) * PX_PER_MM
       const per = page - sheet.tHead.offsetHeight - sheet.tFoot.offsetHeight - 4 * PX_PER_MM
-      let pages = 1
-      let used = 0
+      // Rects are scaled by the preview transform; divide it back out.
+      const zoom = sheet.getBoundingClientRect().height / (sheet.offsetHeight || 1) || 1
+      const h = (el: Element): number => el.getBoundingClientRect().height / zoom
+      const units: PageUnit[] = []
       for (const row of Array.from(sheet.tBodies[0]?.rows ?? [])) {
-        const h = row.offsetHeight
-        if (used + h > per && used > 0) {
-          pages += 1
-          used = 0
+        const flow = row.querySelector<HTMLElement>('.st-flow')
+        const table = flow?.querySelector('table')
+        const lead = flow?.querySelector('tbody.lead')
+        if (!flow || !table?.tHead || !lead) {
+          units.push({ height: row.offsetHeight })
+          continue
         }
-        used += h
+        // Title + header + lead rows travel together; later rows break freely
+        // and re-print the header on the page they start.
+        const top = flow.getBoundingClientRect().top
+        units.push({ height: (lead.getBoundingClientRect().bottom - top) / zoom })
+        const rest = Array.from(table.tBodies).slice(1).flatMap((body) => Array.from(body.rows))
+        rest.forEach((tr, i) => {
+          const trailing = i === rest.length - 1 ? h(row) - (tr.getBoundingClientRect().bottom - top) / zoom : 0
+          units.push({ height: h(tr) + Math.max(0, trailing), header: h(table.tHead as Element), continues: true })
+        })
       }
+      const pages = paginate(units, per)
       const width = sheet.offsetWidth
       const avail = canvas.clientWidth - 32
       const scale = width > 0 && avail > 0 ? Math.min(1, avail / width) : 1

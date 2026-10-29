@@ -426,7 +426,10 @@ describe('fix round 3: say each fact once', () => {
     const [first, second] = rows.map(cells)
     expect(first[1]).toBe('Administrative Leave Form')
     expect(first[3]).toBe('G3095')
-    expect(first[5]).toBe('')
+    // Reference is blank in every row, so that column is dropped: Recorded by is now index 4.
+    expect(first).toHaveLength(5)
+    expect(first[4]).toBe('')
+    expect(second[4]).toBe('Mariam Al Kaabi')
     expect(second[1]).toBe('Leave Application Form')
     expect(second[3]).toBe('النظام')
     expect(sheet()).not.toHaveTextContent(/\bsystem\b/)
