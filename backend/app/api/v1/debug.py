@@ -21,16 +21,16 @@ import sys
 import threading
 import time
 import uuid
-from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from starlette.responses import Response
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app import __version__
 from app.api.deps import get_current_user, require_capability
@@ -55,33 +55,51 @@ _AI_TIMEOUT_S = 600
 _requests: collections.deque[dict[str, Any]] = collections.deque(maxlen=500)
 
 
-async def record_request(
-    request: Request, call_next: Callable[[Request], Awaitable[Response]]
-) -> Response:
-    """Middleware: remember method/path/status/duration of /api calls.
+class RequestRecorderMiddleware:
+    """Record header latency without buffering bodies or owning stream tasks.
 
-    DAV paths carry bearer tokens, so only ``/api/`` paths are kept, query
-    strings dropped.
+    Pure ASGI avoids BaseHTTPMiddleware's receive-stream leak when downstream
+    raises before sending headers. DAV tokens and query strings stay out.
     """
-    path = request.url.path
-    if not path.startswith("/api/") or path.startswith("/api/v1/debug/"):
-        return await call_next(request)
-    start = time.perf_counter()
-    status = 500
-    try:
-        response: Response = await call_next(request)
-        status = response.status_code
-        return response
-    finally:
-        _requests.append(
-            {
-                "ts": datetime.now(UTC).isoformat(timespec="seconds"),
-                "method": request.method,
-                "path": path,
-                "status": status,
-                "ms": round((time.perf_counter() - start) * 1000, 1),
-            }
-        )
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        path = scope.get("path", "")
+        if (
+            scope["type"] != "http"
+            or not path.startswith("/api/")
+            or path.startswith("/api/v1/debug/")
+        ):
+            await self.app(scope, receive, send)
+            return
+        start = time.perf_counter()
+        recorded = False
+
+        def record(status: int) -> None:
+            nonlocal recorded
+            recorded = True
+            _requests.append(
+                {
+                    "ts": datetime.now(UTC).isoformat(timespec="seconds"),
+                    "method": scope["method"],
+                    "path": path,
+                    "status": status,
+                    "ms": round((time.perf_counter() - start) * 1000, 1),
+                }
+            )
+
+        async def record_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                record(message["status"])
+            await send(message)
+
+        try:
+            await self.app(scope, receive, record_headers)
+        finally:
+            if not recorded:
+                record(500)
 
 
 # ── Log reading ──────────────────────────────────────────────────────────────

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import collections
+import gc
 import json
 import logging
 
@@ -136,3 +138,28 @@ def test_diagnose_runs_in_background_and_reports_failure(api_db, logfile, monkey
 def test_diagnose_without_engine_is_409(api_db, monkeypatch):
     monkeypatch.setattr(debug, "_engines", dict)
     assert _client(api_db, "admin").post("/api/v1/debug/diagnose", json={}).status_code == 409
+
+
+def test_failed_request_is_recorded_without_leaking_streams(api_db, monkeypatch):
+    monkeypatch.setattr(debug, "_requests", collections.deque(maxlen=500))
+    client = _client(api_db, "admin")
+
+    def fail():
+        raise RuntimeError("synthetic request failure")
+
+    client.app.add_api_route("/api/v1/recorder-probe", fail)
+    # Place the synthetic endpoint before the frontend catch-all.
+    client.app.router.routes.insert(0, client.app.router.routes.pop())
+    with pytest.raises(RuntimeError, match="synthetic request failure"):
+        client.get("/api/v1/recorder-probe?private=not-for-the-ring")
+    # The former BaseHTTPMiddleware path leaked its receive stream on this
+    # exception. Collect it here rather than failing an unrelated later test.
+    gc.collect()
+
+    response = client.get("/api/v1/debug/requests")
+    assert response.status_code == 200
+    assert [(row["method"], row["path"], row["status"]) for row in response.json()] == [
+        ("GET", "/api/v1/recorder-probe", 500)
+    ]
+    # Reading the console must not record itself or expose the query string.
+    assert client.get("/api/v1/debug/requests").json() == response.json()
