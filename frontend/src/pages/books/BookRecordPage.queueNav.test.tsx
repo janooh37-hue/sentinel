@@ -215,7 +215,7 @@ function renderRecord(): void {
 
 describe('BookRecordPage — Email via Outlook', () => {
   beforeEach(() => {
-    mockHas.mockImplementation(() => false)
+    mockHas.mockImplementation((cap) => cap === 'ledger.send')
     vi.mocked(api.getBook).mockReset()
   })
 
@@ -269,6 +269,16 @@ describe('BookRecordPage — Email via Outlook', () => {
       'aria-disabled',
       'true',
     )
+  })
+
+  it('hides the action without ledger.send even when the record has papers', async () => {
+    mockHas.mockImplementation(() => false)
+    vi.mocked(api.getBook).mockResolvedValue(recordFixture() as never)
+    renderRecord()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Tools' }))
+    expect(screen.queryByRole('menuitem', { name: /^Email via Outlook/ })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('ledger-state')).not.toBeInTheDocument()
   })
 })
 
