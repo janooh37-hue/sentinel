@@ -927,6 +927,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/employees/{employee_id}/statement/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Activity Statement
+         * @description Every readable fact in the employee's record in the period, newest first.
+         */
+        get: operations["get_activity_statement_api_v1_employees__employee_id__statement_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{employee_id}/statement/prints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Statement Print
+         * @description Issue the next statement serial: activity needs ``employees.view``;
+         *     attendance follows the employee attendance read rule exactly.
+         */
+        post: operations["create_statement_print_api_v1_employees__employee_id__statement_prints_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/employees/{employee_id}/leaves": {
         parameters: {
             query?: never;
@@ -7726,6 +7767,114 @@ export interface components {
             status_source?: ("manual" | "resignation_letter" | "scheduler" | "backfill") | null;
             /** Actor Name */
             actor_name?: string | null;
+        };
+        /**
+         * ActivityStatementItemRead
+         * @description One fact in the employee's record. Only the fields of its kind are set.
+         *
+         *     ``occurred_at`` is site-local (Asia/Dubai) and carries its offset, so the
+         *     wall-clock time is the string's ``HH:MM`` and the instant is unambiguous.
+         */
+        ActivityStatementItemRead: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "document" | "leave" | "violation" | "ledger" | "absence" | "duty_location" | "status";
+            /** Source Id */
+            source_id: number;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Date Only */
+            date_only: boolean;
+            /** Actor Name */
+            actor_name: string | null;
+            /** Reference */
+            reference: string | null;
+            /** Template Id */
+            template_id: string | null;
+            /** Template Name En */
+            template_name_en: string | null;
+            /** Template Name Ar */
+            template_name_ar: string | null;
+            /** Leave Type */
+            leave_type: string | null;
+            /** Start Date */
+            start_date: string | null;
+            /** End Date */
+            end_date: string | null;
+            /** Days */
+            days: number | null;
+            /** Leave Status */
+            leave_status: string | null;
+            /** Violation Type */
+            violation_type: string | null;
+            /** Description */
+            description: string | null;
+            /** Action Taken */
+            action_taken: string | null;
+            /** Deduction Days */
+            deduction_days: number | null;
+            /** Violation Status */
+            violation_status: string | null;
+            /** Subject */
+            subject: string | null;
+            /** Direction */
+            direction: string | null;
+            /** Channel */
+            channel: string | null;
+            /** Counterparty */
+            counterparty: string | null;
+            /** Note */
+            note: string | null;
+            /** Event Type */
+            event_type: ("initial_placement" | "transfer") | null;
+            /** From Department */
+            from_department: string | null;
+            /** From Unit */
+            from_unit: string | null;
+            /** From Post */
+            from_post: string | null;
+            /** To Department */
+            to_department: string | null;
+            /** To Unit */
+            to_unit: string | null;
+            /** To Post */
+            to_post: string | null;
+            /** Reason */
+            reason: string | null;
+            /** From Status */
+            from_status: string | null;
+            /** To Status */
+            to_status: string | null;
+            /** Effective Date */
+            effective_date: string | null;
+            /** Site */
+            site: string | null;
+            /** Return Date */
+            return_date: string | null;
+            /** Status Event Kind */
+            status_event_kind: ("changed" | "scheduled" | "scheduled_cancelled" | "applied" | "imported") | null;
+            /** Status Source */
+            status_source: ("manual" | "resignation_letter" | "scheduler" | "backfill") | null;
+            /** Linked Documents */
+            linked_documents: components["schemas"]["LinkedDocumentRead"][];
+        };
+        /** ActivityStatementRead */
+        ActivityStatementRead: {
+            /** Employee Id */
+            employee_id: string;
+            /** From Date */
+            from_date: string | null;
+            /** To Date */
+            to_date: string | null;
+            /** Items */
+            items: components["schemas"]["ActivityStatementItemRead"][];
+            /** Truncated */
+            truncated: boolean;
         };
         /**
          * AddressBookContactCreate
@@ -15558,6 +15707,65 @@ export interface components {
             /** Size */
             size: number;
         };
+        /** StatementPrintCreate */
+        StatementPrintCreate: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "activity" | "attendance";
+            /** From Date */
+            from_date: string | null;
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            /**
+             * Language
+             * @enum {string}
+             */
+            language: "ar" | "en";
+            /** Options */
+            options: {
+                [key: string]: unknown;
+            };
+        };
+        /** StatementPrintRead */
+        StatementPrintRead: {
+            /** Id */
+            id: number;
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "activity" | "attendance";
+            /** Serial */
+            serial: number;
+            /** Reference */
+            reference: string;
+            /** From Date */
+            from_date: string | null;
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            /**
+             * Language
+             * @enum {string}
+             */
+            language: "ar" | "en";
+            /**
+             * Printed At
+             * Format: date-time
+             */
+            printed_at: string;
+            /** Printed By Name */
+            printed_by_name: string | null;
+        };
         /** Subject */
         Subject: {
             /** User Id */
@@ -19827,6 +20035,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeDetailRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_activity_statement_api_v1_employees__employee_id__statement_activity_get: {
+        parameters: {
+            query?: {
+                from_date?: string | null;
+                to_date?: string | null;
+            };
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityStatementRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_statement_print_api_v1_employees__employee_id__statement_prints_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatementPrintCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementPrintRead"];
                 };
             };
             /** @description Validation Error */
