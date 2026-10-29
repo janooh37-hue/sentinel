@@ -282,6 +282,16 @@ After integration run narrow tests above once, TypeScript check `pnpm -C fronten
 3. Should employee message history require a distinct read permission rather than employees.view? **Recommend retain current behavior for this build**, with explicit explanation. A new privacy boundary needs agreement on history, body/provider fields and aggregate surfaces.
 4. Are reusable job presets already a recurring need beyond the 20-account workflow? **Recommend defer until task vocabulary is validated**, then design publish/assignment semantics separately rather than copying effective sets into personal grants.
 
+### Admin decisions (2026-10-29)
+
+These override the recommendations above where they differ.
+
+- Direction approved: Accounts register, then one account workspace. Clean cutover: the mirror and the Advanced panel are removed.
+- Question 1: build real per-template hiding now. Add a per-event view permission enforced by the backend on list, direct read, sample render and every embedded configuration consumer. Defaults keep today's visibility, so only an explicit Deny hides a template. Built as slice E after A to D merge, in the same PR.
+- Questions 2 and 3: keep the direct-recipient/reviewer record exception and employee message-history visibility unchanged. Explain both in Why.
+- See-but-cannot-act remediation across existing consumers ships in this build (slice D scope as written).
+- Question 4: presets and bulk onboarding are deferred until departments land. Add "Copy access from another account" now, in slice B: pick a source account, show the diff of personal exceptions plus a role-mismatch warning, stage the exact patch, preview it, then save with the conditional save. It copies personal exceptions only, never the role, and is unavailable for admin, self and disabled targets.
+
 ## Evidence and limits
 All six `.tmp/handoff-perm-{audit,roster,matrix,effective,scale,find}.md` research inputs were read fully. Parent inspected key template guards/editor, effective read/write schemas, resolver and expiry rules; independent read-only scouts cross-checked enforcement and department conflicts. This is a design deliverable: usability targets and proposed endpoints are not shipped or certified. Existing template gate regression and synthetic resolver/schema probe are current executable evidence; no UI implementation, production incident replay or deployment is claimed.
 Cross-check refinement: preserve pre/post-sweep expiry behavior rather than claiming equivalence. An expired opt-in dynamic grant ceases granting before cleanup, while sweep may convert it to a lasting deny affecting future default rollout (`perm_service.py:142-148,413-425`). Include both states in explanations and tests; changing this policy is not part of the redesign.
