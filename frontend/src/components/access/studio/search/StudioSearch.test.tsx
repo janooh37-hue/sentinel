@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AdminUserRead } from '@/lib/api'
+import i18n from '@/lib/i18n'
+import ar from '@/locales/ar.json'
 import type { ResourceSearchProps } from '../contracts'
 import { StudioSearch } from './StudioSearch'
-import { accountSearchIndex, searchEntries, type SearchEntry } from './searchIndex'
+import { accountSearchIndex, resourceSearchIndex, searchEntries, type SearchEntry } from './searchIndex'
 
 function account(id: number, employee: string, name = 'Ahmed'): AdminUserRead & { name_ar: string } {
   return { id, employee_id: employee, email: `person${id}@example.test`, display_name: name, name_en: name, name_ar: 'أَحْمَد', role: 'operator', status: 'active', failed_attempts: 0, last_login_at: null, created_at: null, is_default_manager: false, password_change_required: false }
@@ -16,7 +18,126 @@ function query(value: string) {
   return field
 }
 
+function templateItem(id = 'admin_leave', label = 'Administrative leave'): ResourceSearchProps['items'][number] {
+  return {
+    resource: { kind: 'notification_template', id }, group_id: 'templates',
+    label: { en: label, ar: 'إجازة إدارية' },
+    description: { en: 'Notification wording', ar: 'نص الإشعارات' },
+    aliases: { en: ['leave notice'], ar: ['إشعار الإجازة'] },
+    actions: (['view', 'edit', 'reset'] as const).map((action) => ({
+      action, authorization: 'allowed', executable_now: true, configurable: true,
+      setting_capabilities: action === 'view' ? [`messages.templates.view.notify.${id}`] : ['messages.templates'],
+      editable_effects: ['grant', 'deny', null], rule_id: `template.${action}`,
+      reasons: [], reason_tree: { op: 'all', children: [] }, required_context: [], warnings: [],
+    })),
+  }
+}
+
+afterEach(async () => { await i18n.changeLanguage('en') })
+
 describe('StudioSearch', () => {
+  it('reports live resource matches once per changed result set and clears them with the query', () => {
+    const onMatchesChange = vi.fn()
+    const navigate = vi.fn()
+    const item = templateItem()
+    const view = render(<StudioSearch subjectId={7} items={[item]} onNavigate={navigate} onMatchesChange={onMatchesChange} />)
+    expect(onMatchesChange).toHaveBeenCalledExactlyOnceWith([])
+    query('leave notice')
+    expect(onMatchesChange).toHaveBeenLastCalledWith([item.resource])
+    expect(onMatchesChange).toHaveBeenCalledTimes(2)
+    expect(navigate).not.toHaveBeenCalled()
+    view.rerender(<StudioSearch subjectId={7} items={[{ ...item }]} onNavigate={navigate} onMatchesChange={onMatchesChange} />)
+    expect(onMatchesChange).toHaveBeenCalledTimes(2)
+    query('')
+    expect(onMatchesChange).toHaveBeenLastCalledWith([])
+    expect(onMatchesChange).toHaveBeenCalledTimes(3)
+  })
+
+  it('groups one human-labelled resource with its breadcrumb and exact-action chips', () => {
+    const navigate = vi.fn()
+    render(<StudioSearch subjectId={7} items={[templateItem()]} onNavigate={navigate} />)
+    const field = query('leave notice')
+    const group = screen.getByRole('group', { name: /Templates & notifications.*Administrative leave/ })
+    expect(screen.getAllByRole('group')).toHaveLength(1)
+    expect(screen.getAllByText('Administrative leave')).toHaveLength(1)
+    expect(within(group).getAllByRole('option')).toHaveLength(3)
+    expect(screen.getByRole('status')).toHaveTextContent('1 result')
+    expect(group).not.toHaveTextContent('admin_leave')
+    expect(group).not.toHaveTextContent('messages.templates')
+    expect(field).not.toHaveAttribute('aria-activedescendant')
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(navigate).not.toHaveBeenCalled()
+    fireEvent.click(within(group).getByRole('option', { name: 'Administrative leave · Reset to default' }))
+    expect(navigate).toHaveBeenCalledExactlyOnceWith({
+      userId: 7, resource: { kind: 'notification_template', id: 'admin_leave' }, action: 'reset',
+    })
+  })
+
+  it('shows only the exactly queried resource or action identifier, never the other technical IDs', () => {
+    render(<StudioSearch subjectId={7} items={[templateItem()]} onNavigate={vi.fn()} />)
+    query('admin_')
+    expect(screen.getByRole('group')).not.toHaveTextContent('admin_leave')
+    query('admin_leave')
+    let group = screen.getByRole('group')
+    expect(within(group).getByText('admin_leave')).toBeVisible()
+    expect(group).not.toHaveTextContent('notification_template:admin_leave:edit')
+    expect(group).not.toHaveTextContent('messages.templates')
+    query('notification_template:admin_leave:edit')
+    group = screen.getByRole('group')
+    expect(within(group).getByText('notification_template:admin_leave:edit')).toBeVisible()
+    expect(within(group).queryByText('admin_leave')).not.toBeInTheDocument()
+    expect(group).not.toHaveTextContent('messages.templates')
+  })
+
+  it('manually selects the exact action ID, retains every sibling chip, and exposes its active descendant', () => {
+    const navigate = vi.fn()
+    render(<StudioSearch subjectId={7} items={[templateItem()]} onNavigate={navigate} />)
+    const field = query('notification_template:admin_leave:reset')
+    expect(screen.getAllByRole('option')).toHaveLength(3)
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(navigate).not.toHaveBeenCalled()
+    fireEvent.keyDown(field, { key: 'ArrowDown' })
+    const selected = screen.getByRole('option', { selected: true })
+    expect(selected).toHaveAccessibleName('Administrative leave · Reset to default')
+    expect(field).toHaveAttribute('aria-activedescendant', selected.id)
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(navigate).toHaveBeenCalledExactlyOnceWith({
+      userId: 7, resource: { kind: 'notification_template', id: 'admin_leave' }, action: 'reset',
+    })
+  })
+
+  it('does not substitute a sibling action after the selected action disappears', () => {
+    const navigate = vi.fn()
+    const item = templateItem()
+    const view = render(<StudioSearch subjectId={7} items={[item]} onNavigate={navigate} />)
+    const field = query('notification_template:admin_leave:reset')
+    fireEvent.keyDown(field, { key: 'ArrowDown' })
+    view.rerender(<StudioSearch subjectId={7} items={[{ ...item, actions: item.actions.filter((action) => action.action !== 'reset') }]} onNavigate={navigate} />)
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(navigate).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toBeVisible()
+  })
+
+  it('presents Arabic labels, breadcrumb and actions while matching English resource and action text', async () => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await act(async () => { await i18n.changeLanguage('ar') })
+    const navigate = vi.fn()
+    render(<div dir="rtl"><StudioSearch subjectId={7} items={[templateItem()]} onNavigate={navigate} /></div>)
+    const field = query('Reset to default')
+    const group = screen.getByRole('group')
+    expect(group).toHaveAccessibleName(`${i18n.t('access.studio.groups.templates')} إجازة إدارية`)
+    expect(within(group).getByText('إجازة إدارية')).toBeVisible()
+    expect(group).not.toHaveTextContent('Administrative leave')
+    expect(group).not.toHaveTextContent('admin_leave')
+    expect(field).toHaveAttribute('dir', 'auto')
+    fireEvent.keyDown(field, { key: 'ArrowDown' })
+    expect(screen.getByRole('option', { selected: true })).toHaveTextContent(i18n.t('access.studio.search.actions.reset'))
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(navigate).toHaveBeenCalledExactlyOnceWith({
+      userId: 7, resource: { kind: 'notification_template', id: 'admin_leave' }, action: 'reset',
+    })
+  })
+
   it('navigates to an exact resource/action without any mutation and clears selection across subjects', () => {
     const navigate = vi.fn()
     const items: ResourceSearchProps['items'] = [{
@@ -131,6 +252,16 @@ function entry(key: string, text: string, aliases: string[] = []): SearchEntry {
   return { key, label: text, alternateLabel: '', text: [text], aliases, identifiers: [key], destination: { userId: 1 } }
 }
 describe('search ranking', () => {
+  it('counts resources once even when several action IDs match the same capability', () => {
+    const items = [templateItem(), templateItem('leave_approved', 'Leave approved')]
+    const index = resourceSearchIndex({ subjectId: 7, items, onNavigate: vi.fn() }, false)
+    expect(index).toHaveLength(2)
+    const matches = searchEntries(index, 'messages.templates')
+    expect(matches).toHaveLength(2)
+    expect(matches.map(({ entry }) => entry.label)).toEqual(['Administrative leave', 'Leave approved'])
+    expect(matches[0].actions?.map((action) => action.destination.action)).toEqual(['edit', 'reset', 'view'])
+  })
+
   it('matches employee digits only to the complete employee number, never a database ID', () => {
     const index = accountSearchIndex([account(101, 'G999'), account(7, 'G101')])
     expect(searchEntries(index, '١٠١').map(({ entry }) => entry.destination.userId)).toEqual([7])

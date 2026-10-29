@@ -2,6 +2,7 @@ import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { AccessWarnings, DecisionOutcome, WhyAccess } from './WhyAccess'
+import { LocalDateTime, SettingIdentity } from './SettingIdentity'
 import {
   destinationId,
   localized,
@@ -95,9 +96,7 @@ export function ChangeReview({
               )
               return (
                 <li key={patch.capability} className="min-w-0 py-3">
-                  <p className="break-all font-mono text-sm">
-                    <bdi dir="ltr">{patch.capability}</bdi>
-                  </p>
+                  <SettingIdentity snapshot={snapshot} capability={patch.capability} />
                   <dl className="mt-2 grid min-w-0 gap-3 text-sm sm:grid-cols-2">
                     <div className="min-w-0">
                       <dt className="text-muted-foreground">
@@ -115,13 +114,7 @@ export function ChangeReview({
                       <dd className="mt-1 break-words text-muted-foreground">
                         {t('access.studio.review.expiry')}:{' '}
                         {before.expires_at ? (
-                          <time
-                            dateTime={before.expires_at}
-                            dir="ltr"
-                            className="break-all font-mono tabular-nums"
-                          >
-                            {before.expires_at}
-                          </time>
+                          <LocalDateTime value={before.expires_at} />
                         ) : (
                           t('access.studio.review.noExpiry')
                         )}
@@ -148,13 +141,7 @@ export function ChangeReview({
                       <dd className="mt-1 break-words text-muted-foreground">
                         {t('access.studio.review.expiry')}:{' '}
                         {patch.expires_at ? (
-                          <time
-                            dateTime={patch.expires_at}
-                            dir="ltr"
-                            className="break-all font-mono tabular-nums"
-                          >
-                            {patch.expires_at}
-                          </time>
+                          <LocalDateTime value={patch.expires_at} />
                         ) : (
                           t('access.studio.review.noExpiry')
                         )}
@@ -226,15 +213,14 @@ export function ChangeReview({
                               {item ? (
                                 localized(item.label, i18n.language)
                               ) : (
-                                <bdi>{impact.resource.id}</bdi>
+                                t(`access.studio.resourceKind.${impact.resource.kind}`)
                               )}{' '}
                               · {t(`access.studio.actions.${impact.action}`)}
                             </h5>
-                            <p className="mt-1 break-all font-mono text-xs">
-                              <bdi dir="ltr">
-                                {destinationId(impact.resource, impact.action)}
-                              </bdi>
-                            </p>
+                            <details className="text-xs text-muted-foreground">
+                              <summary className="inline-flex min-h-11 cursor-pointer items-center focus-visible:outline-2 focus-visible:outline-ring">{t('access.studio.why.technical')}</summary>
+                              <p className="break-all font-mono"><bdi dir="ltr">{destinationId(impact.resource, impact.action)}</bdi></p>
+                            </details>
                             {impact.before.executable_now === true &&
                               impact.after.executable_now === false && (
                                 <p className="mt-2 text-sm text-warning">

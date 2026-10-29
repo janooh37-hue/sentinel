@@ -92,3 +92,12 @@ export function reviewedTemplateGrants(snapshot: Snapshot, patches: Patch[]): Se
     ).flatMap((action) => action.setting_capabilities),
   ))
 }
+
+/** The summary, filter and row marker must describe the same attention set. */
+export function needsAttention(action: Decision, snapshot: Snapshot): boolean {
+  return action.authorization === 'unknown' ||
+    action.authorization === 'needs_context' ||
+    (action.authorization === 'allowed' && action.executable_now === false) ||
+    (action.warnings?.length ?? 0) > 0 ||
+    action.setting_capabilities.some((capability) => snapshot.overrides.some((override) => override.capability === capability && override.state === 'expired'))
+}

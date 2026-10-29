@@ -5387,6 +5387,8 @@
       "access": "Access",
       "account": "Account",
       "evaluated": "Evaluated",
+      "checkedAt": "Checked at {{time}}",
+      "accountSetting": "Account setting",
       "loading": "Loading access…",
       "loadError": "Could not load this account’s access. Retry.",
       "retry": "Retry",
@@ -5596,6 +5598,8 @@
         "LEDGER_BOOK_CHAIN_ONLY": "This operation is restricted to the Ledger Book revision chain.",
         "CONDITIONAL_PREREQUISITE_MISSING": "A prerequisite is missing for the existing-assignment path. Initial placement is evaluated separately.",
         "EXISTING_ASSIGNMENT_REQUIRES_RECORD_TYPE": "Changing an existing assignment requires the ordinary record-type permissions.",
+        "INMATE_REPORTER_ROUTE_FORBIDDEN": "The reporter role does not permit this action.",
+        "TEMPLATE_NOT_FOUND": "This template is unavailable to this account.",
         "PROPOSED_RECORD_ACCESS_LOST": "The proposed settings remove this account’s access to the record."
       },
       "issueCodes": {
@@ -5604,9 +5608,19 @@
         "TEMPLATES_REMAIN_VISIBLE": "Templates remain visible under the current view policy. Editing and resetting are separate.",
         "PREREQUISITE_BLOCKED": "This action is blocked by a missing prerequisite. Review the exact settings; no dependent permissions change automatically.",
         "CONDITIONAL_PREREQUISITE_BLOCKED": "A prerequisite blocks the existing-assignment path. Initial placement may still be allowed; no related settings change automatically.",
+        "VISIBILITY_CONTROL_UNAVAILABLE": "Visibility cannot be changed for this resource.",
         "MISSING_ARABIC_TRANSLATION": "Arabic catalog wording is missing for the listed fields. The available catalog wording is shown."
       },
+      "groupSummary": {
+        "allowed": "{{count}} allowed",
+        "exceptions_one": "{{count}} personal exception",
+        "exceptions_other": "{{count}} personal exceptions",
+        "attention_one": "{{count}} needs attention",
+        "attention_other": "{{count}} need attention"
+      },
       "why": {
+        "short": "Why?",
+        "technical": "Technical details",
         "title": "Why this access?",
         "decisive": "Decisive sources",
         "contributing": "Contributing sources",

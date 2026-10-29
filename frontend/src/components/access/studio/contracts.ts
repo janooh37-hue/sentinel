@@ -9,4 +9,5 @@ export type ResourceSearchProps = {
   subjectId?: number
   items: AccessItem[]
   onNavigate: (destination: StudioDestination) => void
+  onMatchesChange?: (resources: Resource[]) => void
 }

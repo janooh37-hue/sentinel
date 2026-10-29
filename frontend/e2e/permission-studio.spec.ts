@@ -60,7 +60,6 @@ async function reviewAndSave(
   const review = page.getByRole('region', { name: strings.review.title, exact: true })
   const exactChanges = review.getByRole('list', { name: strings.review.exactChanges, exact: true })
   await expect(exactChanges.getByRole('listitem')).toHaveCount(items.length)
-  for (const item of items) await expect(exactChanges.getByText(item.capability, { exact: true })).toBeVisible()
 
   const previewResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `${accessUrl(baseline.subject.user_id)}/preview`)
   await review.getByRole('button', { name: strings.review.refresh, exact: true }).click()
@@ -101,7 +100,7 @@ async function reviewAndSave(
 }
 
 for (const locale of ['en', 'ar'] as const) {
-  for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+  for (const viewport of [{ width: 1366, height: 900 }, { width: 390, height: 844 }]) {
     test(`real account search, deny, check and reviewed copy ${locale} ${viewport.width}x${viewport.height}`, async ({ page, context, request }) => {
       test.setTimeout(120_000)
       const strings = (locale === 'en' ? en : ar).access.studio
@@ -148,6 +147,8 @@ for (const locale of ['en', 'ar'] as const) {
       // Phone entry must not summon its keyboard before the user chooses search.
       await expect(accountSearch).not.toBeFocused()
       await page.getByRole('combobox', { name: strings.role, exact: true }).selectOption('operator')
+      await page.evaluate(() => Promise.all(document.getAnimations().filter((animation) => animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished.catch(() => {}))))
+      await page.screenshot({ path: `../.impeccable/review/perm-polish/${locale}-${viewport.width}-register.png` })
       await page.getByRole('combobox', { name: strings.statusLabel, exact: true }).selectOption('active')
       await accountSearch.fill(target.email)
       const accountResult = page.getByRole('listbox', { name: strings.search.accounts, exact: true }).getByRole('option').filter({ hasText: target.email })
@@ -159,6 +160,16 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(page).toHaveURL(/dept=7/)
       await expect(page.getByText(target.email, { exact: true })).toBeVisible()
       await expect(page.getByRole('heading', { name: strings.access, exact: true })).toBeVisible()
+      const firstAction = page.getByRole('article').first()
+      await expect(firstAction).toBeInViewport()
+      if (viewport.width >= 1000) {
+        const visibleRows = await page.getByRole('article').evaluateAll((rows) => rows.filter((row) => {
+          const rect = row.getBoundingClientRect()
+          return rect.height > 0 && rect.top >= 0 && rect.bottom <= window.innerHeight
+        }).length)
+        expect(visibleRows).toBeGreaterThanOrEqual(10)
+      }
+      await page.screenshot({ path: `../.impeccable/review/perm-polish/${locale}-${viewport.width}-workspace.png` })
 
       const resourceSearch = page.getByRole('combobox', { name: strings.search.resources, exact: true })
       const editName = `${strings.actions.edit} · ${notification.label[locale]}`
@@ -167,8 +178,9 @@ for (const locale of ['en', 'ar'] as const) {
       for (const query of [notification.label.en, notification.label.ar]) {
         await resourceSearch.fill(query)
         const results = page.getByRole('listbox', { name: strings.search.resources, exact: true })
-        const editResult = results.getByRole('option').filter({ hasText: `notification_template:${notification.resource.id}:edit` })
+        const editResult = results.getByRole('option', { name: `${notification.label[locale]} · ${strings.search.actions.edit}`, exact: true })
         await expect(editResult).toHaveCount(1)
+        if (query === notification.label[locale]) await page.screenshot({ path: `../.impeccable/review/perm-polish/${locale}-${viewport.width}-search.png` })
         await editResult.click()
         await expect(editRow.getByRole('heading', { name: editName, exact: true })).toBeFocused()
         await expect(page.getByText(target.email, { exact: true })).toBeInViewport()
@@ -187,11 +199,10 @@ for (const locale of ['en', 'ar'] as const) {
       expect(savedNotification?.actions.find(({ action }) => action === 'view')?.authorization).toBe('allowed')
       await expect(editRow.getByRole('radio', { name: strings.settings.deny, exact: true })).toBeChecked()
       await expect(editRow.getByText(strings.outcomes.denied, { exact: true }).first()).toBeVisible()
-      await editRow.locator('summary').filter({ hasText: strings.why.title }).click()
+      await editRow.locator('summary').filter({ hasText: strings.why.short }).click()
       const why = editRow.locator('details[open]')
       await expect(why.getByRole('heading', { name: strings.why.decisive, exact: true })).toBeVisible()
       await expect(why.getByText(strings.reasonCodes.PERSONAL_DENY, { exact: true }).first()).toBeVisible()
-      await expect(why.getByText('messages.templates', { exact: true }).first()).toBeVisible()
       const viewRow = page.getByRole('article', { name: `${strings.actions.view} · ${notification.label[locale]}`, exact: true })
       await expect(viewRow.getByText(strings.outcomes.allowed, { exact: true }).first()).toBeVisible()
 
@@ -237,7 +248,6 @@ for (const locale of ['en', 'ar'] as const) {
         ['employees.edit', strings.review.followRole, strings.review.deny],
       ]) {
         const change = copyChanges.getByRole('listitem').filter({ hasText: capability })
-        await expect(change.getByText(capability, { exact: true })).toBeVisible()
         await expect(change.locator('dd').filter({ hasText: before })).toBeVisible()
         await expect(change.locator('dd').filter({ hasText: after })).toBeVisible()
       }
@@ -270,7 +280,7 @@ for (const locale of ['en', 'ar'] as const) {
       const hiddenItem = hidden.items.find(({ resource }) => resource.kind === 'notification_template' && resource.id === notification.resource.id)
       expect(hiddenItem?.actions.find(({ action }) => action === 'view')?.authorization).toBe('denied')
       expect(hiddenItem?.actions.find(({ action }) => action === 'edit')?.authorization).toBe('denied')
-      await viewRow.locator('summary').filter({ hasText: strings.why.title }).click()
+      await viewRow.locator('summary').filter({ hasText: strings.why.short }).click()
       await expect(viewRow.getByText(strings.reasonCodes.PERSONAL_DENY, { exact: true }).first()).toBeVisible()
 
       // Deny/Allow here uses the actual controls rather than bypassing them

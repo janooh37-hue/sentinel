@@ -349,7 +349,7 @@ function CheckAccessForm({
                             {item ? (
                               localized(item.label, i18n.language)
                             ) : (
-                              <bdi>{impact.resource.id}</bdi>
+                              t(`access.studio.resourceKind.${impact.resource.kind}`)
                             )}{' '}
                             · {t(`access.studio.actions.${impact.action}`)}
                           </p>

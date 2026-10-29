@@ -141,26 +141,27 @@ export function PeoplePermissionsPanel(): React.JSX.Element {
     if (!requestWorkspaceNavigation(proceed)) proceed()
   }
   const managementLink = <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline underline-offset-4" to="/access-requests">{t('access.studio.manageAccounts')}</Link>
-  return <section ref={registerRef} className="min-w-0 space-y-5 [&_button]:min-h-11" aria-busy={usersQuery.isPending || saving}>
-    <header className="flex flex-wrap items-start justify-between gap-3">
+  return <section ref={registerRef} className="min-w-0 space-y-3 [&_button]:min-h-11" aria-busy={usersQuery.isPending || saving}>
+    {selectedParam === null && <header className="flex flex-wrap items-start justify-between gap-3">
       <h1 className="text-2xl font-semibold tracking-tight">{t('access.studio.accounts')}</h1>
       {managementLink}
-    </header>
+    </header>}
     {usersQuery.isPending ? <p role="status">{t('common.loading')}</p>
       : usersQuery.isLoadingError ? <div role="alert"><p>{t('access.loadError')}: {apiErrorMessage(usersQuery.error)}</p><Button onClick={() => void usersQuery.refetch()}>{t('common.retry')}</Button></div>
       : selectedParam !== null ? <>
         {!selected ? <><Button variant="ghost" onClick={back} disabled={saving}>{t('access.studio.backToAccounts')}</Button><p role="alert">{t('access.studio.accountUnavailable')}</p></> : <>
-          <header ref={identityRef} className="sticky top-0 z-30 space-y-2 border-b border-border bg-background py-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <Button variant="ghost" onClick={back} disabled={saving}>{t('access.studio.backToAccounts')}</Button>
-              <h2 className="min-w-0 break-words text-xl font-semibold"><bdi>{nameOf(selected, arabic)}</bdi></h2>
+          <header ref={identityRef} className="sticky top-0 z-30 border-b border-border bg-background py-2">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" className="shrink-0 px-2" onClick={back} disabled={saving}>{t('access.studio.backToAccounts')}</Button>
+              <h1 className="min-w-0 break-words text-lg font-semibold sm:text-xl"><bdi>{nameOf(selected, arabic)}</bdi></h1>
             </div>
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground sm:text-sm">
               <bdi dir="ltr" className="break-all">{selected.email}</bdi>
-              <bdi dir="ltr">{selected.employee_id}</bdi>
+              {selected.employee_id && <><span aria-hidden="true">·</span><bdi dir="ltr">{selected.employee_id}</bdi></>}
+              <span aria-hidden="true">·</span>
               <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to={`/access-requests?tab=${selected.status === 'active' ? 'active' : 'suspended'}&user=${selected.id}`}>{t(`access.roleName.${selected.role}`)}</Link>
-              <span>{t(`access.status.${selected.status}`)}</span>
-              <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to="/access-requests?tab=permission-requests">{t('access.studio.pendingRequests', { count: pendingCount })}</Link>
+              <span aria-hidden="true">·</span><span>{t(`access.status.${selected.status}`)}</span>
+              <span aria-hidden="true">·</span><Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to="/access-requests?tab=permission-requests">{t('access.studio.pendingRequests', { count: pendingCount })}</Link>
             </p>
           </header>
           {selected.status === 'pending' ? <Link onClick={guardManagementNavigation} aria-disabled={saving || undefined} tabIndex={saving ? -1 : undefined} className="inline-flex min-h-11 items-center text-primary underline" to={`/access-requests?user=${selected.id}`}>{t('access.studio.reviewAccount')}</Link>

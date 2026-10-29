@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import {
   destinationId,
   localized,
+  needsAttention,
   isMessageTemplate,
   personalSetting,
   personalSettingBindings,
@@ -14,12 +15,8 @@ import {
   type Patch,
   type Snapshot,
 } from './studioModel'
-import {
-  AccessWarnings,
-  DecisionOutcome,
-  ReasonText,
-  WhyAccess,
-} from './WhyAccess'
+import { AccessWarnings, DecisionOutcome, WhyAccess } from './WhyAccess'
+import { LocalDateTime } from './SettingIdentity'
 
 export interface ActionRowProps {
   item: AccessItem
@@ -203,11 +200,11 @@ export function ActionRow({
   const changed = patches.some((patch: Patch) =>
     decision.setting_capabilities.includes(patch.capability),
   )
-  const reason =
-    decision.reasons.find(
-      (entry: Decision['reasons'][number]) => entry.decisive,
-    ) ??
-    decision.reasons.find((entry: Decision['reasons'][number]) => entry.applied)
+  const showProposed = changed || (proposed != null && (
+    proposed.authorization !== decision.authorization ||
+    proposed.executable_now !== decision.executable_now ||
+    JSON.stringify(proposed.warnings ?? []) !== JSON.stringify(decision.warnings ?? [])
+  ))
   const residualView =
     decision.action !== 'view' &&
     view?.authorization === 'allowed' &&
@@ -221,211 +218,72 @@ export function ActionRow({
   return (
     <article
       className={cn(
-        'min-w-0 space-y-4 border-t border-hairline p-4 sm:p-5',
+        'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-t border-hairline px-3 py-1 sm:px-4 lg:grid-cols-[minmax(12rem,1fr)_minmax(0,0.7fr)_auto_auto_auto] lg:py-0',
         changed && 'bg-primary-soft/30',
       )}
       aria-labelledby={destination}
     >
-      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 basis-52 space-y-1">
-          <h4
-            id={destination}
-            tabIndex={-1}
-            className="scroll-mt-24 w-fit max-w-full rounded-sm font-semibold text-foreground [overflow-wrap:anywhere] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
-          >
-            {actionLabel} · <bdi>{localized(item.label, i18n.language)}</bdi>
-          </h4>
-          <p className="max-w-prose text-sm text-muted-foreground [overflow-wrap:anywhere]">
-            {localized(item.description, i18n.language)}
-          </p>
-        </div>
+      <div className="col-span-full flex min-w-0 items-center gap-2 lg:col-span-1">
         {editable && (
-          <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-sm px-2 text-sm focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring">
-            <input
-              type="checkbox"
-              checked={selected}
-              disabled={disabled}
-              onChange={(event) => onSelect(event.target.checked)}
-              className="size-4 accent-primary"
-            />
-            <span>{t('access.studio.selectAction')}</span>
-            <span className="sr-only">
-              {actionLabel} · {localized(item.label, i18n.language)}
-            </span>
+          <label className="flex min-h-11 shrink-0 cursor-pointer items-center px-1 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring">
+            <input type="checkbox" checked={selected} disabled={disabled} onChange={(event) => onSelect(event.target.checked)} className="size-4 accent-primary" />
+            <span className="sr-only">{t('access.studio.selectAction')} · {actionLabel} · {localized(item.label, i18n.language)}</span>
           </label>
         )}
+        <h4 id={destination} tabIndex={-1} title={`${actionLabel} · ${localized(item.label, i18n.language)}`} className="min-w-0 scroll-mt-24 truncate rounded-sm text-sm font-semibold text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
+          {actionLabel} · <bdi>{localized(item.label, i18n.language)}</bdi>
+        </h4>
+        {!editable && <LockKeyhole className="size-3.5 shrink-0 text-muted-foreground" aria-label={t('access.studio.lockedPolicy')} />}
       </div>
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">
-            {t('access.studio.current')}
-          </p>
-          <DecisionOutcome decision={decision} resource={item.resource} />
-          {template && decision.action === 'view' && decision.authorization === 'denied' && (
-            <p className="text-sm text-muted-foreground">{t('access.studio.templateViewRequired')}</p>
-          )}
-          {reason && (
-            <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">
-              <ReasonText reason={reason} />
-            </p>
-          )}
-        </div>
-        {(changed ||
-          (proposed &&
-            (proposed.authorization !== decision.authorization ||
-              proposed.executable_now !== decision.executable_now ||
-              JSON.stringify(proposed.warnings ?? []) !==
-                JSON.stringify(decision.warnings ?? [])))) && (
-          <div className="space-y-1" aria-live="polite">
-            <p className="text-xs font-medium text-primary">
-              {t('access.studio.proposed')}
-            </p>
-            {proposed ? (
-              <DecisionOutcome decision={proposed} resource={item.resource} />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {t('access.studio.previewPending')}
-              </p>
-            )}
-          </div>
-        )}
+      <p title={localized(item.description, i18n.language)} className="hidden min-w-0 truncate text-xs text-muted-foreground lg:block">{localized(item.description, i18n.language)}</p>
+      <div className="flex min-w-0 flex-wrap items-center gap-1 lg:max-w-48" aria-live="polite">
+        <span title={t('access.studio.current')}><DecisionOutcome decision={decision} resource={item.resource} /></span>
+        {showProposed && <span className="sr-only">{t('access.studio.proposed')}</span>}
+        {showProposed && (proposed ? <span title={t('access.studio.proposed')}><span aria-hidden="true">› </span><DecisionOutcome decision={proposed} resource={item.resource} /></span> : <span className="text-xs text-muted-foreground">{t('access.studio.previewPending')}</span>)}
+        {needsAttention(decision, snapshot) && <span className="text-xs font-medium text-warning">{t('access.studio.filter.attention')}</span>}
       </div>
-      {decision.setting_capabilities.length > 0 && (
-        <div className="space-y-1 text-sm">
-          <p>
-            <span className="text-muted-foreground">
-              {t('access.studio.roleBaseline')}:{' '}
-            </span>
-            <span className="font-medium">
-              {t(`access.studio.baseline.${baseline}`)}
-            </span>
-          </p>
-          {decision.setting_capabilities.length > 1 && (
-            <ul className="space-y-1 text-xs text-muted-foreground">
-              {decision.setting_capabilities.map(
-                (capability: Decision['setting_capabilities'][number]) => (
-                  <li key={capability} className="[overflow-wrap:anywhere]">
-                    <bdi className="font-mono">{capability}</bdi> ·{' '}
-                    {t(
-                      `access.studio.baseline.${snapshot.role_defaults.includes(capability) ? 'granted' : 'not_granted'}`,
-                    )}
-                  </li>
-                ),
-              )}
-            </ul>
-          )}
-        </div>
-      )}
       {editable ? (
-        <div className="space-y-3">
-          {editImpliesView && (
-            <p id={`${radioName}-consequence`} className="max-w-prose text-sm text-muted-foreground">
-              {t('access.studio.templateEditImpliesView')}
-            </p>
-          )}
-          {template && decision.action === 'view' && (
-            <p id={`${radioName}-consequence`} className="max-w-prose text-sm text-muted-foreground">
-              {t(item.resource.kind === 'email_template'
-                ? 'access.studio.templateViewConsequenceEmail'
-                : 'access.studio.templateViewConsequence')}
-            </p>
-          )}
-          <fieldset disabled={disabled} aria-describedby={template ? `${radioName}-consequence` : undefined} className="min-w-0 space-y-2">
-            <legend className="text-sm font-medium">
-              {t('access.studio.personalSetting')}
-              {effect === 'mixed' && (
-                <span className="ms-2 text-warning">
-                  {t('access.studio.mixed')}
-                </span>
-              )}
-            </legend>
-            <div className="flex flex-wrap gap-2">
-              {options
-                .filter((option) =>
-                  decision.editable_effects.includes(option.effect),
-                )
-                .map((option) => (
-                  <label
-                    key={option.key}
-                    className={cn(
-                      'flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring',
-                      effect === option.effect
-                        ? 'bg-primary-soft font-medium text-primary'
-                        : 'bg-surface text-foreground',
-                      disabled && 'cursor-not-allowed opacity-60',
-                    )}
-                  >
-                    <input
-                      type="radio"
-                      name={radioName}
-                      checked={effect === option.effect}
-                      value={option.effect ?? 'default'}
-                      className="size-4 accent-primary"
-                      onChange={() =>
-                        onStage(
-                          stageActionSetting(item, decision, option.effect, snapshot, patches),
-                        )
-                      }
-                    />
-                    {t(`access.studio.settings.${option.key}`)}
-                  </label>
-                ))}
-            </div>
-          </fieldset>
-          <ul
-            className="space-y-1 text-xs text-muted-foreground"
-            aria-label={t('access.studio.boundSettings')}
-          >
-            {settings.map((setting: Patch) => {
-              const saved = snapshot.overrides.find(
-                (override: Snapshot['overrides'][number]) =>
-                  override.capability === setting.capability,
-              )
-              return (
-                <li
-                  key={setting.capability}
-                  className="[overflow-wrap:anywhere]"
-                >
-                  <bdi className="font-mono">{setting.capability}</bdi> ·{' '}
-                  {t(
-                    `access.studio.settings.${setting.effect == null ? 'followRole' : setting.effect === 'grant' ? 'allow' : 'deny'}`,
-                  )}
-                  {saved?.state === 'expired' &&
-                    !patches.some(
-                      (patch: Patch) => patch.capability === setting.capability,
-                    ) && (
-                      <span className="ms-2 text-warning">
-                        {t('access.studio.expiry.expired')}
-                      </span>
-                    )}
-                </li>
-              )
-            })}
-          </ul>
-          {settings
-            .filter((setting: Patch) => setting.effect != null)
-            .map((setting: Patch) => (
-              <ExpiryField
-                key={`${setting.capability}:${setting.expires_at ?? ''}:${setting.effect}`}
-                patch={setting}
-                disabled={disabled}
-                onStage={onStage}
-              />
+        <fieldset disabled={disabled} className="col-span-full min-w-0 lg:col-span-1">
+          <legend className="sr-only">{t('access.studio.personalSetting')} · {actionLabel} · {localized(item.label, i18n.language)}{effect === 'mixed' && ` · ${t('access.studio.mixed')}`}</legend>
+          <div className="inline-flex max-w-full rounded-md border border-border bg-surface-tinted p-0.5">
+            {options.map((option) => (
+              <label key={option.key} className={cn(
+                'relative flex min-h-11 min-w-0 cursor-pointer items-center justify-center rounded px-3 text-xs focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring lg:min-h-8 lg:px-2 pointer-coarse:min-h-11',
+                effect === option.effect ? 'bg-primary font-semibold text-primary-foreground' : 'text-muted-foreground hover:bg-surface',
+                (disabled || !decision.editable_effects.includes(option.effect)) && 'cursor-not-allowed opacity-60',
+              )}>
+                <input type="radio" name={radioName} checked={effect === option.effect} value={option.effect ?? 'default'} disabled={!decision.editable_effects.includes(option.effect)} className="absolute inset-0 m-0 h-full w-full cursor-inherit opacity-0" onChange={() => onStage(stageActionSetting(item, decision, option.effect, snapshot, patches))} />
+                {t(`access.studio.settings.${option.key}`)}
+              </label>
             ))}
-        </div>
-      ) : (
-        <p className="flex items-start gap-2 text-sm text-muted-foreground">
-          <LockKeyhole className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          {t('access.studio.lockedPolicy')}
-        </p>
-      )}
-      {residualView && !editImpliesView && (
-        <p className="text-sm text-muted-foreground">
-          {t('access.studio.residualView')}
-        </p>
-      )}
-      <AccessWarnings warnings={(proposed ?? decision).warnings} />
-      <WhyAccess decision={decision} snapshot={snapshot} resource={item.resource} />
+          </div>
+        </fieldset>
+      ) : <span className="hidden lg:block" />}
+      <WhyAccess
+        compact
+        baseline={baseline}
+        decision={decision}
+        snapshot={snapshot}
+        resource={item.resource}
+        technicalDetails={
+          <>
+            <ul className="space-y-1" aria-label={t('access.studio.boundSettings')}>
+              {settings.map((setting) => <li key={setting.capability}><bdi dir="ltr" className="font-mono">{setting.capability}</bdi> · {t(`access.studio.settings.${setting.effect == null ? 'followRole' : setting.effect === 'grant' ? 'allow' : 'deny'}`)}{snapshot.overrides.some((saved) => saved.capability === setting.capability && saved.state === 'expired') && !patches.some((patch) => patch.capability === setting.capability) && <span className="ms-2 text-warning">{t('access.studio.expiry.expired')}</span>}</li>)}
+            </ul>
+            {editable && settings.filter((setting) => setting.effect != null).map((setting) => <ExpiryField key={`${setting.capability}:${setting.expires_at ?? ''}:${setting.effect}`} patch={setting} disabled={disabled} onStage={onStage} />)}
+          </>
+        }
+      >
+        <p className="text-muted-foreground lg:hidden">{localized(item.description, i18n.language)}</p>
+        {showProposed && <div className="space-y-1"><p className="font-medium">{t('access.studio.proposed')}</p>{proposed ? <><DecisionOutcome decision={proposed} resource={item.resource} /><AccessWarnings warnings={proposed.warnings} /></> : <p>{t('access.studio.previewPending')}</p>}</div>}
+        {effect === 'mixed' && <p className="text-warning">{t('access.studio.personalSetting')}: {t('access.studio.mixed')}</p>}
+        {settings.some((setting) => setting.effect != null) && <ul className="space-y-1 text-muted-foreground">{settings.filter((setting) => setting.effect != null).map((setting) => <li key={setting.capability}>{t('access.studio.expiry.label')}: {setting.expires_at ? <LocalDateTime value={setting.expires_at} /> : t('access.studio.expiry.none')}</li>)}</ul>}
+        {template && decision.action === 'view' && decision.authorization === 'denied' && <p>{t('access.studio.templateViewRequired')}</p>}
+        {editImpliesView && <p>{t('access.studio.templateEditImpliesView')}</p>}
+        {template && decision.action === 'view' && <p>{t(item.resource.kind === 'email_template' ? 'access.studio.templateViewConsequenceEmail' : 'access.studio.templateViewConsequence')}</p>}
+        {!editable && <p className="text-muted-foreground">{t('access.studio.lockedPolicy')}</p>}
+        {residualView && !editImpliesView && <p>{t('access.studio.residualView')}</p>}
+      </WhyAccess>
     </article>
   )
 }
