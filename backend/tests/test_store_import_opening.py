@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from datetime import date
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.errors import AppError
 from app.db.models import StoreCount, StoreItem
 from app.services import store_service
 
@@ -25,6 +28,8 @@ def _script() -> ModuleType:
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    # Registered first so pydantic can resolve the script's annotations.
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -68,3 +73,30 @@ def test_opening_import_creates_items_in_order_and_the_opening_count(
     with pytest.raises(script.StoreNotEmptyError):
         script.import_opening(db_session, data, actor="storekeeper@test.ae")
     assert len(db_session.scalars(select(StoreCount)).all()) == 1
+
+
+def test_failed_opening_count_leaves_the_store_empty(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The day before the count: the count is refused as future-dated after every
+    # item was already created inside the import's transaction.
+    monkeypatch.setattr(store_service, "today", lambda: date(2026, 10, 28))
+    script = _script()
+    data = json.loads(OPENING.read_text(encoding="utf-8"))
+
+    with pytest.raises(AppError) as raised:
+        script.import_opening(db_session, data, actor="storekeeper@test.ae")
+
+    assert raised.value.code == "STORE_DATE_IN_FUTURE"
+    assert db_session.scalars(select(StoreItem)).all() == []
+    assert db_session.scalars(select(StoreCount)).all() == []
+
+
+def test_invalid_opening_file_is_rejected_before_any_write(db_session: Session) -> None:
+    data = json.loads(OPENING.read_text(encoding="utf-8"))
+    data["items"][-1]["batches"][0]["expiry"] = "2027-13"
+
+    with pytest.raises(ValidationError):
+        _script().import_opening(db_session, data, actor="storekeeper@test.ae")
+
+    assert db_session.scalars(select(StoreItem)).all() == []
