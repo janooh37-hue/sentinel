@@ -29,6 +29,10 @@ interface Props {
   onPrint: () => void
   printPending: boolean
   printError: unknown
+  /** The setup changed while the reference was issued; nothing printed. */
+  printStale?: boolean
+  /** Why Print is unavailable for this setup, stated beside the button. */
+  printBlockedReason?: string | null
   /** False while data is loading or failed: there is nothing honest to print. */
   canPrint: boolean
   settings: ReactNode
@@ -48,6 +52,8 @@ export function PrintSetupShell({
   onPrint,
   printPending,
   printError,
+  printStale = false,
+  printBlockedReason = null,
   canPrint,
   settings,
   notices,
@@ -126,6 +132,16 @@ export function PrintSetupShell({
             {t('statementPrint.printFailed', { message: error })}
           </p>
         )}
+        {printStale && (
+          <p role="alert" className="basis-full text-sm text-accent">
+            {t('statementPrint.printStale')}
+          </p>
+        )}
+        {printBlockedReason && (
+          <p role="status" data-testid="print-blocked" className="basis-full text-sm text-foreground">
+            {printBlockedReason}
+          </p>
+        )}
       </div>
 
       {/* Desktop: both columns scroll inside the viewport below the app bar and this header. */}
@@ -135,7 +151,15 @@ export function PrintSetupShell({
           aria-label={t('statementPrint.settingsLabel')}
           className="flex flex-col border-border bg-surface lg:min-h-0 lg:overflow-y-auto lg:border-e"
         >
-          <div className="flex-1 px-5 pb-2 md:px-6">{settings}</div>
+          {/* Frozen while a reference is being issued: the serial belongs to the setup it was asked for. */}
+          <fieldset
+            disabled={printPending}
+            inert={printPending || undefined}
+            aria-busy={printPending || undefined}
+            className="m-0 min-w-0 flex-1 border-0 px-5 pb-2 md:px-6"
+          >
+            {settings}
+          </fieldset>
           <div
             aria-live="polite"
             className="border-t border-primary bg-surface px-5 py-3.5 text-sm md:px-6 lg:sticky lg:bottom-0"

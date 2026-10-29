@@ -18,6 +18,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 
 import {
   ACTIVITY_PRESETS,
+  ACTIVITY_STATEMENT_QUERY,
   STATEMENT_CATEGORIES,
   activityPeriod,
   categoryOf,
@@ -48,7 +49,7 @@ export function ActivityPrintPage(): React.JSX.Element {
     enabled: id !== '',
   })
   const statement = useQuery({
-    queryKey: ['activity-statement', id, settings.from, settings.to],
+    queryKey: [ACTIVITY_STATEMENT_QUERY, id, settings.from, settings.to],
     queryFn: () =>
       api.getActivityStatement(id, { ...(settings.from ? { from_date: settings.from } : {}), to_date: settings.to }),
     enabled: id !== '',
@@ -72,7 +73,9 @@ export function ActivityPrintPage(): React.JSX.Element {
   const range = (from: string | null, to: string, lang: string): string =>
     formatStatementRange(from, to, lang, i18n.getFixedT(lang)('statementPrint.recordStart'))
   const emp = employee.data?.employee
-  const ready = !!emp && statement.isSuccess
+  // A cut list cannot print as a complete statement.
+  const truncated = statement.data?.truncated === true
+  const ready = !!emp && statement.isSuccess && !truncated
 
   const settingsColumn = (
     <>
@@ -167,7 +170,6 @@ export function ActivityPrintPage(): React.JSX.Element {
         </SetupNotice>
       )}
       {employee.isError && <SetupNotice tone="error">{t('statementPrint.employeeFailed')}</SetupNotice>}
-      {statement.data?.truncated && <SetupNotice>{t('statementPrint.truncated')}</SetupNotice>}
     </>
   )
 
@@ -186,6 +188,8 @@ export function ActivityPrintPage(): React.JSX.Element {
         )
       }
       canPrint={ready}
+      printBlockedReason={truncated ? t('statementPrint.truncated') : null}
+      printStale={flow.stale}
       printPending={flow.pending}
       printError={flow.error}
       onPrint={() =>

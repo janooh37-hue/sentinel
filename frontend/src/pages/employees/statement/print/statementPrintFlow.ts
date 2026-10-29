@@ -6,7 +6,7 @@
  */
 
 import { useMutation } from '@tanstack/react-query'
-import { useContext, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -74,19 +74,41 @@ export function usePaperIssue(issued: StatementPrint | null, lang: PaperLanguage
  */
 export function useStatementPrint(employeeId: string, setupKey: string) {
   const [issued, setIssued] = useState<{ key: string; print: StatementPrint } | null>(null)
+  const [stale, setStale] = useState(false)
+  // The setup on screen right now; read when the serial comes back.
+  const mounted = useRef(setupKey)
+  useEffect(() => {
+    mounted.current = setupKey
+  }, [setupKey])
   const mutation = useMutation({
-    mutationFn: (body: StatementPrintCreate) => api.createStatementPrint(employeeId, body),
-    onSuccess: (print) => {
+    mutationFn: ({ body }: { body: StatementPrintCreate; key: string }) =>
+      api.createStatementPrint(employeeId, body),
+    onSuccess: (print, { key }) => {
+      // The serial was issued for the setup captured with the request. If the
+      // paper changed meanwhile, that serial must not go on a different copy.
+      if (key !== mounted.current) {
+        setIssued(null)
+        setStale(true)
+        return
+      }
       // The dialog snapshots the DOM when print() is called: the reference
       // must already be committed, which a plain setState would not be.
-      flushSync(() => setIssued({ key: setupKey, print }))
+      flushSync(() => {
+        setStale(false)
+        setIssued({ key, print })
+      })
       window.print()
     },
   })
   return {
     issued: issued?.key === setupKey ? issued.print : null,
-    print: mutation.mutate,
+    print: (body: StatementPrintCreate) => {
+      setStale(false)
+      mutation.mutate({ body, key: setupKey })
+    },
     pending: mutation.isPending,
     error: mutation.error,
+    /** The setup changed while the reference was being issued: print again. */
+    stale,
   }
 }
