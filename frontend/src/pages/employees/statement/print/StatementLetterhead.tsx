@@ -10,10 +10,12 @@
  * tables are therefore cut into chunks of rows (`tableBlocks`), each chunk
  * repeating its column header.
  *
- * Chrome drops a repeating head once head + foot pass about a third of the
- * page. A4 portrait stays under it with the full masthead; A4 landscape does
- * not, so landscape prints the full masthead once as the first body row and
- * repeats a compact one-line head instead.
+ * Chrome drops a repeating head once head + foot pass roughly a third of the
+ * page, and the full masthead crosses that as soon as a long name or
+ * placement wraps (seen on real Arabic records: pages 2+ printed with no
+ * head at all). So every orientation repeats a compact one-line head (logo,
+ * title, employee, G-number, reference, period) and prints the full
+ * letterhead + identity once, as the first body row.
  *
  * The paper pins its own ink (index.css `.statement-sheet`): a dark-theme
  * operator still previews and prints dark text on white paper.
@@ -167,14 +169,18 @@ function Masthead({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.
   )
 }
 
-function CompactHead({ frame }: { frame: PaperFrame }): React.JSX.Element {
+function CompactHead({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.Element {
   const e = frame.employee
   return (
-    <div className="st-compact">
+    <div className="st-compact" data-testid="statement-compact-head">
       <img src="/brand/gssg-wordmark.png" alt="GSSG" />
       <b>{frame.title}</b>
       <span className="g">
         <bdi>{frame.lang === 'ar' ? (e.name_ar ?? e.name_en) : e.name_en}</bdi> · <Mono>{e.id}</Mono>
+      </span>
+      <span>
+        {t('statementPrint.paper.ref')}{' '}
+        {frame.issue.reference ? <Mono>{frame.issue.reference}</Mono> : t('statementPrint.paper.refPending')}
       </span>
       <span>{frame.period}</span>
     </div>
@@ -221,7 +227,6 @@ export function StatementSheet({
   blocks: ReactNode[]
 }): React.JSX.Element {
   const t = usePaperT(frame.lang)
-  const landscape = frame.orient === 'landscape'
   return (
     <div className="print-statement" data-orient={frame.orient}>
       <table
@@ -232,7 +237,9 @@ export function StatementSheet({
       >
         <thead>
           <tr>
-            <td>{landscape ? <CompactHead frame={frame} /> : <Masthead frame={frame} t={t} />}</td>
+            <td>
+              <CompactHead frame={frame} t={t} />
+            </td>
           </tr>
         </thead>
         <tfoot>
@@ -243,15 +250,13 @@ export function StatementSheet({
           </tr>
         </tfoot>
         <tbody>
-          {landscape && (
-            <tr className="st-row">
-              <td>
-                <div className="st-first">
-                  <Masthead frame={frame} t={t} />
-                </div>
-              </td>
-            </tr>
-          )}
+          <tr className="st-row">
+            <td>
+              <div className="st-first">
+                <Masthead frame={frame} t={t} />
+              </div>
+            </td>
+          </tr>
           {blocks.map((block, index) => (
             <tr className="st-row" key={index}>
               <td>{block}</td>
