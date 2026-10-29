@@ -25,15 +25,6 @@ vi.mock('@/lib/api', async (importOriginal) => {
 
 if (!i18n.hasResourceBundle('ar', 'translation')) i18n.addResourceBundle('ar', 'translation', ar)
 
-const EMPLOYEE = {
-  status: 'Active' as const,
-  department: 'Operations',
-  duty_unit: 'Control Room',
-  duty_post: 'Supervisor',
-  doj_company: '2019-03-04',
-  doj: null,
-}
-
 beforeEach(async () => {
   hasCapability.mockReturnValue(true)
   getActivityStatement.mockReset()
@@ -120,7 +111,7 @@ function renderActivity(items: ActivityStatementItem[], search = '?tab=activity'
       <MemoryRouter initialEntries={[`/employees/G100${search}`]}>
         <ActivityTab
           employeeId="G100"
-          employee={EMPLOYEE}
+         
           onPreviewDocs={callbacks.onPreviewDocs as (docs: { id: number; name: string }[], index?: number) => void}
           onOpenViolation={callbacks.onOpenViolation as (id: number) => void}
           onOpenTab={callbacks.onOpenTab as (tab: Tab) => void}
@@ -426,7 +417,7 @@ describe('ActivityTab states and access', () => {
     render(
       <QueryClientProvider client={client}>
         <MemoryRouter>
-          <ActivityTab employeeId="G100" employee={EMPLOYEE} onPreviewDocs={vi.fn()} onOpenViolation={vi.fn()} onOpenTab={vi.fn()} />
+          <ActivityTab employeeId="G100" onPreviewDocs={vi.fn()} onOpenViolation={vi.fn()} onOpenTab={vi.fn()} />
         </MemoryRouter>
       </QueryClientProvider>,
     )
@@ -440,7 +431,7 @@ describe('ActivityTab states and access', () => {
     render(
       <QueryClientProvider client={client}>
         <MemoryRouter>
-          <ActivityTab employeeId="G100" employee={EMPLOYEE} onPreviewDocs={vi.fn()} onOpenViolation={vi.fn()} onOpenTab={vi.fn()} />
+          <ActivityTab employeeId="G100" onPreviewDocs={vi.fn()} onOpenViolation={vi.fn()} onOpenTab={vi.fn()} />
         </MemoryRouter>
       </QueryClientProvider>,
     )
