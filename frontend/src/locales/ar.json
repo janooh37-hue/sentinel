@@ -1919,7 +1919,10 @@
       "Others": "أخرى",
       "National Service": "الخدمة الوطنية",
       "Administrative Leave": "إجازة إدارية",
-      "Leave Permit": "تصريح خروج (٨ ساعات)"
+      "Leave Permit": "تصريح خروج (8 ساعات)",
+      "Passport Release": "تسليم جواز السفر",
+      "Duty Resumption": "مباشرة العمل",
+      "Unknown": "نوع غير محدد"
     },
     "filters": {
       "employee": "الموظف…",
@@ -4456,15 +4459,6 @@
       "openViolation": "فتح المخالفة",
       "openLedger": "فتح في المراسلات",
       "openAbsences": "فتح في الغياب"
-    },
-    "rail": {
-      "heading": "موقع العمل والحالة الحاليان",
-      "status": "الحالة",
-      "department": "الإدارة",
-      "unit": "الوحدة",
-      "post": "الموقع الوظيفي",
-      "joined": "تاريخ الالتحاق",
-      "since": "في هذا الموقع منذ"
     }
   },
   "application": {

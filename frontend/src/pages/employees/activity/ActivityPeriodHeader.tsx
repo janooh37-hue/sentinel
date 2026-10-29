@@ -1,5 +1,8 @@
 import { useTranslation } from 'react-i18next'
 
+import { Printer } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -14,6 +17,7 @@ interface Props {
   onPreset: (preset: ActivityPreset) => void
   onCustom: (from: string, to: string) => void
   language: string
+  onPrint: () => void
 }
 
 export function ActivityPeriodHeader({
@@ -24,6 +28,7 @@ export function ActivityPeriodHeader({
   onPreset,
   onCustom,
   language,
+  onPrint,
 }: Props): React.JSX.Element {
   const { t } = useTranslation()
   return (
@@ -76,6 +81,10 @@ export function ActivityPeriodHeader({
             </div>
           </>
         ) : null}
+        <Button type="button" variant="secondary" className="h-10" onClick={onPrint}>
+          <Printer className="h-4 w-4" aria-hidden />
+          {t('activityStatement.printAction')}
+        </Button>
       </div>
     </header>
   )
