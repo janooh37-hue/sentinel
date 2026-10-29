@@ -7,6 +7,7 @@
  */
 
 import { useTranslation } from 'react-i18next'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 export type Tab =
   | 'documents'
@@ -20,9 +21,9 @@ export type Tab =
 
 interface Counts {
   documents: number
-  leaves: string
+  leaves: string | null
   /** Absence days recorded this calendar year (stats.absence_days). */
-  absences: number
+  absences: number | null
   violations: number
   activity: number
   messages: number
@@ -50,13 +51,15 @@ const ORDER: Tab[] = [
 
 export function EmployeeTabChips({ active, counts, onChange }: Props): React.JSX.Element {
   const { t } = useTranslation()
+  const { has } = useCapabilities()
+  const canViewLeaves = has('employees.view') && has('leaves.view')
 
   return (
     <div
       className="mb-4 flex flex-wrap gap-2 overflow-x-auto [-webkit-overflow-scrolling:touch]"
       role="tablist"
     >
-      {ORDER.map((tab) => {
+      {ORDER.filter((tab) => canViewLeaves || (tab !== 'leaves' && tab !== 'absences')).map((tab) => {
         const isActive = active === tab
 
         let badge: string | number | null = null

@@ -31,6 +31,7 @@ import {
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DEFAULT_MAILBOX_VIEW, type MailboxView } from './mailboxTypes'
 import { RenameSmartFolderDialog } from './RenameSmartFolderDialog'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 interface SmartFoldersProps {
   activeView: MailboxView
@@ -136,6 +137,7 @@ function SmartFolderRow({
 }: SmartFolderRowProps): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const { has } = useCapabilities()
   const [renaming, setRenaming] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
@@ -180,7 +182,7 @@ function SmartFolderRow({
       </button>
 
       {/* Hover/focus ⋯ context action (rename / delete). Hidden when collapsed. */}
-      {!collapsed && (
+      {!collapsed && has('ledger.edit') && (
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label={t('ledger.smart.rowActions', { name })}
@@ -189,11 +191,11 @@ function SmartFolderRow({
             <MoreHorizontal className="h-4 w-4" strokeWidth={1.8} aria-hidden />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => setRenaming(true)}>
+            <DropdownMenuItem onSelect={() => { if (has('ledger.edit')) setRenaming(true) }}>
               <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
               <span dir="auto">{t('ledger.smart.rename')}</span>
             </DropdownMenuItem>
-            <DropdownMenuItem variant="danger" onSelect={() => setConfirmingDelete(true)}>
+            <DropdownMenuItem variant="danger" onSelect={() => { if (has('ledger.edit')) setConfirmingDelete(true) }}>
               <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
               <span dir="auto">{t('ledger.smart.delete')}</span>
             </DropdownMenuItem>
@@ -210,7 +212,7 @@ function SmartFolderRow({
         description={t('ledger.smart.deleteBody', { name })}
         confirmLabel={t('ledger.smart.delete')}
         destructive
-        onConfirm={() => deleteMut.mutate()}
+        onConfirm={() => { if (has('ledger.edit')) deleteMut.mutate() }}
       />
     </div>
   )

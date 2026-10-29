@@ -20,6 +20,7 @@ import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { PendingDepartureBadge } from '@/components/employees/PendingDepartureBadge'
 import { statusDetailText } from '@/components/employees/statusDetail'
 import { isWorkingStatus } from '@/components/employees/schema'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -45,6 +46,8 @@ export function EmployeeSearchHero({
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
+  const { has } = useCapabilities()
+  const canViewLeaves = has('employees.view') && has('leaves.view')
 
   const [q, setQ] = useState('')
   const debounced = useDebouncedValue(q, 250)
@@ -151,7 +154,7 @@ export function EmployeeSearchHero({
               {items.length > 0
                 ? items.map((row, idx) => {
                     // Status pill — mirrors EmployeeMobileCard logic
-                    const onLeave = onLeaveIds.has(row.id)
+                    const onLeave = canViewLeaves && onLeaveIds.has(row.id)
                     let pillBg: string
                     let pillFg: string
                     let pillLabel: string

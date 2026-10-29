@@ -16,6 +16,7 @@ import type {
 } from '@/lib/api'
 import type { PreviewDoc } from '@/lib/docPreview'
 import type { Tab } from '../EmployeeTabChips'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 type Kind = ActivityItemRead['kind']
 
@@ -57,6 +58,12 @@ export function ActivityTab({
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const { has } = useCapabilities()
+  const canViewEmployee = has('employees.view')
+  const canViewLeaves = canViewEmployee && has('leaves.view')
+  const visibleActivity = activity.filter((item) =>
+    canViewLeaves || (item.kind !== 'leave' && item.kind !== 'absence'),
+  )
   const fmt = useMemo(
     () => new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }),
     [i18n.language],
@@ -71,6 +78,7 @@ export function ActivityTab({
   )
 
   const handleAction = (item: ActivityItemRead) => {
+    if (!canViewLeaves && (item.kind === 'leave' || item.kind === 'absence')) return
     switch (item.kind) {
       case 'document':
         onPreviewDocs([{ id: item.ref_id, name: item.summary }])
@@ -115,17 +123,19 @@ export function ActivityTab({
     }
   }
 
-  if (activity.length === 0) {
+  if (!canViewEmployee) return <p role="alert">{t('common.forbidden')}</p>
+
+  if (visibleActivity.length === 0) {
     return (
       <div className="rounded-2xl bg-surface p-12 text-center text-muted-foreground">
-        {t('employee.activity.empty')}
+        {t(!canViewLeaves && activity.length > 0 ? 'common.forbidden' : 'employee.activity.empty')}
       </div>
     )
   }
   return (
     <div className="relative ps-8">
       <div className="absolute bottom-1 start-3 top-1 w-px bg-border" aria-hidden />
-      {activity.map((a, i) => {
+      {visibleActivity.map((a, i) => {
         const Icon = ICONS[a.kind] ?? FileText
         return (
           <div key={`${a.kind}-${a.ref_id}-${i}`} className="relative mb-5">

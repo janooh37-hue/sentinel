@@ -20,6 +20,7 @@ import { ManagerPickerField } from '@/components/application/fields/ManagerPicke
 import { MultiRecipientPickerField } from '@/components/application/fields/MultiRecipientPickerField'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/useCapabilities'
 import {
   DialogRoot,
   DialogContent,
@@ -34,23 +35,41 @@ interface Props {
   onOpenChange: (open: boolean) => void
 }
 
+/** Mirrors /duty/transfer: initial placement does not create a General Book. */
+// eslint-disable-next-line react-refresh/only-export-components -- shared exact route predicate for the profile entry
+export function canIssueDutyTransfer(
+  employee: Pick<EmployeeRead, 'duty_unit'>,
+  has: (capability: string) => boolean,
+): boolean {
+  return has('documents.generate') && has('documents.duty_transfer') && (
+    !employee.duty_unit?.trim() || (
+      has('books.category.GS') &&
+      has('books.service.General Book') &&
+      has('books.category.12/1')
+    )
+  )
+}
+
 export function TransferEmployeeDialog({ open, employee, onOpenChange }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const navigate = useNavigate()
+  const { has } = useCapabilities()
+  const canIssueLetter = canIssueDutyTransfer(employee, has)
+  const canEdit = has('employees.edit')
   const unitListId = useId()
   const postListId = useId()
   const checkboxId = useId()
 
   const [unit, setUnit] = useState(employee.duty_unit ?? '')
   const [post, setPost] = useState(employee.duty_post ?? '')
-  const [issueLetter, setIssueLetter] = useState(true)
+  const [issueLetter, setIssueLetter] = useState(() => canIssueLetter)
 
   // Roster fetch only feeds the unit/post combobox suggestions.
   const { data: roster } = useQuery({
     queryKey: ['employees', 'lookup', { limit: 500 }],
     queryFn: () => api.lookupEmployees({ limit: 500 }),
-    enabled: open,
+    enabled: open && (canIssueLetter || canEdit),
   })
   const all = roster?.items ?? []
   const units = unitOptions(all)
@@ -63,6 +82,9 @@ export function TransferEmployeeDialog({ open, employee, onOpenChange }: Props):
 
   const mutation = useMutation({
     mutationFn: async (): Promise<DutyTransferResult | null> => {
+      if (issueLetter ? !canIssueDutyTransfer(employee, has) : !has('employees.edit')) {
+        throw new Error(t('common.forbidden'))
+      }
       if (!issueLetter) {
         await api.updateEmployee(employee.id, {
           duty_unit: unit.trim() || null,
@@ -111,8 +133,10 @@ export function TransferEmployeeDialog({ open, employee, onOpenChange }: Props):
 
   // The letter path needs a destination unit (backend requires to_unit); the
   // silent PATCH may clear both fields (unassign), so an empty unit is fine.
-  const canSubmit = !mutation.isPending && (!issueLetter || unit.trim().length > 0)
+  const canSubmit = (issueLetter ? canIssueLetter : canEdit) &&
+    !mutation.isPending && (!issueLetter || unit.trim().length > 0)
 
+  if (!canIssueLetter && !canEdit) return <p role="alert">{t('common.forbidden')}</p>
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -180,6 +204,7 @@ export function TransferEmployeeDialog({ open, employee, onOpenChange }: Props):
                 id={checkboxId}
                 type="checkbox"
                 checked={issueLetter}
+                disabled={issueLetter ? !canEdit : !canIssueLetter}
                 onChange={(e) => setIssueLetter(e.target.checked)}
                 className="h-4 w-4 accent-primary"
               />

@@ -11,6 +11,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/lib/api'
 
 const { listEmployeeAbsenceEpisodes, deleteEmployeeAbsenceRange, hasCapability } = vi.hoisted(() => ({
   listEmployeeAbsenceEpisodes: vi.fn(),
@@ -105,4 +106,19 @@ describe('AbsencesTab', () => {
       await screen.findByText('No absences recorded yet.'),
     ).toBeInTheDocument()
   })
+})
+
+it.each(['leaves.view', 'employees.view'])('does not query or expose absences without %s', (denied) => {
+  hasCapability.mockImplementation((cap) => cap !== denied)
+  renderTab()
+  expect(screen.getByRole('alert')).toHaveTextContent('You do not have permission')
+  expect(screen.queryByText('No absences recorded yet.')).not.toBeInTheDocument()
+  expect(listEmployeeAbsenceEpisodes).not.toHaveBeenCalled()
+})
+
+it('keeps a denied response distinct from an empty absence register', async () => {
+  listEmployeeAbsenceEpisodes.mockRejectedValue(new ApiError(403, 'FORBIDDEN', 'Denied'))
+  renderTab()
+  expect(await screen.findByRole('alert')).toHaveTextContent('You do not have permission')
+  expect(screen.queryByText('No absences recorded yet.')).not.toBeInTheDocument()
 })

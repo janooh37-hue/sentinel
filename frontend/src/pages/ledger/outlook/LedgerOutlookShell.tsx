@@ -58,6 +58,7 @@ import {
   type QuickFilters,
 } from './mailboxQuery'
 import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 type NavigatePage =
   | 'employees'
@@ -112,6 +113,9 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   const { t } = useTranslation()
   const isMobile = useIsMobile()
   const queryClient = useQueryClient()
+  const { has } = useCapabilities()
+  const canSend = has('ledger.send')
+  const canDelete = has('ledger.delete')
 
   const location = useLocation()
   const navigate = useNavigate()
@@ -259,9 +263,10 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   // Phase 3 — review → create flow. Opening the create dialog closes the sheet
   // so the modal isn't stacked under it.
   const handleCreateFromSuggestion = useCallback((s: SmartFolderSuggestion) => {
+    if (!has('ledger.create')) return
     setReviewOpen(false)
     setCreateSuggestion(s)
-  }, [])
+  }, [has])
   // On create: jump straight into the new folder so the operator sees it work.
   const handleSmartFolderCreated = useCallback((folder: SmartFolder) => {
     setActiveView({ kind: 'smart', folderId: folder.id })
@@ -288,6 +293,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   // fresh (these are user-event callbacks, never batched render-phase calls).
   const openCompose = useCallback(
     (next: ComposeState) => {
+      if (!canSend) return
       if (activeCompose) {
         toast(
           t('ledger.outlook.composeBusy', {
@@ -300,7 +306,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
       composePage.open('compose')
       setFolderDrawerOpen(false)
     },
-    [activeCompose, composePage.open, t],
+    [activeCompose, canSend, composePage.open, t],
   )
 
   // Reply / Reply All / Forward open the compose over the pane.
@@ -329,6 +335,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   const consumedPrefill = useRef(false)
   useEffect(() => {
     if (consumedPrefill.current) return
+    if (!canSend) return
     const prefill = (
       location.state as { composePrefill?: ComposeState['prefill'] } | null
     )?.composePrefill
@@ -341,7 +348,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
     const params = new URLSearchParams(location.search)
     params.set('action', 'compose')
     navigate({ search: `?${params}` }, { replace: true, state: null })
-  }, [location, navigate])
+  }, [canSend, location, navigate])
 
   // A URL may open compose, nothing else.
   useEffect(() => {
@@ -424,6 +431,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
     delayMs: UNDO_DELAY_MS,
     onCommit: async (p) => {
       try {
+        if (!canDelete) return
         await api.deleteLedgerEntry(p.id)
       } finally {
         await queryClient.invalidateQueries({ queryKey: ['ledger'] })
@@ -436,6 +444,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   })
 
   const scheduleTrash = useCallback((ids: number[]) => {
+    if (!canDelete) return
     const fresh = [...new Set(ids)].filter((id) => !pendingIds.has(id))
     if (fresh.length === 0) return
     const batch: TrashBatch = { toastId: '', undos: [] }
@@ -458,24 +467,26 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
         },
       },
     )
-  }, [pendingIds, scheduleDelete, t])
+  }, [canDelete, pendingIds, scheduleDelete, t])
 
   const handleDelete = useCallback(
     (entry: { id: number }) => {
+      if (!canDelete) return
       scheduleTrash([entry.id])
       // If the deleted entry is the one open in the pane, clear the selection.
       if (selectedId === entry.id) setSelectedId(null)
     },
-    [scheduleTrash, selectedId, setSelectedId],
+    [canDelete, scheduleTrash, selectedId, setSelectedId],
   )
 
   // Bulk Trash shares one commit window and one Undo action for all selected rows.
   const handleBulkTrash = useCallback(
     (ids: number[]) => {
+      if (!canDelete) return
       scheduleTrash(ids)
       if (selectedId != null && ids.includes(selectedId)) setSelectedId(null)
     },
-    [scheduleTrash, selectedId, setSelectedId],
+    [canDelete, scheduleTrash, selectedId, setSelectedId],
   )
 
   // Hide optimistically-deleted rows from the list until the timer commits.
@@ -549,7 +560,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   // Desktop: a non-modal Outlook-style window docked bottom-right (the mailbox
   // behind stays clickable); the render-prop hands min/max/restore controls to
   // the handoff surface. Mobile: full-screen page chrome (header + Back).
-  const composeOverlay = activeCompose && (
+  const composeOverlay = activeCompose && canSend && (
     <ComposeWindow fullScreen={isMobile}>
       {(win) => (
         <OutlookHandoffDialog

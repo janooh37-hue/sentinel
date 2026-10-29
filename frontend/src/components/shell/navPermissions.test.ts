@@ -14,7 +14,7 @@ const expectedPrimaryCaps: Record<string, string | undefined> = {
   '/vehicles': 'vehicles.view',
   '/ledger': undefined,
   '/leaves': 'leaves.view',
-  '/services': 'documents.generate',
+  '/services': undefined,
   '/books': 'books.view',
   '/permits': 'permits.view',
 }
@@ -36,6 +36,20 @@ describe('permission-aware navigation', () => {
     expect(isNavEntryAllowed(entry, (cap) => caps.includes(cap))).toBe(allowed)
     const dockEntry = SECTION_ENTRIES.find((item) => item.to === '/ledger')!
     expect(isNavEntryAllowed(dockEntry, (cap) => caps.includes(cap))).toBe(allowed)
+  })
+
+  it.each([
+    { caps: [], allowed: false },
+    { caps: ['documents.generate'], allowed: false },
+    { caps: ['books.view'], allowed: false },
+    { caps: ['books.service.General Book'], allowed: false },
+    { caps: ['documents.generate', 'books.view'], allowed: true },
+  ])('requires both Services prerequisites across shell and dock: $caps', ({ caps, allowed }) => {
+    const has = (capability: string): boolean => caps.includes(capability)
+    const primary = NAV_ITEMS.find((item) => item.to === '/services')!
+    const dock = SECTION_ENTRIES.find((item) => item.to === '/services')!
+    expect(isNavEntryAllowed(primary, has)).toBe(allowed)
+    expect(isNavEntryAllowed(dock, has)).toBe(allowed)
   })
 
   it('gates settings and waiting signals with every destination capability', () => {

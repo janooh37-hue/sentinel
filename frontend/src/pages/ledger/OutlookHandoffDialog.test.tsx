@@ -7,7 +7,7 @@
  * en.json), so a missing or reworded key fails here rather than shipping.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -42,6 +42,10 @@ vi.mock('@/lib/api', async (orig) => {
 vi.mock('@/lib/useIdentity', () => ({
   useIdentity: () => ({ identity: { email: 'me@gssg.ae' }, isAdmin: false }),
 }))
+const { capabilities } = vi.hoisted(() => ({ capabilities: new Set<string>() }))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ has: (cap: string) => capabilities.has(cap) }),
+}))
 // HugeRTE can't mount in jsdom — sentinel div (repo-wide convention).
 vi.mock('@/components/ui/rich-editor', () => ({
   RichEditor: ({ name }: { name: string }) => <div data-testid={`rich-editor-${name}`} />,
@@ -63,11 +67,11 @@ type DialogProps = Parameters<typeof OutlookHandoffDialog>[0]
 
 function renderDialog(
   opts: { mode?: DialogProps['mode']; source?: DialogProps['source']; prefill?: DialogProps['prefill'] } = {},
-): { onClose: () => void; onHandedOff: (id: number) => void } {
+): { onClose: () => void; onHandedOff: (id: number) => void; refresh: () => void } {
   const onClose = vi.fn()
   const onHandedOff = vi.fn()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(
+  const tree = () => (
     <QueryClientProvider client={queryClient}>
       <OutlookHandoffDialog
         mode={opts.mode ?? 'new'}
@@ -76,15 +80,18 @@ function renderDialog(
         onClose={onClose}
         onHandedOff={onHandedOff}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
-  return { onClose, onHandedOff }
+  const view = render(tree())
+  return { onClose, onHandedOff, refresh: () => view.rerender(tree()) }
 }
 
 const draftRadio = (): HTMLElement => screen.getByRole('radio', { name: /Draft in Outlook/ })
 const mailtoRadio = (): HTMLElement => screen.getByRole('radio', { name: /Open Outlook now/ })
 
 beforeEach(() => {
+  capabilities.clear()
+  capabilities.add('ledger.send')
   // Call history, not just implementations — the no-recipient test asserts
   // `emailHandoff` was never reached.
   vi.clearAllMocks()
@@ -122,6 +129,33 @@ describe('OutlookHandoffDialog prefill', () => {
     // A prefilled Cc reveals the row instead of hiding recipients behind a toggle.
     expect(screen.getByText('ops@gssg.ae')).toBeInTheDocument()
     expect(screen.getByText('GS-0048')).toBeInTheDocument()
+  })
+})
+
+describe('Outlook handoff authorization', () => {
+  it.each(['new', 'reply', 'replyall', 'forward'] as const)('blocks %s handoff submit without ledger.send, not ledger.create', async (mode) => {
+    capabilities.delete('ledger.send')
+    capabilities.add('ledger.create')
+    renderDialog({ mode, prefill: { to: ['hr@gssg.ae'], subject: 'Draft' } })
+    const submit = screen.getByRole('button', { name: i18n.t('ledger.outlook.handoff.submit') })
+    expect(submit).toBeDisabled()
+    fireEvent.submit(submit.closest('form')!)
+    await waitFor(() => expect(api.getEmailAccount).toHaveBeenCalled())
+    expect(api.emailHandoff).not.toHaveBeenCalled()
+    expect(screen.getByDisplayValue('Draft')).toBeInTheDocument()
+  })
+
+  it('retains the draft but blocks submit when send access is revoked after opening', async () => {
+    const dialog = renderDialog({ prefill: { to: ['hr@gssg.ae'], subject: 'Reviewed draft' } })
+    await waitFor(() => expect(draftRadio()).toBeChecked())
+    capabilities.delete('ledger.send')
+    dialog.refresh()
+    const submit = screen.getByRole('button', { name: i18n.t('ledger.outlook.handoff.submit') })
+    expect(submit).toBeDisabled()
+    fireEvent.submit(submit.closest('form')!)
+    await waitFor(() => expect(screen.getByDisplayValue('Reviewed draft')).toBeInTheDocument())
+    expect(screen.getByText('hr@gssg.ae')).toBeInTheDocument()
+    expect(api.emailHandoff).not.toHaveBeenCalled()
   })
 })
 

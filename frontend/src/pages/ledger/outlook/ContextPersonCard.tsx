@@ -29,6 +29,7 @@ import { pickPosition } from '@/lib/employeePosition'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { activityEmoji, expiryAlert, leaveBalanceLabel } from './contextResolve'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 /** Coarse page targets the shell's `onNavigate` seam understands. */
 type NavPage = 'employees' | 'services'
@@ -182,6 +183,7 @@ function PersonDetail({
   onEmail,
 }: PersonDetailProps): React.JSX.Element {
   const { t } = useTranslation()
+  const { has } = useCapabilities()
 
   if (isLoading) {
     return (
@@ -254,7 +256,7 @@ function PersonDetail({
       <div className="mt-3 flex gap-2">
         <QuickAction testid="cx-qa-record" emoji={<UserRound className="h-4 w-4" aria-hidden />} label={t('ledger.outlook.quick.record')} onClick={() => onNavigate?.('employees', emp.id)} />
         <QuickAction testid="cx-qa-generate" emoji={<FilePlus className="h-4 w-4" aria-hidden />} label={t('ledger.outlook.quick.generate')} onClick={() => onNavigate?.('services')} />
-        <QuickAction testid="cx-qa-email" emoji={<Mail className="h-4 w-4" aria-hidden />} label={t('ledger.outlook.quick.email')} onClick={() => onEmail?.(emp.id)} />
+        {has('ledger.send') && <QuickAction testid="cx-qa-email" emoji={<Mail className="h-4 w-4" aria-hidden />} label={t('ledger.outlook.quick.email')} onClick={() => { if (has('ledger.send')) onEmail?.(emp.id) }} />}
       </div>
 
       {/* Recent activity mini-list */}

@@ -20,6 +20,9 @@ import { OUTLOOK_PENDING_TAG } from './mailboxTypes'
 vi.mock('@/lib/toast', () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ has: () => true }),
+}))
 
 function item(tags: string[]): LedgerListItem {
   return {

@@ -475,6 +475,7 @@ export interface AdminUserRead {
   employee_id: string | null
   display_name: string | null
   name_en: string | null
+  name_ar?: string | null
   role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
   status: 'pending' | 'active' | 'locked' | 'disabled' | 'rejected'
   failed_attempts: number
@@ -1149,6 +1150,12 @@ async function unwrap<T>(res: Response): Promise<T> {
   return parsed as T
 }
 
+function notifyCapabilityDenied(method: string, response: Response): void {
+  if (response.status === 403 && method !== 'GET' && typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('gssg:capability-denied'))
+  }
+}
+
 export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   // `same-origin` carries the httpOnly `gssg_session` cookie through the Vite
   // proxy (dev) and the pywebview origin (packaged) so auth survives requests.
@@ -1157,7 +1164,9 @@ export async function request<T>(method: string, path: string, body?: unknown): 
     init.headers = { 'content-type': 'application/json' }
     init.body = JSON.stringify(body)
   }
-  return unwrap<T>(await fetch(`${BASE}${path}`, init))
+  const response = await fetch(`${BASE}${path}`, init)
+  notifyCapabilityDenied(method, response)
+  return unwrap<T>(response)
 }
 export async function requestVersioned<T>(
   method: string,
@@ -1175,6 +1184,7 @@ export async function requestVersioned<T>(
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   })
+  notifyCapabilityDenied(method, res)
   const data = await unwrap<T>(res)
   const nextEtag = res.headers.get('etag')
   if (!nextEtag) throw new ApiError(500, 'MISSING_ETAG', 'Versioned response omitted ETag')
@@ -1188,9 +1198,9 @@ function requireEtag(etag: string): string {
 
 
 async function multipart<T>(path: string, form: FormData, method = 'POST'): Promise<T> {
-  return unwrap<T>(
-    await fetch(`${BASE}${path}`, { method, body: form, credentials: 'same-origin' }),
-  )
+  const response = await fetch(`${BASE}${path}`, { method, body: form, credentials: 'same-origin' })
+  notifyCapabilityDenied(method, response)
+  return unwrap<T>(response)
 }
 
 /** A body-versioned mutation: the caller reads `version` off the resource it
@@ -1206,15 +1216,15 @@ async function requestWithIfMatch<T>(
 ): Promise<T> {
   const headers: Record<string, string> = { 'If-Match': requireEtag(ifMatch) }
   if (body !== undefined) headers['content-type'] = 'application/json'
-  return unwrap<T>(
-    await fetch(`${BASE}${path}`, {
-      method,
-      cache: 'no-store',
-      credentials: 'same-origin',
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    }),
-  )
+  const response = await fetch(`${BASE}${path}`, {
+    method,
+    cache: 'no-store',
+    credentials: 'same-origin',
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  notifyCapabilityDenied(method, response)
+  return unwrap<T>(response)
 }
 
 async function multipartWithIfMatch<T>(
@@ -1223,14 +1233,14 @@ async function multipartWithIfMatch<T>(
   ifMatch: string,
   method = 'POST',
 ): Promise<T> {
-  return unwrap<T>(
-    await fetch(`${BASE}${path}`, {
-      method,
-      body: form,
-      credentials: 'same-origin',
-      headers: { 'If-Match': requireEtag(ifMatch) },
-    }),
-  )
+  const response = await fetch(`${BASE}${path}`, {
+    method,
+    body: form,
+    credentials: 'same-origin',
+    headers: { 'If-Match': requireEtag(ifMatch) },
+  })
+  notifyCapabilityDenied(method, response)
+  return unwrap<T>(response)
 }
 
 /** Decode a base64 body to a Blob, tagging its MIME type from magic bytes so a
@@ -2800,21 +2810,6 @@ export const api = {
   myCapabilities: () => request<string[]>('GET', '/auth/me/capabilities'),
   /** Full capability catalog + per-role defaults (admin-only). */
   listCapabilities: () => request<CapabilityRead[]>('GET', '/auth/capabilities'),
-  /** A user's effective caps + overrides (admin-only). */
-  getUserPermissions: (id: number) =>
-    request<UserPermissionRead>('GET', `/auth/users/${id}/permissions`),
-  /** Set/clear one per-user override (effect null = revert to role default). */
-  setUserPermission: (id: number, capability: string, effect: PermissionEffect | null) =>
-    request<UserPermissionRead>('PUT', `/auth/users/${id}/permissions`, {
-      capability,
-      effect,
-    }),
-  /** Apply a batch of overrides in one call (admin matrix save); each item's
-   * effect null reverts that capability to the role default. */
-  setUserPermissionsBulk: (
-    id: number,
-    items: Array<{ capability: string; effect: PermissionEffect | null }>,
-  ) => request<UserPermissionRead>('PUT', `/auth/users/${id}/permissions/bulk`, { items }),
 
   // --- permission requests (Task 10) ---
   /** Submit a capability request for the signed-in user.

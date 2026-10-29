@@ -12,6 +12,12 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import type { DashboardSummary } from '@/lib/api'
 
+
+const hasCapability = vi.hoisted(() => vi.fn<(cap: string) => boolean>(() => true))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ has: hasCapability }),
+}))
+beforeEach(() => hasCapability.mockReturnValue(true))
 const scrollIntoView = vi.fn()
 const dashboardSummary = vi.hoisted(() => ({
   totals: {
@@ -243,4 +249,15 @@ describe('EmployeeLookupPage', () => {
     await userEvent.click(screen.getByRole('link', { name: 'dashboard.widgets.workspace.clearFilters' }))
     expect(await screen.findByTestId('employee-activity')).toBeInTheDocument()
   })
+})
+
+it('a forbidden leave-roster filter makes no roster or dashboard request and does not claim empty results', () => {
+  hasCapability.mockImplementation((cap) => cap !== 'leaves.view')
+  vi.mocked(api.listEmployees).mockClear()
+  vi.mocked(api.getDashboardSummary).mockClear()
+  setup('/employees?on_leave=true')
+  expect(screen.getByRole('alert')).toHaveTextContent('common.forbidden')
+  expect(screen.queryByText('dashboard.widgets.workspace.noMatches')).not.toBeInTheDocument()
+  expect(api.listEmployees).not.toHaveBeenCalled()
+  expect(api.getDashboardSummary).not.toHaveBeenCalled()
 })

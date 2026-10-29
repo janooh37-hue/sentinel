@@ -45,6 +45,7 @@ import { EmailBody } from '@/components/ledger/EmailBody'
 import { LedgerThread } from '@/components/ledger/LedgerThread'
 import { StarButton } from '@/components/ledger/StarButton'
 import { OUTLOOK_PENDING_TAG } from './mailboxTypes'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 /** Coarse page targets the shell's `onNavigate` seam understands. */
 type NavPage = 'employees' | 'books'
@@ -87,6 +88,7 @@ export function ReadingPane({
   onOpenEntry,
 }: ReadingPaneProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const { has } = useCapabilities()
   const isAr = i18n.language.startsWith('ar')
 
   const entryQuery = useQuery({
@@ -159,31 +161,35 @@ export function ReadingPane({
           </div>
           <div className="flex flex-none flex-col items-end gap-2">
             <div className="flex items-center gap-1.5">
-              <Button
-                variant="primary"
-                onClick={() => onReply?.(entry)}
-                icon={<ReplyIcon className="h-[15px] w-[15px] rtl:-scale-x-100" strokeWidth={2} />}
-              >
-                {t('ledger.outlook.reply')}
-              </Button>
-              <Button
-                onClick={() => onReplyAll?.(entry)}
-                icon={<ReplyAllIcon className="h-[15px] w-[15px] rtl:-scale-x-100" strokeWidth={2} />}
-              >
-                {t('ledger.outlook.replyAll')}
-              </Button>
-              <Button
-                onClick={() => onForward?.(entry)}
-                icon={<ForwardIcon className="h-[15px] w-[15px] rtl:-scale-x-100" strokeWidth={2} />}
-              >
-                {t('ledger.outlook.forward')}
-              </Button>
+              {has('ledger.send') && (
+                <>
+                  <Button
+                    variant="primary"
+                    onClick={() => { if (has('ledger.send')) onReply?.(entry) }}
+                    icon={<ReplyIcon className="h-[15px] w-[15px] rtl:-scale-x-100" strokeWidth={2} />}
+                  >
+                    {t('ledger.outlook.reply')}
+                  </Button>
+                  <Button
+                    onClick={() => { if (has('ledger.send')) onReplyAll?.(entry) }}
+                    icon={<ReplyAllIcon className="h-[15px] w-[15px] rtl:-scale-x-100" strokeWidth={2} />}
+                  >
+                    {t('ledger.outlook.replyAll')}
+                  </Button>
+                  <Button
+                    onClick={() => { if (has('ledger.send')) onForward?.(entry) }}
+                    icon={<ForwardIcon className="h-[15px] w-[15px] rtl:-scale-x-100" strokeWidth={2} />}
+                  >
+                    {t('ledger.outlook.forward')}
+                  </Button>
+                </>
+              )}
               <StarButton entryId={entry.id} starred={isStarred} className="h-8 w-8" />
-              {onDelete && (
+              {onDelete && has('ledger.delete') && (
                 <button
                   type="button"
                   aria-label={t('ledger.outlook.delete', { defaultValue: 'Delete' })}
-                  onClick={() => onDelete(entry)}
+                  onClick={() => { if (has('ledger.delete')) onDelete(entry) }}
                   className="inline-flex h-8 w-8 items-center justify-center rounded-[--radius-sm] border border-border-strong bg-surface-raised text-muted-foreground transition-colors hover:border-faint hover:bg-surface-tinted hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <TrashIcon className="h-[15px] w-[15px]" strokeWidth={2} />

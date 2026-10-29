@@ -29,6 +29,7 @@ import { ChevronLeft } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useIdentity } from '@/lib/useIdentity'
 import { cn } from '@/lib/utils'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { PERSONAL_FOLDERS, type MailboxView, type PersonalFolder } from './mailboxTypes'
 import { SmartFolders } from './SmartFolders'
 
@@ -54,6 +55,7 @@ interface FolderRailProps {
 export function FolderRail({ header, activeView, onSelectView, onNewEmail, allMail, onToggleAllMail, onReviewSuggestions, suggestionCount = 0 }: FolderRailProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const { identity, isAdmin } = useIdentity()
+  const { has } = useCapabilities()
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem(RAIL_COLLAPSED_KEY) === '1'
@@ -125,9 +127,10 @@ export function FolderRail({ header, activeView, onSelectView, onNewEmail, allMa
       </button>
 
       {/* ＋ New email — opens a new blank compose (Phase 6). */}
+      {has('ledger.send') && (
       <button
         type="button"
-        onClick={() => onNewEmail?.()}
+        onClick={() => { if (has('ledger.send')) onNewEmail?.() }}
         aria-label={t('ledger.outlook.newEmail')}
         title={collapsed ? t('ledger.outlook.newEmail') : undefined}
         className={cn(
@@ -147,6 +150,7 @@ export function FolderRail({ header, activeView, onSelectView, onNewEmail, allMa
           </span>
         )}
       </button>
+      )}
 
       {/* Account header — the signed-in user (name + status dot + email). */}
       <div className={cn('flex items-center gap-2 px-2 py-0.5 text-[0.75em] text-rail-faint', collapsed && 'justify-center px-0')}>

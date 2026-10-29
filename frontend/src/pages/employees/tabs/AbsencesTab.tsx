@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next'
 import { Trash2 } from 'lucide-react'
 import { toast } from '@/lib/toast'
 
-import { api, apiErrorMessage } from '@/lib/api'
+import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import type { AbsenceEpisodeRead } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -26,7 +26,8 @@ export function AbsencesTab({ employeeId }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const { has } = useCapabilities()
-  const canEdit = has('leaves.edit')
+  const canView = has('employees.view') && has('leaves.view')
+  const canEdit = canView && has('leaves.edit')
   const [deleting, setDeleting] = useState<AbsenceEpisodeRead | null>(null)
 
   const dateFmt = useMemo(
@@ -39,15 +40,20 @@ export function AbsencesTab({ employeeId }: Props): React.JSX.Element {
     [i18n.language],
   )
 
-  const { data: record, isLoading } = useQuery({
+  const { data: record, isLoading, error } = useQuery({
     queryKey: ['employee-absence-episodes', employeeId],
     queryFn: () => api.listEmployeeAbsenceEpisodes(employeeId),
+    enabled: canView,
   })
   const episodes = record?.episodes ?? []
 
   const deleteMutation = useMutation({
-    mutationFn: (episode: AbsenceEpisodeRead) =>
-      api.deleteEmployeeAbsenceRange(employeeId, episode.start_date, episode.end_date),
+    mutationFn: (episode: AbsenceEpisodeRead) => {
+      if (!has('employees.view') || !has('leaves.view') || !has('leaves.edit')) {
+        throw new Error(t('common.forbidden'))
+      }
+      return api.deleteEmployeeAbsenceRange(employeeId, episode.start_date, episode.end_date)
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employee-absence-episodes', employeeId] })
       void qc.invalidateQueries({ queryKey: ['employee-absences', employeeId] })
@@ -57,6 +63,12 @@ export function AbsencesTab({ employeeId }: Props): React.JSX.Element {
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
+
+  if (!canView || (error instanceof ApiError && error.status === 403)) {
+    return <p role="alert" className="p-4 text-muted-foreground">{t('common.forbidden')}</p>
+  }
+  if (error) return <p role="alert" className="p-4 text-accent">{t('common.loadError')}</p>
+  if (isLoading) return <p role="status">{t('common.loading')}</p>
 
   if (!isLoading && episodes.length === 0) {
     return (
@@ -107,7 +119,7 @@ export function AbsencesTab({ employeeId }: Props): React.JSX.Element {
         </tbody>
       </table>
       <ConfirmDialog
-        open={deleting !== null}
+        open={canEdit && deleting !== null}
         onOpenChange={(open) => {
           if (!open) setDeleting(null)
         }}
@@ -119,7 +131,7 @@ export function AbsencesTab({ employeeId }: Props): React.JSX.Element {
         confirmLabel={t('common.delete')}
         destructive
         onConfirm={async () => {
-          if (deleting) await deleteMutation.mutateAsync(deleting)
+          if (canEdit && deleting) await deleteMutation.mutateAsync(deleting)
         }}
       />
     </div>

@@ -27,7 +27,9 @@ const template: MessageTemplateRead = {
 
 function mount(value = template) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><MessageTemplateEditor template={value} /></QueryClientProvider>)
+  const editor = <QueryClientProvider client={client}><MessageTemplateEditor template={value} /></QueryClientProvider>
+  const view = render(editor)
+  return { ...view, refresh: () => view.rerender(<QueryClientProvider client={client}><MessageTemplateEditor template={value} /></QueryClientProvider>) }
 }
 
 beforeEach(() => {
@@ -54,6 +56,21 @@ describe('MessageTemplateEditor', () => {
     expect(screen.getByText('عزيزي Ahmed')).toHaveAttribute('dir', 'rtl')
     expect(screen.getByText('Sent after manager approval')).toBeVisible()
     expect(screen.getAllByText(/1 SMS segments/)).toHaveLength(2)
+  })
+
+  it('removes save and a pending reset confirmation when editing access is revoked', async () => {
+    const view = mount()
+    fireEvent.change(screen.getByRole('textbox', { name: 'English message' }), { target: { value: 'Unsaved wording' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
+    expect(screen.getByRole('button', { name: 'Confirm reset' })).toBeVisible()
+    has.mockReturnValue(false)
+    view.refresh()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Confirm reset' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save template' })).not.toBeInTheDocument()
+    expect(screen.getByText('Unsaved wording')).toBeVisible()
+    expect(messageTemplatesApi.save).not.toHaveBeenCalled()
+    expect(messageTemplatesApi.reset).not.toHaveBeenCalled()
   })
 
   it('inserts a variable at the selection of the last-focused language and restores its caret', () => {

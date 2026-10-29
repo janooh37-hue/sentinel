@@ -16,7 +16,7 @@
  * field value. Storage / backend conversion is unchanged.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Controller, useFormContext } from 'react-hook-form'
 import { Editor as HugeRTEEditor } from '@hugerte/hugerte-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -25,6 +25,7 @@ import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import type { EditorTemplateListItem, EditorTemplateRead } from '@/lib/api'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
@@ -103,16 +104,20 @@ interface SaveTemplateDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   getContent: () => string
+  canManage: () => boolean
 }
 
-function SaveTemplateDialog({ open, onOpenChange, getContent }: SaveTemplateDialogProps): React.JSX.Element | null {
+function SaveTemplateDialog({ open, onOpenChange, getContent, canManage }: SaveTemplateDialogProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const mutation = useMutation({
-    mutationFn: () => api.createEditorTemplate({ name: name.trim(), html: getContent() }),
+    mutationFn: () => {
+      if (!canManage()) throw new Error(t('editor.template.accessDenied'))
+      return api.createEditorTemplate({ name: name.trim(), html: getContent() })
+    },
     onSuccess: (tpl) => {
       toast.success(t('editor.template.savedToast', { name: tpl.name }))
       void qc.invalidateQueries({ queryKey: ['editor-templates'] })
@@ -155,7 +160,7 @@ function SaveTemplateDialog({ open, onOpenChange, getContent }: SaveTemplateDial
           className="mt-1.5"
           autoFocus
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && name.trim()) mutation.mutate()
+            if (e.key === 'Enter' && name.trim() && !mutation.isPending && canManage()) mutation.mutate()
           }}
         />
         {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
@@ -166,7 +171,7 @@ function SaveTemplateDialog({ open, onOpenChange, getContent }: SaveTemplateDial
           <Button
             type="button"
             disabled={!name.trim() || mutation.isPending}
-            onClick={() => mutation.mutate()}
+            onClick={() => { if (canManage() && !mutation.isPending) mutation.mutate() }}
           >
             {mutation.isPending ? t('common.saving') : t('common.save')}
           </Button>
@@ -180,9 +185,10 @@ interface LoadTemplateDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onLoad: (html: string, mode: 'replace' | 'insert') => void
+  canManage: () => boolean
 }
 
-function LoadTemplateDialog({ open, onOpenChange, onLoad }: LoadTemplateDialogProps): React.JSX.Element | null {
+function LoadTemplateDialog({ open, onOpenChange, onLoad, canManage }: LoadTemplateDialogProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [mode, setMode] = useState<'replace' | 'insert'>('insert')
@@ -195,13 +201,19 @@ function LoadTemplateDialog({ open, onOpenChange, onLoad }: LoadTemplateDialogPr
 
   const listQuery = useQuery({
     queryKey: ['editor-templates'],
-    queryFn: () => api.listEditorTemplates({ limit: 200 }).then((r) => r.items),
-    enabled: open,
+    queryFn: () => {
+      if (!canManage()) throw new Error(t('editor.template.accessDenied'))
+      return api.listEditorTemplates({ limit: 200 }).then((r) => r.items)
+    },
+    enabled: open && canManage(),
     staleTime: 30_000,
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteEditorTemplate(id),
+    mutationFn: (id: number) => {
+      if (!canManage()) throw new Error(t('editor.template.accessDenied'))
+      return api.deleteEditorTemplate(id)
+    },
     onSuccess: () => {
       toast.success(t('editor.template.deletedToast'))
       void qc.invalidateQueries({ queryKey: ['editor-templates'] })
@@ -209,8 +221,10 @@ function LoadTemplateDialog({ open, onOpenChange, onLoad }: LoadTemplateDialogPr
   })
 
   const renameMutation = useMutation({
-    mutationFn: ({ id, name }: { id: number; name: string }) =>
-      api.updateEditorTemplate(id, { name }),
+    mutationFn: ({ id, name }: { id: number; name: string }) => {
+      if (!canManage()) throw new Error(t('editor.template.accessDenied'))
+      return api.updateEditorTemplate(id, { name })
+    },
     onSuccess: () => {
       toast.success(t('editor.template.renamedToast'))
       void qc.invalidateQueries({ queryKey: ['editor-templates'] })
@@ -223,8 +237,10 @@ function LoadTemplateDialog({ open, onOpenChange, onLoad }: LoadTemplateDialogPr
   })
 
   async function handleLoad(id: number): Promise<void> {
+    if (!canManage()) return
     try {
       const tpl: EditorTemplateRead = await api.getEditorTemplate(id)
+      if (!canManage()) return
       onLoad(tpl.html, mode)
       onOpenChange(false)
     } catch (err) {
@@ -404,6 +420,13 @@ export function RichEditor({
 }: RichEditorProps): React.JSX.Element {
   const { i18n, t } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
+  const canManageTemplates = useCapabilities().has('editor_templates.manage')
+  const manageTemplatesRef = useRef(canManageTemplates)
+  useLayoutEffect(() => {
+    manageTemplatesRef.current = canManageTemplates
+    return () => { manageTemplatesRef.current = false }
+  }, [canManageTemplates])
+  const canManage = useCallback(() => manageTemplatesRef.current, [])
   const label = (isAr ? label_ar : label_en) ?? ''
 
   const {
@@ -416,6 +439,12 @@ export function RichEditor({
   const editorRef = useRef<HugeRTEEditorLike | null>(null)
   const [saveOpen, setSaveOpen] = useState(false)
   const [loadOpen, setLoadOpen] = useState(false)
+  const [previousTemplateAccess, setPreviousTemplateAccess] = useState(canManageTemplates)
+  if (previousTemplateAccess !== canManageTemplates) {
+    setPreviousTemplateAccess(canManageTemplates)
+    setSaveOpen(false)
+    setLoadOpen(false)
+  }
   // When the self-hosted HugeRTE bundle fails to load (e.g. offline asset
   // missing), fall back to a plain textarea bound to the same field so the
   // form stays usable instead of rendering nothing.
@@ -442,13 +471,13 @@ export function RichEditor({
       editor.ui.registry.addButton('gssg-template-save', {
         icon: 'template-add',
         tooltip: t('editor.template.saveTooltip'),
-        onAction: () => setSaveOpen(true),
+        onAction: () => { if (canManage()) setSaveOpen(true) },
       })
 
       editor.ui.registry.addButton('gssg-template-load', {
         icon: 'restore-draft',
         tooltip: t('editor.template.loadTooltip'),
-        onAction: () => setLoadOpen(true),
+        onAction: () => { if (canManage()) setLoadOpen(true) },
       })
 
       editor.ui.registry.addButton('gssg-table', {
@@ -459,7 +488,7 @@ export function RichEditor({
         },
       })
     },
-    [isFull, t],
+    [isFull, t, canManage],
   )
 
   const init = useMemo(
@@ -468,7 +497,7 @@ export function RichEditor({
       suffix: '.min',
       menubar: isFull ? ('file edit view insert format table tools' as const) : false,
       plugins: isFull ? FULL_PLUGINS : MINIMAL_PLUGINS,
-      toolbar: isFull ? FULL_TOOLBAR_ROWS : MINIMAL_TOOLBAR,
+      toolbar: isFull ? FULL_TOOLBAR_ROWS.map((row) => canManageTemplates ? row : row.replace('gssg-template-save gssg-template-load ', '')) : MINIMAL_TOOLBAR,
       toolbar_mode: 'wrap' as const,
       statusbar: isFull,
       elementpath: false,
@@ -489,7 +518,7 @@ export function RichEditor({
       skin: 'oxide',
       setup,
     }),
-    [isAr, isFull, editorHeight, fillHeight, minHeightPx, contentStyle, setup],
+    [isAr, isFull, editorHeight, fillHeight, minHeightPx, contentStyle, setup, canManageTemplates],
   )
 
   return (
@@ -521,6 +550,7 @@ export function RichEditor({
             />
           ) : (
             <HugeRTEEditor
+              key={canManageTemplates ? 'library-enabled' : 'library-disabled'}
               hugerteScriptSrc="/hugerte/hugerte.min.js"
               value={(field.value as string | undefined) ?? ''}
               onEditorChange={(html) => field.onChange(html)}
@@ -542,17 +572,20 @@ export function RichEditor({
             </span>
           )}
 
-          {isFull && (
+          {isFull && canManageTemplates && (
             <>
               <SaveTemplateDialog
+                canManage={canManage}
                 open={saveOpen}
                 onOpenChange={setSaveOpen}
                 getContent={() => editorRef.current?.getContent() ?? ''}
               />
               <LoadTemplateDialog
+                canManage={canManage}
                 open={loadOpen}
                 onOpenChange={setLoadOpen}
                 onLoad={(html, mode) => {
+                  if (!canManage()) return
                   const ed = editorRef.current
                   if (!ed) return
                   if (mode === 'replace') {

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type {
   ActivityItemRead,
@@ -10,6 +10,12 @@ import type {
 import type { Tab } from '../EmployeeTabChips'
 import { ActivityTab } from './ActivityTab'
 
+
+const hasCapability = vi.hoisted(() => vi.fn<(cap: string) => boolean>(() => true))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ has: hasCapability }),
+}))
+beforeEach(() => hasCapability.mockReturnValue(true))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     i18n: { language: 'en' },
@@ -223,4 +229,25 @@ describe('ActivityTab', () => {
     expect(screen.getByTestId('status-activity-detail')).toHaveTextContent('Port A')
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
+})
+
+it('masks leave and absence timeline facts without leaves.view while retaining unrelated history', () => {
+  hasCapability.mockImplementation((cap) => cap !== 'leaves.view')
+  renderActivity([
+    item('leave', 1, 'Private annual leave'),
+    item('absence', 2, 'Private absence'),
+    item('document', 3, 'Employment certificate'),
+    item('ledger', 4, 'Correspondence record'),
+  ])
+  expect(screen.queryByText('Private annual leave')).not.toBeInTheDocument()
+  expect(screen.queryByText('Private absence')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Employment certificate' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Correspondence record' })).toBeInTheDocument()
+})
+
+it('does not expose employee history when employee viewing itself is denied', () => {
+  hasCapability.mockImplementation((cap) => cap !== 'employees.view')
+  renderActivity([item('document', 3, 'Employment certificate')])
+  expect(screen.getByRole('alert')).toHaveTextContent('common.forbidden')
+  expect(screen.queryByText('Employment certificate')).not.toBeInTheDocument()
 })

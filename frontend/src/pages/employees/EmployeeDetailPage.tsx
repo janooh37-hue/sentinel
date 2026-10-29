@@ -71,6 +71,8 @@ export function EmployeeDetailPage(): React.JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams()
   const { i18n, t } = useTranslation()
   const { has, isLoading: capabilitiesLoading } = useCapabilities()
+  const canViewEmployee = has('employees.view')
+  const canViewLeaves = canViewEmployee && has('leaves.view')
   const action = searchParams.get('action')
   const editOverlay = useUrlOverlay('action')
   const docOverlay = useUrlOverlay('doc')
@@ -157,6 +159,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
 
   const editMutation = useMutation({
     mutationFn: (values: EmployeeFormOutput) => {
+      if (!has('employees.edit')) throw new Error(t('common.forbidden'))
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id: _id, ...patch } = values
       return api.updateEmployee(id!, patch)
@@ -174,9 +177,9 @@ export function EmployeeDetailPage(): React.JSX.Element {
   })
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['employee-detail', id],
+    queryKey: ['employee-detail', id, canViewLeaves],
     queryFn: () => api.getEmployeeDetail(id!),
-    enabled: !!id,
+    enabled: !!id && canViewEmployee,
   })
   const editing = action === 'edit' && has('employees.edit')
   const statusOpen = action === 'status' && has('employees.edit')
@@ -198,7 +201,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
   }, [data?.recent_documents, docOverlay.open])
 
   useEffect(() => {
-    if (!data || capabilitiesLoading) return
+    if (capabilitiesLoading) return
     if (action === 'edit' || action === 'status') {
       if (!has('employees.edit')) editOverlay.close()
     } else if (action) {
@@ -216,6 +219,10 @@ export function EmployeeDetailPage(): React.JSX.Element {
       recordRecentEmployee(data.employee)
     }
   }, [data?.employee])
+
+  if (!capabilitiesLoading && !canViewEmployee) {
+    return <p role="alert" className="p-4 text-muted-foreground">{t('common.forbidden')}</p>
+  }
 
   if (isLoading) {
     return (
@@ -281,7 +288,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
       </div>
 
       {/* ── Inline edit form (above layout) ──────────────────────────────────── */}
-      {(editing || initialExtraction) && (
+      {has('employees.edit') && (editing || initialExtraction) && (
         <div className="mx-auto max-w-[1180px] mt-6 px-4 md:px-8">
           <div className="rounded-2xl border border-hairline bg-surface p-6">
             {initialExtraction && (
@@ -333,6 +340,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
               missing={data.missing_fields}
               completeness={data.completeness}
               onFix={(field) => {
+                if (!has('employees.edit')) return
                 if (field) {
                   // Per-field: switch to the profile tab and open that row's
                   // inline editor in place.
@@ -352,8 +360,8 @@ export function EmployeeDetailPage(): React.JSX.Element {
               active={tab}
               counts={{
                 documents: data.stats.documents,
-                leaves: `${data.stats.leaves_taken_days}d`,
-                absences: data.stats.absence_days,
+                leaves: canViewLeaves && data.stats.leaves_taken_days != null ? `${data.stats.leaves_taken_days}d` : null,
+                absences: canViewLeaves ? data.stats.absence_days : null,
                 violations: data.stats.violations,
                 activity: data.stats.ledger_count,
                 // The chip carries no count: the number that matters is per day,
@@ -380,14 +388,17 @@ export function EmployeeDetailPage(): React.JSX.Element {
                 onPreviewDocs={openDocPreview}
               />
             )}
-            {tab === 'leaves' && (
+            {tab === 'leaves' && canViewLeaves && (
               <LeavesTab
                 employeeId={data.employee.id}
                 leaves={data.recent_leaves}
                 onPreviewDocs={openDocPreview}
               />
             )}
-            {tab === 'absences' && <AbsencesTab employeeId={data.employee.id} />}
+            {tab === 'absences' && canViewLeaves && <AbsencesTab employeeId={data.employee.id} />}
+            {!canViewLeaves && (tab === 'leaves' || tab === 'absences') && (
+              <p role="alert" className="p-4 text-muted-foreground">{t('common.forbidden')}</p>
+            )}
             {tab === 'violations' && (
               <ViolationsTab
                 employeeId={data.employee.id}
@@ -401,7 +412,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
             {tab === 'activity' && (
               <ActivityTab
                 activity={data.recent_activity}
-                leaves={data.recent_leaves}
+                leaves={canViewLeaves ? data.recent_leaves : []}
                 violations={data.recent_violations}
                 onPreviewDocs={openDocPreview}
                 onOpenViolation={openViolation}

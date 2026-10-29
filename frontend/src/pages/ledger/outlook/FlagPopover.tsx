@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { flagPresets, useFlagMutations, type FlagPreset } from './useFlagMutations'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 interface FlagPopoverProps {
   entryId: number
@@ -43,6 +44,8 @@ export function FlagPopover({
 }: FlagPopoverProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const { setFlag, clearFlag } = useFlagMutations()
+  const { has } = useCapabilities()
+  const canEdit = has('ledger.edit')
 
   const presets = useMemo(() => flagPresets(), [])
   const dateFmt = useMemo(
@@ -57,6 +60,7 @@ export function FlagPopover({
   const triggerButton = (
     <button
       type="button"
+      disabled={!canEdit}
       aria-label={flagged ? t('ledger.flag.clear') : t('ledger.flag.set')}
       aria-pressed={flagged}
       title={flagged ? t('ledger.flag.clear') : t('ledger.flag.set')}
@@ -79,7 +83,7 @@ export function FlagPopover({
   )
 
   // Flagged: the button is a plain toggle (clear) — no menu.
-  if (flagged) return triggerButton
+  if (flagged || !canEdit) return triggerButton
 
   return (
     <DropdownMenu>

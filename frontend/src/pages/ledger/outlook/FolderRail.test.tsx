@@ -24,6 +24,10 @@ vi.mock('@/lib/useIdentity', () => ({
 }))
 
 vi.mock('./SmartFolders', () => ({ SmartFolders: () => null }))
+const { capabilities } = vi.hoisted(() => ({ capabilities: new Set<string>(['ledger.view', 'ledger.send']) }))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ has: (cap: string) => capabilities.has(cap) }),
+}))
 
 async function renderRail(language: 'en' | 'ar', header?: ReactNode): Promise<void> {
   await i18n.changeLanguage(language)
@@ -50,6 +54,9 @@ describe('FolderRail personal folders after the Outlook cutover', () => {
 
   beforeEach(() => {
     localStorage.clear()
+    capabilities.clear()
+    capabilities.add('ledger.view')
+    capabilities.add('ledger.send')
   })
 
   afterEach(cleanup)
@@ -82,6 +89,14 @@ describe('FolderRail personal folders after the Outlook cutover', () => {
     const followups = screen.getByRole('button', { name: /^للمتابعة/ })
     expect(await within(followups).findByText('2')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'المسودّات' })).not.toBeInTheDocument()
+  })
+
+  it('keeps mailbox browsing but hides New email without ledger.send even with ledger.create', async () => {
+    capabilities.delete('ledger.send')
+    capabilities.add('ledger.create')
+    await renderRail('en')
+    expect(screen.getByRole('button', { name: /^Inbox/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'New email' })).not.toBeInTheDocument()
   })
 
   it.each(['en', 'ar'] as const)('shows its header first only while expanded in %s', async (language) => {

@@ -52,7 +52,7 @@ interface Props {
  * `seen` and `off` are calendar facts this view adds: a day the device saw with
  * no roster behind it, and a day nobody was rostered at all.
  */
-type DayOutcome = RowState | 'seen' | 'off'
+type DayOutcome = RowState | 'seen' | 'off' | 'unavailable'
 
 const SHIFT_LETTER: Record<string, string> = {
   morning: 'M',
@@ -71,6 +71,7 @@ const CELL: Record<DayOutcome, string> = {
   pending: 'border-dashed border-border-strong bg-transparent',
   seen: 'border-dashed border-info/40 bg-info-soft/40',
   off: 'border-dashed border-border-strong bg-transparent text-faint',
+  unavailable: 'border-border bg-surface text-muted-foreground',
 }
 
 /** Worst first: one cell can hold two shifts, and trouble must win the colour. */
@@ -119,10 +120,11 @@ function dayOutcome(day: EmployeeAttendanceDay, now: Date): DayOutcome {
 }
 
 /** The worst outcome among the shifts a single calendar day holds. */
-function worstOutcome(days: readonly EmployeeAttendanceDay[], now: Date): DayOutcome | null {
+function worstOutcome(days: readonly EmployeeAttendanceDay[], now: Date, canViewLeaveFacts: boolean): DayOutcome | null {
   let worst: DayOutcome | null = null
   for (const day of days) {
     const outcome = dayOutcome(day, now)
+    if (!canViewLeaveFacts && (outcome === 'leave' || outcome === 'absent')) continue
     if (worst === null || CELL_ORDER.indexOf(outcome) < CELL_ORDER.indexOf(worst)) worst = outcome
   }
   return worst
@@ -136,6 +138,7 @@ export function AttendanceTab({
   const { t, i18n } = useTranslation()
   const language = i18n.language
   const { has } = useCapabilities()
+  const canViewLeaveFacts = has('employees.view') && has('leaves.view')
   const [month, setMonth] = useState(() => initialMonth ?? new Date().toISOString().slice(0, 10))
   const [selected, setSelected] = useState<string | null>(null)
 
@@ -145,7 +148,7 @@ export function AttendanceTab({
     (has('workforce.people.view') && has('workforce.attendance.review'))
 
   const query = useQuery({
-    queryKey: ['employee-attendance', employeeId, bounds.from, bounds.to] as const,
+    queryKey: ['employee-attendance', employeeId, bounds.from, bounds.to, canViewLeaveFacts] as const,
     queryFn: () => api.getEmployeeAttendance(employeeId, { from_date: bounds.from, to_date: bounds.to }),
     enabled: allowed,
     staleTime: 60_000,
@@ -312,12 +315,15 @@ export function AttendanceTab({
 
   return (
     <div className="grid gap-3.5">
+      {!canViewLeaveFacts && (
+        <p role="status" className="text-sm text-muted-foreground">{t('attendance.tab.leavePrivacy')}</p>
+      )}
       <div className="grid grid-cols-2 gap-2.5 md:grid-cols-5">
         <Kpi
           id="punctuality"
           label={t('attendance.tab.punctuality')}
-          value={kpis.punctuality === null ? '—' : `${kpis.punctuality}%`}
-          detail={`${kpis.onTime}/${kpis.judged}`}
+          value={!canViewLeaveFacts || kpis.punctuality === null ? '—' : `${kpis.punctuality}%`}
+          detail={canViewLeaveFacts ? `${kpis.onTime}/${kpis.judged}` : undefined}
           tone="text-success"
         />
         <Kpi
@@ -330,7 +336,7 @@ export function AttendanceTab({
         <Kpi
           id="absent"
           label={t('attendance.tab.absentDays')}
-          value={String(kpis.absent)}
+          value={canViewLeaveFacts ? String(kpis.absent) : '—'}
           tone="text-accent"
         />
         <Kpi
@@ -440,7 +446,7 @@ export function AttendanceTab({
           <p className="px-4 py-6 text-center text-[0.82em] text-muted-foreground">
             {history.data?.linked === false
               ? t('attendance.tab.unenrolled')
-              : t('attendance.tab.noSchedule')}
+              : t(canViewLeaveFacts ? 'attendance.tab.noSchedule' : 'common.forbidden')}
           </p>
         ) : (
           <>
@@ -475,8 +481,8 @@ export function AttendanceTab({
                 const iso = `${bounds.from.slice(0, 8)}${String(dayNumber).padStart(2, '0')}`
                 const entries = byDate.get(iso) ?? []
                 const seen = sightings.get(iso)
-                const judged = worstOutcome(entries, judgedAt)
-                const outcome: DayOutcome = judged ?? (seen ? 'seen' : 'off')
+                const judged = worstOutcome(entries, judgedAt, canViewLeaveFacts)
+                const outcome: DayOutcome = judged ?? (seen ? 'seen' : canViewLeaveFacts ? 'off' : 'unavailable')
                 return (
                   <button
                     key={iso}
@@ -498,7 +504,7 @@ export function AttendanceTab({
                         ? entries.map((day) => SHIFT_LETTER[day.shift_code ?? ''] ?? '?').join(' ')
                         : seen
                           ? t('attendance.tab.seenCount', { count: seen.punch_count })
-                          : t('attendance.tab.restDay')}
+                          : canViewLeaveFacts ? t('attendance.tab.restDay') : '—'}
                     </span>
                   </button>
                 )
@@ -509,7 +515,7 @@ export function AttendanceTab({
       </section>
 
       {selectedDays.map((day) => (
-        <DayTimeline key={`${day.operational_date}-${day.shift_code}`} day={day} />
+        <DayTimeline key={`${day.operational_date}-${day.shift_code}`} day={day} canViewLeaveFacts={canViewLeaveFacts} />
       ))}
 
       {unattributed !== null && (
@@ -603,7 +609,7 @@ function SeenOnlyDay({ day }: { day: EmployeeAttendanceHistoryDay }): React.JSX.
 }
 
 /** The selected day's punch timeline: window, grace band, one marker per punch. */
-function DayTimeline({ day }: { day: EmployeeAttendanceDay }): React.JSX.Element {
+function DayTimeline({ day, canViewLeaveFacts }: { day: EmployeeAttendanceDay; canViewLeaveFacts: boolean }): React.JSX.Element {
   const { t } = useTranslation()
   const start = parseInstant(day.scheduled_start_at)
   const end = parseInstant(day.scheduled_end_at)
@@ -656,7 +662,7 @@ function DayTimeline({ day }: { day: EmployeeAttendanceDay }): React.JSX.Element
                     'repeating-linear-gradient(45deg, var(--warning-soft) 0 4px, transparent 4px 8px)',
                 }}
               />
-              {absenceAt !== null && (
+              {canViewLeaveFacts && absenceAt !== null && (
                 <i
                   aria-hidden
                   data-testid="attendance-day-absence"
@@ -696,7 +702,7 @@ function DayTimeline({ day }: { day: EmployeeAttendanceDay }): React.JSX.Element
             {t('attendance.pastGrace', { minutes: pastGrace })}
           </span>
         )}
-        {day.presence_state === 'absent' && (
+        {canViewLeaveFacts && day.presence_state === 'absent' && (
           <span className="font-bold text-accent">{t('attendance.state.absent')}</span>
         )}
       </p>

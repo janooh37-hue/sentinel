@@ -34,6 +34,14 @@ vi.mock('react-i18next', () => ({
 vi.mock('@/lib/useIdentity', () => ({
   useIdentity: () => ({ identity: { email: 'me@gssg.ae' }, isAdmin: false }),
 }))
+const { capabilities } = vi.hoisted(() => ({ capabilities: new Set<string>() }))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ has: (cap: string) => capabilities.has(cap) }),
+}))
+beforeEach(() => {
+  capabilities.clear()
+  for (const cap of ['ledger.view', 'ledger.edit', 'ledger.send', 'ledger.delete', 'ledger.create']) capabilities.add(cap)
+})
 // HugeRTE can't mount in jsdom — sentinel div (repo-wide convention).
 vi.mock('@/components/ui/rich-editor', () => ({
   RichEditor: ({ name }: { name: string }) => <div data-testid={`rich-editor-${name}`} />,
@@ -113,10 +121,10 @@ function LocationProbe(): React.JSX.Element {
   return <output data-testid="location">{location.search}</output>
 }
 
-function renderShell(initialEntry: string, state?: Record<string, unknown>): void {
+function renderShell(initialEntry: string, state?: Record<string, unknown>): { refresh: () => void } {
   const [pathname, search] = initialEntry.split('?')
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(
+  const tree = () => (
     <QueryClientProvider client={queryClient}>
       <MemoryRouter
         initialEntries={[{ pathname, search: search ? `?${search}` : '', state: state ?? null }]}
@@ -124,8 +132,10 @@ function renderShell(initialEntry: string, state?: Record<string, unknown>): voi
         <LedgerOutlookShell />
         <LocationProbe />
       </MemoryRouter>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+  const view = render(tree())
+  return { refresh: () => view.rerender(tree()) }
 }
 
 describe('LedgerOutlookShell mail URLs', () => {
@@ -277,6 +287,15 @@ describe('LedgerOutlookShell Outlook handoff surface', () => {
     expect(screen.getByText('hr@gssg.ae')).toBeInTheDocument()
     expect(screen.getByText('GS-0048')).toBeInTheDocument()
   })
+
+  it('rejects New email, direct compose URLs and prefills without ledger.send even with ledger.create', async () => {
+    capabilities.delete('ledger.send')
+    renderShell('/ledger?action=compose', { composePrefill: { to: ['hr@gssg.ae'], subject: 'Blocked' } })
+    await userEvent.click(screen.getByRole('button', { name: 'ledger.outlook.newEmail' }))
+    expect(screen.queryByTestId('compose-window')).not.toBeInTheDocument()
+    expect(screen.queryByDisplayValue('Blocked')).not.toBeInTheDocument()
+    expect(api.emailHandoff).not.toHaveBeenCalled()
+  })
 })
 
 describe('activityEmoji', () => {
@@ -293,6 +312,12 @@ describe('LedgerOutlookShell deferred Trash', () => {
     vi.mocked(api.deleteLedgerEntry).mockClear()
     vi.mocked(api.listLedger).mockResolvedValue({ items: [entry(42), entry(7)], total: 2, limit: 500, offset: 0 })
     vi.mocked(api.getSmartFolderSuggestions).mockResolvedValue([])
+    vi.mocked(api.getLedgerEntry).mockResolvedValue({
+      ...entry(42),
+      notes_html: null,
+      attachment_paths: [],
+      created_by: null,
+    })
   })
 
   afterEach(() => vi.useRealTimers())
@@ -324,5 +349,31 @@ describe('LedgerOutlookShell deferred Trash', () => {
     expect(toast.dismiss).toHaveBeenCalledWith('trash-toast-id')
     act(() => undo?.())
     expect(toast.error).toHaveBeenCalledWith('ledger.outlook.undoTooLate')
+  })
+
+  it.each(['Trash 42', 'Trash all'])('does not schedule %s or hide rows without ledger.delete', async (action) => {
+    capabilities.delete('ledger.delete')
+    renderShell('/ledger?mail=42')
+    await screen.findByRole('button', { name: '42' })
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: action }))
+    expect(screen.getByRole('button', { name: '42' })).toBeInTheDocument()
+    expect(screen.getByTestId('reading-pane')).toHaveTextContent('42')
+    expect(toast).not.toHaveBeenCalled()
+    await act(() => vi.advanceTimersByTimeAsync(6000))
+    expect(api.deleteLedgerEntry).not.toHaveBeenCalled()
+  })
+
+  it('rechecks ledger.delete when the Undo window expires', async () => {
+    const shell = renderShell('/ledger')
+    await screen.findByRole('button', { name: '42' })
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: 'Trash 42' }))
+    expect(screen.queryByRole('button', { name: '42' })).not.toBeInTheDocument()
+    capabilities.delete('ledger.delete')
+    shell.refresh()
+    await act(() => vi.advanceTimersByTimeAsync(6000))
+    expect(api.deleteLedgerEntry).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: '42' })).toBeInTheDocument()
   })
 })

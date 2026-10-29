@@ -44,6 +44,7 @@ import type { EmployeeLookupItem, LedgerEntryRead } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { base64PdfToFile, desiredRefPdfDocIds, mergeFiles } from '@/lib/refPdfAttachments'
 import { useIdentity } from '@/lib/useIdentity'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { pushRecentRecipient, recordRecipientsForForm } from '@/lib/recentRecipients'
 import { clearBasket } from '@/lib/emailBasket'
@@ -208,6 +209,8 @@ export function OutlookHandoffDialog({
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const { identity } = useIdentity()
+  const { has } = useCapabilities()
+  const canSend = has('ledger.send')
   const selfAddress = identity?.email ?? undefined
 
   const initial: FormValues = useMemo(() => {
@@ -687,6 +690,7 @@ export function OutlookHandoffDialog({
         <FormProvider {...methods}>
           <form
             onSubmit={handleSubmit((values) => {
+              if (!canSend || handoffMutation.isPending) return
               if (!(values.to ?? []).some(Boolean)) {
                 toast.error(t('compose.toRequired', { defaultValue: 'At least one recipient is required' }))
                 return
@@ -1008,7 +1012,7 @@ export function OutlookHandoffDialog({
               <Button type="button" variant="secondary" className="rounded-full" onClick={handleClose}>
                 {t('common.cancel')}
               </Button>
-              <Button type="submit" className="rounded-full" disabled={handoffMutation.isPending}>
+              <Button type="submit" className="rounded-full" disabled={!canSend || handoffMutation.isPending}>
                 {handoffMutation.isPending ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (

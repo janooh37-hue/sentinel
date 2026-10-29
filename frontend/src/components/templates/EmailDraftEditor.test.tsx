@@ -26,7 +26,8 @@ vi.mock('@/lib/messageTemplates', async (importOriginal) => {
 
 function mount(draftKey = 'leave:Annual') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><EmailDraftEditor draftKey={draftKey} label="Annual leave" /></QueryClientProvider>)
+  const view = render(<QueryClientProvider client={client}><EmailDraftEditor draftKey={draftKey} label="Annual leave" /></QueryClientProvider>)
+  return { ...view, refresh: () => view.rerender(<QueryClientProvider client={client}><EmailDraftEditor draftKey={draftKey} label="Annual leave" /></QueryClientProvider>) }
 }
 
 beforeEach(() => {
@@ -43,6 +44,24 @@ afterEach(async () => {
 })
 
 describe('EmailDraftEditor', () => {
+  it('keeps wording visible but removes edit and reset controls after capability loss', async () => {
+    vi.mocked(messageTemplatesApi.drafts).mockResolvedValue({
+      overrides: { 'leave:Annual': { subject: 'عنوان خاص' } }, tokens: { leave: ['names'] },
+    })
+    const view = mount()
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Subject' }), { target: { value: 'عنوان غير محفوظ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
+    expect(screen.getByRole('button', { name: 'Confirm reset' })).toBeVisible()
+    has.mockReturnValue(false)
+    view.refresh()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Confirm reset' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save template' })).not.toBeInTheDocument()
+    expect(screen.getByText('عنوان غير محفوظ')).toBeVisible()
+    expect(messageTemplatesApi.saveDraft).not.toHaveBeenCalled()
+    expect(messageTemplatesApi.resetDraft).not.toHaveBeenCalled()
+  })
+
   it.each(['en', 'ar'] as const)('labels every draft variable in %s and inserts its raw token', async (language) => {
     i18n.addResourceBundle('ar', 'translation', ar, true, true)
     await i18n.changeLanguage(language)

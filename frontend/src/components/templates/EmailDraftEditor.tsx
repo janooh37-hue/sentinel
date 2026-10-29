@@ -60,6 +60,7 @@ function DraftEditor({ draftKey, label, data }: { draftKey: string; label: strin
         {currentOverride !== undefined && <span className="rounded-full bg-primary-soft px-2 py-1 text-xs text-primary">{t('msgTemplates.editor.modified')}</span>}
         {canEdit && dirty && <span className="text-xs text-muted-foreground">{t('msgTemplates.editor.dirty')}</span>}
       </header>
+      {!canEdit && <p role="status" className="text-sm text-muted-foreground">{t('msgTemplates.editor.readOnly')}</p>}
       <div className="space-y-4">
         {fields.map((field) => (
           <div key={field} className="min-w-0 space-y-2">
@@ -86,9 +87,9 @@ function DraftEditor({ draftKey, label, data }: { draftKey: string; label: strin
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             {confirmReset ? <>
               <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={pending} onClick={() => setConfirmReset(false)}>{t('msgTemplates.editor.cancel')}</Button>
-              <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={pending} onClick={() => { save.reset(); reset.mutate(draftKey, { onSuccess: accept }) }}>{t('msgTemplates.editor.confirmReset')}</Button>
+              <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={pending} onClick={() => { if (!canEdit || pending) return; save.reset(); reset.mutate(draftKey, { onSuccess: accept }) }}>{t('msgTemplates.editor.confirmReset')}</Button>
             </> : <Button type="button" variant="outline" className="min-h-11 w-full sm:me-auto sm:w-auto" disabled={pending || currentOverride === undefined} onClick={() => setConfirmReset(true)}>{t('msgTemplates.editor.reset')}</Button>}
-            <Button type="button" className="min-h-11 w-full sm:w-auto" disabled={pending || !dirty || confirmReset} onClick={() => { reset.reset(); save.mutate({ key: draftKey, body: values }, { onSuccess: accept }) }}>{t(pending ? 'msgTemplates.editor.saving' : 'msgTemplates.editor.save')}</Button>
+            <Button type="button" className="min-h-11 w-full sm:w-auto" disabled={pending || !dirty || confirmReset} onClick={() => { if (!canEdit || pending) return; reset.reset(); save.mutate({ key: draftKey, body: values }, { onSuccess: accept }) }}>{t(pending ? 'msgTemplates.editor.saving' : 'msgTemplates.editor.save')}</Button>
           </div>
         </div>
       )}
