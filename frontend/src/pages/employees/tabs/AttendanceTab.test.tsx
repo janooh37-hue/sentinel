@@ -21,6 +21,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getEmployeeAttendance, getEmployeeAttendanceHistory, hasCapability } = vi.hoisted(() => ({
@@ -79,7 +80,9 @@ function renderTab() {
   return render(
     <QueryClientProvider client={client}>
       {/* Pinned month: the grid must not depend on the wall clock. */}
-      <AttendanceTab employeeId="G-9001" initialMonth="2026-08-19" />
+      <MemoryRouter>
+        <AttendanceTab employeeId="G-9001" initialMonth="2026-08-19" />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -208,7 +211,9 @@ describe('AttendanceTab', () => {
 
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <AttendanceTab employeeId="G-9001" initialMonth="2026-01-05" />
+        <MemoryRouter>
+          <AttendanceTab employeeId="G-9001" initialMonth="2026-01-05" />
+        </MemoryRouter>
       </QueryClientProvider>,
     )
 

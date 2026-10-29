@@ -411,9 +411,8 @@ export function EmployeeDetailPage(): React.JSX.Element {
             )}
             {tab === 'activity' && (
               <ActivityTab
-                activity={data.recent_activity}
-                leaves={canViewLeaves ? data.recent_leaves : []}
-                violations={data.recent_violations}
+                employeeId={data.employee.id}
+                employee={data.employee}
                 onPreviewDocs={openDocPreview}
                 onOpenViolation={openViolation}
                 onOpenTab={handleTabChange}

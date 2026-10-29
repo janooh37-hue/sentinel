@@ -2198,6 +2198,546 @@ body {
     break-after: auto;
     page-break-after: auto;
   }
+  /* Employee-file statements (activity, attendance): letterhead sheets that
+     carry their own 14mm side padding and repeat head and foot through the
+     table's header/footer groups, so the page itself has no margin. Each
+     orientation is its own named page; a page-name change forces a sheet, so
+     everything around the paper is print-hidden and ancestors lose their
+     padding (see the leave report above for the blank-first-page trap). */
+  @page statement {
+    size: A4 portrait;
+    margin: 0;
+  }
+  @page statement-landscape {
+    size: A4 landscape;
+    margin: 0;
+  }
+  .print-statement {
+    page: statement;
+  }
+  .print-statement[data-orient='landscape'] {
+    page: statement-landscape;
+  }
+  *:has(.print-statement) {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .statement-setup,
+  .statement-setup > div:not([data-print-hide]) {
+    display: block !important;
+    height: auto !important;
+  }
+  /* The preview scales the sheet to the canvas; paper prints it 1:1. */
+  .statement-zoom,
+  .statement-stage {
+    transform: none !important;
+    width: auto !important;
+    height: auto !important;
+    box-shadow: none !important;
+  }
+  /* The flatten rule above strips every background; these fills are part of
+     the document (letterhead rule, contact band, table heads, calendar
+     cells), so they come back here. `#root` out-specifies the flatten rule. */
+  #root .statement-sheet {
+    background: #fff !important;
+  }
+  #root .statement-sheet .st-rule i {
+    background: #b92027 !important;
+  }
+  #root .statement-sheet .st-contact {
+    background: #ececec !important;
+  }
+  #root .statement-sheet .st-dt th,
+  #root .statement-sheet .st-cal .wd {
+    background: #e9edf2 !important;
+  }
+  #root .statement-sheet .st-dt tr.tot td {
+    background: #f4f4f4 !important;
+  }
+  #root .statement-sheet .st-cal .c.blank,
+  #root .statement-sheet .st-cal .c.out {
+    background: #fafafa !important;
+  }
+  #root .statement-sheet .st-cal .c.s-rest {
+    background: #f1f1f1 !important;
+  }
+  #root .statement-sheet .st-cal .c.s-leave {
+    background: repeating-linear-gradient(135deg, #fff 0 1.1mm, #e6e6e6 1.1mm 1.5mm) !important;
+  }
+  #root .statement-sheet .st-cal .c.s-absent {
+    background: #f6f6f6 !important;
+  }
+}
+
+/* Employee-file statement paper, on screen and on paper alike. Ink and paper
+   are pinned (never theme tokens), so a dark-theme operator previews and
+   prints dark text on white. Sizes are in mm and pt: the preview is the A4
+   sheet at 1:1 before the canvas scales it. */
+.statement-sheet {
+  --st-navy: #0d2845;
+  width: 210mm;
+  background: #fff;
+  color: #151515;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: 'Inter Variable', 'Inter', 'Noto Sans Arabic', sans-serif;
+  font-size: 8.6pt;
+  line-height: 1.38;
+  font-variant-numeric: tabular-nums;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.statement-sheet[data-orient='landscape'] {
+  width: 297mm;
+}
+.statement-sheet:lang(ar),
+.statement-sheet :lang(ar) {
+  font-family: 'Noto Sans Arabic', 'Inter Variable', sans-serif;
+  letter-spacing: 0;
+}
+.statement-sheet:lang(ar) {
+  font-size: 9.2pt;
+  line-height: 1.5;
+}
+.statement-sheet :lang(en) {
+  font-family: 'Inter Variable', 'Inter', sans-serif;
+}
+.statement-sheet > thead > tr > td {
+  padding: 6mm 14mm 0;
+  vertical-align: top;
+}
+.statement-sheet > tbody > tr > td {
+  padding: 0 14mm;
+  vertical-align: top;
+}
+.statement-sheet > tbody > tr.st-row {
+  break-inside: avoid;
+}
+.statement-sheet > tfoot > tr > td {
+  padding: 0 14mm 7mm;
+  vertical-align: bottom;
+}
+.statement-sheet .st-mono {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.92em;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+}
+.statement-sheet .st-lh {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8mm;
+}
+.statement-sheet .st-lh img {
+  width: 87mm;
+  height: 29mm;
+  object-fit: contain;
+  display: block;
+  margin-block: -6mm;
+}
+.statement-sheet .st-office {
+  margin: 0;
+  padding-top: 3mm;
+  min-width: 62mm;
+  font-size: 8pt;
+  line-height: 1.7;
+  color: #222;
+}
+.statement-sheet .st-office div {
+  display: flex;
+  gap: 2mm;
+}
+.statement-sheet .st-office dt {
+  min-width: 18mm;
+  color: #555;
+  white-space: nowrap;
+}
+.statement-sheet .st-office dd {
+  margin: 0;
+  font-weight: 500;
+}
+.statement-sheet .st-pending {
+  color: #555;
+  font-style: italic;
+  font-weight: 400;
+}
+.statement-sheet .st-rule {
+  display: flex;
+  align-items: flex-start;
+}
+.statement-sheet .st-rule i {
+  display: block;
+  background: #b92027;
+}
+.statement-sheet .st-rule i:first-child {
+  width: 65%;
+  height: 0.15mm;
+}
+.statement-sheet .st-rule i:last-child {
+  flex: 1;
+  height: 5.5mm;
+}
+.statement-sheet .st-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8mm;
+  margin-top: 4mm;
+}
+.statement-sheet .st-title h1 {
+  margin: 0;
+  font-size: 14.5pt;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--st-navy);
+}
+.statement-sheet .st-title p {
+  margin: 0;
+  font-size: 9.5pt;
+  font-weight: 500;
+  text-align: end;
+}
+.statement-sheet .st-meta {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2.4mm 0 3mm;
+  font-size: 8.4pt;
+}
+.statement-sheet .st-meta td {
+  padding: 1mm 0;
+  border-bottom: 0.2mm solid #cfcfcf;
+  vertical-align: baseline;
+}
+.statement-sheet .st-meta tr:first-child td {
+  border-top: 0.3mm solid var(--st-navy);
+}
+.statement-sheet .st-meta td.k {
+  width: 27mm;
+  padding-inline-end: 2mm;
+  color: #555;
+}
+.statement-sheet .st-meta td.v {
+  font-weight: 500;
+}
+.statement-sheet .st-meta td.v + td.k {
+  padding-inline-start: 4mm;
+}
+.statement-sheet .st-compact {
+  display: flex;
+  align-items: center;
+  gap: 6mm;
+  padding-bottom: 2mm;
+  margin-bottom: 3mm;
+  border-bottom: 0.3mm solid var(--st-navy);
+  font-size: 8.4pt;
+}
+.statement-sheet .st-compact img {
+  width: 30mm;
+  height: 10mm;
+  object-fit: contain;
+  margin-block: -2mm;
+}
+.statement-sheet .st-compact b {
+  font-size: 10.5pt;
+  font-weight: 600;
+  color: var(--st-navy);
+}
+.statement-sheet .st-compact .g {
+  flex: 1;
+}
+.statement-sheet .st-first {
+  padding-top: 1mm;
+}
+.statement-sheet .st-scope {
+  margin: 1mm 0 3.5mm;
+  padding: 2mm 3mm;
+  border: 0.25mm solid #888;
+  font-size: 8.2pt;
+}
+.statement-sheet .st-scope b {
+  font-weight: 600;
+}
+.statement-sheet .st-sec {
+  margin: 0 0 5mm;
+}
+.statement-sheet .st-sec h2,
+.statement-sheet .st-calwrap h2 {
+  display: flex;
+  gap: 2.5mm;
+  align-items: baseline;
+  margin: 0 0 1.4mm;
+  font-size: 10pt;
+  font-weight: 600;
+  color: var(--st-navy);
+}
+.statement-sheet .st-sec h2 .c {
+  font-size: 8.4pt;
+  font-weight: 400;
+  color: #555;
+}
+.statement-sheet .st-dt {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.3pt;
+}
+.statement-sheet .st-dt th {
+  padding: 1.1mm 1.6mm;
+  background: #e9edf2;
+  border-block: 0.3mm solid var(--st-navy);
+  color: var(--st-navy);
+  font-size: 7.8pt;
+  font-weight: 600;
+  text-align: start;
+  vertical-align: bottom;
+}
+.statement-sheet .st-dt td {
+  padding: 1.2mm 1.6mm;
+  border-bottom: 0.2mm solid #d3d3d3;
+  vertical-align: top;
+}
+.statement-sheet .st-dt td:first-child {
+  white-space: nowrap;
+}
+.statement-sheet .st-dt .num {
+  text-align: end;
+}
+.statement-sheet .st-dt tr.tot td {
+  border-block: 0.3mm solid var(--st-navy);
+  background: #f4f4f4;
+  font-weight: 600;
+}
+.statement-sheet .st-dt td.none {
+  padding: 2mm 1.6mm;
+  color: #444;
+  font-style: italic;
+}
+.statement-sheet .st-sub {
+  display: block;
+  color: #555;
+  font-size: 7.6pt;
+}
+.statement-sheet .st-gl {
+  display: inline-block;
+  width: 3.2mm;
+  height: 3.2mm;
+  vertical-align: -0.6mm;
+  margin-inline-end: 1.2mm;
+}
+.statement-sheet .st-gl.t-verified { color: #047857; }
+.statement-sheet .st-gl.t-grace { color: #8a5d00; }
+.statement-sheet .st-gl.t-late { color: #b45309; }
+.statement-sheet .st-gl.t-absent { color: #c8102e; }
+.statement-sheet .st-gl.t-unpaired { color: #1d4ed8; }
+.statement-sheet .st-gl.t-leave { color: #555; }
+.statement-sheet .st-gl.t-pending,
+.statement-sheet .st-gl.t-rest { color: #888; }
+.statement-sheet .st-shl {
+  display: inline-block;
+  padding: 0 1mm;
+  border: 0.2mm solid #444;
+  border-radius: 0.6mm;
+  font-family: 'IBM Plex Mono', 'Noto Sans Arabic', monospace;
+  font-size: 7pt;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-inline-end: 1.4mm;
+}
+.statement-sheet .st-sum {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.4pt;
+}
+.statement-sheet .st-sum td {
+  padding: 1.3mm 1.6mm;
+  border-bottom: 0.2mm solid #d3d3d3;
+  vertical-align: baseline;
+}
+.statement-sheet .st-sum tr:first-child td {
+  border-top: 0.3mm solid var(--st-navy);
+}
+.statement-sheet .st-sum tr:last-child td {
+  border-bottom: 0.3mm solid var(--st-navy);
+}
+.statement-sheet .st-sum td.k {
+  width: 30%;
+  color: #333;
+}
+.statement-sheet .st-sum td.v {
+  width: 20%;
+  font-weight: 600;
+}
+.statement-sheet .st-sum td.v small {
+  font-size: 7.6pt;
+  font-weight: 400;
+  color: #555;
+}
+.statement-sheet .st-sum td.v + td.k {
+  padding-inline-start: 5mm;
+}
+.statement-sheet .st-calwrap {
+  margin-bottom: 5mm;
+}
+.statement-sheet .st-cal {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 0.3mm solid var(--st-navy);
+  border-inline-start: 0.2mm solid #aaa;
+}
+.statement-sheet .st-cal .wd {
+  padding: 1mm 1.4mm;
+  background: #e9edf2;
+  border-inline-end: 0.2mm solid #aaa;
+  border-bottom: 0.3mm solid var(--st-navy);
+  color: var(--st-navy);
+  font-size: 7.6pt;
+  font-weight: 600;
+}
+.statement-sheet .st-cal .c {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto 1fr;
+  height: 16.5mm;
+  padding: 0.9mm 1.2mm;
+  border-inline-end: 0.2mm solid #aaa;
+  border-bottom: 0.2mm solid #aaa;
+  font-size: 7pt;
+  overflow: hidden;
+}
+.statement-sheet .st-cal .c.blank,
+.statement-sheet .st-cal .c.out {
+  background: #fafafa;
+  color: #999;
+}
+.statement-sheet .st-cal .c.s-rest {
+  background: #f1f1f1;
+  color: #555;
+}
+.statement-sheet .st-cal .c.s-leave {
+  background: repeating-linear-gradient(135deg, #fff 0 1.1mm, #e6e6e6 1.1mm 1.5mm);
+  color: #333;
+}
+.statement-sheet .st-cal .c.s-absent {
+  outline: 0.45mm solid #151515;
+  outline-offset: -0.45mm;
+  background: #f6f6f6;
+}
+.statement-sheet .st-cal .c.s-late,
+.statement-sheet .st-cal .c.s-unpaired {
+  outline: 0.25mm dashed #151515;
+  outline-offset: -0.3mm;
+}
+.statement-sheet .st-cal .dn {
+  font-size: 8.2pt;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.statement-sheet .st-cal .sh {
+  align-self: start;
+  justify-self: end;
+  font-family: 'IBM Plex Mono', 'Noto Sans Arabic', monospace;
+  font-size: 7pt;
+  font-weight: 600;
+}
+.statement-sheet .st-cal .gx {
+  align-self: end;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2mm;
+  font-size: 6.4pt;
+  line-height: 1.2;
+}
+.statement-sheet .st-cal .gx .st-gl {
+  margin-inline-end: 0.6mm;
+}
+.statement-sheet .st-cal .pn {
+  align-self: end;
+  justify-self: end;
+  direction: ltr;
+  text-align: end;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 6.4pt;
+  line-height: 1.25;
+}
+.statement-sheet .st-leg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1mm 8mm;
+  margin: 0 0 5mm;
+  padding: 2.2mm 3mm;
+  border: 0.2mm solid #aaa;
+  font-size: 7.8pt;
+}
+.statement-sheet .st-leg h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 8pt;
+  font-weight: 600;
+  color: var(--st-navy);
+}
+.statement-sheet .st-leg .wide {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #444;
+}
+.statement-sheet .st-sign {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8mm;
+  margin: 7mm 0 2mm;
+}
+.statement-sheet .st-sign[data-count='1'] {
+  grid-template-columns: minmax(0, 1fr) 2fr;
+}
+.statement-sheet .st-sign .b {
+  padding-top: 12mm;
+  border-top: 0.3mm solid #222;
+  font-size: 8pt;
+  line-height: 1.4;
+}
+.statement-sheet .st-sign .b small {
+  display: block;
+  color: #555;
+  font-size: 7.4pt;
+}
+.statement-sheet .st-prov {
+  display: flex;
+  justify-content: space-between;
+  gap: 6mm;
+  padding-top: 1.8mm;
+  border-top: 0.25mm solid #777;
+  color: #333;
+  font-size: 7pt;
+  line-height: 1.5;
+}
+.statement-sheet .st-prov > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.statement-sheet .st-prov b {
+  white-space: nowrap;
+}
+.statement-sheet .st-contact {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1mm 5mm;
+  margin-top: 1.8mm;
+  padding: 1.8mm 3mm;
+  background: #ececec;
+  color: #333;
+  font-size: 6.9pt;
+}
+.statement-sheet .st-contact span {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.4mm;
+}
+.statement-sheet .st-contact img {
+  width: 3mm;
+  height: 3mm;
 }
 
 /* ORG-tree — approved Duty Locations hierarchy chart. */

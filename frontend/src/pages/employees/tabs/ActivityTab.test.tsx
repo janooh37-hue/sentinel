@@ -1,253 +1,431 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import i18n from 'i18next'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
-import type {
-  ActivityItemRead,
-  RecentLeaveRead,
-  RecentViolationRead,
-} from '@/lib/api'
+import type * as ApiModule from '@/lib/api'
+
+import ar from '@/locales/ar.json'
 import type { Tab } from '../EmployeeTabChips'
+import type { ActivityStatement, ActivityStatementItem } from '../statement/statementTypes'
 import { ActivityTab } from './ActivityTab'
-
 
 const hasCapability = vi.hoisted(() => vi.fn<(cap: string) => boolean>(() => true))
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ has: hasCapability }),
 }))
-beforeEach(() => hasCapability.mockReturnValue(true))
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    i18n: { language: 'en' },
-    t: (key: string) => ({
-      'employees.activity.dutyLocation.initial_placement': 'Initial placement',
-      'employees.activity.dutyLocation.transfer': 'Transferred',
-      'employees.activity.dutyLocation.unassigned': 'Unassigned',
-      'employees.activity.dutyLocation.historyBegins': 'History begins at',
-      'employee.activity.empty': 'No activity',
-    })[key] ?? key,
-  }),
-}))
+vi.mock('@/components/employees/useAttendanceAttention', () => ({ siteToday: () => '2026-10-27' }))
+const getActivityStatement = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof ApiModule>()
+  return { ...actual, api: { ...actual.api, getActivityStatement } }
+})
+
+if (!i18n.hasResourceBundle('ar', 'translation')) i18n.addResourceBundle('ar', 'translation', ar)
+
+const EMPLOYEE = {
+  status: 'Active' as const,
+  department: 'Operations',
+  duty_unit: 'Control Room',
+  duty_post: 'Supervisor',
+  doj_company: '2019-03-04',
+  doj: null,
+}
+
+beforeEach(async () => {
+  hasCapability.mockReturnValue(true)
+  getActivityStatement.mockReset()
+  await i18n.changeLanguage('en')
+})
+afterEach(async () => {
+  await i18n.changeLanguage('en')
+})
 
 function LocationProbe(): React.JSX.Element {
   const location = useLocation()
   return <output data-testid="location">{`${location.pathname}${location.search}`}</output>
 }
 
-interface RenderOptions {
-  leaves?: RecentLeaveRead[]
-  violations?: RecentViolationRead[]
-  onPreviewDocs?: (docs: { id: number; name: string }[]) => void
-  onOpenViolation?: (id: number) => void
-  onOpenTab?: (tab: Tab) => void
-}
-
-function renderActivity(activity: ActivityItemRead[], options: RenderOptions = {}) {
-  const onPreviewDocs = options.onPreviewDocs ?? vi.fn()
-  const onOpenViolation = options.onOpenViolation ?? vi.fn()
-  const onOpenTab = options.onOpenTab ?? vi.fn()
-
-  render(
-    <MemoryRouter initialEntries={['/employees/G100?tab=activity']}>
-      <ActivityTab
-        activity={activity}
-        leaves={options.leaves ?? []}
-        violations={options.violations ?? []}
-        onPreviewDocs={onPreviewDocs}
-        onOpenViolation={onOpenViolation}
-        onOpenTab={onOpenTab}
-      />
-      <LocationProbe />
-    </MemoryRouter>,
-  )
-
-  return { onPreviewDocs, onOpenViolation, onOpenTab }
-}
-
-function item(
-  kind: ActivityItemRead['kind'],
-  refId: number,
-  summary: string,
-): ActivityItemRead {
+function item(kind: ActivityStatementItem['kind'], sourceId: number, extra: Partial<ActivityStatementItem> = {}): ActivityStatementItem {
   return {
     kind,
-    ref_id: refId,
-    summary,
-    when: '2026-08-10T09:00:00Z',
+    source_id: sourceId,
+    occurred_at: '2026-08-10T09:30:00',
+    date_only: false,
+    actor_name: 'Mariam Al Kaabi',
+    reference: null,
+    template_id: null,
+    template_name_en: null,
+    template_name_ar: null,
+    leave_type: null,
+    start_date: null,
+    end_date: null,
+    days: null,
+    leave_status: null,
+    violation_type: null,
+    description: null,
+    action_taken: null,
+    deduction_days: null,
+    violation_status: null,
+    subject: null,
+    direction: null,
+    channel: null,
+    counterparty: null,
+    note: null,
+    event_type: null,
+    from_department: null,
+    from_unit: null,
+    from_post: null,
+    to_department: null,
+    to_unit: null,
+    to_post: null,
+    reason: null,
+    from_status: null,
+    to_status: null,
+    effective_date: null,
+    site: null,
+    return_date: null,
+    status_event_kind: null,
+    status_source: null,
+    linked_documents: [],
+    ...extra,
   }
 }
 
-describe('ActivityTab', () => {
-  it('previews a document activity by ref id and summary', () => {
-    const callbacks = renderActivity([item('document', 73, 'Leave application')])
+function statement(items: ActivityStatementItem[], truncated = false): ActivityStatement {
+  return { employee_id: 'G100', from_date: null, to_date: null, items, truncated }
+}
 
-    fireEvent.click(screen.getByRole('button', { name: 'Leave application' }))
+interface Callbacks {
+  onPreviewDocs: Mock
+  onOpenViolation: Mock
+  onOpenTab: Mock
+}
 
-    expect(callbacks.onPreviewDocs).toHaveBeenCalledWith([
-      { id: 73, name: 'Leave application' },
-    ])
+function renderActivity(items: ActivityStatementItem[], search = '?tab=activity'): Callbacks {
+  getActivityStatement.mockResolvedValue(statement(items))
+  const callbacks: Callbacks = { onPreviewDocs: vi.fn(), onOpenViolation: vi.fn(), onOpenTab: vi.fn() }
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[`/employees/G100${search}`]}>
+        <ActivityTab
+          employeeId="G100"
+          employee={EMPLOYEE}
+          onPreviewDocs={callbacks.onPreviewDocs as (docs: { id: number; name: string }[], index?: number) => void}
+          onOpenViolation={callbacks.onOpenViolation as (id: number) => void}
+          onOpenTab={callbacks.onOpenTab as (tab: Tab) => void}
+        />
+        <LocationProbe />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+  return callbacks
+}
+
+async function expandEntry(testId: string): Promise<HTMLElement> {
+  const row = await screen.findByTestId(testId)
+  fireEvent.click(within(row).getByRole('button', { expanded: false }))
+  return row
+}
+
+describe('ActivityTab period', () => {
+  it('queries this year to today by default and shows the range', async () => {
+    renderActivity([item('document', 1, { template_name_en: 'Salary Certificate' })])
+    await screen.findByTestId('activity-summary')
+    expect(getActivityStatement).toHaveBeenCalledWith('G100', { from_date: '2026-01-01', to_date: '2026-10-27' })
+    expect(screen.getByTestId('activity-period-range')).toHaveTextContent('1 Jan to 27 Oct 2026')
   })
 
-  it('previews linked leave documents in backend order', () => {
-    const leave: RecentLeaveRead = {
-      id: 18,
-      leave_type: 'Annual Leave',
-      start_date: '2026-08-10',
-      end_date: '2026-08-12',
-      days: 3,
-      status: 'Approved',
-      linked_documents: [
-        { id: 81, template_id: 'leave_application', created_at: '2026-08-01T09:00:00Z' },
-        { id: 82, template_id: 'duty_resumption', created_at: '2026-08-13T09:00:00Z' },
-      ],
-    }
-    const callbacks = renderActivity(
-      [item('leave', leave.id, 'Annual leave')],
-      { leaves: [leave] },
+  it('refetches with the right bounds when the period changes and keeps it in the URL', async () => {
+    renderActivity([item('document', 1, { template_name_en: 'Salary Certificate' })])
+    await screen.findByTestId('activity-summary')
+
+    fireEvent.change(screen.getByLabelText('Period'), { target: { value: 'month' } })
+    await waitFor(() =>
+      expect(getActivityStatement).toHaveBeenLastCalledWith('G100', { from_date: '2026-10-01', to_date: '2026-10-27' }),
     )
+    expect(screen.getByTestId('location')).toHaveTextContent('period=month')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Annual leave' }))
+    fireEvent.change(screen.getByLabelText('Period'), { target: { value: 'all' } })
+    await waitFor(() => expect(getActivityStatement).toHaveBeenLastCalledWith('G100', { to_date: '2026-10-27' }))
+  })
 
-    expect(callbacks.onPreviewDocs).toHaveBeenCalledWith([
-      { id: 81, name: 'leave_application' },
-      { id: 82, name: 'duty_resumption' },
+  it('restores a custom range from the URL and refetches when an end date is edited', async () => {
+    renderActivity([item('document', 1, { template_name_en: 'Salary Certificate' })], '?tab=activity&period=custom&from=2026-03-01&to=2026-04-30')
+    await screen.findByTestId('activity-summary')
+    expect(getActivityStatement).toHaveBeenCalledWith('G100', { from_date: '2026-03-01', to_date: '2026-04-30' })
+
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-05-31' } })
+    await waitFor(() =>
+      expect(getActivityStatement).toHaveBeenLastCalledWith('G100', { from_date: '2026-03-01', to_date: '2026-05-31' }),
+    )
+  })
+
+  it('opens the print setup with the current period', async () => {
+    renderActivity([item('document', 1, { template_name_en: 'Salary Certificate' })], '?tab=activity&period=last3')
+    await screen.findByTestId('activity-summary')
+    fireEvent.click(screen.getByRole('button', { name: 'Print activity statement' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/employees/G100/activity/print?period=last3')
+  })
+})
+
+describe('ActivityTab summary and filter', () => {
+  const mixed = [
+    item('leave', 1, { leave_type: 'Annual Leave', days: 28, start_date: '2026-09-01', end_date: '2026-09-28', date_only: true, occurred_at: '2026-09-01T00:00:00' }),
+    item('leave', 2, { leave_type: 'Sick Leave', days: 2, start_date: '2026-08-03', end_date: '2026-08-04', date_only: true, occurred_at: '2026-08-03T00:00:00' }),
+    item('violation', 3, { violation_type: 'Late arrival', date_only: true }),
+    item('document', 4, { template_name_en: 'Salary Certificate' }),
+    item('duty_location', 5, { event_type: 'transfer', to_unit: 'Operations' }),
+  ]
+
+  it('writes one sentence from the counts and omits zero categories', async () => {
+    renderActivity(mixed)
+    expect(await screen.findByTestId('activity-summary')).toHaveTextContent(
+      '2 leaves totalling 30 days, 1 violation, 1 document issued and 1 transfer.',
+    )
+  })
+
+  it('states an empty period', async () => {
+    renderActivity([])
+    expect(await screen.findByTestId('activity-summary')).toHaveTextContent('No activity in this period.')
+  })
+
+  it('hides and shows a category and updates the showing line', async () => {
+    renderActivity(mixed)
+    await screen.findByTestId('activity-summary')
+    expect(screen.getByTestId('activity-showing')).toHaveTextContent('Showing 5 of 5 entries')
+
+    const leave = screen.getByRole('button', { name: /^Leave/ })
+    expect(leave).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(leave)
+    expect(leave).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByTestId('activity-showing')).toHaveTextContent('Showing 3 of 5 entries')
+    expect(screen.queryByTestId('activity-entry-leave-1')).not.toBeInTheDocument()
+
+    fireEvent.click(leave)
+    expect(screen.getByTestId('activity-showing')).toHaveTextContent('Showing 5 of 5 entries')
+    expect(screen.getByTestId('activity-entry-leave-1')).toBeInTheDocument()
+  })
+
+  it('groups entries by month with an entry count', async () => {
+    renderActivity(mixed)
+    const august = await screen.findByRole('region', { name: 'August 2026' })
+    expect(within(august).getByText('4 entries')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'September 2026' })).toBeInTheDocument()
+  })
+
+  it('does not offer leave and absence categories without leaves.view', async () => {
+    hasCapability.mockImplementation((cap) => cap !== 'leaves.view')
+    renderActivity([item('document', 4, { template_name_en: 'Salary Certificate' })])
+    await screen.findByTestId('activity-summary')
+    expect(screen.queryByRole('button', { name: /^Leave/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Absence/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Document/ })).toBeInTheDocument()
+  })
+
+  it('uses English plural forms', async () => {
+    renderActivity([item('violation', 3, { violation_type: 'Late arrival' }), item('absence', 6, { note: 'No call' })])
+    expect(await screen.findByTestId('activity-summary')).toHaveTextContent('1 violation and 1 absence.')
+  })
+
+  it('writes the Arabic summary with the dual and Western digits', async () => {
+    await i18n.changeLanguage('ar')
+    renderActivity([
+      item('violation', 1, { violation_type: 'Late arrival' }),
+      item('violation', 2, { violation_type: 'Late arrival' }),
+      item('document', 3, { template_name_ar: 'شهادة راتب' }),
+      item('leave', 4, { leave_type: 'Annual Leave', days: 11, start_date: '2026-09-01', end_date: '2026-09-11' }),
+      item('leave', 5, { leave_type: 'Annual Leave', days: 11, start_date: '2026-09-12', end_date: '2026-09-22' }),
+      item('leave', 6, { leave_type: 'Annual Leave', days: 11, start_date: '2026-10-01', end_date: '2026-10-11' }),
     ])
+    const summary = (await screen.findByTestId('activity-summary')).textContent ?? ''
+    expect(summary).toContain('3 إجازات بإجمالي 33 يومًا')
+    expect(summary).toContain('مخالفتان')
+    expect(summary).toContain('مستند واحد صادر')
+    expect(summary).not.toMatch(/[٠-٩]/)
+    expect(screen.getByTestId('activity-period-range').textContent).not.toMatch(/[٠-٩]/)
+    expect(screen.getByTestId('activity-period-range').textContent).toContain('1 يناير')
+  })
+})
+
+describe('ActivityTab entries', () => {
+  it('builds a bold-actor sentence from real fields with date, time and reference', async () => {
+    renderActivity([
+      item('document', 1, { template_name_en: 'Salary Certificate', reference: 'G100/1/12/7', occurred_at: '2026-10-12T10:42:00' }),
+    ])
+    const row = await screen.findByTestId('activity-entry-document-1')
+    expect(row).toHaveTextContent('Mariam Al Kaabi issued a Salary Certificate')
+    expect(within(row).getByText('Mariam Al Kaabi').tagName).toBe('BDI')
+    expect(within(row).getByText('Salary Certificate').closest('b')).not.toBeNull()
+    expect(row).toHaveTextContent('12 Oct 2026')
+    expect(row).toHaveTextContent('10:42')
+    expect(within(row).getByText('G100/1/12/7')).toHaveAttribute('dir', 'ltr')
+  })
+
+  it('writes the sentence without an actor when none is recorded and omits the time for date-only kinds', async () => {
+    renderActivity([
+      item('leave', 1, {
+        actor_name: null,
+        leave_type: 'Annual Leave',
+        days: 28,
+        start_date: '2026-09-01',
+        end_date: '2026-09-28',
+        date_only: true,
+        occurred_at: '2026-09-01T00:00:00',
+      }),
+    ])
+    const row = await screen.findByTestId('activity-entry-leave-1')
+    expect(row).toHaveTextContent('Annual Leave, 28 days, 1 Sept to 28 Sept 2026')
+    expect(row).not.toHaveTextContent('00:00')
+    expect(row).not.toHaveTextContent('recorded')
+  })
+
+  it('shows correspondence direction, subject and counterparty', async () => {
+    renderActivity([item('ledger', 7, { direction: 'incoming', subject: 'Contract renewal', counterparty: 'HR Authority' })])
+    expect(await screen.findByTestId('activity-entry-ledger-7')).toHaveTextContent(
+      'Mariam Al Kaabi logged incoming letter Contract renewal from HR Authority',
+    )
+  })
+
+  it('expands in place with facts, recorded by and reference', async () => {
+    renderActivity([item('violation', 3, { violation_type: 'Late arrival', description: 'Arrived 40 minutes late', reference: 'V-3' })])
+    const row = await expandEntry('activity-entry-violation-3')
+    expect(within(row).getByRole('button', { expanded: true })).toBeInTheDocument()
+    expect(row).toHaveTextContent('Arrived 40 minutes late')
+    expect(row).toHaveTextContent('Recorded by')
+  })
+
+  it('previews a document from its expanded entry', async () => {
+    const callbacks = renderActivity([item('document', 73, { template_name_en: 'Leave application' })])
+    const row = await expandEntry('activity-entry-document-73')
+    fireEvent.click(within(row).getByRole('button', { name: 'Preview document' }))
+    expect(callbacks.onPreviewDocs).toHaveBeenCalledWith([{ id: 73, name: 'Leave application' }])
+  })
+
+  it('previews linked leave documents in order', async () => {
+    const callbacks = renderActivity([
+      item('leave', 18, {
+        leave_type: 'Annual Leave',
+        linked_documents: [
+          { id: 81, template_id: 'leave_application', created_at: '2026-08-01T09:00:00Z' },
+          { id: 82, template_id: 'duty_resumption', created_at: '2026-08-13T09:00:00Z' },
+        ],
+      }),
+    ])
+    const row = await expandEntry('activity-entry-leave-18')
+    fireEvent.click(within(row).getByRole('button', { name: 'duty_resumption' }))
+    expect(callbacks.onPreviewDocs).toHaveBeenCalledWith(
+      [
+        { id: 81, name: 'leave_application' },
+        { id: 82, name: 'duty_resumption' },
+      ],
+      1,
+    )
     expect(callbacks.onOpenTab).not.toHaveBeenCalled()
   })
 
-  it('opens the leaves tab when leave activity has no linked document', () => {
-    const leave: RecentLeaveRead = {
-      id: 19,
-      leave_type: 'National Service',
-      start_date: '2026-08-10',
-      end_date: '2026-08-12',
-      days: 3,
-      status: 'Approved',
-      linked_documents: [],
-    }
-    const callbacks = renderActivity(
-      [item('leave', leave.id, 'National service leave')],
-      { leaves: [leave] },
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: 'National service leave' }))
-
+  it('opens the leaves tab for a leave with no linked document', async () => {
+    const callbacks = renderActivity([item('leave', 19, { leave_type: 'National Service' })])
+    const row = await expandEntry('activity-entry-leave-19')
+    fireEvent.click(within(row).getByRole('button', { name: 'Open in Leaves' }))
     expect(callbacks.onOpenTab).toHaveBeenCalledWith('leaves')
     expect(callbacks.onPreviewDocs).not.toHaveBeenCalled()
   })
 
-  it('previews linked violation documents', () => {
-    const violation: RecentViolationRead = {
-      id: 31,
-      date: '2026-08-10',
-      violation_type: 'Late arrival',
-      status: 'Open',
-      description: null,
-      linked_documents: [
-        { id: 91, template_id: 'violation_notice', created_at: '2026-08-10T09:00:00Z' },
-      ],
-    }
-    const callbacks = renderActivity(
-      [item('violation', violation.id, 'Late arrival')],
-      { violations: [violation] },
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Late arrival' }))
-
-    expect(callbacks.onPreviewDocs).toHaveBeenCalledWith([
-      { id: 91, name: 'violation_notice' },
+  it('previews linked violation documents and deep-links an unlinked violation', async () => {
+    const linked = renderActivity([
+      item('violation', 31, {
+        violation_type: 'Late arrival',
+        linked_documents: [{ id: 91, template_id: 'violation_notice', created_at: '2026-08-10T09:00:00Z' }],
+      }),
     ])
-    expect(callbacks.onOpenViolation).not.toHaveBeenCalled()
+    const row = await expandEntry('activity-entry-violation-31')
+    fireEvent.click(within(row).getByRole('button', { name: 'violation_notice' }))
+    expect(linked.onPreviewDocs).toHaveBeenCalledWith([{ id: 91, name: 'violation_notice' }], 0)
+    expect(linked.onOpenViolation).not.toHaveBeenCalled()
   })
 
-  it('deep-links an unlinked violation through the employee page callback', () => {
-    const callbacks = renderActivity([item('violation', 32, 'Manual violation')])
-
-    fireEvent.click(screen.getByRole('button', { name: 'Manual violation' }))
-
+  it('deep-links an unlinked violation through the page callback', async () => {
+    const callbacks = renderActivity([item('violation', 32, { violation_type: 'Late arrival' })])
+    const row = await expandEntry('activity-entry-violation-32')
+    fireEvent.click(within(row).getByRole('button', { name: 'Open violation' }))
     expect(callbacks.onOpenViolation).toHaveBeenCalledWith(32)
-    expect(callbacks.onPreviewDocs).not.toHaveBeenCalled()
   })
 
-  it('navigates ledger activity to the established record deep link', () => {
-    renderActivity([item('ledger', 44, 'Ledger entry')])
-
-    fireEvent.click(screen.getByRole('button', { name: 'Ledger entry' }))
-
+  it('navigates correspondence to the ledger record', async () => {
+    renderActivity([item('ledger', 44, { subject: 'Notice', direction: 'outgoing' })])
+    const row = await expandEntry('activity-entry-ledger-44')
+    fireEvent.click(within(row).getByRole('button', { name: 'Open in Ledger' }))
     expect(screen.getByTestId('location')).toHaveTextContent('/ledger?mail=44')
   })
 
-  it('opens the absences tab for an absence activity', () => {
-    const callbacks = renderActivity([item('absence', 55, 'Absent')])
-
-    fireEvent.click(screen.getByRole('button', { name: 'Absent' }))
-
+  it('opens the absences tab for an absence', async () => {
+    const callbacks = renderActivity([item('absence', 55, { note: 'No call' })])
+    const row = await expandEntry('activity-entry-absence-55')
+    fireEvent.click(within(row).getByRole('button', { name: 'Open in Absences' }))
     expect(callbacks.onOpenTab).toHaveBeenCalledWith('absences')
   })
 
-  it('keeps structured duty location history rendered and non-interactive', () => {
-    const activity: ActivityItemRead[] = [{
-      kind: 'duty_location',
-      ref_id: 18,
-      when: '2026-08-10T09:00:00Z',
-      summary: 'Transferred',
-      event_type: 'transfer',
-      from_unit: 'Administration',
-      from_post: 'Main Gate',
-      to_unit: 'Operations',
-      to_post: 'Control Room',
-      reason: 'Operational coverage',
-    }]
-
-    renderActivity(activity)
-
-    expect(screen.getByText('Transferred')).toBeInTheDocument()
-    expect(screen.getByText('Administration / Main Gate')).toBeInTheDocument()
+  it('renders placement and status history with their existing wording and no action', async () => {
+    renderActivity([
+      item('duty_location', 18, { event_type: 'transfer', from_unit: 'Administration', from_post: 'Main Gate', to_unit: 'Operations', to_post: 'Control Room', reason: 'Operational coverage' }),
+      item('status', 19, { from_status: 'Active', to_status: 'Transferred', site: 'Port A', effective_date: '2026-08-15', status_event_kind: 'changed', status_source: 'manual' }),
+    ])
+    expect(await screen.findByText('Administration / Main Gate')).toBeInTheDocument()
     expect(screen.getByText('Operations / Control Room')).toBeInTheDocument()
     expect(screen.getByText('Operational coverage')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Transferred' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('status-activity-title')).toHaveTextContent('Active → Transferred')
+    const row = await expandEntry('activity-entry-status-19')
+    expect(within(row).queryByRole('button', { name: /^Open/ })).not.toBeInTheDocument()
   })
 
-  it('renders status history items non-interactively', () => {
-    const activity: ActivityItemRead[] = [{
-      kind: 'status',
-      ref_id: 19,
-      when: '2026-08-10T09:00:00Z',
-      summary: 'Status',
-      from_status: 'Active',
-      to_status: 'Transferred',
-      site: 'Port A',
-      effective_date: '2026-08-15',
-      status_event_kind: 'changed',
-      status_source: 'manual',
-      actor_name: 'Ahmed',
-    }]
-
-    renderActivity(activity)
-
-    expect(screen.getByTestId('status-activity-title')).toHaveTextContent('employees.activity.statusEvent.change')
-    expect(screen.getByTestId('status-activity-detail')).toHaveTextContent('Port A')
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  it('writes Arabic entry dates and times with Western digits', async () => {
+    await i18n.changeLanguage('ar')
+    renderActivity([item('document', 1, { template_name_ar: 'شهادة راتب', reference: 'G100/1/12/7', occurred_at: '2026-10-12T10:42:00' })])
+    const row = await screen.findByTestId('activity-entry-document-1')
+    expect(row.textContent).toContain('12 أكتوبر 2026')
+    expect(row.textContent).toContain('10:42')
+    expect(row.textContent).not.toMatch(/[٠-٩]/)
+    expect(row).toHaveTextContent('شهادة راتب')
   })
 })
 
-it('masks leave and absence timeline facts without leaves.view while retaining unrelated history', () => {
-  hasCapability.mockImplementation((cap) => cap !== 'leaves.view')
-  renderActivity([
-    item('leave', 1, 'Private annual leave'),
-    item('absence', 2, 'Private absence'),
-    item('document', 3, 'Employment certificate'),
-    item('ledger', 4, 'Correspondence record'),
-  ])
-  expect(screen.queryByText('Private annual leave')).not.toBeInTheDocument()
-  expect(screen.queryByText('Private absence')).not.toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Employment certificate' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Correspondence record' })).toBeInTheDocument()
-})
+describe('ActivityTab states and access', () => {
+  it('shows skeleton rows while loading', () => {
+    getActivityStatement.mockReturnValue(new Promise(() => undefined))
+    const client = new QueryClient()
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <ActivityTab employeeId="G100" employee={EMPLOYEE} onPreviewDocs={vi.fn()} onOpenViolation={vi.fn()} onOpenTab={vi.fn()} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(screen.getByTestId('activity-loading')).toBeInTheDocument()
+  })
 
-it('does not expose employee history when employee viewing itself is denied', () => {
-  hasCapability.mockImplementation((cap) => cap !== 'employees.view')
-  renderActivity([item('document', 3, 'Employment certificate')])
-  expect(screen.getByRole('alert')).toHaveTextContent('common.forbidden')
-  expect(screen.queryByText('Employment certificate')).not.toBeInTheDocument()
+  it('shows the error with a retry that refetches', async () => {
+    getActivityStatement.mockRejectedValueOnce(new TypeError('offline'))
+    getActivityStatement.mockResolvedValueOnce(statement([]))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <ActivityTab employeeId="G100" employee={EMPLOYEE} onPreviewDocs={vi.fn()} onOpenViolation={vi.fn()} onOpenTab={vi.fn()} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByTestId('activity-summary')).toHaveTextContent('No activity in this period.')
+  })
+
+  it('does not request or show history when employee viewing is denied', () => {
+    hasCapability.mockImplementation((cap) => cap !== 'employees.view')
+    renderActivity([item('document', 3, { template_name_en: 'Employment certificate' })])
+    expect(screen.getByRole('alert')).toHaveTextContent('You do not have permission')
+    expect(getActivityStatement).not.toHaveBeenCalled()
+  })
 })
