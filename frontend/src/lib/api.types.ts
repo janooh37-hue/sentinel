@@ -6283,6 +6283,310 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/store/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Store Categories */
+        get: operations["list_store_categories_api_v1_store_categories_get"];
+        put?: never;
+        /** Create Store Category */
+        post: operations["create_store_category_api_v1_store_categories_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/categories/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Store Category */
+        patch: operations["update_store_category_api_v1_store_categories__category_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/store/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Store Items */
+        get: operations["list_store_items_api_v1_store_items_get"];
+        put?: never;
+        /** Create Store Item */
+        post: operations["create_store_item_api_v1_store_items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/items/picker": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Store Picker Items
+         * @description Active Store items for the HQ material request picker.
+         */
+        get: operations["list_store_picker_items_api_v1_store_items_picker_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Store Item */
+        patch: operations["update_store_item_api_v1_store_items__item_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/store/items/{item_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Store Item */
+        post: operations["archive_store_item_api_v1_store_items__item_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/items/{item_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Store Item */
+        post: operations["restore_store_item_api_v1_store_items__item_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Store Batches */
+        get: operations["list_store_batches_api_v1_store_batches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Store Deliveries */
+        get: operations["list_store_deliveries_api_v1_store_deliveries_get"];
+        put?: never;
+        /** Create Store Delivery */
+        post: operations["create_store_delivery_api_v1_store_deliveries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/deliveries/{delivery_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Store Delivery */
+        get: operations["get_store_delivery_api_v1_store_deliveries__delivery_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Store Delivery */
+        delete: operations["delete_store_delivery_api_v1_store_deliveries__delivery_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/deliveries/{delivery_id}/note-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Store Delivery Note */
+        get: operations["download_store_delivery_note_api_v1_store_deliveries__delivery_id__note_file_get"];
+        /** Upload Store Delivery Note */
+        put: operations["upload_store_delivery_note_api_v1_store_deliveries__delivery_id__note_file_put"];
+        post?: never;
+        /** Delete Store Delivery Note */
+        delete: operations["delete_store_delivery_note_api_v1_store_deliveries__delivery_id__note_file_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Store Counts */
+        get: operations["list_store_counts_api_v1_store_counts_get"];
+        put?: never;
+        /** Create Store Count */
+        post: operations["create_store_count_api_v1_store_counts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/counts/expected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Store Count Expected
+         * @description Batches a count on ``counted_on`` must include, without expected quantities.
+         */
+        get: operations["get_store_count_expected_api_v1_store_counts_expected_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/counts/{count_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Store Count */
+        get: operations["get_store_count_api_v1_store_counts__count_id__get"];
+        /** Update Store Count */
+        put: operations["update_store_count_api_v1_store_counts__count_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/disposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Store Disposals */
+        get: operations["list_store_disposals_api_v1_store_disposals_get"];
+        put?: never;
+        /** Create Store Disposal */
+        post: operations["create_store_disposal_api_v1_store_disposals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/disposals/{disposal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Store Disposal */
+        delete: operations["delete_store_disposal_api_v1_store_disposals__disposal_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Store Dashboard */
+        get: operations["get_store_dashboard_api_v1_store_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/debug/logs": {
         parameters: {
             query?: never;
@@ -8368,6 +8672,14 @@ export interface components {
              */
             upload: string;
         };
+        /** Body_upload_store_delivery_note_api_v1_store_deliveries__delivery_id__note_file_put */
+        Body_upload_store_delivery_note_api_v1_store_deliveries__delivery_id__note_file_put: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+        };
         /** Body_upload_to_vault_api_v1_employees__employee_id__vault_upload_post */
         Body_upload_to_vault_api_v1_employees__employee_id__vault_upload_post: {
             /** Kind */
@@ -10080,7 +10392,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "quick_actions" | "waiting_approvals" | "sent_approvals" | "expiring_soon" | "pending_departures" | "workforce_pulse" | "violation_months" | "inbox" | "permits";
+            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "quick_actions" | "waiting_approvals" | "sent_approvals" | "expiring_soon" | "pending_departures" | "workforce_pulse" | "violation_months" | "inbox" | "permits" | "store_expiring" | "store_low_stock";
             /**
              * Visible
              * @default true
@@ -14736,6 +15048,555 @@ export interface components {
             /** Size */
             size: number;
         };
+        /** StoreBatchRead */
+        StoreBatchRead: {
+            /** Item Id */
+            item_id: number;
+            /** Item Code */
+            item_code: string;
+            /** Item Name En */
+            item_name_en: string;
+            /** Item Name Ar */
+            item_name_ar: string | null;
+            /** Counting Unit En */
+            counting_unit_en: string;
+            /** Counting Unit Ar */
+            counting_unit_ar: string;
+            /** Contains Qty */
+            contains_qty: number | null;
+            /** Contains Unit En */
+            contains_unit_en: string | null;
+            /** Contains Unit Ar */
+            contains_unit_ar: string | null;
+            /** Id */
+            id: number;
+            /** Expiry Date */
+            expiry_date: string | null;
+            /** Expiry Month Only */
+            expiry_month_only: boolean;
+            /** On Hand */
+            on_hand: number;
+            /** Days To Expiry */
+            days_to_expiry: number | null;
+        };
+        /** StoreCategoryCreate */
+        StoreCategoryCreate: {
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+        };
+        /** StoreCategoryRead */
+        StoreCategoryRead: {
+            /** Id */
+            id: number;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+        };
+        /** StoreCategoryUpdate */
+        StoreCategoryUpdate: {
+            /** Name En */
+            name_en?: string | null;
+            /** Name Ar */
+            name_ar?: string | null;
+        };
+        /** StoreCountLineInput */
+        StoreCountLineInput: {
+            /** Item Id */
+            item_id: number;
+            /**
+             * Expiry
+             * @description YYYY-MM-DD, YYYY-MM (expires at the end of that month), or null (undated).
+             * @example 2027-04-26
+             * @example 2029-01
+             * @example null
+             */
+            expiry?: string | null;
+            /** Quantity */
+            quantity: number;
+        };
+        /** StoreCountRead */
+        StoreCountRead: {
+            /** Id */
+            id: number;
+            /** Month */
+            month: string;
+            /**
+             * Counted On
+             * Format: date
+             */
+            counted_on: string;
+            /** Note */
+            note: string | null;
+            /** Lines */
+            lines: components["schemas"]["StoreLineRead"][];
+            /** Created By User Id */
+            created_by_user_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /** StoreCountWrite */
+        StoreCountWrite: {
+            /**
+             * Counted On
+             * Format: date
+             */
+            counted_on: string;
+            /** Note */
+            note?: string | null;
+            /** Lines */
+            lines?: components["schemas"]["StoreCountLineInput"][];
+        };
+        /** StoreDashboard */
+        StoreDashboard: {
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /** Expiring Soon Days */
+            expiring_soon_days: number;
+            /** Expired */
+            expired: components["schemas"]["StoreDashboardBatch"][];
+            /** Expiring Soon */
+            expiring_soon: components["schemas"]["StoreDashboardBatch"][];
+            /** Low Stock */
+            low_stock: components["schemas"]["StoreDashboardLowStock"][];
+            usage: components["schemas"]["StoreUsage"];
+            /** Suggestions */
+            suggestions: components["schemas"]["StoreSuggestion"][];
+            /** Last Count On */
+            last_count_on: string | null;
+            /** Last Delivery On */
+            last_delivery_on: string | null;
+        };
+        /** StoreDashboardBatch */
+        StoreDashboardBatch: {
+            /** Item Id */
+            item_id: number;
+            /** Item Code */
+            item_code: string;
+            /** Item Name En */
+            item_name_en: string;
+            /** Item Name Ar */
+            item_name_ar: string | null;
+            /** Counting Unit En */
+            counting_unit_en: string;
+            /** Counting Unit Ar */
+            counting_unit_ar: string;
+            /** Contains Qty */
+            contains_qty: number | null;
+            /** Contains Unit En */
+            contains_unit_en: string | null;
+            /** Contains Unit Ar */
+            contains_unit_ar: string | null;
+            /** Batch Id */
+            batch_id: number;
+            /** Expiry Date */
+            expiry_date: string | null;
+            /** Expiry Month Only */
+            expiry_month_only: boolean;
+            /** On Hand */
+            on_hand: number;
+            /** Days Left */
+            days_left: number | null;
+        };
+        /** StoreDashboardLowStock */
+        StoreDashboardLowStock: {
+            /** Item Id */
+            item_id: number;
+            /** Item Code */
+            item_code: string;
+            /** Item Name En */
+            item_name_en: string;
+            /** Item Name Ar */
+            item_name_ar: string | null;
+            /** Counting Unit En */
+            counting_unit_en: string;
+            /** Counting Unit Ar */
+            counting_unit_ar: string;
+            /** Contains Qty */
+            contains_qty: number | null;
+            /** Contains Unit En */
+            contains_unit_en: string | null;
+            /** Contains Unit Ar */
+            contains_unit_ar: string | null;
+            /** On Hand */
+            on_hand: number;
+            /** Minimum Level */
+            minimum_level: number;
+        };
+        /** StoreDeliveryCreate */
+        StoreDeliveryCreate: {
+            /**
+             * Received On
+             * Format: date
+             */
+            received_on: string;
+            /** Note */
+            note?: string | null;
+            /** Lines */
+            lines: components["schemas"]["StoreDeliveryLineInput"][];
+        };
+        /** StoreDeliveryLineInput */
+        StoreDeliveryLineInput: {
+            /** Item Id */
+            item_id: number;
+            /**
+             * Expiry
+             * @description YYYY-MM-DD, YYYY-MM (expires at the end of that month), or null (undated).
+             * @example 2027-04-26
+             * @example 2029-01
+             * @example null
+             */
+            expiry?: string | null;
+            /** Quantity */
+            quantity: number;
+        };
+        /** StoreDeliveryNoteFile */
+        StoreDeliveryNoteFile: {
+            /** Name */
+            name: string;
+            /** Media Type */
+            media_type: string;
+            /** Size */
+            size: number;
+            /** Url */
+            url: string;
+        };
+        /** StoreDeliveryRead */
+        StoreDeliveryRead: {
+            /** Id */
+            id: number;
+            /**
+             * Received On
+             * Format: date
+             */
+            received_on: string;
+            /** Note */
+            note: string | null;
+            note_file: components["schemas"]["StoreDeliveryNoteFile"] | null;
+            /** Lines */
+            lines: components["schemas"]["StoreLineRead"][];
+            /** Created By User Id */
+            created_by_user_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /** StoreDisposalCreate */
+        StoreDisposalCreate: {
+            /**
+             * Disposed On
+             * Format: date
+             */
+            disposed_on: string;
+            /** Item Id */
+            item_id: number;
+            /** Expiry */
+            expiry?: string | null;
+            /** Quantity */
+            quantity: number;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "expired" | "damaged";
+            /** Note */
+            note?: string | null;
+        };
+        /** StoreDisposalRead */
+        StoreDisposalRead: {
+            /** Item Id */
+            item_id: number;
+            /** Item Code */
+            item_code: string;
+            /** Item Name En */
+            item_name_en: string;
+            /** Item Name Ar */
+            item_name_ar: string | null;
+            /** Counting Unit En */
+            counting_unit_en: string;
+            /** Counting Unit Ar */
+            counting_unit_ar: string;
+            /** Contains Qty */
+            contains_qty: number | null;
+            /** Contains Unit En */
+            contains_unit_en: string | null;
+            /** Contains Unit Ar */
+            contains_unit_ar: string | null;
+            /** Id */
+            id: number;
+            /** Batch Id */
+            batch_id: number;
+            /** Expiry Date */
+            expiry_date: string | null;
+            /** Expiry Month Only */
+            expiry_month_only: boolean;
+            /**
+             * Disposed On
+             * Format: date
+             */
+            disposed_on: string;
+            /** Quantity */
+            quantity: number;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "expired" | "damaged";
+            /** Note */
+            note: string | null;
+            /** Created By User Id */
+            created_by_user_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * StoreExpectedBatch
+         * @description A Batch the count must include. Never carries a quantity (ADR 0009).
+         */
+        StoreExpectedBatch: {
+            /** Item Id */
+            item_id: number;
+            /** Item Code */
+            item_code: string;
+            /** Item Name En */
+            item_name_en: string;
+            /** Item Name Ar */
+            item_name_ar: string | null;
+            /** Counting Unit En */
+            counting_unit_en: string;
+            /** Counting Unit Ar */
+            counting_unit_ar: string;
+            /** Contains Qty */
+            contains_qty: number | null;
+            /** Contains Unit En */
+            contains_unit_en: string | null;
+            /** Contains Unit Ar */
+            contains_unit_ar: string | null;
+            /** Batch Id */
+            batch_id: number;
+            /** Expiry Date */
+            expiry_date: string | null;
+            /** Expiry Month Only */
+            expiry_month_only: boolean;
+        };
+        /** StoreItemCreate */
+        StoreItemCreate: {
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar?: string | null;
+            /** Category Id */
+            category_id: number;
+            /**
+             * Counting Unit En
+             * @default Carton
+             */
+            counting_unit_en: string;
+            /**
+             * Counting Unit Ar
+             * @default كرتون
+             */
+            counting_unit_ar: string;
+            /** Contains Qty */
+            contains_qty?: number | null;
+            /** Contains Unit En */
+            contains_unit_en?: string | null;
+            /** Contains Unit Ar */
+            contains_unit_ar?: string | null;
+            /** Minimum Level */
+            minimum_level?: number | null;
+        };
+        /** StoreItemRead */
+        StoreItemRead: {
+            /** Id */
+            id: number;
+            /** Code */
+            code: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Category Id */
+            category_id: number;
+            category: components["schemas"]["StoreCategoryRead"];
+            /** Counting Unit En */
+            counting_unit_en: string;
+            /** Counting Unit Ar */
+            counting_unit_ar: string;
+            /** Contains Qty */
+            contains_qty: number | null;
+            /** Contains Unit En */
+            contains_unit_en: string | null;
+            /** Contains Unit Ar */
+            contains_unit_ar: string | null;
+            /** Minimum Level */
+            minimum_level: number | null;
+            /** Archived At */
+            archived_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Updated At */
+            updated_at: string | null;
+            /** On Hand */
+            on_hand: number;
+            /** Version */
+            version: string;
+        };
+        /**
+         * StoreItemUpdate
+         * @description Partial update; send ``contains_qty`` with both units, or all three null.
+         */
+        StoreItemUpdate: {
+            /** Name En */
+            name_en?: string | null;
+            /** Name Ar */
+            name_ar?: string | null;
+            /** Category Id */
+            category_id?: number | null;
+            /** Counting Unit En */
+            counting_unit_en?: string | null;
+            /** Counting Unit Ar */
+            counting_unit_ar?: string | null;
+            /** Contains Qty */
+            contains_qty?: number | null;
+            /** Contains Unit En */
+            contains_unit_en?: string | null;
+            /** Contains Unit Ar */
+            contains_unit_ar?: string | null;
+            /** Minimum Level */
+            minimum_level?: number | null;
+        };
+        /** StoreLineRead */
+        StoreLineRead: {
+            /** Item Id */
+            item_id: number;
+            /** Item Code */
+            item_code: string;
+            /** Item Name En */
+            item_name_en: string;
+            /** Item Name Ar */
+            item_name_ar: string | null;
+            /** Counting Unit En */
+            counting_unit_en: string;
+            /** Counting Unit Ar */
+            counting_unit_ar: string;
+            /** Contains Qty */
+            contains_qty: number | null;
+            /** Contains Unit En */
+            contains_unit_en: string | null;
+            /** Contains Unit Ar */
+            contains_unit_ar: string | null;
+            /** Id */
+            id: number;
+            /** Batch Id */
+            batch_id: number;
+            /** Expiry Date */
+            expiry_date: string | null;
+            /** Expiry Month Only */
+            expiry_month_only: boolean;
+            /** Quantity */
+            quantity: number;
+        };
+        /** StorePickerItem */
+        StorePickerItem: {
+            /** Id */
+            id: number;
+            /** Code */
+            code: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Counting Unit En */
+            counting_unit_en: string;
+            /** Counting Unit Ar */
+            counting_unit_ar: string;
+            /** Contains Qty */
+            contains_qty: number | null;
+            /** Contains Unit En */
+            contains_unit_en: string | null;
+            /** Contains Unit Ar */
+            contains_unit_ar: string | null;
+        };
+        /** StoreSuggestion */
+        StoreSuggestion: {
+            /** Item Id */
+            item_id: number;
+            /** Item Code */
+            item_code: string;
+            /** Item Name En */
+            item_name_en: string;
+            /** Item Name Ar */
+            item_name_ar: string | null;
+            /** Counting Unit En */
+            counting_unit_en: string;
+            /** Counting Unit Ar */
+            counting_unit_ar: string;
+            /** Contains Qty */
+            contains_qty: number | null;
+            /** Contains Unit En */
+            contains_unit_en: string | null;
+            /** Contains Unit Ar */
+            contains_unit_ar: string | null;
+            /** Average Usage */
+            average_usage: number;
+            /** On Hand */
+            on_hand: number;
+            /** Suggested */
+            suggested: number;
+            /** Suggested Units */
+            suggested_units: number;
+        };
+        /** StoreUsage */
+        StoreUsage: {
+            /** Months */
+            months: string[];
+            /** Rows */
+            rows: components["schemas"]["StoreUsageRow"][];
+        };
+        /** StoreUsageRow */
+        StoreUsageRow: {
+            /** Item Id */
+            item_id: number;
+            /** Item Code */
+            item_code: string;
+            /** Item Name En */
+            item_name_en: string;
+            /** Item Name Ar */
+            item_name_ar: string | null;
+            /** Counting Unit En */
+            counting_unit_en: string;
+            /** Counting Unit Ar */
+            counting_unit_ar: string;
+            /** Contains Qty */
+            contains_qty: number | null;
+            /** Contains Unit En */
+            contains_unit_en: string | null;
+            /** Contains Unit Ar */
+            contains_unit_ar: string | null;
+            /** Values */
+            values: (number | null)[];
+        };
         /** SubmitterCreate */
         SubmitterCreate: {
             /** Employee Id */
@@ -14813,6 +15674,8 @@ export interface components {
             }[] | null;
             /** Max Rows */
             max_rows?: number | null;
+            /** Item Catalog */
+            item_catalog?: "store" | null;
         };
         /** TemplateListResponse */
         TemplateListResponse: {
@@ -31596,6 +32459,878 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_store_categories_api_v1_store_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreCategoryRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_store_category_api_v1_store_categories_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreCategoryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreCategoryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_store_category_api_v1_store_categories__category_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreCategoryUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreCategoryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_store_items_api_v1_store_items_get: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreItemRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_store_item_api_v1_store_items_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreItemCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreItemRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_store_picker_items_api_v1_store_items_picker_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorePickerItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_store_item_api_v1_store_items__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreItemUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreItemRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_store_item_api_v1_store_items__item_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreItemRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_store_item_api_v1_store_items__item_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreItemRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_store_batches_api_v1_store_batches_get: {
+        parameters: {
+            query?: {
+                item_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreBatchRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_store_deliveries_api_v1_store_deliveries_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreDeliveryRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_store_delivery_api_v1_store_deliveries_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreDeliveryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreDeliveryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_store_delivery_api_v1_store_deliveries__delivery_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                delivery_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreDeliveryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_store_delivery_api_v1_store_deliveries__delivery_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                delivery_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_store_delivery_note_api_v1_store_deliveries__delivery_id__note_file_get: {
+        parameters: {
+            query?: {
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                delivery_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_store_delivery_note_api_v1_store_deliveries__delivery_id__note_file_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                delivery_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_store_delivery_note_api_v1_store_deliveries__delivery_id__note_file_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreDeliveryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_store_delivery_note_api_v1_store_deliveries__delivery_id__note_file_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                delivery_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreDeliveryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_store_counts_api_v1_store_counts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreCountRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_store_count_api_v1_store_counts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreCountWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreCountRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_store_count_expected_api_v1_store_counts_expected_get: {
+        parameters: {
+            query: {
+                counted_on: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreExpectedBatch"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_store_count_api_v1_store_counts__count_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                count_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreCountRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_store_count_api_v1_store_counts__count_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                count_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreCountWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreCountRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_store_disposals_api_v1_store_disposals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreDisposalRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_store_disposal_api_v1_store_disposals_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreDisposalCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreDisposalRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_store_disposal_api_v1_store_disposals__disposal_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                disposal_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_store_dashboard_api_v1_store_dashboard_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreDashboard"];
+                };
             };
             /** @description Validation Error */
             422: {
