@@ -86,8 +86,11 @@ def record_type_decision(
         not missing,
         "record.type",
         missing,
-        AppError("RECORD_TYPE_FORBIDDEN", "You don't have access to this record type.", http_status=403)
-        if missing else None,
+        AppError(
+            "RECORD_TYPE_FORBIDDEN", "You don't have access to this record type.", http_status=403
+        )
+        if missing
+        else None,
     )
 
 
@@ -106,15 +109,24 @@ def service_create_decision(
     if not prerequisites.allowed:
         return prerequisites
     record_type = record_type_decision(
-        caps, category_id=category_id, service_id=service_id, category_exists=category_exists,
+        caps,
+        category_id=category_id,
+        service_id=service_id,
+        category_exists=category_exists,
         classification_code=classification_code if service_id == "General Book" else None,
     )
     if not record_type.allowed:
         return record_type
     if grade == grades.SECRET and "books.secret" not in caps:
         return GuardDecision(
-            False, "record.grade.create", ("books.secret",),
-            AppError("SECRET_CLEARANCE_REQUIRED", "Secret clearance is required for Secret records.", http_status=403),
+            False,
+            "record.grade.create",
+            ("books.secret",),
+            AppError(
+                "SECRET_CLEARANCE_REQUIRED",
+                "Secret clearance is required for Secret records.",
+                http_status=403,
+            ),
         )
     return GuardDecision(True, "service.create")
 
@@ -134,7 +146,10 @@ def duty_transfer_decision(
     if not prerequisites.allowed or initial_placement:
         return prerequisites
     return record_type_decision(
-        caps, category_id="GS", service_id="General Book", classification_code="12/1",
+        caps,
+        category_id="GS",
+        service_id="General Book",
+        classification_code="12/1",
         category_exists=category_exists,
     )
 
@@ -198,7 +213,9 @@ def book_edit_decision(
             if not any(version.id == version_id for version in book.versions):
                 raise NotFoundError("VERSION_NOT_FOUND", "Revision not found")
             if current is None or current.id != version_id:
-                raise AppError("FORBIDDEN", "Only the current revision can be edited.", http_status=403)
+                raise AppError(
+                    "FORBIDDEN", "Only the current revision can be edited.", http_status=403
+                )
         book_service.require_ledger_revision_unlocked(db, book)
 
     return _record_decision("record.edit.current_revision", check)
@@ -219,11 +236,19 @@ def revision_workflow_decision(book: Book) -> GuardDecision:
     return _record_decision("record.revise.workflow", check)
 
 
-def book_revise_decision(db: Session, user: User, book: Book | None) -> GuardDecision:
+def book_revise_authority_decision(db: Session, user: User, book: Book | None) -> GuardDecision:
+    """Authorize stored-field access independently of regeneration readiness."""
     from app.services import book_service
 
+    return _record_decision(
+        "record.revise.authority",
+        lambda: book_service._require_revise_authority(db, user, book),
+    )
+
+
+def book_revise_decision(db: Session, user: User, book: Book | None) -> GuardDecision:
     def check() -> Any:
-        version = book_service._require_revise_authority(db, user, book)
+        version = book_revise_authority_decision(db, user, book).require()
         if book is not None:
             revision_workflow_decision(book).require()
         return version

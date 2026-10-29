@@ -342,5 +342,56 @@ def test_signed_ledger_edit_decision_matches_patch_and_keeps_read_access(api_db)
     response = client.patch(f"/api/v1/books/{book.id}", json={"subject": "Cannot change"})
     assert response.status_code == 409
     assert response.json()["error"]["code"] == decision.error.code
-    assert client.get(f"/api/v1/books/{book.id}", params={"version_id": version.id}).status_code == 200
+    assert (
+        client.get(f"/api/v1/books/{book.id}", params={"version_id": version.id}).status_code == 200
+    )
     assert book.subject is None
+
+
+@pytest.mark.parametrize("state", ["pending", "approved"])
+def test_stored_fields_read_does_not_require_regeneration_readiness(api_db, state):
+    from app.services.action_guard_service import (
+        book_revise_authority_decision,
+        book_revise_decision,
+    )
+
+    manager = _user(api_db, f"fields-{state}@x.ae", role="manager")
+    api_db.add(BookCategory(id="GS", prefix="GS"))
+    book = Book(category_id="GS", ref_number=f"FIELDS-{state}", approval_state=state)
+    api_db.add(book)
+    api_db.flush()
+    version = BookVersion(
+        book_id=book.id,
+        version_no=1,
+        template_id="General Book",
+        fields={"subject": "Stored subject", "_signing": {"private": "snapshot"}},
+        status=state,
+    )
+    book.versions.append(version)
+    api_db.commit()
+
+    assert book_revise_authority_decision(api_db, manager, book).allowed
+    regeneration = book_revise_decision(api_db, manager, book)
+    assert not regeneration.allowed
+    assert regeneration.error.code == "BOOK_NOT_REVISABLE"
+    client = _client(api_db, manager)
+    fields = client.get(f"/api/v1/books/{book.id}/versions/{version.id}/fields")
+    assert fields.status_code == 200
+    assert fields.json() == {"fields": {"subject": "Stored subject"}}
+
+    generated = client.post(
+        "/api/v1/documents/generate",
+        json={
+            "template_id": "General Book",
+            "revise_of_book_id": book.id,
+            "commit": True,
+        },
+    )
+    assert generated.status_code == 422
+    assert generated.json()["error"]["code"] == "BOOK_NOT_REVISABLE"
+    preview = client.post(
+        "/api/v1/notify/preview",
+        json={"template_id": "General Book", "revise_of_book_id": book.id},
+    )
+    assert preview.status_code == 422
+    assert preview.json()["error"]["code"] == "BOOK_NOT_REVISABLE"

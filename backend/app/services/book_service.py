@@ -753,7 +753,9 @@ def _resolve_book_read_access(
             record_type_error = exc
     if _grade_allows(db, user, book, existing=existing):
         if book.grade in grades.RESTRICTED_GRADES or book.distribution == grades.NAMED:
-            read_path = "named_creator" if book.created_by_user_id == user.id else "direct_recipient"
+            read_path = (
+                "named_creator" if book.created_by_user_id == user.id else "direct_recipient"
+            )
         else:
             read_path = "ordinary" if existing else "direct_recipient"
         return BookReadAccess(
@@ -1094,10 +1096,10 @@ def _require_revise_authority(db: Session, user: User, book: Book | None) -> Boo
 
 
 def require_revise_access(db: Session, user: User, book: Book | None) -> BookVersion | None:
-    """Require resource authority and workflow readiness before any rendering."""
-    from app.services.action_guard_service import book_revise_decision
+    """Require resource authority without imposing regeneration workflow state."""
+    from app.services.action_guard_service import book_revise_authority_decision
 
-    return book_revise_decision(db, user, book).require()
+    return book_revise_authority_decision(db, user, book).require()
 
 
 class ServiceCount(NamedTuple):

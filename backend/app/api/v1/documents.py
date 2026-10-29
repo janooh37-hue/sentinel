@@ -364,7 +364,9 @@ def generate_document(
         revise_book = db.get(Book, payload.revise_of_book_id)
         if revise_book is not None and revise_book.deleted_at is not None:
             revise_book = None
-        book_service.require_revise_access(db, user, revise_book)
+        from app.services.action_guard_service import book_revise_decision
+
+        book_revise_decision(db, user, revise_book).require()
     else:
         book_service.require_grade_clearance(db, user, payload.grade)
     # Refuse a duplicate of a live record's leave now, with its reference number,
