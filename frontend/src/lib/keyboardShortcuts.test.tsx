@@ -471,6 +471,13 @@ describe('existing modifier shortcuts', () => {
     expect(focus).toHaveBeenCalledTimes(2)
   })
 
+  it.each(['e', 't'])('preserves Ctrl+%s on alternate Latin layouts', (key) => {
+    const focus = vi.fn()
+    renderWith(<Probe action="focusSearch" handler={focus} />)
+    expect(press({ key, code: 'KeyK', ctrlKey: true })).toBe(true)
+    expect(focus).not.toHaveBeenCalled()
+  })
+
   it.each([{ ctrlKey: true }, { metaKey: true }])(
     'focuses search with physical Arabic KeyK using %o',
     (modifier) => {

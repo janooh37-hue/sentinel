@@ -88,6 +88,10 @@ describe('StudioSearch', () => {
     fireEvent.keyDown(field, { key: 'Enter' })
     expect(navigate).not.toHaveBeenCalled()
     expect(screen.getByRole('alert')).toBeVisible()
+    fireEvent.keyDown(field, { key: 'ArrowDown' })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(navigate).toHaveBeenCalledExactlyOnceWith({ userId: 2 })
   })
 
   it('touch/click selection navigates only to the supplied identity', () => {
@@ -103,6 +107,27 @@ function entry(key: string, text: string, aliases: string[] = []): SearchEntry {
   return { key, label: text, alternateLabel: '', text: [text], aliases, identifiers: [key], destination: { userId: 1 } }
 }
 describe('search ranking', () => {
+  it('matches employee digits only to the complete employee number, never a database ID', () => {
+    const index = accountSearchIndex([account(101, 'G999'), account(7, 'G101')])
+    expect(searchEntries(index, '١٠١').map(({ entry }) => entry.destination.userId)).toEqual([7])
+    expect(searchEntries(index, '10')).toEqual([])
+    expect(searchEntries(index, '7')).toEqual([])
+  })
+
+  it('discovers digit-bearing email prefixes without matching partial numeric runs', () => {
+    const index = accountSearchIndex([account(1, 'G101'), account(10, 'G110')])
+    expect(searchEntries(index, 'person1').map(({ entry }) => entry.destination.userId)).toEqual([1])
+    expect(searchEntries(index, 'person١@ex').map(({ entry }) => entry.destination.userId)).toEqual([1])
+    expect(searchEntries(index, 'person10').map(({ entry }) => entry.destination.userId)).toEqual([10])
+  })
+
+  it('does not duplicate the fallback English name in Arabic presentation', () => {
+    const person = { ...account(3, 'G103'), name_ar: '', display_name: 'Ahmed', name_en: '' }
+    const [indexed] = accountSearchIndex([person], true)
+    expect(indexed.label).toBe('Ahmed')
+    expect(indexed.alternateLabel).toBe('')
+  })
+
   it('ranks exact identifiers, strict text, prefixes, aliases, relaxed spelling then typo suggestions', () => {
     expect(searchEntries([entry('alias', 'Other', ['wording']), entry('prefix', 'wording editor'), entry('wording', 'Unrelated'), entry('strict', 'wording')], 'wording').map(({ entry }) => entry.key)).toEqual(['wording', 'strict', 'prefix', 'alias'])
     expect(searchEntries([entry('relaxed', 'فاطمه'), entry('strict', 'فاطمة')], 'فاطمة').map(({ entry }) => entry.key)).toEqual(['strict', 'relaxed'])

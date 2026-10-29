@@ -50,6 +50,7 @@ function ScopedSearch(props: StudioSearchProps): React.JSX.Element {
     const current = entries.find((candidate) => candidate.key === entry.key)
     if (!current) { setUnavailable(true); return }
     setOpen(false)
+    setUnavailable(false)
     props.onNavigate(current.destination)
   }
 
@@ -57,16 +58,18 @@ function ScopedSearch(props: StudioSearchProps): React.JSX.Element {
     if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false)
   }}>
     <label htmlFor={id} className="sr-only">{label}</label>
-    <input ref={input} id={id} role="combobox" aria-autocomplete="list" aria-expanded={expanded}
+    <div className="relative">
+    <input ref={input} id={id} role="combobox" aria-autocomplete="list" aria-expanded={expanded} aria-keyshortcuts="Control+K Meta+K"
       aria-controls={`${id}-results`} aria-activedescendant={expanded && activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined}
       dir="auto" autoComplete="off" value={query} placeholder={label}
-      className="min-h-11 w-full min-w-0 rounded-lg border border-border bg-surface px-3 py-2 text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className={`min-h-11 w-full min-w-0 rounded-lg border border-border bg-surface px-3 py-2 text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${props.mode !== 'accounts' ? 'sm:px-28' : ''}`}
       onFocus={() => setOpen(true)} onChange={(event) => { setQuery(event.target.value); setActive(null); setUnavailable(false); setOpen(true) }}
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing || event.keyCode === 229 || event.altKey || event.ctrlKey || event.metaKey) return
         if (event.key === 'Escape' && expanded) { event.preventDefault(); event.stopPropagation(); setOpen(false); return }
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
           event.preventDefault(); setOpen(true)
+          setUnavailable(false)
           if (matches.length) {
             const next = activeIndex < 0 ? (event.key === 'ArrowDown' ? 0 : matches.length - 1)
               : (activeIndex + (event.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length
@@ -82,6 +85,10 @@ function ScopedSearch(props: StudioSearchProps): React.JSX.Element {
           }
         }
       }} />
+    {props.mode !== 'accounts' && <kbd dir="ltr" aria-hidden="true" className="pointer-events-none absolute end-3 top-1/2 hidden -translate-y-1/2 rounded border border-border bg-background px-2 py-0.5 font-mono text-xs text-muted-foreground sm:block">
+      {typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ + K' : 'Ctrl + K'}
+    </kbd>}
+    </div>
     {expanded && <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-[50dvh] overflow-y-auto rounded-lg border border-border bg-surface">
       <ul id={`${id}-results`} role="listbox" aria-label={label}>
         {matches.map(({ entry, suggestion }, index) => <li key={entry.key} id={`${id}-option-${index}`} role="option" aria-selected={active === entry.key}

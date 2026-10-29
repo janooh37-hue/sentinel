@@ -8,6 +8,8 @@ export interface SearchEntry {
   label: string
   alternateLabel: string
   identifiers: string[]
+  numericIdentifiers?: string[]
+  email?: string
   text: string[]
   aliases: string[]
   destination: StudioDestination
@@ -18,11 +20,16 @@ export function accountSearchIndex(accounts: AdminUserRead[], arabic = false): S
   return accounts.map((account) => {
     // The enriched authorized account projection is supplied by the caller.
     const arabicName = 'name_ar' in account && typeof account.name_ar === 'string' ? account.name_ar : ''
+    const label = (arabic && arabicName) || account.display_name || account.name_en || account.email
+    const alternate = arabic ? account.name_en || account.display_name || '' : arabicName
+    const employeeNumber = account.employee_id?.match(/^G(\d+)$/i)?.[1]
     return {
       key: `account:${account.id}`,
-      label: (arabic && arabicName) || account.display_name || account.name_en || account.email,
-      alternateLabel: arabic ? account.name_en ?? account.display_name ?? '' : arabicName,
-      identifiers: [String(account.id), account.email, account.employee_id ?? ''],
+      label,
+      alternateLabel: alternate === label ? '' : alternate,
+      identifiers: [account.email, account.employee_id ?? ''],
+      numericIdentifiers: employeeNumber ? [employeeNumber] : [],
+      email: account.email,
       text: [account.display_name ?? '', account.name_en ?? '', arabicName],
       aliases: [],
       destination: { userId: account.id },
@@ -31,7 +38,7 @@ export function accountSearchIndex(accounts: AdminUserRead[], arabic = false): S
 }
 
 export function resourceSearchIndex({ subjectId, items }: ResourceSearchProps, arabic: boolean, actionLabels: (action: string) => string[] = () => []): SearchEntry[] {
-  return items.flatMap((item) => item.actions.map((decision) => ({
+  return items.flatMap((item) => item.actions.map((decision: ResourceSearchProps['items'][number]['actions'][number]) => ({
     key: `${item.resource.kind}:${item.resource.id}:${decision.action}`,
     label: arabic ? item.label.ar : item.label.en,
     alternateLabel: arabic ? item.label.en : item.label.ar,
@@ -51,7 +58,7 @@ export function searchEntries(entries: SearchEntry[], query: string): SearchMatc
   const numeric = /\d/.test(q)
   const matches: SearchMatch[] = []
   for (const entry of entries) {
-    const ids = entry.identifiers.map((value) => normalizeSearchText(value)).filter(Boolean)
+    const ids = [...entry.identifiers, ...entry.numericIdentifiers ?? []].map((value) => normalizeSearchText(value)).filter(Boolean)
     const texts = entry.text.map((value) => normalizeSearchText(value)).filter(Boolean)
     const aliases = entry.aliases.map((value) => normalizeSearchText(value)).filter(Boolean)
     let rank = Infinity
@@ -60,6 +67,11 @@ export function searchEntries(entries: SearchEntry[], query: string): SearchMatc
     else if (numeric) {
       const completeTokens = [...ids, ...texts, ...aliases].flatMap((value) => value.split(/[^\p{L}\p{N}@._-]+/u))
       if (tokens.every((token) => completeTokens.includes(token))) rank = 2
+      else if (entry.email && /[\p{L}@.]/u.test(q)) {
+        const email = normalizeSearchText(entry.email)
+        // Email prefixes are text discovery; do not match a partial digit run.
+        if (email.startsWith(q) && !(/\d$/.test(q) && /\d/.test(email[q.length] ?? ''))) rank = 2
+      }
     } else if (texts.includes(q)) rank = 1
     else if ([...texts, ...ids].some((value) => value.startsWith(q)) || tokens.every((token) => texts.some((value) => value.split(' ').some((word) => word.startsWith(token))))) rank = 2
     else if (texts.some((value) => value.includes(q))) rank = 3

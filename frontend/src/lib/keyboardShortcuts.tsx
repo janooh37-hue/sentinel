@@ -134,7 +134,7 @@ export function KeyboardShortcutsProvider({
         const key = e.key.toLowerCase()
         // Search may take focus from inputs, but never from composition or
         // another modal interaction. Physical KeyK also works on Arabic layouts.
-        if (key === 'k' || e.code === 'KeyK') {
+        if (key === 'k' || (e.code === 'KeyK' && !/^[a-z]$/.test(key))) {
           if (
             e.isComposing ||
             e.keyCode === 229 ||
