@@ -323,7 +323,7 @@ export function AttendancePrintPage(): React.JSX.Element {
           }
         >
           {t('statementPrint.chunkFailed', {
-            months: failed.map((c) => formatStatementMonth(c.from, ui)).join(ui === 'ar' ? '، ' : ', '),
+            months: failed.map((c) => formatStatementMonth(c.from, ui)).join(t('statementPrint.paper.listJoin')),
           })}
         </SetupNotice>
       )}
@@ -379,7 +379,7 @@ export function AttendancePrintPage(): React.JSX.Element {
           <p className="mt-0.5 text-xs text-muted-foreground">
             {t('statementPrint.resultAttendance', {
               range: range(settings.from, settings.to, ui),
-              pages,
+              pages: t('statementPrint.resultPages', { count: pages }),
               orientation: t(`statementPrint.${settings.orient}`),
             })}
           </p>

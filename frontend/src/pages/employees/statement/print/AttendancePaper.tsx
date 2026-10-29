@@ -329,12 +329,7 @@ export function AttendancePaper({ frame, settings, days, shiftWindows, leaveHidd
         key="sign"
         t={t}
         boxes={[
-          {
-            role: t('statementPrint.paper.preparedBy'),
-            name:
-              [frame.issue.printedBy, frame.issue.printedByRole].filter(Boolean).join(lang === 'ar' ? '، ' : ', ') ||
-              null,
-          },
+          { role: t('statementPrint.paper.preparedBy'), name: frame.issue.byline },
           {
             role: t('statementPrint.paper.employeeAck'),
             name: lang === 'ar' ? (e.name_ar ?? e.name_en) : e.name_en,

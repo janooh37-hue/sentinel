@@ -35,8 +35,8 @@ export interface PaperIssue {
   date: string
   /** "27 Oct 2026, 11:20", site time, Western digits. */
   printedAt: string
-  printedBy: string | null
-  printedByRole: string | null
+  /** "Mariam Al Kaabi, HR Officer": who printed it, in the paper's language. */
+  byline: string | null
 }
 
 export interface PaperFrame {
@@ -97,6 +97,20 @@ function Identity({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.
   const e = frame.employee
   const job = frame.lang === 'ar' ? (e.position_ar ?? e.position) : (e.position ?? e.position_ar)
   const placement = [e.duty_unit, e.duty_post].filter(Boolean).join(' / ')
+  // The paper's own language first, the other script beside it.
+  const names = [
+    <bdi key="en" lang="en" dir="ltr">
+      {e.name_en}
+    </bdi>,
+    ...(e.name_ar
+      ? [
+          <bdi key="ar" lang="ar" dir="rtl">
+            {e.name_ar}
+          </bdi>,
+        ]
+      : []),
+  ]
+  if (frame.lang === 'ar') names.reverse()
   return (
     <>
       <div className="st-title">
@@ -108,17 +122,12 @@ function Identity({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.
           <tr>
             <td className="k">{t('statementPrint.paper.name')}</td>
             <td className="v">
-              <bdi lang="en" dir="ltr">
-                {e.name_en}
-              </bdi>
-              {e.name_ar && (
-                <>
-                  {' | '}
-                  <bdi lang="ar" dir="rtl">
-                    {e.name_ar}
-                  </bdi>
-                </>
-              )}
+              {names.map((name, i) => (
+                <span key={i}>
+                  {i > 0 && ' | '}
+                  {name}
+                </span>
+              ))}
             </td>
             <td className="k">{t('statementPrint.paper.employeeNo')}</td>
             <td className="v">
@@ -173,13 +182,12 @@ function CompactHead({ frame }: { frame: PaperFrame }): React.JSX.Element {
 }
 
 function Foot({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.Element {
-  const by = [frame.issue.printedBy, frame.issue.printedByRole].filter(Boolean).join(frame.lang === 'ar' ? '، ' : ', ')
   return (
     <>
       <div className="st-prov">
         <div>
           {t('statementPrint.paper.printed', { at: frame.issue.printedAt })}
-          {by && ` · ${t('statementPrint.paper.printedBy', { name: by })}`}
+          {frame.issue.byline && ` · ${t('statementPrint.paper.printedBy', { name: frame.issue.byline })}`}
           <br />
           {t('statementPrint.paper.source', { id: frame.employee.id })} · <Mono>{frame.sourceUrl}</Mono>
         </div>

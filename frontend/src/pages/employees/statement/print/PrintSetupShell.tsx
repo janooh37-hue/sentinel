@@ -181,7 +181,7 @@ export function PrintSetupShell({
   )
 }
 
-/** A quiet notice above the preview. `tone` adds a word, never colour alone. */
+/** A quiet notice above the preview. Errors are announced (`role="alert"`) and their copy names what failed. */
 export function SetupNotice({
   children,
   tone = 'info',

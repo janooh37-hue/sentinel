@@ -8,6 +8,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { useContext, useState } from 'react'
 import { flushSync } from 'react-dom'
+import { useTranslation } from 'react-i18next'
 
 import { api } from '@/lib/api'
 import { AuthContext } from '@/lib/authContext'
@@ -45,14 +46,24 @@ export function siteStamp(value: Date | string): { date: string; time: string } 
  */
 export function usePaperIssue(issued: StatementPrint | null, lang: PaperLanguage): PaperIssue {
   const user = useContext(AuthContext)?.user ?? null
+  const { i18n } = useTranslation()
+  const t = i18n.getFixedT(lang)
   const stamp = siteStamp(issued?.printed_at ?? new Date())
-  const userName = user ? (lang === 'ar' ? (user.name_ar ?? user.name_en) : (user.name_en ?? user.name_ar)) : null
+  // The printer is the signed-in user, so their name is picked in the paper's
+  // language; the server's name is the fallback.
+  const name =
+    (user ? (lang === 'ar' ? (user.name_ar ?? user.name_en) : (user.name_en ?? user.name_ar)) : null) ??
+    issued?.printed_by_name ??
+    user?.email ??
+    null
+  // The session carries the job title in English only; an Arabic paper leaves
+  // it off rather than print English beside an Arabic name.
+  const role = lang === 'en' ? (user?.position ?? null) : null
   return {
     reference: issued?.reference ?? null,
     date: stamp.date,
-    printedAt: `${formatStatementDate(stamp.date, lang)}${lang === 'ar' ? '، ' : ', '}${stamp.time}`,
-    printedBy: issued?.printed_by_name ?? userName ?? user?.email ?? null,
-    printedByRole: user?.position ?? null,
+    printedAt: `${formatStatementDate(stamp.date, lang)}${t('statementPrint.paper.listJoin')}${stamp.time}`,
+    byline: [name, role].filter(Boolean).join(t('statementPrint.paper.listJoin')) || null,
   }
 }
 

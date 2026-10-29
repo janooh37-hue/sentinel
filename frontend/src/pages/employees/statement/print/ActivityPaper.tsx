@@ -246,15 +246,7 @@ export function ActivityPaper({ frame, settings, items, categories }: Props): Re
       <SignatureBlocks
         key="sign"
         t={t}
-        boxes={[
-          {
-            role: t('statementPrint.paper.preparedBy'),
-            name:
-              [frame.issue.printedBy, frame.issue.printedByRole]
-                .filter(Boolean)
-                .join(settings.lang === 'ar' ? '، ' : ', ') || null,
-          },
-        ]}
+        boxes={[{ role: t('statementPrint.paper.preparedBy'), name: frame.issue.byline }]}
       />,
     )
   }
