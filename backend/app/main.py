@@ -272,7 +272,7 @@ def create_app() -> FastAPI:
     # same size as 9 on the entry bundle (measured), less event-loop CPU.
     app.add_middleware(_GZipExceptEventStream, minimum_size=1024, compresslevel=6)
     # Ring buffer of recent /api request timings for the admin debug console.
-    app.middleware("http")(debug_v1.record_request)
+    app.add_middleware(debug_v1.RequestRecorderMiddleware)
     # Outermost: per-request timings for the performance plan (Phase 0).
     app.add_middleware(RequestTimingMiddleware)
 

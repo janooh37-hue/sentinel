@@ -11,6 +11,9 @@ computation per tick instead of each paying for it.
 Per-tick DB sessions: we do NOT hold the injected ``db`` session open across
 the whole stream — a long-lived session would pin a SQLite connection. Every
 computation opens a short-lived session and closes it in a ``finally`` block.
+Authorization is rechecked before every cache read inside that same worker-owned
+session. The stream uses the shared route policy with its fixed endpoint identity,
+not a request dependency or a request-scoped session inside the worker.
 
 The ``Cache-Control: no-cache`` and ``X-Accel-Buffering: no`` headers defeat
 proxy/CDN buffering so events flush immediately — relevant once Phase 5 puts
@@ -34,13 +37,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker as _make_sm
 
 from app.api.deps import COOKIE_NAME, get_current_user
-from app.api.errors import AppError
 from app.core import grades
 from app.core.security import hash_token
 from app.db.models import User
 from app.db.session import SessionLocal, get_db
 from app.schemas.notifications import DecisionNotice, DecisionNoticesResponse, NotificationCounts
-from app.services import auth_service, book_service, notification_service
+from app.services import auth_service, book_service, notification_service, role_route_service
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -64,14 +66,17 @@ def _shared_counts(session: Session, user: User) -> NotificationCounts:
 
 
 def _session_counts(
-    open_session: Callable[[], Session], token_hash: str, request: Request
+    open_session: Callable[[], Session], token_hash: str
 ) -> NotificationCounts | None:
     """Authorize the originating session before every cache read or computation."""
     with open_session() as session:
         user = auth_service.resolve_session_hash(session, token_hash)
-        try:
-            user = get_current_user(request, user)
-        except AppError:
+        if user is None:
+            return None
+        decision = role_route_service.role_route_decision(
+            user.role, "GET", "/api/v1/notifications/stream"
+        )
+        if not decision.allowed:
             return None
         return _shared_counts(session, user)
 
@@ -189,7 +194,7 @@ async def stream(
     db.close()
 
     async def gen() -> AsyncIterator[str]:
-        last = await anyio.to_thread.run_sync(_session_counts, _tick_session, token_hash, request)
+        last = await anyio.to_thread.run_sync(_session_counts, _tick_session, token_hash)
         if last is None:
             return  # originating session no longer authorized
         yield _frame(last)
@@ -202,9 +207,7 @@ async def stream(
             await anyio.sleep(POLL_SECONDS)
             if await request.is_disconnected():
                 return
-            current = await anyio.to_thread.run_sync(
-                _session_counts, _tick_session, token_hash, request
-            )
+            current = await anyio.to_thread.run_sync(_session_counts, _tick_session, token_hash)
             if current is None:
                 return  # originating session no longer authorized
             if current != last:
