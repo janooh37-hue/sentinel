@@ -696,6 +696,7 @@ def test_reporter_template_diagnostics_match_real_authenticated_route_gate(
 
 def test_catalog_library_labels_and_missing_arabic_are_explicit(api_db, monkeypatch):
     from dataclasses import replace
+
     from app.services import capability_catalog_service
 
     _, target, c = setup(api_db)
@@ -703,7 +704,9 @@ def test_catalog_library_labels_and_missing_arabic_are_explicit(api_db, monkeypa
 
     def catalog_with_missing_arabic(db):
         return tuple(
-            replace(entry, label_ar=None, description_ar=None) if entry.id == "books.view" else entry
+            replace(entry, label_ar=None, description_ar=None)
+            if entry.id == "books.view"
+            else entry
             for entry in original(db)
         )
 
@@ -712,13 +715,23 @@ def test_catalog_library_labels_and_missing_arabic_are_explicit(api_db, monkeypa
     assert response.status_code == 200, response.text
     rows = response.json()["items"]
     labels = {
-        row["resource"]["kind"]: row["label"]
-        for row in rows if row["resource"]["id"] == "library"
+        row["resource"]["kind"]: row["label"] for row in rows if row["resource"]["id"] == "library"
     }
     assert labels["word_template"] == {"en": "Word template library", "ar": "مكتبة قوالب وورد"}
-    assert labels["editor_template"] == {"en": "Editor template library", "ar": "مكتبة قوالب المحرّر"}
-    capability = next(row for row in rows if row["resource"] == {"kind": "capability", "id": "books.view", "revision_id": None})
-    warning = next(warning for warning in capability["actions"][0]["warnings"] if warning["code"] == "MISSING_ARABIC_TRANSLATION")
+    assert labels["editor_template"] == {
+        "en": "Editor template library",
+        "ar": "مكتبة قوالب المحرّر",
+    }
+    capability = next(
+        row
+        for row in rows
+        if row["resource"] == {"kind": "capability", "id": "books.view", "revision_id": None}
+    )
+    warning = next(
+        warning
+        for warning in capability["actions"][0]["warnings"]
+        if warning["code"] == "MISSING_ARABIC_TRANSLATION"
+    )
     assert warning["params"] == {"locale": "ar", "fields": ["label", "description"]}
 
 
@@ -727,7 +740,9 @@ def test_word_template_content_timestamp_does_not_invalidate_policy_revision(api
 
     admin, target, _ = setup(api_db)
     first = book_template_service.TemplateInfo(name="first.docx", modified_at=datetime(2026, 1, 1))
-    second = book_template_service.TemplateInfo(name="second.docx", modified_at=datetime(2026, 1, 2))
+    second = book_template_service.TemplateInfo(
+        name="second.docx", modified_at=datetime(2026, 1, 2)
+    )
     rows = [first, second]
     monkeypatch.setattr(book_template_service, "list_templates", lambda **kwargs: rows)
     before = access_decision_service.snapshot(api_db, target, admin).revision
@@ -735,3 +750,79 @@ def test_word_template_content_timestamp_does_not_invalidate_policy_revision(api
     rows.reverse()
     after = access_decision_service.snapshot(api_db, target, admin).revision
     assert before == after
+
+
+def test_proposed_record_read_loss_is_a_denied_impact_not_a_missing_record(api_db):
+    admin, target, c = setup(api_db, role="manager")
+    api_db.add(BookCategory(id="HR", prefix="HR"))
+    api_db.flush()
+    book = Book(category_id="HR", ref_number="HR-PROPOSED-LOSS", approval_state="none", created_by_user_id=admin.id)
+    api_db.add(book)
+    api_db.flush()
+    api_db.add(BookVersion(book_id=book.id, version_no=1, template_id="Leave Application Form", status="pending", fields={}, created_by_user_id=admin.id))
+    api_db.commit()
+    response = check(c, target, "book", str(book.id), "read", proposed=[{"capability": "books.view", "effect": "deny"}])
+    assert response.status_code == 200, response.text
+    assert response.json()["current"]["authorization"] == "allowed"
+    assert response.json()["proposed"]["authorization"] == "denied"
+    assert response.json()["proposed"]["executable_now"] is False
+    assert len(response.json()["impacts"]) == 1
+    assert perm_service.get_user_overrides(api_db, target.id) == {}
+    perm_service.set_user_override(api_db, target.id, "books.view", "deny")
+    assert check(c, target, "book", str(book.id), "read").status_code == 404
+
+
+def test_reporter_existing_category_create_and_own_revision_match_real_authority(api_db):
+    from app.services import action_guard_service, book_service, document_service
+
+    _, target, c = setup(api_db, role="inmate_reporter")
+    employee = Employee(id="REPORTER-ACCESS", name_en="Synthetic Reporter")
+    api_db.add_all([employee, BookCategory(id="INV", prefix="INV")])
+    api_db.flush()
+    target.employee_id = employee.id
+    book = Book(category_id="INV", ref_number="INV-ACCESS-REVISE", approval_state="none", created_by_user_id=target.id)
+    api_db.add(book)
+    api_db.flush()
+    version = BookVersion(book_id=book.id, version_no=1, template_id="Inmate Conduct Violations", status="pending", fields={"reporter_id": employee.id}, created_by_user_id=target.id)
+    api_db.add(version)
+    api_db.commit()
+    # These are the production generation/revision guards, with no rendering,
+    # generated files, mocked capabilities or substituted allow verdict.
+    document_service.authorize_interactive_generation(api_db, target, "Inmate Conduct Violations")
+    action_guard_service.book_revise_decision(api_db, target, book).require()
+    assert book_service.require_revise_access(api_db, target, book).id == version.id
+    new_record = check(c, target, "service", "Inmate Conduct Violations", "create", context={"grade": "unclassified"})
+    revise = check(c, target, "book", str(book.id), "create")
+    assert new_record.status_code == revise.status_code == 200
+    assert new_record.json()["current"]["authorization"] == "allowed"
+    assert revise.json()["current"]["authorization"] == "allowed"
+    assert revise.json()["current"]["setting_capabilities"] == []
+    assert "books.edit" not in perm_service.effective_caps(api_db, target)
+    assert api_db.scalar(select(func.count()).select_from(AuditLog)) == 0
+
+
+def test_duty_transfer_explains_conditional_record_gates_without_denying_initial_placement(api_db):
+    from app.services.action_guard_service import duty_transfer_decision
+
+    _, target, c = setup(api_db, role="manager")
+    api_db.add(BookCategory(id="GS", prefix="GS"))
+    api_db.commit()
+    for capability in ("documents.generate", "documents.duty_transfer"):
+        perm_service.set_user_override(api_db, target.id, capability, "grant")
+    conditional = ["books.category.GS", "books.service.General Book", "books.category.12/1"]
+    for capability in conditional:
+        perm_service.set_user_override(api_db, target.id, capability, "deny")
+    caps = perm_service.effective_caps(api_db, target)
+    assert duty_transfer_decision(caps, initial_placement=True).allowed
+    assert not duty_transfer_decision(caps, initial_placement=False).allowed
+    response = check(c, target, "capability", "documents.duty_transfer", "manage")
+    assert response.status_code == 200, response.text
+    decision = response.json()["current"]
+    assert decision["authorization"] == "needs_context"
+    assert decision["executable_now"] is None
+    assert decision["required_context"] == ["employee_assignment"]
+    warning = next(warning for warning in decision["warnings"] if warning["code"] == "CONDITIONAL_PREREQUISITE_BLOCKED")
+    assert warning["capabilities"] == conditional
+    assert warning["params"]["condition"] == "existing_assignment"
+    assert decision["reason_tree"]["children"][1]["op"] == "any"
+    assert any(reason["code"] == "INITIAL_PLACEMENT_BYPASSES_RECORD_TYPE" for reason in decision["reasons"])
