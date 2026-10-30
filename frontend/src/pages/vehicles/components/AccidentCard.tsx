@@ -75,7 +75,7 @@ export function AccidentCard({
       })
       toast.success(t('vehicles.statusUpdated'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const remove = useMutation({
@@ -87,7 +87,7 @@ export function AccidentCard({
       })
       toast.success(t('common.deletedToast'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const busy = setStatus.isPending || remove.isPending

@@ -66,7 +66,7 @@ export function DisposalDialog({ open, onOpenChange }: Props): React.JSX.Element
       toast.success(t('assets.store.disposals.saved'))
       onOpenChange(false)
     },
-    onError: (error) => setServerError(storeErrorMessage(error, t)),
+    onError: (error) => setServerError(storeErrorMessage(error)),
   })
   const validationError = errors.batchId?.message ?? errors.quantity?.message ?? errors.disposed_on?.message ?? null
 

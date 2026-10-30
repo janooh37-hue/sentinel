@@ -95,7 +95,7 @@ function MaintenanceRequestForm({ vehicle, lastMaintenance, onOpenChange, onBusy
       navigate(`/books/${result.letter.book_id}`)
     },
     onError: (error) => {
-      const message = vehicleErrorMessage(error, t)
+      const message = vehicleErrorMessage(error)
       setServerError(message)
       toast.error(message)
     },

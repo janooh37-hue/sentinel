@@ -131,7 +131,7 @@ function VehiclePhotoPickerForm({
       setLabelAr('')
       setLabelEn('')
     },
-    onError: (cause) => setError(vehicleErrorMessage(cause, t)),
+    onError: (cause) => setError(vehicleErrorMessage(cause)),
     onSettled: () => onBusyChange(false),
   })
 
@@ -141,7 +141,7 @@ function VehiclePhotoPickerForm({
       setError(null)
       onBusyChange(true)
     },
-    onError: (cause) => setError(vehicleErrorMessage(cause, t)),
+    onError: (cause) => setError(vehicleErrorMessage(cause)),
     onSettled: () => onBusyChange(false),
   })
 

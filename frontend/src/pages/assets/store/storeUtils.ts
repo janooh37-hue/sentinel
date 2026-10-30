@@ -9,7 +9,7 @@
 
 import { type QueryClient, useQuery } from '@tanstack/react-query'
 
-import { api, ApiError, apiErrorMessage } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { formatNumber, isArabic, localized } from '@/lib/language'
 import { monthEndIso } from '@/lib/monthEnd'
@@ -255,10 +255,6 @@ function storeErrorKey(code: string): string | null {
   return `assets.store.errors.${camel}`
 }
 
-export function storeErrorMessage(err: unknown, t: Translate): string {
-  if (err instanceof ApiError) {
-    const key = storeErrorKey(err.code)
-    if (key && i18n.exists(key)) return t(key)
-  }
-  return apiErrorMessage(err)
+export function storeErrorMessage(err: unknown): string {
+  return apiErrorMessage(err, storeErrorKey)
 }

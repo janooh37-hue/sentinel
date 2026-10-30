@@ -221,7 +221,7 @@ export function VehicleDetailPage(): React.JSX.Element {
       })
       toast.success(t('vehicles.fineDeleted'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const markFineUnpaid = useMutation({
@@ -231,7 +231,7 @@ export function VehicleDetailPage(): React.JSX.Element {
       invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId, registers: ['fines'] })
       toast.success(t('vehicles.fines.classified'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const archiveFine = useMutation({
@@ -241,7 +241,7 @@ export function VehicleDetailPage(): React.JSX.Element {
       invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId, registers: ['fines'] })
       toast.success(t('vehicles.fines.archived', { count: 1 }))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const restoreFine = useMutation({
@@ -251,7 +251,7 @@ export function VehicleDetailPage(): React.JSX.Element {
       invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId, registers: ['fines'] })
       toast.success(t('vehicles.fines.restored', { count: 1 }))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const deleteMaintenance = useMutation({
@@ -264,7 +264,7 @@ export function VehicleDetailPage(): React.JSX.Element {
       })
       toast.success(t('common.deletedToast'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const uploadPhoto = useMutation({
@@ -283,7 +283,7 @@ export function VehicleDetailPage(): React.JSX.Element {
     onError: (err, target, toastId) =>
       toast.error(t('common.toastState.error'), {
         id: toastId,
-        description: `${target.file.name}: ${vehicleErrorMessage(err, t)}`,
+        description: `${target.file.name}: ${vehicleErrorMessage(err)}`,
       }),
   })
 
@@ -305,7 +305,7 @@ export function VehicleDetailPage(): React.JSX.Element {
       invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId })
       toast.success(t('common.updatedToast'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const replaceLicenseFile = useMutation({
@@ -320,7 +320,7 @@ export function VehicleDetailPage(): React.JSX.Element {
       invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId })
       toast.success(t('common.updatedToast'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const deletePhoto = useMutation({
@@ -330,7 +330,7 @@ export function VehicleDetailPage(): React.JSX.Element {
       invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId })
       toast.success(t('common.deletedToast'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const archiveVehicle = useMutation({
@@ -340,7 +340,7 @@ export function VehicleDetailPage(): React.JSX.Element {
       toast.success(t('vehicles.vehicleArchived'))
       navigate('/vehicles')
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const restoreVehicle = useMutation({
@@ -349,7 +349,7 @@ export function VehicleDetailPage(): React.JSX.Element {
       invalidateVehicleQueries(queryClient, { vehicleId: target, registers: ['sites'] })
       toast.success(t('vehicles.vehicleRestored'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const vehicle = vehicleQuery.data
@@ -2062,7 +2062,7 @@ function certificateErrorMessage(err: unknown, t: Translate): string {
     const key = CERTIFICATE_ERROR_KEYS[err.code]
     if (key) return t(key)
   }
-  return vehicleErrorMessage(err, t)
+  return vehicleErrorMessage(err)
 }
 
 const CERTIFICATE_NAME_MAX_LENGTH = 128

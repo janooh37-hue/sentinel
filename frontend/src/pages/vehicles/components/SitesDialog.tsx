@@ -93,7 +93,7 @@ function SitesPanel({
     toast.success(message)
   }
   const fail = (err: unknown): void => {
-    const text = vehicleErrorMessage(err, t)
+    const text = vehicleErrorMessage(err)
     setError(text)
     toast.error(text)
   }

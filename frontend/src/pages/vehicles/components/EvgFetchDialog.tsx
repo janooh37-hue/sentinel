@@ -194,7 +194,7 @@ function EvgPanel({
         return
       }
 
-      const text = vehicleErrorMessage(err, t)
+      const text = vehicleErrorMessage(err)
       const detail =
         err instanceof ApiError && typeof err.details.text === 'string' ? err.details.text : null
       setError(text)

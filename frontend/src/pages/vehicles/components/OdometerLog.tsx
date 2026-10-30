@@ -96,7 +96,7 @@ function OdometerRow({ row, canEdit, mobile }: { row: OdometerRowRead; canEdit: 
       setOpening(saved.opening_km == null ? '' : String(saved.opening_km))
       invalidateVehicleQueries(queryClient, { vehicleId: row.vehicle_id, registers: ['odometer'] })
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
   const submit = () => {
     if (opening === '' && closing === '') return

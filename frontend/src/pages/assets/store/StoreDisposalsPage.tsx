@@ -37,7 +37,7 @@ export function StoreDisposalsPage(): React.JSX.Element {
       invalidateStoreQueries(queryClient)
       toast.success(t('assets.store.disposals.deleted'))
     },
-    onError: (error) => toast.error(storeErrorMessage(error, t)),
+    onError: (error) => toast.error(storeErrorMessage(error)),
   })
 
   function deleteButton(row: StoreDisposalRead): React.ReactNode {
@@ -56,7 +56,7 @@ export function StoreDisposalsPage(): React.JSX.Element {
     <StoreShell title={t('assets.store.disposals.title')} description={t('assets.store.disposals.description')} actions={editable ? (
       <Button type="button" className="min-h-11" onClick={() => setRecordOpen(true)}><Plus aria-hidden className="h-4 w-4" />{t('assets.store.disposals.record')}</Button>
     ) : undefined}>
-      <FormAlert id="store-disposal-delete-error" message={deletion.error ? storeErrorMessage(deletion.error, t) : null} />
+      <FormAlert id="store-disposal-delete-error" message={deletion.error ? storeErrorMessage(deletion.error) : null} />
       <StoreQueryState isPending={disposalsQuery.isPending} error={disposalsQuery.error} onRetry={() => { void disposalsQuery.refetch() }} isEmpty={disposals.length === 0} emptyIcon={Trash2} emptyMessage={t('assets.store.disposals.empty')} emptyDescription={t(editable ? 'assets.store.disposals.emptyDescription' : 'assets.store.disposals.emptyReadOnly')}>
         {mobile ? (
           <ul className="flex flex-col gap-3" aria-label={t('assets.store.disposals.title')}>

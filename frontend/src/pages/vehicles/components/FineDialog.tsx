@@ -218,7 +218,7 @@ function FineForm({
       onOpenChange(false)
     },
     onError: (err) => {
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setServerError(message)
       toast.error(message)
     },

@@ -141,7 +141,7 @@ function AccidentLetter(): React.JSX.Element {
       navigate(`/books/${result.book_id}`)
     },
     onError: (err) => {
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setError(message)
       toast.error(message)
     },

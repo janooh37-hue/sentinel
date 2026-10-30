@@ -200,7 +200,7 @@ export function VehicleLicenceScanControl({
       setWarnings(result.warnings ?? [])
     } catch (err) {
       if (requestFileRef.current !== nextFile) return
-      setError(vehicleErrorMessage(err, t))
+      setError(vehicleErrorMessage(err))
     } finally {
       if (requestFileRef.current === nextFile) setScanning(false)
     }

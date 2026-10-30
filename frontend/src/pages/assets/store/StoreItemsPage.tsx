@@ -32,7 +32,7 @@ export function StoreItemsPage(): React.JSX.Element {
       invalidateStoreQueries(qc)
       toast.success(t(restore ? 'assets.store.items.restored' : 'assets.store.items.archivedSuccess'))
     },
-    onError: (err) => toast.error(storeErrorMessage(err, t)),
+    onError: (err) => toast.error(storeErrorMessage(err)),
   })
   const actions = (item: StoreItemRead) => editable && <div className="flex flex-wrap items-center justify-end gap-1">
     <Button type="button" variant="ghost" className="min-h-11 motion-reduce:transition-none" onClick={() => setDialog({ item })} aria-label={t('assets.store.items.editItem', { name: itemName(item, i18n.language) })}>

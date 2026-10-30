@@ -90,7 +90,7 @@ export function VehicleMaintenancePage(): React.JSX.Element {
       })
       toast.success(t('common.deletedToast'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const records = recordsQuery.data ?? NO_RECORDS

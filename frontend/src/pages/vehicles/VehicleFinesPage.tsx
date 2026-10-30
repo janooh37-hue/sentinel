@@ -278,7 +278,7 @@ export function VehicleFinesPage(): React.JSX.Element {
       invalidateAfterChange(fine)
       toast.success(t('common.deletedToast'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const markUnpaid = useMutation({
@@ -288,7 +288,7 @@ export function VehicleFinesPage(): React.JSX.Element {
       invalidateAfterChange(fine)
       toast.success(t('vehicles.fines.classified'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const archiveOne = useMutation({
@@ -299,7 +299,7 @@ export function VehicleFinesPage(): React.JSX.Element {
     },
     onError: (err) => {
       void finesQuery.refetch()
-      toast.error(vehicleErrorMessage(err, t))
+      toast.error(vehicleErrorMessage(err))
     },
   })
 
@@ -311,7 +311,7 @@ export function VehicleFinesPage(): React.JSX.Element {
     },
     onError: (err) => {
       void finesQuery.refetch()
-      toast.error(vehicleErrorMessage(err, t))
+      toast.error(vehicleErrorMessage(err))
     },
   })
 
@@ -326,7 +326,7 @@ export function VehicleFinesPage(): React.JSX.Element {
       // The batch rejected atomically (a stale/invalid row) — refetch so the
       // next confirmation snapshots current data rather than repeating it.
       void finesQuery.refetch()
-      toast.error(vehicleErrorMessage(err, t))
+      toast.error(vehicleErrorMessage(err))
     },
   })
 

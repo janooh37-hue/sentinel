@@ -142,9 +142,9 @@ describe('store expiry', () => {
 describe('storeErrorMessage', () => {
   it('maps STORE_* codes to translated copy and falls back to the server message', () => {
     expect(
-      storeErrorMessage(new ApiError(409, 'STORE_ITEM_CONTAINS_LOCKED', 'server text'), t),
+      storeErrorMessage(new ApiError(409, 'STORE_ITEM_CONTAINS_LOCKED', 'server text')),
     ).toBe('What a Counting unit contains cannot change once the item has stock records.')
-    expect(storeErrorMessage(new ApiError(409, 'STORE_SOMETHING_NEW', 'server text'), t)).toBe(
+    expect(storeErrorMessage(new ApiError(409, 'STORE_SOMETHING_NEW', 'server text'))).toBe(
       'server text',
     )
   })

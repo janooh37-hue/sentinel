@@ -59,7 +59,7 @@ export function StoreQueryState({
           <AlertTriangle aria-hidden strokeWidth={1.75} className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
             <span className="font-semibold">{t('assets.store.state.error')}</span>{' '}
-            <span dir="auto">{storeErrorMessage(error, t)}</span>
+            <span dir="auto">{storeErrorMessage(error)}</span>
           </span>
         </p>
         <Button type="button" variant="secondary" size="sm" className="min-h-11" onClick={onRetry}>

@@ -50,7 +50,7 @@ function DeliveryForm({ onOpenChange, onSaved, onBusyChange }: Omit<Props, 'open
       let uploadError: string | null = null
       if (file) {
         try { await api.uploadStoreDeliveryNote(delivery.id, file) }
-        catch (error) { uploadError = t('assets.store.deliveries.uploadFailed', { error: storeErrorMessage(error, t) }) }
+        catch (error) { uploadError = t('assets.store.deliveries.uploadFailed', { error: storeErrorMessage(error) }) }
       }
       return { uploadError }
     },
@@ -62,7 +62,7 @@ function DeliveryForm({ onOpenChange, onSaved, onBusyChange }: Omit<Props, 'open
       onOpenChange(false)
     },
     onError: (error) => {
-      const text = storeErrorMessage(error, t)
+      const text = storeErrorMessage(error)
       setMessage(text)
       toast.error(text)
     },

@@ -88,7 +88,7 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
       setCategoryError(null)
       toast.success(t('assets.store.items.categoryAdded'))
     },
-    onError: (err) => setCategoryError(storeErrorMessage(err, t)),
+    onError: (err) => setCategoryError(storeErrorMessage(err)),
   })
   const mutation = useMutation({
     mutationFn: (body: StoreItemCreate) => {
@@ -115,7 +115,7 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
         setContains(item.contains_qty != null)
         setValues((old) => ({ ...old, contains_qty: item.contains_qty == null ? '' : String(item.contains_qty), contains_unit_en: item.contains_unit_en ?? '', contains_unit_ar: item.contains_unit_ar ?? '' }))
       }
-      setError(storeErrorMessage(err, t))
+      setError(storeErrorMessage(err))
     },
   })
   const busy = mutation.isPending || categoryMutation.isPending
@@ -154,7 +154,7 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
               <SelectContent>{(categories.data ?? []).map((row) => <SelectItem key={row.id} value={String(row.id)}><span dir="auto">{categoryName(row, i18n.language)}</span></SelectItem>)}</SelectContent>
             </Select>
             {categories.isPending && <p role="status" className="text-xs text-muted-foreground">{t('assets.store.state.loading')}</p>}
-            {categories.error && <><FormAlert id={`${id}-categories-error`} message={storeErrorMessage(categories.error, t)} /><Button type="button" variant="secondary" className="min-h-11 self-start" onClick={() => void categories.refetch()}>{t('assets.store.state.retry')}</Button></>}
+            {categories.error && <><FormAlert id={`${id}-categories-error`} message={storeErrorMessage(categories.error)} /><Button type="button" variant="secondary" className="min-h-11 self-start" onClick={() => void categories.refetch()}>{t('assets.store.state.retry')}</Button></>}
             {!addingCategory && <Button type="button" variant="ghost" disabled={busy} className="min-h-11 self-start" onClick={() => setAddingCategory(true)}>{t('assets.store.items.addCategory')}</Button>}
           </Field>
         </FieldGrid>

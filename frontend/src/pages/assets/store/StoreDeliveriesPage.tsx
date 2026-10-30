@@ -36,7 +36,7 @@ export function StoreDeliveriesPage(): React.JSX.Element {
       invalidateStoreQueries(qc)
       toast.success(t('assets.store.deliveries.deleted'))
     },
-    onError: (error) => toast.error(storeErrorMessage(error, t)),
+    onError: (error) => toast.error(storeErrorMessage(error)),
   })
   const deliveries = [...(query.data ?? [])].sort((a, b) => b.received_on.localeCompare(a.received_on) || b.id - a.id)
 

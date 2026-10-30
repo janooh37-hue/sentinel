@@ -13,7 +13,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import vehicleClassCatalog from '../../../../backend/templates/vehicle_classes.json'
 
 import type { BadgeProps } from '@/components/ui/badge'
-import { ApiError, apiErrorMessage } from '@/lib/api'
+import { apiErrorMessage } from '@/lib/api'
 import type { VehicleFileRead } from '@/lib/api'
 import { formatNumber, isArabic, localized } from '@/lib/language'
 import { normalizeDigits } from '@/lib/utils'
@@ -422,10 +422,6 @@ const ERROR_MESSAGE_KEYS: Record<string, string> = {
   VEHICLE_FINE_NOT_FOUND: 'vehicles.fines.errors.notFound',
 }
 
-export function vehicleErrorMessage(err: unknown, t: Translate): string {
-  if (err instanceof ApiError) {
-    const key = ERROR_MESSAGE_KEYS[err.code]
-    if (key) return t(key)
-  }
-  return apiErrorMessage(err)
+export function vehicleErrorMessage(err: unknown): string {
+  return apiErrorMessage(err, (code) => Object.hasOwn(ERROR_MESSAGE_KEYS, code) ? ERROR_MESSAGE_KEYS[code] : null)
 }

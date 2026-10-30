@@ -321,7 +321,7 @@ export function VehiclesHubPage(): React.JSX.Element {
     },
     onError: (err) => {
       setNotifyDraft(null)
-      toast.error(vehicleErrorMessage(err, t))
+      toast.error(vehicleErrorMessage(err))
     },
   })
 
@@ -348,7 +348,7 @@ export function VehiclesHubPage(): React.JSX.Element {
       invalidateVehicleQueries(queryClient, { registers: ['sites'] })
       toast.success(t('vehicles.vehicleArchived'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
   const restoreMutation = useMutation({
     mutationFn: (vehicle: VehicleListItem) => api.restoreVehicle(vehicle.id),
@@ -356,7 +356,7 @@ export function VehiclesHubPage(): React.JSX.Element {
       invalidateVehicleQueries(queryClient, { registers: ['sites'] })
       toast.success(t('vehicles.vehicleRestored'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   /** The Renew card is a filter, not a dialog: it narrows the ledger to the

@@ -115,7 +115,7 @@ function PaymentForm({
         invalidateVehicleQueries(queryClient, { vehicleId: fine.vehicle_id, registers: ['fines'] })
         return
       }
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setServerError(message)
       toast.error(message)
     },

@@ -141,7 +141,7 @@ function AddVehicleForm({
             await api.uploadVehicleFile(vehicle.id, 'license', licenseFile)
           ).id
         } catch (err) {
-          failures.push(vehicleErrorMessage(err, t))
+          failures.push(vehicleErrorMessage(err))
         }
       }
       if (Object.keys(patch).length > 0) {
@@ -154,7 +154,7 @@ function AddVehicleForm({
           // (PLATE_EXISTS). So the record is reported as saved, the unlinked
           // attachment as the one failure, and the caches are refreshed either
           // way — the operator re-attaches from the vehicle file.
-          failures.push(vehicleErrorMessage(err, t))
+          failures.push(vehicleErrorMessage(err))
         }
       }
       return { vehicle, failures }
@@ -169,7 +169,7 @@ function AddVehicleForm({
       onOpenChange(false)
     },
     onError: (err) => {
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setServerError(message)
       toast.error(message)
     },

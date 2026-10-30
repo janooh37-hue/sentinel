@@ -37,7 +37,7 @@ export function StoreItemPicker({ id, value, onChange, disabled, invalid, descri
       </select>
       {query.error && (
         <div role="alert" className="text-sm text-accent">
-          <p>{storeErrorMessage(query.error, t)}</p>
+          <p>{storeErrorMessage(query.error)}</p>
           <Button type="button" variant="secondary" className="min-h-11" onClick={() => void query.refetch()}>{t('assets.store.state.retry')}</Button>
         </div>
       )}
