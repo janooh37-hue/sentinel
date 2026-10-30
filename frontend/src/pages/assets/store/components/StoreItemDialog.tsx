@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { DialogBody, DialogFooter, DialogShell, Field, FieldGrid, FormAlert } from '@/components/forms/DialogShell'
+import { StoreItemArt, STORE_ART_COLORS, STORE_ART_KINDS } from '@/components/StoreItemArt'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -57,6 +58,9 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
     contains_qty: item?.contains_qty == null ? '' : String(item.contains_qty),
     contains_unit_en: item?.contains_unit_en ?? '', contains_unit_ar: item?.contains_unit_ar ?? '',
   })
+  const [artKind, setArtKind] = useState<string | null>(item?.art_kind ?? null)
+  const [artColor, setArtColor] = useState<string | null>(item?.art_color ?? null)
+  const artColors = artColor && !STORE_ART_COLORS.some((color) => color === artColor) ? [...STORE_ART_COLORS, artColor] : STORE_ART_COLORS
   const [contains, setContains] = useState(item?.contains_qty != null)
   const [locked, setLocked] = useState(item != null && item.on_hand > 0)
   const [minimum, setMinimum] = useState<QuantityParts>(() => {
@@ -141,7 +145,7 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
       mutation.mutate({ name_en: values.name_en.trim(), name_ar: values.name_ar.trim() || null,
         category_id: Number(values.category_id), counting_unit_en: values.counting_unit_en.trim(), counting_unit_ar: values.counting_unit_ar.trim(),
         contains_qty: units.contains_qty, contains_unit_en: units.contains_unit_en?.trim() || null, contains_unit_ar: units.contains_unit_ar?.trim() || null,
-        minimum_level: minimumLevel })
+        minimum_level: minimumLevel, art_kind: artKind, art_color: artColor })
     }}>
       <DialogBody>
         <FormAlert id={alertId} message={error} />
@@ -173,6 +177,42 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
             }}>{t('assets.store.items.saveCategory')}</Button>
           </div>
         </fieldset>}
+        <fieldset className="space-y-3 rounded-lg border border-border p-3" disabled={busy}>
+          <legend className="px-1 text-sm font-semibold">{t('assets.store.items.picture')}</legend>
+          <p className="text-xs text-muted-foreground">{t('assets.store.items.pictureHint')}</p>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="rounded-lg bg-surface-raised p-2" role="img" aria-label={t('assets.store.items.picturePreview')}>
+              <StoreItemArt kind={artKind} color={artColor} categoryId={Number(values.category_id) || null} size={80} />
+            </div>
+            <fieldset className="min-w-0 flex-1 space-y-2" role="radiogroup">
+              <legend className="text-xs font-medium">{t('assets.store.items.pictureKind')}</legend>
+              <div className="flex flex-wrap gap-2">
+                {[null, ...STORE_ART_KINDS].map((kind) => <label key={kind ?? 'default'} className="relative cursor-pointer">
+                  <input type="radio" name={`${id}-art-kind`} value={kind ?? ''} checked={artKind === kind} onChange={() => setArtKind(kind)}
+                    aria-label={t(kind ? `assets.store.items.pictureKinds.${kind}` : 'assets.store.items.pictureDefault')} className="peer sr-only" />
+                  <span className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-border bg-surface peer-checked:border-primary peer-checked:ring-1 peer-checked:ring-primary peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary peer-disabled:opacity-50"
+                    title={t(kind ? `assets.store.items.pictureKinds.${kind}` : 'assets.store.items.pictureDefault')}>
+                    <StoreItemArt kind={kind} color={artColor} categoryId={Number(values.category_id) || null} size={44} />
+                  </span>
+                  <span aria-hidden="true" className="absolute end-0 top-0 hidden rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground peer-checked:block">✓</span>
+                </label>)}
+              </div>
+            </fieldset>
+          </div>
+          <fieldset className="space-y-2" role="radiogroup">
+            <legend className="text-xs font-medium">{t('assets.store.items.pictureColour')}</legend>
+            <div className="flex flex-wrap gap-2">
+              {[null, ...artColors].map((color) => <label key={color ?? 'default'} className="relative cursor-pointer">
+                <input type="radio" name={`${id}-art-color`} value={color ?? ''} checked={artColor === color} onChange={() => setArtColor(color)}
+                  aria-label={color ? t('assets.store.items.pictureColor', { color }) : t('assets.store.items.pictureCategoryColor')} className="peer sr-only" />
+                <span className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-border bg-surface p-2 peer-checked:border-primary peer-checked:ring-1 peer-checked:ring-primary peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary peer-disabled:opacity-50">
+                  {color ? <span aria-hidden="true" className="size-6 rounded-full border border-border" style={{ backgroundColor: color }} /> : <span className="text-xs">{t('assets.store.items.pictureAuto')}</span>}
+                </span>
+                <span aria-hidden="true" className="absolute end-0 top-0 hidden rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground peer-checked:block">✓</span>
+              </label>)}
+            </div>
+          </fieldset>
+        </fieldset>
         <FieldGrid>
           {textField('counting_unit_en', 'countingUnitEn', true)}
           {textField('counting_unit_ar', 'countingUnitAr', true)}

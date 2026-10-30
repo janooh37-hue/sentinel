@@ -51,6 +51,7 @@ describe('Store item dialog', () => {
     await user.click(screen.getByRole('button', { name: 'Save item' }))
     await waitFor(() => expect(api.updateStoreItem).toHaveBeenCalledWith(7, {
       name_en: 'Black tea', name_ar: 'شاي', category_id: 1, counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', minimum_level: 53,
+      art_kind: null, art_color: null,
     }, 'v1'))
   })
 
@@ -97,7 +98,7 @@ describe('Store item dialog', () => {
     await user.click(screen.getByRole('button', { name: 'Save item' }))
     await waitFor(() => expect(api.createStoreItem).toHaveBeenCalledWith({
       name_en: 'Tea', name_ar: null, category_id: 1, counting_unit_en: 'Carton', counting_unit_ar: 'كرتون',
-      contains_qty: 24, contains_unit_en: 'Jar', contains_unit_ar: 'علبة', minimum_level: 53,
+      contains_qty: 24, contains_unit_en: 'Jar', contains_unit_ar: 'علبة', minimum_level: 53, art_kind: null, art_color: null,
     }))
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['store'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['store-dashboard'] })
@@ -168,5 +169,60 @@ describe('Store item dialog', () => {
     await user.click(screen.getByRole('button', { name: 'Save item' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('This Store item was changed by someone else.')
     expect(onOpenChange).not.toHaveBeenCalled()
+  })
+
+  it('posts the selected drawing and colour on create and updates the live preview', async () => {
+    const user = userEvent.setup()
+    renderDialog()
+    await user.type(screen.getByRole('textbox', { name: 'Name in English' }), 'Coffee')
+    await user.click(screen.getByRole('combobox', { name: 'Category' }))
+    await user.click(await screen.findByRole('option', { name: 'Pantry' }))
+    const preview = screen.getByRole('img', { name: 'Picture preview' })
+    const initial = preview.innerHTML
+    await user.click(screen.getByRole('radio', { name: 'Jar' }))
+    await user.click(screen.getByRole('radio', { name: 'Colour #3a2216' }))
+    expect(screen.getByRole('radio', { name: 'Jar' })).toBeChecked()
+    expect(preview.innerHTML).not.toBe(initial)
+    expect(preview.querySelector('rect')).toHaveAttribute('fill', '#3a2216')
+    await user.click(screen.getByRole('button', { name: 'Save item' }))
+    await waitFor(() => expect(api.createStoreItem).toHaveBeenCalledWith(expect.objectContaining({
+      art_kind: 'jar', art_color: '#3a2216',
+    })))
+  })
+
+  it('prefills the picture on edit, preserves a custom colour and posts changed selections', async () => {
+    const user = userEvent.setup()
+    renderDialog({ ...ITEM, art_kind: 'gloves', art_color: '#abcdef' })
+    expect(screen.getByRole('radio', { name: 'Gloves' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Colour #abcdef' })).toBeChecked()
+    await user.click(screen.getByRole('radio', { name: 'Masks' }))
+    await user.click(screen.getByRole('radio', { name: 'Colour #2583b8' }))
+    await user.click(screen.getByRole('button', { name: 'Save item' }))
+    await waitFor(() => expect(api.updateStoreItem).toHaveBeenCalledWith(7, expect.objectContaining({
+      art_kind: 'mask', art_color: '#2583b8',
+    }), 'v1'))
+  })
+
+  it('clears both picture fields explicitly when defaults are selected', async () => {
+    const user = userEvent.setup()
+    renderDialog({ ...ITEM, art_kind: 'jar', art_color: '#3a2216' })
+    await user.click(screen.getByRole('radio', { name: 'Default carton' }))
+    await user.click(screen.getByRole('radio', { name: 'Category colour' }))
+    await user.click(screen.getByRole('button', { name: 'Save item' }))
+    await waitFor(() => expect(api.updateStoreItem).toHaveBeenCalledWith(7, expect.objectContaining({
+      art_kind: null, art_color: null,
+    }), 'v1'))
+  })
+
+  it('supports keyboard picture selection and localized Arabic group labels', async () => {
+    await i18n.changeLanguage('ar')
+    const user = userEvent.setup()
+    renderDialog(ITEM)
+    const drawings = screen.getByRole('radiogroup', { name: 'الرسم' })
+    const defaultDrawing = within(drawings).getByRole('radio', { name: 'الكرتون الافتراضي' })
+    defaultDrawing.focus()
+    await user.keyboard('[ArrowRight]')
+    expect(within(drawings).getByRole('radio', { name: 'كرتون' })).toBeChecked()
+    expect(screen.getByRole('radiogroup', { name: 'اللون' })).toBeInTheDocument()
   })
 })
