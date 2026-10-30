@@ -363,6 +363,12 @@ export type StoreLineRead = components['schemas']['StoreLineRead']
 export type StoreDeliveryCreate = components['schemas']['StoreDeliveryCreate']
 export type StoreDeliveryRead = components['schemas']['StoreDeliveryRead']
 export type StoreDeliveryNoteFile = components['schemas']['StoreDeliveryNoteFile']
+export type StoreDeliveryScan = components['schemas']['StoreDeliveryScan']
+export type StoreScanLine = components['schemas']['StoreScanLine']
+export type StoreHandoverCreate = components['schemas']['StoreHandoverCreate']
+export type StoreHandoverRead = components['schemas']['StoreHandoverRead']
+export type StoreMovementRead = components['schemas']['StoreMovementRead']
+export type StoreMovementKind = StoreMovementRead['kind']
 export type StoreCountWrite = components['schemas']['StoreCountWrite']
 export type StoreCountRead = components['schemas']['StoreCountRead']
 export type StoreExpectedBatch = components['schemas']['StoreExpectedBatch']
@@ -1825,6 +1831,11 @@ export const api = {
   createStoreDelivery: (body: StoreDeliveryCreate) =>
     request<StoreDeliveryRead>('POST', '/store/deliveries', body),
   deleteStoreDelivery: (id: number) => request<void>('DELETE', `/store/deliveries/${id}`),
+  scanStoreDelivery: (file: File): Promise<StoreDeliveryScan> => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<StoreDeliveryScan>('/store/deliveries/scan', form)
+  },
   uploadStoreDeliveryNote: (id: number, file: File) => {
     const form = new FormData()
     form.append('file', file)
@@ -1845,6 +1856,14 @@ export const api = {
   createStoreDisposal: (body: StoreDisposalCreate) =>
     request<StoreDisposalRead>('POST', '/store/disposals', body),
   deleteStoreDisposal: (id: number) => request<void>('DELETE', `/store/disposals/${id}`),
+  listStoreHandovers: () => request<StoreHandoverRead[]>('GET', '/store/handovers'),
+  createStoreHandover: (body: StoreHandoverCreate) =>
+    request<StoreHandoverRead>('POST', '/store/handovers', body),
+  getStoreHandover: (id: number) => request<StoreHandoverRead>('GET', `/store/handovers/${id}`),
+  deleteStoreHandover: (id: number) => request<void>('DELETE', `/store/handovers/${id}`),
+  listStoreHandoverTakers: () => request<string[]>('GET', '/store/handovers/takers'),
+  listStoreMovements: (params: { kind?: StoreMovementKind; q?: string } = {}) =>
+    request<StoreMovementRead[]>('GET', `/store/movements${qs(params)}`),
   getStoreDashboard: () => request<StoreDashboard>('GET', '/store/dashboard'),
   uploadLeaveCertificate: (id: number, file: File) => {
     const form = new FormData()
