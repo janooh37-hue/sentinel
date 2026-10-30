@@ -364,12 +364,25 @@ cross-app combobox hook and generic query-state frame (tier C).
 - Dashboard month-strip metadata is `counts_recorded` (total counts),
   `usage_ready` (a consecutive-count window exists), `suggestion_count`
   (suggestions array length), plus the existing `expiring_soon_days: 60`.
-- Backend selection (`store or migration or extraction`): 161 passed, 1 unrelated
+- Backend selection (`store or migration or extraction`): 189 passed, 1 unrelated
   migration test failed, 3948 deselected. The old inmate-violations migration test
   compares pre-head Book columns against the full head's existing
   `confidentiality`/`send_state` columns. Ruff and numbering pass; there is one
   head, `0111_store_room`. Repo-config mypy reports 59 errors in 14 untouched
   files, with none in the changed files.
-- Art input handling, scan/aliases/noted-quantity business rules, opening scripts,
-  generated contracts and frontend implementation remain separate slices.
+- Item art is exposed on item, picker and batch-reference responses, validated
+  on create/update, and included in all 13 opening items. `store_set_art.py`
+  fills only null drawing fields by exact English name.
+- Delivery-note scanning is implemented without persistence, using the shared
+  upload policy and word-box OCR under exactly one OCR gate. The parser ignores
+  prices and document headings, normalizes Arabic-Indic digits, and returns
+  doubtful descriptions for confirmation. Page indices are zero-based.
+- Delivery creation supports input-only source text, normalized aliases and
+  noted-versus-received quantities. Differences require a reason; receiving zero
+  requires a positive noted quantity and changes no stock. There is no delivery
+  update route in the existing API; count updates remain unchanged.
+- OpenAPI and TypeScript contracts include the new endpoints and store fields.
+  The API client has typed handover, movement-filter and multipart scan methods.
+  Frontend implementation remains a separate slice; typecheck flags existing
+  fixtures and the count page's locally constructed batch rows that omit art.
 
