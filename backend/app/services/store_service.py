@@ -28,7 +28,7 @@ from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.clock import organization_today, utcnow
 from app.core.expiry import expiry_status
-from app.core.uploads import SniffedUploadPolicy, validate_sniffed_upload
+from app.core.uploads import SniffedUploadPolicy, resolve_under, validate_sniffed_upload
 from app.db.models import (
     StoreBatch,
     StoreCategory,
@@ -861,9 +861,8 @@ def create_delivery(
 
 
 def _resolve_stored_path(relative: str, delivery_id: int) -> Path:
-    data_dir = get_settings().data_dir.resolve()
-    path = (data_dir / relative).resolve()
-    if not path.is_relative_to(data_dir):
+    path = resolve_under(get_settings().data_dir, relative)
+    if path is None:
         raise ValidationFailedError(
             "STORE_FILE_INVALID_PATH",
             "The stored delivery note path is outside the data directory.",

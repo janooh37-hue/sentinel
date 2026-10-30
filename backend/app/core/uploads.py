@@ -107,3 +107,13 @@ def validate_sniffed_upload(
             media_type=media_type,
         )
     return safe_name, normalized_media
+
+
+def resolve_under(root: Path, relative: str) -> Path | None:
+    """``root / relative`` fully resolved (symlinks too), or ``None`` if it escapes ``root``.
+
+    Existence is not checked: cleanup callers tolerate already-missing files.
+    """
+    base = root.resolve()
+    path = (base / relative).resolve()
+    return path if path.is_relative_to(base) else None

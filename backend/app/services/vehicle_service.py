@@ -24,6 +24,7 @@ from app.core.uploads import (
     MEDIA_TYPES_BY_EXTENSION,
     SniffedUploadPolicy,
     normalize_media_type,
+    resolve_under,
     safe_filename,
     validate_sniffed_upload,
 )
@@ -2312,9 +2313,8 @@ def update_certificate(
 
 
 def _resolve_file_path(row: VehicleFile) -> Path:
-    data_dir = get_settings().data_dir.resolve()
-    path = (data_dir / row.path).resolve()
-    if not path.is_relative_to(data_dir):
+    path = resolve_under(get_settings().data_dir, row.path)
+    if path is None:
         raise ValidationFailedError(
             "VEHICLE_FILE_INVALID_PATH",
             "The stored vehicle file path is outside the data directory.",
