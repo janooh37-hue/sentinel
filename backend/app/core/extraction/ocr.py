@@ -205,6 +205,107 @@ def ocr_bytes_to_text(raw: bytes) -> str:
     return extract_text(load_image(raw)).text
 
 
+@dataclass(frozen=True, slots=True)
+class OcrWord:
+    """One recognised word. ``confidence`` is Tesseract's 0-100 score.
+
+    Box is in pixels of the page raster. Words sharing ``(block, paragraph,
+    line)`` sit on the same text line.
+    """
+
+    text: str
+    confidence: float
+    left: int
+    top: int
+    width: int
+    height: int
+    block: int
+    paragraph: int
+    line: int
+
+
+@dataclass(frozen=True, slots=True)
+class OcrPage:
+    """Size of the raster the word boxes refer to, and its words in reading order."""
+
+    width: int
+    height: int
+    words: tuple[OcrWord, ...]
+
+
+def _page_words(image: Image.Image, *, lang: str) -> OcrPage:
+    cmd = _resolve_tesseract_cmd()
+    if cmd is None:
+        raise OcrUnavailableError(
+            "Tesseract is not installed. See docs/superpowers/ocr-server-setup.md."
+        )
+    import pytesseract
+
+    pytesseract.pytesseract.tesseract_cmd = cmd
+    img = _prepare(image)
+    width, height = img.size
+    try:
+        data = pytesseract.image_to_data(
+            img, lang=lang, config=_PSM, output_type=pytesseract.Output.DICT
+        )
+    except pytesseract.TesseractError as exc:
+        raise OcrUnavailableError(
+            f"Tesseract failed to run with languages {lang!r}. Those language packs "
+            "must be installed. See docs/superpowers/ocr-server-setup.md."
+        ) from exc
+    finally:
+        if img is not image:
+            img.close()
+    words: list[OcrWord] = []
+    for index, raw_text in enumerate(data.get("text", [])):
+        text = str(raw_text).strip()
+        try:
+            confidence = float(data["conf"][index])
+        except (TypeError, ValueError):
+            continue
+        if not text or confidence < 0:
+            continue
+        words.append(
+            OcrWord(
+                text=text,
+                confidence=confidence,
+                left=int(data["left"][index]),
+                top=int(data["top"][index]),
+                width=int(data["width"][index]),
+                height=int(data["height"][index]),
+                block=int(data["block_num"][index]),
+                paragraph=int(data["par_num"][index]),
+                line=int(data["line_num"][index]),
+            )
+        )
+    return OcrPage(width=width, height=height, words=tuple(words))
+
+
+def word_boxes_from_bytes(raw: bytes, *, lang: str = "eng") -> list[OcrPage]:
+    """Word boxes for every page of an uploaded image or PDF.
+
+    Sniffs ``%PDF`` like :func:`ocr_bytes_to_text`; PDF pages are always
+    rasterised (a text layer has no boxes). Boxes are in pixels of the raster
+    Tesseract read — small images are upscaled first — and each page reports
+    that raster's size. Does not acquire :data:`OCR_GATE`: the caller holds it.
+    Raises :class:`OcrUnavailableError` or :class:`InvalidImageError`.
+    """
+    if not raw.startswith(b"%PDF"):
+        image = load_image(raw)
+        try:
+            return [_page_words(image, lang=lang)]
+        finally:
+            image.close()
+    pages: list[OcrPage] = []
+    with closing(pdf_to_images(raw)) as images:
+        for image in images:
+            try:
+                pages.append(_page_words(image, lang=lang))
+            finally:
+                image.close()
+    return pages
+
+
 def qr_refs_from_bytes(raw: bytes) -> list[str]:
     """GSSG refs decoded from QR symbols in an upload (image or PDF).
 

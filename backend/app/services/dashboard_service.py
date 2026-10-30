@@ -25,6 +25,7 @@ from pydantic import ValidationError
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
+from app.core.clock import organization_today
 from app.db.models import (
     Book,
     Document,
@@ -138,7 +139,7 @@ def get_summary(
     use the Records page's UTC creation-day semantics, including voided rows.
     """
     if today is None:
-        today = datetime.now(book_service._ORGANIZATION_TIMEZONE).date()
+        today = organization_today()
     can_view_leaves = user is None or perm_service.has_capability(db, user, "leaves.view")
     if user is not None:
         owner_user_id = user.id

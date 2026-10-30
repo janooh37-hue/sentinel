@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import re
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -41,6 +40,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS
+from app.core.uploads import clean_filename
 from app.core.vault_manager import Vault
 from app.db.models import Employee, LedgerEntry, VaultFile
 from app.schemas.vault_file import VaultEntry, VaultKind, VaultTree
@@ -55,16 +55,6 @@ MAX_UPLOAD_BYTES: Final[int] = 25 * 1024 * 1024  # 25 MiB
 PDF_THUMB_DPI: Final[int] = 144
 PDF_THUMB_FORMAT: Final[str] = "png"
 
-# Anything outside this character class is replaced with an underscore. Keeps
-# unicode (Arabic filenames) intact while killing path separators / nulls.
-_UNSAFE_CHARS = re.compile(
-    # Path separators / control chars PLUS unicode bidi-control, zero-width
-    # and BOM codepoints that pass ``isalnum`` but enable display-name
-    # spoofing (e.g. U+202E RIGHT-TO-LEFT OVERRIDE in a filename).
-    "[\\/:*?\"<>|\x00-\x1f"
-    "\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]"
-)
-
 
 def _safe_filename(raw: str) -> str:
     """Strip directory components and forbidden chars from ``raw``.
@@ -72,16 +62,12 @@ def _safe_filename(raw: str) -> str:
     Empty results (e.g. user uploaded ``../..``) raise — there's no sane
     default name to fall back to.
     """
-    # ``Path(raw).name`` already drops directory components, but only against
-    # the OS separator. On POSIX the rule is different from Windows, so we do
-    # both before falling back to ``Path``.
-    candidate = raw.replace("\\", "/").rsplit("/", 1)[-1]
-    candidate = Path(candidate).name
-    cleaned = _UNSAFE_CHARS.sub("_", candidate).strip(". ")
+    # ``Path(...).name`` also drops a Windows drive prefix (``C:name``) on the
+    # production host before the shared cleaner replaces unsafe characters.
+    candidate = Path(raw.replace("\\", "/").rsplit("/", 1)[-1]).name
+    cleaned = clean_filename(candidate).strip(". ")
     if not cleaned:
-        raise ValidationFailedError(
-            "VAULT_BAD_FILENAME", "Filename is empty or invalid", raw=raw
-        )
+        raise ValidationFailedError("VAULT_BAD_FILENAME", "Filename is empty or invalid", raw=raw)
     return cleaned
 
 
@@ -140,9 +126,7 @@ def list_tree(g_number: str) -> VaultTree:
     return VaultTree(employee_id=g_number, folders=folders)
 
 
-def save_upload(
-    g_number: str, kind: str, filename: str, data: bytes
-) -> VaultEntry:
+def save_upload(g_number: str, kind: str, filename: str, data: bytes) -> VaultEntry:
     """Persist an uploaded file into the employee's vault."""
     typed_kind = _ensure_kind(kind)
     if len(data) == 0:
@@ -198,9 +182,7 @@ def resolve_file(g_number: str, kind: str, filename: str) -> Path:
     target = _kind_dir(vault, g_number, typed_kind) / safe_name
     resolved = target.resolve()
     if vault.root.resolve() not in resolved.parents:
-        raise AppError(
-            "VAULT_PATH_ESCAPE", "Resolved path escaped the vault root", http_status=400
-        )
+        raise AppError("VAULT_PATH_ESCAPE", "Resolved path escaped the vault root", http_status=400)
     if not resolved.is_file():
         raise NotFoundError(
             "VAULT_FILE_NOT_FOUND",
@@ -362,7 +344,10 @@ def import_from_ledger_attachment(
     dest = Vault.collision_safe_name(target_dir, safe_name)
 
     dest_resolved_parent = dest.parent.resolve()
-    if vault.root.resolve() not in dest_resolved_parent.parents and dest_resolved_parent != vault.root.resolve():
+    if (
+        vault.root.resolve() not in dest_resolved_parent.parents
+        and dest_resolved_parent != vault.root.resolve()
+    ):
         raise AppError(
             "VAULT_PATH_ESCAPE",
             "Resolved destination path escaped the vault root",
@@ -385,7 +370,11 @@ def import_from_ledger_attachment(
     db.refresh(row)
     log.info(
         "ledger->vault: entry=%d idx=%d -> %s/%s (%d bytes)",
-        entry_id, attachment_index, employee_id, typed_kind, size_bytes,
+        entry_id,
+        attachment_index,
+        employee_id,
+        typed_kind,
+        size_bytes,
     )
     return row
 
@@ -403,14 +392,17 @@ def import_bytes(
         raise ValidationFailedError("VAULT_EMPTY_FILE", "Uploaded file is empty")
     if len(data) > MAX_UPLOAD_BYTES:
         raise ValidationFailedError(
-            "VAULT_FILE_TOO_LARGE", f"File exceeds {MAX_UPLOAD_BYTES} bytes",
-            max_bytes=MAX_UPLOAD_BYTES, size=len(data),
+            "VAULT_FILE_TOO_LARGE",
+            f"File exceeds {MAX_UPLOAD_BYTES} bytes",
+            max_bytes=MAX_UPLOAD_BYTES,
+            size=len(data),
         )
     safe_name = _safe_filename(filename)
     ext = Path(safe_name).suffix.lower()
     if ext not in ALLOWED_DOC_EXTS:
         raise ValidationFailedError(
-            "VAULT_BAD_EXTENSION", f"File type {ext!r} is not allowed",
+            "VAULT_BAD_EXTENSION",
+            f"File type {ext!r} is not allowed",
             allowed=sorted(ALLOWED_DOC_EXTS),
         )
     employee = db.get(Employee, employee_id)
@@ -423,20 +415,28 @@ def import_bytes(
     dest = Vault.collision_safe_name(target_dir, safe_name)
     dest_resolved = dest.resolve()
     if vault.root.resolve() not in dest_resolved.parents:
-        raise AppError("VAULT_PATH_ESCAPE", "Resolved upload path escaped the vault root", http_status=500)
+        raise AppError(
+            "VAULT_PATH_ESCAPE", "Resolved upload path escaped the vault root", http_status=500
+        )
     dest.write_bytes(data)
     rel_to_vault = dest_resolved.relative_to(vault.root.resolve()).as_posix()
 
     row = VaultFile(
-        employee_id=employee_id, kind=typed_kind, filename=dest.name,
-        path=rel_to_vault, size_bytes=dest.stat().st_size,
+        employee_id=employee_id,
+        kind=typed_kind,
+        filename=dest.name,
+        path=rel_to_vault,
+        size_bytes=dest.stat().st_size,
     )
     db.add(row)
     db.commit()
     db.refresh(row)
     log.info(
         "vault import_bytes: %s/%s -> %s (%d bytes)",
-        employee_id, typed_kind, dest.name, dest.stat().st_size,
+        employee_id,
+        typed_kind,
+        dest.name,
+        dest.stat().st_size,
     )
     return row
 

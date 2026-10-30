@@ -54,7 +54,7 @@ def _client_for(db: Session, user: User) -> TestClient:
 
 @pytest.fixture(autouse=True)
 def _fixed_today(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(store_service, "today", lambda: TODAY)
+    monkeypatch.setattr(store_service, "organization_today", lambda: TODAY)
     settings = get_settings()
     monkeypatch.setattr(settings, "data_dir", tmp_path / "store-data")
     settings.ensure_dirs()
