@@ -21,7 +21,7 @@ vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 const BATCH: StoreBatchRead = {
   id: 91, item_id: 12, item_code: 'ST-0012', item_name_en: 'Tea', item_name_ar: 'شاي',
   counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 24,
-  contains_unit_en: 'Jar', contains_unit_ar: 'علبة', expiry_date: '2025-09-30',
+  contains_unit_en: 'Jar', contains_unit_ar: 'علبة', art_kind: null, art_color: null, expiry_date: '2025-09-30',
   expiry_month_only: true, on_hand: 60, days_to_expiry: -300,
 }
 const DISPOSAL: StoreDisposalRead = {
@@ -29,7 +29,7 @@ const DISPOSAL: StoreDisposalRead = {
   item_name_en: BATCH.item_name_en, item_name_ar: BATCH.item_name_ar,
   counting_unit_en: BATCH.counting_unit_en, counting_unit_ar: BATCH.counting_unit_ar,
   contains_qty: BATCH.contains_qty, contains_unit_en: BATCH.contains_unit_en,
-  contains_unit_ar: BATCH.contains_unit_ar, expiry_date: BATCH.expiry_date,
+  contains_unit_ar: BATCH.contains_unit_ar, art_kind: null, art_color: null, expiry_date: BATCH.expiry_date,
   expiry_month_only: true, disposed_on: '2026-09-10', quantity: 29, reason: 'expired',
   note: 'Removed from pantry shelf', created_by_user_id: 1, created_at: '2026-09-10T10:00:00',
 }

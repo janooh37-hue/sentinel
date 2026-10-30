@@ -18,7 +18,7 @@ const ITEM: StoreItemRead = {
   id: 7, code: 'ST-0007', name_en: 'Tea', name_ar: 'شاي', category_id: 1,
   category: { id: 1, name_en: 'Pantry', name_ar: 'ضيافة' },
   counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 24,
-  contains_unit_en: 'Jar', contains_unit_ar: 'علبة', minimum_level: 72, on_hand: 53,
+  contains_unit_en: 'Jar', contains_unit_ar: 'علبة', art_kind: null, art_color: null, minimum_level: 72, on_hand: 53,
   archived_at: null, created_at: '2026-10-29T10:00:00', updated_at: null, version: 'v1',
 }
 function renderPage() {

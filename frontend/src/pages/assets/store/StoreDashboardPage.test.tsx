@@ -15,7 +15,7 @@ vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => f
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('./hqRequest', () => ({ canOpenHqMaterialRequest: vi.fn(), openHqMaterialRequest: vi.fn() }))
 
-const item = { item_id: 1, item_code: 'ST-0001', item_name_en: 'Tea', item_name_ar: 'شاي', counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 12, contains_unit_en: 'Jar', contains_unit_ar: 'علبة' }
+const item = { item_id: 1, item_code: 'ST-0001', item_name_en: 'Tea', item_name_ar: 'شاي', counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 12, contains_unit_en: 'Jar', contains_unit_ar: 'علبة', art_kind: null, art_color: null }
 const dashboard: StoreDashboard = {
   today: '2026-10-29', expiring_soon_days: 60,
   expired: [{ ...item, batch_id: 1, expiry_date: '2026-09-30', expiry_month_only: true, on_hand: 14, days_left: -29 }],
@@ -24,6 +24,7 @@ const dashboard: StoreDashboard = {
   usage: { months: ['2026-08', '2026-09', '2026-10'], rows: [{ ...item, values: [null, -2, 48] }] },
   suggestions: [{ ...item, average_usage: 23, on_hand: 10, suggested: 13, suggested_units: 2 }, { ...item, item_id: 2, item_code: 'ST-0002', item_name_en: 'Water', average_usage: 0, on_hand: 10, suggested: 0, suggested_units: 0 }],
   last_count_on: '2026-10-20', last_delivery_on: '2026-10-21',
+  counts_recorded: 4, usage_ready: true, suggestion_count: 2,
 }
 
 function renderPage() {
@@ -37,7 +38,7 @@ beforeEach(async () => {
   await i18n.changeLanguage('en')
   vi.mocked(canOpenHqMaterialRequest).mockReturnValue(true)
   vi.spyOn(api, 'getStoreDashboard').mockResolvedValue(dashboard)
-  vi.spyOn(api, 'listStoreItems').mockResolvedValue([{ id: 1, code: item.item_code, name_en: 'Tea', name_ar: 'شاي', category_id: 1, category: { id: 1, name_en: 'Pantry', name_ar: 'ضيافة' }, counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 12, contains_unit_en: 'Jar', contains_unit_ar: 'علبة', minimum_level: 48, archived_at: null, created_at: '2026-10-01T00:00:00Z', updated_at: null, on_hand: 38, version: '1' }])
+  vi.spyOn(api, 'listStoreItems').mockResolvedValue([{ id: 1, code: item.item_code, name_en: 'Tea', name_ar: 'شاي', category_id: 1, category: { id: 1, name_en: 'Pantry', name_ar: 'ضيافة' }, counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 12, contains_unit_en: 'Jar', contains_unit_ar: 'علبة', art_kind: null, art_color: null, minimum_level: 48, archived_at: null, created_at: '2026-10-01T00:00:00Z', updated_at: null, on_hand: 38, version: '1' }])
 })
 
 describe('Store dashboard', () => {

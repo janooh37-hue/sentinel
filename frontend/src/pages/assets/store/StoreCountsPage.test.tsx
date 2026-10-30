@@ -18,7 +18,7 @@ const COUNT: StoreCountRead = {
   id: 7, month: '2026-09', counted_on: '2026-09-20', note: 'Monthly shelf count',
   lines: [{
     id: 1, batch_id: 10, item_id: 1, item_code: 'ST-0001', item_name_en: 'Tea', item_name_ar: 'شاي',
-    counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 24, contains_unit_en: 'jar', contains_unit_ar: 'علبة',
+    counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 24, contains_unit_en: 'jar', contains_unit_ar: 'علبة', art_kind: null, art_color: null,
     expiry_date: '2028-09-30', expiry_month_only: true, quantity: 77,
   }], created_at: '2026-09-20T10:00:00', updated_at: null, created_by_user_id: 1,
 }

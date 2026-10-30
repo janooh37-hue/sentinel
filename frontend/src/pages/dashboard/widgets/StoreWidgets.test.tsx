@@ -19,7 +19,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 const batch: StoreDashboardBatch = {
   item_id: 1, item_code: 'ST-0001', item_name_en: 'Tea', item_name_ar: 'شاي',
   counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: null,
-  contains_unit_en: null, contains_unit_ar: null, batch_id: 1,
+  contains_unit_en: null, contains_unit_ar: null, art_kind: null, art_color: null, batch_id: 1,
   expiry_date: '2026-10-01', expiry_month_only: false, on_hand: 3, days_left: -28,
 }
 const dashboard: StoreDashboard = {
@@ -28,6 +28,7 @@ const dashboard: StoreDashboard = {
   expiring_soon: [{ ...batch, batch_id: 2, item_name_en: 'Water', item_name_ar: null, days_left: 10, expiry_date: '2026-11-08' }],
   low_stock: [{ ...batch, minimum_level: 5 }],
   usage: { months: [], rows: [] }, suggestions: [], last_count_on: null, last_delivery_on: null,
+  counts_recorded: 0, usage_ready: false, suggestion_count: 0,
 }
 
 function renderWidget(kind: 'expiry' | 'low', tier: WidgetTier = 'list', rows = 2) {

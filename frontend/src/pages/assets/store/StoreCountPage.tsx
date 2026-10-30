@@ -142,7 +142,7 @@ function CountForm({ saved }: { saved?: StoreCountRead }): React.JSX.Element {
     setAdded((previous) => [...previous, {
       item_id: item.id, item_code: item.code, item_name_en: item.name_en, item_name_ar: item.name_ar,
       counting_unit_en: item.counting_unit_en, counting_unit_ar: item.counting_unit_ar,
-      contains_qty: item.contains_qty, contains_unit_en: item.contains_unit_en, contains_unit_ar: item.contains_unit_ar,
+      contains_qty: item.contains_qty, contains_unit_en: item.contains_unit_en, contains_unit_ar: item.contains_unit_ar, art_kind: null, art_color: null,
       expiry_date: expiryDate, expiry_month_only: value?.length === 7, removable: true,
     }])
     setAddError('')
