@@ -13,6 +13,7 @@ import { ApiError, apiErrorMessage } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { formatNumber, isArabic, localized } from '@/lib/language'
 import { monthEndIso } from '@/lib/monthEnd'
+import { todayIso } from '@/pages/vehicles/vehicleUtils'
 
 export type Translate = (key: string, options?: Record<string, unknown>) => string
 
@@ -191,6 +192,26 @@ export function quantityFromParts(parts: QuantityParts, item: StoreUnits): numbe
   const rest = parse(loose)
   if (Number.isNaN(whole) || Number.isNaN(rest)) return NaN
   return toBaseUnits(whole, rest, item)
+}
+
+/** Why a `quantityFromParts` result cannot be saved, or null when it can.
+ *  `missing`: nothing entered (unless `allowBlank`); `invalid`: not a safe whole
+ *  number or below `min`; `aboveMax`: more than `max`. Callers own the copy. */
+export type QuantityIssue = 'missing' | 'invalid' | 'aboveMax'
+
+export function quantityIssue(
+  quantity: number | null,
+  rules: { min: number; max?: number; allowBlank?: boolean },
+): QuantityIssue | null {
+  if (quantity === null) return rules.allowBlank ? null : 'missing'
+  if (!Number.isSafeInteger(quantity) || quantity < rules.min) return 'invalid'
+  if (rules.max !== undefined && quantity > rules.max) return 'aboveMax'
+  return null
+}
+
+/** A record's business date: a complete ISO `YYYY-MM-DD` that is not in the future. */
+export function isBusinessDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && value <= todayIso()
 }
 
 export type ExpiryMode = 'date' | 'month' | 'none'

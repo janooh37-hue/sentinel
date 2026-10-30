@@ -28,8 +28,10 @@ import {
   type ExpiryValue,
   formatExpiry,
   invalidateStoreQueries,
+  isBusinessDate,
   itemName,
   quantityFromParts,
+  quantityIssue,
   type QuantityParts,
   storeErrorMessage,
   storeKeys,
@@ -78,7 +80,7 @@ function CountForm({ saved }: { saved?: StoreCountRead }): React.JSX.Element {
   const [acknowledgedMissing, setAcknowledgedMissing] = useState<string[]>([])
   const [expiry, setExpiry] = useState<ExpiryValue>(DEFAULT_EXPIRY)
   const [addError, setAddError] = useState('')
-  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(countedOn) && countedOn <= todayIso()
+  const validDate = isBusinessDate(countedOn)
   const expected = useQuery({ queryKey: storeKeys.expected(countedOn), queryFn: () => api.getStoreCountExpected(countedOn), enabled: validDate })
   const picker = useQuery({ queryKey: storeKeys.picker, queryFn: api.listStorePickerItems })
   // Missing-batch details identify batches but omit their units and month-only flag.
@@ -104,8 +106,7 @@ function CountForm({ saved }: { saved?: StoreCountRead }): React.JSX.Element {
   }
   const unresolvedMissing = missing.some((entry) => !rows.some((row) => row.batch_id === entry.batch_id || (row.item_code === entry.item_code && row.expiry_date === entry.expiry_date)))
   const entered = rows.filter((row) => {
-    const quantity = quantityFromParts(quantities[batchKey(row.item_id, row.expiry_date)] ?? EMPTY_QUANTITY, row)
-    return quantity !== null && Number.isSafeInteger(quantity)
+    return quantityIssue(quantityFromParts(quantities[batchKey(row.item_id, row.expiry_date)] ?? EMPTY_QUANTITY, row), { min: 0 }) === null
   }).length
 
   const mutation = useMutation({
@@ -154,7 +155,8 @@ function CountForm({ saved }: { saved?: StoreCountRead }): React.JSX.Element {
     for (const row of rows) {
       const key = batchKey(row.item_id, row.expiry_date)
       const quantity = quantityFromParts(quantities[key] ?? EMPTY_QUANTITY, row)
-      if (quantity === null || !Number.isSafeInteger(quantity)) nextErrors[key] = t(quantity === null ? 'assets.store.counts.required' : 'assets.store.counts.invalidQuantity')
+      const issue = quantityIssue(quantity, { min: 0 })
+      if (quantity === null || issue) nextErrors[key] = t(issue === 'missing' ? 'assets.store.counts.required' : 'assets.store.counts.invalidQuantity')
       else lines.push({ item_id: row.item_id, expiry: expiryInput(row), quantity })
     }
     setErrors(nextErrors)

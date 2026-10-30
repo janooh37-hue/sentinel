@@ -13,6 +13,7 @@ import {
   EMPTY_QUANTITY,
   invalidateStoreQueries,
   quantityFromParts,
+  quantityIssue,
   type QuantityParts,
   splitBase,
   storeErrorMessage,
@@ -132,7 +133,7 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
       const minimumLevel = quantityFromParts(minimum, units)
       if (!values.name_en.trim() || !values.category_id || !values.counting_unit_en.trim() || !values.counting_unit_ar.trim() ||
         (!locked && contains && (!/^\d+$/.test(values.contains_qty) || !Number.isSafeInteger(Number(values.contains_qty)) || Number(values.contains_qty) < 2 || !values.contains_unit_en.trim() || !values.contains_unit_ar.trim())) ||
-        (minimumLevel != null && (!Number.isSafeInteger(minimumLevel) || minimumLevel < 0))) {
+        quantityIssue(minimumLevel, { min: 0, allowBlank: true })) {
         setError(t('assets.store.items.validation'))
         return
       }

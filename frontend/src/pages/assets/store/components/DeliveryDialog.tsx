@@ -18,8 +18,10 @@ import {
   expiryFromValue,
   type ExpiryValue,
   invalidateStoreQueries,
+  isBusinessDate,
   itemName,
   quantityFromParts,
+  quantityIssue,
   type QuantityParts,
   storeErrorMessage,
 } from '../storeUtils'
@@ -102,7 +104,7 @@ function DeliveryForm({ onOpenChange, onSaved, onBusyChange }: Omit<Props, 'open
       const expiry = expiryFromValue(line.expiry)
       if (expiry === undefined) issue.expiry = t('assets.store.deliveries.expiryRequired')
       const quantity = line.item ? quantityFromParts(line.quantity, line.item) : null
-      if (quantity == null || !Number.isSafeInteger(quantity) || quantity < 1) issue.quantity = t('assets.store.deliveries.quantityRequired')
+      if (quantityIssue(quantity, { min: 1 })) issue.quantity = t('assets.store.deliveries.quantityRequired')
       if (line.item && expiry !== undefined) {
         const key = batchKey(line.item.id, expiry)
         if (seen.has(key)) issue.expiry = t('assets.store.deliveries.duplicateLine')
@@ -136,7 +138,7 @@ function DeliveryForm({ onOpenChange, onSaved, onBusyChange }: Omit<Props, 'open
           <Field id={`${id}-date`} label={t('assets.store.deliveries.receivedOn')} required error={errors.received_on?.message}>
             <Input id={`${id}-date`} type="date" dir="ltr" max={todayIso()} className="min-h-11 font-mono tabular-nums" aria-invalid={!!errors.received_on || undefined} {...register('received_on', {
               required: t('assets.store.deliveries.dateRequired'),
-              validate: (value) => (/^\d{4}-\d{2}-\d{2}$/.test(value) && value <= todayIso()) || t('assets.store.deliveries.dateRequired'),
+              validate: (value) => isBusinessDate(value) || t('assets.store.deliveries.dateRequired'),
             })} disabled={mutation.isPending} />
           </Field>
           <Field id={`${id}-note`} label={t('assets.store.deliveries.note')}>

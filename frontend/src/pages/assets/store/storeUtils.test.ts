@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/lib/api'
 import i18n from '@/lib/i18n'
+import { todayIso } from '@/pages/vehicles/vehicleUtils'
 
 import {
   batchExpiryDate,
@@ -9,7 +10,9 @@ import {
   expiryFromValue,
   formatExpiry,
   formatQuantity,
+  isBusinessDate,
   quantityFromParts,
+  quantityIssue,
   splitBase,
   storeErrorMessage,
   type StoreUnits,
@@ -68,6 +71,27 @@ describe('store quantities', () => {
     expect(formatQuantity(-3, BOXES)).toBe('−3 صندوق')
     expect(formatQuantity(-24, JARS)).toBe('−1 كرتون')
     expect(formatQuantity(-3, JARS)).toBe('−3 علبة')
+  })
+})
+
+describe('store quantity and date rules', () => {
+  it('applies each record type\'s bounds', () => {
+    expect(quantityIssue(null, { min: 0 })).toBe('missing')
+    expect(quantityIssue(null, { min: 0, allowBlank: true })).toBeNull()
+    expect(quantityIssue(0, { min: 0 })).toBeNull()
+    expect(quantityIssue(0, { min: 1 })).toBe('invalid')
+    expect(quantityIssue(Number.NaN, { min: 0, allowBlank: true })).toBe('invalid')
+    expect(quantityIssue(2 ** 53, { min: 1 })).toBe('invalid')
+    expect(quantityIssue(5, { min: 1, max: 5 })).toBeNull()
+    expect(quantityIssue(6, { min: 1, max: 5 })).toBe('aboveMax')
+  })
+
+  it('accepts only complete ISO dates up to today', () => {
+    expect(isBusinessDate(todayIso())).toBe(true)
+    expect(isBusinessDate('2026-01-05')).toBe(true)
+    expect(isBusinessDate('9999-12-31')).toBe(false)
+    expect(isBusinessDate('2026-1-5')).toBe(false)
+    expect(isBusinessDate('')).toBe(false)
   })
 })
 
