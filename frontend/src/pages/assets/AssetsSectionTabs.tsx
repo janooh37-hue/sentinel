@@ -30,7 +30,7 @@ export function AssetsSectionTabs(): React.JSX.Element {
       className="relative z-[3] mx-auto flex max-w-[1400px] items-end gap-1 px-4 md:px-8"
     >
       {has('store.view') && (
-        <NavLink to="/assets/store" className={tabClass}>
+        <NavLink to="/holdings/store" className={tabClass}>
           {t('assets.sectionTabs.store')}
         </NavLink>
       )}

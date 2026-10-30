@@ -87,13 +87,17 @@ Errors use `STORE_*` codes. Every mutation writes an `AuditLog` row
 
 ## Frontend
 
-- Nav `{ to: '/assets', key: 'nav.assets', Icon: Boxes, cap: 'store.view' }` after
-  `/vehicles`. `/assets` redirects to `/assets/store`.
+- Nav `{ to: '/holdings', key: 'nav.assets', Icon: Boxes, cap: 'store.view' }` after
+  `/vehicles`. `/holdings` redirects to `/holdings/store`. The URL is not `/assets`:
+  that prefix is the backend's mount for Vite's hashed build files and the service
+  worker caches it cache-first, so a page there 404s on reload and can be pinned
+  stale by installed apps (found in the merged smoke test, 2026-10-30).
 - Section tabs (NavLink sub-routes, EmployeesSectionTabs style): Assets → Store.
-  Store sub-tabs: Dashboard `/assets/store`, Items `/items`, Deliveries
+  Store sub-tabs: Dashboard `/holdings/store`, Items `/items`, Deliveries
   `/deliveries`, Counts `/counts` (+ `/counts/new`, `/counts/:id`), Disposals
   `/disposals`. Desktop tables and mobile cards for every list; count screen is
   mobile-first.
+- MRF item picker fills the English HQ paper in English whatever the UI language.
 - Dashboard: expired, expiring soon (60 days), low stock, usage table (last 6
   months), suggestions with **Create HQ request** → `saveDraft('Material Request
   Form', {items})` then `/services/material_request?paper=en`; ApplicationPage
@@ -127,6 +131,14 @@ refuses if any Store item exists.
 ## Progress
 
 - 2026-10-29: design, glossary, ADR committed (`ba4deae7`).
+- 2026-10-29/30: three dtop writers (store-backend, store-fe-pages,
+  store-fe-links) merged into `feat/assets-store`. Backend review (6 should-fix:
+  backdated disposals, RFC 5987 filenames, serialized stock writes, atomic import,
+  upload cleanup) fixed by the backend writer. Both frontend writers ran the
+  i18n-rtl reviewer; integrator fixed its open must-fix (the picker fills the English
+  HQ paper in English regardless of UI language).
+- Deliberately not done: `contains_locked` on `StoreItemRead` (the dialog locks after
+  the server refuses, which is correct; up-front locking is polish).
 
 ## Open notes
 

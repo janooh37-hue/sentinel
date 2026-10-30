@@ -39,7 +39,7 @@ function renderPage() {
   render(
     <QueryClientProvider client={client}>
       <I18nextProvider i18n={i18n}>
-        <MemoryRouter initialEntries={['/assets/store/disposals']}><StoreDisposalsPage /></MemoryRouter>
+        <MemoryRouter initialEntries={['/holdings/store/disposals']}><StoreDisposalsPage /></MemoryRouter>
       </I18nextProvider>
     </QueryClientProvider>,
   )

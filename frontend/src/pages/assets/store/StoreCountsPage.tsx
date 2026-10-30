@@ -28,7 +28,7 @@ export function StoreCountsPage(): React.JSX.Element {
     return next
   })
   const month = (count: StoreCountRead) => editable ? (
-    <Link className="inline-flex min-h-11 items-center font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" to={`/assets/store/counts/${count.id}`}>
+    <Link className="inline-flex min-h-11 items-center font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" to={`/holdings/store/counts/${count.id}`}>
       <bdi dir="ltr" className="font-mono tabular-nums">{count.month}</bdi>
     </Link>
   ) : (
@@ -55,7 +55,7 @@ export function StoreCountsPage(): React.JSX.Element {
 
   return (
     <StoreShell title={t('assets.store.counts.title')} description={t('assets.store.counts.description')} actions={editable && (
-      <Link className={buttonVariants({ className: 'min-h-11' })} to="/assets/store/counts/new"><Plus aria-hidden className="h-4 w-4" />{t('assets.store.counts.new')}</Link>
+      <Link className={buttonVariants({ className: 'min-h-11' })} to="/holdings/store/counts/new"><Plus aria-hidden className="h-4 w-4" />{t('assets.store.counts.new')}</Link>
     )}>
       <StoreQueryState isPending={query.isPending} error={query.error} onRetry={() => { void query.refetch() }} isEmpty={query.data?.length === 0} emptyIcon={ClipboardList} emptyMessage={t('assets.store.counts.empty')} emptyDescription={t('assets.store.counts.emptyDescription')}>
         {mobile ? (

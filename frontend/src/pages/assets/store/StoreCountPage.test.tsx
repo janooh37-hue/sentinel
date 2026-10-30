@@ -36,10 +36,10 @@ function LocationProbe() {
   return <output aria-label="Current location">{useLocation().pathname}</output>
 }
 
-function renderPage(entry = '/assets/store/counts/new') {
+function renderPage(entry = '/holdings/store/counts/new') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><MemoryRouter initialEntries={[entry]}>
-    <Routes><Route path="/assets/store/counts/new" element={<StoreCountPage />} /><Route path="/assets/store/counts/:id" element={<StoreCountPage />} /><Route path="/assets/store/counts" element={<p>Counts destination</p>} /></Routes><LocationProbe />
+    <Routes><Route path="/holdings/store/counts/new" element={<StoreCountPage />} /><Route path="/holdings/store/counts/:id" element={<StoreCountPage />} /><Route path="/holdings/store/counts" element={<p>Counts destination</p>} /></Routes><LocationProbe />
   </MemoryRouter></I18nextProvider></QueryClientProvider>)
   return client
 }
@@ -114,7 +114,7 @@ describe('blank stock count entry', () => {
   it('starts saved quantities blank, retaining extra saved batches, and replaces the saved count', async () => {
     vi.spyOn(api, 'getStoreCountExpected').mockResolvedValue([FIRST])
     const user = userEvent.setup()
-    renderPage('/assets/store/counts/7')
+    renderPage('/holdings/store/counts/7')
     const first = await screen.findByRole('textbox', { name: 'Tea · 2028-09: Carton' })
     const second = screen.getByRole('textbox', { name: 'Tea · No expiry: Carton' })
     expect(first).toHaveValue('')
@@ -154,7 +154,7 @@ describe('blank stock count entry', () => {
     renderPage()
     await screen.findByText('No expected batches for this date')
     await user.click(screen.getByRole('button', { name: 'Save stock count' }))
-    expect(await screen.findByRole('link', { name: 'Open the existing stock count' })).toHaveAttribute('href', '/assets/store/counts/7')
+    expect(await screen.findByRole('link', { name: 'Open the existing stock count' })).toHaveAttribute('href', '/holdings/store/counts/7')
   })
 
   it('refetches required batches when the date changes', async () => {

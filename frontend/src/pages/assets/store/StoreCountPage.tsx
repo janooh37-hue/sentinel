@@ -112,7 +112,7 @@ function CountForm({ saved }: { saved?: StoreCountRead }): React.JSX.Element {
     onSuccess: () => {
       invalidateStoreQueries(queryClient)
       toast.success(t('assets.store.counts.saved'))
-      void navigate('/assets/store/counts')
+      void navigate('/holdings/store/counts')
     },
     onError: (error) => {
       setAcknowledgedMissing([])
@@ -178,7 +178,7 @@ function CountForm({ saved }: { saved?: StoreCountRead }): React.JSX.Element {
         <div><label htmlFor="counted-on" className="mb-1.5 block text-sm font-medium">{t('assets.store.counts.countedOn')}</label><Input id="counted-on" type="date" dir="ltr" className="h-11 font-mono tabular-nums" value={countedOn} max={todayIso()} required aria-invalid={!validDate || undefined} aria-describedby={!validDate ? 'count-date-error' : undefined} onChange={(event) => { setCountedOn(event.target.value); setMissing([]); mutation.reset() }} />{!validDate && <p id="count-date-error" role="alert" className="mt-1 text-sm text-destructive">{t('assets.store.counts.invalidDate')}</p>}</div>
         <div><label htmlFor="count-note" className="mb-1.5 block text-sm font-medium">{t('assets.store.counts.note')}</label><Textarea id="count-note" dir="auto" value={note} onChange={(event) => setNote(event.target.value)} /></div>
       </fieldset>
-      {mutation.error && <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive"><p>{storeErrorMessage(mutation.error, t)}</p>{existingId !== null && <Link className="mt-2 inline-flex min-h-11 items-center font-medium underline" to={`/assets/store/counts/${existingId}`}>{t('assets.store.counts.openExisting')}</Link>}</div>}
+      {mutation.error && <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive"><p>{storeErrorMessage(mutation.error, t)}</p>{existingId !== null && <Link className="mt-2 inline-flex min-h-11 items-center font-medium underline" to={`/holdings/store/counts/${existingId}`}>{t('assets.store.counts.openExisting')}</Link>}</div>}
       <StoreQueryState isPending={validDate && expected.isPending} error={expected.error} onRetry={() => { void expected.refetch() }} isEmpty={validDate && rows.length === 0} emptyIcon={ClipboardList} emptyMessage={t('assets.store.counts.noBatches')} emptyDescription={t('assets.store.counts.noBatchesDescription')}>
         <div className="flex flex-col gap-4">{[...groups.values()].map((batches) => {
           const item = batches[0]
@@ -213,7 +213,7 @@ function CountForm({ saved }: { saved?: StoreCountRead }): React.JSX.Element {
       </fieldset>
       <div className={mobile ? 'sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface px-4 py-3' : 'flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4'}>
         <p role="status" className="text-sm text-muted-foreground">{t('assets.store.counts.progress', { entered: formatNumber(entered, i18n.language), total: formatNumber(rows.length, i18n.language) })}</p>
-        <div className="flex gap-2"><Link className={buttonVariants({ variant: 'secondary', className: 'min-h-11' })} to="/assets/store/counts">{t('assets.store.counts.cancel')}</Link><Button type="submit" className="min-h-11" disabled={mutation.isPending || expected.isPending || Boolean(expected.error) || !validDate || unresolvedMissing}>{t(mutation.isPending ? 'assets.store.counts.saving' : 'assets.store.counts.save')}</Button></div>
+        <div className="flex gap-2"><Link className={buttonVariants({ variant: 'secondary', className: 'min-h-11' })} to="/holdings/store/counts">{t('assets.store.counts.cancel')}</Link><Button type="submit" className="min-h-11" disabled={mutation.isPending || expected.isPending || Boolean(expected.error) || !validDate || unresolvedMissing}>{t(mutation.isPending ? 'assets.store.counts.saving' : 'assets.store.counts.save')}</Button></div>
       </div>
     </form>
   )

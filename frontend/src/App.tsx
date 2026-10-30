@@ -504,9 +504,9 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
-              <Route path="/assets" element={<Navigate to="/assets/store" replace />} />
+              <Route path="/holdings" element={<Navigate to="/holdings/store" replace />} />
               <Route
-                path="/assets/store"
+                path="/holdings/store"
                 element={
                   <RequireCapability cap="store.view">
                     <StoreDashboardPage />
@@ -514,7 +514,7 @@ function Shell(): React.JSX.Element {
                 }
               />
               <Route
-                path="/assets/store/items"
+                path="/holdings/store/items"
                 element={
                   <RequireCapability cap="store.view">
                     <StoreItemsPage />
@@ -522,7 +522,7 @@ function Shell(): React.JSX.Element {
                 }
               />
               <Route
-                path="/assets/store/deliveries"
+                path="/holdings/store/deliveries"
                 element={
                   <RequireCapability cap="store.view">
                     <StoreDeliveriesPage />
@@ -530,7 +530,7 @@ function Shell(): React.JSX.Element {
                 }
               />
               <Route
-                path="/assets/store/counts"
+                path="/holdings/store/counts"
                 element={
                   <RequireCapability cap="store.view">
                     <StoreCountsPage />
@@ -538,7 +538,7 @@ function Shell(): React.JSX.Element {
                 }
               />
               <Route
-                path="/assets/store/counts/new"
+                path="/holdings/store/counts/new"
                 element={
                   <RequireCapability cap="store.view">
                     <RequireCapability cap="store.edit">
@@ -548,7 +548,7 @@ function Shell(): React.JSX.Element {
                 }
               />
               <Route
-                path="/assets/store/counts/:id"
+                path="/holdings/store/counts/:id"
                 element={
                   <RequireCapability cap="store.view">
                     <RequireCapability cap="store.edit">
@@ -558,7 +558,7 @@ function Shell(): React.JSX.Element {
                 }
               />
               <Route
-                path="/assets/store/disposals"
+                path="/holdings/store/disposals"
                 element={
                   <RequireCapability cap="store.view">
                     <StoreDisposalsPage />

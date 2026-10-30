@@ -15,11 +15,11 @@ import { cn } from '@/lib/utils'
 import { AssetsSectionTabs } from '../AssetsSectionTabs'
 
 const STORE_TABS = [
-  { to: '/assets/store', key: 'dashboard', end: true },
-  { to: '/assets/store/items', key: 'items', end: false },
-  { to: '/assets/store/deliveries', key: 'deliveries', end: false },
-  { to: '/assets/store/counts', key: 'counts', end: false },
-  { to: '/assets/store/disposals', key: 'disposals', end: false },
+  { to: '/holdings/store', key: 'dashboard', end: true },
+  { to: '/holdings/store/items', key: 'items', end: false },
+  { to: '/holdings/store/deliveries', key: 'deliveries', end: false },
+  { to: '/holdings/store/counts', key: 'counts', end: false },
+  { to: '/holdings/store/disposals', key: 'disposals', end: false },
 ] as const
 
 function subTabClass({ isActive }: { isActive: boolean }): string {

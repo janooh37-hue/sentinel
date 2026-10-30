@@ -8,7 +8,7 @@ import { formatDmy } from '@/lib/formatDmy'
 import { PEOPLE_BIG, PEOPLE_LINK, PEOPLE_META, PEOPLE_NAME, PEOPLE_ROW, PeopleFeedback } from './peopleWidgetParts'
 import type { WidgetProps } from './types'
 
-const TO = '/assets/store'
+const TO = '/holdings/store'
 const KEY = 'dashboard.widgets.store_expiring'
 
 export function StoreExpiringWidget({ tier, rows }: WidgetProps): React.JSX.Element {

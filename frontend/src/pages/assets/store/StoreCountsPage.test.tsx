@@ -39,8 +39,8 @@ describe('stock counts list', () => {
   it.each([false, true])('links editors to new and existing counts (mobile=%s)', async (mobile) => {
     state.mobile = mobile
     renderPage()
-    expect(await screen.findByRole('link', { name: '2026-09' })).toHaveAttribute('href', '/assets/store/counts/7')
-    expect(screen.getByRole('link', { name: 'New stock count' })).toHaveAttribute('href', '/assets/store/counts/new')
+    expect(await screen.findByRole('link', { name: '2026-09' })).toHaveAttribute('href', '/holdings/store/counts/7')
+    expect(screen.getByRole('link', { name: 'New stock count' })).toHaveAttribute('href', '/holdings/store/counts/new')
     expect(screen.getByText('2026-09-20')).toBeInTheDocument()
     expect(screen.getByText('Monthly shelf count')).toBeInTheDocument()
     expect(screen.getByText('2026-09')).toHaveAttribute('dir', 'ltr')

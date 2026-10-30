@@ -50,7 +50,7 @@ describe('Store widgets', () => {
     expect(api.getStoreDashboard).toHaveBeenCalledTimes(1)
     expect(screen.getByText('Expired', { exact: true })).toBeInTheDocument()
     if (tier === 'glance' || tier === 'summary') expect(screen.getByText('2')).toBeInTheDocument()
-    for (const link of screen.getAllByRole('link')) expect(link).toHaveAttribute('href', '/assets/store')
+    for (const link of screen.getAllByRole('link')) expect(link).toHaveAttribute('href', '/holdings/store')
   })
 
   it.each<WidgetTier>(['glance', 'summary', 'tall', 'list'])('renders low stock at %s tier', async (tier) => {
@@ -71,7 +71,7 @@ describe('Store widgets', () => {
     expect(within(list).getByText('Tea')).toBeInTheDocument()
     expect(within(list).getByText('Expired')).toBeInTheDocument()
     expect(screen.queryByText('Water')).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Additional batches: 1' })).toHaveAttribute('href', '/assets/store')
+    expect(screen.getByRole('link', { name: 'Additional batches: 1' })).toHaveAttribute('href', '/holdings/store')
     expect(within(list).getByText('ST-0001')).toHaveAttribute('dir', 'ltr')
   })
 

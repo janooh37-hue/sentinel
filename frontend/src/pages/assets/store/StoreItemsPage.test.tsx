@@ -23,7 +23,7 @@ const ITEM: StoreItemRead = {
 }
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><MemoryRouter initialEntries={['/assets/store/items']}>
+  render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><MemoryRouter initialEntries={['/holdings/store/items']}>
     <StoreItemsPage />
   </MemoryRouter></I18nextProvider></QueryClientProvider>)
   return client

@@ -7,7 +7,7 @@ import { api } from '@/lib/api'
 import { PEOPLE_BIG, PEOPLE_LINK, PEOPLE_META, PEOPLE_NAME, PEOPLE_ROW, PeopleFeedback } from './peopleWidgetParts'
 import type { WidgetProps } from './types'
 
-const TO = '/assets/store'
+const TO = '/holdings/store'
 const KEY = 'dashboard.widgets.store_low_stock'
 
 export function StoreLowStockWidget({ tier, rows }: WidgetProps): React.JSX.Element {

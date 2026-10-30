@@ -127,14 +127,14 @@ const routes = [
   ['/vehicles/edit', ['vehicles.view', 'vehicles.edit'], 'vehicle-edit-page'],
   ['/vehicles/edit/42', ['vehicles.view', 'vehicles.edit'], 'vehicle-edit-page'],
   ['/vehicles/import', ['vehicles.view', 'vehicles.edit'], 'vehicle-import-page'],
-  ['/assets', ['store.view'], 'store-dashboard-page'],
-  ['/assets/store', ['store.view'], 'store-dashboard-page'],
-  ['/assets/store/items', ['store.view'], 'store-items-page'],
-  ['/assets/store/deliveries', ['store.view'], 'store-deliveries-page'],
-  ['/assets/store/counts', ['store.view'], 'store-counts-page'],
-  ['/assets/store/counts/new', ['store.view', 'store.edit'], 'store-count-page'],
-  ['/assets/store/counts/7', ['store.view', 'store.edit'], 'store-count-page'],
-  ['/assets/store/disposals', ['store.view'], 'store-disposals-page'],
+  ['/holdings', ['store.view'], 'store-dashboard-page'],
+  ['/holdings/store', ['store.view'], 'store-dashboard-page'],
+  ['/holdings/store/items', ['store.view'], 'store-items-page'],
+  ['/holdings/store/deliveries', ['store.view'], 'store-deliveries-page'],
+  ['/holdings/store/counts', ['store.view'], 'store-counts-page'],
+  ['/holdings/store/counts/new', ['store.view', 'store.edit'], 'store-count-page'],
+  ['/holdings/store/counts/7', ['store.view', 'store.edit'], 'store-count-page'],
+  ['/holdings/store/disposals', ['store.view'], 'store-disposals-page'],
 ] as const
 
 beforeEach(() => {
@@ -217,7 +217,7 @@ describe('App route capability gates', () => {
     'denies /assets/store/counts/new when %s is the only granted capability',
     async (capability) => {
       capabilityState.allowed = new Set([capability])
-      window.history.pushState({}, '', '/assets/store/counts/new')
+      window.history.pushState({}, '', '/holdings/store/counts/new')
       render(<App />)
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()

@@ -27,7 +27,7 @@ const DELIVERY: StoreDeliveryRead = {
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><MemoryRouter initialEntries={['/assets/store/deliveries']}><StoreDeliveriesPage /></MemoryRouter></I18nextProvider></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><MemoryRouter initialEntries={['/holdings/store/deliveries']}><StoreDeliveriesPage /></MemoryRouter></I18nextProvider></QueryClientProvider>)
   return client
 }
 
