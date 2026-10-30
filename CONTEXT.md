@@ -362,11 +362,18 @@ Stock removed from the store because it expired or was damaged (إتلاف), rec
 against its Batch with the reason. A Disposal is not Monthly usage.
 _Avoid_: Write-off, loss, usage
 
+**Handover**:
+Stock handed out of the store to a named person (صرف), recorded with who took
+it, who recorded it and when. One Handover can cover several Store items. It
+takes from each item's earliest-expiring Batch first.
+_Avoid_: Issue, withdrawal, handout, consumption log
+
 **Monthly usage**:
 The quantity of a Store item that left the store between two consecutive Stock
 counts (الاستهلاك الشهري): the earlier count plus the Monthly delivery received in
 between, minus Disposals in between, minus the later count. It is derived, never
-entered.
+entered. A Handover reduces what is on the shelf but is not added to Monthly
+usage; the next Stock count already reflects it.
 _Avoid_: Consumption log, issues, handouts
 
 **Minimum level**:

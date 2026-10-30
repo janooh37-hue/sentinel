@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded in part by 0010
 ---
 
 # Store Monthly usage is derived from Stock counts, not logged per handout
