@@ -1,6 +1,6 @@
 """Handovers: FEFO, derived usage, history, audit and capability boundaries."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -53,6 +53,8 @@ def test_store_handover_single_read_delete_and_audit(
     assert row["note"] == "For pantry"
     assert row["recorded_by_name"] == "store-editor@test.ae"
     assert row["recorded_by_name_ar"] is None
+    # Stored naive UTC must reach the client with its offset (JS reads bare as local).
+    assert datetime.fromisoformat(row["created_at"]).utcoffset() == timedelta(0)
     assert [(line["item_id"], line["quantity"]) for line in row["lines"]] == [(item, 3)]
     assert _items_by_code(editor)["ST-0001"]["on_hand"] == 7
     path = f"/api/v1/store/handovers/{row['id']}"

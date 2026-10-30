@@ -336,7 +336,7 @@ class StoreHandoverCreate(BaseModel):
     lines: list[StoreHandoverLineInput] = Field(min_length=1)
 
 
-class StoreHandoverRead(BaseModel):
+class StoreHandoverRead(ORMBase):
     id: int
     handed_on: date_t
     taken_by: str
@@ -351,7 +351,7 @@ class StoreHandoverRead(BaseModel):
 # ── In & out ─────────────────────────────────────────────────────────────────
 
 
-class StoreMovementRead(BaseModel):
+class StoreMovementRead(ORMBase):
     kind: StoreMovementKind
     id: int
     on: date_t

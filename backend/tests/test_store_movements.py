@@ -56,6 +56,11 @@ def test_store_movements_order_shape_and_note_file(
     assert response.status_code == 200, response.text
     rows = response.json()
     assert [(r["kind"], r["id"]) for r in rows] == movements
+    assert [r["created_at"] for r in rows] == [
+        "2026-12-15T13:00:00Z",
+        "2026-12-15T12:00:00Z",
+        "2026-12-15T15:00:00Z",
+    ]
     assert rows[0]["taken_by"] == "Sara"
     assert rows[0]["note"] == "Break room"
     assert rows[0]["recorded_by_name"] == "store-editor@test.ae"
