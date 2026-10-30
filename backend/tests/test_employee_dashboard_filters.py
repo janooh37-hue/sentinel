@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user
+from app.core import clock
 from app.db.models import Employee, Leave, User, Violation
 from app.db.session import get_db
 from app.main import create_app
@@ -75,7 +76,7 @@ def test_presence_working_and_on_leave_match_dashboard_headcounts(api_db, monkey
             # Dubai is already on the next calendar day.
             return datetime(2026, 10, 23, 21, tzinfo=UTC).astimezone(tz)
 
-    monkeypatch.setattr(employee_service, "datetime", FixedDatetime)
+    monkeypatch.setattr(clock, "datetime", FixedDatetime)
     today = date(2026, 10, 24)
     db = api_db
     user = User(email="presence@x.ae", password_hash="x", role="admin", status="active")

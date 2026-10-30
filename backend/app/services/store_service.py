@@ -17,10 +17,9 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
@@ -28,7 +27,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
-from app.core.clock import utcnow
+from app.core.clock import organization_today, utcnow
 from app.db.models import (
     AuditLog,
     StoreBatch,
@@ -71,9 +70,6 @@ from app.schemas.store import (
 )
 from app.services.workforce_etag import require_if_match, row_etag
 
-# Same organisation zone the dashboard and employee services use for "today".
-_ORGANIZATION_TIMEZONE = ZoneInfo("Asia/Dubai")
-
 EXPIRING_SOON_DAYS = 60
 USAGE_WINDOWS = 6
 SUGGESTION_WINDOWS = 3
@@ -99,11 +95,6 @@ _ALLOWED_MEDIA_BY_EXTENSION: dict[str, frozenset[str]] = {
 _UNSAFE_CHARS = re.compile('[\\\\/:*?"<>|\x00-\x1f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]')
 
 
-def today() -> date:
-    """The organisation's (UAE) calendar date, not the UTC date."""
-    return datetime.now(_ORGANIZATION_TIMEZONE).date()
-
-
 def _add_audit(
     db: Session,
     action: str,
@@ -125,7 +116,7 @@ def _add_audit(
 
 
 def _require_not_future(value: date, field_name: str) -> None:
-    if value > today():
+    if value > organization_today():
         raise ValidationFailedError(
             "STORE_DATE_IN_FUTURE",
             "The date cannot be in the future.",
@@ -514,7 +505,7 @@ def get_item(db: Session, item_id: int) -> StoreItem:
 
 
 def item_read(db: Session, row: StoreItem) -> StoreItemRead:
-    on_hand = _item_on_hand(db, _load_ledger(db), today()).get(row.id, 0)
+    on_hand = _item_on_hand(db, _load_ledger(db), organization_today()).get(row.id, 0)
     return _item_read(row, on_hand)
 
 
@@ -523,7 +514,7 @@ def list_items(db: Session, *, include_archived: bool = False) -> list[StoreItem
     if not include_archived:
         stmt = stmt.where(StoreItem.archived_at.is_(None))
     rows = db.scalars(stmt).all()
-    on_hand = _item_on_hand(db, _load_ledger(db), today())
+    on_hand = _item_on_hand(db, _load_ledger(db), organization_today())
     return [_item_read(row, on_hand.get(row.id, 0)) for row in rows]
 
 
@@ -664,7 +655,7 @@ def archive_item(db: Session, item_id: int, *, actor: str | None = None) -> Stor
     with _write(db):
         row = get_item(db, item_id)
         if row.archived_at is None:
-            on_hand = _item_on_hand(db, _load_ledger(db), today()).get(row.id, 0)
+            on_hand = _item_on_hand(db, _load_ledger(db), organization_today()).get(row.id, 0)
             if on_hand > 0:
                 raise ConflictError(
                     "STORE_ITEM_HAS_STOCK",
@@ -773,7 +764,7 @@ def list_batches(db: Session, *, item_id: int | None = None) -> list[StoreBatchR
     if item_id is not None:
         get_item(db, item_id)
         stmt = stmt.where(StoreBatch.item_id == item_id)
-    current = today()
+    current = organization_today()
     on_hand = _load_ledger(db).on_hand(current)
     rows = sorted(db.scalars(stmt).all(), key=_batch_sort_key)
     return [
@@ -1226,7 +1217,9 @@ def create_disposal(
                 item_id=item.id,
                 expiry_date=expiry_date.isoformat() if expiry_date else None,
             )
-        on_hand = _load_ledger(db).disposable(batch.id, payload.disposed_on, as_of=today())
+        on_hand = _load_ledger(db).disposable(
+            batch.id, payload.disposed_on, as_of=organization_today()
+        )
         if payload.quantity > on_hand:
             raise ValidationFailedError(
                 "STORE_DISPOSAL_EXCEEDS_STOCK",
@@ -1290,7 +1283,7 @@ def delete_disposal(db: Session, disposal_id: int, *, actor: str | None = None) 
 
 
 def dashboard(db: Session) -> StoreDashboard:
-    current = today()
+    current = organization_today()
     ledger = _load_ledger(db)
     batch_on_hand = ledger.on_hand(current)
     items = db.scalars(

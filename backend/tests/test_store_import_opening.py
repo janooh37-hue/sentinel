@@ -37,7 +37,7 @@ def _script() -> ModuleType:
 def test_opening_import_creates_items_in_order_and_the_opening_count(
     db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(store_service, "today", lambda: date(2026, 10, 29))
+    monkeypatch.setattr(store_service, "organization_today", lambda: date(2026, 10, 29))
     script = _script()
     data = json.loads(OPENING.read_text(encoding="utf-8"))
 
@@ -80,7 +80,7 @@ def test_failed_opening_count_leaves_the_store_empty(
 ) -> None:
     # The day before the count: the count is refused as future-dated after every
     # item was already created inside the import's transaction.
-    monkeypatch.setattr(store_service, "today", lambda: date(2026, 10, 28))
+    monkeypatch.setattr(store_service, "organization_today", lambda: date(2026, 10, 28))
     script = _script()
     data = json.loads(OPENING.read_text(encoding="utf-8"))
 
