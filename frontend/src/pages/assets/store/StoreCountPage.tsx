@@ -19,6 +19,7 @@ import { StoreQueryState } from './StoreQueryState'
 import { ExpiryInput } from './components/ExpiryInput'
 import { QuantityInput } from './components/QuantityInput'
 import {
+  batchExpiryDate,
   batchKey,
   DEFAULT_EXPIRY,
   EMPTY_QUANTITY,
@@ -130,13 +131,8 @@ function CountForm({ saved }: { saved?: StoreCountRead }): React.JSX.Element {
       setAddError(t('assets.store.counts.chooseBatch'))
       return
     }
-    let expiryDate = value
-    if (value?.length === 7) {
-      const [year, month] = value.split('-').map(Number)
-      const end = new Date(Date.UTC(year, month, 0)).getUTCDate()
-      expiryDate = `${value}-${String(end).padStart(2, '0')}`
-    }
-    const key = batchKey(item.id, expiryDate)
+    const expiryDate = batchExpiryDate(value)
+    const key = batchKey(item.id, value)
     if (rowsByKey.has(key)) {
       setAddError(t('assets.store.counts.duplicateBatch'))
       return

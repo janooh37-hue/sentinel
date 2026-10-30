@@ -12,6 +12,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { ApiError, apiErrorMessage } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { formatNumber, isArabic, localized } from '@/lib/language'
+import { monthEndIso } from '@/lib/monthEnd'
 
 export type Translate = (key: string, options?: Record<string, unknown>) => string
 
@@ -158,9 +159,16 @@ export function expiryInput(batch: ExpiryParts): string | null {
   return batch.expiry_month_only ? batch.expiry_date.slice(0, 7) : batch.expiry_date
 }
 
-/** Stable identity of a Batch within an item: (item, expiry). */
+/** The stored expiry date of a Batch: a month-only `YYYY-MM` is the last day of
+ *  that month, exactly as the server stores it; full dates and null pass through. */
+export function batchExpiryDate(expiry: string | null): string | null {
+  return expiry != null && /^\d{4}-\d{2}$/.test(expiry) ? monthEndIso(expiry) : expiry
+}
+
+/** Stable identity of a Batch within an item: (item, expiry). `YYYY-MM` and its
+ *  month-end date are the same Batch. */
 export function batchKey(itemId: number, expiry: string | null): string {
-  return `${itemId}:${expiry ?? 'none'}`
+  return `${itemId}:${batchExpiryDate(expiry) ?? 'none'}`
 }
 
 // ── Form inputs (QuantityInput / ExpiryInput values) ────────────────────────

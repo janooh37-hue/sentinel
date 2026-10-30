@@ -111,6 +111,30 @@ describe('blank stock count entry', () => {
     await waitFor(() => expect(api.createStoreCount).toHaveBeenCalledWith({ counted_on: todayIso(), note: null, lines: [{ item_id: 1, expiry: '2029-10-15', quantity: 48 }] }))
   })
 
+  it.each(['UTC', 'Pacific/Kiritimati', 'Pacific/Pago_Pago'])('treats a month and its final day as one batch (TZ=%s)', async (zone) => {
+    const previous = process.env.TZ
+    process.env.TZ = zone
+    try {
+      vi.spyOn(api, 'getStoreCountExpected').mockResolvedValue([])
+      const user = userEvent.setup()
+      renderPage()
+      await user.selectOptions(await screen.findByRole('combobox', { name: 'Store item' }), '1')
+      await user.click(screen.getByRole('radio', { name: 'Month only' }))
+      fireEvent.change(screen.getByLabelText('Expiry month'), { target: { value: '2028-02' } })
+      await user.click(screen.getByRole('button', { name: 'Add batch' }))
+      await user.type(screen.getByRole('textbox', { name: 'Tea · 2028-02: Carton' }), '1')
+      await user.click(screen.getByRole('radio', { name: 'Full date' }))
+      fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2028-02-29' } })
+      await user.click(screen.getByRole('button', { name: 'Add batch' }))
+      expect(screen.getByText('This item and expiry are already listed. Enter its quantity in the existing row.')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Save stock count' }))
+      await waitFor(() => expect(api.createStoreCount).toHaveBeenCalledWith({ counted_on: todayIso(), note: null, lines: [{ item_id: 1, expiry: '2028-02', quantity: 24 }] }))
+    } finally {
+      if (previous === undefined) delete process.env.TZ
+      else process.env.TZ = previous
+    }
+  })
+
   it('starts saved quantities blank, retaining extra saved batches, and replaces the saved count', async () => {
     vi.spyOn(api, 'getStoreCountExpected').mockResolvedValue([FIRST])
     const user = userEvent.setup()

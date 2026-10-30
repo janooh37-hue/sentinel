@@ -12,6 +12,7 @@ import { api, type StoreDeliveryCreate, type StorePickerItem } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { todayIso } from '@/pages/vehicles/vehicleUtils'
 import {
+  batchKey,
   DEFAULT_EXPIRY,
   EMPTY_QUANTITY,
   expiryFromValue,
@@ -40,14 +41,6 @@ interface Line {
 interface HeaderValues { received_on: string; note: string }
 type LineErrors = Record<number, { item?: string; expiry?: string; quantity?: string }>
 const newLine = (key: number): Line => ({ key, item: null, expiry: { ...DEFAULT_EXPIRY }, quantity: { ...EMPTY_QUANTITY } })
-
-// Month-only and full-date entries resolve to the same batch at month end.
-function expiryIdentity(expiry: string | null): string {
-  if (expiry == null) return 'none'
-  if (expiry.length !== 7) return expiry
-  const [year, month] = expiry.split('-').map(Number)
-  return `${expiry}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
-}
 
 export function DeliveryDialog({ open, onOpenChange, onSaved }: Props): React.JSX.Element {
   const { t } = useTranslation()
@@ -111,7 +104,7 @@ function DeliveryForm({ onOpenChange, onSaved, onBusyChange }: Omit<Props, 'open
       const quantity = line.item ? quantityFromParts(line.quantity, line.item) : null
       if (quantity == null || !Number.isSafeInteger(quantity) || quantity < 1) issue.quantity = t('assets.store.deliveries.quantityRequired')
       if (line.item && expiry !== undefined) {
-        const key = `${line.item.id}:${expiryIdentity(expiry)}`
+        const key = batchKey(line.item.id, expiry)
         if (seen.has(key)) issue.expiry = t('assets.store.deliveries.duplicateLine')
         seen.add(key)
         if (quantity != null) payload.push({ item_id: line.item.id, expiry, quantity })

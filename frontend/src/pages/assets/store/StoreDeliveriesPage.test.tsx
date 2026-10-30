@@ -102,24 +102,31 @@ describe('Store deliveries', () => {
     expect(api.createStoreDelivery).not.toHaveBeenCalled()
   })
 
-  it('rejects duplicate batches including a month and its final day', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await user.click(screen.getByRole('button', { name: 'Log delivery' }))
-    const dialog = within(screen.getByRole('dialog'))
-    await dialog.findByRole('option', { name: /ST-0004/ })
-    await user.click(dialog.getByRole('button', { name: 'Add line' }))
-    const lines = dialog.getAllByRole('group', { name: /Line/ })
-    for (const line of lines) {
-      await user.selectOptions(within(line).getByRole('combobox', { name: /Store item/ }), '4')
-      await user.type(within(line).getByRole('textbox', { name: 'Coffee: Carton' }), '1')
+  it.each(['UTC', 'Pacific/Kiritimati', 'Pacific/Pago_Pago'])('rejects duplicate batches including a month and its final day (TZ=%s)', async (zone) => {
+    const previous = process.env.TZ
+    process.env.TZ = zone
+    try {
+      const user = userEvent.setup()
+      renderPage()
+      await user.click(screen.getByRole('button', { name: 'Log delivery' }))
+      const dialog = within(screen.getByRole('dialog'))
+      await dialog.findByRole('option', { name: /ST-0004/ })
+      await user.click(dialog.getByRole('button', { name: 'Add line' }))
+      const lines = dialog.getAllByRole('group', { name: /Line/ })
+      for (const line of lines) {
+        await user.selectOptions(within(line).getByRole('combobox', { name: /Store item/ }), '4')
+        await user.type(within(line).getByRole('textbox', { name: 'Coffee: Carton' }), '1')
+      }
+      await user.click(within(lines[0]).getByRole('radio', { name: 'Month only' }))
+      fireEvent.change(within(lines[0]).getByLabelText('Expiry month'), { target: { value: '2028-02' } })
+      fireEvent.change(within(lines[1]).getByLabelText('Expiry date'), { target: { value: '2028-02-29' } })
+      await user.click(dialog.getByRole('button', { name: 'Save delivery' }))
+      expect(dialog.getByText('This item and expiry already appear in another line. Combine their quantities.')).toBeInTheDocument()
+      expect(api.createStoreDelivery).not.toHaveBeenCalled()
+    } finally {
+      if (previous === undefined) delete process.env.TZ
+      else process.env.TZ = previous
     }
-    await user.click(within(lines[0]).getByRole('radio', { name: 'Month only' }))
-    fireEvent.change(within(lines[0]).getByLabelText('Expiry month'), { target: { value: '2028-09' } })
-    fireEvent.change(within(lines[1]).getByLabelText('Expiry date'), { target: { value: '2028-09-30' } })
-    await user.click(dialog.getByRole('button', { name: 'Save delivery' }))
-    expect(dialog.getByText('This item and expiry already appear in another line. Combine their quantities.')).toBeInTheDocument()
-    expect(api.createStoreDelivery).not.toHaveBeenCalled()
   })
 
   it('retains the saved delivery and clearly reports an attachment upload failure', async () => {

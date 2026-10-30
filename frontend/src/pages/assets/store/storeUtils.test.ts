@@ -4,6 +4,8 @@ import { ApiError } from '@/lib/api'
 import i18n from '@/lib/i18n'
 
 import {
+  batchExpiryDate,
+  batchKey,
   expiryFromValue,
   formatExpiry,
   formatQuantity,
@@ -82,6 +84,35 @@ describe('store expiry', () => {
     expect(expiryFromValue({ mode: 'none', date: '', month: '' })).toBeNull()
     expect(expiryFromValue({ mode: 'month', date: '2027-04-26', month: '' })).toBeUndefined()
   })
+
+  // Delivery (duplicate lines) and Count (add batch) both key Batches through
+  // batchKey; a month-only entry must land on the server's stored month end
+  // (`schemas/store.py` parse_expiry) whatever the device timezone is.
+  it.each(['UTC', 'Asia/Dubai', 'America/Los_Angeles', 'Pacific/Kiritimati', 'Pacific/Pago_Pago', 'America/Santiago'])(
+    'keys a month-only expiry as its month end in %s',
+    (zone) => {
+      const previous = process.env.TZ
+      process.env.TZ = zone
+      try {
+        if (zone === 'Pacific/Kiritimati') expect(new Date(2028, 0, 1).getTimezoneOffset()).toBe(-840)
+        for (let year = 2024; year <= 2032; year += 1) {
+          for (let month = 1; month <= 12; month += 1) {
+            const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+            const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]
+            const ym = `${year}-${String(month).padStart(2, '0')}`
+            expect(batchExpiryDate(ym)).toBe(`${ym}-${days}`)
+            expect(batchKey(7, ym)).toBe(batchKey(7, `${ym}-${days}`))
+            expect(batchKey(7, ym)).not.toBe(batchKey(7, `${ym}-${String(days - 1).padStart(2, '0')}`))
+          }
+        }
+        expect(batchKey(7, null)).toBe('7:none')
+        expect(batchKey(7, '2028-02-14')).toBe('7:2028-02-14')
+      } finally {
+        if (previous === undefined) delete process.env.TZ
+        else process.env.TZ = previous
+      }
+    },
+  )
 })
 
 describe('storeErrorMessage', () => {
