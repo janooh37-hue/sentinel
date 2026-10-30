@@ -21,7 +21,6 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useQuery } from '@tanstack/react-query'
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { Check } from 'lucide-react'
@@ -29,9 +28,9 @@ import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { api } from '@/lib/api'
 import type { StorePickerItem } from '@/lib/api'
 import { localized } from '@/lib/language'
+import { useStorePickerItems } from '@/pages/assets/store/storeUtils'
 import type { FieldProps, TemplateField } from '../types'
 
 interface Row {
@@ -218,15 +217,7 @@ function StoreItemCodeInput({ name, index }: { name: string; index: number }): R
   const codePath = `${name}.${index}.code`
   const code = useWatch({ control, name: codePath, defaultValue: '' }) as string
   const registration = register(codePath)
-  const { data, isSuccess } = useQuery({
-    queryKey: ['store-picker-items'],
-    queryFn: api.listStorePickerItems,
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-    retryOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  })
+  const { data, isSuccess } = useStorePickerItems({ optional: true })
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)
   const inputRef = useRef<HTMLInputElement | null>(null)

@@ -7,9 +7,9 @@
  * as "N cartons + M loose" and converts with `toBaseUnits` / `splitBase`.
  */
 
-import type { QueryClient } from '@tanstack/react-query'
+import { type QueryClient, useQuery } from '@tanstack/react-query'
 
-import { ApiError, apiErrorMessage } from '@/lib/api'
+import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { formatNumber, isArabic, localized } from '@/lib/language'
 import { monthEndIso } from '@/lib/monthEnd'
@@ -49,6 +49,19 @@ export const storeKeys = {
 export function invalidateStoreQueries(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: storeKeys.all })
   void queryClient.invalidateQueries({ queryKey: STORE_DASHBOARD_KEY })
+}
+
+/** The active-item picker list (one cache entry, refreshed by every Store write).
+ *  `optional`: a surface outside Store whose user may lack store access, such as
+ *  the material-request items table; it fails quietly and refetches rarely. */
+export function useStorePickerItems({ optional = false }: { optional?: boolean } = {}) {
+  return useQuery({
+    queryKey: storeKeys.picker,
+    queryFn: api.listStorePickerItems,
+    ...(optional
+      ? { staleTime: 5 * 60_000, retry: false, retryOnMount: false, refetchOnWindowFocus: false, refetchOnReconnect: false }
+      : { staleTime: 60_000 }),
+  })
 }
 
 // ── Language ────────────────────────────────────────────────────────────────

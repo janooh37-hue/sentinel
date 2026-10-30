@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { api, ApiError, type StoreCountRead, type StoreCountWrite, type StoreExpectedBatch } from '@/lib/api'
+import { api, ApiError, type StoreCountRead, type StoreCountWrite, type StoreExpectedBatch, type StorePickerItem } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
@@ -18,6 +18,7 @@ import { StoreShell } from './StoreShell'
 import { StoreQueryState } from './StoreQueryState'
 import { ExpiryInput } from './components/ExpiryInput'
 import { QuantityInput } from './components/QuantityInput'
+import { StoreItemPicker } from './components/StoreItemPicker'
 import {
   batchExpiryDate,
   batchKey,
@@ -35,6 +36,7 @@ import {
   type QuantityParts,
   storeErrorMessage,
   storeKeys,
+  useStorePickerItems,
 } from './storeUtils'
 import { ExpiryText } from './components/ExpiryText'
 
@@ -76,13 +78,13 @@ function CountForm({ saved }: { saved?: StoreCountRead }): React.JSX.Element {
   const [quantities, setQuantities] = useState<Record<string, QuantityParts>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [missing, setMissing] = useState<MissingBatch[]>([])
-  const [itemId, setItemId] = useState('')
+  const [item, setItem] = useState<StorePickerItem | null>(null)
   const [acknowledgedMissing, setAcknowledgedMissing] = useState<string[]>([])
   const [expiry, setExpiry] = useState<ExpiryValue>(DEFAULT_EXPIRY)
   const [addError, setAddError] = useState('')
   const validDate = isBusinessDate(countedOn)
   const expected = useQuery({ queryKey: storeKeys.expected(countedOn), queryFn: () => api.getStoreCountExpected(countedOn), enabled: validDate })
-  const picker = useQuery({ queryKey: storeKeys.picker, queryFn: api.listStorePickerItems })
+  const picker = useStorePickerItems()
   // Missing-batch details identify batches but omit their units and month-only flag.
   // Resolve them through the batch endpoint rather than inventing either field.
   const missingBatches = useQuery({ queryKey: storeKeys.batches(), queryFn: () => api.listStoreBatches(), enabled: missing.length > 0 })
@@ -126,7 +128,6 @@ function CountForm({ saved }: { saved?: StoreCountRead }): React.JSX.Element {
   })
 
   function addBatch() {
-    const item = picker.data?.find((entry) => entry.id === Number(itemId))
     const value = expiryFromValue(expiry)
     if (!item || value === undefined) {
       setAddError(t('assets.store.counts.chooseBatch'))
@@ -202,7 +203,7 @@ function CountForm({ saved }: { saved?: StoreCountRead }): React.JSX.Element {
         <legend className="px-2 font-semibold">{t('assets.store.counts.addBatch')}</legend>
         <StoreQueryState isPending={picker.isPending} error={picker.error} onRetry={() => { void picker.refetch() }} isEmpty={picker.data?.length === 0} emptyMessage={t('assets.store.counts.noItems')} emptyDescription={t('assets.store.counts.noItemsDescription')}>
           <div className="grid gap-3 md:grid-cols-2">
-            <div><label htmlFor="batch-item" className="mb-1.5 block text-sm font-medium">{t('assets.store.counts.item')}</label><select id="batch-item" className="min-h-11 w-full rounded-md border border-input bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={itemId} onChange={(event) => setItemId(event.target.value)}><option value="">{t('assets.store.counts.chooseItem')}</option>{picker.data?.map((item) => <option key={item.id} value={item.id}>{`\u2066${item.code}\u2069 — ${itemName(item, i18n.language)}`}</option>)}</select></div>
+            <div><label htmlFor="batch-item" className="mb-1.5 block text-sm font-medium">{t('assets.store.counts.item')}</label><StoreItemPicker id="batch-item" value={item?.id ?? null} onChange={setItem} placeholder={t('assets.store.counts.chooseItem')} /></div>
             <ExpiryInput id="new-batch-expiry" value={expiry} onChange={setExpiry} invalid={Boolean(addError)} describedBy={addError ? 'add-batch-error' : undefined} />
           </div>
           {addError && <p id="add-batch-error" role="alert" className="text-sm text-destructive">{addError}</p>}
