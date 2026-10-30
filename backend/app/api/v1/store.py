@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from datetime import date as date_t
 from typing import Annotated
-from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Header, Query, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api._responses import maybe_base64
+from app.api._responses import content_disposition, maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError
 from app.db.models import User
@@ -37,19 +36,6 @@ from app.schemas.store import (
 from app.services import perm_service, store_service
 
 router = APIRouter(prefix="/store", tags=["store"])
-
-
-def _content_disposition(disposition: str, filename: str | None) -> str:
-    """ASCII fallback plus RFC 5987 ``filename*``, as ``documents._inline_pdf_response``.
-
-    A raw header must be latin-1 encodable, so an Arabic file name needs both.
-    """
-    name = filename or "delivery-note"
-    ascii_name = (
-        name.encode("ascii", "ignore").decode().translate({0x0D: None, 0x0A: None}).strip()
-        or "delivery-note"
-    )
-    return f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
 
 
 _View = Annotated[User, Depends(require_capability("store.view"))]
@@ -200,7 +186,9 @@ def download_store_delivery_note(
         content=raw,
         media_type=media_type,
         headers={
-            "Content-Disposition": _content_disposition(disposition, row.note_file_name),
+            "Content-Disposition": content_disposition(
+                disposition, row.note_file_name or "delivery-note", fallback="delivery-note"
+            ),
             "X-Content-Type-Options": "nosniff",
         },
     )
