@@ -161,16 +161,15 @@ export interface ExpiryParts {
   expiry_month_only: boolean
 }
 
-/** Month-only expiries show `YYYY-MM`; undated batches show the "no expiry" copy. */
-export function formatExpiry(batch: ExpiryParts, t: Translate): string {
-  if (batch.expiry_date == null) return t('assets.store.expiry.none')
-  return batch.expiry_month_only ? batch.expiry_date.slice(0, 7) : batch.expiry_date
-}
-
 /** The API line `expiry` value for a Batch: `YYYY-MM`, `YYYY-MM-DD`, or null. */
 export function expiryInput(batch: ExpiryParts): string | null {
   if (batch.expiry_date == null) return null
   return batch.expiry_month_only ? batch.expiry_date.slice(0, 7) : batch.expiry_date
+}
+
+/** Shown as the API value (`YYYY-MM` for month-only); undated batches show the "no expiry" copy. */
+export function formatExpiry(batch: ExpiryParts, t: Translate): string {
+  return expiryInput(batch) ?? t('assets.store.expiry.none')
 }
 
 /** The stored expiry date of a Batch: a month-only `YYYY-MM` is the last day of
