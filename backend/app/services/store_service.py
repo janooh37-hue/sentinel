@@ -28,6 +28,7 @@ from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.clock import organization_today, utcnow
 from app.core.expiry import expiry_status
+from app.core.uploads import SniffedUploadPolicy, validate_sniffed_upload
 from app.db.models import (
     StoreBatch,
     StoreCategory,
@@ -78,21 +79,14 @@ _CODE_PATTERN = re.compile(r"^ST-(\d+)$")
 
 # Delivery notes: the fine-receipt policy (magic-byte sniff, 10 MiB) plus WebP.
 NOTE_FILE_MAX_BYTES = 10 * 1024 * 1024
-_NOTE_SIGNATURES: dict[str, bytes] = {
-    ".pdf": b"%PDF-",
-    ".png": b"\x89PNG\r\n\x1a\n",
-    ".jpg": b"\xff\xd8\xff",
-    ".jpeg": b"\xff\xd8\xff",
-    ".webp": b"RIFF",
-}
-_ALLOWED_MEDIA_BY_EXTENSION: dict[str, frozenset[str]] = {
-    ".pdf": frozenset({"application/pdf"}),
-    ".png": frozenset({"image/png"}),
-    ".jpg": frozenset({"image/jpeg", "image/jpg"}),
-    ".jpeg": frozenset({"image/jpeg", "image/jpg"}),
-    ".webp": frozenset({"image/webp"}),
-}
-_UNSAFE_CHARS = re.compile('[\\\\/:*?"<>|\x00-\x1f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]')
+_NOTE_FILE_POLICY = SniffedUploadPolicy(
+    code_prefix="STORE_NOTE_FILE",
+    noun="delivery note",
+    extensions=frozenset({".pdf", ".png", ".jpg", ".jpeg", ".webp"}),
+    bad_format_message="Delivery notes must be a PDF, PNG, JPEG, or WebP file.",
+    fallback_name="delivery-note",
+    max_bytes=NOTE_FILE_MAX_BYTES,
+)
 
 
 def _require_not_future(value: date, field_name: str) -> None:
@@ -901,39 +895,6 @@ def delete_delivery(db: Session, delivery_id: int, *, actor: str | None = None) 
         _resolve_stored_path(old_file, delivery_id).unlink(missing_ok=True)
 
 
-def _safe_filename(filename: str) -> str:
-    name = filename.replace("\\", "/").rsplit("/", 1)[-1]
-    name = _UNSAFE_CHARS.sub("_", name).strip().strip(".")
-    return name or "delivery-note"
-
-
-def _validate_note_file(*, filename: str, data: bytes, media_type: str) -> tuple[str, str]:
-    if not data:
-        raise ValidationFailedError("STORE_NOTE_FILE_EMPTY", "Uploaded delivery note is empty.")
-    if len(data) > NOTE_FILE_MAX_BYTES:
-        raise ValidationFailedError(
-            "STORE_NOTE_FILE_TOO_LARGE",
-            f"Delivery note exceeds {NOTE_FILE_MAX_BYTES // (1024 * 1024)} MiB.",
-            size=len(data),
-        )
-    safe_name = _safe_filename(filename)
-    extension = Path(safe_name).suffix.lower()
-    signature = _NOTE_SIGNATURES.get(extension)
-    normalized_media = media_type.partition(";")[0].strip().lower()
-    allowed_media = _ALLOWED_MEDIA_BY_EXTENSION.get(extension, frozenset())
-    signature_ok = signature is not None and data.startswith(signature)
-    if extension == ".webp":
-        signature_ok = signature_ok and data[8:12] == b"WEBP"
-    if not signature_ok or normalized_media not in allowed_media:
-        raise ValidationFailedError(
-            "STORE_NOTE_FILE_BAD_FORMAT",
-            "Delivery notes must be a PDF, PNG, JPEG, or WebP file.",
-            extension=extension,
-            media_type=media_type,
-        )
-    return safe_name, normalized_media
-
-
 def attach_note_file(
     db: Session,
     delivery_id: int,
@@ -943,8 +904,8 @@ def attach_note_file(
     media_type: str,
     actor: str | None = None,
 ) -> StoreDeliveryRead:
-    safe_name, normalized_media = _validate_note_file(
-        filename=filename, data=data, media_type=media_type
+    safe_name, normalized_media = validate_sniffed_upload(
+        _NOTE_FILE_POLICY, filename=filename, data=data, media_type=media_type
     )
     data_dir = get_settings().data_dir.resolve()
     destination_dir = data_dir / "store_files" / str(delivery_id)

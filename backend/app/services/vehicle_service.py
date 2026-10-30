@@ -20,6 +20,13 @@ from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.clock import utcnow
 from app.core.expiry import expiry_status
+from app.core.uploads import (
+    MEDIA_TYPES_BY_EXTENSION,
+    SniffedUploadPolicy,
+    normalize_media_type,
+    safe_filename,
+    validate_sniffed_upload,
+)
 from app.core.vehicle_certificates import Profile
 from app.db.models import (
     Book,
@@ -78,25 +85,19 @@ _PHOTO_KINDS = frozenset({"photo", "gallery"})
 _FILE_KINDS = frozenset({"photo", "license", "gallery", "accident", "receipt", "certificate"})
 _CERTIFICATE_LABEL_MAX_LENGTH = 128
 _CERTIFICATE_PROCESSING_TIMEOUT = 120
-_ALLOWED_MEDIA_BY_EXTENSION: dict[str, frozenset[str]] = {
-    ".pdf": frozenset({"application/pdf"}),
-    ".png": frozenset({"image/png"}),
-    ".jpg": frozenset({"image/jpeg", "image/jpg"}),
-    ".jpeg": frozenset({"image/jpeg", "image/jpg"}),
-    ".webp": frozenset({"image/webp"}),
-}
-_UNSAFE_CHARS = re.compile('[\\\\/:*?"<>|\x00-\x1f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]')
 
 # Fine receipts use a narrower policy than the generic vehicle-file upload:
 # no WebP, a lower size cap, and a magic-byte sniff so a renamed file cannot
 # masquerade as one of the three accepted formats.
 FINE_RECEIPT_MAX_BYTES = 10 * 1024 * 1024
-_FINE_RECEIPT_SIGNATURES: dict[str, bytes] = {
-    ".pdf": b"%PDF-",
-    ".png": b"\x89PNG\r\n\x1a\n",
-    ".jpg": b"\xff\xd8\xff",
-    ".jpeg": b"\xff\xd8\xff",
-}
+_FINE_RECEIPT_POLICY = SniffedUploadPolicy(
+    code_prefix="VEHICLE_FINE_RECEIPT",
+    noun="receipt",
+    extensions=frozenset({".pdf", ".png", ".jpg", ".jpeg"}),
+    bad_format_message="Receipts must be a PDF, PNG, or JPEG file.",
+    fallback_name="vehicle-file",
+    max_bytes=FINE_RECEIPT_MAX_BYTES,
+)
 
 
 def due_state(next_due: date | None, *, today: date, notify_days: int) -> str | None:
@@ -1123,29 +1124,6 @@ def delete_fine(
     return get_vehicle(db, vehicle_id)
 
 
-def _validate_fine_receipt(*, filename: str, data: bytes, media_type: str) -> None:
-    if not data:
-        raise ValidationFailedError("VEHICLE_FINE_RECEIPT_EMPTY", "Uploaded receipt is empty.")
-    if len(data) > FINE_RECEIPT_MAX_BYTES:
-        raise ValidationFailedError(
-            "VEHICLE_FINE_RECEIPT_TOO_LARGE",
-            f"Receipt exceeds {FINE_RECEIPT_MAX_BYTES // (1024 * 1024)} MiB.",
-            size=len(data),
-        )
-    safe_name = _safe_filename(filename)
-    extension = Path(safe_name).suffix.lower()
-    signature = _FINE_RECEIPT_SIGNATURES.get(extension)
-    normalized_media = media_type.partition(";")[0].strip().lower()
-    allowed_media = _ALLOWED_MEDIA_BY_EXTENSION.get(extension, frozenset())
-    if signature is None or not data.startswith(signature) or normalized_media not in allowed_media:
-        raise ValidationFailedError(
-            "VEHICLE_FINE_RECEIPT_BAD_FORMAT",
-            "Receipts must be a PDF, PNG, or JPEG file.",
-            extension=extension,
-            media_type=media_type,
-        )
-
-
 def record_payment(
     db: Session,
     vehicle_id: int,
@@ -1176,7 +1154,12 @@ def record_payment(
     receipt_file: VehicleFile | None = None
     destination: Path | None = None
     if data:
-        _validate_fine_receipt(filename=filename or "", data=data, media_type=media_type or "")
+        validate_sniffed_upload(
+            _FINE_RECEIPT_POLICY,
+            filename=filename or "",
+            data=data,
+            media_type=media_type or "",
+        )
         receipt_file, destination = _store_file_record(
             db,
             vehicle_id,
@@ -1245,7 +1228,9 @@ def attach_receipt(
             "This fine already has a receipt.",
             fine_id=fine_id,
         )
-    _validate_fine_receipt(filename=filename, data=data, media_type=media_type)
+    validate_sniffed_upload(
+        _FINE_RECEIPT_POLICY, filename=filename, data=data, media_type=media_type
+    )
     receipt_file, destination = _store_file_record(
         db, vehicle_id, kind="receipt", filename=filename, data=data, media_type=media_type
     )
@@ -1886,12 +1871,6 @@ def summary(db: Session) -> VehiclesSummary:
     )
 
 
-def _safe_filename(filename: str) -> str:
-    name = filename.replace("\\", "/").rsplit("/", 1)[-1]
-    name = _UNSAFE_CHARS.sub("_", name).strip().strip(".")
-    return name or "vehicle-file"
-
-
 def _validate_upload(
     kind: str, filename: str, data: bytes, media_type: str
 ) -> tuple[str, str, str]:
@@ -1915,7 +1894,7 @@ def _validate_upload(
             f"File exceeds {MAX_FILE_BYTES // (1024 * 1024)} MiB.",
             size=len(data),
         )
-    safe_name = _safe_filename(filename)
+    safe_name = safe_filename(filename, fallback="vehicle-file")
     extension = Path(safe_name).suffix.lower()
     if extension not in _ALLOWED_EXTENSIONS:
         raise ValidationFailedError(
@@ -1929,8 +1908,8 @@ def _validate_upload(
             f"{kind} files must be images.",
             kind=kind,
         )
-    normalized_media = media_type.partition(";")[0].strip().lower()
-    if normalized_media not in _ALLOWED_MEDIA_BY_EXTENSION[extension]:
+    normalized_media = normalize_media_type(media_type)
+    if normalized_media not in MEDIA_TYPES_BY_EXTENSION[extension]:
         raise ValidationFailedError(
             "VEHICLE_FILE_MEDIA_MISMATCH",
             "The upload media type does not match its extension.",
