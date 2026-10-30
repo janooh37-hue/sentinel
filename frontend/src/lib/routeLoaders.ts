@@ -27,6 +27,10 @@ export const loadStoreDeliveriesPage = () =>
   import('@/pages/assets/store/StoreDeliveriesPage').then((m) => ({
     default: m.StoreDeliveriesPage,
   }))
+export const loadStoreDeliveryScanPage = () =>
+  import('@/pages/assets/store/StoreDeliveryScanPage').then((m) => ({
+    default: m.StoreDeliveryScanPage,
+  }))
 export const loadStoreCountsPage = () =>
   import('@/pages/assets/store/StoreCountsPage').then((m) => ({ default: m.StoreCountsPage }))
 export const loadStoreCountPage = () =>
