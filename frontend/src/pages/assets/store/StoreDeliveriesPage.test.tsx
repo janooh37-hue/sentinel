@@ -129,6 +129,26 @@ describe('Store deliveries', () => {
     }
   })
 
+  it('gives a re-added line a fresh key so it does not inherit a removed line\'s error', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Log delivery' }))
+    const dialog = within(screen.getByRole('dialog'))
+    await dialog.findByRole('option', { name: /ST-0004/ })
+    await user.click(dialog.getByRole('button', { name: 'Add line' }))
+    for (const line of dialog.getAllByRole('group', { name: /Line/ })) {
+      await user.selectOptions(within(line).getByRole('combobox', { name: /Store item/ }), '4')
+      await user.click(within(line).getByRole('radio', { name: 'No expiry' }))
+    }
+    await user.click(dialog.getByRole('button', { name: 'Save delivery' }))
+    const duplicate = 'This item and expiry already appear in another line. Combine their quantities.'
+    expect(dialog.getByText(duplicate)).toBeInTheDocument()
+    await user.click(dialog.getByRole('button', { name: 'Remove line 2' }))
+    await user.click(dialog.getByRole('button', { name: 'Add line' }))
+    expect(dialog.getAllByRole('group', { name: /Line/ })).toHaveLength(2)
+    expect(dialog.queryByText(duplicate)).not.toBeInTheDocument()
+  })
+
   it('retains the saved delivery and clearly reports an attachment upload failure', async () => {
     vi.spyOn(api, 'uploadStoreDeliveryNote').mockRejectedValue(new ApiError(503, 'UNAVAILABLE', 'Upload unavailable'))
     const user = userEvent.setup()

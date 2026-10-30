@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { api, ApiError, type StoreCountRead, type StoreCountWrite, type StoreExpectedBatch, type StorePickerItem } from '@/lib/api'
+import { api, ApiError, type StoreCountRead, type StoreCountWrite, type StoreExpectedBatch } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
@@ -78,7 +78,7 @@ function CountForm({ saved }: { saved?: StoreCountRead }): React.JSX.Element {
   const [quantities, setQuantities] = useState<Record<string, QuantityParts>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [missing, setMissing] = useState<MissingBatch[]>([])
-  const [item, setItem] = useState<StorePickerItem | null>(null)
+  const [itemId, setItemId] = useState<number | null>(null)
   const [acknowledgedMissing, setAcknowledgedMissing] = useState<string[]>([])
   const [expiry, setExpiry] = useState<ExpiryValue>(DEFAULT_EXPIRY)
   const [addError, setAddError] = useState('')
@@ -129,6 +129,8 @@ function CountForm({ saved }: { saved?: StoreCountRead }): React.JSX.Element {
 
   function addBatch() {
     const value = expiryFromValue(expiry)
+    // Resolve at Add time: units or archive state may have changed since selection.
+    const item = picker.data?.find((entry) => entry.id === itemId)
     if (!item || value === undefined) {
       setAddError(t('assets.store.counts.chooseBatch'))
       return
@@ -203,7 +205,7 @@ function CountForm({ saved }: { saved?: StoreCountRead }): React.JSX.Element {
         <legend className="px-2 font-semibold">{t('assets.store.counts.addBatch')}</legend>
         <StoreQueryState isPending={picker.isPending} error={picker.error} onRetry={() => { void picker.refetch() }} isEmpty={picker.data?.length === 0} emptyMessage={t('assets.store.counts.noItems')} emptyDescription={t('assets.store.counts.noItemsDescription')}>
           <div className="grid gap-3 md:grid-cols-2">
-            <div><label htmlFor="batch-item" className="mb-1.5 block text-sm font-medium">{t('assets.store.counts.item')}</label><StoreItemPicker id="batch-item" value={item?.id ?? null} onChange={setItem} placeholder={t('assets.store.counts.chooseItem')} /></div>
+            <div><label htmlFor="batch-item" className="mb-1.5 block text-sm font-medium">{t('assets.store.counts.item')}</label><StoreItemPicker id="batch-item" value={itemId} onChange={(next) => setItemId(next?.id ?? null)} placeholder={t('assets.store.counts.chooseItem')} /></div>
             <ExpiryInput id="new-batch-expiry" value={expiry} onChange={setExpiry} invalid={Boolean(addError)} describedBy={addError ? 'add-batch-error' : undefined} />
           </div>
           {addError && <p id="add-batch-error" role="alert" className="text-sm text-destructive">{addError}</p>}
