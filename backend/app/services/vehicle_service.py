@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session, object_session, selectinload, with_expressio
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.clock import utcnow
+from app.core.expiry import expiry_status
 from app.core.vehicle_certificates import Profile
 from app.db.models import (
     AuditLog,
@@ -97,15 +98,6 @@ _FINE_RECEIPT_SIGNATURES: dict[str, bytes] = {
     ".jpg": b"\xff\xd8\xff",
     ".jpeg": b"\xff\xd8\xff",
 }
-
-
-def expiry_status(expiry: date, *, today: date, notify_days: int) -> str:
-    days = (expiry - today).days
-    if days < 0:
-        return "expired"
-    if days <= notify_days:
-        return "due"
-    return "valid"
 
 
 def due_state(next_due: date | None, *, today: date, notify_days: int) -> str | None:

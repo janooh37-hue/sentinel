@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.clock import organization_today, utcnow
+from app.core.expiry import expiry_status
 from app.db.models import (
     AuditLog,
     StoreBatch,
@@ -1312,9 +1313,10 @@ def dashboard(db: Session) -> StoreDashboard:
             on_hand=quantity,
             days_left=days_left,
         )
-        if days_left < 0:
+        status = expiry_status(batch.expiry_date, today=current, notify_days=EXPIRING_SOON_DAYS)
+        if status == "expired":
             expired.append(row)
-        elif days_left <= EXPIRING_SOON_DAYS:
+        elif status == "due":
             expiring.append(row)
     expired.sort(key=lambda row: row.days_left or 0)
     expiring.sort(key=lambda row: row.days_left or 0)
