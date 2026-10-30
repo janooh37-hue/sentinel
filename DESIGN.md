@@ -1834,6 +1834,12 @@ copy with direct actions stay inside the same clipped frame.
   Narrower XL boxes on phones use the compact list.
   Item-permit create, edit, submit and delete invalidate the summary prefix,
   refreshing every cached zone alongside the register.
+- **Store:** `store_expiring` combines expired batches first with batches expiring
+  within the server-provided window (60 days by default), retaining explicit
+  expiry-state labels. `store_low_stock` shows items below their Minimum level.
+  Both require `store.view`, share the `store-dashboard` query, link to
+  `/assets/store`, and use fitted previews for tall/list boxes. Names and
+  quantity units follow the UI language with bilingual fallback.
 - **Workforce pulse:** glance shows coverage as a percentage; other aggregate
   tiers show scheduled/on-duty/coverage. Missing values remain unknown, reason
   codes are translated, and Open coverage opens the existing coverage sheet.

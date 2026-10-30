@@ -2,6 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_LAYOUT, QUICK_ACTION_IDS, WIDGET_IDS, WIDGET_SIZES, packLayout, tierOf, rowsPerHeight, resolveLayout, widgetsForApi, isQuickActionAllowed, hasServiceCap, hasServiceRecordsCap, mergeQuickActionsPreservingDenied, type PackedWidget, type QuickActionId, type WidgetSize } from './dashboardLayout'
 import type { DashboardLayout } from './api'
 
+describe('store dashboard layout', () => {
+  it('appends store widgets hidden with list-capable default sizes', () => {
+    expect(WIDGET_IDS.slice(-2)).toEqual(['store_expiring', 'store_low_stock'])
+    const resolved = resolveLayout({ widgets: [{ id: 'pending', visible: true, order: 0, size: 'M' }] })
+    for (const id of ['store_expiring', 'store_low_stock']) {
+      expect(DEFAULT_LAYOUT.widgets.find((widget) => widget.id === id)).toMatchObject({ visible: false, size: 'L' })
+      expect(resolved.widgets.find((widget) => widget.id === id)).toMatchObject({ visible: false, size: 'L' })
+    }
+  })
+})
+
 describe('companion quick-actions are gone', () => {
   it('QUICK_ACTION_IDS excludes companion forms', () => {
     expect(QUICK_ACTION_IDS).not.toContain('Leave Undertaking')

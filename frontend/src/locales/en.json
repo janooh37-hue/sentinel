@@ -4344,6 +4344,12 @@
       "invalidDate": "Must be a valid date (YYYY-MM-DD)"
     },
     "itemsTable": {
+      "picker": {
+        "label": "Item code, row {{row}}",
+        "placeholder": "Search code or name",
+        "options": "Store items",
+        "empty": "No matching store items. You may enter the item details manually."
+      },
       "addRow": "+ Add row",
       "code": "Code",
       "description": "Description",
@@ -4584,6 +4590,7 @@
         "leaves": "Leaves",
         "workforce": "Workforce",
         "permits": "Permits",
+        "store": "Store",
         "services": "Services"
       }
     },
@@ -4726,6 +4733,22 @@
       "onLeave": "on leave"
     },
     "widgets": {
+      "store_expiring": {
+        "title": "Store expiry",
+        "window": "Batches expired or expiring within {{days}} days",
+        "empty": "No batches on hand are expired or expire within {{days}} days.",
+        "expired": "Expired",
+        "expiring": "Expiring soon",
+        "more": "Additional batches: {{total}}"
+      },
+      "store_low_stock": {
+        "title": "Store low stock",
+        "meaning": "Items below their Minimum level",
+        "empty": "No items with a Minimum level have stock below it.",
+        "onHand": "On hand",
+        "minimum": "Minimum level",
+        "more": "Additional items: {{total}}"
+      },
       "viewAll": "View all: {{title}}",
       "recordsAction": "Open records",
       "quickActions": {

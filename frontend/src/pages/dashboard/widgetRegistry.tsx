@@ -17,6 +17,8 @@ import { PendingDeparturesWidget } from './widgets/PendingDeparturesWidget'
 import { ViolationMonthsWidget } from './widgets/ViolationMonthsWidget'
 import { PermitsWidget } from './widgets/PermitsWidget'
 import { WorkforcePulseWidget } from './widgets/WorkforcePulseWidget'
+import { StoreExpiringWidget } from './widgets/StoreExpiringWidget'
+import { StoreLowStockWidget } from './widgets/StoreLowStockWidget'
 import type { WidgetProps } from './widgets/types'
 
 export interface WidgetAvailabilityContext {
@@ -52,4 +54,6 @@ export const widgetRegistry: Record<WidgetId, WidgetRegistration> = {
   violation_months: { titleKey: 'dashboard.widgets.violation_months.title', source: 'records', available: ({ has }) => has('books.view') && has('documents.generate') && hasServiceCap('Inmate Conduct Violations', has) && hasServiceRecordsCap('Inmate Conduct Violations', has), Component: ViolationMonthsWidget },
   permits: { titleKey: 'dashboard.widgets.permits.title', source: 'permits', available: ({ has }) => has('permits.view'), Component: PermitsWidget },
   quick_actions: { titleKey: 'dashboard.widgets.quickActions.title', source: 'services', available: ({ has }) => has('documents.generate') && has('books.view'), Component: QuickActionsWidget },
+  store_expiring: { titleKey: 'dashboard.widgets.store_expiring.title', source: 'store', available: ({ has }) => has('store.view'), Component: StoreExpiringWidget },
+  store_low_stock: { titleKey: 'dashboard.widgets.store_low_stock.title', source: 'store', available: ({ has }) => has('store.view'), Component: StoreLowStockWidget },
 }
