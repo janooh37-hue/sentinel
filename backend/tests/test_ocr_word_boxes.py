@@ -97,3 +97,23 @@ def test_missing_tesseract_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> No
 def test_unreadable_upload_is_invalid_image() -> None:
     with pytest.raises(ocr.InvalidImageError):
         word_boxes_from_bytes(b"not an image")
+
+
+def test_timeout_is_passed_to_tesseract_and_a_timeout_is_raised_as_ocr_timeout(
+    tesseract, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    word_boxes_from_bytes(_png(2000, 900), timeout=30)
+    assert tesseract[0][1]["timeout"] == 30
+    import pytesseract
+
+    def timed_out(image: Image.Image, **kwargs: Any) -> dict[str, list[Any]]:
+        raise RuntimeError("Tesseract process timeout")
+
+    monkeypatch.setattr(pytesseract, "image_to_data", timed_out)
+    with pytest.raises(ocr.OcrTimeoutError):
+        word_boxes_from_bytes(_png(2000, 900), timeout=30)
+
+
+def test_default_has_no_tesseract_timeout(tesseract) -> None:
+    word_boxes_from_bytes(_png(2000, 900))
+    assert tesseract[0][1].get("timeout", 0) == 0

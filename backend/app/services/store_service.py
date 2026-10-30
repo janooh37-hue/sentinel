@@ -950,15 +950,33 @@ def _upsert_delivery_aliases(
         )
 
 
+SCAN_MAX_PAGES = 5
+SCAN_PAGE_TIMEOUT_SECONDS = 30
+
+
 def scan_delivery(db: Session, *, filename: str, data: bytes, media_type: str) -> StoreDeliveryScan:
     """Read a delivery note without persisting files, rows, or audit records."""
     import pytesseract
 
     validate_sniffed_upload(_NOTE_FILE_POLICY, filename=filename, data=data, media_type=media_type)
     try:
+        # Bound the work done while holding the shared OCR gate: refuse long
+        # PDFs before rasterising, and cap Tesseract per page.
+        if data.startswith(b"%PDF") and ocr.pdf_page_count(data) > SCAN_MAX_PAGES:
+            raise ValidationFailedError(
+                "STORE_SCAN_TOO_MANY_PAGES",
+                f"A delivery note scan reads at most {SCAN_MAX_PAGES} pages.",
+                max_pages=SCAN_MAX_PAGES,
+            )
         # word_boxes_from_bytes does not acquire the gate itself.
         with ocr.OCR_GATE:
-            pages = ocr.word_boxes_from_bytes(data, lang="eng")
+            pages = ocr.word_boxes_from_bytes(data, lang="eng", timeout=SCAN_PAGE_TIMEOUT_SECONDS)
+    except ocr.OcrTimeoutError as exc:
+        raise ValidationFailedError(
+            "STORE_SCAN_TIMEOUT",
+            "Reading the delivery note took too long. Try a clearer or smaller photo.",
+            timeout_seconds=SCAN_PAGE_TIMEOUT_SECONDS,
+        ) from exc
     except (ocr.OcrUnavailableError, pytesseract.TesseractNotFoundError):
         return StoreDeliveryScan(pages=[], lines=[], ocr_available=False)
     except ocr.InvalidImageError as exc:

@@ -24,7 +24,21 @@ from app.schemas.store import StoreDeliveryCreate
 from app.services import store_service
 
 TODAY = date(2026, 12, 15)
-_PDF = b"%PDF-1.4\n%store delivery note\n"
+
+
+def _pdf_pages(count: int) -> bytes:
+    import pymupdf
+
+    doc = pymupdf.open()
+    for _ in range(count):
+        doc.new_page(width=200, height=100)
+    try:
+        return bytes(doc.tobytes())
+    finally:
+        doc.close()
+
+
+_PDF = _pdf_pages(1)
 
 
 def _make_user(
@@ -737,7 +751,7 @@ def test_delivery_scan_matches_items_and_alias_upsert_rematches(
             "Grand Total 1100.00",
         )
     ]
-    monkeypatch.setattr(ocr, "word_boxes_from_bytes", lambda raw, *, lang: pages)
+    monkeypatch.setattr(ocr, "word_boxes_from_bytes", lambda raw, *, lang, timeout: pages)
     before_audit = len(api_db.scalars(select(AuditLog)).all())
 
     def scan() -> dict:
@@ -791,7 +805,7 @@ def test_delivery_scan_ocr_unavailable(
 
     from app.core.extraction import ocr
 
-    def unavailable(raw: bytes, *, lang: str) -> Any:
+    def unavailable(raw: bytes, *, lang: str, timeout: float) -> Any:
         if missing_binary:
             raise pytesseract.TesseractNotFoundError()
         raise ocr.OcrUnavailableError("Unavailable")
@@ -817,3 +831,51 @@ def test_delivery_scan_reuses_file_rules_and_requires_edit(
         "/api/v1/store/deliveries/scan", files={"file": ("note.pdf", _PDF, "application/pdf")}
     )
     assert response.status_code == 403
+
+
+def test_delivery_scan_refuses_long_pdfs_before_ocr(
+    editor: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.extraction import ocr
+
+    calls: list[bytes] = []
+
+    def boxes(raw: bytes, *, lang: str, timeout: float) -> list[Any]:
+        calls.append(raw)
+        return []
+
+    monkeypatch.setattr(ocr, "word_boxes_from_bytes", boxes)
+    response = editor.post(
+        "/api/v1/store/deliveries/scan",
+        files={"file": ("note.pdf", _pdf_pages(6), "application/pdf")},
+    )
+    assert response.status_code == 422
+    assert _error(response)["code"] == "STORE_SCAN_TOO_MANY_PAGES"
+    assert _error(response)["details"] == {"max_pages": 5}
+    assert calls == []
+    ok = editor.post(
+        "/api/v1/store/deliveries/scan",
+        files={"file": ("note.pdf", _pdf_pages(5), "application/pdf")},
+    )
+    assert ok.status_code == 200, ok.text
+    assert len(calls) == 1
+
+
+def test_delivery_scan_bounds_tesseract_time_per_page(
+    editor: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.extraction import ocr
+
+    timeouts: list[float] = []
+
+    def slow(raw: bytes, *, lang: str, timeout: float) -> list[Any]:
+        timeouts.append(timeout)
+        raise ocr.OcrTimeoutError("Tesseract process timeout")
+
+    monkeypatch.setattr(ocr, "word_boxes_from_bytes", slow)
+    response = editor.post(
+        "/api/v1/store/deliveries/scan", files={"file": ("note.pdf", _PDF, "application/pdf")}
+    )
+    assert response.status_code == 422
+    assert _error(response)["code"] == "STORE_SCAN_TIMEOUT"
+    assert len(timeouts) == 1 and 0 < timeouts[0] <= 60
