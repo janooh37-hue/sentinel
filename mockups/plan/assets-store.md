@@ -148,9 +148,14 @@ refuses if any Store item exists.
   English MRF prefilled in both UI languages; picker filled English in the Arabic
   UI; mobile count screen showed 23 blank inputs. Found and fixed the `/assets`
   route collision (reload 404) by moving the section to `/holdings`.
-- Next: publish to the dev channel (blocked: the dev worktree has staged changes
-  from another session; on `dev` the migration must sit on `0116`), user tests,
-  then PR from `feat/assets-store` after renumbering the migration onto main's head.
+- 2026-10-30 dev channel: the 22 store commits were cherry-picked onto `dev`, plus
+  dev-only `9acb3d15` renumbering the migration to `0117_store` after `dev`'s
+  `0116` (never promote it). Conflicts resolved toward `dev`: capability-count test
+  (removed on dev), PermissionsPage (rewritten as the access studio, catalog-driven),
+  `api.types.ts` regenerated. 66 store/migration tests pass and `tsc` is clean on
+  `dev`. Published; opening stock imported into dev data (13 items, 23 lines).
+- Next: user tests on the dev URL, then PR from `feat/assets-store` after
+  renumbering the migration onto main's head.
 
 ## Open notes
 
