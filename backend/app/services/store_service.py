@@ -311,6 +311,8 @@ def _item_ref(item: StoreItem) -> dict[str, Any]:
         "contains_qty": item.contains_qty,
         "contains_unit_en": item.contains_unit_en,
         "contains_unit_ar": item.contains_unit_ar,
+        "art_kind": item.art_kind,
+        "art_color": item.art_color,
     }
 
 
@@ -350,6 +352,8 @@ def _item_read(row: StoreItem, on_hand: int) -> StoreItemRead:
         contains_unit_en=row.contains_unit_en,
         contains_unit_ar=row.contains_unit_ar,
         minimum_level=row.minimum_level,
+        art_kind=row.art_kind,
+        art_color=row.art_color,
         archived_at=row.archived_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -538,6 +542,8 @@ def list_picker_items(db: Session) -> list[StorePickerItem]:
             contains_qty=row.contains_qty,
             contains_unit_en=row.contains_unit_en,
             contains_unit_ar=row.contains_unit_ar,
+            art_kind=row.art_kind,
+            art_color=row.art_color,
         )
         for row in rows
     ]
@@ -550,6 +556,31 @@ def _check_contains(qty: int | None, unit_en: str | None, unit_ar: str | None) -
             "STORE_ITEM_CONTAINS_INCOMPLETE",
             "A contained quantity needs its unit in English and Arabic, and the reverse.",
         )
+
+
+_ART_KINDS = frozenset(
+    {
+        "jar",
+        "canister",
+        "box",
+        "tins",
+        "water",
+        "cups",
+        "bigcups",
+        "tissue",
+        "gloves",
+        "mask",
+        "carton",
+    }
+)
+
+
+def _check_art(kind: str | None, color: str | None) -> str | None:
+    if kind is not None and kind not in _ART_KINDS:
+        raise ValidationFailedError("STORE_ITEM_ART_KIND", "Unknown Store item drawing kind.")
+    if color is not None and re.fullmatch(r"#[0-9a-fA-F]{6}", color) is None:
+        raise ValidationFailedError("STORE_ITEM_ART_COLOR", "Drawing colour must be #rrggbb.")
+    return color.lower() if color is not None else None
 
 
 def _next_code(db: Session) -> str:
@@ -570,6 +601,7 @@ def create_item(
     commit: bool = True,
 ) -> StoreItem:
     _check_contains(payload.contains_qty, payload.contains_unit_en, payload.contains_unit_ar)
+    color = _check_art(payload.art_kind, payload.art_color)
     with _write(db, commit=commit):
         _get_category(db, payload.category_id)
         row = StoreItem(
@@ -583,6 +615,8 @@ def create_item(
             contains_unit_en=payload.contains_unit_en,
             contains_unit_ar=payload.contains_unit_ar,
             minimum_level=payload.minimum_level,
+            art_kind=payload.art_kind,
+            art_color=color,
             created_by_user_id=actor_user_id,
         )
         db.add(row)
@@ -638,6 +672,12 @@ def update_item(
     with _write(db):
         row = get_item(db, item_id)
         require_if_match(if_match, _item_etag(row), code="STORE_ITEM_VERSION_CONFLICT")
+        if "art_kind" in data or "art_color" in data:
+            color = _check_art(
+                data.get("art_kind", row.art_kind), data.get("art_color", row.art_color)
+            )
+            if "art_color" in data:
+                data["art_color"] = color
         if any(key in data for key in _CONTAINS_FIELDS):
             new_contains = tuple(data.get(key, getattr(row, key)) for key in _CONTAINS_FIELDS)
             _check_contains(*new_contains)

@@ -73,6 +73,8 @@ class StoreItemCreate(BaseModel):
     contains_unit_en: str | None = Field(default=None, max_length=64)
     contains_unit_ar: str | None = Field(default=None, max_length=64)
     minimum_level: int | None = Field(default=None, ge=0)
+    art_kind: str | None = None
+    art_color: str | None = None
 
     @field_validator("name_ar", "contains_unit_en", "contains_unit_ar")
     @classmethod
@@ -92,6 +94,8 @@ class StoreItemUpdate(BaseModel):
     contains_unit_en: str | None = Field(default=None, max_length=64)
     contains_unit_ar: str | None = Field(default=None, max_length=64)
     minimum_level: int | None = Field(default=None, ge=0)
+    art_kind: str | None = None
+    art_color: str | None = None
 
     @field_validator("name_ar", "contains_unit_en", "contains_unit_ar")
     @classmethod
@@ -112,6 +116,8 @@ class StoreItemRead(ORMBase):
     contains_unit_en: str | None
     contains_unit_ar: str | None
     minimum_level: int | None
+    art_kind: str | None
+    art_color: str | None
     archived_at: datetime | None
     created_at: datetime
     updated_at: datetime | None
@@ -129,6 +135,8 @@ class StorePickerItem(BaseModel):
     contains_qty: int | None
     contains_unit_en: str | None
     contains_unit_ar: str | None
+    art_kind: str | None
+    art_color: str | None
 
 
 # ── Batches and lines ────────────────────────────────────────────────────────
@@ -146,6 +154,8 @@ class StoreItemRef(ORMBase):
     contains_qty: int | None
     contains_unit_en: str | None
     contains_unit_ar: str | None
+    art_kind: str | None
+    art_color: str | None
 
 
 class StoreBatchRead(StoreItemRef):

@@ -568,3 +568,26 @@ def test_concurrent_first_use_of_a_batch_creates_it_once(tmp_path: Path) -> None
             assert [(b.item_id, b.expiry_date) for b in batches] == [(item_id, date(2027, 5, 31))]
     finally:
         engine.dispose()
+
+
+def test_item_art_validation_and_read_surfaces(editor: TestClient, category: StoreCategory) -> None:
+    item = _item(editor, category, art_kind="jar", art_color="#AaBbCc")
+    assert (item["art_kind"], item["art_color"]) == ("jar", "#aabbcc")
+    picker = editor.get("/api/v1/store/items/picker").json()
+    assert picker[0]["art_kind"] == "jar"
+    for extra, code in [
+        ({"art_kind": "photo"}, "STORE_ITEM_ART_KIND"),
+        ({"art_color": "#fff"}, "STORE_ITEM_ART_COLOR"),
+    ]:
+        response = editor.post(
+            "/api/v1/store/items", json={"name_en": "Invalid", "category_id": category.id, **extra}
+        )
+        assert _error(response)["code"] == code
+    updated = editor.patch(
+        f"/api/v1/store/items/{item['id']}",
+        headers={"If-Match": item["version"]},
+        json={"art_kind": "carton", "art_color": None},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["art_kind"] == "carton"
+    assert updated.json()["art_color"] is None

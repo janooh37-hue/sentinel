@@ -65,6 +65,8 @@ class _OpeningItem(BaseModel):
     category: str = Field(min_length=1)
     counting_unit_en: str = Field(min_length=1)
     counting_unit_ar: str = Field(min_length=1)
+    art_kind: str | None = None
+    art_color: str | None = None
     batches: list[_OpeningBatch] = Field(min_length=1)
 
 
@@ -109,6 +111,8 @@ def import_opening(db: Session, data: dict[str, Any], *, actor: str) -> StoreCou
                     category_id=_category_id(db, entry.category, actor),
                     counting_unit_en=entry.counting_unit_en,
                     counting_unit_ar=entry.counting_unit_ar,
+                    art_kind=entry.art_kind,
+                    art_color=entry.art_color,
                 ),
                 actor=actor,
                 actor_user_id=actor_user_id,

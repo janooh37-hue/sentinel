@@ -4,6 +4,8 @@
   "items": [
     {
       "name_en": "Nescafe Classic 12×190g",
+      "art_kind": "jar",
+      "art_color": "#3a2216",
       "category": "Pantry",
       "counting_unit_en": "Carton",
       "counting_unit_ar": "كرتون",
@@ -15,6 +17,8 @@
     },
     {
       "name_en": "Coffee-mate 15×400g",
+      "art_kind": "canister",
+      "art_color": "#f4efe6",
       "category": "Pantry",
       "counting_unit_en": "Carton",
       "counting_unit_ar": "كرتون",
@@ -32,6 +36,8 @@
     },
     {
       "name_en": "Lipton Yellow Label Tea 24×400g",
+      "art_kind": "box",
+      "art_color": "#f2c230",
       "category": "Pantry",
       "counting_unit_en": "Carton",
       "counting_unit_ar": "كرتون",
@@ -39,6 +45,8 @@
     },
     {
       "name_en": "Green tea",
+      "art_kind": "box",
+      "art_color": "#3f7d3a",
       "category": "Pantry",
       "counting_unit_en": "Packet",
       "counting_unit_ar": "علبة",
@@ -46,6 +54,8 @@
     },
     {
       "name_en": "Lipton Red Label 36×100 teabags",
+      "art_kind": "box",
+      "art_color": "#b3121f",
       "category": "Pantry",
       "counting_unit_en": "Carton",
       "counting_unit_ar": "كرتون",
@@ -53,6 +63,8 @@
     },
     {
       "name_en": "Rainbow milk 96×170g",
+      "art_kind": "tins",
+      "art_color": "#d0312d",
       "category": "Pantry",
       "counting_unit_en": "Carton",
       "counting_unit_ar": "كرتون",
@@ -60,6 +72,8 @@
     },
     {
       "name_en": "Liwa Water",
+      "art_kind": "water",
+      "art_color": "#2f7fc1",
       "category": "Pantry",
       "counting_unit_en": "Carton",
       "counting_unit_ar": "كرتون",
@@ -67,6 +81,8 @@
     },
     {
       "name_en": "Coffee cup 50×40pc",
+      "art_kind": "cups",
+      "art_color": "#ffffff",
       "category": "Pantry",
       "counting_unit_en": "Carton",
       "counting_unit_ar": "كرتون",
@@ -74,6 +90,8 @@
     },
     {
       "name_en": "Big coffee cup",
+      "art_kind": "bigcups",
+      "art_color": "#ffffff",
       "category": "Pantry",
       "counting_unit_en": "Carton",
       "counting_unit_ar": "كرتون",
@@ -81,6 +99,8 @@
     },
     {
       "name_en": "Masafi Pure Soft café tissues 150×2",
+      "art_kind": "tissue",
+      "art_color": "#5aa9d6",
       "category": "Pantry",
       "counting_unit_en": "Carton",
       "counting_unit_ar": "كرتون",
@@ -88,6 +108,8 @@
     },
     {
       "name_en": "Nitrile gloves",
+      "art_kind": "gloves",
+      "art_color": "#2b5fb4",
       "category": "Protective",
       "counting_unit_en": "Carton",
       "counting_unit_ar": "كرتون",
@@ -95,6 +117,8 @@
     },
     {
       "name_en": "Vinyl gloves 10×100",
+      "art_kind": "gloves",
+      "art_color": "#e9eef2",
       "category": "Protective",
       "counting_unit_en": "Carton",
       "counting_unit_ar": "كرتون",
@@ -102,6 +126,8 @@
     },
     {
       "name_en": "Face mask 3-ply blue",
+      "art_kind": "mask",
+      "art_color": "#eaf3fa",
       "category": "Protective",
       "counting_unit_en": "Carton",
       "counting_unit_ar": "كرتون",
