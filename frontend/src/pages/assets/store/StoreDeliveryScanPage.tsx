@@ -5,7 +5,6 @@ import { LoaderCircle, ScanLine } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { api, ApiError, type StoreDeliveryScan } from '@/lib/api'
-import { toast } from '@/lib/toast'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { DeliveryDialog } from './components/DeliveryDialog'
 import { ScanDeliveryConfirm } from './components/ScanDeliveryConfirm'
@@ -80,7 +79,7 @@ export function StoreDeliveryScanPage(): React.JSX.Element {
           <Button asChild variant="ghost" className="min-h-11 self-start"><Link to="/holdings/store/deliveries">{t('assets.store.scan.back')}</Link></Button>
         </section>
       )}
-      <DeliveryDialog open={manual} onOpenChange={setManual} initialFile={file} onSaved={(warning) => { if (warning) toast.error(warning); navigate('/holdings/store/deliveries') }} />
+      <DeliveryDialog open={manual} onOpenChange={setManual} initialFile={file} onSaved={() => navigate('/holdings/store/deliveries')} />
     </StoreShell>
   )
 }
