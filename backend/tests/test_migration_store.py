@@ -20,11 +20,15 @@ from app.db.models import (
     StoreDelivery,
     StoreDeliveryLine,
     StoreDisposal,
+    StoreHandover,
+    StoreHandoverLine,
     StoreItem,
+    StoreItemAlias,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0110_store"
+HEAD = "0111_store_room"
+STORE_REVISION = "0110_store"
 PARENT = "0109_book_folder_shares"
 MODELS = (
     StoreCategory,
@@ -35,6 +39,9 @@ MODELS = (
     StoreCount,
     StoreCountLine,
     StoreDisposal,
+    StoreHandover,
+    StoreHandoverLine,
+    StoreItemAlias,
 )
 
 
@@ -61,7 +68,7 @@ def test_revision_follows_parent_in_single_head_history() -> None:
     heads = script.get_heads()
     assert len(heads) == 1
     assert HEAD in {revision.revision for revision in script.walk_revisions("base", heads[0])}
-    assert script.get_revision(HEAD).down_revision == PARENT
+    assert script.get_revision(STORE_REVISION).down_revision == PARENT
 
 
 def test_upgrade_matches_models_and_seeds_categories(at_parent: tuple[Engine, Config]) -> None:
