@@ -2,9 +2,9 @@
 
 Quantities are integers in base units (loose units when a Store item has
 ``contains_qty``, otherwise Counting units). On-hand and Monthly usage are
-derived from Stock counts plus the Monthly deliveries and Disposals around them
-(ADR 0009); nothing records individual handouts. A delivery or Disposal dated
-on a Stock count's day happens after that count.
+derived from Stock counts plus Monthly deliveries and Disposals (ADR 0010).
+Handovers reduce on-hand but are excluded from derived usage. All movements
+dated on a Stock count's day happen after that count.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import Any
+from typing import Literal
 
 from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
@@ -37,6 +38,8 @@ from app.db.models import (
     StoreDelivery,
     StoreDeliveryLine,
     StoreDisposal,
+    StoreHandover,
+    StoreHandoverLine,
     StoreItem,
 )
 from app.db.repos._locking import begin_immediate_if_idle
@@ -59,6 +62,8 @@ from app.schemas.store import (
     StoreDisposalCreate,
     StoreDisposalRead,
     StoreExpectedBatch,
+    StoreHandoverCreate,
+    StoreHandoverRead,
     StoreItemCreate,
     StoreItemRead,
     StoreItemUpdate,
@@ -69,6 +74,7 @@ from app.schemas.store import (
     StoreUsageRow,
     parse_expiry,
 )
+from app.services import book_service
 from app.services.workforce_etag import require_if_match, row_etag
 
 EXPIRING_SOON_DAYS = 60
@@ -152,6 +158,7 @@ class _Event:
     batch_id: int
     on: date
     delta: int
+    kind: Literal["in", "out", "disposed"]
 
 
 @dataclass
@@ -222,7 +229,7 @@ class _Ledger:
                 totals[item_of[batch_id]] -= quantity
                 seen.add(item_of[batch_id])
             for event in self.events:
-                if first.counted_on <= event.on < second.counted_on:
+                if event.kind != "out" and first.counted_on <= event.on < second.counted_on:
                     totals[item_of[event.batch_id]] += event.delta
                     seen.add(item_of[event.batch_id])
             values: dict[int, int | None] = {item_id: totals[item_id] for item_id in seen}
@@ -245,7 +252,7 @@ def _load_ledger(db: Session) -> _Ledger:
         ).all()
     ]
     events = [
-        _Event(batch_id, received_on, quantity)
+        _Event(batch_id, received_on, quantity, "in")
         for batch_id, received_on, quantity in db.execute(
             select(
                 StoreDeliveryLine.batch_id, StoreDelivery.received_on, StoreDeliveryLine.quantity
@@ -253,9 +260,17 @@ def _load_ledger(db: Session) -> _Ledger:
         ).all()
     ]
     events.extend(
-        _Event(batch_id, disposed_on, -quantity)
+        _Event(batch_id, disposed_on, -quantity, "disposed")
         for batch_id, disposed_on, quantity in db.execute(
             select(StoreDisposal.batch_id, StoreDisposal.disposed_on, StoreDisposal.quantity)
+        ).all()
+    )
+    events.extend(
+        _Event(batch_id, handed_on, -quantity, "out")
+        for batch_id, handed_on, quantity in db.execute(
+            select(
+                StoreHandoverLine.batch_id, StoreHandover.handed_on, StoreHandoverLine.quantity
+            ).join(StoreHandover, StoreHandover.id == StoreHandoverLine.handover_id)
         ).all()
     )
     return _Ledger(counts=counts, events=events)
@@ -302,7 +317,7 @@ def _days_left(batch: StoreBatch, as_of: date) -> int | None:
     return (batch.expiry_date - as_of).days if batch.expiry_date is not None else None
 
 
-def _line_read(line: StoreDeliveryLine | StoreCountLine) -> StoreLineRead:
+def _line_read(line: StoreDeliveryLine | StoreCountLine | StoreHandoverLine) -> StoreLineRead:
     batch = line.batch
     return StoreLineRead(
         **_item_ref(batch.item),
@@ -588,6 +603,7 @@ def _item_has_lines(db: Session, item_id: int) -> bool:
                 exists().where(StoreDeliveryLine.batch_id.in_(batch_ids))
                 | exists().where(StoreCountLine.batch_id.in_(batch_ids))
                 | exists().where(StoreDisposal.batch_id.in_(batch_ids))
+                | exists().where(StoreHandoverLine.batch_id.in_(batch_ids))
             )
         )
     )
@@ -760,6 +776,7 @@ def _remove_orphan_batches(db: Session, batch_ids: Iterable[int]) -> None:
                 exists().where(StoreDeliveryLine.batch_id == batch_id)
                 | exists().where(StoreCountLine.batch_id == batch_id)
                 | exists().where(StoreDisposal.batch_id == batch_id)
+                | exists().where(StoreHandoverLine.batch_id == batch_id)
             )
         )
         if not used:
@@ -1259,6 +1276,172 @@ def delete_disposal(db: Session, disposal_id: int, *, actor: str | None = None) 
         db.delete(row)
         db.flush()
         _remove_orphan_batches(db, [batch_id])
+
+
+# ── Handovers ────────────────────────────────────────────────────────────────
+
+
+def _handover_options() -> Any:
+    return (
+        selectinload(StoreHandover.lines)
+        .selectinload(StoreHandoverLine.batch)
+        .selectinload(StoreBatch.item)
+    )
+
+
+def _handover_reads(db: Session, rows: Sequence[StoreHandover]) -> list[StoreHandoverRead]:
+    ids = {row.created_by_user_id for row in rows if row.created_by_user_id is not None}
+    names = book_service.resolve_names_by_ids(db, ids)
+    names_ar = book_service.resolve_names_ar_by_ids(db, ids)
+    return [
+        StoreHandoverRead(
+            id=row.id,
+            handed_on=row.handed_on,
+            taken_by=row.taken_by,
+            note=row.note,
+            lines=[_line_read(line) for line in row.lines],
+            created_by_user_id=row.created_by_user_id,
+            created_at=row.created_at,
+            recorded_by_name=names.get(row.created_by_user_id) if row.created_by_user_id else None,
+            recorded_by_name_ar=names_ar.get(row.created_by_user_id)
+            if row.created_by_user_id
+            else None,
+        )
+        for row in rows
+    ]
+
+
+def list_handovers(db: Session) -> list[StoreHandoverRead]:
+    rows = db.scalars(
+        select(StoreHandover)
+        .options(_handover_options())
+        .order_by(
+            StoreHandover.handed_on.desc(), StoreHandover.created_at.desc(), StoreHandover.id.desc()
+        )
+    ).all()
+    return _handover_reads(db, rows)
+
+
+def _get_handover(db: Session, handover_id: int) -> StoreHandover:
+    row = db.scalar(
+        select(StoreHandover).where(StoreHandover.id == handover_id).options(_handover_options())
+    )
+    if row is None:
+        raise NotFoundError(
+            "STORE_HANDOVER_NOT_FOUND", "Handover not found.", handover_id=handover_id
+        )
+    return row
+
+
+def get_handover(db: Session, handover_id: int) -> StoreHandoverRead:
+    return _handover_reads(db, [_get_handover(db, handover_id)])[0]
+
+
+def list_handover_takers(db: Session) -> list[str]:
+    rows = db.scalars(
+        select(StoreHandover.taken_by).order_by(
+            StoreHandover.handed_on.desc(), StoreHandover.created_at.desc(), StoreHandover.id.desc()
+        )
+    ).all()
+    return list(dict.fromkeys(rows))
+
+
+def create_handover(
+    db: Session,
+    payload: StoreHandoverCreate,
+    *,
+    actor: str | None = None,
+    actor_user_id: int | None = None,
+) -> StoreHandoverRead:
+    _require_not_future(payload.handed_on, "handed_on")
+    # Preserve spelling and whitespace exactly; trim only to reject an empty name.
+    if not payload.taken_by.strip():
+        raise ValidationFailedError("STORE_HANDOVER_TAKER_REQUIRED", "Taken by cannot be blank.")
+    with _write(db):
+        requested: dict[int, int] = defaultdict(int)
+        for line in payload.lines:
+            requested[line.item_id] += line.quantity
+        ledger = _load_ledger(db)
+        current = organization_today()
+        resolved: list[tuple[int, int]] = []
+        for item_id, quantity in requested.items():
+            item = get_item(db, item_id)
+            _refuse_archived(item)
+            batches = db.scalars(
+                select(StoreBatch)
+                .where(
+                    StoreBatch.item_id == item_id,
+                    (StoreBatch.expiry_date.is_(None))
+                    | (StoreBatch.expiry_date >= payload.handed_on),
+                )
+                .order_by(StoreBatch.expiry_date.is_(None), StoreBatch.expiry_date, StoreBatch.id)
+            ).all()
+            capacities = [
+                (batch.id, max(0, ledger.disposable(batch.id, payload.handed_on, as_of=current)))
+                for batch in batches
+            ]
+            available = sum(capacity for _batch_id, capacity in capacities)
+            if quantity > available:
+                raise ValidationFailedError(
+                    "STORE_HANDOVER_SHORT",
+                    "Not enough non-expired stock for this Handover.",
+                    item_id=item_id,
+                    available=available,
+                )
+            remaining = quantity
+            for batch_id, capacity in capacities:
+                take = min(remaining, capacity)
+                if take:
+                    resolved.append((batch_id, take))
+                    remaining -= take
+                if remaining == 0:
+                    break
+        row = StoreHandover(
+            handed_on=payload.handed_on,
+            taken_by=payload.taken_by,
+            note=payload.note,
+            created_by_user_id=actor_user_id,
+            lines=[StoreHandoverLine(batch_id=batch_id, quantity=q) for batch_id, q in resolved],
+        )
+        db.add(row)
+        db.flush()
+        append_audit(
+            db,
+            action="handover.created",
+            entity_type="store_handover",
+            entity_id=row.id,
+            actor=actor,
+            payload={
+                "handed_on": row.handed_on.isoformat(),
+                "taken_by": row.taken_by,
+                "lines": [{"batch_id": b, "quantity": q} for b, q in resolved],
+            },
+        )
+    db.expire_all()
+    return get_handover(db, row.id)
+
+
+def delete_handover(db: Session, handover_id: int, *, actor: str | None = None) -> None:
+    with _write(db):
+        row = _get_handover(db, handover_id)
+        batch_ids = [line.batch_id for line in row.lines]
+        append_audit(
+            db,
+            action="handover.deleted",
+            entity_type="store_handover",
+            entity_id=row.id,
+            actor=actor,
+            payload={
+                "handed_on": row.handed_on.isoformat(),
+                "taken_by": row.taken_by,
+                "lines": [
+                    {"batch_id": line.batch_id, "quantity": line.quantity} for line in row.lines
+                ],
+            },
+        )
+        db.delete(row)
+        db.flush()
+        _remove_orphan_batches(db, batch_ids)
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.clock import organization_today
 from app.schemas._base import ORMBase
 
 StoreDisposalReason = Literal["expired", "damaged"]
@@ -269,6 +270,33 @@ class StoreDisposalRead(StoreItemRef):
     note: str | None
     created_by_user_id: int | None
     created_at: datetime
+
+
+# ── Handovers ────────────────────────────────────────────────────────────────
+
+
+class StoreHandoverLineInput(BaseModel):
+    item_id: int
+    quantity: int = Field(ge=1)
+
+
+class StoreHandoverCreate(BaseModel):
+    handed_on: date_t = Field(default_factory=organization_today)
+    taken_by: str = Field(min_length=1, max_length=128)
+    note: str | None = None
+    lines: list[StoreHandoverLineInput] = Field(min_length=1)
+
+
+class StoreHandoverRead(BaseModel):
+    id: int
+    handed_on: date_t
+    taken_by: str
+    note: str | None
+    lines: list[StoreLineRead]
+    created_by_user_id: int | None
+    created_at: datetime
+    recorded_by_name: str | None
+    recorded_by_name_ar: str | None
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────────

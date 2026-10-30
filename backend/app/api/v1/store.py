@@ -28,6 +28,8 @@ from app.schemas.store import (
     StoreDisposalCreate,
     StoreDisposalRead,
     StoreExpectedBatch,
+    StoreHandoverCreate,
+    StoreHandoverRead,
     StoreItemCreate,
     StoreItemRead,
     StoreItemUpdate,
@@ -246,6 +248,35 @@ def create_store_disposal(payload: StoreDisposalCreate, db: _Db, user: _Edit) ->
 @router.delete("/disposals/{disposal_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_store_disposal(disposal_id: int, db: _Db, user: _Edit) -> Response:
     store_service.delete_disposal(db, disposal_id, actor=user.email)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── Handovers ────────────────────────────────────────────────────────────────
+
+
+@router.get("/handovers", response_model=list[StoreHandoverRead])
+def list_store_handovers(db: _Db, _user: _View) -> list[StoreHandoverRead]:
+    return store_service.list_handovers(db)
+
+
+@router.post("/handovers", response_model=StoreHandoverRead, status_code=status.HTTP_201_CREATED)
+def create_store_handover(payload: StoreHandoverCreate, db: _Db, user: _Edit) -> StoreHandoverRead:
+    return store_service.create_handover(db, payload, actor=user.email, actor_user_id=user.id)
+
+
+@router.get("/handovers/takers", response_model=list[str])
+def list_store_handover_takers(db: _Db, _user: _View) -> list[str]:
+    return store_service.list_handover_takers(db)
+
+
+@router.get("/handovers/{handover_id}", response_model=StoreHandoverRead)
+def get_store_handover(handover_id: int, db: _Db, _user: _View) -> StoreHandoverRead:
+    return store_service.get_handover(db, handover_id)
+
+
+@router.delete("/handovers/{handover_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_store_handover(handover_id: int, db: _Db, user: _Edit) -> Response:
+    store_service.delete_handover(db, handover_id, actor=user.email)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
