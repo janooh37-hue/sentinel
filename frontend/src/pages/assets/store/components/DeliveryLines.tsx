@@ -1,4 +1,4 @@
-import type { Dispatch, ReactNode, SetStateAction } from 'react'
+import { type Dispatch, type ReactNode, type SetStateAction, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Trash2 } from 'lucide-react'
 
@@ -28,6 +28,8 @@ interface Props {
 /** The delivery line editor: item, quantity and expiry per line, add/remove lines. */
 export function DeliveryLines({ idPrefix, lines, onChange, errors, alertId, disabled = false, renderLineStart, renderLineFields }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  // Monotonic: a removed line's key (and its errors) is never reused.
+  const nextKey = useRef(Math.max(-1, ...lines.map((line) => line.key)) + 1)
   const updateLine = (key: number, patch: Partial<DeliveryLine>) => onChange((current) => current.map((line) => line.key === key ? { ...line, ...patch } : line))
   return (
     <section className="flex flex-col gap-3" aria-labelledby={`${idPrefix}-lines`}>
@@ -59,7 +61,7 @@ export function DeliveryLines({ idPrefix, lines, onChange, errors, alertId, disa
           </fieldset>
         )
       })}
-      <Button type="button" variant="secondary" className="min-h-11 self-start" disabled={disabled} onClick={() => onChange((current) => [...current, newDeliveryLine(Math.max(-1, ...current.map((line) => line.key)) + 1)])}><Plus aria-hidden className="h-4 w-4" />{t('assets.store.deliveries.addLine')}</Button>
+      <Button type="button" variant="secondary" className="min-h-11 self-start" disabled={disabled} onClick={() => { const key = Math.max(nextKey.current, ...lines.map((line) => line.key + 1)); nextKey.current = key + 1; onChange((current) => [...current, newDeliveryLine(key)]) }}><Plus aria-hidden className="h-4 w-4" />{t('assets.store.deliveries.addLine')}</Button>
     </section>
   )
 }

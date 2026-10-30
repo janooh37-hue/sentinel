@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
@@ -10,6 +10,7 @@ import i18n from '@/lib/i18n'
 import { toast } from '@/lib/toast'
 import { todayIso } from '@/pages/vehicles/vehicleUtils'
 import { StoreCountPage } from './StoreCountPage'
+import { storeKeys } from './storeUtils'
 
 const state = vi.hoisted(() => ({ mobile: false, editable: true }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => state.mobile }))
@@ -109,6 +110,30 @@ describe('blank stock count entry', () => {
     await user.type(quantity, '2')
     await user.click(screen.getByRole('button', { name: 'Save stock count' }))
     await waitFor(() => expect(api.createStoreCount).toHaveBeenCalledWith({ counted_on: todayIso(), note: null, lines: [{ item_id: 1, expiry: '2029-10-15', quantity: 48 }] }))
+  })
+
+  it('adds the batch with the item as it is when added, not when selected', async () => {
+    vi.spyOn(api, 'getStoreCountExpected').mockResolvedValue([])
+    const user = userEvent.setup()
+    const client = renderPage()
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Store item' }), '1')
+    act(() => { client.setQueryData(storeKeys.picker, [{ ...ITEM, contains_qty: 12 }]) })
+    await user.click(screen.getByRole('radio', { name: 'No expiry' }))
+    await user.click(screen.getByRole('button', { name: 'Add batch' }))
+    await user.type(screen.getByRole('textbox', { name: 'Tea · No expiry: Carton' }), '1')
+    await user.click(screen.getByRole('button', { name: 'Save stock count' }))
+    await waitFor(() => expect(api.createStoreCount).toHaveBeenCalledWith({ counted_on: todayIso(), note: null, lines: [{ item_id: 1, expiry: null, quantity: 12 }] }))
+  })
+
+  it('does not add an item archived after it was selected', async () => {
+    vi.spyOn(api, 'getStoreCountExpected').mockResolvedValue([])
+    const user = userEvent.setup()
+    const client = renderPage()
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Store item' }), '1')
+    act(() => { client.setQueryData(storeKeys.picker, [{ ...ITEM, id: 2, code: 'ST-0002' }]) })
+    await user.click(screen.getByRole('radio', { name: 'No expiry' }))
+    await user.click(screen.getByRole('button', { name: 'Add batch' }))
+    expect(screen.queryByRole('textbox', { name: 'Tea · No expiry: Carton' })).not.toBeInTheDocument()
   })
 
   it.each(['UTC', 'Pacific/Kiritimati', 'Pacific/Pago_Pago'])('treats a month and its final day as one batch (TZ=%s)', async (zone) => {
