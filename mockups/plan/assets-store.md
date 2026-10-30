@@ -139,6 +139,18 @@ refuses if any Store item exists.
   HQ paper in English regardless of UI language).
 - Deliberately not done: `contains_locked` on `StoreItemRead` (the dialog locks after
   the server refuses, which is correct; up-front locking is polish).
+- 2026-10-30 verification (dtop, merged branch): backend full suite 4045 passed;
+  the 4 failures + 1 error also fail on `origin/main` (pre-existing). Frontend:
+  full vitest, `tsc`, lint (0 errors) green; ruff, format check, numbering green.
+- 2026-10-30 smoke (laptop, fresh scratch DB, built bundle): opening import created
+  13 items / 23 count lines; dashboard flagged Coffee-mate Nov/Dec batches and
+  low-stock gloves; suggestion math checked by hand; Create HQ request opened the
+  English MRF prefilled in both UI languages; picker filled English in the Arabic
+  UI; mobile count screen showed 23 blank inputs. Found and fixed the `/assets`
+  route collision (reload 404) by moving the section to `/holdings`.
+- Next: publish to the dev channel (blocked: the dev worktree has staged changes
+  from another session; on `dev` the migration must sit on `0116`), user tests,
+  then PR from `feat/assets-store` after renumbering the migration onto main's head.
 
 ## Open notes
 
