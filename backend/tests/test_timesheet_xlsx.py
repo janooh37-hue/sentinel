@@ -53,19 +53,22 @@ def _row(
     codes: list[str | None] | None = None,
     stat_codes: list[str | None] | None = None,
     stat_block: int = 1,
+    stat_row_no: int | None = None,
+    nationality_en: str | None = "U.A.E",
 ) -> GridRow:
     day_codes = _codes(days) if codes is None else codes
     return GridRow(
         employee_id=employee_id,
         row_no=row_no,
         name_en=name_en,
-        nationality_en="U.A.E",
+        nationality_en=nationality_en,
         designation_en="Security Guard",
         designation_ar="حارس امن",
         rank_order=15,
         codes=day_codes,
         stat_codes=list(day_codes) if stat_codes is None else stat_codes,
         stat_block=stat_block,
+        stat_row_no=row_no if stat_row_no is None else stat_row_no,
         stat_filler=None,
         joined_day=None,
         left_day=None,
@@ -328,11 +331,36 @@ def test_the_code_validation_is_a_quoted_literal_list_that_still_blocks() -> Non
 # --------------------------------------------------------------------------- #
 
 
-def test_statistics_uses_arabic_designations() -> None:
-    sheet = _sheet(timesheet_xlsx.render(_grid(_row()), variant="statistics"))
-    assert sheet["E6"].value == "حارس امن"
-    # ...where the attendance variant prints the English one.
-    assert _sheet(timesheet_xlsx.render(_grid(_row())))["E6"].value == "Security Guard"
+def test_statistics_marks_arabic_designations_citizen_or_resident() -> None:
+    grid = _grid(
+        _row("G1001", 1),
+        _row("G1002", 2, nationality_en="Nepal"),
+        _row("G1003", 3, nationality_en=None),  # unmapped: blocks the download, no guess
+    )
+    sheet = _sheet(timesheet_xlsx.render(grid, variant="statistics"))
+    assert [sheet.cell(r, 5).value for r in (6, 7, 8)] == [
+        "حارس امن (مواطن)",
+        "حارس امن (مقيم)",
+        "حارس امن",
+    ]
+    # ...where the attendance variant prints the English one, unmarked.
+    assert _sheet(timesheet_xlsx.render(grid))["E6"].value == "Security Guard"
+
+
+def test_statistics_print_in_pay_grade_order_and_number_it() -> None:
+    """Attendance order is ``row_no``; the client sheet walks ``stat_row_no``."""
+
+    grid = _grid(
+        _row("G1001", 1, stat_row_no=3, stat_block=2),
+        _row("G1002", 2, stat_row_no=1),
+        _row("G1003", 3, stat_row_no=2),
+        post_count=2,
+    )
+    statistics = _sheet(timesheet_xlsx.render(grid, variant="statistics"))
+    assert [statistics.cell(r, 2).value for r in (6, 7, 10)] == ["G1002", "G1003", "G1001"]
+    assert [statistics.cell(r, 1).value for r in (6, 7, 10)] == [1, 2, 3]
+    attendance = _sheet(timesheet_xlsx.render(grid))
+    assert [attendance.cell(r, 2).value for r in (6, 7, 8)] == ["G1001", "G1002", "G1003"]
 
 
 def test_statistics_prints_stat_codes_not_the_real_ones() -> None:

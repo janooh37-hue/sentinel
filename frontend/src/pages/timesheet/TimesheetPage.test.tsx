@@ -71,6 +71,7 @@ const EMPTY_MONTH: TimesheetGridResponse = {
   days_in_month: 31,
   sheet: 'main',
   post_count: 249,
+  quotas: [],
   rows: [],
   blocking: [],
   warnings: [],
@@ -82,6 +83,7 @@ const EMPTY_MONTH: TimesheetGridResponse = {
 const ROW: TimesheetRow = {
   employee_id: 'G1001',
   row_no: 1,
+  stat_row_no: 1,
   name_en: 'AHMED BILAL NOOR',
   nationality_en: 'India',
   designation_en: 'SECURITY GUARD',
@@ -107,6 +109,7 @@ const filterRow = (
   ...ROW,
   employee_id,
   row_no,
+  stat_row_no: row_no,
   name_en,
   designation_en,
   designation_ar: designation_en,
@@ -149,12 +152,13 @@ const DESIGNATION = {
   name_en: 'SECURITY GUARD',
   name_ar: 'حارس أمن',
   rank_order: 1,
+  quota_uae: 0,
+  quota_arab: 0,
+  quota_fill: 'own' as const,
   sheet: 'main',
   active: true,
   system_key: null,
 }
-
-
 
 /** A recomputed blocking check — the kind of fact only the server can supply. */
 const ISSUE: TimesheetIssue = {

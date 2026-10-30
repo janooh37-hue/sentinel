@@ -986,6 +986,8 @@ export type TimesheetRemoved = components['schemas']['TimesheetRemoved']
 export type TimesheetDesignationRead = components['schemas']['TimesheetDesignationRead']
 export type TimesheetDesignationCreate = components['schemas']['TimesheetDesignationCreate']
 export type TimesheetDesignationUpdate = components['schemas']['TimesheetDesignationUpdate']
+export type TimesheetDesignationQuotaWrite = components['schemas']['TimesheetDesignationQuota']
+export type TimesheetQuotaLine = components['schemas']['TimesheetQuotaLine']
 export type TimesheetRosterBatch = components['schemas']['TimesheetRosterBatch']
 export type TimesheetCellUpdate = components['schemas']['TimesheetCellUpdate']
 export type TimesheetPeriodPatch = components['schemas']['TimesheetPeriodPatch']
@@ -2965,6 +2967,8 @@ export const api = {
    *  `DESIGNATION_ORDER_INCOMPLETE`. Answers with the catalog as re-ranked. */
   reorderDesignations: (ids: number[]) =>
     request<TimesheetDesignationRead[]>('PUT', '/timesheet/designations/order', { ids }),
+  setTimesheetDesignationQuota: (id: number, input: TimesheetDesignationQuotaWrite) =>
+    request<TimesheetDesignationRead>('PUT', `/timesheet/designations/${id}/quota`, input),
   getTimesheet: (p: TimesheetMonth) =>
     request<TimesheetGridResponse>(
       'GET',

@@ -134,6 +134,16 @@ sheet. Observed shape in both months: a first group of `SL`, a bulk of `AL`, a
 trailing group of `TR`, some rows left `P`. `NG`, `-` and genuine `AB` are
 preserved inside block 2.
 
+> **Revised 2026-10-29 (September 2026 file).** The finance office's July,
+> August and September files all pack block 2 the same way: every leave day of
+> the month — block 1's and block 2's own — laid row by row, `AL` then `SL`
+> then `AB` then `TR`, with `P` after them; per code the totals equal the
+> attendance sheet's. Who is billed follows a fixed contract per designation and
+> nationality (249 posts, confirmed by the finance office 2026-10-29), not a
+> single post count; both workbooks print in one designation order. Column `E`
+> marks each Arabic designation `(مواطن)` for a U.A.E national and `(مقيم)`
+> otherwise. See "Statistics generation".
+
 Column `A` numbers run continuously `1..N` straight across the gap.
 
 June closes exactly: 249 posts × 30 days − 119 departure days = 7,351 `P`, which
@@ -315,17 +325,47 @@ Sort: `rank_order`, then the numeric part of the employee ID.
 
 From the same `MonthGrid`:
 
-1. Split at `period.post_count` in sort order.
-2. Block 1: every cell becomes `P` except `NG` and `-`.
-3. Block 2: every cell becomes its assigned filler code except `NG`, `-` and
-   real `AB`. Assignments live in `timesheet_stat_fillers` (migration 0075),
-   keyed by year, month and employee. A new member defaults to `AL`; thereafter
-   the previous month's assignment carries forward, so the June/July shape — a
-   first group of `SL`, a bulk of `AL`, a trailing group of `TR` — is set once by
-   hand and then persists. Editable per row before download.
-4. Column `E` renders `designation_ar`; column `A` numbers continuously across
-   the two blank rows.
-5. The page shows total `P` days and the implied post count
+1. Decide who is billed (main sheet, `_allocate_posts`). Each designation
+   carries `quota_uae` (posts for U.A.E nationals) and `quota_arab` (posts for
+   Arab nationals of other countries); Nepal and other nationalities fill no
+   billed post. The contract (migration 0116 on dev):
+
+   | Designation | UAE | Arab | Filled by |
+   | --- | --- | --- | --- |
+   | Prisons Director, Ass. Director, Project Manager | 1 each | | own holders |
+   | Branch Manager, Duty In Charge | 4 each | | own holders |
+   | Security Supervisor | 7 | | own holders |
+   | Armory Officer | 4 | | own holders |
+   | Ass. Security Supervisor | 20 | | own holders |
+   | Armory Keeper | 4 | | own, then spare UAE guards |
+   | Control Room SG | 48 | | own, then spare UAE guards |
+   | Messengers | 40 | | own, then spare UAE guards |
+   | Clinic SG | | 8 | own holders |
+   | Security Guard | 55 | 38 | own; UAE gaps from spare Arab guards |
+   | Escort SG / Habilitation SG | | 10 / 4 | spare Arab guards only |
+
+   Holders fill their own posts oldest G-number first, so the newest drop below
+   the line. Gaps are then filled from spare Security Guards, oldest first, one
+   grade up at most; a gap nobody may fill stays empty and is not billed.
+   Escort and Habilitation staff are company-paid and never billed. An employee
+   with no designation counts as a Security Guard. Quotas are edited in
+   Settings and apply to every month; the main sheet's `post_count` is their sum.
+2. Order: billed rows first, everyone else below the line, each part in the
+   designation `rank_order` then numeric ID — the same order the attendance
+   sheet prints everyone in. That position is `stat_row_no`, frozen in the
+   snapshot (migration 0116 on dev).
+3. Main block 1: every leave day (`AL`, `SL `, `AB`, `TR`) moves to block 2 and
+   leaves `P`; `NG`, `-` and `X` stay.
+4. Main block 2: the moved days plus block 2's own fill its cells row by row,
+   `AL`, `SL `, `AB`, `TR`, then `P`, stepping over `NG`, `-`, `X` and days past
+   month end. Leave that does not fit stays on its block-1 row, the
+   highest-ranked rows moving first, so no day is invented or dropped.
+   Drivers keep the per-month post count and the per-row filler of
+   `timesheet_stat_fillers` (migration 0075).
+5. Column `E` renders `designation_ar` plus `(مواطن)` / `(مقيم)` from the
+   nationality; column `A` prints `stat_row_no`, continuous across the two blank
+   rows. The Time Sheet page lists each quota as filled: own, from guards, empty.
+6. The page shows total `P` days and the implied post count
    (`P days ÷ days in month`) so a drift like July's +59 is visible. The figure
    sits a little *below* the configured post count, because `NG` and `-` roster
    edges subtract: June's reference is 7,351 ÷ 30 = 245.0 against 249 posts. A

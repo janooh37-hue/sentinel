@@ -241,6 +241,7 @@ export function TimesheetMasthead({
 
 /** The strings a row needs, built once so `memo` on the row actually holds. */
 interface RowStrings {
+  language: string
   cell: (id: string, day: number, meaning: string) => string
   meaning: Record<string, string>
   select: (id: string) => string
@@ -255,6 +256,7 @@ interface RowStrings {
 
 interface GridRowProps {
   row: TimesheetRow
+  statistics: boolean
   codes: readonly (string | null)[]
   daysInMonth: number
   designation: string | null
@@ -279,6 +281,7 @@ interface GridRowProps {
 
 const GridRow = memo(function GridRow({
   row,
+  statistics,
   codes,
   daysInMonth,
   designation,
@@ -328,7 +331,7 @@ const GridRow = memo(function GridRow({
       data-code-filter-current={filterCurrent ? '1' : undefined}
       style={{ blockSize: 'var(--row)' }}
     >
-      <td className="ts-stick ts-c-no">{row.row_no}</td>
+      <td className="ts-stick ts-c-no">{statistics ? row.stat_row_no : row.row_no}</td>
       <td className="ts-stick ts-c-id">
         {/* The row handle: what points the dock's panels and the two-month
             extract at one employee (UI spec §16.2, §16.3). */}
@@ -582,13 +585,12 @@ export function TimesheetGrid({
    */
   const editable = canEdit && !closed && !statistics && rosterEdit === undefined
 
-  const visibleRows = useMemo(
-    () =>
-      rosterEdit || filteredEmployeeIds === null
-        ? rows
-        : rows.filter((row) => filteredEmployeeIds.has(row.employee_id)),
-    [filteredEmployeeIds, rosterEdit, rows],
-  )
+  const visibleRows = useMemo(() => {
+    const visible = rosterEdit || filteredEmployeeIds === null
+      ? rows
+      : rows.filter((row) => filteredEmployeeIds.has(row.employee_id))
+    return statistics ? [...visible].sort((a, b) => a.stat_row_no - b.stat_row_no) : visible
+  }, [filteredEmployeeIds, rosterEdit, rows, statistics])
 
   const byId = useMemo(() => {
     const index = new Map<string, TimesheetRow>()
@@ -669,6 +671,7 @@ export function TimesheetGrid({
     const meaning: Record<string, string> = {}
     for (const spec of CODES) meaning[spec.slug] = t(spec.labelKey)
     return {
+      language: i18n.language,
       meaning,
       cell: (id, day, sense) => t('timesheet.cellLabel', { id, day, meaning: sense }),
       select: (id) => t('timesheet.selectRow', { id }),
@@ -764,9 +767,8 @@ export function TimesheetGrid({
     }
     let group: string | null = null
     for (const row of visibleRows) {
-      // Attendance groups by the rank order the client asked for; statistics
-      // replaces the groups with the two blocks and draws the printed gap
-      // between them (UI spec §5, §9).
+      // Attendance keeps HR rank order; statistics uses its own pay-grade
+      // positions and separates the two client billing blocks with a gap.
       const key = statistics ? `b${row.stat_block}` : `r${row.rank_order}|${row.designation_en}`
       if (key !== group) {
         if (statistics && group !== null) out.push({ kind: 'gap', key: `gap-${key}` })
@@ -1554,6 +1556,7 @@ export function TimesheetGrid({
               <GridRow
                 key={line.key}
                 row={line.row}
+                statistics={statistics}
                 codes={codesOf(line.row)}
                 daysInMonth={daysInMonth}
                 designation={statistics ? line.row.designation_ar : line.row.designation_en}

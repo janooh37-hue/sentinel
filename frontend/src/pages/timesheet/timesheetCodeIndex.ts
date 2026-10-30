@@ -38,12 +38,13 @@ export function buildTimesheetCodeIndex(
   const employeeIds: Record<CodeSlug, string[]> = { P: [], AL: [], SL: [], AB: [], TR: [], NG: [], '-': [], X: [] }
 
   const statistics = variant === 'statistics'
+  const orderedRows = statistics ? [...rows].sort((a, b) => a.stat_row_no - b.stat_row_no) : rows
   // Hoisted and cleared per row rather than allocated per row: the dedup is
   // strictly row-local either way, and this is one Set for the whole sheet
   // instead of one per guard.
   const seen = new Set<CodeSlug>()
 
-  for (const row of rows) {
+  for (const row of orderedRows) {
     const codes = statistics ? row.stat_codes : row.codes
     seen.clear()
 

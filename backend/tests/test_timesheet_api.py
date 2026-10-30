@@ -178,7 +178,7 @@ def test_the_grid_response_loses_no_field(client, db_session):
 
     grid_fields = {f.name for f in fields(svc.MonthGrid)}
     row_fields = {f.name for f in fields(svc.GridRow)}
-    assert len(grid_fields) == 11 and len(row_fields) == 17
+    assert len(grid_fields) == 12 and len(row_fields) == 18
     assert set(body) == grid_fields
     row = body["rows"][0]
     assert set(row) == row_fields
@@ -515,14 +515,14 @@ def test_an_unknown_variant_is_refused(client, db_session):
     assert client.get("/api/v1/timesheet/2026/7/export?variant=nonsense").status_code == 422
 
 
-def test_export_blocks_when_an_employee_has_no_designation(client, db_session):
+def test_export_blocks_when_an_employee_has_an_unmapped_nationality(client, db_session):
     db_session.add(
-        Employee(id="G9999", name_en="Nobody", nationality="الإمارات", doj=date(2020, 1, 1))
+        Employee(id="G9999", name_en="Nobody", nationality="فرنسا", doj=date(2020, 1, 1))
     )
     db_session.commit()
     response = client.get("/api/v1/timesheet/2026/7/export")
     assert response.status_code == 422
-    assert "no_designation" in response.text
+    assert "no_nationality" in response.text
     assert db_session.query(TimesheetPeriod).count() == 0  # a refused download freezes nothing
 
 
@@ -742,6 +742,27 @@ def test_designations_list_and_reorder(client):
     )
 
 
+def test_a_designation_quota_is_set_and_validated(client, db_session):
+    guard = db_session.query(TimesheetDesignation).filter_by(name_en="Security Guard").one()
+    body = client.get("/api/v1/timesheet/designations").json()
+    assert sum(d["quota_uae"] + d["quota_arab"] for d in body) == 249  # the seeded contract
+
+    url = f"/api/v1/timesheet/designations/{guard.id}/quota"
+    response = client.put(url, json={"quota_uae": 50, "quota_arab": 40, "quota_fill": "own"})
+    assert response.status_code == 200
+    assert (response.json()["quota_uae"], response.json()["quota_arab"]) == (50, 40)
+    assert response.json()["quota_fill"] == "own"
+    assert client.get("/api/v1/timesheet/2026/7").json()["post_count"] == 249 - 93 + 90
+
+    for bad in (
+        {"quota_uae": -1, "quota_arab": 0, "quota_fill": "own"},
+        {"quota_uae": 1, "quota_arab": 0, "quota_fill": "anyone"},
+    ):
+        assert client.put(url, json=bad).status_code == 422
+    missing = {"quota_uae": 1, "quota_arab": 0, "quota_fill": "own"}
+    assert client.put("/api/v1/timesheet/designations/9999/quota", json=missing).status_code == 404
+
+
 def test_designation_create_normalizes_names_and_rename_preserves_catalog_fields(
     client, db_session
 ):
@@ -882,6 +903,7 @@ def test_the_static_designation_routes_are_declared_before_the_month_route():
     month = paths.index("/api/v1/timesheet/{year}/{month}")
     assert paths.index("/api/v1/timesheet/designations") < month
     assert paths.index("/api/v1/timesheet/designations/order") < month
+    assert paths.index("/api/v1/timesheet/designations/{designation_id}/quota") < month
     assert paths.index("/api/v1/timesheet/designations/{designation_id}") < month
     assert paths.index("/api/v1/timesheet/{year}/{month}/roster") < month
 
@@ -915,6 +937,11 @@ def test_the_presets_split_reading_from_correcting():
             {"assignments": [{"employee_id": "G1001", "designation_id": 1}]},
         ),
         ("PUT", "/api/v1/timesheet/designations/order", {"ids": [1]}),
+        (
+            "PUT",
+            "/api/v1/timesheet/designations/1/quota",
+            {"quota_uae": 1, "quota_arab": 0, "quota_fill": "own"},
+        ),
         ("PUT", "/api/v1/timesheet/2026/7/cell", {"employee_id": "G1001", "day": 9, "code": "AB"}),
         ("PATCH", "/api/v1/timesheet/2026/7", {"post_count": 100}),
         ("POST", "/api/v1/timesheet/2026/7/close", None),

@@ -18,6 +18,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { TimesheetGridResponse, TimesheetRow } from '@/lib/api'
+import i18n from '@/lib/i18n'
 
 import { TimesheetDock, type TimesheetDockProps } from './TimesheetDock'
 import { buildTimesheetCodeIndex } from './timesheetCodeIndex'
@@ -40,6 +41,7 @@ function renderPanel(ui: React.ReactNode) {
 const ROW: TimesheetRow = {
   employee_id: 'G7057',
   row_no: 1,
+  stat_row_no: 1,
   name_en: 'RAJESH KUMAR SINGH',
   nationality_en: 'U.A.E',
   designation_en: 'SECURITY GUARD',
@@ -71,6 +73,7 @@ function dockProps({
   year = 2026,
   month = 7,
   onReopen = vi.fn(),
+  sheet = 'main',
 }: {
   blocking?: number
   closed?: boolean
@@ -79,15 +82,17 @@ function dockProps({
   year?: number
   month?: number
   onReopen?: () => void
+  sheet?: 'main' | 'drivers'
 }): TimesheetDockProps {
   const grid: TimesheetGridResponse = {
     year,
     month,
     days_in_month: 31,
-    sheet: 'main',
+    sheet,
     closed_at: closed ? '2026-08-01T06:00:00' : null,
     closed_by: closed ? 'A. Al Mansoori' : null,
     post_count: 249,
+    quotas: [],
     rows,
     blocking: Array.from({ length: blocking }, (_, i) => ({
       employee_id: `G70${i}`,
@@ -234,14 +239,23 @@ describe('TimesheetDock', () => {
     expect(strip.querySelectorAll('[data-testid^="dock-count-"]')).toHaveLength(8)
   })
 
-  it('contracts and implies the posts at a glance', async () => {
-    renderPanel(<TimesheetDock {...dockProps({ blocking: 0, rows: [ROW] })} />)
+  it('contracts and implies the posts at a glance on the drivers sheet', async () => {
+    renderPanel(<TimesheetDock {...dockProps({ blocking: 0, rows: [ROW], sheet: 'drivers' })} />)
 
     // 29 P cells over 31 days = 0.9 implied posts against a contract of 249.
     const posts = await screen.findByRole('button', { name: /contracted posts/i })
     expect(posts).toHaveTextContent('249')
     expect(posts).toHaveTextContent('0.9')
   })
+
+  it('shows only the contract total on the main sheet, where the quota table is the check', async () => {
+    renderPanel(<TimesheetDock {...dockProps({ blocking: 0, rows: [ROW] })} />)
+
+    const posts = await screen.findByRole('button', { name: /contracted posts/i })
+    expect(posts).toHaveTextContent('249')
+    expect(posts).not.toHaveTextContent('0.9')
+  })
+
   it('closes the codes panel before activating its code filter', async () => {
     const base = dockProps({ blocking: 0, rows: [ROW] })
     const onOpenPanel = vi.fn()
@@ -351,7 +365,7 @@ describe('TimesheetDock', () => {
     )
     // Posts: the readout and the rule are still there; the field is not.
     expect(await screen.findByRole('region', { name: /contracted posts/i })).toBeInTheDocument()
-    expect(screen.getByTestId('implied-posts')).toHaveTextContent('0.9')
+    expect(screen.getByText('Contract total: 249 posts')).toBeInTheDocument()
     // `queryByLabelText` would also match the panel region's own `aria-label`,
     // so the FIELD is asked for by its role.
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
@@ -382,9 +396,38 @@ describe('TimesheetDock', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('writes the post count once the field is committed', async () => {
+  it.each(['en', 'ar'])('renders localized quota lines and highlights empty posts in %s', async (language) => {
+    await i18n.changeLanguage(language)
+    try {
+      const base = dockProps({})
+      base.grid.post_count = 7
+      base.grid.quotas = [
+        { designation_id: 101, name_en: 'Duty In charge', name_ar: 'مناوب عام', nationality: 'uae', quota: 4, own: 1, from_guards: 2 },
+        { designation_id: 101, name_en: 'Duty In charge', name_ar: 'مناوب عام', nationality: 'arab', quota: 3, own: 2, from_guards: 1 },
+      ]
+      const view = renderPanel(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'posts' }} />)
+      const table = screen.getByRole('table', { name: language === 'ar' ? 'النقاط المفوترة حسب المسمى الوظيفي' : 'Billed posts by designation' })
+      const rows = within(table).getAllByRole('row')
+      expect(rows[1]).toHaveTextContent(language === 'ar' ? 'مناوب عام' : 'Duty In charge')
+      expect(rows[1]).toHaveTextContent(language === 'ar' ? 'إماراتي' : 'UAE')
+      expect(rows[2]).toHaveTextContent(language === 'ar' ? 'عربي' : 'Arab')
+      expect(within(rows[1]!).getByText('1 + 2 / 4')).toBeInTheDocument()
+      expect(within(rows[1]!).getAllByRole('cell')[2]).toHaveClass('bg-warning-soft', 'text-warning')
+      expect(within(rows[1]!).getAllByRole('cell')[2]).toHaveTextContent('1')
+      expect(within(rows[2]!).getAllByRole('cell')[2]).not.toHaveClass('bg-warning-soft')
+      expect(rows[3]).toHaveTextContent('3 + 3 / 7')
+      expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
+      view.rerender(wrap(<TimesheetDock {...base} grid={{ ...base.grid, quotas: [], closed_at: '2026-08-01T06:00:00' }} ui={{ ...base.ui, panel: 'posts' }} />))
+      expect(screen.getByText(language === 'ar' ? /هذا الشهر مغلق وفقاً للنسخة المطبوعة/ : /This month is sealed as printed/)).toBeInTheDocument()
+      expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+
+  it('writes the drivers post count once the field is committed', async () => {
     const onSetPostCount = vi.fn()
-    const base = dockProps({ blocking: 0, rows: [ROW] })
+    const base = dockProps({ blocking: 0, rows: [ROW], sheet: 'drivers' })
     renderPanel(
       <TimesheetDock
         {...base}
@@ -407,7 +450,7 @@ describe('TimesheetDock', () => {
    */
   it('never commits an emptied post-count field', async () => {
     const onSetPostCount = vi.fn()
-    const base = dockProps({ blocking: 0, rows: [ROW] })
+    const base = dockProps({ blocking: 0, rows: [ROW], sheet: 'drivers' })
     renderPanel(
       <TimesheetDock
         {...base}
@@ -431,7 +474,7 @@ describe('TimesheetDock', () => {
    * resetting by `key` would cost) takes the caret out of the field mid-edit.
    */
   it('re-seats the post-count field from the server without remounting it', async () => {
-    const base = dockProps({ blocking: 0, rows: [ROW] })
+    const base = dockProps({ blocking: 0, rows: [ROW], sheet: 'drivers' })
     const view = renderPanel(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'posts' }} />)
     const field = await screen.findByRole('spinbutton', { name: /contracted posts/i })
     await userEvent.clear(field)
@@ -578,7 +621,7 @@ describe('TimesheetDock', () => {
   })
 
   it('refuses the post count on a closed month without a dead control', async () => {
-    const base = dockProps({ blocking: 0, closed: true, rows: [ROW] })
+    const base = dockProps({ blocking: 0, closed: true, rows: [ROW], sheet: 'drivers' })
     renderPanel(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'posts' }} />)
     expect(await screen.findByTestId('implied-posts')).toHaveTextContent('0.9')
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()

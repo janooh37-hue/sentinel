@@ -107,6 +107,7 @@ const PENDING_MONTH: TimesheetGridResponse = {
   days_in_month: 31,
   sheet: 'main',
   post_count: 0,
+  quotas: [],
   rows: [],
   blocking: [],
   warnings: [],

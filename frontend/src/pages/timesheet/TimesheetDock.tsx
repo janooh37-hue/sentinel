@@ -162,19 +162,16 @@ export function TimesheetDock({
 
   /**
    * Implied posts: the mean daily manned headcount on the ATTENDANCE sheet, in
-   * both variants — unlike the strip above, and unlike the grid's headcount
-   * footer, which follows the variant. So on the statistics sheet this readout
-   * and that footer DISAGREE on one screen, deliberately: the footer reports the
-   * derived sheet it sits in, and this reports the sheet the drift is a fact
-   * about. They agree on the attendance variant, which is where they are read
-   * together.
-   * The drift it feeds asks one question — "are block-2 rows still marked as
-   * working days?" — and that is a fact about the attendance sheet. The
-   * statistics sheet is the already-corrected view: block 1 is `row_no <=
-   * post_count` by construction, so its working-day count can never exceed
-   * `post_count * days` and `drift` would be mathematically unable to fire, in
-   * the one variant §9 actually places this readout in. The A3 mockup has the
-   * same dead flag; this is where it stops being dead.
+   * both variants — unlike the grid's headcount footer, which follows the
+   * variant. So on the statistics sheet this readout and that footer DISAGREE on
+   * one screen, deliberately: the footer reports the derived sheet it sits in,
+   * and this reports the sheet the drift is a fact about.
+   *
+   * The drift asks "are more people working than the contract bills?" — a fact
+   * about the attendance sheet, and a question only for the drivers sheet. On
+   * the main sheet everyone below the line still works, so the headcount sits
+   * above the quota total every month by design; its check is the quota table in
+   * the posts panel, and the trigger shows the contract total alone.
    */
   const impliedPosts = useMemo(() => {
     if (daysInMonth === 0) return 0
@@ -186,7 +183,8 @@ export function TimesheetDock({
     }
     return manned / daysInMonth
   }, [daysInMonth, grid.rows])
-  const drift = impliedPosts > grid.post_count
+  const drivers = grid.sheet === 'drivers'
+  const drift = drivers && impliedPosts > grid.post_count
 
   const group =
     'inline-flex shrink-0 items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-[0.75em] transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-expanded:border-primary aria-expanded:bg-primary-soft'
@@ -262,21 +260,24 @@ export function TimesheetDock({
             {t('timesheet.postsLabel')}
           </span>
           <span dir="ltr" className={datum}>
-            {grid.post_count} · {impliedPosts.toFixed(1)}
+            {grid.post_count}
+            {drivers && ` · ${impliedPosts.toFixed(1)}`}
           </span>
           {/* A compact flag, because a whole sentence in a 54px bar pushes the
               other three groups off the line (UI spec §14's narrow-column
               trap). The glyph is not the only channel: the words ride along in
               the trigger's accessible name, and the panel states them in full
               beside the number. */}
-          <span
-            className={cn(chip, drift ? 'bg-accent-soft text-accent' : 'bg-success-soft text-success')}
-          >
-            <span aria-hidden>{drift ? '▲' : '✓'}</span>
-            <span className="sr-only">
-              {drift ? t('timesheet.impliedDrift') : t('timesheet.impliedOk')}
+          {drivers && (
+            <span
+              className={cn(chip, drift ? 'bg-accent-soft text-accent' : 'bg-success-soft text-success')}
+            >
+              <span aria-hidden>{drift ? '▲' : '✓'}</span>
+              <span className="sr-only">
+                {drift ? t('timesheet.impliedDrift') : t('timesheet.impliedOk')}
+              </span>
             </span>
-          </span>
+          )}
           <span aria-hidden className="text-[0.6rem] text-faint">
             ▲
           </span>
@@ -441,6 +442,8 @@ export function TimesheetDock({
 
           {open === 'posts' && (
             <PostsPanel
+              sheet={grid.sheet}
+              quotas={grid.quotas}
               postCount={grid.post_count}
               impliedPosts={impliedPosts}
               canEdit={canEdit}

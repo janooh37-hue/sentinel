@@ -40,6 +40,7 @@ import { TimesheetPage } from './TimesheetPage'
 const ROW: TimesheetRow = {
   employee_id: 'G1001',
   row_no: 1,
+  stat_row_no: 1,
   name_en: 'AHMED BILAL NOOR',
   nationality_en: 'India',
   designation_en: 'SECURITY GUARD',
@@ -62,6 +63,7 @@ const MONTH: TimesheetGridResponse = {
   days_in_month: 31,
   sheet: 'main',
   post_count: 249,
+  quotas: [],
   rows: [ROW],
   blocking: [],
   warnings: [],

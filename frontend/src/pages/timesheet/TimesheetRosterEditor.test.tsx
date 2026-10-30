@@ -79,7 +79,7 @@ function designation(
   sheet: string,
   active = true,
 ): TimesheetDesignationRead {
-  return { id, name_en, name_ar, rank_order: rank, sheet, active, system_key: null }
+  return { id, name_en, name_ar, rank_order: rank, quota_uae: 0, quota_arab: 0, quota_fill: 'own', sheet, active, system_key: null }
 }
 
 // Ids offset from ranks, so an id/rank confusion cannot pass. `DRIVER` prints
@@ -100,6 +100,7 @@ function row(
   return {
     employee_id,
     row_no,
+    stat_row_no: row_no,
     name_en: `GUARD ${employee_id}`,
     nationality_en: 'India',
     designation_en: from?.name_en ?? null,
@@ -127,6 +128,7 @@ const MONTH: TimesheetGridResponse = {
   days_in_month: 31,
   sheet: 'main',
   post_count: 249,
+  quotas: [],
   rows: [row('G6001', 1, DUTY), row('G7014', 2, GUARD), row('G7160', 3, GUARD)],
   blocking: [],
   warnings: [],
@@ -613,7 +615,7 @@ describe('cancelling the draft', () => {
 })
 
 describe('the other deliverable', () => {
-  it('prints the server order in the statistics variant while the draft waits', async () => {
+  it('prints statistics positions while the attendance draft waits', async () => {
     getTimesheet.mockResolvedValue(BLOCKED_MONTH)
     renderPage()
     await screen.findByText('GUARD G7200')
@@ -624,10 +626,8 @@ describe('the other deliverable', () => {
     const deliverable = screen.getByRole('group', { name: 'Deliverable' })
     await userEvent.click(within(deliverable).getByRole('button', { name: 'Client statistics' }))
 
-    // The statistics sheet groups by BLOCK, not by designation. Printing the
-    // staged order there files a man under a block heading he is not in and
-    // splits the block he is, so this variant shows the server's own order —
-    // exactly two block headings, in the order the response had.
+    // Statistics uses its own positions and billing blocks, not the staged HR
+    // designation order. An attendance draft must leave these positions intact.
     expect(printed()).toEqual(['G6001', 'G7014', 'G7160', 'G7200'])
     expect(screen.getAllByText(/block 1/i)).toHaveLength(1)
     expect(screen.getAllByText(/block 2/i)).toHaveLength(1)

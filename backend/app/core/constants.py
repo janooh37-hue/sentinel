@@ -344,6 +344,26 @@ def nationality_en(value: str | None) -> str | None:
     return NATIONALITY_EN.get(value.strip())
 
 
+#: The two nationality classes the client statistics bill posts for. A U.A.E
+#: national fills a UAE post; an Arab national of another country fills an
+#: Arab post; anyone else (Nepal) fills no billed post at all.
+UAE_NATIONALITY_EN: Final[str] = "U.A.E"
+ARAB_NATIONALITIES_EN: Final[frozenset[str]] = frozenset(
+    {
+        "Oman",
+        "Sudan",
+        "Jordan",
+        "Yemen",
+        "Comoros",
+        "Mauritania",
+        "Egypt",
+        "Syria",
+        "Morocco",
+        "Algeria",
+    }
+)
+
+
 #: Gregorian month names in Arabic (UAE-standard transliterations), January at
 #: index 0. The one table for every Arabic month label in the app: time-sheet
 #: titles, notification text, digests.
@@ -397,4 +417,32 @@ DESIGNATION_SEED: Final[tuple[tuple[str, int, str, str, str], ...]] = (
     ("messengers", 14, "Messengers", "حارس امن الارساليات", "main"),
     ("security_guard", 15, "Security Guard", "حارس امن", "main"),
     ("driver", 16, "Driver", "سائق", "drivers"),
+)
+
+#: The designation everyone without one counts as, and the pool whose spare
+#: members fill other designations' empty billed posts.
+SECURITY_GUARD_KEY: Final[str] = "security_guard"
+
+#: The billed-post contract confirmed by the finance office on 2026-10-29:
+#: system_key -> (UAE posts, Arab posts, who fills them). 249 posts in all.
+#: Migration 0110 wrote the same values into the live catalog; this copy seeds a
+#: designation that is restored later, and the test catalog.
+DESIGNATION_QUOTA_SEED: Final[Mapping[str, tuple[int, int, str]]] = MappingProxyType(
+    {
+        "prisons_director": (1, 0, "own"),
+        "assistant_director": (1, 0, "own"),
+        "project_manager": (1, 0, "own"),
+        "branch_manager": (4, 0, "own"),
+        "duty_in_charge": (4, 0, "own"),
+        "security_supervisor": (7, 0, "own"),
+        "armory_officer": (4, 0, "own"),
+        "assistant_security_supervisor": (20, 0, "own"),
+        "armory_keeper": (4, 0, "own_then_guards"),
+        "control_room_security_guard": (48, 0, "own_then_guards"),
+        "clinic_security_guard": (0, 8, "own"),
+        "habilitation_security_guard": (0, 4, "guards_only"),
+        "escort_security_guard": (0, 10, "guards_only"),
+        "messengers": (40, 0, "own_then_guards"),
+        "security_guard": (55, 38, "own_then_guards"),
+    }
 )
