@@ -8,7 +8,7 @@ import re
 import uuid
 from calendar import monthrange
 from collections.abc import Sequence
-from datetime import UTC, date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, object_session, selectinload, with_expressio
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
+from app.core.clock import utcnow
 from app.core.vehicle_certificates import Profile
 from app.db.models import (
     AuditLog,
@@ -96,10 +97,6 @@ _FINE_RECEIPT_SIGNATURES: dict[str, bytes] = {
     ".jpg": b"\xff\xd8\xff",
     ".jpeg": b"\xff\xd8\xff",
 }
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def expiry_status(expiry: date, *, today: date, notify_days: int) -> str:
@@ -537,8 +534,8 @@ def archive_vehicle(db: Session, vehicle_id: int, *, actor: str | None = None) -
     row = get_vehicle(db, vehicle_id)
     if row.archived_at is not None:
         return row
-    row.archived_at = _utcnow()
-    row.updated_at = _utcnow()
+    row.archived_at = utcnow()
+    row.updated_at = utcnow()
     _add_audit(db, "vehicle.archived", row.id, actor, {"plate_number": row.plate_number})
     db.commit()
     return get_vehicle(db, row.id)
@@ -555,7 +552,7 @@ def restore_vehicle(db: Session, vehicle_id: int, *, actor: str | None = None) -
             site_id=row.site_id,
         )
     row.archived_at = None
-    row.updated_at = _utcnow()
+    row.updated_at = utcnow()
     _add_audit(db, "vehicle.restored", row.id, actor, {"plate_number": row.plate_number})
     db.commit()
     return get_vehicle(db, row.id)
@@ -804,7 +801,7 @@ def _update_vehicle_record(db: Session, row: Vehicle, payload: VehicleUpdate) ->
         row.expiry_reminder_sent_for = None
     if insurance_changed:
         row.insurance_reminder_sent_for = None
-    row.updated_at = _utcnow()
+    row.updated_at = utcnow()
 
 
 def update_vehicle(
@@ -963,7 +960,7 @@ def renew_license(
     if payload.scan_file_id is not None:
         row.license_file_id = payload.scan_file_id
     row.expiry_reminder_sent_for = None
-    row.updated_at = _utcnow()
+    row.updated_at = utcnow()
     db.commit()
     _audit(
         db,
@@ -1073,7 +1070,7 @@ def update_fine(
         )
     for field, value in data.items():
         setattr(row, field, value)
-    row.updated_at = _utcnow()
+    row.updated_at = utcnow()
     db.commit()
     _audit(
         db,
@@ -1185,7 +1182,7 @@ def record_payment(
         row.payment_status = "paid"
         if receipt_file is not None:
             row.receipt_file_id = receipt_file.id
-        row.updated_at = _utcnow()
+        row.updated_at = utcnow()
         db.commit()
     except Exception:
         db.rollback()
@@ -1247,7 +1244,7 @@ def attach_receipt(
     )
     try:
         row.receipt_file_id = receipt_file.id
-        row.updated_at = _utcnow()
+        row.updated_at = utcnow()
         db.commit()
     except Exception:
         db.rollback()
@@ -1305,7 +1302,7 @@ def archive_fines(
                 fine_id=fine.id,
                 payment_status=fine.payment_status,
             )
-    now = _utcnow()
+    now = utcnow()
     by_vehicle: dict[int, list[int]] = {}
     for fine, _version in fines:
         fine.archived_at = now
@@ -1334,7 +1331,7 @@ def restore_fines(
                 "Only an archived fine can be restored.",
                 fine_id=fine.id,
             )
-    now = _utcnow()
+    now = utcnow()
     by_vehicle: dict[int, list[int]] = {}
     for fine, _version in fines:
         fine.archived_at = None
@@ -1424,7 +1421,7 @@ def set_accident_status(
             status=status,
         )
     row.status = status
-    row.updated_at = _utcnow()
+    row.updated_at = utcnow()
     db.commit()
     _audit(
         db,
@@ -1503,7 +1500,7 @@ def create_maintenance(
                 VehicleMaintenanceRequest.vehicle_id == vehicle.id,
                 VehicleMaintenanceRequest.status == "open",
             )
-            .values(status="done", completed_at=_utcnow())
+            .values(status="done", completed_at=utcnow())
         )
         if cast(CursorResult[Any], claimed).rowcount != 1:
             db.rollback()
@@ -1802,7 +1799,7 @@ def upsert_odometer(
         reading = VehicleOdometerReading(vehicle_id=vehicle_id, month=month)
         db.add(reading)
     else:
-        reading.updated_at = _utcnow()
+        reading.updated_at = utcnow()
     reading.opening_km = None if carried is not None else opening
     reading.closing_km = closing
     db.commit()

@@ -23,7 +23,7 @@ Schema decisions worth flagging (more in plans/02-data-layer.md):
 from __future__ import annotations
 
 import datetime as dt
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from typing import Any, Final
 
 from sqlalchemy import (
@@ -43,16 +43,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, foreign, mapped_column, query_expression, relationship
 
+from app.core.clock import utcnow
 from app.db.base import Base
 
 # Single-row sequence is keyed by this constant so callers don't sprinkle
 # magic ``1`` literals through the codebase.
 REF_SEQUENCE_ID: Final[int] = 1
-
-
-def _utcnow() -> datetime:
-    """Naive UTC timestamp — matches the rest of the v3 data (no tz info)."""
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class Employee(Base):
@@ -98,8 +94,8 @@ class Employee(Base):
     # Preferred WhatsApp-notification language ('ar' | 'en'). Default Arabic;
     # operators flip the few non-Arabic speakers to 'en' in the employee form.
     msg_language: Mapped[str] = mapped_column(String(2), default="ar", server_default="ar")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     leaves: Mapped[list[Leave]] = relationship(
         back_populates="employee", cascade="all, delete-orphan"
@@ -149,7 +145,7 @@ class EmployeeStatusEvent(Base):
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     source: Mapped[str] = mapped_column(String(32), nullable=False)
     actor_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
     __table_args__ = (
         Index("ix_employee_status_events_employee_created", "employee_id", "created_at"),
@@ -215,7 +211,7 @@ class BookEditSession(Base):
     token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     working_path: Mapped[str] = mapped_column(Text, nullable=False)
     state: Mapped[str] = mapped_column(String(16), default="active")  # active|finished|discarded
-    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
     last_put_at: Mapped[datetime | None] = mapped_column(nullable=True)
     template_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Report-only: the picked signer employee + whether to embed their signature
@@ -246,7 +242,7 @@ class Book(Base):
     employee_name_snapshot: Mapped[str | None] = mapped_column(String(256), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     doc_path: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     priority: Mapped[str] = mapped_column(
         String(16), nullable=False, default="Normal", server_default="Normal"
@@ -347,7 +343,7 @@ class BookApprovalStep(Base):
     seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     book: Mapped[Book] = relationship(back_populates="approval_steps")
     version: Mapped[BookVersion | None] = relationship(back_populates="approval_steps")
@@ -385,7 +381,7 @@ class BookVersion(Base):
         String(16), nullable=False, default="none", server_default="none"
     )
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     # Signing (approval == signing). Populated by book_service.sign_book.
     signed_pdf_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Private immutable signed form used to rebuild the downloadable package.
@@ -499,7 +495,7 @@ class BookRecipient(Base):
     # info | action | reply | circulate (للاطلاع / للتنفيذ / للإفادة / للتعميم)
     purpose: Mapped[str] = mapped_column(String(16), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     done_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -538,7 +534,7 @@ class BookLink(Base):
         Boolean, nullable=False, default=False, server_default="0"
     )
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
     __table_args__ = (
         CheckConstraint("kind IN ('reply', 'based_on', 'reference')", name="ck_book_links_kind"),
@@ -559,7 +555,7 @@ class BookFolder(Base):
     name: Mapped[str] = mapped_column(String(80), nullable=False)
     created_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, nullable=False, default=utcnow, server_default=func.current_timestamp()
     )
 
     __table_args__ = (Index("ix_book_folders_owner_user_id", "owner_user_id"),)
@@ -579,7 +575,7 @@ class BookFolderShare(Base):
     )
     department: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, nullable=False, default=utcnow, server_default=func.current_timestamp()
     )
 
     __table_args__ = (
@@ -607,7 +603,7 @@ class BookFolderItem(Base):
     )
     added_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, nullable=False, default=utcnow, server_default=func.current_timestamp()
     )
 
     __table_args__ = (
@@ -639,7 +635,7 @@ class BookAnnotation(Base):
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     # FK to users.id omitted (SQLite batch ALTER limitation, mirrors Book.submitted_by_user_id).
     author_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     version: Mapped[BookVersion] = relationship(back_populates="annotations")
 
@@ -694,7 +690,7 @@ class SignatureArtifactRevision(Base):
     before_geometry: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     after_geometry: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     actor_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
     version: Mapped[BookVersion] = relationship()
 
@@ -722,7 +718,7 @@ class Leave(Base):
     certificate_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     return_doc_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -758,7 +754,7 @@ class Violation(Base):
     deduction_days: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(32), default="Open")
     doc_path: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     employee: Mapped[Employee] = relationship(back_populates="violations")
     documents: Mapped[list[Document]] = relationship(back_populates="violation")
@@ -773,7 +769,7 @@ class VehicleSite(Base):
     name_ar: Mapped[str] = mapped_column(String(128), nullable=False)
     name_en: Mapped[str] = mapped_column(String(128), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
     vehicles: Mapped[list[Vehicle]] = relationship(back_populates="site")
 
@@ -796,7 +792,7 @@ class VehiclePhotoAsset(Base):
     full_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     legacy_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     canonical_asset_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
     __table_args__ = (
         UniqueConstraint("content_hash", name="uq_vehicle_photo_assets_content_hash"),
@@ -839,7 +835,7 @@ class Vehicle(Base):
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     insurance_reminder_sent_for: Mapped[date | None] = mapped_column(Date, nullable=True)
     expiry_reminder_sent_for: Mapped[date | None] = mapped_column(Date, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     _list_fines_count: Mapped[int | None] = query_expression()
     _list_fines_amount_fils: Mapped[int | None] = query_expression()
@@ -900,7 +896,7 @@ class VehicleFile(Base):
     original_name: Mapped[str] = mapped_column(String(255), nullable=False)
     media_type: Mapped[str] = mapped_column(String(64), nullable=False)
     size: Mapped[int] = mapped_column(Integer, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     # Certificate-only metadata (migration 0090). Every other kind leaves these
     # NULL/false; the certificate service path is the only writer.
     expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -928,7 +924,7 @@ class VehicleLicenseRenewal(Base):
     renewed_on: Mapped[date] = mapped_column(Date, nullable=False)
     cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
     scan_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
     vehicle: Mapped[Vehicle] = relationship(back_populates="renewals")
 
@@ -963,7 +959,7 @@ class VehicleFine(Base):
     receipt_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     vehicle: Mapped[Vehicle] = relationship(back_populates="fines")
@@ -998,7 +994,7 @@ class VehicleAccident(Base):
         JSON, nullable=False, default=list, server_default="[]"
     )
     letter_book_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     vehicle: Mapped[Vehicle] = relationship(back_populates="accidents")
@@ -1023,7 +1019,7 @@ class VehicleMaintenance(Base):
     next_due: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     receipt_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reminder_sent_for: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
     vehicle: Mapped[Vehicle] = relationship(back_populates="maintenance")
 
@@ -1048,7 +1044,7 @@ class VehicleMaintenanceRequest(Base):
     )
     maintenance_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     vehicle: Mapped[Vehicle] = relationship(back_populates="maintenance_requests")
@@ -1075,7 +1071,7 @@ class VehicleOdometerReading(Base):
     month: Mapped[str] = mapped_column(String(7), nullable=False)
     opening_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
     closing_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     vehicle: Mapped[Vehicle] = relationship(back_populates="odometer_readings")
@@ -1134,7 +1130,7 @@ class Permit(Base):
     revoke_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     book_id: Mapped[int | None] = mapped_column(Integer)
     manager_id: Mapped[int | None] = mapped_column(Integer)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -1186,7 +1182,7 @@ class PermitPerson(Base):
     role: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # Scan of the person's UAE ID card (relative to the data dir). Optional.
     id_doc_path: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     removed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     permit: Mapped[Permit] = relationship(back_populates="people")
@@ -1217,7 +1213,7 @@ class PermitVehicle(Base):
     plate_category: Mapped[str | None] = mapped_column(String(32))
     traffic_no: Mapped[str | None] = mapped_column(String(32))
     reg_expiry: Mapped[date | None] = mapped_column(Date)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     removed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     permit: Mapped[Permit] = relationship(back_populates="vehicles")
@@ -1241,12 +1237,12 @@ class PermitVisit(Base):
     )
     # 'in' | 'out'
     direction: Mapped[str] = mapped_column(String(4), default="in")
-    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     uae_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     gate: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # 'manual' | 'gate' — how the visit reached us.
     source: Mapped[str] = mapped_column(String(16), default="manual")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     permit: Mapped[Permit] = relationship(back_populates="visits")
 
@@ -1271,7 +1267,7 @@ class ItemPermit(Base):
     items: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
     manager_id: Mapped[int | None] = mapped_column(Integer)
     book_id: Mapped[int | None] = mapped_column(Integer)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -1302,7 +1298,7 @@ class WhatsAppMessage(Base):
     provider_msg_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     sent_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (Index("ix_whatsapp_messages_event", "event_type", "event_ref"),)
 
@@ -1328,7 +1324,7 @@ class SmsMessage(Base):
     provider_msg_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     sent_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     # Full rendered SMS text (added 0047). Nullable: historical rows predate it.
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Gateway delivery outcome (added 0049). NULL until first polled.
@@ -1371,7 +1367,7 @@ class OutboundMessage(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
     sent_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (
         Index("ix_outbound_messages_event", "event_type", "event_ref"),
@@ -1392,7 +1388,7 @@ class DutySupervisor(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     duty_unit: Mapped[str] = mapped_column(String(128))
     recipient_duty_post: Mapped[str] = mapped_column(String(128))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (
         Index("ux_duty_supervisors_unit_post", "duty_unit", "recipient_duty_post", unique=True),
@@ -1410,7 +1406,7 @@ class GroupAnnouncement(Base):
     attachment_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
     book_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sent_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class GroupAnnouncementSend(Base):
@@ -1425,7 +1421,7 @@ class GroupAnnouncementSend(Base):
     status: Mapped[str] = mapped_column(String(16))  # 'sent' | 'failed'
     provider_msg_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (Index("ix_group_announcement_sends_ann", "announcement_id"),)
 
@@ -1469,7 +1465,7 @@ class GeneralBookRecipient(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     name_ar: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (UniqueConstraint("name", name="uq_general_book_recipients_name"),)
 
@@ -1492,8 +1488,8 @@ class UserDashboardLayout(Base):
     layout: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=_utcnow,
-        onupdate=_utcnow,
+        default=utcnow,
+        onupdate=utcnow,
         server_default=func.current_timestamp(),
         nullable=False,
     )
@@ -1508,7 +1504,7 @@ class VaultFile(Base):
     filename: Mapped[str] = mapped_column(String(256))
     path: Mapped[str] = mapped_column(Text)  # relative to vault root
     size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     employee: Mapped[Employee] = relationship(back_populates="vault_files")
 
@@ -1539,7 +1535,7 @@ class Document(Base):
     # Private immutable generated form used to rebuild Included papers packages.
     # The normal ``pdf_path`` remains the published combined output.
     base_pdf_path: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     leave_id: Mapped[int | None] = mapped_column(
         ForeignKey("leaves.id", ondelete="SET NULL"), nullable=True
     )
@@ -1599,7 +1595,7 @@ class LedgerEntry(Base):
     related_employee_id: Mapped[str | None] = mapped_column(
         ForeignKey("employees.id", ondelete="SET NULL"), nullable=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -1666,7 +1662,7 @@ class EditorTemplate(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     html: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -1726,7 +1722,7 @@ class EmailAccount(Base):
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_sync_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     __table_args__ = (Index("ix_email_accounts_owner_user_id", "owner_user_id"),)
@@ -1749,7 +1745,7 @@ class AddressBookContact(Base):
     owner_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
     display_name: Mapped[str] = mapped_column(String(256), nullable=False, default="")
     address: Mapped[str] = mapped_column(String(320), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (
         UniqueConstraint("owner_user_id", "address", name="uq_address_book_owner_address"),
@@ -1774,9 +1770,9 @@ class RecipientList(Base):
     members: Mapped[list[dict[str, str]]] = mapped_column(
         JSON, nullable=False, default=list, server_default="[]"
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime, default=_utcnow, onupdate=_utcnow, nullable=True
+        DateTime, default=utcnow, onupdate=utcnow, nullable=True
     )
 
     __table_args__ = (
@@ -1802,7 +1798,7 @@ class CorrespondenceCategory(Base):
     name_ar: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     sort: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (UniqueConstraint("key", name="uq_correspondence_categories_key"),)
 
@@ -1830,7 +1826,7 @@ class CorrespondenceRule(Base):
     )
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     sort: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (Index("ix_correspondence_rules_trigger", "trigger"),)
 
@@ -1893,8 +1889,8 @@ class User(Base):
     )
     locked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     sessions: Mapped[list[AuthSession]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
@@ -1916,7 +1912,7 @@ class AuthSession(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(256), nullable=True)
@@ -1981,7 +1977,7 @@ class AuditLog(Base):
     entity_type: Mapped[str] = mapped_column(String(64))
     entity_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     payload: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON-encoded
-    ts: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    ts: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (Index("ix_audit_log_ts", "ts"),)
 
@@ -2004,7 +2000,7 @@ class DocumentExtraction(Base):
     source_file: Mapped[str | None] = mapped_column(String(512), nullable=True)
     model_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, default=utcnow, server_default=func.current_timestamp()
     )
 
 
@@ -2021,7 +2017,7 @@ class ScanInbox(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, default=utcnow, server_default=func.current_timestamp()
     )
     source: Mapped[str] = mapped_column(
         String(32)
@@ -2085,7 +2081,7 @@ class PushSubscription(Base):
     # per device. NULL → treat as English.
     locale: Mapped[str | None] = mapped_column(String(8), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, default=utcnow, server_default=func.current_timestamp()
     )
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -2111,7 +2107,7 @@ class PushSent(Base):
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     ref: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, default=utcnow, server_default=func.current_timestamp()
     )
 
     __table_args__ = (
@@ -2138,7 +2134,7 @@ class PermissionRequest(Base):
     decision: Mapped[str | None] = mapped_column(String(16), nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, default=utcnow, server_default=func.current_timestamp()
     )
     decided_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -2168,10 +2164,10 @@ class LedgerFlag(Base):
     entry_id: Mapped[int] = mapped_column(
         ForeignKey("ledger_entries.id", ondelete="CASCADE"), nullable=False
     )
-    flagged_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    flagged_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     followup_due: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, default=utcnow, server_default=func.current_timestamp()
     )
 
     __table_args__ = (
@@ -2203,7 +2199,7 @@ class SmartFolder(Base):
     rule_kind: Mapped[str] = mapped_column(String(32), nullable=False)
     rule_value: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, default=utcnow, server_default=func.current_timestamp()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -2227,7 +2223,7 @@ class SmartFolderDismissal(Base):
     )
     cluster_key: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, default=utcnow, server_default=func.current_timestamp()
     )
 
     __table_args__ = (
@@ -2278,7 +2274,7 @@ class TimesheetRosterAssignment(Base):
     )
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
     assigned_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, default=utcnow, server_default=func.current_timestamp()
     )
     assigned_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
@@ -2308,7 +2304,7 @@ class Absence(Base):
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, default=utcnow, server_default=func.current_timestamp()
     )
 
     __table_args__ = (
@@ -2368,7 +2364,7 @@ class TimesheetOverride(Base):
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, default=utcnow, server_default=func.current_timestamp()
     )
 
     __table_args__ = (
@@ -2456,7 +2452,7 @@ class TimesheetStartAck(Base):
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     month: Mapped[int] = mapped_column(Integer, nullable=False)
     employee_id: Mapped[str] = mapped_column(String(16), nullable=False)
-    acked_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    acked_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     acked_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
@@ -2621,7 +2617,7 @@ class InmateViolationManualRow(Base):
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     created_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, server_default=func.current_timestamp()
+        DateTime, default=utcnow, server_default=func.current_timestamp()
     )
     updated_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -2640,7 +2636,7 @@ class StoreCategory(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name_en: Mapped[str] = mapped_column(String(128), nullable=False)
     name_ar: Mapped[str] = mapped_column(String(128), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
     __table_args__ = (UniqueConstraint("name_en", name="uq_store_categories_name_en"),)
 
@@ -2668,7 +2664,7 @@ class StoreItem(Base):
     minimum_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     category: Mapped[StoreCategory] = relationship()
@@ -2711,7 +2707,7 @@ class StoreBatch(Base):
     expiry_month_only: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
     item: Mapped[StoreItem] = relationship(back_populates="batches")
 
@@ -2745,7 +2741,7 @@ class StoreDelivery(Base):
     note_file_media_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     note_file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     lines: Mapped[list[StoreDeliveryLine]] = relationship(
@@ -2785,7 +2781,7 @@ class StoreCount(Base):
     counted_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     lines: Mapped[list[StoreCountLine]] = relationship(
@@ -2830,7 +2826,7 @@ class StoreDisposal(Base):
     reason: Mapped[str] = mapped_column(String(8), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
     batch: Mapped[StoreBatch] = relationship()
 

@@ -17,7 +17,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
+from app.core.clock import utcnow
 from app.db.models import (
     AuditLog,
     StoreBatch,
@@ -96,10 +97,6 @@ _ALLOWED_MEDIA_BY_EXTENSION: dict[str, frozenset[str]] = {
     ".webp": frozenset({"image/webp"}),
 }
 _UNSAFE_CHARS = re.compile('[\\\\/:*?"<>|\x00-\x1f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]')
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def today() -> date:
@@ -658,7 +655,7 @@ def update_item(
             _get_category(db, data["category_id"])
         for key, value in data.items():
             setattr(row, key, value)
-        row.updated_at = _utcnow()
+        row.updated_at = utcnow()
         _add_audit(db, "item.updated", "store_item", row.id, actor, data)
     return get_item(db, row.id)
 
@@ -675,7 +672,7 @@ def archive_item(db: Session, item_id: int, *, actor: str | None = None) -> Stor
                     item_id=row.id,
                     on_hand=on_hand,
                 )
-            row.archived_at = _utcnow()
+            row.archived_at = utcnow()
             row.updated_at = row.archived_at
             _add_audit(db, "item.archived", "store_item", row.id, actor, {"code": row.code})
     return get_item(db, item_id)
@@ -686,7 +683,7 @@ def restore_item(db: Session, item_id: int, *, actor: str | None = None) -> Stor
         row = get_item(db, item_id)
         if row.archived_at is not None:
             row.archived_at = None
-            row.updated_at = _utcnow()
+            row.updated_at = utcnow()
             _add_audit(db, "item.restored", "store_item", row.id, actor, {"code": row.code})
     return get_item(db, item_id)
 
@@ -951,7 +948,7 @@ def attach_note_file(
             row.note_file_name = safe_name
             row.note_file_media_type = normalized_media
             row.note_file_size = len(data)
-            row.updated_at = _utcnow()
+            row.updated_at = utcnow()
             _add_audit(
                 db,
                 "delivery.note_file.attached",
@@ -985,7 +982,7 @@ def delete_note_file(
         row.note_file_name = None
         row.note_file_media_type = None
         row.note_file_size = None
-        row.updated_at = _utcnow()
+        row.updated_at = utcnow()
         _add_audit(db, "delivery.note_file.deleted", "store_delivery", row.id, actor, {})
     _resolve_stored_path(old_file, delivery_id).unlink(missing_ok=True)
     return get_delivery(db, delivery_id)
@@ -1170,7 +1167,7 @@ def update_count(
         row.counted_on = payload.counted_on
         row.note = payload.note
         row.lines.extend(StoreCountLine(batch_id=b.id, quantity=q) for b, q in resolved)
-        row.updated_at = _utcnow()
+        row.updated_at = utcnow()
         db.flush()
         _remove_orphan_batches(db, old_batch_ids)
         _add_audit(
