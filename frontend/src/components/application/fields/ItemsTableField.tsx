@@ -241,10 +241,12 @@ function StoreItemCodeInput({ name, index }: { name: string; index: number }): R
   const activeIndex = active >= 0 && active < items.length ? active : -1
 
   function choose(item: StorePickerItem) {
+    // The store catalog feeds only the English HQ material request, which HQ
+    // reads in English: fill English values whatever the UI language is.
     const values = {
       code: item.code,
-      description: isAr ? item.name_ar || item.name_en : item.name_en || item.name_ar || '',
-      unit: isAr ? item.counting_unit_ar : item.counting_unit_en,
+      description: item.name_en || item.name_ar || '',
+      unit: item.counting_unit_en || item.counting_unit_ar,
     }
     for (const [key, value] of Object.entries(values)) {
       setValue(`${name}.${index}.${key}`, value, { shouldDirty: true, shouldValidate: true })

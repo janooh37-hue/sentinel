@@ -160,7 +160,7 @@ describe('ItemsTableField store picker', () => {
     expect(rows()).toEqual([INITIAL_ROW])
   })
 
-  it('uses Arabic labels, names and counting units, with a missing-name fallback', async () => {
+  it('shows Arabic labels and names but fills the English HQ paper in English', async () => {
     i18n.addResourceBundle('ar', 'translation', { application: { itemsTable: ar.application.itemsTable } }, true, true)
     await act(async () => { await i18n.changeLanguage('ar') })
     const user = userEvent.setup()
@@ -174,11 +174,11 @@ describe('ItemsTableField store picker', () => {
     expect(within(option).getByText('ST-0001')).toHaveAttribute('dir', 'ltr')
     expect(within(option).getByText('شاي أسود')).toHaveAttribute('dir', 'auto')
     await user.click(option)
-    expect(rows()[0]).toMatchObject({ code: 'ST-0001', description: 'شاي أسود', unit: 'كرتون' })
+    expect(rows()[0]).toMatchObject({ code: 'ST-0001', description: 'Black tea', unit: 'Carton' })
     await user.clear(code)
     await user.type(code, 'water')
     await user.click(screen.getByRole('option', { name: /Water/ }))
-    expect(rows()[0]).toMatchObject({ code: 'ST-0002', description: 'Water', unit: 'صندوق' })
+    expect(rows()[0]).toMatchObject({ code: 'ST-0002', description: 'Water', unit: 'Case' })
     await user.clear(code)
     await user.type(code, 'غير موجود')
     expect(screen.getByRole('status')).toHaveTextContent('لا توجد أصناف مطابقة في المخزن. يمكنك إدخال تفاصيل الصنف يدوياً.')
