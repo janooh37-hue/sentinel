@@ -47,16 +47,6 @@ scripts/mng.ps1 logs          # tail service log (-Stderr for the error log)
 
 ## Architecture
 
-**Request flow (backend):** `app/main.py` is the app factory — it mounts each
-`app/api/v1/<domain>.py` router, installs error handlers, a body-size-limit
-middleware, and the SSE/scheduler lifespan. Routers are thin: they depend on
-`app/api/deps.py` (auth via `get_current_user`, permission gates) and delegate
-all logic to `app/services/*_service.py`. Services orchestrate; reusable
-pure/domain logic lives in `app/core/` (document rendering, PDF chain, leave
-calc, permissions, Arabic/RTL, signatures). Persistence is SQLAlchemy models in
-`app/db/models.py` with `app/db/repos/` for queries. **DB is SQLite** — this
-shapes the schema (see Migrations).
-
 **Frontend↔backend contract is generated, not hand-written.** The chain is
 `backend FastAPI app → backend/openapi.json → frontend/src/lib/api.types.ts`.
 `mng build`/`deploy` use the **committed** `api.types.ts` and do NOT regenerate.
@@ -64,9 +54,7 @@ So after any backend Pydantic schema / route change you MUST resync the types
 (the `/sync-api-types` skill: dump openapi, run `pnpm gen:api`, typecheck) and
 commit `openapi.json` + `api.types.ts` together, or the frontend drifts silently.
 
-**Frontend** is React Query for server state, Radix + Tailwind 4 for UI,
-react-hook-form + Zod for forms. Pages in `src/pages/`, shared UI in
-`src/components/`. Many record types have **two detail surfaces** — desktop
+**Frontend:** many record types have **two detail surfaces** — desktop
 inline (report/RecordExpansion) and a mobile modal (TabRecords) — per-record
 actions must be wired into BOTH.
 
@@ -94,13 +82,8 @@ any bilingual surface, run the `i18n-rtl-reviewer` and
 
 ## Migrations (Alembic on SQLite)
 
-Revision IDs are hand-numbered `NNNN_<slug>` (not Alembic hashes). Keep a
-**single linear head** — a split history once forced an emergency merge revision.
-SQLite can't `ALTER` most constraints in place: wrap alters in
-`op.batch_alter_table`, omit named FKs to existing tables (enforce integrity
-app-side), and give NOT-NULL-on-populated-table columns a `server_default`. Use
-the `/new-migration` skill to scaffold safely and the `alembic-migration-reviewer`
-agent to review; CI's `scripts/check_numbering.py` fails a split head.
+Keep a **single linear head** (CI's `scripts/check_numbering.py` fails a split
+one). SQLite-specific rules live in `backend/app/db/migrations/CLAUDE.md`.
 
 ## Gotchas
 
