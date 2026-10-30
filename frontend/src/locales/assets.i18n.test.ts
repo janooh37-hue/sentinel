@@ -37,6 +37,15 @@ describe('assets locale parity', () => {
     expect(ar.nav.assets).toBe('الأصول')
   })
 
+  it('covers the room frontend namespaces', () => {
+    for (const prefix of ['assets.store.dashboard.', 'assets.store.handovers.', 'assets.store.movements.', 'assets.store.items.picture']) {
+      expect([...enAssets.keys()].some(key => key.startsWith(prefix)), prefix).toBe(true)
+      expect([...arAssets.keys()].some(key => key.startsWith(prefix)), prefix).toBe(true)
+    }
+    expect(enAssets.has('assets.store.tabs.movements')).toBe(true)
+    expect(arAssets.has('assets.store.tabs.movements')).toBe(true)
+  })
+
   it('gives every English key an Arabic peer and no Arabic-only keys', () => {
     expect([...baseKeys(arAssets)].sort()).toEqual([...baseKeys(enAssets)].sort())
   })
