@@ -20,6 +20,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
+from rapidfuzz import fuzz, process
 from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -28,6 +29,8 @@ from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.clock import organization_today, utcnow
 from app.core.expiry import expiry_status
+from app.core.extraction import ocr
+from app.core.extraction.delivery_note import normalize_item_text, parse_row
 from app.core.uploads import SniffedUploadPolicy, resolve_under, validate_sniffed_upload
 from app.db.models import (
     StoreBatch,
@@ -40,6 +43,7 @@ from app.db.models import (
     StoreHandover,
     StoreHandoverLine,
     StoreItem,
+    StoreItemAlias,
 )
 from app.db.repos._locking import begin_immediate_if_idle
 from app.db.repos.audit_repo import append_audit
@@ -58,6 +62,7 @@ from app.schemas.store import (
     StoreDeliveryLineInput,
     StoreDeliveryNoteFile,
     StoreDeliveryRead,
+    StoreDeliveryScan,
     StoreDisposalCreate,
     StoreDisposalRead,
     StoreExpectedBatch,
@@ -70,6 +75,9 @@ from app.schemas.store import (
     StoreMovementKind,
     StoreMovementRead,
     StorePickerItem,
+    StoreScanBox,
+    StoreScanLine,
+    StoreScanPage,
     StoreSuggestion,
     StoreUsage,
     StoreUsageRow,
@@ -331,6 +339,8 @@ def _line_read(
         expiry_date=batch.expiry_date,
         expiry_month_only=batch.expiry_month_only,
         quantity=line.quantity,
+        noted_quantity=line.noted_quantity if isinstance(line, StoreDeliveryLine) else None,
+        difference_reason=line.difference_reason if isinstance(line, StoreDeliveryLine) else None,
     )
 
 
@@ -887,6 +897,122 @@ def get_delivery(db: Session, delivery_id: int) -> StoreDeliveryRead:
     return _delivery_read(_get_delivery(db, delivery_id))
 
 
+def _validate_delivery_lines(lines: Sequence[StoreDeliveryLineInput]) -> None:
+    for index, line in enumerate(lines):
+        if line.quantity == 0 and not (line.noted_quantity is not None and line.noted_quantity > 0):
+            raise ValidationFailedError(
+                "STORE_DELIVERY_ZERO_QUANTITY",
+                "Zero received requires a positive quantity on the delivery note.",
+                line=index,
+            )
+        if (
+            line.noted_quantity is not None
+            and line.noted_quantity != line.quantity
+            and not line.difference_reason
+        ):
+            raise ValidationFailedError(
+                "STORE_DELIVERY_DIFFERENCE_REASON",
+                "Explain why the received quantity differs from the delivery note.",
+                line=index,
+            )
+
+
+def _upsert_delivery_aliases(
+    db: Session,
+    lines: Sequence[StoreDeliveryLineInput],
+    *,
+    actor: str | None,
+    actor_user_id: int | None,
+) -> None:
+    for line in lines:
+        norm = normalize_item_text(line.source_text or "")
+        if not norm:
+            continue
+        alias = db.scalar(select(StoreItemAlias).where(StoreItemAlias.alias_norm == norm))
+        if alias is not None and alias.item_id == line.item_id:
+            continue
+        previous = alias.item_id if alias is not None else None
+        if alias is None:
+            alias = StoreItemAlias(
+                alias_norm=norm, item_id=line.item_id, created_by_user_id=actor_user_id
+            )
+            db.add(alias)
+        else:
+            alias.item_id = line.item_id
+        db.flush()
+        append_audit(
+            db,
+            action="item_alias.upserted",
+            entity_type="store_item_alias",
+            entity_id=alias.id,
+            actor=actor,
+            payload={"alias_norm": norm, "item_id": line.item_id, "previous_item_id": previous},
+        )
+
+
+def scan_delivery(db: Session, *, filename: str, data: bytes, media_type: str) -> StoreDeliveryScan:
+    """Read a delivery note without persisting files, rows, or audit records."""
+    import pytesseract
+
+    validate_sniffed_upload(_NOTE_FILE_POLICY, filename=filename, data=data, media_type=media_type)
+    try:
+        # word_boxes_from_bytes does not acquire the gate itself.
+        with ocr.OCR_GATE:
+            pages = ocr.word_boxes_from_bytes(data, lang="eng")
+    except (ocr.OcrUnavailableError, pytesseract.TesseractNotFoundError):
+        return StoreDeliveryScan(pages=[], lines=[], ocr_available=False)
+    except ocr.InvalidImageError as exc:
+        raise ValidationFailedError("STORE_NOTE_FILE_INVALID", str(exc)) from exc
+    choices: dict[str, int] = {}
+    items = db.scalars(select(StoreItem).where(StoreItem.archived_at.is_(None))).all()
+    for item in items:
+        for value in (item.code, item.name_en, item.name_ar):
+            if value:
+                choices.setdefault(normalize_item_text(value), item.id)
+    active_ids = {item.id for item in items}
+    for alias in db.scalars(select(StoreItemAlias)).all():
+        if alias.item_id in active_ids:
+            choices[alias.alias_norm] = alias.item_id
+    candidates = list(choices)
+    lines: list[StoreScanLine] = []
+    for page_index, page in enumerate(pages):
+        rows: dict[tuple[int, int, int], list[ocr.OcrWord]] = defaultdict(list)
+        for word in page.words:
+            rows[(word.block, word.paragraph, word.line)].append(word)
+        for words in rows.values():
+            raw_text = " ".join(word.text for word in words)
+            parsed = parse_row(raw_text)
+            if parsed is None:
+                continue
+            matches = [
+                process.extractOne(normalize_item_text(text), candidates, scorer=fuzz.ratio)
+                for text in (parsed.item_text, raw_text)
+            ]
+            best = max(
+                (match for match in matches if match is not None), key=lambda m: m[1], default=None
+            )
+            score = float(best[1]) if best else 0.0
+            left, top = min(w.left for w in words), min(w.top for w in words)
+            right = max(w.left + w.width for w in words)
+            bottom = max(w.top + w.height for w in words)
+            lines.append(
+                StoreScanLine(
+                    raw_text=raw_text,
+                    item_id=choices[best[0]] if best and score >= 85 else None,
+                    match_score=score,
+                    quantity=parsed.quantity,
+                    confidence=max(0.0, min(100.0, sum(w.confidence for w in words) / len(words))),
+                    page=page_index,
+                    bbox=StoreScanBox(x=left, y=top, w=right - left, h=bottom - top),
+                )
+            )
+    return StoreDeliveryScan(
+        pages=[StoreScanPage(width=p.width, height=p.height) for p in pages],
+        lines=lines,
+        ocr_available=True,
+    )
+
+
 def create_delivery(
     db: Session,
     payload: StoreDeliveryCreate,
@@ -895,16 +1021,26 @@ def create_delivery(
     actor_user_id: int | None = None,
 ) -> StoreDeliveryRead:
     _require_not_future(payload.received_on, "received_on")
+    _validate_delivery_lines(payload.lines)
     with _write(db):
         resolved = _resolve_lines(db, payload.lines)
         row = StoreDelivery(
             received_on=payload.received_on,
             note=payload.note,
             created_by_user_id=actor_user_id,
-            lines=[StoreDeliveryLine(batch_id=b.id, quantity=q) for b, q in resolved],
+            lines=[
+                StoreDeliveryLine(
+                    batch_id=batch.id,
+                    quantity=quantity,
+                    noted_quantity=line.noted_quantity,
+                    difference_reason=line.difference_reason,
+                )
+                for (batch, quantity), line in zip(resolved, payload.lines, strict=True)
+            ],
         )
         db.add(row)
         db.flush()
+        _upsert_delivery_aliases(db, payload.lines, actor=actor, actor_user_id=actor_user_id)
         append_audit(
             db,
             action="delivery.created",

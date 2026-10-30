@@ -182,7 +182,15 @@ class _LineInput(BaseModel):
 
 
 class StoreDeliveryLineInput(_LineInput):
-    quantity: int = Field(ge=1)
+    quantity: int = Field(ge=0)
+    source_text: str | None = None
+    noted_quantity: int | None = Field(default=None, ge=0)
+    difference_reason: str | None = Field(default=None, max_length=200)
+
+    @field_validator("source_text", "difference_reason")
+    @classmethod
+    def _blank_is_null(cls, value: str | None) -> str | None:
+        return _strip(value)
 
 
 class StoreCountLineInput(_LineInput):
@@ -195,6 +203,8 @@ class StoreLineRead(StoreItemRef):
     expiry_date: date_t | None
     expiry_month_only: bool
     quantity: int
+    noted_quantity: int | None = None
+    difference_reason: str | None = None
 
 
 # ── Deliveries ───────────────────────────────────────────────────────────────
@@ -222,6 +232,34 @@ class StoreDeliveryRead(ORMBase):
     created_by_user_id: int | None
     created_at: datetime
     updated_at: datetime | None
+
+
+class StoreScanPage(BaseModel):
+    width: int
+    height: int
+
+
+class StoreScanBox(BaseModel):
+    x: int
+    y: int
+    w: int
+    h: int
+
+
+class StoreScanLine(BaseModel):
+    raw_text: str
+    item_id: int | None
+    match_score: float = Field(ge=0, le=100)
+    quantity: int | None
+    confidence: float = Field(ge=0, le=100)
+    page: int = Field(ge=0, description="Zero-based page index.")
+    bbox: StoreScanBox
+
+
+class StoreDeliveryScan(BaseModel):
+    pages: list[StoreScanPage]
+    lines: list[StoreScanLine]
+    ocr_available: bool
 
 
 # ── Stock counts ─────────────────────────────────────────────────────────────

@@ -25,6 +25,7 @@ from app.schemas.store import (
     StoreDashboard,
     StoreDeliveryCreate,
     StoreDeliveryRead,
+    StoreDeliveryScan,
     StoreDisposalCreate,
     StoreDisposalRead,
     StoreExpectedBatch,
@@ -141,6 +142,20 @@ def list_store_deliveries(db: _Db, _user: _View) -> list[StoreDeliveryRead]:
 @router.post("/deliveries", response_model=StoreDeliveryRead, status_code=status.HTTP_201_CREATED)
 def create_store_delivery(payload: StoreDeliveryCreate, db: _Db, user: _Edit) -> StoreDeliveryRead:
     return store_service.create_delivery(db, payload, actor=user.email, actor_user_id=user.id)
+
+
+@router.post("/deliveries/scan", response_model=StoreDeliveryScan)
+async def scan_store_delivery(
+    db: _Db, _user: _Edit, file: Annotated[UploadFile, File()]
+) -> StoreDeliveryScan:
+    data = await file.read(store_service.NOTE_FILE_MAX_BYTES + 1)
+    return await run_in_threadpool(
+        store_service.scan_delivery,
+        db,
+        filename=file.filename or "delivery-note",
+        data=data,
+        media_type=file.content_type or "",
+    )
 
 
 @router.get("/deliveries/{delivery_id}", response_model=StoreDeliveryRead)

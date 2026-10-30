@@ -591,3 +591,229 @@ def test_item_art_validation_and_read_surfaces(editor: TestClient, category: Sto
     assert updated.status_code == 200
     assert updated.json()["art_kind"] == "carton"
     assert updated.json()["art_color"] is None
+
+
+@pytest.mark.parametrize(
+    ("quantity", "noted", "reason", "code"),
+    [
+        (8, 10, None, "STORE_DELIVERY_DIFFERENCE_REASON"),
+        (0, None, None, "STORE_DELIVERY_ZERO_QUANTITY"),
+        (0, 0, None, "STORE_DELIVERY_ZERO_QUANTITY"),
+        (0, 10, "  ", "STORE_DELIVERY_DIFFERENCE_REASON"),
+    ],
+)
+def test_delivery_note_quantity_rules(
+    editor: TestClient,
+    category: StoreCategory,
+    quantity: int,
+    noted: int | None,
+    reason: str | None,
+    code: str,
+) -> None:
+    item = _item(editor, category)["id"]
+    response = editor.post(
+        "/api/v1/store/deliveries",
+        json={
+            "received_on": TODAY.isoformat(),
+            "lines": [
+                {
+                    "item_id": item,
+                    "quantity": quantity,
+                    "noted_quantity": noted,
+                    "difference_reason": reason,
+                }
+            ],
+        },
+    )
+    assert _error(response)["code"] == code
+
+
+def test_delivery_zero_is_ledger_noop_and_exposes_note_fields(
+    editor: TestClient,
+    category: StoreCategory,
+) -> None:
+    item = _item(editor, category)["id"]
+    assert _count(editor, date(2026, 10, 1), (item, None, 10)).status_code == 201
+    response = editor.post(
+        "/api/v1/store/deliveries",
+        json={
+            "received_on": "2026-10-10",
+            "lines": [
+                {
+                    "item_id": item,
+                    "quantity": 0,
+                    "noted_quantity": 10,
+                    "difference_reason": "Nothing arrived",
+                }
+            ],
+        },
+    )
+    assert response.status_code == 201, response.text
+    line = response.json()["lines"][0]
+    assert (line["quantity"], line["noted_quantity"], line["difference_reason"]) == (
+        0,
+        10,
+        "Nothing arrived",
+    )
+    assert _items_by_code(editor)["ST-0001"]["on_hand"] == 10
+    assert _count(editor, date(2026, 11, 1), (item, None, 8)).status_code == 201
+    dashboard = editor.get("/api/v1/store/dashboard").json()
+    assert dashboard["usage"]["rows"][0]["values"] == [2]
+    feed = editor.get("/api/v1/store/movements").json()
+    assert feed[0]["lines"][0]["noted_quantity"] == 10
+    assert editor.get("/api/v1/store/deliveries").json()[0]["lines"][0] == line
+    manual = _deliver(editor, TODAY, (item, None, 2)).json()["lines"][0]
+    assert manual["noted_quantity"] is None and manual["difference_reason"] is None
+    assert "source_text" not in manual
+    too_long = editor.post(
+        "/api/v1/store/deliveries",
+        json={
+            "received_on": TODAY.isoformat(),
+            "lines": [
+                {
+                    "item_id": item,
+                    "quantity": 1,
+                    "noted_quantity": 2,
+                    "difference_reason": "x" * 201,
+                }
+            ],
+        },
+    )
+    assert too_long.status_code == 422
+
+
+def _ocr_page(*rows: str) -> Any:
+    from app.core.extraction.ocr import OcrPage, OcrWord
+
+    return OcrPage(
+        width=1000,
+        height=800,
+        words=tuple(
+            OcrWord(
+                text=word,
+                confidence=90.0,
+                left=10 + column * 100,
+                top=20 + row * 30,
+                width=80,
+                height=20,
+                block=1,
+                paragraph=1,
+                line=row + 1,
+            )
+            for row, text in enumerate(rows)
+            for column, word in enumerate(text.split())
+        ),
+    )
+
+
+def test_delivery_scan_matches_items_and_alias_upsert_rematches(
+    editor: TestClient,
+    category: StoreCategory,
+    api_db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.extraction import ocr
+    from app.db.models import AuditLog, StoreDelivery, StoreItemAlias
+
+    first = _item(editor, category, "Coffee-mate 15\u00d7400g")["id"]
+    second = _item(editor, category, "Gloves")["id"]
+
+    class Gate:
+        entries = 0
+
+        def __enter__(self) -> None:
+            self.entries += 1
+
+        def __exit__(self, *args: Any) -> None:
+            pass
+
+    gate = Gate()
+    monkeypatch.setattr(ocr, "OCR_GATE", gate)
+    pages = [
+        _ocr_page(
+            "Item Description Qty Price Amount",
+            "Coffee-mate 15\u00d7400g 8 125.00 1000.00",
+            "Mystery supplies 2 50.00",
+            "Grand Total 1100.00",
+        )
+    ]
+    monkeypatch.setattr(ocr, "word_boxes_from_bytes", lambda raw, *, lang: pages)
+    before_audit = len(api_db.scalars(select(AuditLog)).all())
+
+    def scan() -> dict:
+        response = editor.post(
+            "/api/v1/store/deliveries/scan", files={"file": ("note.pdf", _PDF, "application/pdf")}
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    result = scan()
+    assert gate.entries == 1
+    assert result["ocr_available"] is True
+    assert result["pages"] == [{"width": 1000, "height": 800}]
+    assert len(result["lines"]) == 2
+    line = result["lines"][0]
+    assert (line["item_id"], line["match_score"], line["quantity"]) == (first, 100, 8)
+    assert line["confidence"] == 90 and line["page"] == 0
+    assert line["bbox"] == {"x": 10, "y": 50, "w": 480, "h": 20}
+    assert result["lines"][1]["item_id"] is None
+    assert api_db.scalars(select(StoreDelivery)).all() == []
+    assert len(api_db.scalars(select(AuditLog)).all()) == before_audit
+    for item_id in (first, second, second):
+        response = editor.post(
+            "/api/v1/store/deliveries",
+            json={
+                "received_on": TODAY.isoformat(),
+                "lines": [
+                    {
+                        "item_id": item_id,
+                        "quantity": 2,
+                        "noted_quantity": 2,
+                        "source_text": "Mystery supplies 2 50.00",
+                    }
+                ],
+            },
+        )
+        assert response.status_code == 201, response.text
+    aliases = api_db.scalars(select(StoreItemAlias)).all()
+    assert len(aliases) == 1 and aliases[0].item_id == second
+    assert scan()["lines"][1]["item_id"] == second
+    assert scan()["lines"][1]["match_score"] == 100
+
+
+@pytest.mark.parametrize("missing_binary", [False, True])
+def test_delivery_scan_ocr_unavailable(
+    editor: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    missing_binary: bool,
+) -> None:
+    import pytesseract
+
+    from app.core.extraction import ocr
+
+    def unavailable(raw: bytes, *, lang: str) -> Any:
+        if missing_binary:
+            raise pytesseract.TesseractNotFoundError()
+        raise ocr.OcrUnavailableError("Unavailable")
+
+    monkeypatch.setattr(ocr, "word_boxes_from_bytes", unavailable)
+    response = editor.post(
+        "/api/v1/store/deliveries/scan", files={"file": ("note.pdf", _PDF, "application/pdf")}
+    )
+    assert response.json() == {"pages": [], "lines": [], "ocr_available": False}
+
+
+def test_delivery_scan_reuses_file_rules_and_requires_edit(
+    editor: TestClient,
+    api_db: Session,
+) -> None:
+    bad = editor.post(
+        "/api/v1/store/deliveries/scan", files={"file": ("note.txt", b"text", "text/plain")}
+    )
+    assert _error(bad)["code"].startswith("STORE_NOTE_FILE")
+    user = _make_user(api_db, role="operator", email="scan-view@test.ae", grants=("store.view",))
+    viewer = _client_for(api_db, user)
+    response = viewer.post(
+        "/api/v1/store/deliveries/scan", files={"file": ("note.pdf", _PDF, "application/pdf")}
+    )
+    assert response.status_code == 403
