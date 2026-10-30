@@ -52,7 +52,6 @@ from app.core.nationalities import (
     resolve_nationality,
 )
 from app.db.models import (
-    AuditLog,
     Book,
     BookVersion,
     Employee,
@@ -63,6 +62,7 @@ from app.db.models import (
     User,
     UserPermission,
 )
+from app.db.repos.audit_repo import append_audit
 from app.db.workforce_models import DutyAssignmentEvent
 from app.services import book_service, perm_service
 
@@ -822,31 +822,6 @@ def awaiting_close(
 
 
 # --------------------------------------------------------------------------- #
-# audit
-# --------------------------------------------------------------------------- #
-
-
-def _audit(
-    db: Session,
-    *,
-    actor: User | None,
-    action: str,
-    entity_type: str,
-    entity_id: str,
-    payload: dict[str, Any],
-) -> None:
-    db.add(
-        AuditLog(
-            actor=actor.email if actor is not None else None,
-            action=action,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            payload=json.dumps(payload, ensure_ascii=False, default=str),
-        )
-    )
-
-
-# --------------------------------------------------------------------------- #
 # manual entries
 # --------------------------------------------------------------------------- #
 
@@ -954,12 +929,12 @@ def create_manual_row(
     )
     db.add(row)
     db.flush()
-    _audit(
+    append_audit(
         db,
-        actor=actor,
         action="inmate_violation_manual_row_created",
         entity_type="inmate_violation_row",
         entity_id=f"manual:{row.id}",
+        actor=actor.email if actor is not None else None,
         payload={"year": year, "month": month, **_manual_payload(row)},
     )
     return row
@@ -1012,12 +987,12 @@ def update_manual_row(
         for cell in _MANUAL_CELLS
         if before[cell] != after[cell]
     }
-    _audit(
+    append_audit(
         db,
-        actor=actor,
         action="inmate_violation_manual_row_updated",
         entity_type="inmate_violation_row",
         entity_id=f"manual:{row.id}",
+        actor=actor.email if actor is not None else None,
         payload={"year": row.year, "month": row.month, "reason": row.reason, "changed": changed},
     )
     return row
@@ -1035,12 +1010,12 @@ def delete_manual_row(db: Session, manual_row_id: int, *, actor: User) -> None:
     if row is None:
         raise NotFoundError("INMATE_REGISTER_ROW_NOT_FOUND", "Manual entry not found.")
     payload = {"year": row.year, "month": row.month, **_manual_payload(row)}
-    _audit(
+    append_audit(
         db,
-        actor=actor,
         action="inmate_violation_manual_row_deleted",
         entity_type="inmate_violation_row",
         entity_id=f"manual:{row.id}",
+        actor=actor.email if actor is not None else None,
         payload=payload,
     )
     db.delete(row)
@@ -1144,12 +1119,12 @@ def complete_import(
     fields["completion"] = completion
     version.fields = fields
     db.flush()
-    _audit(
+    append_audit(
         db,
-        actor=actor,
         action="inmate_violation_import_completed",
         entity_type="book",
         entity_id=str(book.id),
+        actor=actor.email if actor is not None else None,
         payload={
             "book_id": book.id,
             "ref_number": book.ref_number,
@@ -1487,12 +1462,12 @@ def _log(
 ) -> None:
     """Every transition lands in the append-only audit log, actors included."""
 
-    _audit(
+    append_audit(
         db,
-        actor=actor,
         action=f"inmate_violation_month_{action}",
         entity_type="inmate_violation_period",
         entity_id=f"{root.year}-{root.month:02d}",
+        actor=actor.email if actor is not None else None,
         payload={
             "year": root.year,
             "month": root.month,

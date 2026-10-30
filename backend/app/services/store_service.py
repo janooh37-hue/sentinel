@@ -9,7 +9,6 @@ on a Stock count's day happens after that count.
 
 from __future__ import annotations
 
-import json
 import math
 import re
 import uuid
@@ -30,7 +29,6 @@ from app.config import get_settings
 from app.core.clock import organization_today, utcnow
 from app.core.expiry import expiry_status
 from app.db.models import (
-    AuditLog,
     StoreBatch,
     StoreCategory,
     StoreCount,
@@ -41,6 +39,7 @@ from app.db.models import (
     StoreItem,
 )
 from app.db.repos._locking import begin_immediate_if_idle
+from app.db.repos.audit_repo import append_audit
 from app.schemas.store import (
     StoreBatchRead,
     StoreCategoryCreate,
@@ -94,26 +93,6 @@ _ALLOWED_MEDIA_BY_EXTENSION: dict[str, frozenset[str]] = {
     ".webp": frozenset({"image/webp"}),
 }
 _UNSAFE_CHARS = re.compile('[\\\\/:*?"<>|\x00-\x1f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]')
-
-
-def _add_audit(
-    db: Session,
-    action: str,
-    entity_type: str,
-    entity_id: int,
-    actor: str | None,
-    payload: dict[str, Any],
-) -> None:
-    """Add an audit entry without owning the caller's transaction."""
-    db.add(
-        AuditLog(
-            actor=actor,
-            action=action,
-            entity_type=entity_type,
-            entity_id=str(entity_id),
-            payload=json.dumps(payload, default=str, ensure_ascii=False),
-        )
-    )
 
 
 def _require_not_future(value: date, field_name: str) -> None:
@@ -468,13 +447,13 @@ def create_category(
         row = StoreCategory(name_en=name_en, name_ar=payload.name_ar.strip())
         db.add(row)
         db.flush()
-        _add_audit(
+        append_audit(
             db,
-            "category.created",
-            "store_category",
-            row.id,
-            actor,
-            {"name_en": row.name_en, "name_ar": row.name_ar},
+            action="category.created",
+            entity_type="store_category",
+            entity_id=row.id,
+            actor=actor,
+            payload={"name_en": row.name_en, "name_ar": row.name_ar},
         )
     return StoreCategoryRead.model_validate(row)
 
@@ -493,7 +472,14 @@ def update_category(
             _raise_category_exists(data["name_en"])
         for key, value in data.items():
             setattr(row, key, value)
-        _add_audit(db, "category.updated", "store_category", row.id, actor, data)
+        append_audit(
+            db,
+            action="category.updated",
+            entity_type="store_category",
+            entity_id=row.id,
+            actor=actor,
+            payload=data,
+        )
     return StoreCategoryRead.model_validate(row)
 
 
@@ -589,13 +575,13 @@ def create_item(
         )
         db.add(row)
         db.flush()
-        _add_audit(
+        append_audit(
             db,
-            "item.created",
-            "store_item",
-            row.id,
-            actor,
-            {"code": row.code, "name_en": row.name_en, "category_id": row.category_id},
+            action="item.created",
+            entity_type="store_item",
+            entity_id=row.id,
+            actor=actor,
+            payload={"code": row.code, "name_en": row.name_en, "category_id": row.category_id},
         )
     return get_item(db, row.id)
 
@@ -654,7 +640,14 @@ def update_item(
         for key, value in data.items():
             setattr(row, key, value)
         row.updated_at = utcnow()
-        _add_audit(db, "item.updated", "store_item", row.id, actor, data)
+        append_audit(
+            db,
+            action="item.updated",
+            entity_type="store_item",
+            entity_id=row.id,
+            actor=actor,
+            payload=data,
+        )
     return get_item(db, row.id)
 
 
@@ -672,7 +665,14 @@ def archive_item(db: Session, item_id: int, *, actor: str | None = None) -> Stor
                 )
             row.archived_at = utcnow()
             row.updated_at = row.archived_at
-            _add_audit(db, "item.archived", "store_item", row.id, actor, {"code": row.code})
+            append_audit(
+                db,
+                action="item.archived",
+                entity_type="store_item",
+                entity_id=row.id,
+                actor=actor,
+                payload={"code": row.code},
+            )
     return get_item(db, item_id)
 
 
@@ -682,7 +682,14 @@ def restore_item(db: Session, item_id: int, *, actor: str | None = None) -> Stor
         if row.archived_at is not None:
             row.archived_at = None
             row.updated_at = utcnow()
-            _add_audit(db, "item.restored", "store_item", row.id, actor, {"code": row.code})
+            append_audit(
+                db,
+                action="item.restored",
+                entity_type="store_item",
+                entity_id=row.id,
+                actor=actor,
+                payload={"code": row.code},
+            )
     return get_item(db, item_id)
 
 
@@ -844,13 +851,13 @@ def create_delivery(
         )
         db.add(row)
         db.flush()
-        _add_audit(
+        append_audit(
             db,
-            "delivery.created",
-            "store_delivery",
-            row.id,
-            actor,
-            {
+            action="delivery.created",
+            entity_type="store_delivery",
+            entity_id=row.id,
+            actor=actor,
+            payload={
                 "received_on": row.received_on.isoformat(),
                 "lines": [{"batch_id": b.id, "quantity": q} for b, q in resolved],
             },
@@ -876,13 +883,13 @@ def delete_delivery(db: Session, delivery_id: int, *, actor: str | None = None) 
         row = _get_delivery(db, delivery_id)
         batch_ids = [line.batch_id for line in row.lines]
         old_file = row.note_file_path
-        _add_audit(
+        append_audit(
             db,
-            "delivery.deleted",
-            "store_delivery",
-            row.id,
-            actor,
-            {
+            action="delivery.deleted",
+            entity_type="store_delivery",
+            entity_id=row.id,
+            actor=actor,
+            payload={
                 "received_on": row.received_on.isoformat(),
                 "lines": [{"batch_id": ln.batch_id, "quantity": ln.quantity} for ln in row.lines],
             },
@@ -953,13 +960,13 @@ def attach_note_file(
             row.note_file_media_type = normalized_media
             row.note_file_size = len(data)
             row.updated_at = utcnow()
-            _add_audit(
+            append_audit(
                 db,
-                "delivery.note_file.attached",
-                "store_delivery",
-                row.id,
-                actor,
-                {"name": safe_name, "size": len(data), "replaced": old_file is not None},
+                action="delivery.note_file.attached",
+                entity_type="store_delivery",
+                entity_id=row.id,
+                actor=actor,
+                payload={"name": safe_name, "size": len(data), "replaced": old_file is not None},
             )
     except BaseException:
         # A partially written or uncommitted file never outlives its failed write.
@@ -987,7 +994,14 @@ def delete_note_file(
         row.note_file_media_type = None
         row.note_file_size = None
         row.updated_at = utcnow()
-        _add_audit(db, "delivery.note_file.deleted", "store_delivery", row.id, actor, {})
+        append_audit(
+            db,
+            action="delivery.note_file.deleted",
+            entity_type="store_delivery",
+            entity_id=row.id,
+            actor=actor,
+            payload={},
+        )
     _resolve_stored_path(old_file, delivery_id).unlink(missing_ok=True)
     return get_delivery(db, delivery_id)
 
@@ -1135,13 +1149,13 @@ def create_count(
         )
         db.add(row)
         db.flush()
-        _add_audit(
+        append_audit(
             db,
-            "count.created",
-            "store_count",
-            row.id,
-            actor,
-            {
+            action="count.created",
+            entity_type="store_count",
+            entity_id=row.id,
+            actor=actor,
+            payload={
                 "counted_on": row.counted_on.isoformat(),
                 "lines": [{"batch_id": b.id, "quantity": q} for b, q in resolved],
             },
@@ -1174,13 +1188,13 @@ def update_count(
         row.updated_at = utcnow()
         db.flush()
         _remove_orphan_batches(db, old_batch_ids)
-        _add_audit(
+        append_audit(
             db,
-            "count.updated",
-            "store_count",
-            row.id,
-            actor,
-            {
+            action="count.updated",
+            entity_type="store_count",
+            entity_id=row.id,
+            actor=actor,
+            payload={
                 "counted_on": row.counted_on.isoformat(),
                 "lines": [{"batch_id": b.id, "quantity": q} for b, q in resolved],
             },
@@ -1246,13 +1260,13 @@ def create_disposal(
         )
         db.add(row)
         db.flush()
-        _add_audit(
+        append_audit(
             db,
-            "disposal.created",
-            "store_disposal",
-            row.id,
-            actor,
-            {
+            action="disposal.created",
+            entity_type="store_disposal",
+            entity_id=row.id,
+            actor=actor,
+            payload={
                 "batch_id": batch.id,
                 "disposed_on": row.disposed_on.isoformat(),
                 "quantity": row.quantity,
@@ -1274,13 +1288,13 @@ def delete_disposal(db: Session, disposal_id: int, *, actor: str | None = None) 
                 "STORE_DISPOSAL_NOT_FOUND", "Disposal not found.", disposal_id=disposal_id
             )
         batch_id = row.batch_id
-        _add_audit(
+        append_audit(
             db,
-            "disposal.deleted",
-            "store_disposal",
-            row.id,
-            actor,
-            {"batch_id": batch_id, "quantity": row.quantity, "reason": row.reason},
+            action="disposal.deleted",
+            entity_type="store_disposal",
+            entity_id=row.id,
+            actor=actor,
+            payload={"batch_id": batch_id, "quantity": row.quantity, "reason": row.reason},
         )
         db.delete(row)
         db.flush()

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 import uuid
@@ -23,7 +22,6 @@ from app.core.clock import utcnow
 from app.core.expiry import expiry_status
 from app.core.vehicle_certificates import Profile
 from app.db.models import (
-    AuditLog,
     Book,
     Employee,
     Vehicle,
@@ -37,6 +35,7 @@ from app.db.models import (
     VehiclePhotoAsset,
     VehicleSite,
 )
+from app.db.repos.audit_repo import append_audit
 from app.schemas.vehicle import (
     MONTH_PATTERN,
     LicenseRenewalRead,
@@ -528,7 +527,15 @@ def archive_vehicle(db: Session, vehicle_id: int, *, actor: str | None = None) -
         return row
     row.archived_at = utcnow()
     row.updated_at = utcnow()
-    _add_audit(db, "vehicle.archived", row.id, actor, {"plate_number": row.plate_number})
+    append_audit(
+        db,
+        action="vehicle.archived",
+        entity_type="vehicle",
+        entity_id=row.id,
+        actor=actor,
+        payload={"plate_number": row.plate_number},
+        ensure_ascii=True,
+    )
     db.commit()
     return get_vehicle(db, row.id)
 
@@ -545,7 +552,15 @@ def restore_vehicle(db: Session, vehicle_id: int, *, actor: str | None = None) -
         )
     row.archived_at = None
     row.updated_at = utcnow()
-    _add_audit(db, "vehicle.restored", row.id, actor, {"plate_number": row.plate_number})
+    append_audit(
+        db,
+        action="vehicle.restored",
+        entity_type="vehicle",
+        entity_id=row.id,
+        actor=actor,
+        payload={"plate_number": row.plate_number},
+        ensure_ascii=True,
+    )
     db.commit()
     return get_vehicle(db, row.id)
 
@@ -2202,17 +2217,19 @@ def store_file(
                     "This certificate already has a replacement.",
                     file_id=predecessor.id,
                 )
-            _add_audit(
+            append_audit(
                 db,
-                "certificate.replaced",
-                vehicle_id,
-                actor,
-                {
+                action="certificate.replaced",
+                entity_type="vehicle",
+                entity_id=vehicle_id,
+                actor=actor,
+                payload={
                     "old_file_id": predecessor.id,
                     "new_file_id": row.id,
                     "old_size": predecessor.size,
                     "stored_size": update_values.get("size", predecessor.size),
                 },
+                ensure_ascii=True,
             )
 
         db.commit()
@@ -2301,12 +2318,14 @@ def update_certificate(
 
     after = _snapshot()
     if before != after:
-        _add_audit(
+        append_audit(
             db,
-            "certificate.updated",
-            vehicle_id,
-            actor,
-            {"file_id": file_id, "before": before, "after": after},
+            action="certificate.updated",
+            entity_type="vehicle",
+            entity_id=vehicle_id,
+            actor=actor,
+            payload={"file_id": file_id, "before": before, "after": after},
+            ensure_ascii=True,
         )
     db.commit()
     db.refresh(row)
@@ -2409,27 +2428,6 @@ def delete_file(
     _audit(db, "file.deleted", vehicle_id, actor, {"file_id": file_id})
 
 
-def _add_audit(
-    db: Session,
-    action: str,
-    vehicle_id: int,
-    actor: str | None,
-    payload: dict[str, Any],
-    *,
-    entity_type: str = "vehicle",
-) -> None:
-    """Add an audit entry without owning the caller's transaction."""
-    db.add(
-        AuditLog(
-            actor=actor,
-            action=action,
-            entity_type=entity_type,
-            entity_id=str(vehicle_id),
-            payload=json.dumps(payload),
-        )
-    )
-
-
 def _audit(
     db: Session,
     action: str,
@@ -2439,12 +2437,14 @@ def _audit(
     *,
     entity_type: str = "vehicle",
 ) -> None:
-    _add_audit(
+    """Append an audit entry and commit the caller's whole transaction."""
+    append_audit(
         db,
-        action,
-        vehicle_id,
-        actor,
-        payload,
+        action=action,
         entity_type=entity_type,
+        entity_id=vehicle_id,
+        actor=actor,
+        payload=payload,
+        ensure_ascii=True,
     )
     db.commit()

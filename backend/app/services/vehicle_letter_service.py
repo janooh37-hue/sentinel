@@ -17,6 +17,7 @@ from app.core.vehicle_letters import (
     odometer_form_fields,
 )
 from app.db.models import Book, Document, Employee, User, VehicleMaintenanceRequest
+from app.db.repos.audit_repo import append_audit
 from app.schemas.vehicle import (
     LetterResult,
     VehicleMaintenanceRequestCreate,
@@ -336,12 +337,13 @@ def create_maintenance_request(
         row.book_id = letter.book_id
         db.add(row)
         db.flush()
-        vehicle_service._add_audit(
+        append_audit(
             db,
-            "letter.generated",
-            letter.book_id,
-            user.email,
-            {
+            action="letter.generated",
+            entity_type="book",
+            entity_id=letter.book_id,
+            actor=user.email,
+            payload={
                 "template_id": "General Book",
                 "book_id": letter.book_id,
                 "document_id": letter.document_id,
@@ -349,7 +351,7 @@ def create_maintenance_request(
                 "vehicle_id": vehicle_id,
                 "maintenance_request_id": row.id,
             },
-            entity_type="book",
+            ensure_ascii=True,
         )
         db.commit()
     except Exception:
