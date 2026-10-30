@@ -13,6 +13,7 @@ import {
   EMPTY_QUANTITY,
   invalidateStoreQueries,
   quantityFromParts,
+  quantityIssue,
   type QuantityParts,
   splitBase,
   storeErrorMessage,
@@ -87,7 +88,7 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
       setCategoryError(null)
       toast.success(t('assets.store.items.categoryAdded'))
     },
-    onError: (err) => setCategoryError(storeErrorMessage(err, t)),
+    onError: (err) => setCategoryError(storeErrorMessage(err)),
   })
   const mutation = useMutation({
     mutationFn: (body: StoreItemCreate) => {
@@ -114,7 +115,7 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
         setContains(item.contains_qty != null)
         setValues((old) => ({ ...old, contains_qty: item.contains_qty == null ? '' : String(item.contains_qty), contains_unit_en: item.contains_unit_en ?? '', contains_unit_ar: item.contains_unit_ar ?? '' }))
       }
-      setError(storeErrorMessage(err, t))
+      setError(storeErrorMessage(err))
     },
   })
   const busy = mutation.isPending || categoryMutation.isPending
@@ -132,7 +133,7 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
       const minimumLevel = quantityFromParts(minimum, units)
       if (!values.name_en.trim() || !values.category_id || !values.counting_unit_en.trim() || !values.counting_unit_ar.trim() ||
         (!locked && contains && (!/^\d+$/.test(values.contains_qty) || !Number.isSafeInteger(Number(values.contains_qty)) || Number(values.contains_qty) < 2 || !values.contains_unit_en.trim() || !values.contains_unit_ar.trim())) ||
-        (minimumLevel != null && (!Number.isSafeInteger(minimumLevel) || minimumLevel < 0))) {
+        quantityIssue(minimumLevel, { min: 0, allowBlank: true })) {
         setError(t('assets.store.items.validation'))
         return
       }
@@ -153,7 +154,7 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
               <SelectContent>{(categories.data ?? []).map((row) => <SelectItem key={row.id} value={String(row.id)}><span dir="auto">{categoryName(row, i18n.language)}</span></SelectItem>)}</SelectContent>
             </Select>
             {categories.isPending && <p role="status" className="text-xs text-muted-foreground">{t('assets.store.state.loading')}</p>}
-            {categories.error && <><FormAlert id={`${id}-categories-error`} message={storeErrorMessage(categories.error, t)} /><Button type="button" variant="secondary" className="min-h-11 self-start" onClick={() => void categories.refetch()}>{t('assets.store.state.retry')}</Button></>}
+            {categories.error && <><FormAlert id={`${id}-categories-error`} message={storeErrorMessage(categories.error)} /><Button type="button" variant="secondary" className="min-h-11 self-start" onClick={() => void categories.refetch()}>{t('assets.store.state.retry')}</Button></>}
             {!addingCategory && <Button type="button" variant="ghost" disabled={busy} className="min-h-11 self-start" onClick={() => setAddingCategory(true)}>{t('assets.store.items.addCategory')}</Button>}
           </Field>
         </FieldGrid>

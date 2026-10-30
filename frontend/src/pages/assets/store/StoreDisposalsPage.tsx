@@ -16,11 +16,12 @@ import { useIsMobile } from '@/lib/useIsMobile'
 import { DisposalDialog } from './components/DisposalDialog'
 import { StoreQueryState } from './StoreQueryState'
 import { StoreShell } from './StoreShell'
-import { formatQuantity, invalidateStoreQueries, itemName, storeErrorMessage, storeKeys } from './storeUtils'
+import { invalidateStoreQueries, storeErrorMessage, storeKeys } from './storeUtils'
 import { ExpiryText } from './components/ExpiryText'
+import { ItemIdentity, StoreQuantity } from './components/RecordParts'
 
 export function StoreDisposalsPage(): React.JSX.Element {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const mobile = useIsMobile()
   const { has } = useCapabilities()
   const editable = has('store.edit')
@@ -36,41 +37,44 @@ export function StoreDisposalsPage(): React.JSX.Element {
       invalidateStoreQueries(queryClient)
       toast.success(t('assets.store.disposals.deleted'))
     },
-    onError: (error) => toast.error(storeErrorMessage(error, t)),
+    onError: (error) => toast.error(storeErrorMessage(error)),
   })
+
+  function deleteButton(row: StoreDisposalRead): React.ReactNode {
+    return (
+      <Button type="button" variant="ghost" className="min-h-11 text-destructive" disabled={deletion.isPending} aria-label={t('assets.store.disposals.deleteAria', { code: row.item_code, date: row.disposed_on })} onClick={(event) => {
+        deleteTrigger.current = event.currentTarget
+        deletion.reset()
+        setDeleteTarget(row)
+      }}>
+        <Trash2 aria-hidden className="h-4 w-4" />{t('assets.store.disposals.delete')}
+      </Button>
+    )
+  }
 
   return (
     <StoreShell title={t('assets.store.disposals.title')} description={t('assets.store.disposals.description')} actions={editable ? (
       <Button type="button" className="min-h-11" onClick={() => setRecordOpen(true)}><Plus aria-hidden className="h-4 w-4" />{t('assets.store.disposals.record')}</Button>
     ) : undefined}>
-      <FormAlert id="store-disposal-delete-error" message={deletion.error ? storeErrorMessage(deletion.error, t) : null} />
+      <FormAlert id="store-disposal-delete-error" message={deletion.error ? storeErrorMessage(deletion.error) : null} />
       <StoreQueryState isPending={disposalsQuery.isPending} error={disposalsQuery.error} onRetry={() => { void disposalsQuery.refetch() }} isEmpty={disposals.length === 0} emptyIcon={Trash2} emptyMessage={t('assets.store.disposals.empty')} emptyDescription={t(editable ? 'assets.store.disposals.emptyDescription' : 'assets.store.disposals.emptyReadOnly')}>
         {mobile ? (
           <ul className="flex flex-col gap-3" aria-label={t('assets.store.disposals.title')}>
             {disposals.map((row) => (
               <li key={row.id} className="rounded-xl border border-border bg-surface p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <bdi dir="ltr" className="font-mono text-xs tabular-nums text-muted-foreground">{row.item_code}</bdi>
-                    <span dir="auto" className="font-medium">{itemName(row, i18n.language)}</span>
-                  </div>
+                  <ItemIdentity row={row} stacked />
                   <Badge className="border border-border bg-surface-tinted text-foreground">{t(`assets.store.disposals.reasons.${row.reason}`)}</Badge>
                 </div>
                 <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
                   <div><dt className="text-xs text-muted-foreground">{t('assets.store.disposals.disposedOn')}</dt><dd><bdi dir="ltr" className="font-mono tabular-nums">{row.disposed_on}</bdi></dd></div>
                   <div><dt className="text-xs text-muted-foreground">{t('assets.store.disposals.expiry')}</dt><dd><ExpiryText batch={row} /></dd></div>
-                  <div className="col-span-2"><dt className="text-xs text-muted-foreground">{t('assets.store.disposals.quantity')}</dt><dd><bdi dir="auto" className="whitespace-nowrap tabular-nums">{formatQuantity(row.quantity, row, i18n.language)}</bdi></dd></div>
+                  <div className="col-span-2"><dt className="text-xs text-muted-foreground">{t('assets.store.disposals.quantity')}</dt><dd><StoreQuantity value={row.quantity} item={row} /></dd></div>
                   <div className="col-span-2"><dt className="text-xs text-muted-foreground">{t('assets.store.disposals.note')}</dt><dd dir="auto" className="whitespace-pre-wrap break-words">{row.note || '—'}</dd></div>
                 </dl>
                 {editable && (
                   <div className="mt-3 flex justify-end border-t border-hairline pt-2">
-                    <Button type="button" variant="ghost" className="min-h-11 text-destructive" disabled={deletion.isPending} aria-label={t('assets.store.disposals.deleteAria', { code: row.item_code, date: row.disposed_on })} onClick={(event) => {
-                      deleteTrigger.current = event.currentTarget
-                      deletion.reset()
-                      setDeleteTarget(row)
-                    }}>
-                      <Trash2 aria-hidden className="h-4 w-4" />{t('assets.store.disposals.delete')}
-                    </Button>
+                    {deleteButton(row)}
                   </div>
                 )}
               </li>
@@ -91,24 +95,15 @@ export function StoreDisposalsPage(): React.JSX.Element {
               <TableRow key={row.id} className="hover:bg-surface-tinted motion-reduce:transition-none">
                 <TableCell><bdi dir="ltr" className="whitespace-nowrap font-mono tabular-nums">{row.disposed_on}</bdi></TableCell>
                 <TableCell>
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <bdi dir="ltr" className="font-mono text-xs tabular-nums text-muted-foreground">{row.item_code}</bdi>
-                    <span dir="auto" className="font-medium">{itemName(row, i18n.language)}</span>
-                  </div>
+                  <ItemIdentity row={row} stacked />
                 </TableCell>
                 <TableCell><ExpiryText batch={row} /></TableCell>
-                <TableCell><bdi dir="auto" className="whitespace-nowrap tabular-nums">{formatQuantity(row.quantity, row, i18n.language)}</bdi></TableCell>
+                <TableCell><StoreQuantity value={row.quantity} item={row} /></TableCell>
                 <TableCell><Badge className="border border-border bg-surface-tinted text-foreground">{t(`assets.store.disposals.reasons.${row.reason}`)}</Badge></TableCell>
                 <TableCell className="max-w-xs whitespace-pre-wrap break-words" dir="auto">{row.note || '—'}</TableCell>
                 {editable && (
                   <TableCell className="text-end">
-                    <Button type="button" variant="ghost" className="min-h-11 text-destructive" disabled={deletion.isPending} aria-label={t('assets.store.disposals.deleteAria', { code: row.item_code, date: row.disposed_on })} onClick={(event) => {
-                      deleteTrigger.current = event.currentTarget
-                      deletion.reset()
-                      setDeleteTarget(row)
-                    }}>
-                      <Trash2 aria-hidden className="h-4 w-4" />{t('assets.store.disposals.delete')}
-                    </Button>
+                    {deleteButton(row)}
                   </TableCell>
                 )}
               </TableRow>

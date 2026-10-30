@@ -24,6 +24,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
 import { useSearchParam } from '@/lib/urlState'
+import { formatNumber, isArabic, localized } from '@/lib/language'
 import { MonthSwitcher } from '@/pages/application/statistics/MonthSwitcher'
 import { monthKey, parseMonthKey } from '@/pages/application/statistics/registerModel'
 
@@ -32,10 +33,7 @@ import {
   VEHICLE_QUERY_KEYS,
   formatAed,
   formatIsoDate,
-  formatNumber,
   invalidateVehicleQueries,
-  isArabic,
-  localized,
   vehicleErrorMessage,
 } from './vehicleUtils'
 import { MaintenanceDialog } from './components/MaintenanceDialog'
@@ -92,7 +90,7 @@ export function VehicleMaintenancePage(): React.JSX.Element {
       })
       toast.success(t('common.deletedToast'))
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
 
   const records = recordsQuery.data ?? NO_RECORDS

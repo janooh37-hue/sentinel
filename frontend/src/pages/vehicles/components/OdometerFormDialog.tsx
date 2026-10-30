@@ -6,7 +6,8 @@ import { toast } from '@/lib/toast'
 
 import { Button } from '@/components/ui/button'
 import { api, type OdometerRowRead } from '@/lib/api'
-import { localized, vehicleErrorMessage } from '../vehicleUtils'
+import { localized } from '@/lib/language'
+import { vehicleErrorMessage } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'
 import {
   DialogBody,
@@ -45,7 +46,7 @@ function OdometerForm({ month, rows, onClose, onBusyChange }: { month: string; r
       toast.success(t('vehicles.letterSaved'), { reference: result.ref_number })
       navigate(`/books/${result.book_id}`)
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
   return (
     <form className="flex min-h-0 flex-1 flex-col" aria-busy={mutation.isPending} onSubmit={(event) => {

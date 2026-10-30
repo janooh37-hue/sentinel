@@ -10,10 +10,11 @@ import { api, type StoreItemRead } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
+import { isArabic } from '@/lib/language'
 import { StoreItemDialog } from './components/StoreItemDialog'
 import { StoreQueryState } from './StoreQueryState'
 import { StoreShell } from './StoreShell'
-import { categoryName, countingUnit, formatContains, formatQuantity, invalidateStoreQueries, isArabic, itemName, storeErrorMessage, storeKeys } from './storeUtils'
+import { categoryName, countingUnit, formatContains, formatQuantity, invalidateStoreQueries, itemName, storeErrorMessage, storeKeys } from './storeUtils'
 
 export function StoreItemsPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -31,7 +32,7 @@ export function StoreItemsPage(): React.JSX.Element {
       invalidateStoreQueries(qc)
       toast.success(t(restore ? 'assets.store.items.restored' : 'assets.store.items.archivedSuccess'))
     },
-    onError: (err) => toast.error(storeErrorMessage(err, t)),
+    onError: (err) => toast.error(storeErrorMessage(err)),
   })
   const actions = (item: StoreItemRead) => editable && <div className="flex flex-wrap items-center justify-end gap-1">
     <Button type="button" variant="ghost" className="min-h-11 motion-reduce:transition-none" onClick={() => setDialog({ item })} aria-label={t('assets.store.items.editItem', { name: itemName(item, i18n.language) })}>

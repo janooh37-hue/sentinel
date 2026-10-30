@@ -2,12 +2,17 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/lib/api'
 import i18n from '@/lib/i18n'
+import { todayIso } from '@/pages/vehicles/vehicleUtils'
 
 import {
+  batchExpiryDate,
+  batchKey,
   expiryFromValue,
   formatExpiry,
   formatQuantity,
+  isBusinessDate,
   quantityFromParts,
+  quantityIssue,
   splitBase,
   storeErrorMessage,
   type StoreUnits,
@@ -69,6 +74,27 @@ describe('store quantities', () => {
   })
 })
 
+describe('store quantity and date rules', () => {
+  it('applies each record type\'s bounds', () => {
+    expect(quantityIssue(null, { min: 0 })).toBe('missing')
+    expect(quantityIssue(null, { min: 0, allowBlank: true })).toBeNull()
+    expect(quantityIssue(0, { min: 0 })).toBeNull()
+    expect(quantityIssue(0, { min: 1 })).toBe('invalid')
+    expect(quantityIssue(Number.NaN, { min: 0, allowBlank: true })).toBe('invalid')
+    expect(quantityIssue(2 ** 53, { min: 1 })).toBe('invalid')
+    expect(quantityIssue(5, { min: 1, max: 5 })).toBeNull()
+    expect(quantityIssue(6, { min: 1, max: 5 })).toBe('aboveMax')
+  })
+
+  it('accepts only complete ISO dates up to today', () => {
+    expect(isBusinessDate(todayIso())).toBe(true)
+    expect(isBusinessDate('2026-01-05')).toBe(true)
+    expect(isBusinessDate('9999-12-31')).toBe(false)
+    expect(isBusinessDate('2026-1-5')).toBe(false)
+    expect(isBusinessDate('')).toBe(false)
+  })
+})
+
 describe('store expiry', () => {
   it('shows month-only expiries as the month and undated batches as no expiry', () => {
     expect(formatExpiry({ expiry_date: '2028-09-30', expiry_month_only: true }, t)).toBe('2028-09')
@@ -82,14 +108,43 @@ describe('store expiry', () => {
     expect(expiryFromValue({ mode: 'none', date: '', month: '' })).toBeNull()
     expect(expiryFromValue({ mode: 'month', date: '2027-04-26', month: '' })).toBeUndefined()
   })
+
+  // Delivery (duplicate lines) and Count (add batch) both key Batches through
+  // batchKey; a month-only entry must land on the server's stored month end
+  // (`schemas/store.py` parse_expiry) whatever the device timezone is.
+  it.each(['UTC', 'Asia/Dubai', 'America/Los_Angeles', 'Pacific/Kiritimati', 'Pacific/Pago_Pago', 'America/Santiago'])(
+    'keys a month-only expiry as its month end in %s',
+    (zone) => {
+      const previous = process.env.TZ
+      process.env.TZ = zone
+      try {
+        if (zone === 'Pacific/Kiritimati') expect(new Date(2028, 0, 1).getTimezoneOffset()).toBe(-840)
+        for (let year = 2024; year <= 2032; year += 1) {
+          for (let month = 1; month <= 12; month += 1) {
+            const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+            const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]
+            const ym = `${year}-${String(month).padStart(2, '0')}`
+            expect(batchExpiryDate(ym)).toBe(`${ym}-${days}`)
+            expect(batchKey(7, ym)).toBe(batchKey(7, `${ym}-${days}`))
+            expect(batchKey(7, ym)).not.toBe(batchKey(7, `${ym}-${String(days - 1).padStart(2, '0')}`))
+          }
+        }
+        expect(batchKey(7, null)).toBe('7:none')
+        expect(batchKey(7, '2028-02-14')).toBe('7:2028-02-14')
+      } finally {
+        if (previous === undefined) delete process.env.TZ
+        else process.env.TZ = previous
+      }
+    },
+  )
 })
 
 describe('storeErrorMessage', () => {
   it('maps STORE_* codes to translated copy and falls back to the server message', () => {
     expect(
-      storeErrorMessage(new ApiError(409, 'STORE_ITEM_CONTAINS_LOCKED', 'server text'), t),
+      storeErrorMessage(new ApiError(409, 'STORE_ITEM_CONTAINS_LOCKED', 'server text')),
     ).toBe('What a Counting unit contains cannot change once the item has stock records.')
-    expect(storeErrorMessage(new ApiError(409, 'STORE_SOMETHING_NEW', 'server text'), t)).toBe(
+    expect(storeErrorMessage(new ApiError(409, 'STORE_SOMETHING_NEW', 'server text'))).toBe(
       'server text',
     )
   })

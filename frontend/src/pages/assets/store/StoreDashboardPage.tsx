@@ -12,8 +12,9 @@ import { useIsMobile } from '@/lib/useIsMobile'
 import { StoreShell } from './StoreShell'
 import { StoreQueryState } from './StoreQueryState'
 import { canOpenHqMaterialRequest, openHqMaterialRequest } from './hqRequest'
-import { formatQuantity, itemName, storeKeys } from './storeUtils'
+import { itemName, storeKeys } from './storeUtils'
 import { ExpiryText } from './components/ExpiryText'
+import { StoreQuantity } from './components/RecordParts'
 
 const ns = 'assets.store.dashboard.'
 
@@ -48,9 +49,8 @@ export function StoreDashboardPage() {
   const data = query.data
   const label = (key: string) => t(ns + key)
   const name = (row: { item_code: string; item_name_en: string; item_name_ar?: string | null }) => <span className="inline-flex flex-wrap gap-2"><Run>{row.item_code}</Run><span dir="auto">{itemName(row, i18n.language)}</span></span>
-  const quantity = (value: number, row: Parameters<typeof formatQuantity>[1]) => <bdi dir="auto" className="whitespace-nowrap tabular-nums">{formatQuantity(value, row, i18n.language)}</bdi>
   const requestRows = data?.suggestions.filter(row => row.suggested_units > 0).map(row => ({ code: row.item_code, description: row.item_name_en, unit: row.counting_unit_en, qty: row.suggested_units })) ?? []
-  const batches = (rows: StoreDashboardBatch[], expired: boolean) => rows.map(row => ({ key: row.batch_id, cells: [name(row), quantity(row.on_hand, row), <ExpiryText batch={row} />, <span className={`inline-flex items-center gap-2 ${expired ? 'text-accent' : 'text-warning'}`}><AlertTriangle aria-hidden className="h-4 w-4 shrink-0" />{label(expired ? 'expiredStatus' : 'soonStatus')} · {t(ns + (expired ? 'daysOverdue' : 'daysLeft'), { count: Math.abs(row.days_left ?? 0) })}</span>] }))
+  const batches = (rows: StoreDashboardBatch[], expired: boolean) => rows.map(row => ({ key: row.batch_id, cells: [name(row), <StoreQuantity value={row.on_hand} item={row} />, <ExpiryText batch={row} />, <span className={`inline-flex items-center gap-2 ${expired ? 'text-accent' : 'text-warning'}`}><AlertTriangle aria-hidden className="h-4 w-4 shrink-0" />{label(expired ? 'expiredStatus' : 'soonStatus')} · {t(ns + (expired ? 'daysOverdue' : 'daysLeft'), { count: Math.abs(row.days_left ?? 0) })}</span>] }))
   const months = data?.usage.months.slice(-6) ?? []
   const offset = (data?.usage.months.length ?? 0) - months.length
   const negative = data?.usage.rows.some(row => row.values.slice(offset).some(value => value != null && value < 0))
@@ -62,12 +62,12 @@ export function StoreDashboardPage() {
         <Records title={label('expired')} headers={['item', 'onHand', 'expiry', 'status'].map(label)} rows={batches(data.expired, true)} empty={label('noExpired')} mobile={mobile} />
         <Records title={label('soon')} headers={['item', 'onHand', 'expiry', 'status'].map(label)} rows={batches(data.expiring_soon, false)} empty={label('noSoon')} mobile={mobile} />
         <p className="text-sm text-muted-foreground">{t(ns + 'soonWindow', { count: data.expiring_soon_days })}</p>
-        <Records title={label('lowStock')} headers={['item', 'onHand', 'minimum'].map(label)} rows={data.low_stock.map(row => ({ key: row.item_id, cells: [name(row), quantity(row.on_hand, row), quantity(row.minimum_level, row)] }))} empty={label('noLowStock')} mobile={mobile} />
+        <Records title={label('lowStock')} headers={['item', 'onHand', 'minimum'].map(label)} rows={data.low_stock.map(row => ({ key: row.item_id, cells: [name(row), <StoreQuantity value={row.on_hand} item={row} />, <StoreQuantity value={row.minimum_level} item={row} />] }))} empty={label('noLowStock')} mobile={mobile} />
         <section className="space-y-3" aria-label={label('usageSection')}>
-          <Records title={label('usage')} headers={[label('item'), ...months]} rows={data.usage.rows.map(row => ({ key: row.item_id, cells: [name(row), ...row.values.slice(offset).map(value => value == null ? <><span aria-hidden>—</span><span className="sr-only">{label('noData')}</span></> : <span className="inline-flex flex-wrap gap-2">{quantity(value, row)}{value < 0 && <span className="font-medium text-warning">{label('negativeFlag')}</span>}</span>)] }))} empty={label('noUsage')} mobile={mobile} />
+          <Records title={label('usage')} headers={[label('item'), ...months]} rows={data.usage.rows.map(row => ({ key: row.item_id, cells: [name(row), ...row.values.slice(offset).map(value => value == null ? <><span aria-hidden>—</span><span className="sr-only">{label('noData')}</span></> : <span className="inline-flex flex-wrap gap-2"><StoreQuantity value={value} item={row} />{value < 0 && <span className="font-medium text-warning">{label('negativeFlag')}</span>}</span>)] }))} empty={label('noUsage')} mobile={mobile} />
           {negative && <p className="text-sm text-muted-foreground">{label('negativeNote')}</p>}
         </section>
-        <Records title={label('suggestions')} headers={['item', 'average', 'onHand', 'suggested', 'wholeUnits'].map(label)} rows={data.suggestions.map(row => ({ key: row.item_id, cells: [name(row), <Run>{new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 2 }).format(row.average_usage)}</Run>, quantity(row.on_hand, row), quantity(row.suggested, row), <bdi dir="auto" className="whitespace-nowrap tabular-nums">{formatQuantity(row.suggested_units, { ...row, contains_qty: null }, i18n.language)}</bdi>] }))} empty={label('noSuggestions')} mobile={mobile} />
+        <Records title={label('suggestions')} headers={['item', 'average', 'onHand', 'suggested', 'wholeUnits'].map(label)} rows={data.suggestions.map(row => ({ key: row.item_id, cells: [name(row), <Run>{new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 2 }).format(row.average_usage)}</Run>, <StoreQuantity value={row.on_hand} item={row} />, <StoreQuantity value={row.suggested} item={row} />, <StoreQuantity value={row.suggested_units} item={{ ...row, contains_qty: null }} />] }))} empty={label('noSuggestions')} mobile={mobile} />
         {data.suggestions.length > 0 && <p className="text-sm text-muted-foreground">{label('averageNote')}</p>}
       </div>}
     </StoreQueryState>

@@ -16,16 +16,18 @@ import { StoreQueryState } from '../StoreQueryState'
 import {
   EMPTY_QUANTITY,
   expiryInput,
-  formatQuantity,
   invalidateStoreQueries,
+  isBusinessDate,
   itemName,
   quantityFromParts,
+  quantityIssue,
   type QuantityParts,
   storeErrorMessage,
   storeKeys,
 } from '../storeUtils'
 import { QuantityInput } from './QuantityInput'
 import { ExpiryText } from './ExpiryText'
+import { StoreQuantity } from './RecordParts'
 
 interface Props {
   open: boolean
@@ -64,7 +66,7 @@ export function DisposalDialog({ open, onOpenChange }: Props): React.JSX.Element
       toast.success(t('assets.store.disposals.saved'))
       onOpenChange(false)
     },
-    onError: (error) => setServerError(storeErrorMessage(error, t)),
+    onError: (error) => setServerError(storeErrorMessage(error)),
   })
   const validationError = errors.batchId?.message ?? errors.quantity?.message ?? errors.disposed_on?.message ?? null
 
@@ -73,7 +75,7 @@ export function DisposalDialog({ open, onOpenChange }: Props): React.JSX.Element
       <form noValidate className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit((values) => {
         if (!batch) return
         const quantity = quantityFromParts(values.quantity, batch)
-        if (quantity == null || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > batch.on_hand) return
+        if (quantity === null || quantityIssue(quantity, { min: 1, max: batch.on_hand })) return
         setServerError(null)
         mutation.mutate({ disposed_on: values.disposed_on, item_id: batch.item_id, expiry: expiryInput(batch), quantity, reason: values.reason, note: values.note.trim() || null })
       })}>
@@ -100,7 +102,7 @@ export function DisposalDialog({ open, onOpenChange }: Props): React.JSX.Element
                         <span dir="auto">{itemName(option, i18n.language)}</span>{' · '}
                         <ExpiryText batch={option} />{' · '}
                         {t('assets.store.disposals.onHand')}{': '}
-                        <bdi dir="auto" className="whitespace-nowrap tabular-nums">{formatQuantity(option.on_hand, option, i18n.language)}</bdi>
+                        <StoreQuantity value={option.on_hand} item={option} />
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -109,11 +111,11 @@ export function DisposalDialog({ open, onOpenChange }: Props): React.JSX.Element
             </Field>
             {batch && (
               <Field id={`${id}-quantity`} label={t('assets.store.disposals.quantity')} required>
-                <p className="text-xs text-muted-foreground">{t('assets.store.disposals.onHand')}{': '}<bdi dir="auto" className="whitespace-nowrap tabular-nums">{formatQuantity(batch.on_hand, batch, i18n.language)}</bdi></p>
+                <p className="text-xs text-muted-foreground">{t('assets.store.disposals.onHand')}{': '}<StoreQuantity value={batch.on_hand} item={batch} /></p>
                 <Controller control={control} name="quantity" rules={{ validate: (value) => {
-                  const quantity = quantityFromParts(value, batch)
-                  if (quantity == null || !Number.isSafeInteger(quantity) || quantity < 1) return t('assets.store.disposals.quantityRequired')
-                  return quantity <= batch.on_hand || t('assets.store.disposals.quantityExceedsStock')
+                  const issue = quantityIssue(quantityFromParts(value, batch), { min: 1, max: batch.on_hand })
+                  if (issue === 'aboveMax') return t('assets.store.disposals.quantityExceedsStock')
+                  return !issue || t('assets.store.disposals.quantityRequired')
                 } }} render={({ field }) => (
                   <QuantityInput id={`${id}-quantity`} item={batch} value={field.value} onChange={field.onChange} label={t('assets.store.disposals.quantity')} invalid={!!errors.quantity} describedBy={errors.quantity ? alertId : undefined} disabled={mutation.isPending} required />
                 )} />
@@ -131,7 +133,7 @@ export function DisposalDialog({ open, onOpenChange }: Props): React.JSX.Element
               </div>
             </fieldset>
             <Field id={`${id}-date`} label={t('assets.store.disposals.disposedOn')} required>
-              <Input id={`${id}-date`} type="date" max={todayIso()} dir="ltr" className="min-h-11 font-mono tabular-nums" disabled={mutation.isPending} aria-invalid={!!errors.disposed_on} aria-describedby={errors.disposed_on ? alertId : undefined} {...register('disposed_on', { required: t('assets.store.disposals.dateRequired'), validate: (value) => value <= todayIso() || t('assets.store.errors.dateInFuture') })} />
+              <Input id={`${id}-date`} type="date" max={todayIso()} dir="ltr" className="min-h-11 font-mono tabular-nums" disabled={mutation.isPending} aria-invalid={!!errors.disposed_on} aria-describedby={errors.disposed_on ? alertId : undefined} {...register('disposed_on', { required: t('assets.store.disposals.dateRequired'), validate: (value) => isBusinessDate(value) || t('assets.store.errors.dateInFuture') })} />
             </Field>
             <Field id={`${id}-note`} label={t('assets.store.disposals.note')}>
               <Textarea id={`${id}-note`} dir="auto" disabled={mutation.isPending} {...register('note')} />

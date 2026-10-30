@@ -1096,15 +1096,18 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   APPROVED_IMPORT_TOKEN_FORBIDDEN: 'errors.forbidden.stagedImportOwner',
 }
 
-/** Localized user-facing error text. A code in `CODE_MESSAGE_KEYS` uses its
- * translated message; any other 403 uses the shared permission message; other
- * server details pass through unless an Arabic UI receives text without Arabic
- * letters. Network TypeErrors and unexpected thrown values use localized
- * network and generic messages respectively. */
-export function apiErrorMessage(err: unknown): string {
+/** Localized user-facing error text. A module's own `codeKey` mapping wins
+ * when it names an existing translation; then a code in `CODE_MESSAGE_KEYS`
+ * uses its translated message; any other 403 uses the shared permission
+ * message; other server details pass through unless an Arabic UI receives text
+ * without Arabic letters. Network TypeErrors and unexpected thrown values use
+ * localized network and generic messages respectively. */
+export function apiErrorMessage(err: unknown, codeKey?: (code: string) => string | null | undefined): string {
   if (!(err instanceof ApiError)) {
     return i18n.t(err instanceof TypeError ? 'errors.network' : 'errors.generic')
   }
+  const moduleKey = codeKey?.(err.code)
+  if (moduleKey && i18n.exists(moduleKey)) return i18n.t(moduleKey)
   if (Object.hasOwn(CODE_MESSAGE_KEYS, err.code)) return i18n.t(CODE_MESSAGE_KEYS[err.code])
   if (err.status === 403) return i18n.t('common.forbiddenError')
   // ponytail: Arabic users lose specific server detail until err.code maps to locale keys.

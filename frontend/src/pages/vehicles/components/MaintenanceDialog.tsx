@@ -32,13 +32,13 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import type { VehicleListItem, VehicleMaintenanceRead, VehicleMaintenanceRequestRead } from '@/lib/api'
+import { localized } from '@/lib/language'
 
 import {
   DOCUMENT_ACCEPT,
   MAINTENANCE_TYPES,
   VEHICLE_QUERY_KEYS,
   invalidateVehicleQueries,
-  localized,
   plateLabel,
   todayIso,
   vehicleErrorMessage,
@@ -205,7 +205,7 @@ function MaintenanceForm({
       onOpenChange(false)
     },
     onError: (err) => {
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setServerError(message)
       toast.error(message)
     },

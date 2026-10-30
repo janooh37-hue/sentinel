@@ -7,10 +7,13 @@
  * as "N cartons + M loose" and converts with `toBaseUnits` / `splitBase`.
  */
 
-import type { QueryClient } from '@tanstack/react-query'
+import { type QueryClient, useQuery } from '@tanstack/react-query'
 
-import { ApiError, apiErrorMessage } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import i18n from '@/lib/i18n'
+import { formatNumber, isArabic, localized } from '@/lib/language'
+import { monthEndIso } from '@/lib/monthEnd'
+import { todayIso } from '@/pages/vehicles/vehicleUtils'
 
 export type Translate = (key: string, options?: Record<string, unknown>) => string
 
@@ -48,20 +51,27 @@ export function invalidateStoreQueries(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: STORE_DASHBOARD_KEY })
 }
 
-// ── Language ────────────────────────────────────────────────────────────────
-
-export function isArabic(language: string = i18n.language): boolean {
-  return language.startsWith('ar')
+/** The active-item picker list (one cache entry, refreshed by every Store write).
+ *  `optional`: a surface outside Store whose user may lack store access, such as
+ *  the material-request items table; it fails quietly and refetches rarely. */
+export function useStorePickerItems({ optional = false }: { optional?: boolean } = {}) {
+  return useQuery({
+    queryKey: storeKeys.picker,
+    queryFn: api.listStorePickerItems,
+    ...(optional
+      ? { staleTime: 5 * 60_000, retry: false, retryOnMount: false, refetchOnWindowFocus: false, refetchOnReconnect: false }
+      : { staleTime: 60_000 }),
+  })
 }
 
-/** Item name in the active language, falling back to English. */
+// ── Language ────────────────────────────────────────────────────────────────
+
+/** Item name in the active language, falling back to the other language. */
 export function itemName(
   row: { name_en?: string; name_ar?: string | null; item_name_en?: string; item_name_ar?: string | null },
   language: string = i18n.language,
 ): string {
-  const en = row.name_en ?? row.item_name_en ?? ''
-  const ar = row.name_ar ?? row.item_name_ar ?? null
-  return isArabic(language) ? ar?.trim() || en : en
+  return localized(row.name_ar ?? row.item_name_ar, row.name_en ?? row.item_name_en, language)
 }
 
 export function categoryName(
@@ -77,12 +87,6 @@ export function countingUnit(item: StoreUnits, language: string = i18n.language)
 
 export function containsUnit(item: StoreUnits, language: string = i18n.language): string {
   return (isArabic(language) ? item.contains_unit_ar : item.contains_unit_en) ?? ''
-}
-
-export function formatNumber(value: number, language: string = i18n.language): string {
-  return new Intl.NumberFormat(isArabic(language) ? 'ar-AE' : 'en-AE', {
-    maximumFractionDigits: 0,
-  }).format(value)
 }
 
 // ── Quantities ──────────────────────────────────────────────────────────────
@@ -157,21 +161,27 @@ export interface ExpiryParts {
   expiry_month_only: boolean
 }
 
-/** Month-only expiries show `YYYY-MM`; undated batches show the "no expiry" copy. */
-export function formatExpiry(batch: ExpiryParts, t: Translate): string {
-  if (batch.expiry_date == null) return t('assets.store.expiry.none')
-  return batch.expiry_month_only ? batch.expiry_date.slice(0, 7) : batch.expiry_date
-}
-
 /** The API line `expiry` value for a Batch: `YYYY-MM`, `YYYY-MM-DD`, or null. */
 export function expiryInput(batch: ExpiryParts): string | null {
   if (batch.expiry_date == null) return null
   return batch.expiry_month_only ? batch.expiry_date.slice(0, 7) : batch.expiry_date
 }
 
-/** Stable identity of a Batch within an item: (item, expiry). */
+/** Shown as the API value (`YYYY-MM` for month-only); undated batches show the "no expiry" copy. */
+export function formatExpiry(batch: ExpiryParts, t: Translate): string {
+  return expiryInput(batch) ?? t('assets.store.expiry.none')
+}
+
+/** The stored expiry date of a Batch: a month-only `YYYY-MM` is the last day of
+ *  that month, exactly as the server stores it; full dates and null pass through. */
+export function batchExpiryDate(expiry: string | null): string | null {
+  return expiry != null && /^\d{4}-\d{2}$/.test(expiry) ? monthEndIso(expiry) : expiry
+}
+
+/** Stable identity of a Batch within an item: (item, expiry). `YYYY-MM` and its
+ *  month-end date are the same Batch. */
 export function batchKey(itemId: number, expiry: string | null): string {
-  return `${itemId}:${expiry ?? 'none'}`
+  return `${itemId}:${batchExpiryDate(expiry) ?? 'none'}`
 }
 
 // ── Form inputs (QuantityInput / ExpiryInput values) ────────────────────────
@@ -194,6 +204,26 @@ export function quantityFromParts(parts: QuantityParts, item: StoreUnits): numbe
   const rest = parse(loose)
   if (Number.isNaN(whole) || Number.isNaN(rest)) return NaN
   return toBaseUnits(whole, rest, item)
+}
+
+/** Why a `quantityFromParts` result cannot be saved, or null when it can.
+ *  `missing`: nothing entered (unless `allowBlank`); `invalid`: not a safe whole
+ *  number or below `min`; `aboveMax`: more than `max`. Callers own the copy. */
+export type QuantityIssue = 'missing' | 'invalid' | 'aboveMax'
+
+export function quantityIssue(
+  quantity: number | null,
+  rules: { min: number; max?: number; allowBlank?: boolean },
+): QuantityIssue | null {
+  if (quantity === null) return rules.allowBlank ? null : 'missing'
+  if (!Number.isSafeInteger(quantity) || quantity < rules.min) return 'invalid'
+  if (rules.max !== undefined && quantity > rules.max) return 'aboveMax'
+  return null
+}
+
+/** A record's business date: a complete ISO `YYYY-MM-DD` that is not in the future. */
+export function isBusinessDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && value <= todayIso()
 }
 
 export type ExpiryMode = 'date' | 'month' | 'none'
@@ -225,10 +255,6 @@ function storeErrorKey(code: string): string | null {
   return `assets.store.errors.${camel}`
 }
 
-export function storeErrorMessage(err: unknown, t: Translate): string {
-  if (err instanceof ApiError) {
-    const key = storeErrorKey(err.code)
-    if (key && i18n.exists(key)) return t(key)
-  }
-  return apiErrorMessage(err)
+export function storeErrorMessage(err: unknown): string {
+  return apiErrorMessage(err, storeErrorKey)
 }

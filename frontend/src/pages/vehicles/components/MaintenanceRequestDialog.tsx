@@ -12,12 +12,12 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { api, type VehicleMaintenanceRead, type VehicleRead } from '@/lib/api'
+import { formatNumber } from '@/lib/language'
 import {
   EMPTY_VALUE,
   MAINTENANCE_TYPES,
   formatAed,
   formatIsoDate,
-  formatNumber,
   invalidateVehicleQueries,
   plateLabel,
   vehicleErrorMessage,
@@ -95,7 +95,7 @@ function MaintenanceRequestForm({ vehicle, lastMaintenance, onOpenChange, onBusy
       navigate(`/books/${result.letter.book_id}`)
     },
     onError: (error) => {
-      const message = vehicleErrorMessage(error, t)
+      const message = vehicleErrorMessage(error)
       setServerError(message)
       toast.error(message)
     },

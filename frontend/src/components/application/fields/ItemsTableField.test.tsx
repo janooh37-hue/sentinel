@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError } from '@/lib/api'
 import type { StorePickerItem } from '@/lib/api'
 import ar from '@/locales/ar.json'
+import { invalidateStoreQueries, storeKeys } from '@/pages/assets/store/storeUtils'
 import { ItemsTableField } from './ItemsTableField'
 
 vi.spyOn(api, 'listStorePickerItems')
@@ -63,6 +64,14 @@ afterEach(async () => {
 })
 
 describe('ItemsTableField store picker', () => {
+  it('refreshes the catalogue after any Store write', async () => {
+    const client = renderTable()
+    await screen.findByRole('combobox', { name: 'Item code, row 1' })
+    expect(api.listStorePickerItems).toHaveBeenCalledTimes(1)
+    invalidateStoreQueries(client)
+    await waitFor(() => expect(api.listStorePickerItems).toHaveBeenCalledTimes(2))
+  })
+
   it('picks with the keyboard, filling only legacy code, description and counting unit', async () => {
     const user = userEvent.setup()
     renderTable()
@@ -120,7 +129,7 @@ describe('ItemsTableField store picker', () => {
   it('silently degrades a 403 to the original plain inputs and never retries on focus or a new row', async () => {
     vi.mocked(api.listStorePickerItems).mockRejectedValue(new ApiError(403, 'FORBIDDEN', 'Forbidden'))
     const client = renderTable()
-    await waitFor(() => expect(client.getQueryState(['store-picker-items'])?.status).toBe('error'))
+    await waitFor(() => expect(client.getQueryState(storeKeys.picker)?.status).toBe('error'))
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()

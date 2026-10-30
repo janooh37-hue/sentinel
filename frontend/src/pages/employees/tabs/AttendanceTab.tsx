@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 
 import { api } from '@/lib/api'
 import type { EmployeeAttendanceDay, EmployeeAttendanceHistoryDay } from '@/lib/api'
+import { lastDayOfMonth } from '@/lib/monthEnd'
 import { useCapabilities } from '@/lib/useCapabilities'
 import {
   graceFor,
@@ -94,7 +95,7 @@ const RECORD_FROM = `${new Date().getUTCFullYear()}-01-01`
 /** First and last day of the month containing `iso`, as ISO dates. */
 function monthBounds(iso: string): { from: string; to: string; year: number; month: number } {
   const [year, month] = iso.split('-').map(Number)
-  const last = new Date(year, month, 0).getDate()
+  const last = lastDayOfMonth(year, month)
   const pad = (value: number): string => String(value).padStart(2, '0')
   return {
     from: `${year}-${pad(month)}-01`,

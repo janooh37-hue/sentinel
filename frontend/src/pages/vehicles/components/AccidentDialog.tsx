@@ -35,12 +35,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
 import type { VehicleAccidentRead, VehicleListItem } from '@/lib/api'
+import { localized } from '@/lib/language'
 
 import {
   IMAGE_ACCEPT,
   VEHICLE_QUERY_KEYS,
   invalidateVehicleQueries,
-  localized,
   nowTime,
   plateLabel,
   todayIso,
@@ -209,7 +209,7 @@ function AccidentForm({
       onOpenChange(false)
     },
     onError: (err) => {
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setServerError(message)
       toast.error(message)
     },

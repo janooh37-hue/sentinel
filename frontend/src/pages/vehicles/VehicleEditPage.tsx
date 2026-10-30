@@ -35,6 +35,7 @@ import type {
 import { useCapabilities } from '@/lib/useCapabilities'
 import { isolateBidi } from '@/lib/useCapabilityCatalog'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
+import { localized } from '@/lib/language'
 
 import {
   type VehicleFormInput,
@@ -49,7 +50,6 @@ import {
   VEHICLE_QUERY_KEYS,
   fileLabel,
   invalidateVehicleQueries,
-  localized,
   plateLabel,
   vehicleErrorMessage,
 } from './vehicleUtils'
@@ -430,7 +430,7 @@ function EditorForm({
           invalidateVehicleQueries(queryClient, { vehicleId: savedVehicle.id })
           galleryUploaded.push(pending)
         } catch (err) {
-          failures.push(vehicleErrorMessage(err, t))
+          failures.push(vehicleErrorMessage(err))
         }
       }
 
@@ -443,7 +443,7 @@ function EditorForm({
           invalidateVehicleQueries(queryClient, { vehicleId: savedVehicle.id })
           mainPhotoSaved = true
         } catch (err) {
-          failures.push(vehicleErrorMessage(err, t))
+          failures.push(vehicleErrorMessage(err))
         }
       }
 
@@ -470,7 +470,7 @@ function EditorForm({
             }
             invalidateVehicleQueries(queryClient, { vehicleId: savedVehicle.id })
           } catch (err) {
-            failures.push(vehicleErrorMessage(err, t))
+            failures.push(vehicleErrorMessage(err))
           }
         }
         if (licenceUploadedFileId != null) {
@@ -481,7 +481,7 @@ function EditorForm({
             invalidateVehicleQueries(queryClient, { vehicleId: savedVehicle.id })
             licenceAttached = true
           } catch (err) {
-            failures.push(vehicleErrorMessage(err, t))
+            failures.push(vehicleErrorMessage(err))
           }
         }
       }
@@ -535,7 +535,7 @@ function EditorForm({
       onSaved(result.vehicle)
     },
     onError: (err) => {
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setServerError(message)
       toast.error(message)
     },
@@ -552,7 +552,7 @@ function EditorForm({
       void queryClient.invalidateQueries({ queryKey: VEHICLE_QUERY_KEYS.photoLibrary })
     },
     onError: (err) => {
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setServerError(message)
       toast.error(message)
     },
@@ -577,7 +577,7 @@ function EditorForm({
       toast.success(t('vehicles.photoDeleted'))
     },
     onError: (err) => {
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setServerError(message)
       toast.error(message)
     },

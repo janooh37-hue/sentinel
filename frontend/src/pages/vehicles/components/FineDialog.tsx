@@ -40,12 +40,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
 import type { VehicleFineRead, VehicleListItem, VehicleRead } from '@/lib/api'
+import { localized } from '@/lib/language'
 
 import {
   VEHICLE_QUERY_KEYS,
   filsToEditableText,
   invalidateVehicleQueries,
-  localized,
   parseAmountToFils,
   plateLabel,
   todayIso,
@@ -218,7 +218,7 @@ function FineForm({
       onOpenChange(false)
     },
     onError: (err) => {
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setServerError(message)
       toast.error(message)
     },

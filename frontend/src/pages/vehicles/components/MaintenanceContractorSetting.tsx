@@ -24,7 +24,7 @@ export function MaintenanceContractorSetting({ summary, canEdit }: {
       queryClient.setQueryData(VEHICLE_QUERY_KEYS.summary, next)
       toast.success(t('vehicles.maintenanceContractorSaved'))
     },
-    onError: (error) => toast.error(vehicleErrorMessage(error, t)),
+    onError: (error) => toast.error(vehicleErrorMessage(error)),
   })
 
   return (

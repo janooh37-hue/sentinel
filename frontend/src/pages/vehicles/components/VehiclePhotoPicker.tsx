@@ -10,11 +10,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import type { VehiclePhotoRead } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { localized } from '@/lib/language'
 
 import {
   IMAGE_ACCEPT,
   VEHICLE_QUERY_KEYS,
-  localized,
   vehicleErrorMessage,
 } from '../vehicleUtils'
 import {
@@ -131,7 +131,7 @@ function VehiclePhotoPickerForm({
       setLabelAr('')
       setLabelEn('')
     },
-    onError: (cause) => setError(vehicleErrorMessage(cause, t)),
+    onError: (cause) => setError(vehicleErrorMessage(cause)),
     onSettled: () => onBusyChange(false),
   })
 
@@ -141,7 +141,7 @@ function VehiclePhotoPickerForm({
       setError(null)
       onBusyChange(true)
     },
-    onError: (cause) => setError(vehicleErrorMessage(cause, t)),
+    onError: (cause) => setError(vehicleErrorMessage(cause)),
     onSettled: () => onBusyChange(false),
   })
 
