@@ -3,17 +3,8 @@ import { StoreItemArt } from '@/components/StoreItemArt'
 import type { StoreBatchRead, StoreCategoryRead, StoreDashboard, StoreItemRead } from '@/lib/api'
 import { categoryName, formatQuantity, itemName } from '../storeUtils'
 
-export type ShelfFilter = 'all' | 'expired' | 'expiring' | 'low'
-export function availableStock(itemId: number, batches: StoreBatchRead[]): number {
-  return batches.reduce((sum, batch) => batch.item_id === itemId && (batch.days_to_expiry == null || batch.days_to_expiry >= 0) ? sum + Math.max(0, batch.on_hand) : sum, 0)
-}
-export function itemFlags(itemId: number, dashboard: StoreDashboard): Exclude<ShelfFilter, 'all'>[] {
-  const flags: Exclude<ShelfFilter, 'all'>[] = []
-  if (dashboard.expired.some(batch => batch.item_id === itemId)) flags.push('expired')
-  if (dashboard.expiring_soon.some(batch => batch.item_id === itemId)) flags.push('expiring')
-  if (dashboard.low_stock.some(item => item.item_id === itemId)) flags.push('low')
-  return flags
-}
+import { availableStock, itemFlags, type ShelfFilter } from './storeShelfModel'
+
 export function ItemStatus({ itemId, dashboard, all = false }: { itemId: number; dashboard: StoreDashboard; all?: boolean }) {
   const { t } = useTranslation()
   const flags = itemFlags(itemId, dashboard)

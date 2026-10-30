@@ -20,7 +20,7 @@ export function StoreMovementsPage() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<StoreMovementRead | null>(null)
   const query = useQuery({ queryKey: storeKeys.movements, queryFn: () => api.listStoreMovements() })
-  const rows = query.data ?? []
+  const rows = useMemo(() => query.data ?? [], [query.data])
   const groups = useMemo(() => {
     const grouped = new Map<string, StoreMovementRead[]>()
     const q = search.trim().toLocaleLowerCase()

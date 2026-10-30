@@ -9,7 +9,8 @@ import type { StoreBatchRead, StoreDashboard, StoreItemRead, StoreMovementRead }
 import { categoryName, formatExpiry, formatQuantity, itemName } from '../storeUtils'
 import { HandoverForm, QuantityStepper } from './HandoverTray'
 import { MovementRow } from './MovementRow'
-import { ItemStatus, availableStock } from './StoreShelves'
+import { ItemStatus } from './StoreShelves'
+import { availableStock } from './storeShelfModel'
 
 function ExpiryTimeline({ batches, windowDays }: { batches: StoreBatchRead[]; windowDays: number }) {
   const { t } = useTranslation()
