@@ -50,6 +50,7 @@ export function createDeliveryLines(initial: DeliveryLineInit[] = [{}]): Deliver
 export function validateDeliveryLines(
   lines: readonly DeliveryLine[],
   t: Translate,
+  options: { minimumQuantity?: (line: DeliveryLine) => number } = {},
 ): DeliveryLinesCheck {
   const errors: DeliveryLineErrors = {}
   const seen = new Set<string>()
@@ -60,7 +61,7 @@ export function validateDeliveryLines(
     const expiry = expiryFromValue(line.expiry)
     if (expiry === undefined) issue.expiry = t('assets.store.deliveries.expiryRequired')
     const quantity = line.item ? quantityFromParts(line.quantity, line.item) : null
-    if (quantityIssue(quantity, { min: 1 })) issue.quantity = t('assets.store.deliveries.quantityRequired')
+    if (quantityIssue(quantity, { min: options.minimumQuantity?.(line) ?? 1 })) issue.quantity = t('assets.store.deliveries.quantityRequired')
     if (line.item && expiry !== undefined) {
       const key = batchKey(line.item.id, expiry)
       if (seen.has(key)) issue.expiry = t('assets.store.deliveries.duplicateLine')
