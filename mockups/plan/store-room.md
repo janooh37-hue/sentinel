@@ -348,3 +348,28 @@ cross-app combobox hook and generic query-state frame (tier C).
 3. Wave 3, frontend: store-room pages writer and scan/confirm writer.
 4. Reviews (i18n-rtl, alembic), full suite, dev channel, then a UX/best-practice
    review of the new pages.
+
+## Backend progress (2026-10-31)
+
+- Migration `0111_store_room` supplies the handover/alias tables, item-art columns,
+  delivery-note quantity columns and nonnegative delivery-quantity check. Its
+  reversible downgrade deletes stock-neutral zero-quantity delivery lines before
+  restoring the old positive-quantity constraint.
+- Handovers and the In & out feed are implemented with the capability gates above.
+  Handover names retain exactly what was typed; whitespace-only names are refused.
+  Duplicate input item lines merge before FEFO allocation. The shared ledger's
+  disposable capacity protects later balances for backdated handovers. Handovers
+  reduce stock but never enter derived usage windows. Recorder names use Book's
+  existing English/Arabic batched resolvers.
+- Dashboard month-strip metadata is `counts_recorded` (total counts),
+  `usage_ready` (a consecutive-count window exists), `suggestion_count`
+  (suggestions array length), plus the existing `expiring_soon_days: 60`.
+- Backend selection (`store or migration or extraction`): 161 passed, 1 unrelated
+  migration test failed, 3948 deselected. The old inmate-violations migration test
+  compares pre-head Book columns against the full head's existing
+  `confidentiality`/`send_state` columns. Ruff and numbering pass; there is one
+  head, `0111_store_room`. Repo-config mypy reports 59 errors in 14 untouched
+  files, with none in the changed files.
+- Art input handling, scan/aliases/noted-quantity business rules, opening scripts,
+  generated contracts and frontend implementation remain separate slices.
+

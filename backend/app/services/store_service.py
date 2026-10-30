@@ -18,8 +18,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
-from typing import Any
-from typing import Literal
+from typing import Any, Literal
 
 from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
@@ -68,6 +67,8 @@ from app.schemas.store import (
     StoreItemRead,
     StoreItemUpdate,
     StoreLineRead,
+    StoreMovementKind,
+    StoreMovementRead,
     StorePickerItem,
     StoreSuggestion,
     StoreUsage,
@@ -142,7 +143,7 @@ def _write(
         raise
 
 
-# ── Derived stock (counts + deliveries - disposals) ──────────────────────────
+# ── Derived stock (counts + deliveries - disposals - handovers) ───────────────
 
 
 @dataclass(frozen=True)
@@ -194,12 +195,12 @@ class _Ledger:
         return self._balance(base, day, include_end=False)
 
     def disposable(self, batch_id: int, day: date, *, as_of: date) -> int:
-        """Most a Disposal dated ``day`` may remove from one Batch.
+        """Most a Disposal or Handover dated ``day`` may remove from one Batch.
 
         The Batch's stock on ``day`` (after a count that day, with every event up
         to and including ``day``), and at every later movement until the next
         Stock count resets the shelf (or until ``as_of`` when none follows), so a
-        backdated Disposal can never drive a later balance below zero.
+        backdated removal can never drive a later balance below zero.
         """
         next_count = next((c.counted_on for c in self.counts if c.counted_on > day), None)
         points = {day} | {
@@ -317,7 +318,9 @@ def _days_left(batch: StoreBatch, as_of: date) -> int | None:
     return (batch.expiry_date - as_of).days if batch.expiry_date is not None else None
 
 
-def _line_read(line: StoreDeliveryLine | StoreCountLine | StoreHandoverLine) -> StoreLineRead:
+def _line_read(
+    line: StoreDeliveryLine | StoreCountLine | StoreHandoverLine | StoreDisposal,
+) -> StoreLineRead:
     batch = line.batch
     return StoreLineRead(
         **_item_ref(batch.item),
@@ -717,7 +720,7 @@ def _find_batch(db: Session, item_id: int, expiry_date: date | None) -> StoreBat
 
 
 def _refuse_archived(item: StoreItem) -> None:
-    """An archived item takes no new stock records (Deliveries, Counts, Disposals)."""
+    """An archived item takes no new stock records, including Handovers."""
     if item.archived_at is not None:
         raise ConflictError(
             "STORE_ITEM_ARCHIVED",
@@ -769,7 +772,7 @@ def _resolve_lines(
 
 
 def _remove_orphan_batches(db: Session, batch_ids: Iterable[int]) -> None:
-    """Delete Batches no delivery line, count line, or Disposal refers to any more."""
+    """Delete Batches no stock record refers to any more."""
     for batch_id in set(batch_ids):
         used = db.scalar(
             select(
@@ -1444,6 +1447,87 @@ def delete_handover(db: Session, handover_id: int, *, actor: str | None = None) 
         _remove_orphan_batches(db, batch_ids)
 
 
+# ── In & out ─────────────────────────────────────────────────────────────────
+
+
+def list_movements(
+    db: Session,
+    *,
+    kind: StoreMovementKind | None = None,
+    q: str | None = None,
+) -> list[StoreMovementRead]:
+    records: list[StoreDelivery | StoreHandover | StoreDisposal] = []
+    if kind is None or kind == "in":
+        records.extend(
+            db.scalars(
+                select(StoreDelivery).options(
+                    selectinload(StoreDelivery.lines).options(_line_options())
+                )
+            ).all()
+        )
+    if kind is None or kind == "out":
+        records.extend(db.scalars(select(StoreHandover).options(_handover_options())).all())
+    if kind is None or kind == "disposed":
+        records.extend(db.scalars(select(StoreDisposal).options(_disposal_options())).all())
+    ids = {row.created_by_user_id for row in records if row.created_by_user_id is not None}
+    names = book_service.resolve_names_by_ids(db, ids)
+    names_ar = book_service.resolve_names_ar_by_ids(db, ids)
+    movements = []
+    query = (q or "").strip().casefold()
+    for record in records:
+        note_file = None
+        taken_by = None
+        reason = None
+        movement_kind: StoreMovementKind
+        if isinstance(record, StoreDelivery):
+            movement_kind = "in"
+            on = record.received_on
+            delivery = _delivery_read(record)
+            lines = delivery.lines
+            note_file = delivery.note_file
+        elif isinstance(record, StoreHandover):
+            movement_kind = "out"
+            on = record.handed_on
+            lines = [_line_read(line) for line in record.lines]
+            taken_by = record.taken_by
+        else:
+            movement_kind = "disposed"
+            on = record.disposed_on
+            lines = [_line_read(record)]
+            reason = _disposal_read(record).reason
+        movement = StoreMovementRead(
+            kind=movement_kind,
+            id=record.id,
+            on=on,
+            created_at=record.created_at,
+            recorded_by_name=names.get(record.created_by_user_id)
+            if record.created_by_user_id
+            else None,
+            recorded_by_name_ar=names_ar.get(record.created_by_user_id)
+            if record.created_by_user_id
+            else None,
+            taken_by=taken_by,
+            note=record.note,
+            reason=reason,
+            note_file=note_file,
+            lines=lines,
+        )
+        if query:
+            searchable = [
+                movement.taken_by,
+                movement.note,
+                movement.recorded_by_name,
+                movement.recorded_by_name_ar,
+            ]
+            for line in lines:
+                searchable.extend([line.item_code, line.item_name_en, line.item_name_ar])
+            if not any(query in value.casefold() for value in searchable if value):
+                continue
+        movements.append(movement)
+    movements.sort(key=lambda row: (row.on, row.created_at, row.id, row.kind), reverse=True)
+    return movements
+
+
 # ── Dashboard ────────────────────────────────────────────────────────────────
 
 
@@ -1529,6 +1613,9 @@ def dashboard(db: Session) -> StoreDashboard:
         low_stock=low_stock,
         usage=StoreUsage(months=[month for month, _values in shown], rows=usage_rows),
         suggestions=suggestions,
+        counts_recorded=len(ledger.counts),
+        usage_ready=bool(windows),
+        suggestion_count=len(suggestions),
         last_count_on=ledger.counts[-1].counted_on if ledger.counts else None,
         last_delivery_on=db.scalar(
             select(StoreDelivery.received_on).order_by(StoreDelivery.received_on.desc()).limit(1)

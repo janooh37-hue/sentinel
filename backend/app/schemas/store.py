@@ -14,6 +14,7 @@ from app.core.clock import organization_today
 from app.schemas._base import ORMBase
 
 StoreDisposalReason = Literal["expired", "damaged"]
+StoreMovementKind = Literal["in", "out", "disposed"]
 
 _EXPIRY_PATTERN = re.compile(r"^(\d{4})-(\d{2})(?:-(\d{2}))?$")
 
@@ -299,6 +300,23 @@ class StoreHandoverRead(BaseModel):
     recorded_by_name_ar: str | None
 
 
+# ── In & out ─────────────────────────────────────────────────────────────────
+
+
+class StoreMovementRead(BaseModel):
+    kind: StoreMovementKind
+    id: int
+    on: date_t
+    created_at: datetime
+    recorded_by_name: str | None
+    recorded_by_name_ar: str | None
+    taken_by: str | None = None
+    note: str | None = None
+    reason: StoreDisposalReason | None = None
+    note_file: StoreDeliveryNoteFile | None = None
+    lines: list[StoreLineRead]
+
+
 # ── Dashboard ────────────────────────────────────────────────────────────────
 
 
@@ -341,3 +359,6 @@ class StoreDashboard(BaseModel):
     suggestions: list[StoreSuggestion]
     last_count_on: date_t | None
     last_delivery_on: date_t | None
+    counts_recorded: int
+    usage_ready: bool
+    suggestion_count: int

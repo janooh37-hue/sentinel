@@ -33,6 +33,8 @@ from app.schemas.store import (
     StoreItemCreate,
     StoreItemRead,
     StoreItemUpdate,
+    StoreMovementKind,
+    StoreMovementRead,
     StorePickerItem,
 )
 from app.services import perm_service, store_service
@@ -278,6 +280,16 @@ def get_store_handover(handover_id: int, db: _Db, _user: _View) -> StoreHandover
 def delete_store_handover(handover_id: int, db: _Db, user: _Edit) -> Response:
     store_service.delete_handover(db, handover_id, actor=user.email)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/movements", response_model=list[StoreMovementRead])
+def list_store_movements(
+    db: _Db,
+    _user: _View,
+    kind: StoreMovementKind | None = None,
+    q: str | None = None,
+) -> list[StoreMovementRead]:
+    return store_service.list_movements(db, kind=kind, q=q)
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────────
