@@ -16,7 +16,6 @@ import { StoreQueryState } from '../StoreQueryState'
 import {
   EMPTY_QUANTITY,
   expiryInput,
-  formatQuantity,
   invalidateStoreQueries,
   isBusinessDate,
   itemName,
@@ -28,6 +27,7 @@ import {
 } from '../storeUtils'
 import { QuantityInput } from './QuantityInput'
 import { ExpiryText } from './ExpiryText'
+import { StoreQuantity } from './RecordParts'
 
 interface Props {
   open: boolean
@@ -102,7 +102,7 @@ export function DisposalDialog({ open, onOpenChange }: Props): React.JSX.Element
                         <span dir="auto">{itemName(option, i18n.language)}</span>{' · '}
                         <ExpiryText batch={option} />{' · '}
                         {t('assets.store.disposals.onHand')}{': '}
-                        <bdi dir="auto" className="whitespace-nowrap tabular-nums">{formatQuantity(option.on_hand, option, i18n.language)}</bdi>
+                        <StoreQuantity value={option.on_hand} item={option} />
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -111,7 +111,7 @@ export function DisposalDialog({ open, onOpenChange }: Props): React.JSX.Element
             </Field>
             {batch && (
               <Field id={`${id}-quantity`} label={t('assets.store.disposals.quantity')} required>
-                <p className="text-xs text-muted-foreground">{t('assets.store.disposals.onHand')}{': '}<bdi dir="auto" className="whitespace-nowrap tabular-nums">{formatQuantity(batch.on_hand, batch, i18n.language)}</bdi></p>
+                <p className="text-xs text-muted-foreground">{t('assets.store.disposals.onHand')}{': '}<StoreQuantity value={batch.on_hand} item={batch} /></p>
                 <Controller control={control} name="quantity" rules={{ validate: (value) => {
                   const issue = quantityIssue(quantityFromParts(value, batch), { min: 1, max: batch.on_hand })
                   if (issue === 'aboveMax') return t('assets.store.disposals.quantityExceedsStock')

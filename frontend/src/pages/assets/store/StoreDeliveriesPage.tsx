@@ -14,11 +14,12 @@ import { useIsMobile } from '@/lib/useIsMobile'
 import { DeliveryDialog } from './components/DeliveryDialog'
 import { StoreQueryState } from './StoreQueryState'
 import { StoreShell } from './StoreShell'
-import { formatQuantity, invalidateStoreQueries, itemName, storeErrorMessage, storeKeys } from './storeUtils'
+import { invalidateStoreQueries, storeErrorMessage, storeKeys } from './storeUtils'
 import { ExpiryText } from './components/ExpiryText'
+import { ItemIdentity, StoreQuantity } from './components/RecordParts'
 
 export function StoreDeliveriesPage(): React.JSX.Element {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const mobile = useIsMobile()
   const editable = useCapabilities().has('store.edit')
   const qc = useQueryClient()
@@ -69,8 +70,8 @@ export function StoreDeliveriesPage(): React.JSX.Element {
                 <ul className="mb-3 divide-y divide-border">
                   {delivery.lines.map((line) => (
                     <li key={line.id} className="flex flex-col gap-1 py-3 text-sm">
-                      <div className="flex flex-wrap items-baseline gap-2"><bdi dir="ltr" className="font-mono tabular-nums text-muted-foreground">{line.item_code}</bdi><span dir="auto" className="font-medium">{itemName(line, i18n.language)}</span></div>
-                      <div className="flex flex-wrap justify-between gap-2"><span>{t('assets.store.deliveries.expiry')}: <ExpiryText batch={line} /></span><bdi dir="auto" className="whitespace-nowrap tabular-nums">{formatQuantity(line.quantity, line, i18n.language)}</bdi></div>
+                      <ItemIdentity row={line} />
+                      <div className="flex flex-wrap justify-between gap-2"><span>{t('assets.store.deliveries.expiry')}: <ExpiryText batch={line} /></span><StoreQuantity value={line.quantity} item={line} /></div>
                     </li>
                   ))}
                 </ul>
@@ -89,7 +90,7 @@ export function StoreDeliveriesPage(): React.JSX.Element {
                   <TableCell className="max-w-64 whitespace-pre-wrap break-words align-top"><span dir="auto">{delivery.note || t('assets.store.deliveries.noNote')}</span></TableCell>
                   <TableCell className="align-top">
                     <ul className="divide-y divide-border">
-                      {delivery.lines.map((line) => <li key={line.id} className="flex flex-col gap-1 py-2 first:pt-0 last:pb-0"><div className="flex flex-wrap items-baseline gap-2"><bdi dir="ltr" className="font-mono tabular-nums text-muted-foreground">{line.item_code}</bdi><span dir="auto" className="font-medium">{itemName(line, i18n.language)}</span></div><div className="flex flex-wrap gap-x-4 gap-y-1 text-sm"><span>{t('assets.store.deliveries.expiry')}: <ExpiryText batch={line} /></span><bdi dir="auto" className="whitespace-nowrap tabular-nums">{formatQuantity(line.quantity, line, i18n.language)}</bdi></div></li>)}
+                      {delivery.lines.map((line) => <li key={line.id} className="flex flex-col gap-1 py-2 first:pt-0 last:pb-0"><ItemIdentity row={line} /><div className="flex flex-wrap gap-x-4 gap-y-1 text-sm"><span>{t('assets.store.deliveries.expiry')}: <ExpiryText batch={line} /></span><StoreQuantity value={line.quantity} item={line} /></div></li>)}
                     </ul>
                   </TableCell>
                   <TableCell className="max-w-64 align-top">{attachment(delivery.note_file)}</TableCell>

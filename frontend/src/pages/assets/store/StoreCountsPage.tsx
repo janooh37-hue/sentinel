@@ -13,8 +13,9 @@ import { useIsMobile } from '@/lib/useIsMobile'
 import { formatNumber } from '@/lib/language'
 import { StoreShell } from './StoreShell'
 import { StoreQueryState } from './StoreQueryState'
-import { formatQuantity, itemName, storeKeys } from './storeUtils'
+import { storeKeys } from './storeUtils'
 import { ExpiryText } from './components/ExpiryText'
+import { ItemIdentity, StoreQuantity } from './components/RecordParts'
 
 export function StoreCountsPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -43,11 +44,10 @@ export function StoreCountsPage(): React.JSX.Element {
       {count.lines.map((line) => (
         <li key={line.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <bdi dir="ltr" className="font-mono tabular-nums text-muted-foreground">{line.item_code}</bdi>
-            <span dir="auto">{itemName(line, i18n.language)}</span>
+            <ItemIdentity row={line} />
             <ExpiryText batch={line} />
           </div>
-          <bdi dir="auto" className="whitespace-nowrap tabular-nums">{formatQuantity(line.quantity, line, i18n.language)}</bdi>
+          <StoreQuantity value={line.quantity} item={line} />
         </li>
       ))}
       {count.lines.length === 0 && <li className="py-3 text-sm text-muted-foreground">{t('assets.store.counts.noLines')}</li>}
