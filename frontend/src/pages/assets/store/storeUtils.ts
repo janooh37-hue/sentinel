@@ -43,6 +43,9 @@ export const storeKeys = {
   count: (id: number) => ['store', 'counts', id] as const,
   expected: (countedOn: string) => ['store', 'counts', 'expected', countedOn] as const,
   disposals: ['store', 'disposals'] as const,
+  handovers: ['store', 'handovers'] as const,
+  takers: ['store', 'takers'] as const,
+  movements: ['store', 'movements'] as const,
 }
 
 /** Every Store write can move on-hand, usage and the dashboard: refresh all. */

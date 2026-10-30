@@ -16,6 +16,7 @@ import { AssetsSectionTabs } from '../AssetsSectionTabs'
 
 const STORE_TABS = [
   { to: '/holdings/store', key: 'dashboard', end: true },
+  { to: '/holdings/store/movements', key: 'movements', end: false },
   { to: '/holdings/store/items', key: 'items', end: false },
   { to: '/holdings/store/deliveries', key: 'deliveries', end: false },
   { to: '/holdings/store/counts', key: 'counts', end: false },

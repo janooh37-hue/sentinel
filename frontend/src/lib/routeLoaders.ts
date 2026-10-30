@@ -35,6 +35,8 @@ export const loadStoreDisposalsPage = () =>
   import('@/pages/assets/store/StoreDisposalsPage').then((m) => ({
     default: m.StoreDisposalsPage,
   }))
+export const loadStoreMovementsPage = () =>
+  import('@/pages/assets/store/StoreMovementsPage').then((m) => ({ default: m.StoreMovementsPage }))
 export const loadVehiclesHubPage = () =>
   import('@/pages/vehicles/VehiclesHubPage').then((m) => ({ default: m.VehiclesHubPage }))
 export const loadVehicleDetailPage = () =>
