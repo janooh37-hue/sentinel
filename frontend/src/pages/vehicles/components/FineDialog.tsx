@@ -53,14 +53,14 @@ import {
 } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'
 import {
-  VehicleDialogBody,
-  VehicleDialogFooter,
-  VehicleDialogShell,
-  VehicleEmployeeField,
-  VehicleField,
-  VehicleFieldGrid,
-  VehicleFormAlert,
-} from './VehicleDialogShell'
+  DialogBody,
+  DialogFooter,
+  DialogShell,
+  Field,
+  FieldGrid,
+  FormAlert,
+} from '@/components/forms/DialogShell'
+import { VehicleEmployeeField } from './VehicleEmployeeField'
 
 /** A first fine is almost always the AED 300 speeding ticket. */
 const DEFAULT_AMOUNT = '300'
@@ -120,7 +120,7 @@ export function FineDialog({
   const ready = Boolean(vehicle) || Boolean(fine) || vehiclesQuery.isSuccess
 
   return (
-    <VehicleDialogShell
+    <DialogShell
       open={open}
       onOpenChange={onOpenChange}
       title={fine ? t('vehicles.editFine') : t('vehicles.addFineTitle')}
@@ -139,12 +139,12 @@ export function FineDialog({
           onBusyChange={setBusy}
         />
       ) : (
-        <VehicleDialogBody>
+        <DialogBody>
           <Skeleton className="h-9 w-full" />
           <Skeleton className="h-9 w-2/3" />
-        </VehicleDialogBody>
+        </DialogBody>
       )}
-    </VehicleDialogShell>
+    </DialogShell>
   )
 }
 
@@ -243,8 +243,8 @@ function FineForm({
         mutation.mutate(values)
       })}
     >
-      <VehicleDialogBody>
-        <VehicleFormAlert id={alertId} message={alert} />
+      <DialogBody>
+        <FormAlert id={alertId} message={alert} />
 
         {locked ? (
           <div className="flex flex-col gap-1.5">
@@ -254,7 +254,7 @@ function FineForm({
             </div>
           </div>
         ) : (
-          <VehicleField
+          <Field
             id={`${fieldId}-vehicle`}
             label={t('vehicles.selectedVehicle')}
             required
@@ -282,11 +282,11 @@ function FineForm({
                 </Select>
               )}
             />
-          </VehicleField>
+          </Field>
         )}
 
-        <VehicleFieldGrid>
-          <VehicleField id={`${fieldId}-date`} label={t('vehicles.date')} required>
+        <FieldGrid>
+          <Field id={`${fieldId}-date`} label={t('vehicles.date')} required>
             <Input
               id={`${fieldId}-date`}
               type="date"
@@ -295,8 +295,8 @@ function FineForm({
               {...register('date')}
               {...flag('date')}
             />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-time`} label={t('vehicles.time')}>
+          </Field>
+          <Field id={`${fieldId}-time`} label={t('vehicles.time')}>
             <Input
               id={`${fieldId}-time`}
               type="time"
@@ -304,8 +304,8 @@ function FineForm({
               {...register('time')}
               {...flag('time')}
             />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-amount`} label={t('vehicles.amount')} required>
+          </Field>
+          <Field id={`${fieldId}-amount`} label={t('vehicles.amount')} required>
             <Input
               id={`${fieldId}-amount`}
               type="text"
@@ -315,8 +315,8 @@ function FineForm({
               {...register('amount')}
               {...flag('amount')}
             />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-points`} label={t('vehicles.blackPoints')} required>
+          </Field>
+          <Field id={`${fieldId}-points`} label={t('vehicles.blackPoints')} required>
             <Input
               id={`${fieldId}-points`}
               type="number"
@@ -327,7 +327,7 @@ function FineForm({
               {...register('black_points')}
               {...flag('black_points')}
             />
-          </VehicleField>
+          </Field>
           <Controller
             control={control}
             name="employee_id"
@@ -339,10 +339,10 @@ function FineForm({
               />
             )}
           />
-          <VehicleField id={`${fieldId}-location`} label={t('vehicles.location')} full>
+          <Field id={`${fieldId}-location`} label={t('vehicles.location')} full>
             <Input id={`${fieldId}-location`} dir="auto" {...register('location')} />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-description`} label={t('vehicles.description')} full>
+          </Field>
+          <Field id={`${fieldId}-description`} label={t('vehicles.description')} full>
             <Textarea
               id={`${fieldId}-description`}
               dir="auto"
@@ -350,11 +350,11 @@ function FineForm({
               className="min-h-[64px]"
               {...register('description')}
             />
-          </VehicleField>
-        </VehicleFieldGrid>
-      </VehicleDialogBody>
+          </Field>
+        </FieldGrid>
+      </DialogBody>
 
-      <VehicleDialogFooter>
+      <DialogFooter>
         <Button
           type="button"
           variant="ghost"
@@ -366,7 +366,7 @@ function FineForm({
         <Button type="submit" disabled={mutation.isPending || !selectedId}>
           {mutation.isPending ? t('common.saving') : t('vehicles.save')}
         </Button>
-      </VehicleDialogFooter>
+      </DialogFooter>
     </form>
   )
 }

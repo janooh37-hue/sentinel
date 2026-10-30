@@ -84,6 +84,12 @@ vi.mock('@/lib/routeLoaders', () => ({
   loadVehicleFinesReportPage: () => Promise.resolve({ default: () => <div>vehicle-fines-report-page</div> }),
   loadVehicleMaintenancePage: () => Promise.resolve({ default: () => <div>vehicle-maintenance-page</div> }),
   loadVehiclesHubPage: () => Promise.resolve({ default: () => <div>vehicles-hub-page</div> }),
+  loadStoreDashboardPage: () => Promise.resolve({ default: () => <div>store-dashboard-page</div> }),
+  loadStoreItemsPage: () => Promise.resolve({ default: () => <div>store-items-page</div> }),
+  loadStoreDeliveriesPage: () => Promise.resolve({ default: () => <div>store-deliveries-page</div> }),
+  loadStoreCountsPage: () => Promise.resolve({ default: () => <div>store-counts-page</div> }),
+  loadStoreCountPage: () => Promise.resolve({ default: () => <div>store-count-page</div> }),
+  loadStoreDisposalsPage: () => Promise.resolve({ default: () => <div>store-disposals-page</div> }),
   loadScanBackPage: () => Promise.resolve({ default: () => <div>scanback-page</div> }),
   loadSignaturePlacementPage: () =>
     Promise.resolve({ default: () => <div>signature-placement-page</div> }),
@@ -121,6 +127,14 @@ const routes = [
   ['/vehicles/edit', ['vehicles.view', 'vehicles.edit'], 'vehicle-edit-page'],
   ['/vehicles/edit/42', ['vehicles.view', 'vehicles.edit'], 'vehicle-edit-page'],
   ['/vehicles/import', ['vehicles.view', 'vehicles.edit'], 'vehicle-import-page'],
+  ['/assets', ['store.view'], 'store-dashboard-page'],
+  ['/assets/store', ['store.view'], 'store-dashboard-page'],
+  ['/assets/store/items', ['store.view'], 'store-items-page'],
+  ['/assets/store/deliveries', ['store.view'], 'store-deliveries-page'],
+  ['/assets/store/counts', ['store.view'], 'store-counts-page'],
+  ['/assets/store/counts/new', ['store.view', 'store.edit'], 'store-count-page'],
+  ['/assets/store/counts/7', ['store.view', 'store.edit'], 'store-count-page'],
+  ['/assets/store/disposals', ['store.view'], 'store-disposals-page'],
 ] as const
 
 beforeEach(() => {
@@ -196,6 +210,18 @@ describe('App route capability gates', () => {
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
       expect(screen.queryByText('vehicle-edit-page')).not.toBeInTheDocument()
+    },
+  )
+
+  it.each(['store.view', 'store.edit'])(
+    'denies /assets/store/counts/new when %s is the only granted capability',
+    async (capability) => {
+      capabilityState.allowed = new Set([capability])
+      window.history.pushState({}, '', '/assets/store/counts/new')
+      render(<App />)
+
+      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+      expect(screen.queryByText('store-count-page')).not.toBeInTheDocument()
     },
   )
 

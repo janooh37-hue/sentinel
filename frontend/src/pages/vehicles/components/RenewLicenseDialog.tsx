@@ -32,14 +32,14 @@ import {
 } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'
 import {
+  DialogBody,
+  DialogFooter,
+  DialogShell,
+  Field,
+  FieldGrid,
+  FormAlert,
   UploadSlot,
-  VehicleDialogBody,
-  VehicleDialogFooter,
-  VehicleDialogShell,
-  VehicleField,
-  VehicleFieldGrid,
-  VehicleFormAlert,
-} from './VehicleDialogShell'
+} from '@/components/forms/DialogShell'
 
 /** What this fleet's renewal has cost; overridden when the receipt differs. */
 const DEFAULT_COST = '1450'
@@ -83,7 +83,7 @@ export function RenewLicenseDialog({
   // dismissal, so the in-flight state is reported up to it.
   const [busy, setBusy] = useState(false)
   return (
-    <VehicleDialogShell
+    <DialogShell
       open={open}
       onOpenChange={onOpenChange}
       title={t('vehicles.renewTitle')}
@@ -97,7 +97,7 @@ export function RenewLicenseDialog({
         onOpenChange={onOpenChange}
         onBusyChange={setBusy}
       />
-    </VehicleDialogShell>
+    </DialogShell>
   )
 }
 
@@ -182,8 +182,8 @@ function RenewForm({
         mutation.mutate(values)
       })}
     >
-      <VehicleDialogBody>
-        <VehicleFormAlert id={alertId} message={alert} />
+      <DialogBody>
+        <FormAlert id={alertId} message={alert} />
 
         <div className="flex flex-col gap-1.5">
           <Label id={`${fieldId}-plate-label`}>{t('vehicles.plate')}</Label>
@@ -202,8 +202,8 @@ function RenewForm({
           </div>
         </div>
 
-        <VehicleFieldGrid>
-          <VehicleField id={`${fieldId}-start`} label={t('vehicles.newStart')} required>
+        <FieldGrid>
+          <Field id={`${fieldId}-start`} label={t('vehicles.newStart')} required>
             <Input
               id={`${fieldId}-start`}
               type="date"
@@ -216,8 +216,8 @@ function RenewForm({
               }}
               {...flag('start')}
             />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-expiry`} label={t('vehicles.newExpiry')} required>
+          </Field>
+          <Field id={`${fieldId}-expiry`} label={t('vehicles.newExpiry')} required>
             <Input
               id={`${fieldId}-expiry`}
               type="date"
@@ -225,8 +225,8 @@ function RenewForm({
               {...register('expiry', { onChange: () => setExpiryEdited(true) })}
               {...flag('expiry')}
             />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-cost`} label={t('vehicles.renewalCost')} required>
+          </Field>
+          <Field id={`${fieldId}-cost`} label={t('vehicles.renewalCost')} required>
             <Input
               id={`${fieldId}-cost`}
               type="number"
@@ -237,8 +237,8 @@ function RenewForm({
               {...register('cost')}
               {...flag('cost')}
             />
-          </VehicleField>
-        </VehicleFieldGrid>
+          </Field>
+        </FieldGrid>
 
         <UploadSlot
           label={t('vehicles.uploadScan')}
@@ -249,9 +249,9 @@ function RenewForm({
           clearLabel={t('common.remove')}
           disabled={mutation.isPending}
         />
-      </VehicleDialogBody>
+      </DialogBody>
 
-      <VehicleDialogFooter>
+      <DialogFooter>
         <Button
           type="button"
           variant="ghost"
@@ -263,7 +263,7 @@ function RenewForm({
         <Button type="submit" disabled={mutation.isPending}>
           {mutation.isPending ? t('common.saving') : t('vehicles.renew')}
         </Button>
-      </VehicleDialogFooter>
+      </DialogFooter>
     </form>
   )
 }

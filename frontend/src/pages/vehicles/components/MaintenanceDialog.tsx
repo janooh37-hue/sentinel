@@ -45,14 +45,14 @@ import {
 } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'
 import {
+  DialogBody,
+  DialogFooter,
+  DialogShell,
+  Field,
+  FieldGrid,
+  FormAlert,
   UploadSlot,
-  VehicleDialogBody,
-  VehicleDialogFooter,
-  VehicleDialogShell,
-  VehicleField,
-  VehicleFieldGrid,
-  VehicleFormAlert,
-} from './VehicleDialogShell'
+} from '@/components/forms/DialogShell'
 
 const schema = z.object({
   vehicle_id: z.string().min(1),
@@ -104,7 +104,7 @@ export function MaintenanceDialog({
   const options = vehicle ? [] : vehiclesQuery.data
 
   return (
-    <VehicleDialogShell
+    <DialogShell
       open={open}
       onOpenChange={onOpenChange}
       title={t('vehicles.addMaintenance')}
@@ -122,12 +122,12 @@ export function MaintenanceDialog({
           onBusyChange={setBusy}
         />
       ) : (
-        <VehicleDialogBody>
+        <DialogBody>
           <Skeleton className="h-9 w-full" />
           <Skeleton className="h-9 w-2/3" />
-        </VehicleDialogBody>
+        </DialogBody>
       )}
-    </VehicleDialogShell>
+    </DialogShell>
   )
 }
 
@@ -229,8 +229,8 @@ function MaintenanceForm({
         mutation.mutate(values)
       })}
     >
-      <VehicleDialogBody>
-        <VehicleFormAlert id={alertId} message={alert} />
+      <DialogBody>
+        <FormAlert id={alertId} message={alert} />
 
         {locked ? (
           <div className="flex flex-col gap-1.5">
@@ -240,7 +240,7 @@ function MaintenanceForm({
             </div>
           </div>
         ) : (
-          <VehicleField
+          <Field
             id={`${fieldId}-vehicle`}
             label={t('vehicles.selectedVehicle')}
             required
@@ -268,11 +268,11 @@ function MaintenanceForm({
                 </Select>
               )}
             />
-          </VehicleField>
+          </Field>
         )}
 
-        <VehicleFieldGrid>
-          <VehicleField id={`${fieldId}-date`} label={t('vehicles.date')} required>
+        <FieldGrid>
+          <Field id={`${fieldId}-date`} label={t('vehicles.date')} required>
             <Input
               id={`${fieldId}-date`}
               type="date"
@@ -280,8 +280,8 @@ function MaintenanceForm({
               {...register('date')}
               {...flag('date')}
             />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-type`} label={t('vehicles.maintenanceType')} required>
+          </Field>
+          <Field id={`${fieldId}-type`} label={t('vehicles.maintenanceType')} required>
             <Controller
               control={control}
               name="type"
@@ -300,8 +300,8 @@ function MaintenanceForm({
                 </Select>
               )}
             />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-odometer`} label={`${t('vehicles.odometer')} (${t('vehicles.km')})`}>
+          </Field>
+          <Field id={`${fieldId}-odometer`} label={`${t('vehicles.odometer')} (${t('vehicles.km')})`}>
             <Input
               id={`${fieldId}-odometer`}
               type="number"
@@ -312,8 +312,8 @@ function MaintenanceForm({
               {...register('odometer_km')}
               {...flag('odometer_km')}
             />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-cost`} label={t('vehicles.cost')} required>
+          </Field>
+          <Field id={`${fieldId}-cost`} label={t('vehicles.cost')} required>
             <Input
               id={`${fieldId}-cost`}
               type="number"
@@ -324,14 +324,14 @@ function MaintenanceForm({
               {...register('cost')}
               {...flag('cost')}
             />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-vendor-ar`} label={`${t('vehicles.garage')} · AR`}>
+          </Field>
+          <Field id={`${fieldId}-vendor-ar`} label={`${t('vehicles.garage')} · AR`}>
             <Input id={`${fieldId}-vendor-ar`} dir="rtl" {...register('vendor_ar')} />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-vendor-en`} label={`${t('vehicles.garage')} · EN`}>
+          </Field>
+          <Field id={`${fieldId}-vendor-en`} label={`${t('vehicles.garage')} · EN`}>
             <Input id={`${fieldId}-vendor-en`} dir="ltr" {...register('vendor_en')} />
-          </VehicleField>
-          <VehicleField
+          </Field>
+          <Field
             id={`${fieldId}-next-due`}
             label={t('vehicles.nextDue')}
             hint={t('vehicles.reminderHint')}
@@ -343,8 +343,8 @@ function MaintenanceForm({
               className="font-mono"
               {...register('next_due')}
             />
-          </VehicleField>
-        </VehicleFieldGrid>
+          </Field>
+        </FieldGrid>
 
         <UploadSlot
           label={t('vehicles.uploadReceipt')}
@@ -355,9 +355,9 @@ function MaintenanceForm({
           clearLabel={t('common.remove')}
           disabled={mutation.isPending}
         />
-      </VehicleDialogBody>
+      </DialogBody>
 
-      <VehicleDialogFooter>
+      <DialogFooter>
         <Button
           type="button"
           variant="ghost"
@@ -369,7 +369,7 @@ function MaintenanceForm({
         <Button type="submit" disabled={mutation.isPending || !selectedId}>
           {mutation.isPending ? t('common.saving') : t('vehicles.save')}
         </Button>
-      </VehicleDialogFooter>
+      </DialogFooter>
     </form>
   )
 }

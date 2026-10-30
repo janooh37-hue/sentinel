@@ -48,14 +48,14 @@ import {
 } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'
 import {
-  VehicleDialogBody,
-  VehicleDialogFooter,
-  VehicleDialogShell,
-  VehicleEmployeeField,
-  VehicleField,
-  VehicleFieldGrid,
-  VehicleFormAlert,
-} from './VehicleDialogShell'
+  DialogBody,
+  DialogFooter,
+  DialogShell,
+  Field,
+  FieldGrid,
+  FormAlert,
+} from '@/components/forms/DialogShell'
+import { VehicleEmployeeField } from './VehicleEmployeeField'
 
 const schema = z.object({
   vehicle_id: z.string().min(1),
@@ -106,7 +106,7 @@ export function AccidentDialog({
   const options = vehicle ? [] : vehiclesQuery.data
 
   return (
-    <VehicleDialogShell
+    <DialogShell
       open={open}
       onOpenChange={onOpenChange}
       title={t('vehicles.newReport')}
@@ -123,12 +123,12 @@ export function AccidentDialog({
           onBusyChange={setBusy}
         />
       ) : (
-        <VehicleDialogBody>
+        <DialogBody>
           <Skeleton className="h-9 w-full" />
           <Skeleton className="h-9 w-2/3" />
-        </VehicleDialogBody>
+        </DialogBody>
       )}
-    </VehicleDialogShell>
+    </DialogShell>
   )
 }
 
@@ -233,8 +233,8 @@ function AccidentForm({
         mutation.mutate(values)
       })}
     >
-      <VehicleDialogBody>
-        <VehicleFormAlert id={alertId} message={alert} />
+      <DialogBody>
+        <FormAlert id={alertId} message={alert} />
 
         {locked ? (
           <div className="flex flex-col gap-1.5">
@@ -244,7 +244,7 @@ function AccidentForm({
             </div>
           </div>
         ) : (
-          <VehicleField
+          <Field
             id={`${fieldId}-vehicle`}
             label={t('vehicles.selectedVehicle')}
             required
@@ -272,11 +272,11 @@ function AccidentForm({
                 </Select>
               )}
             />
-          </VehicleField>
+          </Field>
         )}
 
-        <VehicleFieldGrid>
-          <VehicleField id={`${fieldId}-date`} label={t('vehicles.date')} required>
+        <FieldGrid>
+          <Field id={`${fieldId}-date`} label={t('vehicles.date')} required>
             <Input
               id={`${fieldId}-date`}
               type="date"
@@ -284,8 +284,8 @@ function AccidentForm({
               {...register('date')}
               {...flag('date')}
             />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-time`} label={t('vehicles.time')} required>
+          </Field>
+          <Field id={`${fieldId}-time`} label={t('vehicles.time')} required>
             <Input
               id={`${fieldId}-time`}
               type="time"
@@ -293,7 +293,7 @@ function AccidentForm({
               {...register('time')}
               {...flag('time')}
             />
-          </VehicleField>
+          </Field>
           <Controller
             control={control}
             name="employee_id"
@@ -305,7 +305,7 @@ function AccidentForm({
               />
             )}
           />
-          <VehicleField
+          <Field
             id={`${fieldId}-location-ar`}
             label={`${t('vehicles.location')} · AR`}
             required
@@ -316,19 +316,19 @@ function AccidentForm({
               {...register('location_ar')}
               {...flag('location_ar')}
             />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-location-en`} label={`${t('vehicles.location')} · EN`}>
+          </Field>
+          <Field id={`${fieldId}-location-en`} label={`${t('vehicles.location')} · EN`}>
             <Input id={`${fieldId}-location-en`} dir="ltr" {...register('location_en')} />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-police`} label={t('vehicles.policeRef')}>
+          </Field>
+          <Field id={`${fieldId}-police`} label={t('vehicles.policeRef')}>
             <Input
               id={`${fieldId}-police`}
               dir="ltr"
               className="font-mono"
               {...register('police_ref')}
             />
-          </VehicleField>
-          <VehicleField id={`${fieldId}-cost`} label={t('vehicles.damageCost')} required>
+          </Field>
+          <Field id={`${fieldId}-cost`} label={t('vehicles.damageCost')} required>
             <Input
               id={`${fieldId}-cost`}
               type="number"
@@ -339,8 +339,8 @@ function AccidentForm({
               {...register('damage_cost')}
               {...flag('damage_cost')}
             />
-          </VehicleField>
-          <VehicleField
+          </Field>
+          <Field
             id={`${fieldId}-desc-ar`}
             label={`${t('vehicles.description')} · AR`}
             required
@@ -353,8 +353,8 @@ function AccidentForm({
               {...register('description_ar')}
               {...flag('description_ar')}
             />
-          </VehicleField>
-          <VehicleField
+          </Field>
+          <Field
             id={`${fieldId}-desc-en`}
             label={`${t('vehicles.description')} · EN`}
             full
@@ -365,8 +365,8 @@ function AccidentForm({
               rows={3}
               {...register('description_en')}
             />
-          </VehicleField>
-        </VehicleFieldGrid>
+          </Field>
+        </FieldGrid>
 
         <div className="flex flex-col gap-2">
           {photos.length > 0 && (
@@ -400,9 +400,9 @@ function AccidentForm({
             onFile={(file) => setPhotos((current) => [...current, file])}
           />
         </div>
-      </VehicleDialogBody>
+      </DialogBody>
 
-      <VehicleDialogFooter>
+      <DialogFooter>
         <Button
           type="button"
           variant="ghost"
@@ -414,7 +414,7 @@ function AccidentForm({
         <Button type="submit" disabled={mutation.isPending || !selectedId}>
           {mutation.isPending ? t('common.saving') : t('vehicles.save')}
         </Button>
-      </VehicleDialogFooter>
+      </DialogFooter>
     </form>
   )
 }

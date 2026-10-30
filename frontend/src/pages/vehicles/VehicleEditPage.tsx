@@ -54,7 +54,7 @@ import {
   vehicleErrorMessage,
 } from './vehicleUtils'
 import { PlateChip } from './components/PlateChip'
-import { UploadSlot } from './components/VehicleDialogShell'
+import { UploadSlot } from '@/components/forms/DialogShell'
 import { VehicleFileThumb } from './components/VehicleFileViewer'
 import { VehicleLicenceScanControl } from './components/VehicleLicenceScanControl'
 import { VehicleFormFields } from './components/VehicleFormFields'

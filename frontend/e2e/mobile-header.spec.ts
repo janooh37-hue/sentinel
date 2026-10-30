@@ -157,7 +157,7 @@ const UNREAD_ITEMS = Array.from({ length: 5 }, (_, i) => ({
 }))
 
 /**
- * `fullDesktop`: a mouse desktop wide enough to print the destination LABELS (>= 1240px). With all eight
+ * `fullDesktop`: a mouse desktop wide enough to print the destination LABELS (>= 1280px). With all eight
  * destinations the existing TopNav row already overflows there (the strip runs into the utilities; unchanged
  * and out of this fix's scope), so those cells omit the two extra destinations; every other cell keeps them.
  */
@@ -253,7 +253,7 @@ async function openApp(browser: Browser, c: Cell): Promise<Harness> {
   })
   const page = await ctx.newPage()
   const unmocked: string[] = []
-  const table = stubs(c.lang, c.aa, c.rich, !c.touch && c.w >= 1240, c.theme ?? 'light')
+  const table = stubs(c.lang, c.aa, c.rich, !c.touch && c.w >= 1280, c.theme ?? 'light')
   await page.route('**/*', (route: Route) => {
     const req = route.request()
     const url = new URL(req.url())

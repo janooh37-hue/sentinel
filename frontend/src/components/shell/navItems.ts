@@ -1,4 +1,5 @@
 import {
+  Boxes,
   BookText,
   Car,
   CalendarDays,
@@ -25,6 +26,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/', key: 'nav.dashboard', Icon: LayoutDashboard },
   { to: '/employees', key: 'nav.employees', Icon: Users, cap: 'employees.view' },
   { to: '/vehicles', key: 'nav.vehicles', Icon: Car, cap: 'vehicles.view' },
+  { to: '/assets', key: 'nav.assets', Icon: Boxes, cap: 'store.view' },
   { to: '/ledger', key: 'nav.ledger', Icon: Mail, anyCaps: ['ledger.view', 'books.view'] },
   { to: '/leaves', key: 'nav.leaves', Icon: CalendarDays, cap: 'leaves.view' },
   { to: '/services', key: 'nav.services', Icon: FileText, cap: 'documents.generate' },
