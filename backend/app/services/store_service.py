@@ -699,6 +699,16 @@ def _find_batch(db: Session, item_id: int, expiry_date: date | None) -> StoreBat
     return db.scalar(stmt)
 
 
+def _refuse_archived(item: StoreItem) -> None:
+    """An archived item takes no new stock records (Deliveries, Counts, Disposals)."""
+    if item.archived_at is not None:
+        raise ConflictError(
+            "STORE_ITEM_ARCHIVED",
+            "An archived Store item takes no new stock records.",
+            item_id=item.id,
+        )
+
+
 def _resolve_lines(
     db: Session,
     lines: Sequence[StoreDeliveryLineInput | StoreCountLineInput],
@@ -729,12 +739,8 @@ def _resolve_lines(
             )
         seen.add(key)
         batch = _find_batch(db, item.id, expiry_date)
-        if item.archived_at is not None and (batch is None or batch.id not in reusable):
-            raise ConflictError(
-                "STORE_ITEM_ARCHIVED",
-                "An archived Store item takes no new stock records.",
-                item_id=item.id,
-            )
+        if batch is None or batch.id not in reusable:
+            _refuse_archived(item)
         if batch is None:
             batch = StoreBatch(
                 item_id=item.id, expiry_date=expiry_date, expiry_month_only=month_only
@@ -1210,12 +1216,7 @@ def create_disposal(
     expiry_date, _month_only = parse_expiry(payload.expiry)
     with _write(db):
         item = get_item(db, payload.item_id)
-        if item.archived_at is not None:
-            raise ConflictError(
-                "STORE_ITEM_ARCHIVED",
-                "An archived Store item takes no new stock records.",
-                item_id=item.id,
-            )
+        _refuse_archived(item)
         batch = _find_batch(db, item.id, expiry_date)
         if batch is None:
             raise NotFoundError(
