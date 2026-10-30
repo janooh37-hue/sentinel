@@ -288,18 +288,24 @@ def _load_ledger(db: Session) -> _Ledger:
     return _Ledger(counts=counts, events=events)
 
 
+def _item_totals(per_batch: dict[int, int], item_of: dict[int, int]) -> defaultdict[int, int]:
+    """Sum per-batch balances into per-item totals; missing items read as 0."""
+    totals: defaultdict[int, int] = defaultdict(int)
+    for batch_id, quantity in per_batch.items():
+        totals[item_of[batch_id]] += quantity
+    return totals
+
+
 def _item_on_hand(db: Session, ledger: _Ledger, as_of: date) -> dict[int, int]:
     per_batch = ledger.on_hand(as_of)
-    totals: dict[int, int] = defaultdict(int)
-    if per_batch:
-        item_of = dict(
-            db.execute(
-                select(StoreBatch.id, StoreBatch.item_id).where(StoreBatch.id.in_(per_batch))
-            ).all()
-        )
-        for batch_id, quantity in per_batch.items():
-            totals[item_of[batch_id]] += quantity
-    return dict(totals)
+    if not per_batch:
+        return {}
+    item_of: dict[int, int] = dict(
+        db.execute(
+            select(StoreBatch.id, StoreBatch.item_id).where(StoreBatch.id.in_(per_batch))
+        ).all()
+    )
+    return dict(_item_totals(per_batch, item_of))
 
 
 # ── Read builders ────────────────────────────────────────────────────────────
@@ -1294,9 +1300,7 @@ def dashboard(db: Session) -> StoreDashboard:
     batches = db.scalars(select(StoreBatch).options(selectinload(StoreBatch.item))).all()
     item_of = {batch.id: batch.item_id for batch in batches}
 
-    item_on_hand: dict[int, int] = defaultdict(int)
-    for batch_id, quantity in batch_on_hand.items():
-        item_on_hand[item_of[batch_id]] += quantity
+    item_on_hand = _item_totals(batch_on_hand, item_of)
 
     expired: list[StoreDashboardBatch] = []
     expiring: list[StoreDashboardBatch] = []
