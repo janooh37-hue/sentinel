@@ -13,12 +13,9 @@ import type { QueryClient } from '@tanstack/react-query'
 import vehicleClassCatalog from '../../../../backend/templates/vehicle_classes.json'
 
 import type { BadgeProps } from '@/components/ui/badge'
-import type { DocViewerItem } from '@/components/ui/document-viewer-dialog'
 import { ApiError, apiErrorMessage } from '@/lib/api'
 import type { VehicleFileRead } from '@/lib/api'
-import { fileKindFromName } from '@/lib/fileTypes'
 import { formatNumber, isArabic, localized } from '@/lib/language'
-import { toBase64Url } from '@/lib/pdf'
 import { normalizeDigits } from '@/lib/utils'
 
 /** The Badge tones this module may use — derived from the design system so a
@@ -337,25 +334,6 @@ export const FINE_RECEIPT_ACCEPT = '.pdf,.png,.jpg,.jpeg'
 
 export function fileLabel(file: VehicleFileRead, language: string): string {
   return localized(file.label_ar, file.label_en, language) || file.original_name
-}
-
-/**
- * A stored vehicle file as `DocumentViewerDialog` wants it. PDFs go through
- * `?encoding=base64` (the WebView2/IDM handler hijacks a raw PDF response);
- * images are linked directly, which the API serves `Content-Disposition:
- * inline`.
- */
-export function vehicleFileViewerItem(file: VehicleFileRead, url: string): DocViewerItem {
-  const isPdf =
-    file.media_type === 'application/pdf' || fileKindFromName(file.original_name) === 'pdf'
-  return {
-    name: file.original_name,
-    kind: isPdf ? 'pdf' : fileKindFromName(file.original_name),
-    imageUrl: isPdf ? undefined : url,
-    pdfBase64Url: isPdf ? toBase64Url(url) : undefined,
-    openUrl: url,
-    downloadUrl: url,
-  }
 }
 
 // ── Server state ────────────────────────────────────────────────────────────

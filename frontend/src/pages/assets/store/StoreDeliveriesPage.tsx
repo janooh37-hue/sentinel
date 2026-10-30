@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DocumentViewerDialog } from '@/components/ui/document-viewer-dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader } from '@/components/ui/table'
 import { api, type StoreDeliveryNoteFile, type StoreDeliveryRead } from '@/lib/api'
+import { fileViewerItem } from '@/lib/fileViewerItem'
 import { toast } from '@/lib/toast'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
@@ -103,7 +104,7 @@ export function StoreDeliveriesPage(): React.JSX.Element {
       </StoreQueryState>
       {editable && <DeliveryDialog open={dialog} onOpenChange={setDialog} onSaved={setUploadWarning} />}
       <ConfirmDialog open={!!deleting && editable} onOpenChange={(open) => { if (!open) setDeleting(null) }} title={t('assets.store.deliveries.deleteTitle')} description={t('assets.store.deliveries.deleteDescription')} confirmLabel={t('assets.store.deliveries.delete')} returnFocusRef={deleteFocus} destructive onConfirm={() => { if (deleting && editable) mutation.mutate(deleting.id) }} />
-      {viewer && <DocumentViewerDialog items={[{ name: viewer.name, kind: viewer.media_type === 'application/pdf' ? 'pdf' : 'image', imageUrl: viewer.media_type.startsWith('image/') ? viewer.url : undefined, pdfBase64Url: viewer.media_type === 'application/pdf' ? `${viewer.url}?encoding=base64` : undefined, openUrl: viewer.url, downloadUrl: viewer.url }]} onClose={() => setViewer(null)} />}
+      {viewer && <DocumentViewerDialog items={[fileViewerItem({ name: viewer.name, mediaType: viewer.media_type, url: viewer.url })]} onClose={() => setViewer(null)} />}
     </StoreShell>
   )
 }

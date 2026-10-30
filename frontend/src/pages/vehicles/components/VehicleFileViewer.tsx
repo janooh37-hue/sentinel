@@ -19,9 +19,10 @@ import { DocumentViewerDialog } from '@/components/ui/document-viewer-dialog'
 import { api } from '@/lib/api'
 import type { VehicleFileRead } from '@/lib/api'
 import { fileKindFromName } from '@/lib/fileTypes'
+import { fileViewerItem } from '@/lib/fileViewerItem'
 import { cn } from '@/lib/utils'
 
-import { fileLabel, vehicleFileViewerItem } from '../vehicleUtils'
+import { fileLabel } from '../vehicleUtils'
 
 interface ViewerProps {
   vehicleId: number
@@ -40,7 +41,7 @@ export function VehicleFileViewer({
   if (files.length === 0) return null
   return (
     <DocumentViewerDialog
-      items={files.map((file) => vehicleFileViewerItem(file, api.vehicleFileUrl(vehicleId, file.id)))}
+      items={files.map((file) => fileViewerItem({ name: file.original_name, mediaType: file.media_type, url: api.vehicleFileUrl(vehicleId, file.id) }))}
       startIndex={Math.min(Math.max(startIndex, 0), files.length - 1)}
       onClose={onClose}
     />
