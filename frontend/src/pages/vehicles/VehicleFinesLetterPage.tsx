@@ -61,12 +61,11 @@ import {
   formatIsoDate,
   formatLetterFilsAed,
   formatLetterDate,
-  formatNumber,
-  isArabic,
   plateLabel,
   vehicleErrorMessage,
 } from './vehicleUtils'
 import { useSearchParam } from '@/lib/urlState'
+import { formatNumber, isArabic } from '@/lib/language'
 import { PaperNote, PaperPlateBox, PaperSheet, PaperTable } from './components/PaperSheet'
 import { PlateChip } from './components/PlateChip'
 import { FormAlert } from '@/components/forms/DialogShell'

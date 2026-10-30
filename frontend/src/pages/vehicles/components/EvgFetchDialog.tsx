@@ -56,6 +56,7 @@ import { ApiError, api } from '@/lib/api'
 import type { EvgConfirmRequest, EvgPreviewResponse, EvgPreviewRow } from '@/lib/api'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
+import { formatNumber } from '@/lib/language'
 
 import {
   EMPTY_VALUE,
@@ -63,7 +64,6 @@ import {
   formatFilsAed,
   formatFilsNumber,
   formatDateTime,
-  formatNumber,
   invalidateVehicleQueries,
   plateLabel,
   vehicleErrorMessage,

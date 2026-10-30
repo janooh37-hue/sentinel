@@ -10,9 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api, type StoreCountRead } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
+import { formatNumber } from '@/lib/language'
 import { StoreShell } from './StoreShell'
 import { StoreQueryState } from './StoreQueryState'
-import { formatNumber, formatQuantity, itemName, storeKeys } from './storeUtils'
+import { formatQuantity, itemName, storeKeys } from './storeUtils'
 import { ExpiryText } from './components/ExpiryText'
 
 export function StoreCountsPage(): React.JSX.Element {

@@ -22,9 +22,10 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { VehicleRead, VehicleSiteRead } from '@/lib/api'
+import { localized } from '@/lib/language'
 
 import { CUSTOM_CLASS, NEW_SITE, type VehicleFormInput, type VehicleFormValues } from '../vehicleForm'
-import { VEHICLE_CLASSES, licenseWindowEnd, localized } from '../vehicleUtils'
+import { VEHICLE_CLASSES, licenseWindowEnd } from '../vehicleUtils'
 import { Field, FieldGrid } from '@/components/forms/DialogShell'
 
 export interface VehicleFormFieldsProps {

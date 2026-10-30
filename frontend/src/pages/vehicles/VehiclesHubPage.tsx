@@ -51,15 +51,14 @@ import { useReducedMotion } from '@/lib/useFakeProgress'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
 import { cn } from '@/lib/utils'
+import { formatNumber, localized } from '@/lib/language'
 
 import {
   EMPTY_VALUE,
   VEHICLE_QUERY_KEYS,
   formatFilsAed,
   formatIsoDate,
-  formatNumber,
   invalidateVehicleQueries,
-  localized,
   vehicleErrorMessage,
 } from './vehicleUtils'
 import { AddVehicleDialog } from './components/AddVehicleDialog'

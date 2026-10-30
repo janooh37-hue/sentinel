@@ -53,6 +53,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import type { VehicleAccidentRead, VehicleRead, VehicleSiteRead } from '@/lib/api'
+import { isArabic } from '@/lib/language'
 
 import {
   EMPTY_VALUE,
@@ -60,7 +61,6 @@ import {
   formatLetterAed,
   formatLetterDate,
   invalidateVehicleQueries,
-  isArabic,
   plateLabel,
   vehicleErrorMessage,
 } from './vehicleUtils'

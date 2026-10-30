@@ -17,6 +17,7 @@ import type { DocViewerItem } from '@/components/ui/document-viewer-dialog'
 import { ApiError, apiErrorMessage } from '@/lib/api'
 import type { VehicleFileRead } from '@/lib/api'
 import { fileKindFromName } from '@/lib/fileTypes'
+import { formatNumber, isArabic, localized } from '@/lib/language'
 import { toBase64Url } from '@/lib/pdf'
 import { normalizeDigits } from '@/lib/utils'
 
@@ -82,22 +83,6 @@ export function paymentTone(status: PaymentStatus): VehicleTone {
 
 // ── Language ────────────────────────────────────────────────────────────────
 
-/** True for `ar` and any Arabic regional tag (`ar-AE`). */
-export function isArabic(language: string): boolean {
-  return language.startsWith('ar')
-}
-
-/** Pick the language-appropriate half of a bilingual pair, falling back to the
- *  peer language rather than rendering an empty cell. */
-export function localized(
-  ar: string | null | undefined,
-  en: string | null | undefined,
-  language: string,
-): string {
-  const [first, second] = isArabic(language) ? [ar, en] : [en, ar]
-  return first?.trim() || second?.trim() || ''
-}
-
 /** Label for an employee that may be unassigned (imported EVG fines have no
  *  driver): the localized name, else the caller's «Unassigned» copy. */
 export function employeeLabel(
@@ -110,12 +95,6 @@ export function employeeLabel(
 }
 
 // ── Numbers, money, dates ───────────────────────────────────────────────────
-
-export function formatNumber(value: number, language: string): string {
-  return new Intl.NumberFormat(isArabic(language) ? 'ar-AE' : 'en-AE', {
-    maximumFractionDigits: 0,
-  }).format(value)
-}
 
 /** Whole dirhams, with the currency word after the amount in both languages
  *  («17,975 AED» / «١٧٩٧٥ د.إ»). Wrap in `<bdi>` at the render site. */

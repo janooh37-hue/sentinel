@@ -11,6 +11,7 @@ import type { QueryClient } from '@tanstack/react-query'
 
 import { ApiError, apiErrorMessage } from '@/lib/api'
 import i18n from '@/lib/i18n'
+import { formatNumber, isArabic, localized } from '@/lib/language'
 
 export type Translate = (key: string, options?: Record<string, unknown>) => string
 
@@ -50,18 +51,12 @@ export function invalidateStoreQueries(queryClient: QueryClient): void {
 
 // ── Language ────────────────────────────────────────────────────────────────
 
-export function isArabic(language: string = i18n.language): boolean {
-  return language.startsWith('ar')
-}
-
-/** Item name in the active language, falling back to English. */
+/** Item name in the active language, falling back to the other language. */
 export function itemName(
   row: { name_en?: string; name_ar?: string | null; item_name_en?: string; item_name_ar?: string | null },
   language: string = i18n.language,
 ): string {
-  const en = row.name_en ?? row.item_name_en ?? ''
-  const ar = row.name_ar ?? row.item_name_ar ?? null
-  return isArabic(language) ? ar?.trim() || en : en
+  return localized(row.name_ar ?? row.item_name_ar, row.name_en ?? row.item_name_en, language)
 }
 
 export function categoryName(
@@ -77,12 +72,6 @@ export function countingUnit(item: StoreUnits, language: string = i18n.language)
 
 export function containsUnit(item: StoreUnits, language: string = i18n.language): string {
   return (isArabic(language) ? item.contains_unit_ar : item.contains_unit_en) ?? ''
-}
-
-export function formatNumber(value: number, language: string = i18n.language): string {
-  return new Intl.NumberFormat(isArabic(language) ? 'ar-AE' : 'en-AE', {
-    maximumFractionDigits: 0,
-  }).format(value)
 }
 
 // ── Quantities ──────────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ import { api, ApiError, type StoreCountRead, type StoreCountWrite, type StoreExp
 import { toast } from '@/lib/toast'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
+import { formatNumber } from '@/lib/language'
 import { todayIso } from '@/pages/vehicles/vehicleUtils'
 import { StoreShell } from './StoreShell'
 import { StoreQueryState } from './StoreQueryState'
@@ -25,7 +26,6 @@ import {
   expiryInput,
   type ExpiryValue,
   formatExpiry,
-  formatNumber,
   invalidateStoreQueries,
   itemName,
   quantityFromParts,

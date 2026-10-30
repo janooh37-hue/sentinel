@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
 import { useFitCount } from '@/components/dashboard/useFitCount'
 import { api } from '@/lib/api'
+import { localized } from '@/lib/language'
+import { itemName } from '@/pages/assets/store/storeUtils'
 import { formatDmy } from '@/lib/formatDmy'
 import { PEOPLE_BIG, PEOPLE_LINK, PEOPLE_META, PEOPLE_NAME, PEOPLE_ROW, PeopleFeedback } from './peopleWidgetParts'
 import type { WidgetProps } from './types'
@@ -18,7 +20,6 @@ export function StoreExpiringWidget({ tier, rows }: WidgetProps): React.JSX.Elem
   const batches = [...(data?.expired ?? []), ...(data?.expiring_soon ?? [])]
   const list = tier === 'tall' || tier === 'list'
   const { listRef, visibleCount } = useFitCount(Math.min(batches.length, rows))
-  const isAr = i18n.language.startsWith('ar')
   const days = data?.expiring_soon_days ?? 60
   const more = batches.length - visibleCount
   return (
@@ -33,8 +34,8 @@ export function StoreExpiringWidget({ tier, rows }: WidgetProps): React.JSX.Elem
               <li key={batch.batch_id}>
                 <Link to={TO} className={`${PEOPLE_ROW} min-h-11`}>
                   <span className="min-w-0 flex-1">
-                    <span dir="auto" className={PEOPLE_NAME}>{isAr ? batch.item_name_ar || batch.item_name_en : batch.item_name_en || batch.item_name_ar}</span>
-                    <span className={`${PEOPLE_META} block`}><bdi dir="ltr" className="font-mono tabular-nums">{batch.item_code}</bdi> · <bdi dir="ltr" className="font-mono tabular-nums">{batch.on_hand}</bdi> <span dir="auto">{batch.contains_qty ? (isAr ? batch.contains_unit_ar || batch.contains_unit_en : batch.contains_unit_en || batch.contains_unit_ar) : (isAr ? batch.counting_unit_ar || batch.counting_unit_en : batch.counting_unit_en || batch.counting_unit_ar)}</span></span>
+                    <span dir="auto" className={PEOPLE_NAME}>{itemName(batch, i18n.language)}</span>
+                    <span className={`${PEOPLE_META} block`}><bdi dir="ltr" className="font-mono tabular-nums">{batch.item_code}</bdi> · <bdi dir="ltr" className="font-mono tabular-nums">{batch.on_hand}</bdi> <span dir="auto">{batch.contains_qty ? localized(batch.contains_unit_ar, batch.contains_unit_en, i18n.language) : localized(batch.counting_unit_ar, batch.counting_unit_en, i18n.language)}</span></span>
                   </span>
                   <span className={`${PEOPLE_META} shrink-0 text-end`}>
                     <span className="block">{t(`${KEY}.${index < data.expired.length ? 'expired' : 'expiring'}`)}</span>

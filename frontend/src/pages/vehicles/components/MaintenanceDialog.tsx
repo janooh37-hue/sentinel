@@ -32,13 +32,13 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import type { VehicleListItem, VehicleMaintenanceRead, VehicleMaintenanceRequestRead } from '@/lib/api'
+import { localized } from '@/lib/language'
 
 import {
   DOCUMENT_ACCEPT,
   MAINTENANCE_TYPES,
   VEHICLE_QUERY_KEYS,
   invalidateVehicleQueries,
-  localized,
   plateLabel,
   todayIso,
   vehicleErrorMessage,

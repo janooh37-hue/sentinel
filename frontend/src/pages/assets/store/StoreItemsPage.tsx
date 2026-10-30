@@ -10,10 +10,11 @@ import { api, type StoreItemRead } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
+import { isArabic } from '@/lib/language'
 import { StoreItemDialog } from './components/StoreItemDialog'
 import { StoreQueryState } from './StoreQueryState'
 import { StoreShell } from './StoreShell'
-import { categoryName, countingUnit, formatContains, formatQuantity, invalidateStoreQueries, isArabic, itemName, storeErrorMessage, storeKeys } from './storeUtils'
+import { categoryName, countingUnit, formatContains, formatQuantity, invalidateStoreQueries, itemName, storeErrorMessage, storeKeys } from './storeUtils'
 
 export function StoreItemsPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()

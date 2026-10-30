@@ -35,6 +35,7 @@ import type {
 import { useCapabilities } from '@/lib/useCapabilities'
 import { isolateBidi } from '@/lib/useCapabilityCatalog'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
+import { localized } from '@/lib/language'
 
 import {
   type VehicleFormInput,
@@ -49,7 +50,6 @@ import {
   VEHICLE_QUERY_KEYS,
   fileLabel,
   invalidateVehicleQueries,
-  localized,
   plateLabel,
   vehicleErrorMessage,
 } from './vehicleUtils'

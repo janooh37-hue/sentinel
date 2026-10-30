@@ -25,6 +25,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { api } from '@/lib/api'
 import type { VehicleAccidentRead } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { localized } from '@/lib/language'
 
 import {
   EMPTY_VALUE,
@@ -32,7 +33,6 @@ import {
   formatAed,
   formatDateTime,
   invalidateVehicleQueries,
-  localized,
   vehicleErrorMessage,
 } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'

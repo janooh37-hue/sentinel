@@ -61,16 +61,14 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useReducedMotion } from '@/lib/useFakeProgress'
 import { cn } from '@/lib/utils'
+import { formatNumber, isArabic, localized } from '@/lib/language'
 
 import {
   EMPTY_VALUE,
   VEHICLE_QUERY_KEYS,
   employeeLabel,
   formatDateTime,
-  formatNumber,
   invalidateVehicleQueries,
-  isArabic,
-  localized,
   vehicleErrorMessage,
 } from './vehicleUtils'
 import { FineActions, type FineActionCallbacks } from './components/FineActions'

@@ -4,13 +4,13 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import type { VehicleProfileScan } from '@/lib/api'
+import { localized } from '@/lib/language'
 
 import { CUSTOM_CLASS, resolveVehicleClass, type VehicleFormValues } from '../vehicleForm'
 import {
   DOCUMENT_ACCEPT,
   EMPTY_VALUE,
   VEHICLE_CLASSES,
-  localized,
   plateLabel,
   vehicleErrorMessage,
 } from '../vehicleUtils'

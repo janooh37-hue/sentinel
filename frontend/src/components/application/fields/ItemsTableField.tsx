@@ -31,6 +31,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
 import type { StorePickerItem } from '@/lib/api'
+import { localized } from '@/lib/language'
 import type { FieldProps, TemplateField } from '../types'
 
 interface Row {
@@ -367,7 +368,7 @@ function StoreItemCodeInput({ name, index }: { name: string; index: number }): R
               >
                 <bdi dir="ltr" className="font-mono tabular-nums">{item.code}</bdi>
                 <span dir="auto" className="min-w-0 flex-1 break-words">
-                  {isAr ? item.name_ar || item.name_en : item.name_en || item.name_ar}
+                  {localized(item.name_ar, item.name_en, i18n.language)}
                 </span>
                 {optionIndex === activeIndex && <Check aria-hidden="true" className="size-4 shrink-0" />}
               </button>

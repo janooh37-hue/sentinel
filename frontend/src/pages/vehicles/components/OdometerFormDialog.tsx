@@ -6,7 +6,8 @@ import { toast } from '@/lib/toast'
 
 import { Button } from '@/components/ui/button'
 import { api, type OdometerRowRead } from '@/lib/api'
-import { localized, vehicleErrorMessage } from '../vehicleUtils'
+import { localized } from '@/lib/language'
+import { vehicleErrorMessage } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'
 import {
   DialogBody,

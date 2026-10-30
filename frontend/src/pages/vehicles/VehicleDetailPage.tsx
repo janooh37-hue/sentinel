@@ -77,6 +77,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
 import { useUrlOverlay } from '@/lib/urlState'
+import { formatNumber, isArabic, localized } from '@/lib/language'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
 import {
@@ -90,10 +91,7 @@ import {
   formatDateTime,
   formatFilsAed,
   formatIsoDate,
-  formatNumber,
   invalidateVehicleQueries,
-  isArabic,
-  localized,
   plateLabel,
   vehicleErrorMessage,
 } from './vehicleUtils'
