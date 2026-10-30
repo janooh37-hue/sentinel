@@ -265,7 +265,11 @@ def _load_ledger(db: Session) -> _Ledger:
         for batch_id, received_on, quantity in db.execute(
             select(
                 StoreDeliveryLine.batch_id, StoreDelivery.received_on, StoreDeliveryLine.quantity
-            ).join(StoreDelivery, StoreDelivery.id == StoreDeliveryLine.delivery_id)
+            )
+            .join(StoreDelivery, StoreDelivery.id == StoreDeliveryLine.delivery_id)
+            # A zero-received line ("on the note, nothing arrived") is not a
+            # stock movement; as an event it would mark a fake usage window.
+            .where(StoreDeliveryLine.quantity > 0)
         ).all()
     ]
     events.extend(

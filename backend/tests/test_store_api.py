@@ -879,3 +879,39 @@ def test_delivery_scan_bounds_tesseract_time_per_page(
     assert response.status_code == 422
     assert _error(response)["code"] == "STORE_SCAN_TIMEOUT"
     assert len(timeouts) == 1 and 0 < timeouts[0] <= 60
+
+
+def test_zero_received_line_does_not_create_a_zero_usage_window(
+    editor: TestClient, category: StoreCategory
+) -> None:
+    anchor = _item(editor, category, "Tea")["id"]
+    item = _item(editor, category, "Sugar")["id"]
+    assert _count(editor, date(2026, 10, 1), (anchor, None, 5)).status_code == 201
+    # On the note, nothing arrived: not a stock movement for Sugar.
+    zero = editor.post(
+        "/api/v1/store/deliveries",
+        json={
+            "received_on": "2026-10-10",
+            "lines": [
+                {
+                    "item_id": item,
+                    "quantity": 0,
+                    "noted_quantity": 10,
+                    "difference_reason": "Nothing arrived",
+                }
+            ],
+        },
+    )
+    assert zero.status_code == 201, zero.text
+    assert _count(editor, date(2026, 11, 1), (anchor, None, 5)).status_code == 201
+    assert _deliver(editor, date(2026, 11, 5), (item, None, 10)).status_code == 201
+    assert _count(editor, date(2026, 12, 1), (anchor, None, 5), (item, None, 0)).status_code == 201
+
+    dashboard = editor.get("/api/v1/store/dashboard").json()
+    rows = {row["item_id"]: row["values"] for row in dashboard["usage"]["rows"]}
+    assert rows[item] == [None, 10]
+    suggestion = next(row for row in dashboard["suggestions"] if row["item_id"] == item)
+    assert suggestion["average_usage"] == 10 and suggestion["suggested"] == 10
+    # The zero line still shows in delivery details and the In & out feed.
+    feed = editor.get("/api/v1/store/movements", params={"kind": "in"}).json()
+    assert any(line["quantity"] == 0 for row in feed for line in row["lines"])
