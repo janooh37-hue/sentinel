@@ -18,27 +18,29 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSaved?: (uploadError: string | null) => void
+  /** A local scan file is carried into the manual fallback without uploading again. */
+  initialFile?: File | null
 }
 interface HeaderValues { received_on: string; note: string }
 
-export function DeliveryDialog({ open, onOpenChange, onSaved }: Props): React.JSX.Element {
+export function DeliveryDialog({ open, onOpenChange, onSaved, initialFile }: Props): React.JSX.Element {
   const { t } = useTranslation()
   const [busy, setBusy] = useState(false)
   return (
     <DialogShell open={open} onOpenChange={onOpenChange} title={t('assets.store.deliveries.log')} description={t('assets.store.deliveries.dialogDescription')} size="xl" busy={busy}>
-      {open && <DeliveryForm onOpenChange={onOpenChange} onSaved={onSaved} onBusyChange={setBusy} />}
+      {open && <DeliveryForm onOpenChange={onOpenChange} onSaved={onSaved} onBusyChange={setBusy} initialFile={initialFile} />}
     </DialogShell>
   )
 }
 
-function DeliveryForm({ onOpenChange, onSaved, onBusyChange }: Omit<Props, 'open'> & { onBusyChange: (busy: boolean) => void }): React.JSX.Element {
+function DeliveryForm({ onOpenChange, onSaved, onBusyChange, initialFile }: Omit<Props, 'open'> & { onBusyChange: (busy: boolean) => void }): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const id = useId()
   const [lines, setLines] = useState(() => createDeliveryLines())
   const [lineErrors, setLineErrors] = useState<DeliveryLineErrors>({})
   const [message, setMessage] = useState<string | null>(null)
-  const [file, setFile] = useState<File | null>(null)
+  const [file, setFile] = useState<File | null>(initialFile ?? null)
   const [fileError, setFileError] = useState<string | null>(null)
   const { register, handleSubmit, formState: { errors } } = useForm<HeaderValues>({ defaultValues: { received_on: todayIso(), note: '' } })
   const mutation = useMutation({

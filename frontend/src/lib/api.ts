@@ -1197,9 +1197,9 @@ function requireEtag(etag: string): string {
 }
 
 
-async function multipart<T>(path: string, form: FormData, method = 'POST'): Promise<T> {
+async function multipart<T>(path: string, form: FormData, method = 'POST', signal?: AbortSignal): Promise<T> {
   return unwrap<T>(
-    await fetch(`${BASE}${path}`, { method, body: form, credentials: 'same-origin' }),
+    await fetch(`${BASE}${path}`, { method, body: form, credentials: 'same-origin', signal }),
   )
 }
 
@@ -1831,10 +1831,10 @@ export const api = {
   createStoreDelivery: (body: StoreDeliveryCreate) =>
     request<StoreDeliveryRead>('POST', '/store/deliveries', body),
   deleteStoreDelivery: (id: number) => request<void>('DELETE', `/store/deliveries/${id}`),
-  scanStoreDelivery: (file: File): Promise<StoreDeliveryScan> => {
+  scanStoreDelivery: (file: File, signal?: AbortSignal): Promise<StoreDeliveryScan> => {
     const form = new FormData()
     form.append('file', file)
-    return multipart<StoreDeliveryScan>('/store/deliveries/scan', form)
+    return multipart<StoreDeliveryScan>('/store/deliveries/scan', form, 'POST', signal)
   },
   uploadStoreDeliveryNote: (id: number, file: File) => {
     const form = new FormData()
