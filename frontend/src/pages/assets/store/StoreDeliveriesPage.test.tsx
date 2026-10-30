@@ -17,11 +17,11 @@ vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: s
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 const ITEM: StorePickerItem = {
-  id: 4, code: 'ST-0004', name_en: 'Coffee', name_ar: 'قهوة', counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 24, contains_unit_en: 'Jar', contains_unit_ar: 'علبة',
+  id: 4, code: 'ST-0004', name_en: 'Coffee', name_ar: 'قهوة', counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 24, contains_unit_en: 'Jar', contains_unit_ar: 'علبة', art_kind: null, art_color: null,
 }
 const DELIVERY: StoreDeliveryRead = {
   id: 12, received_on: '2026-10-20', note: 'HQ delivery', note_file: null,
-  lines: [{ id: 31, batch_id: 9, item_id: ITEM.id, item_code: ITEM.code, item_name_en: ITEM.name_en, item_name_ar: ITEM.name_ar, counting_unit_en: ITEM.counting_unit_en, counting_unit_ar: ITEM.counting_unit_ar, contains_qty: ITEM.contains_qty, contains_unit_en: ITEM.contains_unit_en, contains_unit_ar: ITEM.contains_unit_ar, expiry_date: '2028-09-30', expiry_month_only: true, quantity: 53 }],
+  lines: [{ id: 31, batch_id: 9, item_id: ITEM.id, item_code: ITEM.code, item_name_en: ITEM.name_en, item_name_ar: ITEM.name_ar, counting_unit_en: ITEM.counting_unit_en, counting_unit_ar: ITEM.counting_unit_ar, contains_qty: ITEM.contains_qty, contains_unit_en: ITEM.contains_unit_en, contains_unit_ar: ITEM.contains_unit_ar, art_kind: null, art_color: null, expiry_date: '2028-09-30', expiry_month_only: true, quantity: 53 }],
   created_at: '2026-10-20T10:00:00Z', updated_at: null, created_by_user_id: 1,
 }
 

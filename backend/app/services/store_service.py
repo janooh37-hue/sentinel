@@ -2,9 +2,9 @@
 
 Quantities are integers in base units (loose units when a Store item has
 ``contains_qty``, otherwise Counting units). On-hand and Monthly usage are
-derived from Stock counts plus the Monthly deliveries and Disposals around them
-(ADR 0009); nothing records individual handouts. A delivery or Disposal dated
-on a Stock count's day happens after that count.
+derived from Stock counts plus Monthly deliveries and Disposals (ADR 0010).
+Handovers reduce on-hand but are excluded from derived usage. All movements
+dated on a Stock count's day happen after that count.
 """
 
 from __future__ import annotations
@@ -18,8 +18,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
+from rapidfuzz import fuzz, process
 from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -28,6 +29,8 @@ from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.clock import organization_today, utcnow
 from app.core.expiry import expiry_status
+from app.core.extraction import ocr
+from app.core.extraction.delivery_note import normalize_item_text, parse_row
 from app.core.uploads import SniffedUploadPolicy, resolve_under, validate_sniffed_upload
 from app.db.models import (
     StoreBatch,
@@ -37,7 +40,10 @@ from app.db.models import (
     StoreDelivery,
     StoreDeliveryLine,
     StoreDisposal,
+    StoreHandover,
+    StoreHandoverLine,
     StoreItem,
+    StoreItemAlias,
 )
 from app.db.repos._locking import begin_immediate_if_idle
 from app.db.repos.audit_repo import append_audit
@@ -56,19 +62,28 @@ from app.schemas.store import (
     StoreDeliveryLineInput,
     StoreDeliveryNoteFile,
     StoreDeliveryRead,
+    StoreDeliveryScan,
     StoreDisposalCreate,
     StoreDisposalRead,
     StoreExpectedBatch,
+    StoreHandoverCreate,
+    StoreHandoverRead,
     StoreItemCreate,
     StoreItemRead,
     StoreItemUpdate,
     StoreLineRead,
+    StoreMovementKind,
+    StoreMovementRead,
     StorePickerItem,
+    StoreScanBox,
+    StoreScanLine,
+    StoreScanPage,
     StoreSuggestion,
     StoreUsage,
     StoreUsageRow,
     parse_expiry,
 )
+from app.services import book_service
 from app.services.workforce_etag import require_if_match, row_etag
 
 EXPIRING_SOON_DAYS = 60
@@ -136,7 +151,7 @@ def _write(
         raise
 
 
-# ── Derived stock (counts + deliveries - disposals) ──────────────────────────
+# ── Derived stock (counts + deliveries - disposals - handovers) ───────────────
 
 
 @dataclass(frozen=True)
@@ -152,6 +167,7 @@ class _Event:
     batch_id: int
     on: date
     delta: int
+    kind: Literal["in", "out", "disposed"]
 
 
 @dataclass
@@ -187,12 +203,12 @@ class _Ledger:
         return self._balance(base, day, include_end=False)
 
     def disposable(self, batch_id: int, day: date, *, as_of: date) -> int:
-        """Most a Disposal dated ``day`` may remove from one Batch.
+        """Most a Disposal or Handover dated ``day`` may remove from one Batch.
 
         The Batch's stock on ``day`` (after a count that day, with every event up
         to and including ``day``), and at every later movement until the next
         Stock count resets the shelf (or until ``as_of`` when none follows), so a
-        backdated Disposal can never drive a later balance below zero.
+        backdated removal can never drive a later balance below zero.
         """
         next_count = next((c.counted_on for c in self.counts if c.counted_on > day), None)
         points = {day} | {
@@ -222,7 +238,7 @@ class _Ledger:
                 totals[item_of[batch_id]] -= quantity
                 seen.add(item_of[batch_id])
             for event in self.events:
-                if first.counted_on <= event.on < second.counted_on:
+                if event.kind != "out" and first.counted_on <= event.on < second.counted_on:
                     totals[item_of[event.batch_id]] += event.delta
                     seen.add(item_of[event.batch_id])
             values: dict[int, int | None] = {item_id: totals[item_id] for item_id in seen}
@@ -245,17 +261,29 @@ def _load_ledger(db: Session) -> _Ledger:
         ).all()
     ]
     events = [
-        _Event(batch_id, received_on, quantity)
+        _Event(batch_id, received_on, quantity, "in")
         for batch_id, received_on, quantity in db.execute(
             select(
                 StoreDeliveryLine.batch_id, StoreDelivery.received_on, StoreDeliveryLine.quantity
-            ).join(StoreDelivery, StoreDelivery.id == StoreDeliveryLine.delivery_id)
+            )
+            .join(StoreDelivery, StoreDelivery.id == StoreDeliveryLine.delivery_id)
+            # A zero-received line ("on the note, nothing arrived") is not a
+            # stock movement; as an event it would mark a fake usage window.
+            .where(StoreDeliveryLine.quantity > 0)
         ).all()
     ]
     events.extend(
-        _Event(batch_id, disposed_on, -quantity)
+        _Event(batch_id, disposed_on, -quantity, "disposed")
         for batch_id, disposed_on, quantity in db.execute(
             select(StoreDisposal.batch_id, StoreDisposal.disposed_on, StoreDisposal.quantity)
+        ).all()
+    )
+    events.extend(
+        _Event(batch_id, handed_on, -quantity, "out")
+        for batch_id, handed_on, quantity in db.execute(
+            select(
+                StoreHandoverLine.batch_id, StoreHandover.handed_on, StoreHandoverLine.quantity
+            ).join(StoreHandover, StoreHandover.id == StoreHandoverLine.handover_id)
         ).all()
     )
     return _Ledger(counts=counts, events=events)
@@ -295,6 +323,8 @@ def _item_ref(item: StoreItem) -> dict[str, Any]:
         "contains_qty": item.contains_qty,
         "contains_unit_en": item.contains_unit_en,
         "contains_unit_ar": item.contains_unit_ar,
+        "art_kind": item.art_kind,
+        "art_color": item.art_color,
     }
 
 
@@ -302,7 +332,9 @@ def _days_left(batch: StoreBatch, as_of: date) -> int | None:
     return (batch.expiry_date - as_of).days if batch.expiry_date is not None else None
 
 
-def _line_read(line: StoreDeliveryLine | StoreCountLine) -> StoreLineRead:
+def _line_read(
+    line: StoreDeliveryLine | StoreCountLine | StoreHandoverLine | StoreDisposal,
+) -> StoreLineRead:
     batch = line.batch
     return StoreLineRead(
         **_item_ref(batch.item),
@@ -311,6 +343,8 @@ def _line_read(line: StoreDeliveryLine | StoreCountLine) -> StoreLineRead:
         expiry_date=batch.expiry_date,
         expiry_month_only=batch.expiry_month_only,
         quantity=line.quantity,
+        noted_quantity=line.noted_quantity if isinstance(line, StoreDeliveryLine) else None,
+        difference_reason=line.difference_reason if isinstance(line, StoreDeliveryLine) else None,
     )
 
 
@@ -332,6 +366,8 @@ def _item_read(row: StoreItem, on_hand: int) -> StoreItemRead:
         contains_unit_en=row.contains_unit_en,
         contains_unit_ar=row.contains_unit_ar,
         minimum_level=row.minimum_level,
+        art_kind=row.art_kind,
+        art_color=row.art_color,
         archived_at=row.archived_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -520,6 +556,8 @@ def list_picker_items(db: Session) -> list[StorePickerItem]:
             contains_qty=row.contains_qty,
             contains_unit_en=row.contains_unit_en,
             contains_unit_ar=row.contains_unit_ar,
+            art_kind=row.art_kind,
+            art_color=row.art_color,
         )
         for row in rows
     ]
@@ -532,6 +570,31 @@ def _check_contains(qty: int | None, unit_en: str | None, unit_ar: str | None) -
             "STORE_ITEM_CONTAINS_INCOMPLETE",
             "A contained quantity needs its unit in English and Arabic, and the reverse.",
         )
+
+
+_ART_KINDS = frozenset(
+    {
+        "jar",
+        "canister",
+        "box",
+        "tins",
+        "water",
+        "cups",
+        "bigcups",
+        "tissue",
+        "gloves",
+        "mask",
+        "carton",
+    }
+)
+
+
+def _check_art(kind: str | None, color: str | None) -> str | None:
+    if kind is not None and kind not in _ART_KINDS:
+        raise ValidationFailedError("STORE_ITEM_ART_KIND", "Unknown Store item drawing kind.")
+    if color is not None and re.fullmatch(r"#[0-9a-fA-F]{6}", color) is None:
+        raise ValidationFailedError("STORE_ITEM_ART_COLOR", "Drawing colour must be #rrggbb.")
+    return color.lower() if color is not None else None
 
 
 def _next_code(db: Session) -> str:
@@ -552,6 +615,7 @@ def create_item(
     commit: bool = True,
 ) -> StoreItem:
     _check_contains(payload.contains_qty, payload.contains_unit_en, payload.contains_unit_ar)
+    color = _check_art(payload.art_kind, payload.art_color)
     with _write(db, commit=commit):
         _get_category(db, payload.category_id)
         row = StoreItem(
@@ -565,6 +629,8 @@ def create_item(
             contains_unit_en=payload.contains_unit_en,
             contains_unit_ar=payload.contains_unit_ar,
             minimum_level=payload.minimum_level,
+            art_kind=payload.art_kind,
+            art_color=color,
             created_by_user_id=actor_user_id,
         )
         db.add(row)
@@ -588,6 +654,7 @@ def _item_has_lines(db: Session, item_id: int) -> bool:
                 exists().where(StoreDeliveryLine.batch_id.in_(batch_ids))
                 | exists().where(StoreCountLine.batch_id.in_(batch_ids))
                 | exists().where(StoreDisposal.batch_id.in_(batch_ids))
+                | exists().where(StoreHandoverLine.batch_id.in_(batch_ids))
             )
         )
     )
@@ -619,6 +686,12 @@ def update_item(
     with _write(db):
         row = get_item(db, item_id)
         require_if_match(if_match, _item_etag(row), code="STORE_ITEM_VERSION_CONFLICT")
+        if "art_kind" in data or "art_color" in data:
+            color = _check_art(
+                data.get("art_kind", row.art_kind), data.get("art_color", row.art_color)
+            )
+            if "art_color" in data:
+                data["art_color"] = color
         if any(key in data for key in _CONTAINS_FIELDS):
             new_contains = tuple(data.get(key, getattr(row, key)) for key in _CONTAINS_FIELDS)
             _check_contains(*new_contains)
@@ -701,7 +774,7 @@ def _find_batch(db: Session, item_id: int, expiry_date: date | None) -> StoreBat
 
 
 def _refuse_archived(item: StoreItem) -> None:
-    """An archived item takes no new stock records (Deliveries, Counts, Disposals)."""
+    """An archived item takes no new stock records, including Handovers."""
     if item.archived_at is not None:
         raise ConflictError(
             "STORE_ITEM_ARCHIVED",
@@ -753,13 +826,14 @@ def _resolve_lines(
 
 
 def _remove_orphan_batches(db: Session, batch_ids: Iterable[int]) -> None:
-    """Delete Batches no delivery line, count line, or Disposal refers to any more."""
+    """Delete Batches no stock record refers to any more."""
     for batch_id in set(batch_ids):
         used = db.scalar(
             select(
                 exists().where(StoreDeliveryLine.batch_id == batch_id)
                 | exists().where(StoreCountLine.batch_id == batch_id)
                 | exists().where(StoreDisposal.batch_id == batch_id)
+                | exists().where(StoreHandoverLine.batch_id == batch_id)
             )
         )
         if not used:
@@ -827,6 +901,140 @@ def get_delivery(db: Session, delivery_id: int) -> StoreDeliveryRead:
     return _delivery_read(_get_delivery(db, delivery_id))
 
 
+def _validate_delivery_lines(lines: Sequence[StoreDeliveryLineInput]) -> None:
+    for index, line in enumerate(lines):
+        if line.quantity == 0 and not (line.noted_quantity is not None and line.noted_quantity > 0):
+            raise ValidationFailedError(
+                "STORE_DELIVERY_ZERO_QUANTITY",
+                "Zero received requires a positive quantity on the delivery note.",
+                line=index,
+            )
+        if (
+            line.noted_quantity is not None
+            and line.noted_quantity != line.quantity
+            and not line.difference_reason
+        ):
+            raise ValidationFailedError(
+                "STORE_DELIVERY_DIFFERENCE_REASON",
+                "Explain why the received quantity differs from the delivery note.",
+                line=index,
+            )
+
+
+def _upsert_delivery_aliases(
+    db: Session,
+    lines: Sequence[StoreDeliveryLineInput],
+    *,
+    actor: str | None,
+    actor_user_id: int | None,
+) -> None:
+    for line in lines:
+        norm = normalize_item_text(line.source_text or "")
+        if not norm:
+            continue
+        alias = db.scalar(select(StoreItemAlias).where(StoreItemAlias.alias_norm == norm))
+        if alias is not None and alias.item_id == line.item_id:
+            continue
+        previous = alias.item_id if alias is not None else None
+        if alias is None:
+            alias = StoreItemAlias(
+                alias_norm=norm, item_id=line.item_id, created_by_user_id=actor_user_id
+            )
+            db.add(alias)
+        else:
+            alias.item_id = line.item_id
+        db.flush()
+        append_audit(
+            db,
+            action="item_alias.upserted",
+            entity_type="store_item_alias",
+            entity_id=alias.id,
+            actor=actor,
+            payload={"alias_norm": norm, "item_id": line.item_id, "previous_item_id": previous},
+        )
+
+
+SCAN_MAX_PAGES = 5
+SCAN_PAGE_TIMEOUT_SECONDS = 30
+
+
+def scan_delivery(db: Session, *, filename: str, data: bytes, media_type: str) -> StoreDeliveryScan:
+    """Read a delivery note without persisting files, rows, or audit records."""
+    import pytesseract
+
+    validate_sniffed_upload(_NOTE_FILE_POLICY, filename=filename, data=data, media_type=media_type)
+    try:
+        # Bound the work done while holding the shared OCR gate: refuse long
+        # PDFs before rasterising, and cap Tesseract per page.
+        if data.startswith(b"%PDF") and ocr.pdf_page_count(data) > SCAN_MAX_PAGES:
+            raise ValidationFailedError(
+                "STORE_SCAN_TOO_MANY_PAGES",
+                f"A delivery note scan reads at most {SCAN_MAX_PAGES} pages.",
+                max_pages=SCAN_MAX_PAGES,
+            )
+        # word_boxes_from_bytes does not acquire the gate itself.
+        with ocr.OCR_GATE:
+            pages = ocr.word_boxes_from_bytes(data, lang="eng", timeout=SCAN_PAGE_TIMEOUT_SECONDS)
+    except ocr.OcrTimeoutError as exc:
+        raise ValidationFailedError(
+            "STORE_SCAN_TIMEOUT",
+            "Reading the delivery note took too long. Try a clearer or smaller photo.",
+            timeout_seconds=SCAN_PAGE_TIMEOUT_SECONDS,
+        ) from exc
+    except (ocr.OcrUnavailableError, pytesseract.TesseractNotFoundError):
+        return StoreDeliveryScan(pages=[], lines=[], ocr_available=False)
+    except ocr.InvalidImageError as exc:
+        raise ValidationFailedError("STORE_NOTE_FILE_INVALID", str(exc)) from exc
+    choices: dict[str, int] = {}
+    items = db.scalars(select(StoreItem).where(StoreItem.archived_at.is_(None))).all()
+    for item in items:
+        for value in (item.code, item.name_en, item.name_ar):
+            if value:
+                choices.setdefault(normalize_item_text(value), item.id)
+    active_ids = {item.id for item in items}
+    for alias in db.scalars(select(StoreItemAlias)).all():
+        if alias.item_id in active_ids:
+            choices[alias.alias_norm] = alias.item_id
+    candidates = list(choices)
+    lines: list[StoreScanLine] = []
+    for page_index, page in enumerate(pages):
+        rows: dict[tuple[int, int, int], list[ocr.OcrWord]] = defaultdict(list)
+        for word in page.words:
+            rows[(word.block, word.paragraph, word.line)].append(word)
+        for words in rows.values():
+            raw_text = " ".join(word.text for word in words)
+            parsed = parse_row(raw_text)
+            if parsed is None:
+                continue
+            matches = [
+                process.extractOne(normalize_item_text(text), candidates, scorer=fuzz.ratio)
+                for text in (parsed.item_text, raw_text)
+            ]
+            best = max(
+                (match for match in matches if match is not None), key=lambda m: m[1], default=None
+            )
+            score = float(best[1]) if best else 0.0
+            left, top = min(w.left for w in words), min(w.top for w in words)
+            right = max(w.left + w.width for w in words)
+            bottom = max(w.top + w.height for w in words)
+            lines.append(
+                StoreScanLine(
+                    raw_text=raw_text,
+                    item_id=choices[best[0]] if best and score >= 85 else None,
+                    match_score=score,
+                    quantity=parsed.quantity,
+                    confidence=max(0.0, min(100.0, sum(w.confidence for w in words) / len(words))),
+                    page=page_index,
+                    bbox=StoreScanBox(x=left, y=top, w=right - left, h=bottom - top),
+                )
+            )
+    return StoreDeliveryScan(
+        pages=[StoreScanPage(width=p.width, height=p.height) for p in pages],
+        lines=lines,
+        ocr_available=True,
+    )
+
+
 def create_delivery(
     db: Session,
     payload: StoreDeliveryCreate,
@@ -835,16 +1043,26 @@ def create_delivery(
     actor_user_id: int | None = None,
 ) -> StoreDeliveryRead:
     _require_not_future(payload.received_on, "received_on")
+    _validate_delivery_lines(payload.lines)
     with _write(db):
         resolved = _resolve_lines(db, payload.lines)
         row = StoreDelivery(
             received_on=payload.received_on,
             note=payload.note,
             created_by_user_id=actor_user_id,
-            lines=[StoreDeliveryLine(batch_id=b.id, quantity=q) for b, q in resolved],
+            lines=[
+                StoreDeliveryLine(
+                    batch_id=batch.id,
+                    quantity=quantity,
+                    noted_quantity=line.noted_quantity,
+                    difference_reason=line.difference_reason,
+                )
+                for (batch, quantity), line in zip(resolved, payload.lines, strict=True)
+            ],
         )
         db.add(row)
         db.flush()
+        _upsert_delivery_aliases(db, payload.lines, actor=actor, actor_user_id=actor_user_id)
         append_audit(
             db,
             action="delivery.created",
@@ -1261,6 +1479,253 @@ def delete_disposal(db: Session, disposal_id: int, *, actor: str | None = None) 
         _remove_orphan_batches(db, [batch_id])
 
 
+# ── Handovers ────────────────────────────────────────────────────────────────
+
+
+def _handover_options() -> Any:
+    return (
+        selectinload(StoreHandover.lines)
+        .selectinload(StoreHandoverLine.batch)
+        .selectinload(StoreBatch.item)
+    )
+
+
+def _handover_reads(db: Session, rows: Sequence[StoreHandover]) -> list[StoreHandoverRead]:
+    ids = {row.created_by_user_id for row in rows if row.created_by_user_id is not None}
+    names = book_service.resolve_names_by_ids(db, ids)
+    names_ar = book_service.resolve_names_ar_by_ids(db, ids)
+    return [
+        StoreHandoverRead(
+            id=row.id,
+            handed_on=row.handed_on,
+            taken_by=row.taken_by,
+            note=row.note,
+            lines=[_line_read(line) for line in row.lines],
+            created_by_user_id=row.created_by_user_id,
+            created_at=row.created_at,
+            recorded_by_name=names.get(row.created_by_user_id) if row.created_by_user_id else None,
+            recorded_by_name_ar=names_ar.get(row.created_by_user_id)
+            if row.created_by_user_id
+            else None,
+        )
+        for row in rows
+    ]
+
+
+def list_handovers(db: Session) -> list[StoreHandoverRead]:
+    rows = db.scalars(
+        select(StoreHandover)
+        .options(_handover_options())
+        .order_by(
+            StoreHandover.handed_on.desc(), StoreHandover.created_at.desc(), StoreHandover.id.desc()
+        )
+    ).all()
+    return _handover_reads(db, rows)
+
+
+def _get_handover(db: Session, handover_id: int) -> StoreHandover:
+    row = db.scalar(
+        select(StoreHandover).where(StoreHandover.id == handover_id).options(_handover_options())
+    )
+    if row is None:
+        raise NotFoundError(
+            "STORE_HANDOVER_NOT_FOUND", "Handover not found.", handover_id=handover_id
+        )
+    return row
+
+
+def get_handover(db: Session, handover_id: int) -> StoreHandoverRead:
+    return _handover_reads(db, [_get_handover(db, handover_id)])[0]
+
+
+def list_handover_takers(db: Session) -> list[str]:
+    rows = db.scalars(
+        select(StoreHandover.taken_by).order_by(
+            StoreHandover.handed_on.desc(), StoreHandover.created_at.desc(), StoreHandover.id.desc()
+        )
+    ).all()
+    return list(dict.fromkeys(rows))
+
+
+def create_handover(
+    db: Session,
+    payload: StoreHandoverCreate,
+    *,
+    actor: str | None = None,
+    actor_user_id: int | None = None,
+) -> StoreHandoverRead:
+    _require_not_future(payload.handed_on, "handed_on")
+    # Preserve spelling and whitespace exactly; trim only to reject an empty name.
+    if not payload.taken_by.strip():
+        raise ValidationFailedError("STORE_HANDOVER_TAKER_REQUIRED", "Taken by cannot be blank.")
+    with _write(db):
+        requested: dict[int, int] = defaultdict(int)
+        for line in payload.lines:
+            requested[line.item_id] += line.quantity
+        ledger = _load_ledger(db)
+        current = organization_today()
+        resolved: list[tuple[int, int]] = []
+        for item_id, quantity in requested.items():
+            item = get_item(db, item_id)
+            _refuse_archived(item)
+            batches = db.scalars(
+                select(StoreBatch)
+                .where(
+                    StoreBatch.item_id == item_id,
+                    (StoreBatch.expiry_date.is_(None))
+                    | (StoreBatch.expiry_date >= payload.handed_on),
+                )
+                .order_by(StoreBatch.expiry_date.is_(None), StoreBatch.expiry_date, StoreBatch.id)
+            ).all()
+            capacities = [
+                (batch.id, max(0, ledger.disposable(batch.id, payload.handed_on, as_of=current)))
+                for batch in batches
+            ]
+            available = sum(capacity for _batch_id, capacity in capacities)
+            if quantity > available:
+                raise ValidationFailedError(
+                    "STORE_HANDOVER_SHORT",
+                    "Not enough non-expired stock for this Handover.",
+                    item_id=item_id,
+                    available=available,
+                )
+            remaining = quantity
+            for batch_id, capacity in capacities:
+                take = min(remaining, capacity)
+                if take:
+                    resolved.append((batch_id, take))
+                    remaining -= take
+                if remaining == 0:
+                    break
+        row = StoreHandover(
+            handed_on=payload.handed_on,
+            taken_by=payload.taken_by,
+            note=payload.note,
+            created_by_user_id=actor_user_id,
+            lines=[StoreHandoverLine(batch_id=batch_id, quantity=q) for batch_id, q in resolved],
+        )
+        db.add(row)
+        db.flush()
+        append_audit(
+            db,
+            action="handover.created",
+            entity_type="store_handover",
+            entity_id=row.id,
+            actor=actor,
+            payload={
+                "handed_on": row.handed_on.isoformat(),
+                "taken_by": row.taken_by,
+                "lines": [{"batch_id": b, "quantity": q} for b, q in resolved],
+            },
+        )
+    db.expire_all()
+    return get_handover(db, row.id)
+
+
+def delete_handover(db: Session, handover_id: int, *, actor: str | None = None) -> None:
+    with _write(db):
+        row = _get_handover(db, handover_id)
+        batch_ids = [line.batch_id for line in row.lines]
+        append_audit(
+            db,
+            action="handover.deleted",
+            entity_type="store_handover",
+            entity_id=row.id,
+            actor=actor,
+            payload={
+                "handed_on": row.handed_on.isoformat(),
+                "taken_by": row.taken_by,
+                "lines": [
+                    {"batch_id": line.batch_id, "quantity": line.quantity} for line in row.lines
+                ],
+            },
+        )
+        db.delete(row)
+        db.flush()
+        _remove_orphan_batches(db, batch_ids)
+
+
+# ── In & out ─────────────────────────────────────────────────────────────────
+
+
+def list_movements(
+    db: Session,
+    *,
+    kind: StoreMovementKind | None = None,
+    q: str | None = None,
+) -> list[StoreMovementRead]:
+    records: list[StoreDelivery | StoreHandover | StoreDisposal] = []
+    if kind is None or kind == "in":
+        records.extend(
+            db.scalars(
+                select(StoreDelivery).options(
+                    selectinload(StoreDelivery.lines).options(_line_options())
+                )
+            ).all()
+        )
+    if kind is None or kind == "out":
+        records.extend(db.scalars(select(StoreHandover).options(_handover_options())).all())
+    if kind is None or kind == "disposed":
+        records.extend(db.scalars(select(StoreDisposal).options(_disposal_options())).all())
+    ids = {row.created_by_user_id for row in records if row.created_by_user_id is not None}
+    names = book_service.resolve_names_by_ids(db, ids)
+    names_ar = book_service.resolve_names_ar_by_ids(db, ids)
+    movements = []
+    query = (q or "").strip().casefold()
+    for record in records:
+        note_file = None
+        taken_by = None
+        reason = None
+        movement_kind: StoreMovementKind
+        if isinstance(record, StoreDelivery):
+            movement_kind = "in"
+            on = record.received_on
+            delivery = _delivery_read(record)
+            lines = delivery.lines
+            note_file = delivery.note_file
+        elif isinstance(record, StoreHandover):
+            movement_kind = "out"
+            on = record.handed_on
+            lines = [_line_read(line) for line in record.lines]
+            taken_by = record.taken_by
+        else:
+            movement_kind = "disposed"
+            on = record.disposed_on
+            lines = [_line_read(record)]
+            reason = _disposal_read(record).reason
+        movement = StoreMovementRead(
+            kind=movement_kind,
+            id=record.id,
+            on=on,
+            created_at=record.created_at,
+            recorded_by_name=names.get(record.created_by_user_id)
+            if record.created_by_user_id
+            else None,
+            recorded_by_name_ar=names_ar.get(record.created_by_user_id)
+            if record.created_by_user_id
+            else None,
+            taken_by=taken_by,
+            note=record.note,
+            reason=reason,
+            note_file=note_file,
+            lines=lines,
+        )
+        if query:
+            searchable = [
+                movement.taken_by,
+                movement.note,
+                movement.recorded_by_name,
+                movement.recorded_by_name_ar,
+            ]
+            for line in lines:
+                searchable.extend([line.item_code, line.item_name_en, line.item_name_ar])
+            if not any(query in value.casefold() for value in searchable if value):
+                continue
+        movements.append(movement)
+    movements.sort(key=lambda row: (row.on, row.created_at, row.id, row.kind), reverse=True)
+    return movements
+
+
 # ── Dashboard ────────────────────────────────────────────────────────────────
 
 
@@ -1346,6 +1811,9 @@ def dashboard(db: Session) -> StoreDashboard:
         low_stock=low_stock,
         usage=StoreUsage(months=[month for month, _values in shown], rows=usage_rows),
         suggestions=suggestions,
+        counts_recorded=len(ledger.counts),
+        usage_ready=bool(windows),
+        suggestion_count=len(suggestions),
         last_count_on=ledger.counts[-1].counted_on if ledger.counts else None,
         last_delivery_on=db.scalar(
             select(StoreDelivery.received_on).order_by(StoreDelivery.received_on.desc()).limit(1)

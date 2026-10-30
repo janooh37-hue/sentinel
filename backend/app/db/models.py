@@ -2662,6 +2662,8 @@ class StoreItem(Base):
     contains_unit_en: Mapped[str | None] = mapped_column(String(64), nullable=True)
     contains_unit_ar: Mapped[str | None] = mapped_column(String(64), nullable=True)
     minimum_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    art_kind: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    art_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
@@ -2760,13 +2762,19 @@ class StoreDeliveryLine(Base):
     )
     batch_id: Mapped[int] = mapped_column(ForeignKey("store_batches.id"), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    noted_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    difference_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     delivery: Mapped[StoreDelivery] = relationship(back_populates="lines")
     batch: Mapped[StoreBatch] = relationship()
 
     __table_args__ = (
         UniqueConstraint("delivery_id", "batch_id", name="uq_store_delivery_lines_batch"),
-        CheckConstraint("quantity > 0", name="ck_store_delivery_lines_quantity"),
+        CheckConstraint("quantity >= 0", name="ck_store_delivery_lines_quantity"),
+        CheckConstraint(
+            "noted_quantity IS NULL OR noted_quantity >= 0",
+            name="ck_store_delivery_lines_noted_quantity",
+        ),
         Index("ix_store_delivery_lines_batch", "batch_id"),
     )
 
@@ -2836,6 +2844,57 @@ class StoreDisposal(Base):
         Index("ix_store_disposals_batch", "batch_id"),
         Index("ix_store_disposals_disposed_on", "disposed_on"),
     )
+
+
+class StoreHandover(Base):
+    """Stock handed to a named person, resolved into FEFO Batch lines."""
+
+    __tablename__ = "store_handovers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    handed_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    taken_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+    lines: Mapped[list[StoreHandoverLine]] = relationship(
+        back_populates="handover", cascade="all, delete-orphan", order_by="StoreHandoverLine.id"
+    )
+
+    __table_args__ = (Index("ix_store_handovers_handed_on", "handed_on"),)
+
+
+class StoreHandoverLine(Base):
+    __tablename__ = "store_handover_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    handover_id: Mapped[int] = mapped_column(
+        ForeignKey("store_handovers.id", ondelete="CASCADE"), nullable=False
+    )
+    batch_id: Mapped[int] = mapped_column(ForeignKey("store_batches.id"), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    handover: Mapped[StoreHandover] = relationship(back_populates="lines")
+    batch: Mapped[StoreBatch] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("handover_id", "batch_id", name="uq_store_handover_lines_batch"),
+        CheckConstraint("quantity > 0", name="ck_store_handover_lines_quantity"),
+        Index("ix_store_handover_lines_batch", "batch_id"),
+    )
+
+
+class StoreItemAlias(Base):
+    __tablename__ = "store_item_aliases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("store_items.id"), nullable=False)
+    alias_norm: Mapped[str] = mapped_column(String, nullable=False)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+    __table_args__ = (UniqueConstraint("alias_norm", name="uq_store_item_aliases_alias_norm"),)
 
 
 # Imported last on purpose: workforce models reference tables defined above, so

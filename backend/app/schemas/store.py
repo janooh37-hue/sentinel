@@ -10,9 +10,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.clock import organization_today
 from app.schemas._base import ORMBase
 
 StoreDisposalReason = Literal["expired", "damaged"]
+StoreMovementKind = Literal["in", "out", "disposed"]
 
 _EXPIRY_PATTERN = re.compile(r"^(\d{4})-(\d{2})(?:-(\d{2}))?$")
 
@@ -71,6 +73,8 @@ class StoreItemCreate(BaseModel):
     contains_unit_en: str | None = Field(default=None, max_length=64)
     contains_unit_ar: str | None = Field(default=None, max_length=64)
     minimum_level: int | None = Field(default=None, ge=0)
+    art_kind: str | None = None
+    art_color: str | None = None
 
     @field_validator("name_ar", "contains_unit_en", "contains_unit_ar")
     @classmethod
@@ -90,6 +94,8 @@ class StoreItemUpdate(BaseModel):
     contains_unit_en: str | None = Field(default=None, max_length=64)
     contains_unit_ar: str | None = Field(default=None, max_length=64)
     minimum_level: int | None = Field(default=None, ge=0)
+    art_kind: str | None = None
+    art_color: str | None = None
 
     @field_validator("name_ar", "contains_unit_en", "contains_unit_ar")
     @classmethod
@@ -110,6 +116,8 @@ class StoreItemRead(ORMBase):
     contains_unit_en: str | None
     contains_unit_ar: str | None
     minimum_level: int | None
+    art_kind: str | None
+    art_color: str | None
     archived_at: datetime | None
     created_at: datetime
     updated_at: datetime | None
@@ -127,6 +135,8 @@ class StorePickerItem(BaseModel):
     contains_qty: int | None
     contains_unit_en: str | None
     contains_unit_ar: str | None
+    art_kind: str | None
+    art_color: str | None
 
 
 # ── Batches and lines ────────────────────────────────────────────────────────
@@ -144,6 +154,8 @@ class StoreItemRef(ORMBase):
     contains_qty: int | None
     contains_unit_en: str | None
     contains_unit_ar: str | None
+    art_kind: str | None
+    art_color: str | None
 
 
 class StoreBatchRead(StoreItemRef):
@@ -170,7 +182,15 @@ class _LineInput(BaseModel):
 
 
 class StoreDeliveryLineInput(_LineInput):
-    quantity: int = Field(ge=1)
+    quantity: int = Field(ge=0)
+    source_text: str | None = None
+    noted_quantity: int | None = Field(default=None, ge=0)
+    difference_reason: str | None = Field(default=None, max_length=200)
+
+    @field_validator("source_text", "difference_reason")
+    @classmethod
+    def _blank_is_null(cls, value: str | None) -> str | None:
+        return _strip(value)
 
 
 class StoreCountLineInput(_LineInput):
@@ -183,6 +203,8 @@ class StoreLineRead(StoreItemRef):
     expiry_date: date_t | None
     expiry_month_only: bool
     quantity: int
+    noted_quantity: int | None = None
+    difference_reason: str | None = None
 
 
 # ── Deliveries ───────────────────────────────────────────────────────────────
@@ -210,6 +232,34 @@ class StoreDeliveryRead(ORMBase):
     created_by_user_id: int | None
     created_at: datetime
     updated_at: datetime | None
+
+
+class StoreScanPage(BaseModel):
+    width: int
+    height: int
+
+
+class StoreScanBox(BaseModel):
+    x: int
+    y: int
+    w: int
+    h: int
+
+
+class StoreScanLine(BaseModel):
+    raw_text: str
+    item_id: int | None
+    match_score: float = Field(ge=0, le=100)
+    quantity: int | None
+    confidence: float = Field(ge=0, le=100)
+    page: int = Field(ge=0, description="Zero-based page index.")
+    bbox: StoreScanBox
+
+
+class StoreDeliveryScan(BaseModel):
+    pages: list[StoreScanPage]
+    lines: list[StoreScanLine]
+    ocr_available: bool
 
 
 # ── Stock counts ─────────────────────────────────────────────────────────────
@@ -271,6 +321,50 @@ class StoreDisposalRead(StoreItemRef):
     created_at: datetime
 
 
+# ── Handovers ────────────────────────────────────────────────────────────────
+
+
+class StoreHandoverLineInput(BaseModel):
+    item_id: int
+    quantity: int = Field(ge=1)
+
+
+class StoreHandoverCreate(BaseModel):
+    handed_on: date_t = Field(default_factory=organization_today)
+    taken_by: str = Field(min_length=1, max_length=128)
+    note: str | None = None
+    lines: list[StoreHandoverLineInput] = Field(min_length=1)
+
+
+class StoreHandoverRead(ORMBase):
+    id: int
+    handed_on: date_t
+    taken_by: str
+    note: str | None
+    lines: list[StoreLineRead]
+    created_by_user_id: int | None
+    created_at: datetime
+    recorded_by_name: str | None
+    recorded_by_name_ar: str | None
+
+
+# ── In & out ─────────────────────────────────────────────────────────────────
+
+
+class StoreMovementRead(ORMBase):
+    kind: StoreMovementKind
+    id: int
+    on: date_t
+    created_at: datetime
+    recorded_by_name: str | None
+    recorded_by_name_ar: str | None
+    taken_by: str | None = None
+    note: str | None = None
+    reason: StoreDisposalReason | None = None
+    note_file: StoreDeliveryNoteFile | None = None
+    lines: list[StoreLineRead]
+
+
 # ── Dashboard ────────────────────────────────────────────────────────────────
 
 
@@ -313,3 +407,6 @@ class StoreDashboard(BaseModel):
     suggestions: list[StoreSuggestion]
     last_count_on: date_t | None
     last_delivery_on: date_t | None
+    counts_recorded: int
+    usage_ready: bool
+    suggestion_count: int

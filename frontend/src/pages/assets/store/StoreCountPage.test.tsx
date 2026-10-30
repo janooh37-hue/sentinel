@@ -19,11 +19,11 @@ vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 const ITEM: StorePickerItem = {
   id: 1, code: 'ST-0001', name_en: 'Tea', name_ar: 'شاي', counting_unit_en: 'Carton', counting_unit_ar: 'كرتون',
-  contains_qty: 24, contains_unit_en: 'jar', contains_unit_ar: 'علبة',
+  contains_qty: 24, contains_unit_en: 'jar', contains_unit_ar: 'علبة', art_kind: null, art_color: null,
 }
 const FIRST: StoreExpectedBatch = {
   item_id: 1, item_code: 'ST-0001', item_name_en: 'Tea', item_name_ar: 'شاي',
-  counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 24, contains_unit_en: 'jar', contains_unit_ar: 'علبة',
+  counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 24, contains_unit_en: 'jar', contains_unit_ar: 'علبة', art_kind: null, art_color: null,
   batch_id: 10, expiry_date: '2028-09-30', expiry_month_only: true,
 }
 const SECOND: StoreExpectedBatch = { ...FIRST, batch_id: 11, expiry_date: null, expiry_month_only: false }

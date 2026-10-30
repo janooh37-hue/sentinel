@@ -25,12 +25,17 @@ from app.schemas.store import (
     StoreDashboard,
     StoreDeliveryCreate,
     StoreDeliveryRead,
+    StoreDeliveryScan,
     StoreDisposalCreate,
     StoreDisposalRead,
     StoreExpectedBatch,
+    StoreHandoverCreate,
+    StoreHandoverRead,
     StoreItemCreate,
     StoreItemRead,
     StoreItemUpdate,
+    StoreMovementKind,
+    StoreMovementRead,
     StorePickerItem,
 )
 from app.services import perm_service, store_service
@@ -137,6 +142,20 @@ def list_store_deliveries(db: _Db, _user: _View) -> list[StoreDeliveryRead]:
 @router.post("/deliveries", response_model=StoreDeliveryRead, status_code=status.HTTP_201_CREATED)
 def create_store_delivery(payload: StoreDeliveryCreate, db: _Db, user: _Edit) -> StoreDeliveryRead:
     return store_service.create_delivery(db, payload, actor=user.email, actor_user_id=user.id)
+
+
+@router.post("/deliveries/scan", response_model=StoreDeliveryScan)
+async def scan_store_delivery(
+    db: _Db, _user: _Edit, file: Annotated[UploadFile, File()]
+) -> StoreDeliveryScan:
+    data = await file.read(store_service.NOTE_FILE_MAX_BYTES + 1)
+    return await run_in_threadpool(
+        store_service.scan_delivery,
+        db,
+        filename=file.filename or "delivery-note",
+        data=data,
+        media_type=file.content_type or "",
+    )
 
 
 @router.get("/deliveries/{delivery_id}", response_model=StoreDeliveryRead)
@@ -247,6 +266,45 @@ def create_store_disposal(payload: StoreDisposalCreate, db: _Db, user: _Edit) ->
 def delete_store_disposal(disposal_id: int, db: _Db, user: _Edit) -> Response:
     store_service.delete_disposal(db, disposal_id, actor=user.email)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── Handovers ────────────────────────────────────────────────────────────────
+
+
+@router.get("/handovers", response_model=list[StoreHandoverRead])
+def list_store_handovers(db: _Db, _user: _View) -> list[StoreHandoverRead]:
+    return store_service.list_handovers(db)
+
+
+@router.post("/handovers", response_model=StoreHandoverRead, status_code=status.HTTP_201_CREATED)
+def create_store_handover(payload: StoreHandoverCreate, db: _Db, user: _Edit) -> StoreHandoverRead:
+    return store_service.create_handover(db, payload, actor=user.email, actor_user_id=user.id)
+
+
+@router.get("/handovers/takers", response_model=list[str])
+def list_store_handover_takers(db: _Db, _user: _View) -> list[str]:
+    return store_service.list_handover_takers(db)
+
+
+@router.get("/handovers/{handover_id}", response_model=StoreHandoverRead)
+def get_store_handover(handover_id: int, db: _Db, _user: _View) -> StoreHandoverRead:
+    return store_service.get_handover(db, handover_id)
+
+
+@router.delete("/handovers/{handover_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_store_handover(handover_id: int, db: _Db, user: _Edit) -> Response:
+    store_service.delete_handover(db, handover_id, actor=user.email)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/movements", response_model=list[StoreMovementRead])
+def list_store_movements(
+    db: _Db,
+    _user: _View,
+    kind: StoreMovementKind | None = None,
+    q: str | None = None,
+) -> list[StoreMovementRead]:
+    return store_service.list_movements(db, kind=kind, q=q)
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────────

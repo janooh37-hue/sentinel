@@ -17,12 +17,12 @@ const ITEMS: StorePickerItem[] = [
   {
     id: 1, code: 'ST-0001', name_en: 'Black tea', name_ar: 'شاي أسود',
     counting_unit_en: 'Carton', counting_unit_ar: 'كرتون',
-    contains_qty: 12, contains_unit_en: 'Box', contains_unit_ar: 'علبة',
+    contains_qty: 12, contains_unit_en: 'Box', contains_unit_ar: 'علبة', art_kind: null, art_color: null,
   },
   {
     id: 2, code: 'ST-0002', name_en: 'Water', name_ar: null,
     counting_unit_en: 'Case', counting_unit_ar: 'صندوق',
-    contains_qty: null, contains_unit_en: null, contains_unit_ar: null,
+    contains_qty: null, contains_unit_en: null, contains_unit_ar: null, art_kind: null, art_color: null,
   },
 ]
 const INITIAL_ROW = {

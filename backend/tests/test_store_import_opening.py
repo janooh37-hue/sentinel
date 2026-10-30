@@ -47,6 +47,9 @@ def test_opening_import_creates_items_in_order_and_the_opening_count(
     assert [item.code for item in items] == [f"ST-{n:04d}" for n in range(1, 14)]
     assert [item.name_en for item in items] == [entry["name_en"] for entry in data["items"]]
     assert {item.category.name_en for item in items[-3:]} == {"Protective"}
+    assert [(item.art_kind, item.art_color) for item in items] == [
+        (entry["art_kind"], entry["art_color"]) for entry in data["items"]
+    ]
     assert count.month == "2026-10"
     assert count.counted_on == date(2026, 10, 29)
 
@@ -100,3 +103,26 @@ def test_invalid_opening_file_is_rejected_before_any_write(db_session: Session) 
         _script().import_opening(db_session, data, actor="storekeeper@test.ae")
 
     assert db_session.scalars(select(StoreItem)).all() == []
+
+
+def test_set_art_fills_only_null_fields_and_is_idempotent(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(store_service, "organization_today", lambda: date(2026, 10, 29))
+    data = json.loads(OPENING.read_text(encoding="utf-8"))
+    _script().import_opening(db_session, data, actor="storekeeper@test.ae")
+    items = db_session.scalars(select(StoreItem).order_by(StoreItem.id)).all()
+    items[0].art_kind = None
+    items[0].art_color = "#abcdef"
+    items[1].art_color = None
+    db_session.commit()
+    spec = importlib.util.spec_from_file_location(
+        "store_set_art", ROOT / "scripts/store_set_art.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.set_art(db_session, data, actor="storekeeper@test.ae") == 2
+    assert (items[0].art_kind, items[0].art_color) == ("jar", "#abcdef")
+    assert items[1].art_color == "#f4efe6"
+    assert module.set_art(db_session, data, actor="storekeeper@test.ae") == 0

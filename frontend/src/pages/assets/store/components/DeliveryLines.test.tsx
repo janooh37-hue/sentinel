@@ -11,7 +11,7 @@ import { DeliveryLines } from './DeliveryLines'
 import { createDeliveryLines, type DeliveryLineInit, type DeliveryLinesCheck, validateDeliveryLines } from './deliveryLineModel'
 
 const COFFEE: StorePickerItem = {
-  id: 4, code: 'ST-0004', name_en: 'Coffee', name_ar: 'قهوة', counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 24, contains_unit_en: 'Jar', contains_unit_ar: 'علبة',
+  id: 4, code: 'ST-0004', name_en: 'Coffee', name_ar: 'قهوة', counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 24, contains_unit_en: 'Jar', contains_unit_ar: 'علبة', art_kind: null, art_color: null,
 }
 
 function Harness({ initial }: { initial: DeliveryLineInit[] }) {
