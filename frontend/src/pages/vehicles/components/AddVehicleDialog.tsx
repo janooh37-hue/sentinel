@@ -31,12 +31,12 @@ import {
   vehicleFormSchema,
 } from '../vehicleForm'
 import {
+  DialogBody,
+  DialogFooter,
+  DialogShell,
+  FormAlert,
   UploadSlot,
-  VehicleDialogBody,
-  VehicleDialogFooter,
-  VehicleDialogShell,
-  VehicleFormAlert,
-} from './VehicleDialogShell'
+} from '@/components/forms/DialogShell'
 import { VehicleFormFields } from './VehicleFormFields'
 import { VehicleLicenceScanControl } from './VehicleLicenceScanControl'
 import { VehiclePhotoPicker } from './VehiclePhotoPicker'
@@ -63,7 +63,7 @@ export function AddVehicleDialog({ open, onOpenChange, onSaved }: Props): React.
   const sites = sitesQuery.data
 
   return (
-    <VehicleDialogShell
+    <DialogShell
       open={open}
       onOpenChange={onOpenChange}
       title={t('vehicles.addVehicleTitle')}
@@ -79,13 +79,13 @@ export function AddVehicleDialog({ open, onOpenChange, onSaved }: Props): React.
           onBusyChange={setBusy}
         />
       ) : (
-        <VehicleDialogBody>
+        <DialogBody>
           <Skeleton className="h-9 w-full" />
           <Skeleton className="h-9 w-2/3" />
           <Skeleton className="h-9 w-1/2" />
-        </VehicleDialogBody>
+        </DialogBody>
       )}
-    </VehicleDialogShell>
+    </DialogShell>
   )
 }
 
@@ -141,7 +141,7 @@ function AddVehicleForm({
             await api.uploadVehicleFile(vehicle.id, 'license', licenseFile)
           ).id
         } catch (err) {
-          failures.push(vehicleErrorMessage(err, t))
+          failures.push(vehicleErrorMessage(err))
         }
       }
       if (Object.keys(patch).length > 0) {
@@ -154,7 +154,7 @@ function AddVehicleForm({
           // (PLATE_EXISTS). So the record is reported as saved, the unlinked
           // attachment as the one failure, and the caches are refreshed either
           // way — the operator re-attaches from the vehicle file.
-          failures.push(vehicleErrorMessage(err, t))
+          failures.push(vehicleErrorMessage(err))
         }
       }
       return { vehicle, failures }
@@ -169,7 +169,7 @@ function AddVehicleForm({
       onOpenChange(false)
     },
     onError: (err) => {
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setServerError(message)
       toast.error(message)
     },
@@ -187,8 +187,8 @@ function AddVehicleForm({
         mutation.mutate(values)
       })}
     >
-      <VehicleDialogBody>
-        <VehicleFormAlert id={alertId} message={alert} />
+      <DialogBody>
+        <FormAlert id={alertId} message={alert} />
         <VehicleFormFields
           form={form}
           sites={sites}
@@ -263,9 +263,9 @@ function AddVehicleForm({
             />
           </div>
         </div>
-      </VehicleDialogBody>
+      </DialogBody>
 
-      <VehicleDialogFooter>
+      <DialogFooter>
         <Button
           type="button"
           variant="ghost"
@@ -277,7 +277,7 @@ function AddVehicleForm({
         <Button type="submit" disabled={mutation.isPending}>
           {mutation.isPending ? t('common.saving') : t('vehicles.save')}
         </Button>
-      </VehicleDialogFooter>
+      </DialogFooter>
     </form>
       <VehiclePhotoPicker
         open={photoPickerOpen}

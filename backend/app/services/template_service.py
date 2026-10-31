@@ -90,6 +90,9 @@ class TemplateField(BaseModel):
     # non-table field.
     columns: list[dict[str, str]] | None = None
     max_rows: int | None = None
+    # items_table only: the catalog whose items the Code cell offers as picks.
+    # Free text stays allowed; absent means a plain text cell.
+    item_catalog: Literal["store"] | None = None
 
 
 class TemplateDetailResponse(BaseModel):

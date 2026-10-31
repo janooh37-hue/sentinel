@@ -1,6 +1,6 @@
 """Naive timestamps must serialize with an offset, or the frontend is 4h off.
 
-Timestamp columns store naive UTC (``models._utcnow``). Pydantic emitted them
+Timestamp columns store naive UTC (``app.core.clock.utcnow``). Pydantic emitted them
 with no offset, and JS ``new Date("2026-08-04T05:51:00")`` reads an offset-less
 datetime as LOCAL — so on this UTC+4 box a message sent 09:51 displayed as
 05:51. ``ORMBase`` tags the zone at validation time; these assertions cover that,

@@ -61,15 +61,14 @@ import {
   formatIsoDate,
   formatLetterFilsAed,
   formatLetterDate,
-  formatNumber,
-  isArabic,
   plateLabel,
   vehicleErrorMessage,
 } from './vehicleUtils'
 import { useSearchParam } from '@/lib/urlState'
+import { formatNumber, isArabic } from '@/lib/language'
 import { PaperNote, PaperPlateBox, PaperSheet, PaperTable } from './components/PaperSheet'
 import { PlateChip } from './components/PlateChip'
-import { VehicleFormAlert } from './components/VehicleDialogShell'
+import { FormAlert } from '@/components/forms/DialogShell'
 import { VehicleStatusBadge } from './components/VehicleStatusBadge'
 
 /** What the reference line shows before the book exists. The real ref
@@ -160,7 +159,7 @@ function FinesLetterWizard(): React.JSX.Element {
       navigate(`/books/${result.book_id}`)
     },
     onError: (err) => {
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setError(message)
       toast.error(message)
     },
@@ -281,7 +280,7 @@ function FinesLetterWizard(): React.JSX.Element {
             )}
 
             <div className="mt-3">
-              <VehicleFormAlert id={ERROR_ID} message={error} />
+              <FormAlert id={ERROR_ID} message={error} />
             </div>
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2">

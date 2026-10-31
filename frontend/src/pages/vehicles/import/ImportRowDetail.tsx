@@ -21,7 +21,7 @@ import {
   type VehicleFormValues,
   vehicleFormSchema,
 } from '../vehicleForm'
-import { VehicleFormAlert } from '../components/VehicleDialogShell'
+import { FormAlert } from '@/components/forms/DialogShell'
 import { VehicleFormFields } from '../components/VehicleFormFields'
 import { ImportImageReview } from './ImportImageReview'
 import {
@@ -275,7 +275,7 @@ export function ImportRowDetail({
           <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden />
         </summary>
         <div className="mt-3 space-y-3">
-          <VehicleFormAlert
+          <FormAlert
             id={alertId}
             message={
               invalidCorrection ? t('vehicles.import.correctionInvalid') : null

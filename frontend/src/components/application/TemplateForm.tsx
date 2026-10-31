@@ -264,6 +264,7 @@ function renderField(
           {...common}
           columns={field.columns}
           maxRows={field.max_rows}
+          itemCatalog={field.item_catalog}
         />
       )
 

@@ -27,12 +27,15 @@
   --color-background: var(--bg);
   --color-foreground: var(--text);
   --color-surface: var(--surface);
+  --color-shelf: var(--shelf);
   --color-surface-raised: var(--surface-raised);
   --color-surface-tinted: var(--surface-tinted);
+  --color-store-art-surface: var(--store-art-surface);
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-primary-soft: var(--primary-soft);
   --color-primary-on-soft: var(--primary-on-soft);
+  --color-primary-text: var(--primary-text);
   --color-primary-foreground: var(--on-primary);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
@@ -50,6 +53,7 @@
   --color-info-soft: var(--info-soft);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-text: var(--destructive-text);
   --color-rail: var(--rail);
   --color-rail-2: var(--rail-2);
   --color-rail-3: var(--rail-3);
@@ -98,12 +102,18 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --bg: #f5f4f1;
   --surface: #ffffff;
+  --shelf: #c9c3b4;
   --surface-raised: #fafaf6;
   --surface-tinted: #f0eee8;
+  /* Artwork needs a fixed light ground in both themes, not a themed UI surface. */
+  --store-art-surface: #fafaf6;
   --primary: #0d2845;
   --primary-hover: #1d3a5e;
   --primary-soft: #e8edf3;
   --primary-on-soft: #0d2845;
+  /* Primary-tone TEXT (links, selected chips, inline figures) on surface,
+     surface-raised and primary-soft; ≥ 4.5:1 in both themes. */
+  --primary-text: #0d2845;
   --on-primary: #ffffff;
   --accent: #c8102e;
   --accent-hover: #a30d24;
@@ -124,6 +134,9 @@
   --info-soft: #e0e8f8;
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
+  /* Error text on surface or on a destructive/accent tint (alerts, query
+     errors). `--destructive` itself is 4.1:1 on its own tint. */
+  --destructive-text: #b91c1c;
   --text: #1c1f24;
   --text-muted: #5a6068;
   --text-faint: #8b9098;
@@ -270,12 +283,14 @@
 [data-theme="dark"] {
   --bg: #0a0e18;
   --surface: #131826;
+  --shelf: #4a5370;
   --surface-raised: #1a2034;
   --surface-tinted: #1f263b;
   --primary: #5778cf;
   --primary-hover: #7491db;
   --primary-soft: #1c2849;
   --primary-on-soft: #7491db;
+  --primary-text: #8aa4e8;
   --on-primary: #0a0e18;
   --accent: #ef4858;
   --accent-hover: #f56b78;
@@ -294,6 +309,7 @@
   --info-soft: #1c2940;
   --destructive: #f87171;
   --destructive-foreground: #1c1f24;
+  --destructive-text: #fca5a5;
   --text: #e6e9f2;
   --text-muted: #8a93a7;
   --text-faint: #5f6678;
@@ -802,11 +818,14 @@
    widest-first, and every control stays clickable:
      Tier 1 (<1560px): the brand copy goes, the logo (still a labelled link to
        the dashboard) stays; gaps and padding tighten.
-     Tier 2 (<1240px): destinations collapse to their icons — the icon lives in
+     Tier 1b (<1520px): the two widest utilities shed their extras (the Aa
+       range, whose ± buttons remain; the language word, whose globe remains).
+       With all nine destinations (Assets added after Vehicles) the labelled
+       strip otherwise runs into the utilities from ~1510px down.
+     Tier 2 (<1280px): destinations collapse to their icons — the icon lives in
        the DOM at every width and is revealed here, with the accessible name
-       kept on the link — and the two widest utilities shed their extras (the
-       Aa range, whose ± buttons remain; the language word, whose globe
-       remains).
+       kept on the link. Measured with every destination granted: at 1280 the
+       labelled strip keeps ~30px (en) / ~60px (ar) clear of the utilities.
    Large content scales (20-24) get Tier 2 at any width, and keep the old cap
    on the header's OWN font so chrome stays usable while page content grows. */
 /* The link icon is decoration until a collapsed tier needs it as the only
@@ -833,10 +852,24 @@
   }
 }
 
-@media (max-width: 1239px) {
-  [data-topnav] .topnav-link-label,
+@media (max-width: 1519px) {
   [data-topnav] [data-topnav-aa-range],
   [data-topnav] [data-topnav-language-label] {
+    display: none;
+  }
+
+  [data-topnav] .topnav-utilities {
+    gap: 0.25rem;
+  }
+
+  [data-topnav] [data-topnav-aa] {
+    gap: 0.25rem;
+    padding-inline: 0.5rem;
+  }
+}
+
+@media (max-width: 1279px) {
+  [data-topnav] .topnav-link-label {
     display: none;
   }
 
@@ -847,15 +880,6 @@
   [data-topnav] .topnav-link {
     min-width: 42px;
     min-height: 42px;
-  }
-
-  [data-topnav] .topnav-utilities {
-    gap: 0.25rem;
-  }
-
-  [data-topnav] [data-topnav-aa] {
-    gap: 0.25rem;
-    padding-inline: 0.5rem;
   }
 }
 
@@ -2073,6 +2097,8 @@ body {
     --caution: #ca8a04;
     --info: #1d4ed8;
     --destructive: #dc2626;
+    --destructive-text: #b91c1c;
+    --primary-text: #0d2845;
     --border: #e6e4dd;
     --border-strong: #d4d1c8;
     --hairline: #efece5;

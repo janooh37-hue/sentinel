@@ -53,6 +53,7 @@ from app.api.v1 import scan_inbox as scan_inbox_v1
 from app.api.v1 import settings as settings_v1
 from app.api.v1 import signatures as signatures_v1
 from app.api.v1 import smart_folders as smart_folders_v1
+from app.api.v1 import store as store_v1
 from app.api.v1 import submitters as submitters_v1
 from app.api.v1 import system as system_v1
 from app.api.v1 import templates as templates_v1
@@ -330,6 +331,7 @@ def create_app() -> FastAPI:
     app.include_router(permits_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(item_permits_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(vehicles_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(store_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(debug_v1.router, prefix="/api/v1", dependencies=auth_gate)
     # Workforce depends on the optional attendance persistence surface.  Import
     # it only while constructing the application so routine module imports

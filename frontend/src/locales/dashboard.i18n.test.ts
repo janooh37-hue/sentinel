@@ -38,3 +38,16 @@ it('preserves both branches’ dashboard keys with English/Arabic parity', () =>
     expect(ar.dashboard.widgets.ledger[key]).toBeTruthy()
   }
 })
+
+it('keeps store widget translations and source labels in both languages', () => {
+  for (const id of ['store_expiring', 'store_low_stock'] as const) {
+    expect(Object.keys(en.dashboard.widgets[id]).sort()).toEqual(Object.keys(ar.dashboard.widgets[id]).sort())
+    for (const lng of ['en', 'ar']) {
+      for (const key of Object.keys(en.dashboard.widgets[id])) {
+        expect(i18n.exists(`dashboard.widgets.${id}.${key}`, { lng })).toBe(true)
+      }
+    }
+  }
+  expect(en.dashboard.customize.sources.store).toBe('Store')
+  expect(ar.dashboard.customize.sources.store).toBe('المخزن')
+})

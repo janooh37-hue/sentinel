@@ -32,6 +32,7 @@ from app.core.vehicle_xlsx import (
     parse_vehicle_workbook,
 )
 from app.db.models import User, Vehicle, VehicleFile, VehicleSite
+from app.db.repos.audit_repo import append_audit
 from app.schemas.vehicle import (
     VehicleCreate,
     VehicleImportChange,
@@ -1409,38 +1410,43 @@ def confirm(
                 db.flush()
 
             if response.action == "create":
-                vehicle_service._add_audit(
+                append_audit(
                     db,
-                    "vehicle.created",
-                    vehicle.id,
-                    owner.email,
-                    {
+                    action="vehicle.created",
+                    entity_type="vehicle",
+                    entity_id=vehicle.id,
+                    actor=owner.email,
+                    payload={
                         "plate_code": vehicle.plate_code,
                         "plate_number": vehicle.plate_number,
                         "site_id": vehicle.site_id,
                     },
+                    ensure_ascii=True,
                 )
             elif response.action == "update":
-                vehicle_service._add_audit(
+                append_audit(
                     db,
-                    "vehicle.updated",
-                    vehicle.id,
-                    owner.email,
-                    {change.field: change.after for change in response.changes},
+                    action="vehicle.updated",
+                    entity_type="vehicle",
+                    entity_id=vehicle.id,
+                    actor=owner.email,
+                    payload={change.field: change.after for change in response.changes},
+                    ensure_ascii=True,
                 )
             vehicle_ids.append(vehicle.id)
 
-        vehicle_service._add_audit(
+        append_audit(
             db,
-            "vehicle.imported",
-            vehicle_ids[0],
-            owner.email,
-            {
+            action="vehicle.imported",
+            entity_type="vehicle_import",
+            entity_id=vehicle_ids[0],
+            actor=owner.email,
+            payload={
                 "source_filename": str(_json(claimed / "metadata.json")["filename"]),
                 "row_ids": request.row_ids,
                 "vehicle_ids": vehicle_ids,
             },
-            entity_type="vehicle_import",
+            ensure_ascii=True,
         )
         db.commit()
         committed = True

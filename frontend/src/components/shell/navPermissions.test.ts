@@ -12,6 +12,7 @@ const expectedPrimaryCaps: Record<string, string | undefined> = {
   '/': undefined,
   '/employees': 'employees.view',
   '/vehicles': 'vehicles.view',
+  '/holdings': 'store.view',
   '/ledger': undefined,
   '/leaves': 'leaves.view',
   '/services': 'documents.generate',
@@ -25,6 +26,15 @@ describe('permission-aware navigation', () => {
       expectedPrimaryCaps,
     )
     expect(NAV_ITEMS.map((item) => item.to)).toEqual(Object.keys(expectedPrimaryCaps))
+  })
+
+  it('keeps every destination off the /assets build-file prefix', () => {
+    // The backend mounts Vite's hashed files at /assets and the service worker
+    // caches /assets/* cache-first forever, so a page there would 404 on reload
+    // and could be pinned stale by installed apps.
+    for (const { to } of NAV_ITEMS) {
+      expect(to === '/assets' || to.startsWith('/assets/')).toBe(false)
+    }
   })
 
   it.each([

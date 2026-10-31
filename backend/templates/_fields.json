@@ -709,7 +709,8 @@
         "type": "items_table",
         "label_en": "Requested Items",
         "label_ar": "المواد المطلوبة",
-        "required": true
+        "required": true,
+        "item_catalog": "store"
       },
       {
         "key": "motivation",

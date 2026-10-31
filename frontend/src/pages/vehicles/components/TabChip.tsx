@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
-import { formatNumber } from '../vehicleUtils'
+import { formatNumber } from '@/lib/language'
 
 export function TabChip({
   active,

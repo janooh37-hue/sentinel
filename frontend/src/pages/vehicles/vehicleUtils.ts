@@ -13,11 +13,9 @@ import type { QueryClient } from '@tanstack/react-query'
 import vehicleClassCatalog from '../../../../backend/templates/vehicle_classes.json'
 
 import type { BadgeProps } from '@/components/ui/badge'
-import type { DocViewerItem } from '@/components/ui/document-viewer-dialog'
-import { ApiError, apiErrorMessage } from '@/lib/api'
+import { apiErrorMessage } from '@/lib/api'
 import type { VehicleFileRead } from '@/lib/api'
-import { fileKindFromName } from '@/lib/fileTypes'
-import { toBase64Url } from '@/lib/pdf'
+import { formatNumber, isArabic, localized } from '@/lib/language'
 import { normalizeDigits } from '@/lib/utils'
 
 /** The Badge tones this module may use — derived from the design system so a
@@ -82,22 +80,6 @@ export function paymentTone(status: PaymentStatus): VehicleTone {
 
 // ── Language ────────────────────────────────────────────────────────────────
 
-/** True for `ar` and any Arabic regional tag (`ar-AE`). */
-export function isArabic(language: string): boolean {
-  return language.startsWith('ar')
-}
-
-/** Pick the language-appropriate half of a bilingual pair, falling back to the
- *  peer language rather than rendering an empty cell. */
-export function localized(
-  ar: string | null | undefined,
-  en: string | null | undefined,
-  language: string,
-): string {
-  const [first, second] = isArabic(language) ? [ar, en] : [en, ar]
-  return first?.trim() || second?.trim() || ''
-}
-
 /** Label for an employee that may be unassigned (imported EVG fines have no
  *  driver): the localized name, else the caller's «Unassigned» copy. */
 export function employeeLabel(
@@ -110,12 +92,6 @@ export function employeeLabel(
 }
 
 // ── Numbers, money, dates ───────────────────────────────────────────────────
-
-export function formatNumber(value: number, language: string): string {
-  return new Intl.NumberFormat(isArabic(language) ? 'ar-AE' : 'en-AE', {
-    maximumFractionDigits: 0,
-  }).format(value)
-}
 
 /** Whole dirhams, with the currency word after the amount in both languages
  *  («17,975 AED» / «١٧٩٧٥ د.إ»). Wrap in `<bdi>` at the render site. */
@@ -360,25 +336,6 @@ export function fileLabel(file: VehicleFileRead, language: string): string {
   return localized(file.label_ar, file.label_en, language) || file.original_name
 }
 
-/**
- * A stored vehicle file as `DocumentViewerDialog` wants it. PDFs go through
- * `?encoding=base64` (the WebView2/IDM handler hijacks a raw PDF response);
- * images are linked directly, which the API serves `Content-Disposition:
- * inline`.
- */
-export function vehicleFileViewerItem(file: VehicleFileRead, url: string): DocViewerItem {
-  const isPdf =
-    file.media_type === 'application/pdf' || fileKindFromName(file.original_name) === 'pdf'
-  return {
-    name: file.original_name,
-    kind: isPdf ? 'pdf' : fileKindFromName(file.original_name),
-    imageUrl: isPdf ? undefined : url,
-    pdfBase64Url: isPdf ? toBase64Url(url) : undefined,
-    openUrl: url,
-    downloadUrl: url,
-  }
-}
-
 // ── Server state ────────────────────────────────────────────────────────────
 
 /** Every query the module reads. Mutations invalidate through
@@ -465,10 +422,6 @@ const ERROR_MESSAGE_KEYS: Record<string, string> = {
   VEHICLE_FINE_NOT_FOUND: 'vehicles.fines.errors.notFound',
 }
 
-export function vehicleErrorMessage(err: unknown, t: Translate): string {
-  if (err instanceof ApiError) {
-    const key = ERROR_MESSAGE_KEYS[err.code]
-    if (key) return t(key)
-  }
-  return apiErrorMessage(err)
+export function vehicleErrorMessage(err: unknown): string {
+  return apiErrorMessage(err, (code) => Object.hasOwn(ERROR_MESSAGE_KEYS, code) ? ERROR_MESSAGE_KEYS[code] : null)
 }

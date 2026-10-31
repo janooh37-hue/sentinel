@@ -17,6 +17,30 @@ export const loadLeavesPage = () =>
   import('@/pages/leaves/LeavesPage').then((m) => ({ default: m.LeavesPage }))
 export const loadPermitsPage = () =>
   import('@/pages/permits/PermitsPage').then((m) => ({ default: m.PermitsPage }))
+export const loadStoreDashboardPage = () =>
+  import('@/pages/assets/store/StoreDashboardPage').then((m) => ({
+    default: m.StoreDashboardPage,
+  }))
+export const loadStoreItemsPage = () =>
+  import('@/pages/assets/store/StoreItemsPage').then((m) => ({ default: m.StoreItemsPage }))
+export const loadStoreDeliveriesPage = () =>
+  import('@/pages/assets/store/StoreDeliveriesPage').then((m) => ({
+    default: m.StoreDeliveriesPage,
+  }))
+export const loadStoreDeliveryScanPage = () =>
+  import('@/pages/assets/store/StoreDeliveryScanPage').then((m) => ({
+    default: m.StoreDeliveryScanPage,
+  }))
+export const loadStoreCountsPage = () =>
+  import('@/pages/assets/store/StoreCountsPage').then((m) => ({ default: m.StoreCountsPage }))
+export const loadStoreCountPage = () =>
+  import('@/pages/assets/store/StoreCountPage').then((m) => ({ default: m.StoreCountPage }))
+export const loadStoreDisposalsPage = () =>
+  import('@/pages/assets/store/StoreDisposalsPage').then((m) => ({
+    default: m.StoreDisposalsPage,
+  }))
+export const loadStoreMovementsPage = () =>
+  import('@/pages/assets/store/StoreMovementsPage').then((m) => ({ default: m.StoreMovementsPage }))
 export const loadVehiclesHubPage = () =>
   import('@/pages/vehicles/VehiclesHubPage').then((m) => ({ default: m.VehiclesHubPage }))
 export const loadVehicleDetailPage = () =>

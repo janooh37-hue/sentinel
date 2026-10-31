@@ -349,6 +349,38 @@ export type EvgPreviewJobStatus = components['schemas']['EvgPreviewJobStatus']
 export type EvgPreviewRow = components['schemas']['EvgPreviewRow']
 export type EvgConfirmRequest = components['schemas']['EvgConfirmRequest']
 export type EvgConfirmResult = components['schemas']['EvgConfirmResult']
+export type StoreCategoryRead = components['schemas']['StoreCategoryRead']
+export type StoreCategoryCreate = components['schemas']['StoreCategoryCreate']
+export type StoreCategoryUpdate = components['schemas']['StoreCategoryUpdate']
+export type StoreItemRead = components['schemas']['StoreItemRead']
+export type StoreItemCreate = components['schemas']['StoreItemCreate']
+export type StoreItemUpdate = components['schemas']['StoreItemUpdate']
+export type StorePickerItem = components['schemas']['StorePickerItem']
+export type StoreBatchRead = components['schemas']['StoreBatchRead']
+export type StoreDeliveryLineInput = components['schemas']['StoreDeliveryLineInput']
+export type StoreCountLineInput = components['schemas']['StoreCountLineInput']
+export type StoreLineRead = components['schemas']['StoreLineRead']
+export type StoreDeliveryCreate = components['schemas']['StoreDeliveryCreate']
+export type StoreDeliveryRead = components['schemas']['StoreDeliveryRead']
+export type StoreDeliveryNoteFile = components['schemas']['StoreDeliveryNoteFile']
+export type StoreDeliveryScan = components['schemas']['StoreDeliveryScan']
+export type StoreScanLine = components['schemas']['StoreScanLine']
+export type StoreHandoverCreate = components['schemas']['StoreHandoverCreate']
+export type StoreHandoverRead = components['schemas']['StoreHandoverRead']
+export type StoreMovementRead = components['schemas']['StoreMovementRead']
+export type StoreMovementKind = StoreMovementRead['kind']
+export type StoreCountWrite = components['schemas']['StoreCountWrite']
+export type StoreCountRead = components['schemas']['StoreCountRead']
+export type StoreExpectedBatch = components['schemas']['StoreExpectedBatch']
+export type StoreDisposalCreate = components['schemas']['StoreDisposalCreate']
+export type StoreDisposalRead = components['schemas']['StoreDisposalRead']
+export type StoreDisposalReason = StoreDisposalRead['reason']
+export type StoreDashboard = components['schemas']['StoreDashboard']
+export type StoreDashboardBatch = components['schemas']['StoreDashboardBatch']
+export type StoreDashboardLowStock = components['schemas']['StoreDashboardLowStock']
+export type StoreUsage = components['schemas']['StoreUsage']
+export type StoreUsageRow = components['schemas']['StoreUsageRow']
+export type StoreSuggestion = components['schemas']['StoreSuggestion']
 
 export interface LeaveReturnBody {
   resumption_date: string // ISO yyyy-mm-dd
@@ -1070,15 +1102,18 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   APPROVED_IMPORT_TOKEN_FORBIDDEN: 'errors.forbidden.stagedImportOwner',
 }
 
-/** Localized user-facing error text. A code in `CODE_MESSAGE_KEYS` uses its
- * translated message; any other 403 uses the shared permission message; other
- * server details pass through unless an Arabic UI receives text without Arabic
- * letters. Network TypeErrors and unexpected thrown values use localized
- * network and generic messages respectively. */
-export function apiErrorMessage(err: unknown): string {
+/** Localized user-facing error text. A module's own `codeKey` mapping wins
+ * when it names an existing translation; then a code in `CODE_MESSAGE_KEYS`
+ * uses its translated message; any other 403 uses the shared permission
+ * message; other server details pass through unless an Arabic UI receives text
+ * without Arabic letters. Network TypeErrors and unexpected thrown values use
+ * localized network and generic messages respectively. */
+export function apiErrorMessage(err: unknown, codeKey?: (code: string) => string | null | undefined): string {
   if (!(err instanceof ApiError)) {
     return i18n.t(err instanceof TypeError ? 'errors.network' : 'errors.generic')
   }
+  const moduleKey = codeKey?.(err.code)
+  if (moduleKey && i18n.exists(moduleKey)) return i18n.t(moduleKey)
   if (Object.hasOwn(CODE_MESSAGE_KEYS, err.code)) return i18n.t(CODE_MESSAGE_KEYS[err.code])
   if (err.status === 403) return i18n.t('common.forbiddenError')
   // ponytail: Arabic users lose specific server detail until err.code maps to locale keys.
@@ -1162,9 +1197,9 @@ function requireEtag(etag: string): string {
 }
 
 
-async function multipart<T>(path: string, form: FormData, method = 'POST'): Promise<T> {
+async function multipart<T>(path: string, form: FormData, method = 'POST', signal?: AbortSignal): Promise<T> {
   return unwrap<T>(
-    await fetch(`${BASE}${path}`, { method, body: form, credentials: 'same-origin' }),
+    await fetch(`${BASE}${path}`, { method, body: form, credentials: 'same-origin', signal }),
   )
 }
 
@@ -1772,6 +1807,64 @@ export const api = {
     request<VehicleMaintenanceRead>('POST', '/vehicles/maintenance', body),
   deleteVehicleMaintenance: (vehicleId: number, maintenanceId: number) =>
     request<void>('DELETE', `/vehicles/${vehicleId}/maintenance/${maintenanceId}`),
+  // --- assets: store ---
+  listStoreCategories: () => request<StoreCategoryRead[]>('GET', '/store/categories'),
+  createStoreCategory: (body: StoreCategoryCreate) =>
+    request<StoreCategoryRead>('POST', '/store/categories', body),
+  updateStoreCategory: (id: number, body: StoreCategoryUpdate) =>
+    request<StoreCategoryRead>('PATCH', `/store/categories/${id}`, body),
+  listStoreItems: (includeArchived = false) =>
+    request<StoreItemRead[]>(
+      'GET',
+      `/store/items${qs({ include_archived: includeArchived ? true : undefined })}`,
+    ),
+  listStorePickerItems: () => request<StorePickerItem[]>('GET', '/store/items/picker'),
+  createStoreItem: (body: StoreItemCreate) => request<StoreItemRead>('POST', '/store/items', body),
+  updateStoreItem: (id: number, body: StoreItemUpdate, ifMatch: string) =>
+    requestWithIfMatch<StoreItemRead>('PATCH', `/store/items/${id}`, ifMatch, body),
+  archiveStoreItem: (id: number) => request<StoreItemRead>('POST', `/store/items/${id}/archive`),
+  restoreStoreItem: (id: number) => request<StoreItemRead>('POST', `/store/items/${id}/restore`),
+  listStoreBatches: (itemId?: number) =>
+    request<StoreBatchRead[]>('GET', `/store/batches${qs({ item_id: itemId })}`),
+  listStoreDeliveries: () => request<StoreDeliveryRead[]>('GET', '/store/deliveries'),
+  getStoreDelivery: (id: number) => request<StoreDeliveryRead>('GET', `/store/deliveries/${id}`),
+  createStoreDelivery: (body: StoreDeliveryCreate) =>
+    request<StoreDeliveryRead>('POST', '/store/deliveries', body),
+  deleteStoreDelivery: (id: number) => request<void>('DELETE', `/store/deliveries/${id}`),
+  scanStoreDelivery: (file: File, signal?: AbortSignal): Promise<StoreDeliveryScan> => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<StoreDeliveryScan>('/store/deliveries/scan', form, 'POST', signal)
+  },
+  uploadStoreDeliveryNote: (id: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<StoreDeliveryRead>(`/store/deliveries/${id}/note-file`, form, 'PUT')
+  },
+  deleteStoreDeliveryNote: (id: number) =>
+    request<StoreDeliveryRead>('DELETE', `/store/deliveries/${id}/note-file`),
+  storeDeliveryNoteUrl: (id: number) => `${BASE}/store/deliveries/${id}/note-file`,
+  listStoreCounts: () => request<StoreCountRead[]>('GET', '/store/counts'),
+  getStoreCount: (id: number) => request<StoreCountRead>('GET', `/store/counts/${id}`),
+  getStoreCountExpected: (countedOn: string) =>
+    request<StoreExpectedBatch[]>('GET', `/store/counts/expected${qs({ counted_on: countedOn })}`),
+  createStoreCount: (body: StoreCountWrite) =>
+    request<StoreCountRead>('POST', '/store/counts', body),
+  updateStoreCount: (id: number, body: StoreCountWrite) =>
+    request<StoreCountRead>('PUT', `/store/counts/${id}`, body),
+  listStoreDisposals: () => request<StoreDisposalRead[]>('GET', '/store/disposals'),
+  createStoreDisposal: (body: StoreDisposalCreate) =>
+    request<StoreDisposalRead>('POST', '/store/disposals', body),
+  deleteStoreDisposal: (id: number) => request<void>('DELETE', `/store/disposals/${id}`),
+  listStoreHandovers: () => request<StoreHandoverRead[]>('GET', '/store/handovers'),
+  createStoreHandover: (body: StoreHandoverCreate) =>
+    request<StoreHandoverRead>('POST', '/store/handovers', body),
+  getStoreHandover: (id: number) => request<StoreHandoverRead>('GET', `/store/handovers/${id}`),
+  deleteStoreHandover: (id: number) => request<void>('DELETE', `/store/handovers/${id}`),
+  listStoreHandoverTakers: () => request<string[]>('GET', '/store/handovers/takers'),
+  listStoreMovements: (params: { kind?: StoreMovementKind; q?: string; from?: string; to?: string } = {}) =>
+    request<StoreMovementRead[]>('GET', `/store/movements${qs(params)}`),
+  getStoreDashboard: () => request<StoreDashboard>('GET', '/store/dashboard'),
   uploadLeaveCertificate: (id: number, file: File) => {
     const form = new FormData()
     form.append('file', file)

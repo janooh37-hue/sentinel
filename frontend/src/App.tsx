@@ -45,6 +45,14 @@ import {
   loadLeavesPage,
   loadLedgerPage,
   loadPermitsPage,
+  loadStoreCountPage,
+  loadStoreCountsPage,
+  loadStoreDashboardPage,
+  loadStoreDeliveriesPage,
+  loadStoreDeliveryScanPage,
+  loadStoreDisposalsPage,
+  loadStoreMovementsPage,
+  loadStoreItemsPage,
   loadVehicleAccidentLetterPage,
   loadVehicleAccidentsPage,
   loadVehicleEditPage,
@@ -92,6 +100,14 @@ const VehicleFinesReportPage = lazy(loadVehicleFinesReportPage)
 const VehicleAccidentsPage = lazy(loadVehicleAccidentsPage)
 const VehicleAccidentLetterPage = lazy(loadVehicleAccidentLetterPage)
 const VehicleMaintenancePage = lazy(loadVehicleMaintenancePage)
+const StoreDashboardPage = lazy(loadStoreDashboardPage)
+const StoreItemsPage = lazy(loadStoreItemsPage)
+const StoreDeliveriesPage = lazy(loadStoreDeliveriesPage)
+const StoreDeliveryScanPage = lazy(loadStoreDeliveryScanPage)
+const StoreCountsPage = lazy(loadStoreCountsPage)
+const StoreCountPage = lazy(loadStoreCountPage)
+const StoreDisposalsPage = lazy(loadStoreDisposalsPage)
+const StoreMovementsPage = lazy(loadStoreMovementsPage)
 const LedgerPage = lazy(loadLedgerPage)
 const SettingsPage = lazy(loadSettingsPage)
 const DashboardPage = lazy(loadDashboardPage)
@@ -491,6 +507,79 @@ function Shell(): React.JSX.Element {
                     <VehicleFinesLetterPage />
                   </RequireCapability>
                 }
+              />
+              <Route path="/holdings" element={<Navigate to="/holdings/store" replace />} />
+              <Route
+                path="/holdings/store"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreDashboardPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/items"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreItemsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/deliveries"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreDeliveriesPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/deliveries/scan"
+                element={
+                  <RequireCapability cap="store.edit">
+                    <StoreDeliveryScanPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/counts"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreCountsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/counts/new"
+                element={
+                  <RequireCapability cap="store.view">
+                    <RequireCapability cap="store.edit">
+                      <StoreCountPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/counts/:id"
+                element={
+                  <RequireCapability cap="store.view">
+                    <RequireCapability cap="store.edit">
+                      <StoreCountPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/disposals"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreDisposalsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/movements"
+                element={<RequireCapability cap="store.view"><StoreMovementsPage /></RequireCapability>}
               />
               <Route
                 path="/ledger"

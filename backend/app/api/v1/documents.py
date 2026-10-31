@@ -19,7 +19,6 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
-from urllib.parse import quote
 
 import anyio
 from fastapi import (
@@ -35,7 +34,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.orm import Session
 
-from app.api._responses import maybe_base64
+from app.api._responses import content_disposition, maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
@@ -554,21 +553,13 @@ def get_document(
 
 
 def _inline_pdf_response(content: bytes, filename: str) -> Response:
-    """Serve PDF bytes inline with an RFC 5987 Content-Disposition.
-
-    A raw ``Response`` header must be latin-1 encodable, so a bilingual filename
-    (Arabic employee name) needs an ASCII fallback plus a percent-encoded
-    ``filename*`` — the same shape ``FileResponse`` builds for us automatically.
-    """
-    ascii_name = (
-        filename.encode("ascii", "ignore").decode().translate({0x0D: None, 0x0A: None}).strip()
-        or "document.pdf"
-    )
-    disposition = f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
+    """Serve PDF bytes inline with an RFC 5987 Content-Disposition."""
     return Response(
         content=content,
         media_type="application/pdf",
-        headers={"Content-Disposition": disposition},
+        headers={
+            "Content-Disposition": content_disposition("inline", filename, fallback="document.pdf")
+        },
     )
 
 

@@ -50,6 +50,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import type { VehicleFineRead, VehicleSiteRead } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { formatNumber, isArabic, localized } from '@/lib/language'
 
 import {
   EMPTY_VALUE,
@@ -59,9 +60,6 @@ import {
   formatIsoDate,
   formatLetterFilsAed,
   formatLetterDate,
-  formatNumber,
-  isArabic,
-  localized,
 } from './vehicleUtils'
 import { PaperNote, PaperSheet, PaperTable } from './components/PaperSheet'
 import { PlateChip } from './components/PlateChip'

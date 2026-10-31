@@ -33,6 +33,10 @@ class OcrUnavailableError(RuntimeError):
     """Raised when the Tesseract binary is not installed on the host."""
 
 
+class OcrTimeoutError(RuntimeError):
+    """Raised when Tesseract exceeds the caller's per-page timeout."""
+
+
 class InvalidImageError(ValueError):
     """Raised when the uploaded bytes aren't a decodable image (or too large).
 
@@ -203,6 +207,124 @@ def ocr_bytes_to_text(raw: bytes) -> str:
     if raw.startswith(b"%PDF"):
         return text_from_pdf(raw)
     return extract_text(load_image(raw)).text
+
+
+@dataclass(frozen=True, slots=True)
+class OcrWord:
+    """One recognised word. ``confidence`` is Tesseract's 0-100 score.
+
+    Box is in pixels of the page raster. Words sharing ``(block, paragraph,
+    line)`` sit on the same text line.
+    """
+
+    text: str
+    confidence: float
+    left: int
+    top: int
+    width: int
+    height: int
+    block: int
+    paragraph: int
+    line: int
+
+
+@dataclass(frozen=True, slots=True)
+class OcrPage:
+    """Size of the raster the word boxes refer to, and its words in reading order."""
+
+    width: int
+    height: int
+    words: tuple[OcrWord, ...]
+
+
+def _page_words(image: Image.Image, *, lang: str, timeout: float) -> OcrPage:
+    cmd = _resolve_tesseract_cmd()
+    if cmd is None:
+        raise OcrUnavailableError(
+            "Tesseract is not installed. See docs/superpowers/ocr-server-setup.md."
+        )
+    import pytesseract
+
+    pytesseract.pytesseract.tesseract_cmd = cmd
+    img = _prepare(image)
+    width, height = img.size
+    try:
+        data = pytesseract.image_to_data(
+            img, lang=lang, config=_PSM, output_type=pytesseract.Output.DICT, timeout=timeout
+        )
+    except pytesseract.TesseractError as exc:
+        raise OcrUnavailableError(
+            f"Tesseract failed to run with languages {lang!r}. Those language packs "
+            "must be installed. See docs/superpowers/ocr-server-setup.md."
+        ) from exc
+    except RuntimeError as exc:
+        if "timeout" not in str(exc).lower():
+            raise
+        raise OcrTimeoutError(f"Tesseract took longer than {timeout:g}s on one page.") from exc
+    finally:
+        if img is not image:
+            img.close()
+    words: list[OcrWord] = []
+    for index, raw_text in enumerate(data.get("text", [])):
+        text = str(raw_text).strip()
+        try:
+            confidence = float(data["conf"][index])
+        except (TypeError, ValueError):
+            continue
+        if not text or confidence < 0:
+            continue
+        words.append(
+            OcrWord(
+                text=text,
+                confidence=confidence,
+                left=int(data["left"][index]),
+                top=int(data["top"][index]),
+                width=int(data["width"][index]),
+                height=int(data["height"][index]),
+                block=int(data["block_num"][index]),
+                paragraph=int(data["par_num"][index]),
+                line=int(data["line_num"][index]),
+            )
+        )
+    return OcrPage(width=width, height=height, words=tuple(words))
+
+
+def word_boxes_from_bytes(raw: bytes, *, lang: str = "eng", timeout: float = 0) -> list[OcrPage]:
+    """Word boxes for every page of an uploaded image or PDF.
+
+    Sniffs ``%PDF`` like :func:`ocr_bytes_to_text`; PDF pages are always
+    rasterised (a text layer has no boxes). Boxes are in pixels of the raster
+    Tesseract read — small images are upscaled first — and each page reports
+    that raster's size. Does not acquire :data:`OCR_GATE`: the caller holds it.
+    ``timeout`` bounds Tesseract per page in seconds (0 = unbounded); exceeding
+    it raises :class:`OcrTimeoutError`.
+    Raises :class:`OcrUnavailableError` or :class:`InvalidImageError`.
+    """
+    if not raw.startswith(b"%PDF"):
+        image = load_image(raw)
+        try:
+            return [_page_words(image, lang=lang, timeout=timeout)]
+        finally:
+            image.close()
+    pages: list[OcrPage] = []
+    with closing(pdf_to_images(raw)) as images:
+        for image in images:
+            try:
+                pages.append(_page_words(image, lang=lang, timeout=timeout))
+            finally:
+                image.close()
+    return pages
+
+
+def pdf_page_count(raw: bytes) -> int:
+    """Number of pages in a PDF upload; :class:`InvalidImageError` if unreadable."""
+    import fitz
+
+    try:
+        with fitz.open(stream=raw, filetype="pdf") as doc:
+            return int(doc.page_count)
+    except Exception as exc:  # PyMuPDF raises several unrelated types on bad input
+        raise InvalidImageError("The uploaded PDF could not be read.") from exc
 
 
 def qr_refs_from_bytes(raw: bytes) -> list[str]:
