@@ -91,6 +91,12 @@ variable and the alias.**
 | `bg-surface`              | `--surface`            | `#ffffff`   | `#131826`   | Card and panel background                                |
 | `bg-surface-raised`       | `--surface-raised`     | `#fafaf6`   | `#1a2034`   | Slightly elevated row in lists, dialog body items        |
 | `bg-surface-tinted`       | `--surface-tinted`     | `#f0eee8`   | `#1f263b`   | Hover wash for rows + interactive surfaces               |
+| `bg-store-art-surface`    | `--store-art-surface`   | `#fafaf6`   | `#fafaf6`   | Fixed light backing for Store item artwork previews, not text/UI surfaces |
+
+Store item Picture pickers use `bg-store-art-surface` behind the large preview
+and every drawing option. The backing intentionally stays light in both themes
+so the brown carton, jar and glove details retain their intended contrast;
+selection rings/checkmarks and surrounding form controls remain theme-aware.
 
 #### 1.1.2 Primary (GSSG navy)
 
@@ -99,6 +105,7 @@ variable and the alias.**
 | `bg-primary`, `text-primary`  | `--primary`           | `#0d2845`   | `#5778cf`   | Brand color. Buttons, active nav, action arrows. |
 | `bg-primary-hover`            | `--primary-hover`     | `#1d3a5e`   | `#7491db`   | One step lighter; hover state on primary buttons |
 | `bg-primary-soft`             | `--primary-soft`      | `#e8edf3`   | `#1c2849`   | Tinted background for primary-tone chips & avatars |
+| `text-primary-text`           | `--primary-text`      | `#0d2845`   | `#8aa4e8`   | Primary-tone **text** (links, selected chip label/count, inline figures). ≥ 4.5:1 on surface, raised, tinted and `primary-soft` in both themes; dark `--primary` is only 3.4:1 on `primary-soft`. |
 | `text-primary-foreground`     | `--on-primary`        | `#ffffff`   | `#0a0e18`   | Foreground when on primary bg. **Dark theme flips to dark text** (because primary is now light blue). |
 
 > **Dark-theme note:** primary becomes a mid-blue rather than navy, and
@@ -117,6 +124,11 @@ high-priority label, and error/destructive text.
 | `bg-accent`, `text-accent` | `--accent`       | `#c8102e`   | `#ef4858`   |
 | `bg-accent-hover`        | `--accent-hover`   | `#a30d24`   | `#f56b78`   |
 | `bg-accent-soft`         | `--accent-soft`    | `#fbe5e8`   | `#3a1820`   |
+| `text-destructive-text`  | `--destructive-text` | `#b91c1c` | `#fca5a5` |
+
+`text-destructive-text` is the error **text** colour for alerts and query
+errors on a destructive/accent tint (≥ 5.3:1 light, ≥ 8:1 dark); plain
+`--destructive` drops to ~4.1:1 on its own tint.
 
 #### 1.1.4 Status tones (success / warning / info)
 
@@ -518,21 +530,22 @@ focus-visible:ring-offset-1 focus-visible:ring-offset-background
 
 | Variant       | Default                                                      | Hover                          | Active                          | Disabled              |
 | ------------- | ------------------------------------------------------------ | ------------------------------ | ------------------------------- | --------------------- |
-| `default`     | `bg-primary text-primary-foreground`                         | `bg-primary/90`                | `bg-primary/95`                 | `pointer-events-none opacity-50` |
+| `default`     | `bg-primary text-primary-foreground`                         | `bg-primary-hover`             | `bg-primary-hover`              | `pointer-events-none opacity-50` |
 | `secondary`   | `border border-border bg-surface text-foreground`            | `bg-surface-tinted`            | (no specific active)            | same                  |
 | `outline`     | `border border-border bg-transparent text-foreground`        | `bg-surface-tinted`            | (no specific active)            | same                  |
 | `ghost`       | `text-muted-foreground`                                      | `bg-surface-tinted hover:text-foreground` | (no specific active) | same                  |
-| `destructive` | `bg-destructive text-destructive-foreground` (*see note*)    | `bg-destructive/90`            | (no specific active)            | same                  |
+| `destructive` | `bg-destructive text-destructive-foreground`                 | solid `bg-destructive`, underline | (no specific active)         | same                  |
 | `link`        | `text-primary underline-offset-4`                            | `underline`                    | (no underline change)           | same                  |
 
 > Neutral variants (`secondary`, `outline`, `ghost`) hover to
 > `bg-surface-tinted`. They hovered to GSSG red (`bg-accent`) until the Books
 > workspace pass fixed it.
 >
-> **`destructive` variant** references `bg-destructive` and
-> `text-destructive-foreground`, which are **not defined** in the project's
-> `@theme inline`. These classes resolve to nothing. Destructive actions on
-> the site use raw `text-accent` instead. (Flagged in §6.)
+> **`destructive` variant** uses the theme-aware `--destructive` /
+> `--destructive-foreground` pair: light `#dc2626` / `#ffffff`, dark
+> `#f87171` / `#1c1f24`. Both tokens are defined in `@theme inline`.
+> Hover keeps the solid fill and underlines the label; opacity hovers are not
+> used for primary or destructive buttons because they can reduce contrast.
 
 #### Sizes
 
@@ -549,6 +562,35 @@ focus-visible:ring-offset-1 focus-visible:ring-offset-background
 
 `ring-2` × `ring-primary` × `ring-offset-1` × offset bg = `--bg`. Light:
 crisp navy ring on cream; Dark: light-blue ring on near-black.
+
+#### ConfirmDialog and dialog dismissal
+
+`components/ui/confirm-dialog.tsx` uses the same solid destructive background /
+foreground pair, never literal white. Destructive confirmations initially focus
+Cancel; ordinary confirmations retain first-action autofocus. Confirm and Cancel
+have `pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px]`.
+
+The built-in `DialogContent` Close button (`data-dialog-close`) is centered in a
+minimum 44 × 44 CSS px target on coarse pointers. Fine pointers keep the compact
+padding. Close, Escape and controlled dismissal share focus-return behavior.
+
+`DialogContent` and `SheetContent` capture the active element before open
+autofocus. On close they restore a connected `returnFocusRef.current`, or the
+captured opener when no explicit target is supplied. They honor a consumer's
+`onCloseAutoFocus` handler if it prevents default. This fixes trigger-less
+controlled dialogs: Radix's default modal close handler prevents browser focus
+restoration and only focuses its registered `Dialog.Trigger`.
+
+`DialogShell` forwards `returnFocusRef` and `onOpenAutoFocus`. Ordinary
+keyboard-opened dialogs need no consumer change. Tap-opened dialogs (where the
+browser may not focus the opener), menu-launched dialogs, and dialogs whose opener
+is removed/replaced must pass a stable, connected return target. Missing or
+disconnected targets are not focused; Radix retains its normal trigger fallback.
+
+`FormAlert` and Store query errors use `text-destructive-text` on tinted error
+backgrounds. Store loading frames expose `role="status"` with localized sr-only
+loading text instead of an inaccessible label on a generic container.
+
 
 ---
 
@@ -2334,10 +2376,8 @@ documented.
   `ViolationMonthsWidget` already uses those success/warning label pairs.
 - (Fixed) shadcn Button `secondary` / `outline` / `ghost` variants now hover to
   `bg-surface-tinted` instead of `bg-accent` (GSSG red).
-- shadcn Button `destructive` variant references `bg-destructive` and
-  `text-destructive-foreground` which **don't exist in @theme inline** —
-  the variant is effectively unstyled. Either delete the variant or wire
-  it to `--accent` / `--accent-soft`.
+- (Fixed) shadcn Button and ConfirmDialog use the defined theme-aware
+  `bg-destructive` / `text-destructive-foreground` pair with solid hover fills.
 
 ### Legacy color tokens (per CLAUDE.md "durable architectural notes")
 

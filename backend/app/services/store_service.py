@@ -1653,20 +1653,33 @@ def list_movements(
     *,
     kind: StoreMovementKind | None = None,
     q: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
 ) -> list[StoreMovementRead]:
-    records: list[StoreDelivery | StoreHandover | StoreDisposal] = []
-    if kind is None or kind == "in":
-        records.extend(
-            db.scalars(
-                select(StoreDelivery).options(
-                    selectinload(StoreDelivery.lines).options(_line_options())
-                )
-            ).all()
+    if from_date is not None and to_date is not None and from_date > to_date:
+        raise ValidationFailedError(
+            "STORE_MOVEMENTS_DATE_RANGE",
+            "The start date must be on or before the end date.",
         )
-    if kind is None or kind == "out":
-        records.extend(db.scalars(select(StoreHandover).options(_handover_options())).all())
-    if kind is None or kind == "disposed":
-        records.extend(db.scalars(select(StoreDisposal).options(_disposal_options())).all())
+    records: list[StoreDelivery | StoreHandover | StoreDisposal] = []
+    for model, event_date, options, movement_kind in (
+        (
+            StoreDelivery,
+            StoreDelivery.received_on,
+            selectinload(StoreDelivery.lines).options(_line_options()),
+            "in",
+        ),
+        (StoreHandover, StoreHandover.handed_on, _handover_options(), "out"),
+        (StoreDisposal, StoreDisposal.disposed_on, _disposal_options(), "disposed"),
+    ):
+        if kind is not None and kind != movement_kind:
+            continue
+        statement = select(model).options(options)
+        if from_date is not None:
+            statement = statement.where(event_date >= from_date)
+        if to_date is not None:
+            statement = statement.where(event_date <= to_date)
+        records.extend(db.scalars(statement).all())
     ids = {row.created_by_user_id for row in records if row.created_by_user_id is not None}
     names = book_service.resolve_names_by_ids(db, ids)
     names_ar = book_service.resolve_names_ar_by_ids(db, ids)

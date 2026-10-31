@@ -61,11 +61,17 @@ export function DialogContent({
   children,
   /** Hide the built-in top-end close button (the modal supplies its own). */
   hideClose = false,
+  returnFocusRef,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentPropsWithoutRef<typeof Dialog.Content> & {
   hideClose?: boolean
+  /** Use for tap-opened dialogs or openers removed/replaced while the dialog is open. */
+  returnFocusRef?: React.RefObject<HTMLElement | null>
 }): React.JSX.Element {
   const { t } = useTranslation()
+  const openerRef = React.useRef<HTMLElement | null>(null)
   return (
     <Dialog.Portal>
       <DialogOverlay />
@@ -80,11 +86,28 @@ export function DialogContent({
           className,
         )}
         {...props}
+        onOpenAutoFocus={(event) => {
+          openerRef.current = document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null
+          onOpenAutoFocus?.(event)
+        }}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event)
+          if (event.defaultPrevented) return
+          // Radix otherwise only restores its Trigger, absent in controlled dialogs.
+          const target = returnFocusRef?.current ?? openerRef.current
+          if (target?.isConnected && target !== document.body) {
+            event.preventDefault()
+            target.focus()
+          }
+        }}
       >
         {children}
         {!hideClose && (
           <Dialog.Close
-            className="absolute end-3.5 top-3.5 rounded-md p-1 text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            data-dialog-close
+            className="absolute end-3.5 top-3.5 inline-flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px]"
             aria-label={t('common.close')}
           >
             <X className="h-4 w-4" aria-hidden />

@@ -41,7 +41,8 @@ export function StoreQueryState({
 
   if (isPending) {
     return (
-      <div aria-busy="true" aria-label={t('assets.store.state.loading')} className="flex flex-col gap-2">
+      <div role="status" className="flex flex-col gap-2">
+        <span className="sr-only">{t('assets.store.state.loading')}</span>
         {mobile
           ? Array.from({ length: 3 }, (_, i) => <SkeletonCard key={i} rows={2} />)
           : Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={5} />)}
@@ -55,7 +56,7 @@ export function StoreQueryState({
         role="alert"
         className="flex flex-col items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4"
       >
-        <p className="flex items-start gap-2 text-sm text-destructive">
+        <p className="flex items-start gap-2 text-sm text-destructive-text">
           <AlertTriangle aria-hidden strokeWidth={1.75} className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
             <span className="font-semibold">{t('assets.store.state.error')}</span>{' '}

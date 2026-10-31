@@ -33799,6 +33799,10 @@ export interface operations {
             query?: {
                 kind?: ("in" | "out" | "disposed") | null;
                 q?: string | null;
+                /** @description Inclusive event-date lower bound. */
+                from?: string | null;
+                /** @description Inclusive event-date upper bound. */
+                to?: string | null;
             };
             header?: never;
             path?: never;

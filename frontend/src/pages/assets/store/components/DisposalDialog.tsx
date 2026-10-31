@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -32,6 +32,7 @@ import { StoreQuantity } from './RecordParts'
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
+  itemId?: number
 }
 
 interface Values {
@@ -42,7 +43,7 @@ interface Values {
   note: string
 }
 
-export function DisposalDialog({ open, onOpenChange }: Props): React.JSX.Element {
+export function DisposalDialog({ open, onOpenChange, itemId }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const id = useId()
@@ -53,12 +54,19 @@ export function DisposalDialog({ open, onOpenChange }: Props): React.JSX.Element
     queryFn: () => api.listStoreBatches(),
     enabled: open,
   })
-  const batches = batchesQuery.data?.filter((batch) => batch.on_hand > 0) ?? []
+  const batches = batchesQuery.data?.filter((batch) => batch.on_hand > 0 && (itemId == null || batch.item_id === itemId)) ?? []
   const { register, control, handleSubmit, setValue, clearErrors, formState: { errors } } = useForm<Values>({
     defaultValues: { batchId: '', quantity: EMPTY_QUANTITY, disposed_on: todayIso(), reason: 'damaged', note: '' },
   })
   const batchId = useWatch({ control, name: 'batchId' })
   const batch = batches.find((option) => String(option.id) === batchId)
+  const firstBatch = itemId == null ? undefined : [...batches].sort((a, b) => (a.expiry_date ?? '9999').localeCompare(b.expiry_date ?? '9999'))[0]
+  useEffect(() => {
+    if (open && !batchId && firstBatch) {
+      setValue('batchId', String(firstBatch.id))
+      setValue('reason', firstBatch.days_to_expiry != null && firstBatch.days_to_expiry < 0 ? 'expired' : 'damaged')
+    }
+  }, [open, batchId, firstBatch, setValue])
   const mutation = useMutation({
     mutationFn: (body: StoreDisposalCreate) => api.createStoreDisposal(body),
     onSuccess: () => {
