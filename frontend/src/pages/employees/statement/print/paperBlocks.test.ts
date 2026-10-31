@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { dropEmptyColumns, paginate, type Column, type TableRow } from './paperBlocks'
+import { dropEmptyColumns, paginate, rowGroups, type Column, type TableRow } from './paperBlocks'
 
 describe('paginate', () => {
   it('re-prints the header only on the page a table continues', () => {
@@ -52,5 +52,33 @@ describe('dropEmptyColumns', () => {
     const out = dropEmptyColumns(columns, rows)
     expect(out.columns.map((c) => c.label)).toEqual(['Date', 'Subject', 'Reference'])
     expect(out.rows[2].cells).toEqual(['Total', '', ''])
+  })
+})
+
+describe('rowGroups', () => {
+  const data = (n: number): TableRow[] => Array.from({ length: n }, (_, i) => ({ key: `r${i}`, cells: [String(i)] }))
+  const total: TableRow = { key: 'total', total: true, cells: ['Total'] }
+  const keys = (rows: TableRow[]): string[] => rows.map((r) => r.key)
+
+  it('keeps a total row with the last two data rows', () => {
+    const groups = rowGroups([...data(10), total])
+    expect(keys(groups.lead)).toEqual(['r0', 'r1'])
+    expect(keys(groups.tail)).toEqual(['r8', 'r9', 'total'])
+    expect(groups.body).toHaveLength(6)
+  })
+
+  it('never leaves a total row to open a group on its own when the table is short', () => {
+    for (const n of [1, 2, 3, 4]) {
+      const groups = rowGroups([...data(n), total])
+      const last = groups.tail.length > 0 ? groups.tail : groups.lead
+      expect(last.at(-1)?.key).toBe('total')
+      expect(last.filter((r) => !r.total).length).toBeGreaterThanOrEqual(Math.min(n, 2))
+    }
+  })
+
+  it('has no tail without a total row', () => {
+    const groups = rowGroups(data(10))
+    expect(groups.tail).toEqual([])
+    expect(keys(groups.body)).toHaveLength(8)
   })
 })

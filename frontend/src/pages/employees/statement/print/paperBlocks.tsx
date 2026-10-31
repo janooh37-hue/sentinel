@@ -37,6 +37,26 @@ export interface TableRow {
 /** Rows kept with the section title and column header, so neither is stranded at a page foot. */
 export const LEAD_ROWS = 2
 
+/** Data rows kept with a closing total row, so a total never starts a page alone. */
+export const TAIL_ROWS = 2
+
+/**
+ * A table's rows as three unbreakable-at-the-edges groups: `lead` (the first
+ * `LEAD_ROWS`, travelling with title and header), `body` (free to break
+ * between rows), and `tail` (a trailing total row with the last `TAIL_ROWS`
+ * data rows). When the table is too short for all three, everything is lead.
+ */
+export function rowGroups<T extends { total?: boolean }>(rows: T[]): { lead: T[]; body: T[]; tail: T[] } {
+  const hasTotal = rows.length > 0 && !!rows[rows.length - 1].total
+  const tailSize = hasTotal ? TAIL_ROWS + 1 : 0
+  if (rows.length <= LEAD_ROWS + tailSize) return { lead: rows, body: [], tail: [] }
+  return {
+    lead: rows.slice(0, LEAD_ROWS),
+    body: rows.slice(LEAD_ROWS, rows.length - tailSize),
+    tail: rows.slice(rows.length - tailSize),
+  }
+}
+
 const isBlank = (cell: ReactNode): boolean => cell === null || cell === undefined || cell === '' || cell === '-'
 
 /**
@@ -59,7 +79,8 @@ export function dropEmptyColumns(columns: Column[], rows: TableRow[]): { columns
  * where the table continues (the inner `thead` is a table-header-group, which
  * Chrome repeats per fragment). Rows never split. The title, header and the
  * first `LEAD_ROWS` rows travel together (`tbody.lead`), so a section never
- * leaves its title or header alone at a page foot.
+ * leaves its title or header alone at a page foot; a total row travels with
+ * the last `TAIL_ROWS` data rows (`tbody.tail`), so it never opens a page alone.
  */
 export function tableBlocks({
   id,
@@ -101,6 +122,7 @@ export function tableBlocks({
       ))}
     </tr>
   )
+  const groups = rowGroups(rows)
   return [
     <section className="st-sec st-flow" key={id} data-section={id}>
       {title}
@@ -114,8 +136,9 @@ export function tableBlocks({
             ))}
           </tr>
         </thead>
-        <tbody className="lead">{rows.slice(0, LEAD_ROWS).map(row)}</tbody>
-        {rows.length > LEAD_ROWS && <tbody>{rows.slice(LEAD_ROWS).map(row)}</tbody>}
+        <tbody className="lead">{groups.lead.map(row)}</tbody>
+        {groups.body.length > 0 && <tbody>{groups.body.map(row)}</tbody>}
+        {groups.tail.length > 0 && <tbody className="tail">{groups.tail.map(row)}</tbody>}
       </table>
     </section>,
   ]
