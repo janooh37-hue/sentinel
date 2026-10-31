@@ -94,7 +94,7 @@ export function ConfirmDialog({
               onOpenChange(false)
               onConfirm()
             }}
-            className={`pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] ${destructive ? 'bg-destructive text-destructive-foreground hover:bg-destructive hover:underline' : ''}`}
+            className={`pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] ${destructive ? 'bg-destructive text-destructive-foreground hover:bg-destructive active:bg-destructive hover:underline' : ''}`}
           >
             {label}
           </AlertDialogAction>
