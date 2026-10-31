@@ -57,15 +57,18 @@ export function DeliveryLines({ idPrefix, lines, onChange, errors, alertId, disa
             </div>}
             {renderLineStart?.(line, index)}
             <FieldGrid>
-              <Field id={`${prefix}-item`} label={t('assets.store.deliveries.item')} required full={!!renderQuantityAside} error={issue?.item}>
-                <StoreItemPicker id={`${prefix}-item`} value={line.item?.id ?? null} onChange={(item) => updateLine(line.key, { item, quantity: quantityForItem?.(line, item) ?? { ...EMPTY_QUANTITY } })} disabled={disabled} invalid={!!issue?.item} describedBy={issue?.item ? alertId : undefined} />
+              <Field id={`${prefix}-item`} label={t('assets.store.deliveries.item')} required full={!!renderQuantityAside}>
+                <StoreItemPicker id={`${prefix}-item`} value={line.item?.id ?? null} onChange={(item) => updateLine(line.key, { item, quantity: quantityForItem?.(line, item) ?? { ...EMPTY_QUANTITY } })} disabled={disabled} invalid={!!issue?.item} describedBy={issue?.item ? `${prefix}-item-error ${alertId}` : undefined} />
+                {issue?.item && <span id={`${prefix}-item-error`} role="alert" className="text-xs text-destructive">{issue.item}</span>}
               </Field>
               {renderQuantityAside?.(line, index)}
-              <Field id={`${prefix}-quantity`} label={quantityLabel ?? t('assets.store.deliveries.quantity')} required error={issue?.quantity}>
-                {line.item ? <QuantityInput id={`${prefix}-quantity`} item={line.item} value={line.quantity} onChange={(quantity) => updateLine(line.key, { quantity })} label={itemName(line.item, i18n.language)} invalid={!!issue?.quantity} describedBy={issue?.quantity ? alertId : undefined} disabled={disabled} required pluralUnits={pluralQuantityUnits} /> : <p className="py-3 text-sm text-muted-foreground">{t('assets.store.deliveries.selectItemFirst')}</p>}
+              <Field id={`${prefix}-quantity`} label={quantityLabel ?? t('assets.store.deliveries.quantity')} required>
+                {line.item ? <QuantityInput id={`${prefix}-quantity`} item={line.item} value={line.quantity} onChange={(quantity) => updateLine(line.key, { quantity })} label={itemName(line.item, i18n.language)} invalid={!!issue?.quantity} describedBy={issue?.quantity ? `${prefix}-quantity-error ${alertId}` : undefined} disabled={disabled} required pluralUnits={pluralQuantityUnits} /> : <p className="py-3 text-sm text-muted-foreground">{t('assets.store.deliveries.selectItemFirst')}</p>}
+                {issue?.quantity && <span id={`${prefix}-quantity-error`} role="alert" className="text-xs text-destructive">{issue.quantity}</span>}
               </Field>
-              <Field id={`${prefix}-expiry`} label={t('assets.store.deliveries.expiry')} required full error={issue?.expiry}>
-                <ExpiryInput id={`${prefix}-expiry`} value={line.expiry} onChange={(expiry) => updateLine(line.key, { expiry })} invalid={!!issue?.expiry} describedBy={issue?.expiry ? alertId : undefined} disabled={disabled} allowUndated={allowUndated} />
+              <Field id={`${prefix}-expiry`} label={t('assets.store.deliveries.expiry')} required full>
+                <ExpiryInput id={`${prefix}-expiry`} value={line.expiry} onChange={(expiry) => updateLine(line.key, { expiry })} invalid={!!issue?.expiry} describedBy={issue?.expiry ? `${prefix}-expiry-error ${alertId}` : undefined} disabled={disabled} allowUndated={allowUndated} />
+                {issue?.expiry && <span id={`${prefix}-expiry-error`} role="alert" className="text-xs text-destructive">{issue.expiry}</span>}
               </Field>
               {renderLineFields?.(line, index)}
             </FieldGrid>

@@ -16,8 +16,8 @@ export function useScanDeliverySave(file: File) {
   const busy = useRef(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [errorCause, setErrorCause] = useState<unknown>(null)
+  const [uploadFailed, setUploadFailed] = useState(false)
 
   function finish(withoutFile = false): void {
     invalidateStoreQueries(queryClient)
@@ -28,12 +28,12 @@ export function useScanDeliverySave(file: File) {
 
   async function attach(): Promise<void> {
     if (deliveryId.current == null) return
-    setUploadError(null)
+    setUploadFailed(false)
     try {
       await api.uploadStoreDeliveryNote(deliveryId.current, file)
       finish()
     } catch {
-      setUploadError(t('assets.store.scan.uploadFailed'))
+      setUploadFailed(true)
     }
   }
 
@@ -41,7 +41,7 @@ export function useScanDeliverySave(file: File) {
     if (busy.current || deliveryId.current != null) return
     busy.current = true
     setSaving(true)
-    setError(null)
+    setErrorCause(null)
     try {
       const delivery = await api.createStoreDelivery(body)
       deliveryId.current = delivery.id
@@ -49,7 +49,7 @@ export function useScanDeliverySave(file: File) {
       invalidateStoreQueries(queryClient)
       await attach()
     } catch (cause) {
-      setError(storeErrorMessage(cause))
+      setErrorCause(cause)
     } finally {
       busy.current = false
       setSaving(false)
@@ -68,5 +68,5 @@ export function useScanDeliverySave(file: File) {
     if (!busy.current && deliveryId.current != null) finish(true)
   }
 
-  return { saving, saved, error, uploadError, save, retryUpload, finishWithoutFile }
+  return { saving, saved, error: errorCause ? storeErrorMessage(errorCause) : null, uploadError: uploadFailed ? t('assets.store.scan.uploadFailed') : null, save, retryUpload, finishWithoutFile }
 }

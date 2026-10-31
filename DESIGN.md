@@ -2449,6 +2449,10 @@ will trip over them.
 - On-note crops and quantities stay together beside Received; both quantities
   use the same pluralised units. Differences require a reason, expiry is
   required, and received zero is accepted only for positive noted quantities.
+- After submission, validation follows current values on every edit. Errors
+  are translated in the active language and linked to their own inline text;
+  the summary clears when all errors are fixed. Scan expiry requires a date
+  or month from packaging (there is no undated option).
 - Skipping is a secondary end-of-line action. Skipped rows retain edits and
   can be restored with focus returning to the item. If every row is skipped,
   offer both another-note selection and manual entry with the valid photo.

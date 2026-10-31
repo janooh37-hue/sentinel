@@ -1991,6 +1991,7 @@
         "finishWithoutFile": "Finish without file",
         "uploadFailed": "The delivery was recorded, but the delivery note was not uploaded. Retry the upload or finish without the file.",
         "quantityRequired": "Enter a whole received quantity of zero or more base units.",
+        "expiryRequired": "Enter a complete expiry date or month from the packaging.",
         "dateRequired": "Enter a received date on or before today.",
         "savedWithoutFile": "Delivery recorded without the delivery-note file.",
         "scanTimeout": "Reading took too long. Try a clearer or smaller photo, or enter the delivery manually.",

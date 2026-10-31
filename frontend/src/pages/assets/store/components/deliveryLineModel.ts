@@ -50,7 +50,7 @@ export function createDeliveryLines(initial: DeliveryLineInit[] = [{}]): Deliver
 export function validateDeliveryLines(
   lines: readonly DeliveryLine[],
   t: Translate,
-  options: { minimumQuantity?: (line: DeliveryLine) => number } = {},
+  options: { minimumQuantity?: (line: DeliveryLine) => number; allowUndated?: boolean } = {},
 ): DeliveryLinesCheck {
   const errors: DeliveryLineErrors = {}
   const seen = new Set<string>()
@@ -59,7 +59,7 @@ export function validateDeliveryLines(
     const issue: DeliveryLineErrors[number] = {}
     if (!line.item) issue.item = t('assets.store.deliveries.itemRequired')
     const expiry = expiryFromValue(line.expiry)
-    if (expiry === undefined) issue.expiry = t('assets.store.deliveries.expiryRequired')
+    if (expiry === undefined || (expiry === null && options.allowUndated === false)) issue.expiry = t(options.allowUndated === false ? 'assets.store.scan.expiryRequired' : 'assets.store.deliveries.expiryRequired')
     const quantity = line.item ? quantityFromParts(line.quantity, line.item) : null
     if (quantityIssue(quantity, { min: options.minimumQuantity?.(line) ?? 1 })) issue.quantity = t('assets.store.deliveries.quantityRequired')
     if (line.item && expiry !== undefined) {

@@ -42,15 +42,31 @@ function ConfirmForm({ file, scan, items, onChooseAnother, onManual }: Props & {
   const [announcement, setAnnouncement] = useState<{ key: string; number: number } | null>(null)
   const restoredKey = useRef<number | null>(null)
   const [reasons, setReasons] = useState<Record<number, string>>({})
-  const [lineErrors, setLineErrors] = useState<DeliveryLineErrors>({})
-  const [reasonErrors, setReasonErrors] = useState<Record<number, string>>({})
+  const [submitted, setSubmitted] = useState(false)
   const [receivedOn, setReceivedOn] = useState(todayIso)
   const [note, setNote] = useState('')
-  const [dateError, setDateError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
   const save = useScanDeliverySave(file)
   const disabled = save.saving || save.saved
   const attentionCount = lines.filter(needsAttention).length
+  // Derive error keys from current values; translate only while rendering.
+  const checked = validateDeliveryLines(lines, (key) => key, { allowUndated: false, minimumQuantity: (line) => (scan.lines[line.key].quantity ?? 0) > 0 ? 0 : 1 })
+  const lineErrors: DeliveryLineErrors = {}
+  const reasonErrors: Record<number, string> = {}
+  for (const line of lines) {
+    const issue = checked.errors[line.key]
+    if (submitted && issue) lineErrors[line.key] = {
+      item: issue.item ? t(issue.item) : undefined,
+      expiry: issue.expiry ? t(issue.expiry) : undefined,
+      quantity: issue.quantity ? t('assets.store.scan.quantityRequired') : undefined,
+    }
+    const row = scan.lines[line.key]
+    const received = line.item ? quantityFromParts(line.quantity, line.item) : null
+    if (row.quantity != null && received != null && Number.isSafeInteger(received) && received !== row.quantity && !reasons[line.key]?.trim()) reasonErrors[line.key] = 'assets.store.scan.reasonRequired'
+  }
+  const invalidDate = !isBusinessDate(receivedOn)
+  const dateError = submitted && invalidDate ? t('assets.store.scan.dateRequired') : null
+  const invalid = !lines.length || Object.keys(checked.errors).length > 0 || Object.keys(reasonErrors).length > 0 || invalidDate
+  const message = submitted && invalid ? t(!lines.length ? 'assets.store.scan.noLines' : 'assets.store.deliveries.correctFields') : null
 
   function needsAttention(line: DeliveryLine): boolean {
     const row = scan.lines[line.key]
@@ -81,26 +97,11 @@ function ConfirmForm({ file, scan, items, onChooseAnother, onManual }: Props & {
   function submit(event: React.FormEvent): void {
     event.preventDefault()
     if (disabled) return
-    const checked = validateDeliveryLines(lines, t, { minimumQuantity: (line) => (scan.lines[line.key].quantity ?? 0) > 0 ? 0 : 1 })
-    const invalidReasons: Record<number, string> = {}
-    for (const line of lines) {
-      const row = scan.lines[line.key]
-      const received = line.item ? quantityFromParts(line.quantity, line.item) : null
-      if (row.quantity != null && received != null && Number.isSafeInteger(received) && received !== row.quantity && !reasons[line.key]?.trim()) invalidReasons[line.key] = t('assets.store.scan.reasonRequired')
-    }
-    const invalidDate = !isBusinessDate(receivedOn) ? t('assets.store.scan.dateRequired') : null
-    for (const issue of Object.values(checked.errors)) {
-      if (issue.quantity) issue.quantity = t('assets.store.scan.quantityRequired')
-    }
-    setLineErrors(checked.errors)
-    setReasonErrors(invalidReasons)
-    setDateError(invalidDate)
-    if (!lines.length || Object.keys(checked.errors).length || Object.keys(invalidReasons).length || invalidDate) {
-      setMessage(t(!lines.length ? 'assets.store.scan.noLines' : 'assets.store.deliveries.correctFields'))
+    setSubmitted(true)
+    if (invalid) {
       summary.current?.focus()
       return
     }
-    setMessage(null)
     const body: StoreDeliveryCreate = {
       received_on: receivedOn,
       note: note.trim() || null,
@@ -122,8 +123,9 @@ function ConfirmForm({ file, scan, items, onChooseAnother, onManual }: Props & {
         <FormAlert id={`${id}-alert`} message={message ?? save.error} />
       </div>
       <FieldGrid>
-        <Field id={`${id}-date`} label={t('assets.store.deliveries.receivedOn')} required error={dateError ?? undefined}>
-          <Input id={`${id}-date`} type="date" dir="ltr" className="min-h-11 font-mono tabular-nums" max={todayIso()} value={receivedOn} onChange={(event) => setReceivedOn(event.target.value)} disabled={disabled} required aria-invalid={!!dateError || undefined} aria-describedby={dateError ? `${id}-alert` : undefined} />
+        <Field id={`${id}-date`} label={t('assets.store.deliveries.receivedOn')} required>
+          <Input id={`${id}-date`} type="date" dir="ltr" className="min-h-11 font-mono tabular-nums" max={todayIso()} value={receivedOn} onChange={(event) => setReceivedOn(event.target.value)} disabled={disabled} required aria-invalid={!!dateError || undefined} aria-describedby={dateError ? `${id}-date-error` : undefined} />
+          {dateError && <span id={`${id}-date-error`} role="alert" className="text-xs text-destructive">{dateError}</span>}
         </Field>
         <Field id={`${id}-note`} label={t('assets.store.deliveries.note')}><Textarea id={`${id}-note`} dir="auto" value={note} onChange={(event) => setNote(event.target.value)} disabled={disabled} /></Field>
       </FieldGrid>
@@ -138,7 +140,8 @@ function ConfirmForm({ file, scan, items, onChooseAnother, onManual }: Props & {
             const row = scan.lines[line.key]
             const received = line.item ? quantityFromParts(line.quantity, line.item) : null
             if (row.quantity == null || received == null || !Number.isSafeInteger(received) || received === row.quantity) return null
-            return <Field id={`${id}-${line.key}-reason`} label={t('assets.store.scan.reason')} required full error={reasonErrors[line.key]}><Textarea id={`${id}-${line.key}-reason`} dir="auto" maxLength={200} required value={reasons[line.key] ?? ''} onChange={(event) => setReasons((current) => ({ ...current, [line.key]: event.target.value }))} disabled={disabled} aria-invalid={!!reasonErrors[line.key] || undefined} aria-describedby={reasonErrors[line.key] ? `${id}-alert` : undefined} /></Field>
+            const error = submitted && reasonErrors[line.key] ? t(reasonErrors[line.key]) : null
+            return <Field id={`${id}-${line.key}-reason`} label={t('assets.store.scan.reason')} required full><Textarea id={`${id}-${line.key}-reason`} dir="auto" maxLength={200} required value={reasons[line.key] ?? ''} onChange={(event) => setReasons((current) => ({ ...current, [line.key]: event.target.value }))} disabled={disabled} aria-invalid={!!error || undefined} aria-describedby={error ? `${id}-${line.key}-reason-error` : undefined} />{error && <span id={`${id}-${line.key}-reason-error`} role="alert" className="text-xs text-destructive">{error}</span>}</Field>
           }} />
       )} />
       <p role="status" aria-atomic="true" className="sr-only">{announcement && <Trans i18nKey={announcement.key} values={{ number: announcement.number }} components={{ number: <bdi dir="ltr" /> }} />}</p>
