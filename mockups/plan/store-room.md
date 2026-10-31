@@ -403,6 +403,40 @@ cross-app combobox hook and generic query-state frame (tier C).
   update route in the existing API; count updates remain unchanged.
 - OpenAPI and TypeScript contracts include the new endpoints and store fields.
   The API client has typed handover, movement-filter and multipart scan methods.
-  Frontend implementation remains a separate slice; typecheck flags existing
-  fixtures and the count page's locally constructed batch rows that omit art.
 
+## Progress (2026-10-31, integrator)
+
+Built by dtop writers in waves, each reviewed before merge into `feat/store-room`.
+
+- **Dedupe** (tiers A+B, 19 merges; #9 skipped because it changed widget text).
+  Review caught 2 regressions (stale item on count add-batch, recycled delivery
+  line keys); fixed with failing-first tests. jscpd clones touching store code
+  23 → 22 (the real duplicates were semantic, not textual).
+- **Backend**: handovers (FEFO, usage untouched), movements, month-strip fields,
+  item art, scan + aliases + noted vs received, ADR 0010, migration
+  `0111_store_room`. Review fixes: scan bounded to 5 PDF pages and 30 s per page,
+  zero-received lines excluded from the ledger, UTC offsets on handover/movement
+  reads. `openapi.json` stays untracked (gitignored, as on main).
+- **Frontend**: shelves dashboard, drawer, picking tray, In & out, item drawings,
+  scan + confirm page. `storeItemArt.ts` renamed `storeArtCatalog.ts`: on Windows it
+  shadowed `StoreItemArt.tsx` and broke the build.
+- **UX/a11y review** (`store-room-ux-review.md`, 35 findings): the user approved all
+  must + should fixes including shared components, plus #34 and #35 (In & out date
+  filter, `?from=&to=`). axe-core WCAG 2.2 AA: dashboard/drawer/tray/In & out 140 → 0
+  violations (32 runs), scan/confirm 26 → 0 (48 runs, both notes). Parser now
+  drops title and column-header rows.
+- **Checks on `41faaf8f`+**: frontend 4,190/4,190 tests, `tsc`, lint 0 errors,
+  build; backend 4,143 passed; the 4 failures + 1 error also fail on `691635e1`
+  (inmate reporter, migration 0099, book schema UTC, vehicle reminders, vehicle
+  import unraisable-warning flake). Single head `0111_store_room`.
+- **Laptop smoke** (scratch DB, Windows build): FEFO took the 30 Nov batch then
+  Dec; shelf 21 → 18 with usage unchanged; 3-item handover toast and In & out
+  detail; synthetic note read 3/3 quantities, misspelling matched at 96 and at 100
+  after the alias; "Note said 4 · received 3 · reason" stored and shown; file attached.
+- **Dev channel**: delta applied as dev-only commits, migration renumbered
+  `0118_store_room` after `0117_store`; 13 real items given drawings with
+  `store_set_art.py`.
+- **Next**: the user tests on the dev URL and supplies real delivery-note photos
+  for OCR calibration (field accuracy: item match, quantity). Then PR from
+  `feat/store-room` (contains `feat/assets-store`) after renumbering migrations
+  onto main's head at that time.
