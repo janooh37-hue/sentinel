@@ -58,6 +58,14 @@ describe('assets locale parity', () => {
     }
   })
 
+  it('uses natural Arabic punctuation for every expiring-soon window plural', () => {
+    for (const suffix of AR_PLURAL) {
+      const text = arAssets.get(`assets.store.dashboard.soonWindow${suffix}`)
+      expect(text).toContain(': خلال')
+      expect(text).not.toContain('=')
+    }
+  })
+
   it('uses the same interpolation variables and no empty strings', () => {
     for (const [key, enText] of enAssets) {
       expect(enText.trim(), key).not.toBe('')

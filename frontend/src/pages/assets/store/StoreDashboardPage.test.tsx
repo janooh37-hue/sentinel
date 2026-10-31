@@ -10,10 +10,10 @@ import { toast } from '@/lib/toast'
 import { StoreDashboardPage } from './StoreDashboardPage'
 import { canOpenHqMaterialRequest, openHqMaterialRequest } from './hqRequest'
 
-const state = vi.hoisted(() => ({ mobile: false, editable: true }))
+const state = vi.hoisted(() => ({ mobile: false, editable: true, signedIn: true }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => state.mobile }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (capability: string) => capability === 'store.edit' && state.editable }) }))
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { name_en: 'Store keeper', name_ar: 'أمين المخزن', email: 'store@example.test' } }) }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: state.signedIn ? { name_en: 'Store keeper', name_ar: 'أمين المخزن', email: 'store@example.test' } : null }) }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('./hqRequest', () => ({ canOpenHqMaterialRequest: vi.fn(), openHqMaterialRequest: vi.fn() }))
 
@@ -39,6 +39,7 @@ beforeEach(async () => {
   vi.clearAllMocks()
   state.mobile = false
   state.editable = true
+  state.signedIn = true
   await i18n.changeLanguage('en')
   vi.mocked(canOpenHqMaterialRequest).mockReturnValue(true)
   vi.spyOn(api, 'getStoreDashboard').mockResolvedValue(dashboard)
@@ -79,9 +80,9 @@ describe('Store dashboard', () => {
     const button = await screen.findByRole('button', { name: 'Tea' })
     await user.click(button); await user.click(button); await user.click(button)
     const tray = screen.getByRole('region', { name: 'Handover' })
-    expect(within(tray).getByLabelText('+ Tea')).toBeDisabled()
+    expect(within(tray).getByLabelText('Increase Tea')).toBeDisabled()
     expect(within(tray).getByRole('status', { name: 'Tea' })).toHaveTextContent('2')
-    await user.click(within(tray).getByLabelText('− Tea')); await user.click(within(tray).getByLabelText('− Tea'))
+    await user.click(within(tray).getByLabelText('Decrease Tea')); await user.click(within(tray).getByLabelText('Decrease Tea'))
     expect(within(tray).getByText('Nothing added yet. Tap an item on a shelf.')).toBeInTheDocument()
   })
   it('disables items whose only remaining stock is expired', async () => {
@@ -94,7 +95,7 @@ describe('Store dashboard', () => {
     const user = userEvent.setup()
     renderPage()
     await user.click(await screen.findByRole('button', { name: 'Tea' }))
-    await user.click(screen.getByLabelText('+ Quantity'))
+    await user.click(screen.getByLabelText('Increase Quantity'))
     await user.click(screen.getByRole('button', { name: /Add to a multi-item handover/ }))
     const tray = screen.getByRole('region', { name: 'Handover' })
     expect(within(tray).getByRole('status', { name: 'Tea' })).toHaveTextContent('2')
@@ -181,12 +182,47 @@ describe('Store dashboard', () => {
     await user.click(await screen.findByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('region', { name: 'Pantry' })).toBeInTheDocument()
   })
+  it.each([
+    ['en', true, 'Recorded by Store keeper (you)'],
+    ['en', false, 'Recorded by you'],
+    ['ar', true, 'يسجّله أمين المخزن (أنت)'],
+    ['ar', false, 'يسجّله أنت'],
+  ] as const)('localizes the recorder without repeating you (%s, signedIn=%s)', async (language, signedIn, expected) => {
+    state.signedIn = signedIn
+    await i18n.changeLanguage(language)
+    renderPage('/holdings/store?pick=1')
+    expect(await screen.findByText(expected)).toBeInTheDocument()
+    expect(screen.queryByText(/you \(you\)|أنت \(أنت\)/)).not.toBeInTheDocument()
+  })
   it('renders Arabic shelves and the Arabic handover form', async () => {
     await i18n.changeLanguage('ar')
     const user = userEvent.setup()
     renderPage()
-    await user.click(await screen.findByRole('button', { name: 'شاي' }))
+    const shelf = await screen.findByRole('region', { name: 'ضيافة' })
+    expect(within(shelf).getByText('1 كرتون + 4 علبة')).toHaveAttribute('dir', 'auto')
+    await user.click(screen.getByRole('button', { name: 'شاي' }))
+    const dialog = screen.getByRole('dialog', { name: 'شاي' })
+    expect(within(dialog).getByText('1 كرتون + 4 علبة')).toHaveAttribute('dir', 'auto')
+    expect(within(dialog).getByText('4 كرتون')).toHaveAttribute('dir', 'auto')
+    expect(within(dialog).getByText('2 كرتون')).toHaveAttribute('dir', 'auto')
+    expect(within(dialog).getByText('1 كرتون + 11 علبة')).toHaveAttribute('dir', 'auto')
+    expect(within(dialog).getByLabelText('زيادة الكمية')).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('إنقاص الكمية')).toBeDisabled()
     expect(screen.getByLabelText('المستلم')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /إضافة إلى صرف متعدد/ })).toBeInTheDocument()
+    const addMulti = screen.getByRole('button', { name: 'إضافة إلى صرف متعدد' })
+    expect(addMulti.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+    await user.click(addMulti)
+    const tray = screen.getByRole('region', { name: 'صرف' })
+    expect(within(tray).getByText('1 علبة')).toHaveAttribute('dir', 'auto')
+    expect(within(tray).getByLabelText('زيادة شاي')).toBeInTheDocument()
+    expect(within(tray).getByLabelText('إنقاص شاي')).toBeInTheDocument()
+  })
+  it('does not force an Arabic no-expiry label into an LTR run', async () => {
+    await i18n.changeLanguage('ar')
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'ماء' }))
+    const dialog = screen.getByRole('dialog', { name: 'ماء' })
+    expect(within(dialog).getByText(i18n.t('assets.store.expiry.none'))).toHaveAttribute('dir', 'auto')
   })
 })

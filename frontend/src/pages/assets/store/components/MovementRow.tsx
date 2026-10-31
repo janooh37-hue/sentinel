@@ -12,8 +12,8 @@ import { localized } from '@/lib/language'
 import { toast } from '@/lib/toast'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
-import { formatExpiry, formatQuantity, invalidateStoreQueries, itemName, storeErrorMessage } from '../storeUtils'
-import { ItemIdentity } from './RecordParts'
+import { formatExpiry, invalidateStoreQueries, itemName, storeErrorMessage } from '../storeUtils'
+import { ItemIdentity, SignedStoreQuantity } from './RecordParts'
 
 type Line = StoreMovementRead['lines'][number]
 function summedItems(movement: StoreMovementRead): Line[] {
@@ -36,14 +36,14 @@ export function MovementRow({ movement, onSelect }: { movement: StoreMovementRea
   const { t, i18n } = useTranslation()
   const items = summedItems(movement)
   const recorder = localized(movement.recorded_by_name_ar, movement.recorded_by_name, i18n.language) || t('assets.store.movements.unknownRecorder')
-  const who = movement.kind === 'in' ? t('assets.store.movements.fromHQ') : movement.kind === 'out' ? t('assets.store.movements.toWho', { name: movement.taken_by }) : t(`assets.store.movements.reason.${movement.reason ?? 'damaged'}`)
+  const who = movement.kind === 'in' ? t('assets.store.movements.fromHQ') : movement.kind === 'out' ? t('assets.store.movements.toWho', { name: movement.taken_by }) : movement.reason ? t(`assets.store.movements.reason.${movement.reason}`) : t('assets.store.movements.kind.disposed')
   const total = movement.lines.reduce((sum, line) => sum + line.quantity, 0)
   return <button type="button" onClick={() => onSelect(movement)} className="flex min-h-20 w-full items-center gap-3 border-b border-border px-3 py-4 text-start last:border-0 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-4">
     <KindIcon kind={movement.kind} /><span className="sr-only">{t(`assets.store.movements.kind.${movement.kind}`)}</span>
     <span className="hidden w-20 shrink-0 text-sm sm:block">{dateText(movement.on, i18n.language, { day: 'numeric', month: 'short' })}<span className="block text-xs text-muted-foreground">{dateText(movement.created_at, i18n.language, { hour: '2-digit', minute: '2-digit' })}</span></span>
     <span className="hidden shrink-0 items-center sm:flex">{items.slice(0, 3).map((line, index) => <StoreItemArt key={line.item_id} kind={line.art_kind} color={line.art_color} size={36} className={index ? '-ms-3' : ''} />)}</span>
     <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{items.map((line, index) => <span key={line.item_id}>{index > 0 && ' · '}{itemName(line, i18n.language)} <bdi dir="ltr" className="font-normal text-muted-foreground">×{line.quantity}</bdi></span>)}</span><span className="mt-1 block text-xs text-muted-foreground">{who} · {t('assets.store.movements.byWho', { name: recorder })}</span><span className="mt-1 block text-xs text-muted-foreground sm:hidden">{dateText(movement.on, i18n.language, { day: 'numeric', month: 'short' })} · {dateText(movement.created_at, i18n.language, { hour: '2-digit', minute: '2-digit' })}</span></span>
-    <span className="shrink-0 text-end text-sm font-semibold">{items.length === 1 ? <bdi dir="ltr">{movement.kind === 'in' ? '+' : ''}{formatQuantity(movement.kind === 'in' ? total : -total, items[0]!, i18n.language)}</bdi> : <>{t('assets.store.movements.items', { count: items.length })}<span className="block text-xs font-normal text-muted-foreground">{t('assets.store.movements.units', { count: total })}</span></>}</span><ChevronRight aria-hidden className="hidden size-4 text-muted-foreground rtl:rotate-180 sm:block" />
+    <span className="shrink-0 text-end text-sm font-semibold">{items.length === 1 ? <SignedStoreQuantity value={movement.kind === 'in' ? total : -total} item={items[0]!} /> : <>{t('assets.store.movements.items', { count: items.length })}<span className="block text-xs font-normal text-muted-foreground">{t('assets.store.movements.units', { count: total })}</span></>}</span><ChevronRight aria-hidden className="hidden size-4 text-muted-foreground rtl:rotate-180 sm:block" />
   </button>
 }
 export function MovementDetailDialog({ movement, open, onOpenChange }: { movement: StoreMovementRead | null; open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -73,7 +73,7 @@ export function MovementDetailDialog({ movement, open, onOpenChange }: { movemen
           <p className="text-xs text-muted-foreground">{line.expiry_date ? <span title={formatExpiry(line, t)}>{t('assets.store.movements.batchExpiring', { date: dateText(line.expiry_date, i18n.language, { ...(line.expiry_month_only ? {} : { day: 'numeric' as const }), month: 'short', year: 'numeric' }) })}</span> : t('assets.store.movements.undated')}</p>
           {movement.kind === 'in' && line.noted_quantity != null && <p className="mt-1 text-xs text-muted-foreground">{t('assets.store.movements.noted', { noted: line.noted_quantity, received: line.quantity })}{line.difference_reason && <> · <span dir="auto">{line.difference_reason}</span></>}</p>}
         </div>
-        <bdi dir="ltr" className="text-sm font-semibold">{movement.kind === 'in' ? '+' : ''}{formatQuantity(movement.kind === 'in' ? line.quantity : -line.quantity, line, i18n.language)}</bdi>
+        <span className="text-sm font-semibold"><SignedStoreQuantity value={movement.kind === 'in' ? line.quantity : -line.quantity} item={line} /></span>
       </li>)}</ul>
       {movement.kind === 'out' && has('store.edit') && <Button ref={trigger} type="button" variant="ghost" className="min-h-11 text-destructive" disabled={deletion.isPending} onClick={() => { deletion.reset(); setConfirm(true) }}><Trash2 aria-hidden className="me-2 size-4" />{t('assets.store.movements.delete')}</Button>}
     </div>

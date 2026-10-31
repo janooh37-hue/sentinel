@@ -8,13 +8,15 @@ import { Input } from '@/components/ui/input'
 import { api, type StoreItemRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { toast } from '@/lib/toast'
-import { formatQuantity, invalidateStoreQueries, itemName, storeErrorMessage, storeKeys } from '../storeUtils'
+import { invalidateStoreQueries, itemName, storeErrorMessage, storeKeys } from '../storeUtils'
+import { StoreQuantity } from './RecordParts'
 
 export function QuantityStepper({ value, max, onChange, label, disabled = false, minimum = 1 }: { value: number; max: number; onChange: (value: number) => void; label: string; disabled?: boolean; minimum?: number }) {
+  const { t } = useTranslation()
   return <div role="group" aria-label={label} className="inline-flex items-center rounded-lg border border-border bg-surface">
-    <Button type="button" variant="ghost" className="h-11 min-w-11 px-2" aria-label={`− ${label}`} disabled={disabled || value <= minimum} onClick={() => onChange(value - 1)}>−</Button>
+    <Button type="button" variant="ghost" className="h-11 min-w-11 px-2" aria-label={t('assets.store.handovers.decrease', { label })} disabled={disabled || value <= minimum} onClick={() => onChange(value - 1)}>−</Button>
     <output aria-label={label} className="min-w-8 text-center font-mono tabular-nums"><bdi dir="ltr">{value}</bdi></output>
-    <Button type="button" variant="ghost" className="h-11 min-w-11 px-2" aria-label={`+ ${label}`} disabled={disabled || value >= max} onClick={() => onChange(value + 1)}>+</Button>
+    <Button type="button" variant="ghost" className="h-11 min-w-11 px-2" aria-label={t('assets.store.handovers.increase', { label })} disabled={disabled || value >= max} onClick={() => onChange(value + 1)}>+</Button>
   </div>
 }
 
@@ -47,7 +49,7 @@ export function HandoverForm({ lines, onSuccess, onCancel, multi = false, childr
       </div>
       {errors.takenBy && <p id={`${id}-error`} role="alert" className="text-sm text-accent">{errors.takenBy.message}</p>}
       {mutation.error && <p role="alert" className="text-sm text-accent">{storeErrorMessage(mutation.error)}</p>}
-      <p className="text-xs text-muted-foreground">{t('assets.store.handovers.recordedBy', { name })} ({t('assets.store.handovers.you')})</p>
+      <p className="text-xs text-muted-foreground">{t(user ? 'assets.store.handovers.recordedBySelf' : 'assets.store.handovers.recordedBy', { name })}</p>
       <div className="flex flex-wrap justify-end gap-2">{onCancel && <Button type="button" variant="secondary" className="min-h-11" onClick={onCancel}>{t('common.cancel')}</Button>}<Button type="submit" className="min-h-11" disabled={!lines.length || mutation.isPending}>{multi ? t('assets.store.handovers.recordAll', { count: lines.length }) : t('assets.store.handovers.record')}</Button></div>
     </fieldset>
   </form>
@@ -59,7 +61,7 @@ export function HandoverTray({ items, picked, maximum, onChange, onCancel, onSuc
   return <section aria-label={t('assets.store.handovers.title')} className="fixed inset-x-0 bottom-0 z-30 max-h-[60dvh] overflow-y-auto border-t border-border bg-surface px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl">
     <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-2">
       <div><h2 className="mb-2 font-semibold">{t('assets.store.handovers.title')} · {t('assets.store.dashboard.shelfItems', { count: selected.length })}</h2>
-        <div className="max-h-40 space-y-1 overflow-y-auto">{!selected.length && <p className="text-sm text-muted-foreground">{t('assets.store.handovers.empty')}</p>}{selected.map(item => <div key={item.id} className="flex items-center gap-2"><StoreItemArt kind={item.art_kind} color={item.art_color} categoryId={item.category_id} size={38} /><span dir="auto" className="min-w-0 flex-1 text-sm">{itemName(item, i18n.language)}<span className="block text-xs text-muted-foreground"><bdi dir="ltr">{formatQuantity(picked[item.id], item, i18n.language)}</bdi></span></span><QuantityStepper label={itemName(item, i18n.language)} value={picked[item.id]} max={maximum(item.id)} minimum={0} disabled={busy} onChange={quantity => onChange(item.id, quantity)} /></div>)}</div>
+        <div className="max-h-40 space-y-1 overflow-y-auto">{!selected.length && <p className="text-sm text-muted-foreground">{t('assets.store.handovers.empty')}</p>}{selected.map(item => <div key={item.id} className="flex items-center gap-2"><StoreItemArt kind={item.art_kind} color={item.art_color} categoryId={item.category_id} size={38} /><span dir="auto" className="min-w-0 flex-1 text-sm">{itemName(item, i18n.language)}<span className="block text-xs text-muted-foreground"><StoreQuantity value={picked[item.id]} item={item} /></span></span><QuantityStepper label={itemName(item, i18n.language)} value={picked[item.id]} max={maximum(item.id)} minimum={0} disabled={busy} onChange={quantity => onChange(item.id, quantity)} /></div>)}</div>
       </div>
       <HandoverForm multi lines={selected.map(item => ({ item_id: item.id, quantity: picked[item.id] }))} onCancel={onCancel} onSuccess={onSuccess} busyChanged={busyChanged} />
     </div>

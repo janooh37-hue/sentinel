@@ -127,8 +127,27 @@ function pluralEn(unit: string, count: number): string {
 }
 
 function unitPhrase(count: number, unit: string, language: string): string {
-  const number = formatNumber(count, language)
-  return isArabic(language) ? `${number} ${unit.trim()}` : `${number} ${pluralEn(unit, count)}`
+  return `${formatNumber(count, language)} ${quantityUnit(count, unit, language)}`
+}
+
+function quantityUnit(count: number, unit: string, language: string): string {
+  return isArabic(language) ? unit.trim() : pluralEn(unit, count)
+}
+
+/** Separate numbers from translated units so signed runs can be isolated LTR. */
+export function formatQuantityParts(
+  base: number,
+  item: StoreUnits,
+  language: string = i18n.language,
+): { number: string; unit: string }[] {
+  const { units, loose } = splitBase(Math.abs(base), item)
+  const parts = []
+  if (units || !loose) parts.push({ count: units, unit: countingUnit(item, language) })
+  if (loose) parts.push({ count: loose, unit: containsUnit(item, language) })
+  return parts.map(({ count, unit }, index) => ({
+    number: `${base < 0 && index === 0 ? '−' : ''}${formatNumber(count, language)}`,
+    unit: quantityUnit(count, unit, language),
+  }))
 }
 
 /**
@@ -141,14 +160,7 @@ export function formatQuantity(
   item: StoreUnits,
   language: string = i18n.language,
 ): string {
-  const unit = countingUnit(item, language)
-  const sign = base < 0 ? '−' : ''
-  if (!hasContains(item)) return `${sign}${unitPhrase(Math.abs(base), unit, language)}`
-  const { units, loose } = splitBase(base, item)
-  const looseUnit = containsUnit(item, language)
-  if (loose === 0) return `${sign}${unitPhrase(Math.abs(units), unit, language)}`
-  if (units === 0) return `${sign}${unitPhrase(Math.abs(loose), looseUnit, language)}`
-  return `${sign}${unitPhrase(Math.abs(units), unit, language)} + ${unitPhrase(Math.abs(loose), looseUnit, language)}`
+  return formatQuantityParts(base, item, language).map(part => `${part.number} ${part.unit}`).join(' + ')
 }
 
 /** "1 Carton = 24 jars" — the contains rule, for hints and item rows. */

@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { StoreItemArt } from '@/components/StoreItemArt'
 import type { StoreBatchRead, StoreCategoryRead, StoreDashboard, StoreItemRead } from '@/lib/api'
-import { categoryName, formatQuantity, itemName } from '../storeUtils'
+import { categoryName, itemName } from '../storeUtils'
+import { StoreQuantity } from './RecordParts'
 
 import { availableStock, itemFlags, type ShelfFilter } from './storeShelfModel'
 
@@ -28,7 +29,7 @@ export function StoreShelves({ items, categories, batches, dashboard, filter, pi
           <span className="absolute inset-x-0 top-0 flex min-h-6 justify-center">{picking ? available > 0 && <span aria-hidden className="flex h-7 min-w-7 items-center justify-center rounded-full bg-primary px-1 text-sm font-semibold text-primary-foreground">{picked[item.id] || '+'}</span> : <ItemStatus itemId={item.id} dashboard={dashboard} />}</span>
           <StoreItemArt kind={item.art_kind} color={item.art_color} categoryId={item.category_id} size={72} />
           <span dir="auto" className="line-clamp-2 min-h-9 text-xs leading-snug">{itemName(item, i18n.language)}</span>
-          <bdi dir="ltr" className="text-xs font-medium tabular-nums">{formatQuantity(item.on_hand, item, i18n.language)}</bdi>
+          <span className="text-xs font-medium"><StoreQuantity value={item.on_hand} item={item} /></span>
         </button>
       })}</div>
     </section>

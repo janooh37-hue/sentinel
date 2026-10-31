@@ -7,7 +7,7 @@
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
-import { formatQuantity, itemName, type StoreUnits } from '../storeUtils'
+import { formatQuantity, formatQuantityParts, itemName, type StoreUnits } from '../storeUtils'
 
 interface ItemRow {
   item_code: string
@@ -30,4 +30,10 @@ export function ItemIdentity({ row, stacked = false }: { row: ItemRow; stacked?:
 export function StoreQuantity({ value, item }: { value: number; item: StoreUnits }): React.JSX.Element {
   const { i18n } = useTranslation()
   return <bdi dir="auto" className="whitespace-nowrap tabular-nums">{formatQuantity(value, item, i18n.language)}</bdi>
+}
+
+/** Keep signs and digits LTR without imposing that direction on translated units. */
+export function SignedStoreQuantity({ value, item }: { value: number; item: StoreUnits }): React.JSX.Element {
+  const { i18n } = useTranslation()
+  return <bdi dir="auto" className="whitespace-nowrap tabular-nums">{formatQuantityParts(value, item, i18n.language).map((part, index) => <span key={index}>{index > 0 && ' + '}<bdi dir="ltr">{index === 0 && value >= 0 ? '+' : ''}{part.number}</bdi> {part.unit}</span>)}</bdi>
 }
