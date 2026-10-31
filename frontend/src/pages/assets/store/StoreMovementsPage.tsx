@@ -23,7 +23,7 @@ export function StoreMovementsPage() {
   const [to, setTo] = useState('')
   const [selected, setSelected] = useState<StoreMovementRead | null>(null)
   const query = useQuery({
-    queryKey: [...storeKeys.movements, { from, to }],
+    queryKey: from || to ? [...storeKeys.movements, { from, to }] : storeKeys.movements,
     queryFn: () => api.listStoreMovements({ from: from || undefined, to: to || undefined }),
   })
   const rows = useMemo(() => query.data ?? [], [query.data])
