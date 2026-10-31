@@ -2,7 +2,7 @@ import { render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { StoreItemArt } from './StoreItemArt'
-import { STORE_ART_COLORS, STORE_ART_KINDS } from './storeItemArt'
+import { STORE_ART_COLORS, STORE_ART_KINDS } from './storeArtCatalog'
 
 describe('StoreItemArt', () => {
   it.each([null, undefined, 'unrecognised'])('renders the plain carton for kind %s', (kind) => {
