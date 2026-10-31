@@ -80,7 +80,7 @@ describe('Store dashboard', () => {
     await user.click(screen.getByRole('button', { name: /^Tea / }))
     const dialog = screen.getByRole('dialog', { name: 'Tea' })
     expect(within(dialog).getByText('Low stock')).toBeInTheDocument()
-    expect(within(dialog).getByText('Expires in 12d')).toBeInTheDocument()
+    expect(within(dialog).getByText('2 jars · expires in 12d')).toBeInTheDocument()
     expect(within(dialog).getByText(i18n.t('assets.store.handovers.fromBatch', { date: '\u20662026-11-10\u2069' }))).toBeInTheDocument()
   })
   it('enters picking from a deep link, caps at non-expired stock, and removes at one', async () => {

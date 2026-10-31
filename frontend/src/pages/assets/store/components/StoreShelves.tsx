@@ -1,16 +1,20 @@
 import { useTranslation } from 'react-i18next'
 import { StoreItemArt } from '@/components/StoreItemArt'
 import type { StoreBatchRead, StoreCategoryRead, StoreDashboard, StoreItemRead } from '@/lib/api'
-import { categoryName, itemName } from '../storeUtils'
+import { categoryName, formatQuantity, itemName } from '../storeUtils'
 import { StoreQuantity } from './RecordParts'
 
 import { availableStock, itemFlags, sortForShelf, type ShelfFilter } from './storeShelfModel'
 
 export function ItemStatus({ itemId, dashboard, all = false }: { itemId: number; dashboard: StoreDashboard; all?: boolean }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const flags = itemFlags(itemId, dashboard)
-  const days = Math.min(...dashboard.expiring_soon.filter(batch => batch.item_id === itemId).map(batch => batch.days_left ?? 0))
-  return <>{(all ? flags : flags.slice(0, 1)).map(flag => <span key={flag} className={`rounded-full px-2 py-0.5 text-xs font-medium ${flag === 'expired' ? 'bg-accent-soft text-accent' : 'bg-warning-soft text-warning'}`}>{flag === 'expiring' ? t('assets.store.dashboard.shortExpiring', { count: days }) : t(`assets.store.dashboard.${flag === 'low' ? 'shortLow' : 'expiredStatus'}`)}</span>)}{all && !flags.length && <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs text-success">{t('assets.store.dashboard.inStock')}</span>}</>
+  // The soonest Batch, and only it: "2 cartons · expires in 30d", never the item total.
+  const expiring = dashboard.expiring_soon.filter(batch => batch.item_id === itemId)
+  const days = Math.min(...expiring.map(batch => batch.days_left ?? 0))
+  const soonest = expiring.filter(batch => (batch.days_left ?? 0) === days)
+  const quantity = soonest.length ? formatQuantity(soonest.reduce((sum, batch) => sum + batch.on_hand, 0), soonest[0], i18n.language) : ''
+  return <>{(all ? flags : flags.slice(0, 1)).map(flag => <span key={flag} className={`rounded-full px-2 py-0.5 text-xs font-medium ${flag === 'expired' ? 'bg-accent-soft text-accent' : 'bg-warning-soft text-warning'}`}>{flag === 'expiring' ? t('assets.store.dashboard.shortExpiring', { count: days, quantity }) : t(`assets.store.dashboard.${flag === 'low' ? 'shortLow' : 'expiredStatus'}`)}</span>)}{all && !flags.length && <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs text-success">{t('assets.store.dashboard.inStock')}</span>}</>
 }
 export function StoreShelves({ items, categories, batches, dashboard, filter, picking, picked, busy, onSelect, onAdd }: {
   items: StoreItemRead[]; categories: StoreCategoryRead[]; batches: StoreBatchRead[]; dashboard: StoreDashboard; filter: ShelfFilter; picking: boolean; picked: Record<number, number>; busy: boolean; onSelect: (item: StoreItemRead, opener: HTMLButtonElement) => void; onAdd: (item: StoreItemRead) => void
@@ -29,13 +33,13 @@ export function StoreShelves({ items, categories, batches, dashboard, filter, pi
         const available = availableStock(item.id, batches)
         const disabled = picking && (busy || available === 0)
         // Named by its own visible content (name, quantity, then the status
-        // badge, which is drawn at the top but read last), so the accessible
-        // name always contains the visible label (WCAG 2.5.3).
-        return <button key={item.id} type="button" disabled={disabled} onClick={event => picking ? onAdd(item) : onSelect(item, event.currentTarget)} className={`relative flex min-h-52 min-w-0 flex-col items-center justify-end gap-1 border-b-[6px] border-[var(--shelf)] px-1 pb-2 pt-7 text-center hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${disabled ? 'opacity-35' : ''}`}>
+        // badge, which CSS order draws above the picture but is read last), so
+        // the accessible name always contains the visible label (WCAG 2.5.3).
+        return <button key={item.id} type="button" disabled={disabled} onClick={event => picking ? onAdd(item) : onSelect(item, event.currentTarget)} className={`flex min-h-48 min-w-0 flex-col items-center justify-end gap-1 border-b-[6px] border-[var(--shelf)] px-1 pb-2 pt-2 text-center hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${disabled ? 'opacity-35' : ''}`}>
           <StoreItemArt kind={item.art_kind} color={item.art_color} categoryId={item.category_id} size={104} className="-mb-2 max-w-full" />
-          <span dir="auto" className="line-clamp-2 min-h-10 text-sm leading-snug">{itemName(item, i18n.language)}</span>{' '}
+          <span dir="auto" className="line-clamp-3 min-h-10 text-sm leading-snug">{itemName(item, i18n.language)}</span>{' '}
           <span className="text-balance text-sm font-semibold [&_bdi]:whitespace-normal"><StoreQuantity value={item.on_hand} item={item} /></span>{' '}
-          <span className="absolute inset-x-0 top-0 flex min-h-6 justify-center">{picking ? available > 0 && <span aria-hidden className="flex h-7 min-w-7 items-center justify-center rounded-full bg-primary px-1 text-sm font-semibold text-primary-foreground">{picked[item.id] || '+'}</span> : <ItemStatus itemId={item.id} dashboard={dashboard} />}</span>
+          <span className="order-first flex min-h-7 items-end justify-center text-balance">{picking ? available > 0 && <span aria-hidden className="flex h-7 min-w-7 items-center justify-center rounded-full bg-primary px-1 text-sm font-semibold text-primary-foreground">{picked[item.id] || '+'}</span> : <ItemStatus itemId={item.id} dashboard={dashboard} />}</span>
         </button>
       })}</div>
     </section>
