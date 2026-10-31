@@ -6846,7 +6846,6 @@
       "periodSummary": "ملخص الفترة",
       "total": "الإجمالي",
       "noRecords": "لا توجد سجلات في هذه الفترة",
-      "entriesWithDays": "{{count}} (الأيام: {{days}})",
       "system": "النظام",
       "deduction": "الخصم (أيام): {{count}}",
       "fromTo": "من {{from}} إلى {{to}}",

@@ -388,7 +388,8 @@ describe('fix round 3: say each fact once', () => {
     renderAt('/employees/G3190/activity/print?period=year&lang=en')
     await waitFor(() => expect(sheet()).toBeInTheDocument())
     const summary = sheet().querySelector('[data-section="summary"]') as HTMLElement
-    expect(summary).toHaveTextContent('Leaves1 (28 days)')
+    const leaveRow = Array.from(summary.querySelectorAll('tbody tr')).find((r) => r.textContent?.startsWith('Leaves'))
+    expect(Array.from(leaveRow?.querySelectorAll('td') ?? []).map((td) => td.textContent)).toEqual(['Leaves', '1', '28'])
     expect(summary).not.toHaveTextContent('Absences')
     expect(summary).not.toHaveTextContent('Total days')
     expect(within(sheet()).getByTestId('statement-empty-categories')).toHaveTextContent(
@@ -424,13 +425,14 @@ describe('fix round 3: say each fact once', () => {
     const rows = Array.from(sheet().querySelectorAll('[data-section="ledger"] tbody tr'))
     const cells = (row: Element): string[] => Array.from(row.querySelectorAll('td')).map((td) => td.textContent ?? '')
     const [first, second] = rows.map(cells)
-    expect(first[1]).toBe('Administrative Leave Form')
+    // Subject, Date, Direction, Counterparty, (Reference), Recorded by.
+    expect(first[0]).toBe('Administrative Leave Form')
     expect(first[3]).toBe('G3095')
     // Reference is blank in every row, so that column is dropped: Recorded by is now index 4.
     expect(first).toHaveLength(5)
     expect(first[4]).toBe('')
     expect(second[4]).toBe('Mariam Al Kaabi')
-    expect(second[1]).toBe('Leave Application Form')
+    expect(second[0]).toBe('Leave Application Form')
     expect(second[3]).toBe('النظام')
     expect(sheet()).not.toHaveTextContent(/\bsystem\b/)
   })
@@ -441,5 +443,19 @@ describe('fix round 3: say each fact once', () => {
     const section = sheet().querySelector('[data-section="exceptions"]') as HTMLElement
     expect(section.querySelector('table')).toBeNull()
     expect(section).toHaveTextContent('No exceptions in this period')
+  })
+
+  it.each([
+    ['activity', 'en', '/employees/G3190/activity/print?period=year&lang=en'],
+    ['activity', 'ar', '/employees/G3190/activity/print?period=year&lang=ar'],
+    ['attendance', 'en', '/employees/G3190/attendance/print?mode=month&y=2026&m=9&lang=en'],
+    ['attendance', 'ar', '/employees/G3190/attendance/print?mode=month&y=2026&m=9&lang=ar'],
+  ])('the %s statement (%s) carries exactly one wordmark, in the repeating head', async (_kind, _lang, path) => {
+    renderAt(path)
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const wordmarks = sheet().querySelectorAll('img[src*="wordmark"]')
+    expect(wordmarks).toHaveLength(1)
+    expect(sheet().querySelector('thead')?.contains(wordmarks[0])).toBe(true)
+    expect(sheet().querySelector('tbody img[src*="wordmark"]')).toBeNull()
   })
 })

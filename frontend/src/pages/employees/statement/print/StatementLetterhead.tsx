@@ -3,22 +3,15 @@
  * letterhead, the identity table, the provenance and contact footer, the
  * signature boxes, and the sheet that repeats head and foot on every page.
  *
- * The sheet is one table: letterhead + identity in `thead`, provenance +
- * contact in `tfoot`, and the body as one table row per block. Chrome repeats
- * a table's header and footer groups on every printed page, but only when the
- * page breaks BETWEEN rows; one tall cell would print the head once. Long
- * tables are therefore cut into chunks of rows (`tableBlocks`), each chunk
- * repeating its column header.
- *
- * Chrome drops a repeating head once head + foot pass roughly a third of the
- * page, and the full masthead crosses that as soon as a long name or
- * placement wraps (seen on real Arabic records: pages 2+ printed with no
- * head at all). So every orientation repeats a compact one-line head (logo,
- * title, employee, G-number, reference, period) and prints the full
- * letterhead + identity once, as the first body row.
- *
- * The paper pins its own ink (index.css `.statement-sheet`): a dark-theme
- * operator still previews and prints dark text on white paper.
+ * The sheet is one table: the masthead (letterhead, red rule, one document
+ * line) in `thead`, provenance + contact in `tfoot`, and the body as one
+ * table row per block, the page-1 identity first. Chrome repeats a table's
+ * header and footer groups on every printed page, but only when the page
+ * breaks BETWEEN rows, and only while head + foot stay under roughly a third
+ * of the page (landscape A4 is 210 mm tall). The masthead is therefore the
+ * only logo on the sheet and is sized to stay under 32 mm (foot under 22 mm)
+ * whatever the name length: the document line never wraps, it ellipsizes.
+ * Section tables repeat their own column header where they continue.
  */
 
 import type { TFunction } from 'i18next'
@@ -29,6 +22,7 @@ import type { EmployeeRead } from '@/lib/api'
 import { formatStatementDate } from '../statementModel'
 import { usePaperT } from './paperBlocks'
 import type { Orientation, PaperLanguage } from './printSettings'
+import { scriptLang } from './paperText'
 
 export interface PaperIssue {
   /** `G3190/1/12/7` once the server issued it; null in the preview. */
@@ -61,11 +55,15 @@ export function Mono({ children }: { children: ReactNode }): React.JSX.Element {
   )
 }
 
+/** Free text in a `bdi`, tagged with its own script so the paper sets it in the right family. */
+export function Txt({ children }: { children: string | null | undefined }): React.JSX.Element {
+  return <bdi lang={scriptLang(children)}>{children || '-'}</bdi>
+}
+
 /**
- * The one masthead, repeated on every page: letterhead (wordmark, office
- * block, red rule) and one line under the rule naming the document. Sized to
- * stay well under Chrome's repeat threshold (head <= 40 mm) whatever the
- * name length: the name line never wraps, it ellipsizes.
+ * The one masthead, repeated on every page: letterhead (wordmark at the
+ * inline start, office block at the inline end, baselines aligned), the red
+ * rule, and one line under the rule naming the document.
  */
 function Masthead({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.Element {
   const e = frame.employee
@@ -137,9 +135,9 @@ function Identity({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.
         </span>
       )),
     ],
-    [t('statementPrint.paper.jobTitle'), <bdi key="j">{job ?? '-'}</bdi>],
-    [t('statementPrint.paper.departmentField'), <bdi key="d">{e.department ?? '-'}</bdi>],
-    [t('statementPrint.paper.unitPost'), <bdi key="u">{placement || '-'}</bdi>],
+    [t('statementPrint.paper.jobTitle'), <Txt key="j">{job}</Txt>],
+    [t('statementPrint.paper.departmentField'), <Txt key="d">{e.department}</Txt>],
+    [t('statementPrint.paper.unitPost'), <Txt key="u">{placement}</Txt>],
     [t('statementPrint.paper.joined'), e.doj ? formatStatementDate(e.doj, frame.lang) : '-'],
   ]
   return (
@@ -258,6 +256,11 @@ export function ScopeLine({ t, items }: { t: TFunction; items: string[] }): Reac
   return <NoteLine label={t('statementPrint.paper.notIncluded')} items={items} testId="statement-scope" t={t} />
 }
 
+/**
+ * Signature boxes laid out like a letter: role on top, writing space, the
+ * line, then the name and "Signature and date" under it. One box never
+ * splits across pages.
+ */
 export function SignatureBlocks({
   t,
   boxes,
@@ -269,8 +272,9 @@ export function SignatureBlocks({
     <div className="st-sign" data-testid="statement-signatures" data-count={boxes.length}>
       {boxes.map((box) => (
         <div className="b" key={box.role} data-testid="statement-signature">
-          {box.role}
-          {box.name && <small>{box.name}</small>}
+          <div className="role">{box.role}</div>
+          <div className="line" aria-hidden="true" />
+          {box.name && <bdi className="nm">{box.name}</bdi>}
           <small>{t('statementPrint.paper.signatureDate')}</small>
         </div>
       ))}

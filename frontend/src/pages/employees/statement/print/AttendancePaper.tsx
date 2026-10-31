@@ -248,10 +248,11 @@ export function AttendancePaper({ frame, settings, days, shiftWindows, leaveHidd
   }
 
   if (settings.exceptions) {
+    // What, when, then the measures.
     const columns = [
+      { label: t('statementPrint.paper.col.exception') },
       { label: t('statementPrint.paper.col.date'), kind: 'date' as const },
       { label: t('statementPrint.paper.col.shift'), kind: 'short' as const },
-      { label: t('statementPrint.paper.col.exception') },
       ...(settings.punches
         ? [
             { label: t('statementPrint.paper.col.firstPunch'), kind: 'short' as const },
@@ -265,14 +266,14 @@ export function AttendancePaper({ frame, settings, days, shiftWindows, leaveHidd
       key: `${c.date}-${c.shiftCode}-${i}`,
       cells: [
         <>
+          <Glyph state={c.state} />
+          {stateLabel(c.state)}
+        </>,
+        <>
           {formatStatementDate(c.date, lang)}
           <span className="st-sub">{weekdayName(weekdayOf(c.date), lang, 'long')}</span>
         </>,
         shiftCell(c.shiftCode),
-        <>
-          <Glyph state={c.state} />
-          {stateLabel(c.state)}
-        </>,
         ...(settings.punches ? [punch(c.firstPunch), punch(c.lastPunch, c.lastNextDay)] : []),
         String(c.punchCount),
         c.state === 'late' ? String(c.pastGrace) : '-',

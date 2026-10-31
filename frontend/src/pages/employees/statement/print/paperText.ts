@@ -10,6 +10,22 @@ export function paperActor(name: string | null | undefined, t: TFunction): strin
   return name.trim().toLowerCase() === 'system' ? t('statementPrint.paper.system') : name
 }
 
+const ARABIC = /[\u0600-\u06ff\u0750-\u077f\ufb50-\ufdff\ufe70-\ufeff]/
+const LATIN = /[A-Za-z]/
+
+/**
+ * The script a free-text value is written in, as a `lang` tag, so the paper
+ * sets it in the right family at a matching optical size. Mixed or neutral
+ * text (digits, codes) gets no tag and inherits the paper's language.
+ */
+export function scriptLang(text: string | null | undefined): 'ar' | 'en' | undefined {
+  if (!text) return undefined
+  const ar = ARABIC.test(text)
+  const en = LATIN.test(text)
+  if (ar === en) return undefined
+  return ar ? 'ar' : 'en'
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

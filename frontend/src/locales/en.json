@@ -6314,8 +6314,6 @@
       "periodSummary": "Period summary",
       "total": "Total",
       "noRecords": "No records in this period",
-      "entriesWithDays_one": "{{count}} ({{days}} days)",
-      "entriesWithDays_other": "{{count}} ({{days}} days)",
       "system": "System",
       "deduction_one": "Deduction: {{count}} day",
       "deduction_other": "Deduction: {{count}} days",
