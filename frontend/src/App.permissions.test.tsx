@@ -91,6 +91,7 @@ vi.mock('@/lib/routeLoaders', () => ({
   loadStoreCountsPage: () => Promise.resolve({ default: () => <div>store-counts-page</div> }),
   loadStoreCountPage: () => Promise.resolve({ default: () => <div>store-count-page</div> }),
   loadStoreDisposalsPage: () => Promise.resolve({ default: () => <div>store-disposals-page</div> }),
+  loadStoreMovementsPage: () => Promise.resolve({ default: () => <div>store-movements-page</div> }),
   loadScanBackPage: () => Promise.resolve({ default: () => <div>scanback-page</div> }),
   loadSignaturePlacementPage: () =>
     Promise.resolve({ default: () => <div>signature-placement-page</div> }),
@@ -130,6 +131,7 @@ const routes = [
   ['/vehicles/import', ['vehicles.view', 'vehicles.edit'], 'vehicle-import-page'],
   ['/holdings', ['store.view'], 'store-dashboard-page'],
   ['/holdings/store', ['store.view'], 'store-dashboard-page'],
+  ['/holdings/store/movements', ['store.view'], 'store-movements-page'],
   ['/holdings/store/items', ['store.view'], 'store-items-page'],
   ['/holdings/store/deliveries', ['store.view'], 'store-deliveries-page'],
   ['/holdings/store/deliveries/scan', ['store.edit'], 'store-delivery-scan-page'],
