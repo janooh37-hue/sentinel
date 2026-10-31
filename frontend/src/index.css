@@ -27,6 +27,7 @@
   --color-background: var(--bg);
   --color-foreground: var(--text);
   --color-surface: var(--surface);
+  --color-shelf: var(--shelf);
   --color-surface-raised: var(--surface-raised);
   --color-surface-tinted: var(--surface-tinted);
   --color-primary: var(--primary);
@@ -98,6 +99,7 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --bg: #f5f4f1;
   --surface: #ffffff;
+  --shelf: #c9c3b4;
   --surface-raised: #fafaf6;
   --surface-tinted: #f0eee8;
   --primary: #0d2845;
@@ -270,6 +272,7 @@
 [data-theme="dark"] {
   --bg: #0a0e18;
   --surface: #131826;
+  --shelf: #4a5370;
   --surface-raised: #1a2034;
   --surface-tinted: #1f263b;
   --primary: #5778cf;

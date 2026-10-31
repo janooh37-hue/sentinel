@@ -10,6 +10,7 @@ import {
   expiryFromValue,
   formatExpiry,
   formatQuantity,
+  formatQuantityParts,
   isBusinessDate,
   quantityFromParts,
   quantityIssue,
@@ -71,6 +72,22 @@ describe('store quantities', () => {
     expect(formatQuantity(-3, BOXES)).toBe('−3 صندوق')
     expect(formatQuantity(-24, JARS)).toBe('−1 كرتون')
     expect(formatQuantity(-3, JARS)).toBe('−3 علبة')
+  })
+
+  it.each([
+    [77, JARS, [{ number: '3', unit: 'cartons' }, { number: '5', unit: 'jars' }]],
+    [-26, JARS, [{ number: '−1', unit: 'carton' }, { number: '2', unit: 'jars' }]],
+    [-3, JARS, [{ number: '−3', unit: 'jars' }]],
+    [0, JARS, [{ number: '0', unit: 'cartons' }]],
+    [-3, BOXES, [{ number: '−3', unit: 'boxes' }]],
+  ] as const)('separates signed numbers from unit labels for %s base units', (value, item, expected) => {
+    expect(formatQuantityParts(value, item, 'en')).toEqual(expected)
+  })
+
+  it('shares Arabic unit formatting between string and isolated-number output', () => {
+    const parts = formatQuantityParts(-26, JARS, 'ar')
+    expect(parts).toEqual([{ number: '−1', unit: 'كرتون' }, { number: '2', unit: 'علبة' }])
+    expect(parts.map(part => `${part.number} ${part.unit}`).join(' + ')).toBe(formatQuantity(-26, JARS, 'ar'))
   })
 })
 

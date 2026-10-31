@@ -37,6 +37,15 @@ describe('assets locale parity', () => {
     expect(ar.nav.assets).toBe('الأصول')
   })
 
+  it('covers the room frontend namespaces', () => {
+    for (const prefix of ['assets.store.dashboard.', 'assets.store.handovers.', 'assets.store.movements.', 'assets.store.items.picture']) {
+      expect([...enAssets.keys()].some(key => key.startsWith(prefix)), prefix).toBe(true)
+      expect([...arAssets.keys()].some(key => key.startsWith(prefix)), prefix).toBe(true)
+    }
+    expect(enAssets.has('assets.store.tabs.movements')).toBe(true)
+    expect(arAssets.has('assets.store.tabs.movements')).toBe(true)
+  })
+
   it('gives every English key an Arabic peer and no Arabic-only keys', () => {
     expect([...baseKeys(arAssets)].sort()).toEqual([...baseKeys(enAssets)].sort())
   })
@@ -46,6 +55,14 @@ describe('assets locale parity', () => {
     for (const key of plurals) {
       for (const suffix of EN_PLURAL) expect(enAssets.has(`${key}${suffix}`), `${key}${suffix}`).toBe(true)
       for (const suffix of AR_PLURAL) expect(arAssets.has(`${key}${suffix}`), `${key}${suffix}`).toBe(true)
+    }
+  })
+
+  it('uses natural Arabic punctuation for every expiring-soon window plural', () => {
+    for (const suffix of AR_PLURAL) {
+      const text = arAssets.get(`assets.store.dashboard.soonWindow${suffix}`)
+      expect(text).toContain(': خلال')
+      expect(text).not.toContain('=')
     }
   })
 
