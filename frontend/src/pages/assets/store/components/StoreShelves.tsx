@@ -35,11 +35,11 @@ export function StoreShelves({ items, categories, batches, dashboard, filter, pi
         // Named by its own visible content (name, quantity, then the status
         // badge, which CSS order draws above the picture but is read last), so
         // the accessible name always contains the visible label (WCAG 2.5.3).
-        return <button key={item.id} type="button" disabled={disabled} onClick={event => picking ? onAdd(item) : onSelect(item, event.currentTarget)} className={`flex min-h-48 min-w-0 flex-col items-center justify-end gap-1 border-b-[6px] border-[var(--shelf)] px-1 pb-2 pt-2 text-center hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${disabled ? 'opacity-35' : ''}`}>
-          <StoreItemArt kind={item.art_kind} color={item.art_color} categoryId={item.category_id} size={104} className="-mb-2 max-w-full" />
+        return <button key={item.id} type="button" disabled={disabled} onClick={event => picking ? onAdd(item) : onSelect(item, event.currentTarget)} className={`flex min-w-0 flex-col items-center justify-end gap-1 border-b-[6px] border-[var(--shelf)] px-1 pb-2 pt-2 text-center hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${disabled ? 'opacity-35' : ''}`}>
+          <StoreItemArt kind={item.art_kind} color={item.art_color} categoryId={item.category_id} size={104} className="-my-3 max-w-full" />
           <span dir="auto" className="line-clamp-3 min-h-10 text-sm leading-snug">{itemName(item, i18n.language)}</span>{' '}
           <span className="text-balance text-sm font-semibold [&_bdi]:whitespace-normal"><StoreQuantity value={item.on_hand} item={item} /></span>{' '}
-          <span className="order-first flex min-h-7 items-end justify-center text-balance">{picking ? available > 0 && <span aria-hidden className="flex h-7 min-w-7 items-center justify-center rounded-full bg-primary px-1 text-sm font-semibold text-primary-foreground">{picked[item.id] || '+'}</span> : <ItemStatus itemId={item.id} dashboard={dashboard} />}</span>
+          <span className="order-first flex justify-center text-balance empty:hidden">{picking ? available > 0 && <span aria-hidden className="flex h-7 min-w-7 items-center justify-center rounded-full bg-primary px-1 text-sm font-semibold text-primary-foreground">{picked[item.id] || '+'}</span> : <ItemStatus itemId={item.id} dashboard={dashboard} />}</span>
         </button>
       })}</div>
     </section>
