@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -5,7 +6,7 @@ import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, type StoreHandoverRead, type StoreItemRead } from '@/lib/api'
 import i18n from '@/lib/i18n'
-import { HandoverForm, HandoverTray } from './HandoverTray'
+import { HandoverForm, HandoverTray, ItemQuantityStepper } from './HandoverTray'
 
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: null }) }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
@@ -110,5 +111,33 @@ describe('Handover tray', () => {
     act(() => viewport.dispatchEvent(new Event('resize')))
     expect(tray.style.getPropertyValue('--handover-viewport-height')).toBe('350px')
     expect(tray.style.getPropertyValue('--handover-keyboard-offset')).toBe(`${window.innerHeight - 350}px`)
+  })
+})
+
+describe('Item quantity stepper', () => {
+  const jars: StoreItemRead = { ...tea, contains_qty: 12, contains_unit_en: 'Jar', contains_unit_ar: 'مرطبان' }
+  function Harness({ start, max }: { start: number; max: number }) {
+    const [value, setValue] = useState(start)
+    return <I18nextProvider i18n={i18n}><ItemQuantityStepper item={jars} label="Tea" value={value} max={max} onChange={setValue} /><p data-testid="total">{value}</p></I18nextProvider>
+  }
+
+  it('rolls pieces into a carton, borrows one back, and caps cartons at the stock', async () => {
+    const user = userEvent.setup()
+    render(<Harness start={11} max={30} />)
+    await user.click(screen.getByLabelText('Increase Tea · Jar'))
+    expect(screen.getByTestId('total')).toHaveTextContent('12')
+    expect(screen.getByRole('status', { name: 'Tea · Carton' })).toHaveTextContent('1')
+    expect(screen.getByRole('status', { name: 'Tea · Jar' })).toHaveTextContent('0')
+    await user.click(screen.getByLabelText('Decrease Tea · Jar'))
+    expect(screen.getByTestId('total')).toHaveTextContent('11')
+    await user.click(screen.getByLabelText('Increase Tea · Carton'))
+    expect(screen.getByTestId('total')).toHaveTextContent('23')
+    expect(screen.getByLabelText('Increase Tea · Carton')).toBeDisabled()
+  })
+
+  it('keeps a handover at one piece or more', () => {
+    render(<Harness start={1} max={30} />)
+    expect(screen.getByLabelText('Decrease Tea · Jar')).toBeDisabled()
+    expect(screen.getByLabelText('Decrease Tea · Carton')).toBeDisabled()
   })
 })
