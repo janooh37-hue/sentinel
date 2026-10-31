@@ -55,8 +55,15 @@ export function SheetTitle(
 export function SheetContent({
   className,
   children,
+  returnFocusRef,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
-}: React.ComponentPropsWithoutRef<typeof Dialog.Content>): React.JSX.Element {
+}: React.ComponentPropsWithoutRef<typeof Dialog.Content> & {
+  /** Stable return target when a tap does not focus the opener or it is replaced. */
+  returnFocusRef?: React.RefObject<HTMLElement | null>
+}): React.JSX.Element {
+  const openerRef = React.useRef<HTMLElement | null>(null)
   return (
     <Dialog.Portal>
       <SheetOverlay />
@@ -70,6 +77,21 @@ export function SheetContent({
           className,
         )}
         {...props}
+        onOpenAutoFocus={(event) => {
+          openerRef.current = document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null
+          onOpenAutoFocus?.(event)
+        }}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event)
+          if (event.defaultPrevented) return
+          const target = returnFocusRef?.current ?? openerRef.current
+          if (target?.isConnected && target !== document.body) {
+            event.preventDefault()
+            target.focus()
+          }
+        }}
       >
         {children}
       </Dialog.Content>

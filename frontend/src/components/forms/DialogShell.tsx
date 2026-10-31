@@ -42,6 +42,8 @@ interface ShellProps {
   size?: keyof typeof SIZES
   /** Blocks Escape / overlay / close-button dismissal while saving. */
   busy?: boolean
+  returnFocusRef?: React.RefObject<HTMLElement | null>
+  onOpenAutoFocus?: React.ComponentPropsWithoutRef<typeof DialogContent>['onOpenAutoFocus']
 }
 
 export function DialogShell({
@@ -52,6 +54,8 @@ export function DialogShell({
   children,
   size = 'lg',
   busy = false,
+  returnFocusRef,
+  onOpenAutoFocus,
 }: ShellProps): React.JSX.Element {
   return (
     <DialogRoot
@@ -62,6 +66,8 @@ export function DialogShell({
       }}
     >
       <DialogContent
+        returnFocusRef={returnFocusRef}
+        onOpenAutoFocus={onOpenAutoFocus}
         className={cn(
           'bottom-sheet inset-x-0 bottom-0 top-auto max-h-[92dvh] max-w-none translate-x-0 translate-y-0 rounded-b-none rounded-t-2xl',
           'md:inset-auto md:left-1/2 md:top-1/2 md:max-h-[88dvh] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl',
@@ -73,7 +79,7 @@ export function DialogShell({
           aria-hidden
           className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-hairline md:hidden"
         />
-        <DialogHeader className="pe-10">
+        <DialogHeader className="pe-10 pointer-coarse:pe-16">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
@@ -168,7 +174,7 @@ export function FormAlert({
     <p
       id={id}
       role="alert"
-      className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+      className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive-text"
     >
       <AlertTriangle aria-hidden strokeWidth={1.75} className="mt-px h-3.5 w-3.5 shrink-0" />
       <span dir="auto">{message}</span>

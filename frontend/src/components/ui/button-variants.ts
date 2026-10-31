@@ -10,7 +10,7 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95',
+          'bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-hover',
         secondary:
           'border border-border bg-surface text-foreground hover:bg-surface-tinted',
         outline:
@@ -18,7 +18,7 @@ export const buttonVariants = cva(
         ghost:
           'text-muted-foreground hover:bg-surface-tinted hover:text-foreground',
         destructive:
-          'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+          'bg-destructive text-destructive-foreground hover:bg-destructive hover:underline',
         link:
           'text-primary underline-offset-4 hover:underline',
         // Commit — final actions that mint a ref number (Generate document,
