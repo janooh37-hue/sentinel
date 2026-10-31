@@ -397,6 +397,44 @@ def test_recorders_carry_their_employee_number(env):
     }
 
 
+def test_correspondence_subjects_offer_the_arabic_form(env):
+    db = env.db
+    env.db.get(Employee, EMP).name_ar = "موظف الكشف"
+    subjects = [
+        "Leave Application Form — Statement Employee",
+        "Duty Resumption Form",
+        "Annual Leave - إجازة سنوية",
+        "Note - موظف الكشف",
+        "Free text subject",
+    ]
+    for n, subject in enumerate(subjects):
+        db.add(
+            LedgerEntry(
+                entry_date=date(2026, 5, 1),
+                direction="outgoing",
+                channel="letter",
+                counterparty="x",
+                subject=subject,
+                related_employee_id=EMP,
+                created_at=datetime(2026, 5, 1, 8, n),
+            )
+        )
+    db.commit()
+
+    forms = {i["subject"]: (i["subject_en"], i["subject_ar"]) for i in _statement(env)["items"]}
+    assert forms == {
+        "Leave Application Form — Statement Employee": (
+            "Leave Application Form — Statement Employee",
+            "طلب إجازة — Statement Employee",
+        ),
+        "Duty Resumption Form": ("Duty Resumption Form", "استئناف العمل"),
+        "Annual Leave - إجازة سنوية": ("Annual Leave", "إجازة سنوية"),
+        # The employee's own Arabic name is not an Arabic form of the subject.
+        "Note - موظف الكشف": (None, None),
+        "Free text subject": (None, None),
+    }
+
+
 def test_unknown_employee_404_and_inverted_range_422(env):
     missing = env.client.get("/api/v1/employees/G0000/statement/activity")
     assert missing.status_code == 404

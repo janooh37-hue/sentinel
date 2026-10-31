@@ -21,6 +21,11 @@ G-number the account signs in with). Ledger rows store their author as free
 text in ``created_by``: a G-number (the usual case) is used as is after a check
 that the employee exists, and an email or a unique display name resolves
 through the matching user. Anything else stays null.
+
+Correspondence subjects of generated forms start with the template's English
+name (``"Leave Application Form — <name>"``); ``subject_ar`` swaps in the
+template's Arabic name. A stored ``"English - Arabic"`` pair splits into
+``subject_en`` / ``subject_ar``.
 """
 
 from __future__ import annotations
@@ -52,6 +57,10 @@ from app.services.employee_detail_service import (
 # Hard safety cap on one statement; ``truncated`` reports a cut.
 STATEMENT_CAP = 2000
 _DUTY_EVENT_TYPES = ("initial_placement", "transfer")
+# How a generated subject joins the form name to the rest (see document_service):
+# em dash, en dash, or hyphen, each with spaces.
+_SUBJECT_SEPARATORS = (" \u2014 ", " \u2013 ", " - ")
+_BILINGUAL_SEPARATOR = " - "
 
 
 def activity_statement(
@@ -177,6 +186,7 @@ def activity_statement(
         )
 
     ledger_items: list[tuple[ActivityStatementItemRead, str | None]] = []
+    catalog = _template_names(fields_meta)
     for entry in db.scalars(
         select(models.LedgerEntry)
         .where(*ledger_filters_for(db, emp.id, user))
@@ -184,6 +194,7 @@ def activity_statement(
         .order_by(models.LedgerEntry.created_at.desc(), models.LedgerEntry.id.desc())
         .limit(fetch)
     ):
+        subject_en, subject_ar = _subject_forms(entry.subject, catalog, emp)
         author = (entry.created_by or "").strip() or None
         item = ActivityStatementItemRead(
             kind="ledger",
@@ -192,6 +203,8 @@ def activity_statement(
             date_only=False,
             actor_name=author,
             subject=entry.subject,
+            subject_en=subject_en,
+            subject_ar=subject_ar,
             direction=entry.direction,
             channel=entry.channel,
             counterparty=entry.counterparty,
@@ -406,6 +419,65 @@ def _ledger_author_numbers(db: Session, authors: set[str]) -> dict[str, str]:
         elif len(by_name.get(author, ())) == 1:
             resolved[author] = next(iter(by_name[author]))
     return resolved
+
+
+def _template_names(fields_meta: dict[str, Any]) -> list[tuple[str, str]]:
+    """(English form name, Arabic name) pairs, longest English name first.
+
+    Both the template id and its ``name_en`` count, since generated subjects
+    start with the id.
+    """
+    pairs: dict[str, str] = {}
+    for template_id, meta in fields_meta.items():
+        if not isinstance(meta, dict):
+            continue
+        name_ar = (meta.get("name_ar") or "").strip()
+        if not name_ar:
+            continue
+        for name_en in (template_id, meta.get("name_en")):
+            if isinstance(name_en, str) and name_en.strip():
+                pairs.setdefault(name_en.strip(), name_ar)
+    return sorted(pairs.items(), key=lambda pair: -len(pair[0]))
+
+
+def _has_script(text: str, arabic: bool) -> bool:
+    for ch in text:
+        if not ch.isalpha():
+            continue
+        is_arabic = "\u0600" <= ch <= "\u06ff" or "\u0750" <= ch <= "\u077f"
+        if is_arabic == arabic:
+            return True
+    return False
+
+
+def _subject_forms(
+    subject: str | None, catalog: list[tuple[str, str]], employee: models.Employee
+) -> tuple[str | None, str | None]:
+    """``(subject_en, subject_ar)`` when an Arabic form is known, else nulls."""
+    text = (subject or "").strip()
+    if not text:
+        return None, None
+    for name_en, name_ar in catalog:
+        if text == name_en:
+            return text, name_ar
+        for separator in _SUBJECT_SEPARATORS:
+            if text.startswith(name_en + separator):
+                return text, name_ar + text[len(name_en) :]
+    english, sep, arabic = text.partition(_BILINGUAL_SEPARATOR)
+    english, arabic = english.strip(), arabic.strip()
+    own_name = (employee.name_ar or "").strip()
+    if (
+        sep
+        and english
+        and arabic
+        and arabic != own_name
+        and _has_script(english, arabic=False)
+        and not _has_script(english, arabic=True)
+        and _has_script(arabic, arabic=True)
+        and not _has_script(arabic, arabic=False)
+    ):
+        return english, arabic
+    return None, None
 
 
 def _site(stored_utc: datetime) -> datetime:

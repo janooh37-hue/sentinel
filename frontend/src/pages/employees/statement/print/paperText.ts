@@ -27,6 +27,14 @@ export function recorderOf(
   return { kind: 'none' }
 }
 
+/** A ledger subject in the paper's language: the Arabic form when the backend knows one. */
+export function paperSubject(
+  item: Pick<ActivityStatementItem, 'subject' | 'subject_en' | 'subject_ar'>,
+  lang: 'ar' | 'en',
+): string | null {
+  return (lang === 'ar' ? item.subject_ar : item.subject_en) ?? item.subject
+}
+
 // Letters only: Arabic punctuation (`،`) and Arabic-Indic digits are neutral.
 const ARABIC = /(?=\p{L})\p{Script=Arabic}/u
 const LATIN = /(?=\p{L})\p{Script=Latin}/u

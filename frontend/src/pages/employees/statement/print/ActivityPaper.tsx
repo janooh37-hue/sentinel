@@ -23,7 +23,7 @@ import {
   sectionOf,
   type ActivitySection,
 } from '../statementModel'
-import { paperActor, recorderOf, stripOwnName } from './paperText'
+import { paperActor, paperSubject, recorderOf, stripOwnName } from './paperText'
 import type { ActivitySettings } from './printSettings'
 import { tableBlocks, usePaperT, type Column, type ColumnKind, type TableRow } from './paperBlocks'
 import { Mono, ScopeLine, SignatureBlocks, StatementSheet, Txt, type PaperFrame } from './StatementLetterhead'
@@ -137,10 +137,11 @@ function sectionRows(
           // Said once: when the counterparty is also who recorded it, the
           // recorded-by cell stays empty (the column keeps its place).
           const sameParty = !!counterparty && counterparty.toLowerCase() === recorderText.toLowerCase()
+          const subject = paperSubject(item, lang)
           return {
             key: key(item),
             cells: [
-              <Txt key="s">{item.subject ? stripOwnName(item.subject, employee) : null}</Txt>,
+              <Txt key="s">{subject ? stripOwnName(subject, employee) : null}</Txt>,
               date(item.occurred_at),
               item.direction ? t(`ledger.direction.${item.direction}`, { defaultValue: item.direction }) : '-',
               <Txt key="c">{counterparty}</Txt>,

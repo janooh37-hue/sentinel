@@ -72,6 +72,10 @@ class ActivityStatementItemRead(ORMBase):
     violation_status: str | None = None
     # ledger (correspondence)
     subject: str | None = None
+    # ``subject`` in each language when a form is known: a generated form's
+    # template name, or one side of a stored "English - Arabic" pair.
+    subject_en: str | None = None
+    subject_ar: str | None = None
     direction: str | None = None
     channel: str | None = None
     counterparty: str | None = None

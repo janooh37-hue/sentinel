@@ -69,6 +69,8 @@ function item(kind: ActivityStatementItem['kind'], sourceId: number, extra: Part
     deduction_days: null,
     violation_status: null,
     subject: null,
+    subject_en: null,
+    subject_ar: null,
     direction: null,
     channel: null,
     counterparty: null,

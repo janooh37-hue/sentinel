@@ -452,7 +452,7 @@ describe('fix round 3: say each fact once', () => {
     expect(sheet()).not.toHaveTextContent('Unlinked Admin')
   })
 
-  it("strips the employee's own name from subjects, prints a shared party once, and localizes system", async () => {
+  it("strips the employee's own name from subjects, prints a shared party once, and prints the paper's language", async () => {
     getActivityStatement.mockResolvedValue({
       employee_id: 'G3190',
       from_date: '2026-01-01',
@@ -461,13 +461,17 @@ describe('fix round 3: say each fact once', () => {
       items: [
         item('ledger', 20, {
           subject: 'Administrative Leave Form — AHMED MANSOUR',
+          subject_en: 'Administrative Leave Form — AHMED MANSOUR',
+          subject_ar: 'طلب إجازة إدارية — AHMED MANSOUR',
           direction: 'outgoing',
           counterparty: 'G3095',
           actor_name: 'G3095',
           actor_employee_id: 'G3095',
         }),
         item('ledger', 21, {
-          subject: 'Leave Application Form - أحمد منصور',
+          subject: 'Free text subject',
+          subject_en: null,
+          subject_ar: null,
           direction: 'incoming',
           counterparty: 'system',
           actor_name: 'Mariam Al Kaabi',
@@ -475,21 +479,27 @@ describe('fix round 3: say each fact once', () => {
         }),
       ],
     })
-    renderAt('/employees/G3190/activity/print?period=year&lang=ar')
+    const { unmount } = renderAt('/employees/G3190/activity/print?period=year&lang=ar')
     await waitFor(() => expect(sheet()).toBeInTheDocument())
-    const rows = Array.from(sheet().querySelectorAll('[data-section="ledger"] tbody tr'))
     const cells = (row: Element): string[] => Array.from(row.querySelectorAll('td')).map((td) => td.textContent ?? '')
-    const [first, second] = rows.map(cells)
+    const ledgerRows = (): string[][] => Array.from(sheet().querySelectorAll('[data-section="ledger"] tbody tr')).map(cells)
+    const [first, second] = ledgerRows()
     // Subject, Date, Direction, Counterparty, (Reference), Recorded by.
-    expect(first[0]).toBe('Administrative Leave Form')
+    expect(first[0]).toBe('طلب إجازة إدارية')
     expect(first[3]).toBe('G3095')
     // Reference is blank in every row, so that column is dropped: Recorded by is now index 4.
     expect(first).toHaveLength(5)
     expect(first[4]).toBe('')
     expect(second[4]).toBe('G4602')
-    expect(second[0]).toBe('Leave Application Form')
+    // No Arabic form known: the stored subject prints as is.
+    expect(second[0]).toBe('Free text subject')
     expect(second[3]).toBe('النظام')
     expect(sheet()).not.toHaveTextContent(/\bsystem\b/)
+    unmount()
+
+    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    expect(ledgerRows()[0][0]).toBe('Administrative Leave Form')
   })
 
   it('prints an empty exceptions list as one line, not an empty table', async () => {

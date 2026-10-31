@@ -7459,6 +7459,10 @@ export interface components {
             violation_status: string | null;
             /** Subject */
             subject: string | null;
+            /** Subject En */
+            subject_en: string | null;
+            /** Subject Ar */
+            subject_ar: string | null;
             /** Direction */
             direction: string | null;
             /** Channel */
