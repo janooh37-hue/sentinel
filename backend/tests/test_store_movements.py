@@ -88,6 +88,47 @@ def test_store_movements_kind_filter(
 
 
 @pytest.mark.parametrize(
+    "params, kinds",
+    [
+        ({"from": TODAY.isoformat()}, ["out", "disposed"]),
+        ({"to": (TODAY - timedelta(days=2)).isoformat()}, ["in"]),
+        ({"from": TODAY.isoformat(), "to": TODAY.isoformat()}, ["out", "disposed"]),
+        (
+            {"from": (TODAY - timedelta(days=2)).isoformat(), "to": TODAY.isoformat()},
+            ["out", "disposed", "in"],
+        ),
+        ({"from": (TODAY + timedelta(days=1)).isoformat()}, []),
+        ({"to": (TODAY - timedelta(days=3)).isoformat()}, []),
+        ({"from": TODAY.isoformat(), "kind": "out", "q": "Sara"}, ["out"]),
+    ],
+)
+def test_store_movements_inclusive_event_date_filter(
+    editor: TestClient,
+    movements: list[tuple[str, int]],
+    params: dict[str, str],
+    kinds: list[str],
+) -> None:
+    # The fixture's recording timestamps differ from its event dates.
+    response = editor.get("/api/v1/store/movements", params=params)
+    assert response.status_code == 200, response.text
+    assert [row["kind"] for row in response.json()] == kinds
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"from": TODAY.isoformat(), "to": (TODAY - timedelta(days=1)).isoformat()},
+        {"from": "not-a-date"},
+        {"to": "2026-02-30"},
+    ],
+)
+def test_store_movements_rejects_invalid_date_range(
+    editor: TestClient, params: dict[str, str]
+) -> None:
+    assert editor.get("/api/v1/store/movements", params=params).status_code == 422
+
+
+@pytest.mark.parametrize(
     "query, kinds",
     [
         ("sArA", ["out"]),

@@ -1862,7 +1862,7 @@ export const api = {
   getStoreHandover: (id: number) => request<StoreHandoverRead>('GET', `/store/handovers/${id}`),
   deleteStoreHandover: (id: number) => request<void>('DELETE', `/store/handovers/${id}`),
   listStoreHandoverTakers: () => request<string[]>('GET', '/store/handovers/takers'),
-  listStoreMovements: (params: { kind?: StoreMovementKind; q?: string } = {}) =>
+  listStoreMovements: (params: { kind?: StoreMovementKind; q?: string; from?: string; to?: string } = {}) =>
     request<StoreMovementRead[]>('GET', `/store/movements${qs(params)}`),
   getStoreDashboard: () => request<StoreDashboard>('GET', '/store/dashboard'),
   uploadLeaveCertificate: (id: number, file: File) => {

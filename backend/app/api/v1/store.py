@@ -303,8 +303,14 @@ def list_store_movements(
     _user: _View,
     kind: StoreMovementKind | None = None,
     q: str | None = None,
+    from_date: Annotated[
+        date_t | None, Query(alias="from", description="Inclusive event-date lower bound.")
+    ] = None,
+    to_date: Annotated[
+        date_t | None, Query(alias="to", description="Inclusive event-date upper bound.")
+    ] = None,
 ) -> list[StoreMovementRead]:
-    return store_service.list_movements(db, kind=kind, q=q)
+    return store_service.list_movements(db, kind=kind, q=q, from_date=from_date, to_date=to_date)
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────────
