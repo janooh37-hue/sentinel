@@ -115,6 +115,10 @@ taken_by, recorded-by name, note, item code, item names). Show the recorded-by
 name, not the user id. Resolve names with the existing helper pattern
 (`timesheet_service._display_names` or `book_service.user_display_name`; book
 schemas already expose `created_by_name` / `created_by_name_ar`).
+Optional `?from=YYYY-MM-DD&to=YYYY-MM-DD` filter on the event date `on`,
+both bounds inclusive; an invalid date or `from` after `to` returns 422. The
+In & out page exposes them as labelled "From date" / "To date" inputs with
+"Clear dates" (not persisted in the URL).
 
 Migration: one new revision after `0110_store` on this branch
 (`store_handovers`, `store_handover_lines`, plus the two item drawing columns
