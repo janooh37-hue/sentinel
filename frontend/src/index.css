@@ -34,6 +34,7 @@
   --color-primary-hover: var(--primary-hover);
   --color-primary-soft: var(--primary-soft);
   --color-primary-on-soft: var(--primary-on-soft);
+  --color-primary-text: var(--primary-text);
   --color-primary-foreground: var(--on-primary);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
@@ -51,6 +52,7 @@
   --color-info-soft: var(--info-soft);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-text: var(--destructive-text);
   --color-rail: var(--rail);
   --color-rail-2: var(--rail-2);
   --color-rail-3: var(--rail-3);
@@ -106,6 +108,9 @@
   --primary-hover: #1d3a5e;
   --primary-soft: #e8edf3;
   --primary-on-soft: #0d2845;
+  /* Primary-tone TEXT (links, selected chips, inline figures) on surface,
+     surface-raised and primary-soft; ≥ 4.5:1 in both themes. */
+  --primary-text: #0d2845;
   --on-primary: #ffffff;
   --accent: #c8102e;
   --accent-hover: #a30d24;
@@ -126,6 +131,9 @@
   --info-soft: #e0e8f8;
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
+  /* Error text on surface or on a destructive/accent tint (alerts, query
+     errors). `--destructive` itself is 4.1:1 on its own tint. */
+  --destructive-text: #b91c1c;
   --text: #1c1f24;
   --text-muted: #5a6068;
   --text-faint: #8b9098;
@@ -279,6 +287,7 @@
   --primary-hover: #7491db;
   --primary-soft: #1c2849;
   --primary-on-soft: #7491db;
+  --primary-text: #8aa4e8;
   --on-primary: #0a0e18;
   --accent: #ef4858;
   --accent-hover: #f56b78;
@@ -297,6 +306,7 @@
   --info-soft: #1c2940;
   --destructive: #f87171;
   --destructive-foreground: #1c1f24;
+  --destructive-text: #fca5a5;
   --text: #e6e9f2;
   --text-muted: #8a93a7;
   --text-faint: #5f6678;
@@ -2084,6 +2094,8 @@ body {
     --caution: #ca8a04;
     --info: #1d4ed8;
     --destructive: #dc2626;
+    --destructive-text: #b91c1c;
+    --primary-text: #0d2845;
     --border: #e6e4dd;
     --border-strong: #d4d1c8;
     --hairline: #efece5;

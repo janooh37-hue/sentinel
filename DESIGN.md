@@ -99,6 +99,7 @@ variable and the alias.**
 | `bg-primary`, `text-primary`  | `--primary`           | `#0d2845`   | `#5778cf`   | Brand color. Buttons, active nav, action arrows. |
 | `bg-primary-hover`            | `--primary-hover`     | `#1d3a5e`   | `#7491db`   | One step lighter; hover state on primary buttons |
 | `bg-primary-soft`             | `--primary-soft`      | `#e8edf3`   | `#1c2849`   | Tinted background for primary-tone chips & avatars |
+| `text-primary-text`           | `--primary-text`      | `#0d2845`   | `#8aa4e8`   | Primary-tone **text** (links, selected chip label/count, inline figures). ≥ 4.5:1 on surface, raised, tinted and `primary-soft` in both themes; dark `--primary` is only 3.4:1 on `primary-soft`. |
 | `text-primary-foreground`     | `--on-primary`        | `#ffffff`   | `#0a0e18`   | Foreground when on primary bg. **Dark theme flips to dark text** (because primary is now light blue). |
 
 > **Dark-theme note:** primary becomes a mid-blue rather than navy, and
@@ -117,6 +118,11 @@ high-priority label, and error/destructive text.
 | `bg-accent`, `text-accent` | `--accent`       | `#c8102e`   | `#ef4858`   |
 | `bg-accent-hover`        | `--accent-hover`   | `#a30d24`   | `#f56b78`   |
 | `bg-accent-soft`         | `--accent-soft`    | `#fbe5e8`   | `#3a1820`   |
+| `text-destructive-text`  | `--destructive-text` | `#b91c1c` | `#fca5a5` |
+
+`text-destructive-text` is the error **text** colour for alerts and query
+errors on a destructive/accent tint (≥ 5.3:1 light, ≥ 8:1 dark); plain
+`--destructive` drops to ~4.1:1 on its own tint.
 
 #### 1.1.4 Status tones (success / warning / info)
 
