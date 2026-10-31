@@ -10,8 +10,9 @@ export function paperActor(name: string | null | undefined, t: TFunction): strin
   return name.trim().toLowerCase() === 'system' ? t('statementPrint.paper.system') : name
 }
 
-const ARABIC = /[\u0600-\u06ff\u0750-\u077f\ufb50-\ufdff\ufe70-\ufeff]/
-const LATIN = /[A-Za-z]/
+// Letters only: Arabic punctuation (`،`) and Arabic-Indic digits are neutral.
+const ARABIC = /(?=\p{L})\p{Script=Arabic}/u
+const LATIN = /(?=\p{L})\p{Script=Latin}/u
 
 /**
  * The script a free-text value is written in, as a `lang` tag, so the paper
