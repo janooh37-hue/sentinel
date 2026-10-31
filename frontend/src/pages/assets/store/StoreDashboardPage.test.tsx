@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { api, ApiError, type StoreDashboard, type StoreItemRead } from '@/lib/api'
+import { api, ApiError, type StoreDashboard, type StoreItemRead, type StoreMovementRead } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { toast } from '@/lib/toast'
 import { StoreDashboardPage } from './StoreDashboardPage'
@@ -28,6 +28,14 @@ const dashboard: StoreDashboard = {
   usage: { months: ['2026-08', '2026-09', '2026-10'], rows: [{ ...item, values: [null, -2, 48] }] },
   suggestions: [{ ...item, average_usage: 23, on_hand: 16, suggested: 13, suggested_units: 2 }],
   last_count_on: '2026-10-20', last_delivery_on: '2026-10-21', counts_recorded: 4, usage_ready: true, suggestion_count: 1,
+}
+const handover: StoreMovementRead = {
+  kind: 'out', id: 7, on: '2026-10-28', created_at: '2026-10-29T12:00:00Z', recorded_by_name: 'Store keeper', recorded_by_name_ar: 'أمين المخزن', taken_by: 'Rashid', note: null,
+  lines: [
+    { ...item, id: 1, batch_id: 1, quantity: 12, expiry_date: '2026-11-10', expiry_month_only: false },
+    { ...item, item_id: 2, item_code: water.code, item_name_en: water.name_en, item_name_ar: water.name_ar, contains_qty: null, id: 2, batch_id: 3, quantity: 3, expiry_date: null, expiry_month_only: false },
+    { ...item, item_id: 3, item_code: 'ST-0003', item_name_en: 'Coffee', item_name_ar: 'قهوة', contains_qty: null, id: 3, batch_id: 4, quantity: 2, expiry_date: null, expiry_month_only: false },
+  ],
 }
 function renderPage(path = '/holdings/store') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -67,17 +75,18 @@ describe('Store dashboard', () => {
     expect(screen.getByRole('region', { name: 'Monthly usage' })).toHaveTextContent('−2 jars')
     expect(screen.getByRole('region', { name: 'Suggested request quantities' })).toHaveTextContent('2 cartons')
     await user.click(screen.getByRole('button', { name: '1 Below minimum' }))
-    expect(screen.getByRole('button', { name: 'Water' })).toHaveClass('opacity-35')
-    await user.click(screen.getByRole('button', { name: 'Tea' }))
+    expect(screen.queryByRole('button', { name: /^Water / })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Drinks' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /^Tea / }))
     const dialog = screen.getByRole('dialog', { name: 'Tea' })
     expect(within(dialog).getByText('Low')).toBeInTheDocument()
     expect(within(dialog).getByText('12d')).toBeInTheDocument()
-    expect(within(dialog).getByText(/Taken from the batch expiring 2026-11-10 first/)).toBeInTheDocument()
+    expect(within(dialog).getByText(i18n.t('assets.store.handovers.fromBatch', { date: '\u20662026-11-10\u2069' }))).toBeInTheDocument()
   })
   it('enters picking from a deep link, caps at non-expired stock, and removes at one', async () => {
     const user = userEvent.setup()
     renderPage('/holdings/store?pick=1')
-    const button = await screen.findByRole('button', { name: 'Tea' })
+    const button = await screen.findByRole('button', { name: /^Tea / })
     await user.click(button); await user.click(button); await user.click(button)
     const tray = screen.getByRole('region', { name: 'Handover' })
     expect(within(tray).getByLabelText('Increase Tea')).toBeDisabled()
@@ -88,17 +97,21 @@ describe('Store dashboard', () => {
   it('disables items whose only remaining stock is expired', async () => {
     vi.mocked(api.listStoreBatches).mockResolvedValue(dashboard.expired.map(batch => ({ ...batch, id: batch.batch_id, days_to_expiry: batch.days_left })))
     renderPage('/holdings/store?pick=1')
-    expect(await screen.findByRole('button', { name: 'Tea' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Water' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: /^Tea / })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Water / })).toBeDisabled()
   })
   it('moves the drawer quantity into a multi-item handover', async () => {
     const user = userEvent.setup()
     renderPage()
-    await user.click(await screen.findByRole('button', { name: 'Tea' }))
+    await user.click(await screen.findByRole('button', { name: /^Tea / }))
     await user.click(screen.getByLabelText('Increase Quantity'))
+    await user.type(screen.getByLabelText('Taken by'), 'Rashid')
+    await user.type(screen.getByLabelText('Note (optional)'), 'Meeting supplies')
     await user.click(screen.getByRole('button', { name: /Add to a multi-item handover/ }))
     const tray = screen.getByRole('region', { name: 'Handover' })
     expect(within(tray).getByRole('status', { name: 'Tea' })).toHaveTextContent('2')
+    expect(within(tray).getByLabelText('Taken by')).toHaveValue('Rashid')
+    expect(within(tray).getByLabelText('Note (optional)')).toHaveValue('Meeting supplies')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
   it('posts all tray lines in one request, refreshes queries and exits picking', async () => {
@@ -106,8 +119,8 @@ describe('Store dashboard', () => {
     const client = renderPage()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
     await user.click(screen.getByRole('button', { name: 'Hand out items' }))
-    await user.click(await screen.findByRole('button', { name: 'Tea' }))
-    await user.click(screen.getByRole('button', { name: 'Water' }))
+    await user.click(await screen.findByRole('button', { name: /^Tea / }))
+    await user.click(screen.getByRole('button', { name: /^Water / }))
     const tray = screen.getByRole('region', { name: 'Handover' })
     await user.type(within(tray).getByLabelText('Taken by'), 'Rashid')
     await user.type(within(tray).getByLabelText('Note (optional)'), 'Meeting')
@@ -121,7 +134,7 @@ describe('Store dashboard', () => {
   it('records a single-item handover and validates the taker', async () => {
     const user = userEvent.setup()
     renderPage()
-    await user.click(await screen.findByRole('button', { name: 'Tea' }))
+    await user.click(await screen.findByRole('button', { name: /^Tea / }))
     const dialog = screen.getByRole('dialog', { name: 'Tea' })
     await user.click(within(dialog).getByRole('button', { name: 'Record handover' }))
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Enter the name')
@@ -134,7 +147,7 @@ describe('Store dashboard', () => {
     vi.mocked(api.createStoreHandover).mockRejectedValue(new ApiError(422, 'STORE_HANDOVER_SHORT', 'short'))
     const user = userEvent.setup()
     renderPage('/holdings/store?pick=1')
-    await user.click(await screen.findByRole('button', { name: 'Tea' }))
+    await user.click(await screen.findByRole('button', { name: /^Tea / }))
     await user.type(screen.getByLabelText('Taken by'), 'Rashid')
     await user.click(screen.getByRole('button', { name: 'Record handover · 1 item' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('not enough non-expired stock')
@@ -144,7 +157,7 @@ describe('Store dashboard', () => {
     state.editable = false
     const user = userEvent.setup()
     renderPage('/holdings/store?pick=1')
-    await user.click(await screen.findByRole('button', { name: 'Tea' }))
+    await user.click(await screen.findByRole('button', { name: /^Tea / }))
     expect(screen.queryByRole('form')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Hand out items' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Taken by')).not.toBeInTheDocument()
@@ -190,7 +203,9 @@ describe('Store dashboard', () => {
   ] as const)('localizes the recorder without repeating you (%s, signedIn=%s)', async (language, signedIn, expected) => {
     state.signedIn = signedIn
     await i18n.changeLanguage(language)
+    const user = userEvent.setup()
     renderPage('/holdings/store?pick=1')
+    await user.click(await screen.findByRole('button', { name: language === 'ar' ? /^شاي / : /^Tea / }))
     expect(await screen.findByText(expected)).toBeInTheDocument()
     expect(screen.queryByText(/you \(you\)|أنت \(أنت\)/)).not.toBeInTheDocument()
   })
@@ -200,7 +215,7 @@ describe('Store dashboard', () => {
     renderPage()
     const shelf = await screen.findByRole('region', { name: 'ضيافة' })
     expect(within(shelf).getByText('1 كرتون + 4 علبة')).toHaveAttribute('dir', 'auto')
-    await user.click(screen.getByRole('button', { name: 'شاي' }))
+    await user.click(screen.getByRole('button', { name: /^شاي / }))
     const dialog = screen.getByRole('dialog', { name: 'شاي' })
     expect(within(dialog).getByText('1 كرتون + 4 علبة')).toHaveAttribute('dir', 'auto')
     expect(within(dialog).getByText('4 كرتون')).toHaveAttribute('dir', 'auto')
@@ -221,8 +236,104 @@ describe('Store dashboard', () => {
     await i18n.changeLanguage('ar')
     const user = userEvent.setup()
     renderPage()
-    await user.click(await screen.findByRole('button', { name: 'ماء' }))
+    await user.click(await screen.findByRole('button', { name: /^ماء / }))
     const dialog = screen.getByRole('dialog', { name: 'ماء' })
     expect(within(dialog).getByText(i18n.t('assets.store.expiry.none'))).toHaveAttribute('dir', 'auto')
+  })
+  it.each([
+    ['expired', '0 Expired', 'No expired items'],
+    ['expiring', '0 Expiring soon', 'No items expiring soon'],
+    ['low', '0 Below minimum', 'No items are below their minimum level.'],
+  ] as const)('shows a filter-specific empty state with no shelf tiles (%s)', async (_filter, chip, message) => {
+    vi.mocked(api.getStoreDashboard).mockResolvedValue({ ...dashboard, expired: [], expiring_soon: [], low_stock: [] })
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: chip }))
+    expect(screen.getByRole('status')).toHaveTextContent(message)
+    expect(screen.queryByRole('button', { name: /^Tea |^Water / })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Pantry' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Drinks' })).not.toBeInTheDocument()
+    expect(screen.queryByText('No store items yet')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '2 All items' }))
+    expect(screen.getByRole('button', { name: /^Tea / })).toBeInTheDocument()
+  })
+  it.each(['en', 'ar'])('names a shelf tile with its visible name, quantity and status (%s)', async language => {
+    await i18n.changeLanguage(language)
+    renderPage()
+    const tile = await screen.findByRole('button', { name: language === 'ar' ? 'شاي 1 كرتون + 4 علبة منتهي الصلاحية' : 'Tea 1 carton + 4 jars Expired' })
+    expect(tile).not.toHaveAttribute('aria-label')
+    expect(tile.getAttribute('aria-labelledby')?.split(' ')).toHaveLength(3)
+  })
+  it('returns focus to the opening shelf tile when the drawer closes', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    const tile = await screen.findByRole('button', { name: /^Tea / })
+    await user.click(tile)
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(tile).toHaveFocus())
+  })
+  it('keeps the drawer title and close control outside the scrolling body', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: /^Tea / }))
+    const dialog = screen.getByRole('dialog', { name: 'Tea' })
+    const close = within(dialog).getByRole('button', { name: 'Close' })
+    expect(close.closest('header')).toContainElement(within(dialog).getByRole('heading', { name: 'Tea' }))
+    expect(close.closest('.overflow-y-auto')).toBeNull()
+  })
+  it.each([false, true])('gates the item suggestion on usage readiness (%s)', async usageReady => {
+    vi.mocked(api.getStoreDashboard).mockResolvedValue({ ...dashboard, usage_ready: usageReady, suggestions: [] })
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: /^Tea / }))
+    const suggestion = within(screen.getByRole('dialog', { name: 'Tea' })).getByText('Suggested request').parentElement!
+    expect(suggestion).toHaveTextContent(usageReady ? 'Nothing to request' : 'Available after the second stock count')
+    if (!usageReady) expect(suggestion).not.toHaveTextContent('Nothing to request')
+  })
+  it('shows only this item’s quantity in history and collapses other items', async () => {
+    vi.mocked(api.listStoreMovements).mockResolvedValue([handover])
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: /^Tea / }))
+    const dialog = screen.getByRole('dialog', { name: 'Tea' })
+    expect(within(dialog).getByText((_, element) => element?.tagName === 'BDI' && element.getAttribute('dir') === 'auto' && element.textContent === '−1 carton')).toBeInTheDocument()
+    expect(within(dialog).getByText((_, element) => element?.tagName === 'P' && element.textContent === '+2 other items')).toBeInTheDocument()
+    expect(within(dialog).queryByText(/Water|Coffee|3 items|17 units/)).not.toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: /Rashid/ }))
+    expect(within(screen.getByRole('dialog', { name: 'Handover' })).getByText('Water')).toBeInTheDocument()
+  })
+  it('preselects the drawer item for disposal and returns to it on cancel', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: /^Tea / }))
+    await user.click(screen.getByRole('button', { name: 'Record disposal' }))
+    const dialog = screen.getByRole('dialog', { name: 'Record disposal' })
+    const batch = within(dialog).getByRole('combobox', { name: /Batch/ })
+    await waitFor(() => expect(batch).toHaveTextContent('Tea'))
+    expect(batch).toHaveTextContent('2026-09')
+    await user.click(batch)
+    const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(2)
+    expect(options.every(option => option.textContent?.includes('Tea'))).toBe(true)
+    expect(screen.queryByRole('option', { name: /Water/ })).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(await screen.findByRole('dialog', { name: 'Tea' })).toBeInTheDocument()
+  })
+  it('returns focus to Hand out items after cancelling the tray', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Hand out items' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Hand out items' })).toHaveFocus())
+  })
+  it('shows recent handover quantities with their own units and no mixed total', async () => {
+    vi.mocked(api.listStoreMovements).mockResolvedValue([handover])
+    renderPage()
+    const recent = await screen.findByRole('region', { name: 'Recent handovers' })
+    await waitFor(() => expect(recent).toHaveTextContent('1 carton'))
+    expect(recent).toHaveTextContent('3 cartons')
+    expect(recent).toHaveTextContent('2 cartons')
+    expect(recent).not.toHaveTextContent('17 units')
   })
 })
