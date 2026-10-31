@@ -7408,6 +7408,7 @@ export interface components {
          *
          *     ``occurred_at`` is site-local (Asia/Dubai) and carries its offset, so the
          *     wall-clock time is the string's ``HH:MM`` and the instant is unambiguous.
+         *     ORMBase tags only naive values, so the aware site instant passes through.
          */
         ActivityStatementItemRead: {
             /**

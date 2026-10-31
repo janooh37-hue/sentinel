@@ -1,4 +1,4 @@
-"""Migration 0115 adds the statement print serial table and reverses cleanly."""
+"""Migration 0110 adds the statement print serial table and reverses cleanly."""
 
 from pathlib import Path
 
@@ -10,8 +10,8 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0115_employee_statement_prints"
-PARENT = "0114_step_outcome_seen"
+HEAD = "0110_employee_statement_prints"
+PARENT = "0109_book_folder_shares"
 
 
 def test_single_head_and_round_trip(tmp_path: Path) -> None:

@@ -278,6 +278,7 @@
     }
   },
   "common": {
+    "forbidden": "You do not have permission to view or perform this action.",
     "save": "Save",
     "cancel": "Cancel",
     "delete": "Delete",

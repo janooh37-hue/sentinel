@@ -88,7 +88,6 @@ def get_employee_detail(
 
     tenure_years = _tenure_years(emp.doj)
     can_view_violations = user is None or perm_service.has_capability(db, user, "violations.view")
-    can_view_leaves = user is None or perm_service.has_capability(db, user, "leaves.view")
     doc_filters = document_filters(emp.id)
     ledger_filters = ledger_filters_for(db, emp.id, user)
 
