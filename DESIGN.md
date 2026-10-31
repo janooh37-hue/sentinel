@@ -2431,3 +2431,25 @@ will trip over them.
   book in place (replace), or return to the list when the scope is empty.
 - Dates are `DD/MM/YYYY` with Western digits (`formatDmy`, `dir="ltr"` mono) in
   both languages, per §1.7.
+
+## 8. Store delivery-note scanning
+
+**Sources:** `pages/assets/store/StoreDeliveryScanPage.tsx`,
+`components/ScanDeliveryConfirm.tsx`, `components/ScanNotePreview.tsx`.
+
+- `/holdings/store/deliveries/scan` stays under the Deliveries tab and requires
+  `store.edit`. Desktop uses the header entry; phones have a list-level entry.
+- The local photo/PDF is scanned once. Reading is announced and cancellable;
+  unavailable OCR or an empty result offers the manual delivery dialog with
+  the chosen file already attached.
+- Confirmation reuses `DeliveryLines` through optional props and slots. Local
+  row crops retain document coordinates in either UI direction. Unmatched,
+  uncertain and missing-quantity rows sort first; the focused summary and
+  each flagged row pair warning icons with text.
+- On-note quantities are read-only beside Received. Differences require a
+  reason, expiry is required, and received zero is accepted only when the
+  note lists a positive quantity. Non-store rows can be skipped.
+- Delivery creation and file attachment are separate durable steps. Attachment
+  failure retains the confirmed rows, disables edits and offers attachment-only
+  retry or an explicit finish without the file; retry never creates a second
+  delivery. English and Arabic scan copy live under `assets.store.scan`.

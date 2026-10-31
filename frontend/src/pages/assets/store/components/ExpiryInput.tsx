@@ -20,6 +20,7 @@ interface Props {
   invalid?: boolean
   describedBy?: string
   disabled?: boolean
+  allowUndated?: boolean
 }
 
 export function ExpiryInput({
@@ -29,6 +30,7 @@ export function ExpiryInput({
   invalid = false,
   describedBy,
   disabled = false,
+  allowUndated = true,
 }: Props): React.JSX.Element {
   const { t } = useTranslation()
   return (
@@ -38,7 +40,7 @@ export function ExpiryInput({
         aria-label={t('assets.store.expiryInput.modeAria')}
         className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-surface p-1"
       >
-        {MODES.map((mode) => (
+        {MODES.filter((mode) => allowUndated || mode !== 'none').map((mode) => (
           <button
             key={mode}
             type="button"

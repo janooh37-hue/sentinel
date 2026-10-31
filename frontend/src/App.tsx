@@ -49,6 +49,7 @@ import {
   loadStoreCountsPage,
   loadStoreDashboardPage,
   loadStoreDeliveriesPage,
+  loadStoreDeliveryScanPage,
   loadStoreDisposalsPage,
   loadStoreMovementsPage,
   loadStoreItemsPage,
@@ -102,6 +103,7 @@ const VehicleMaintenancePage = lazy(loadVehicleMaintenancePage)
 const StoreDashboardPage = lazy(loadStoreDashboardPage)
 const StoreItemsPage = lazy(loadStoreItemsPage)
 const StoreDeliveriesPage = lazy(loadStoreDeliveriesPage)
+const StoreDeliveryScanPage = lazy(loadStoreDeliveryScanPage)
 const StoreCountsPage = lazy(loadStoreCountsPage)
 const StoreCountPage = lazy(loadStoreCountPage)
 const StoreDisposalsPage = lazy(loadStoreDisposalsPage)
@@ -528,6 +530,14 @@ function Shell(): React.JSX.Element {
                 element={
                   <RequireCapability cap="store.view">
                     <StoreDeliveriesPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/deliveries/scan"
+                element={
+                  <RequireCapability cap="store.edit">
+                    <StoreDeliveryScanPage />
                   </RequireCapability>
                 }
               />

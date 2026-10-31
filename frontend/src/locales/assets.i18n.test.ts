@@ -46,6 +46,35 @@ describe('assets locale parity', () => {
     expect(arAssets.has('assets.store.tabs.movements')).toBe(true)
   })
 
+  it('provides every delivery-note scan label in English and Arabic', () => {
+    const required = [
+      'title', 'description', 'entry', 'chooseFile', 'fileHint', 'reading',
+      'cancelReading', 'confirmTitle', 'confirmDescription', 'needsLook',
+      'unmatched', 'lowConfidence', 'onNote', 'received', 'line', 'skipLine',
+      'unknownQuantity', 'reason', 'reasonRequired', 'skip', 'noLines',
+      'unavailable', 'nothingRead', 'manual', 'back', 'cropAlt',
+      'cropUnavailable', 'retryUpload', 'finishWithoutFile', 'uploadFailed',
+      'quantityRequired', 'dateRequired', 'savedWithoutFile', 'scanTimeout',
+      'tooManyPages',
+    ]
+    const enKeys = baseKeys(enAssets)
+    const arKeys = baseKeys(arAssets)
+    for (const key of required) {
+      const path = `assets.store.scan.${key}`
+      expect(enKeys.has(path), path).toBe(true)
+      expect(arKeys.has(path), path).toBe(true)
+    }
+    for (const suffix of EN_PLURAL) {
+      expect(variables(en.assets.store.scan[`needsLook${suffix}`])).toContain('count')
+      expect(en.assets.store.scan[`needsLook${suffix}`]).toContain('<count>{{count}}</count>')
+    }
+    for (const suffix of AR_PLURAL) {
+      expect(ar.assets.store.scan[`needsLook${suffix}`].trim()).not.toBe('')
+      const text = ar.assets.store.scan[`needsLook${suffix}`]
+      if (variables(text).includes('count')) expect(text).toContain('<count>{{count}}</count>')
+    }
+  })
+
   it('gives every English key an Arabic peer and no Arabic-only keys', () => {
     expect([...baseKeys(arAssets)].sort()).toEqual([...baseKeys(enAssets)].sort())
   })
