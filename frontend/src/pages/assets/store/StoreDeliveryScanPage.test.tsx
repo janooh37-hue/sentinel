@@ -191,7 +191,7 @@ describe('Store delivery scan', () => {
     fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2028-09-30' } })
     await user.type(screen.getByRole('textbox', { name: /Reason for difference/ }), 'Missing jars')
     await user.click(screen.getByRole('button', { name: 'Not a store item: skip, line 1' }))
-    expect(screen.getByRole('heading', { name: 'Confirm delivery' }).parentElement).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Restore, line 1' })).toHaveFocus()
     expect(screen.getByText((_, element) => element?.getAttribute('role') === 'status' && element.textContent === 'Line 1 skipped. You can restore it below.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Restore, line 1' }))
     expect(screen.getByRole('combobox', { name: /Store item/ })).toHaveFocus()
@@ -317,6 +317,19 @@ describe('Store delivery scan', () => {
     expect(loose).not.toHaveAttribute('aria-invalid')
     expect(screen.queryByText('Correct the indicated fields before saving.')).not.toBeInTheDocument()
     expect(screen.queryAllByRole('alert')).toHaveLength(0)
+    expect(api.createStoreDelivery).not.toHaveBeenCalled()
+  })
+
+  it('moves focus to the first invalid field after a failed save, again on a repeat attempt, and keeps the summary alert', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await scanFile()
+    const expiry = screen.getByLabelText('Expiry date')
+    await user.click(screen.getByRole('button', { name: 'Save delivery' }))
+    expect(expiry).toHaveFocus()
+    expect(screen.getByText('Correct the indicated fields before saving.').closest('[role="alert"]')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Save delivery' }))
+    expect(expiry).toHaveFocus()
     expect(api.createStoreDelivery).not.toHaveBeenCalled()
   })
 

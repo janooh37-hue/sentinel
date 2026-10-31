@@ -31,6 +31,9 @@ function ConfirmForm({ file, scan, items, onChooseAnother, onManual }: Props & {
   const id = useId()
   const navigate = useNavigate()
   const summary = useRef<HTMLDivElement>(null)
+  const form = useRef<HTMLFormElement>(null)
+  /** Element id, or 'firstInvalid', to focus after the next render. */
+  const pendingFocus = useRef<string | null>(null)
   const [lines, setLines] = useState(() => {
     const initial = createDeliveryLines(scan.lines.map((row) => {
       const item = items.find((entry) => entry.id === row.item_id) ?? null
@@ -79,12 +82,23 @@ function ConfirmForm({ file, scan, items, onChooseAnother, onManual }: Props & {
     document.getElementById(`${id}-${restoredKey.current}-item`)?.focus()
     restoredKey.current = null
   }, [id, lines])
+  // Runs after every render: a pending focus target only exists once the DOM reflects the state change.
+  useEffect(() => {
+    if (pendingFocus.current == null) return
+    focusTarget(pendingFocus.current)
+    pendingFocus.current = null
+  })
+
+  function focusTarget(target: string): void {
+    const element = target === 'firstInvalid' ? form.current?.querySelector<HTMLElement>('[aria-invalid="true"]') : document.getElementById(target)
+    ;(element ?? summary.current)?.focus()
+  }
 
   function skipLine(line: DeliveryLine): void {
     setSkipped((current) => [...current, line])
     setLines((current) => current.filter((entry) => entry.key !== line.key))
     setAnnouncement({ key: 'assets.store.scan.skippedAnnouncement', number: line.key + 1 })
-    summary.current?.focus()
+    pendingFocus.current = `${id}-${line.key}-restore`
   }
 
   function restoreLine(line: DeliveryLine): void {
@@ -99,7 +113,9 @@ function ConfirmForm({ file, scan, items, onChooseAnother, onManual }: Props & {
     if (disabled) return
     setSubmitted(true)
     if (invalid) {
-      summary.current?.focus()
+      // A repeat failed Save changes no state, so there is no render to wait for.
+      if (submitted) focusTarget('firstInvalid')
+      else pendingFocus.current = 'firstInvalid'
       return
     }
     const body: StoreDeliveryCreate = {
@@ -115,7 +131,7 @@ function ConfirmForm({ file, scan, items, onChooseAnother, onManual }: Props & {
   }
 
   return (
-    <form noValidate onSubmit={submit} className="flex min-w-0 flex-col gap-5 rounded-xl border border-border bg-surface p-4 md:p-6" aria-busy={save.saving}>
+    <form ref={form} noValidate onSubmit={submit} className="flex min-w-0 flex-col gap-5 rounded-xl border border-border bg-surface p-4 md:p-6" aria-busy={save.saving}>
       <div ref={summary} tabIndex={-1} className="rounded-lg border border-border p-3 focus-visible:ring-2 focus-visible:ring-ring">
         <h2 className="font-semibold">{t('assets.store.scan.confirmTitle')}</h2>
         <p className="text-sm text-muted-foreground">{t('assets.store.scan.confirmDescription')}</p>
@@ -149,7 +165,7 @@ function ConfirmForm({ file, scan, items, onChooseAnother, onManual }: Props & {
         <h3 id={`${id}-skipped`} className="font-medium">{t('assets.store.scan.skippedLines')}</h3>
         <ul className="mt-2 flex flex-col gap-2">{skipped.map((line) => <li key={line.key} className="flex flex-wrap items-center justify-between gap-2">
           <span dir="auto">{scan.lines[line.key].raw_text}</span>
-          <Button type="button" variant="secondary" className="min-h-11" disabled={disabled} aria-label={t('assets.store.scan.restoreLine', { number: line.key + 1 })} onClick={() => restoreLine(line)}>{t('assets.store.scan.restore')}</Button>
+          <Button id={`${id}-${line.key}-restore`} type="button" variant="secondary" className="min-h-11" disabled={disabled} aria-label={t('assets.store.scan.restoreLine', { number: line.key + 1 })} onClick={() => restoreLine(line)}>{t('assets.store.scan.restore')}</Button>
         </li>)}</ul>
       </section>}
       {!lines.length && <div className="flex flex-col gap-3"><p role="status">{t('assets.store.scan.noLines')}</p><div className="flex flex-wrap gap-2">
