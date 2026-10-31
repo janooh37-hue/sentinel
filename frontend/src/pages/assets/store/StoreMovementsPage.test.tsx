@@ -130,7 +130,10 @@ describe('Store movements', () => {
     expect(screen.queryByText('No store records yet.')).not.toBeInTheDocument()
   })
   it('shows unknown counts while loading and after an error, rather than zero', async () => {
-    const { promise, reject } = Promise.withResolvers<StoreMovementRead[]>()
+    let reject!: (reason: unknown) => void
+    const promise = new Promise<StoreMovementRead[]>((_, fail) => {
+      reject = fail
+    })
     vi.mocked(api.listStoreMovements).mockReturnValue(promise)
     renderPage()
     for (const label of ['All', 'Received', 'Handed out', 'Disposed']) {
