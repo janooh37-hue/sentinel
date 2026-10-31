@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import { STORE_ART_COLORS } from './storeItemArt'
+import { STORE_ART_COLORS } from './storeArtCatalog'
 
 function shade(hex: string, amount: number): string {
   const value = Number.parseInt(hex.slice(1), 16)

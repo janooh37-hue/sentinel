@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { DialogBody, DialogFooter, DialogShell, Field, FieldGrid, FormAlert } from '@/components/forms/DialogShell'
 import { StoreItemArt } from '@/components/StoreItemArt'
-import { STORE_ART_COLORS, STORE_ART_KINDS } from '@/components/storeItemArt'
+import { STORE_ART_COLORS, STORE_ART_KINDS } from '@/components/storeArtCatalog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
