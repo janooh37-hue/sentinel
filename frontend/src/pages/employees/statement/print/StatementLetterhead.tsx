@@ -155,14 +155,15 @@ function Identity({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.
 function Foot({ frame, t }: { frame: PaperFrame; t: TFunction }): React.JSX.Element {
   return (
     <>
+      {/* The line total floats beside the first line only, so the source line and its URL get the full width. */}
       <div className="st-prov">
-        <div>
-          {t('statementPrint.paper.printed', { at: frame.issue.printedAt })}
-          {frame.issue.byline && ` · ${t('statementPrint.paper.printedBy', { name: frame.issue.byline })}`}
-          <br />
-          {t('statementPrint.paper.source', { id: frame.employee.id })} · <Mono>{frame.sourceUrl}</Mono>
-        </div>
         <b data-testid="statement-line-total">{frame.lineTotal}</b>
+        {t('statementPrint.paper.printed', { at: frame.issue.printedAt })}
+        {frame.issue.byline && ` · ${t('statementPrint.paper.printedBy', { name: frame.issue.byline })}`}
+        <br />
+        {t('statementPrint.paper.source', { id: frame.employee.id })}{' '}
+        {/* The separator travels with the URL (no-break space, unbreakable mono): a wrapped URL starts its line with "·". */}
+        ·&nbsp;<Mono>{frame.sourceUrl}</Mono>
       </div>
       <div className="st-contact">
         <span>
