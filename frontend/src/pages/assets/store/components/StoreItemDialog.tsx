@@ -182,7 +182,7 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
           <legend className="px-1 text-sm font-semibold">{t('assets.store.items.picture')}</legend>
           <p className="text-xs text-muted-foreground">{t('assets.store.items.pictureHint')}</p>
           <div className="flex flex-wrap items-center gap-4">
-            <div className="rounded-lg bg-surface-raised p-2" role="img" aria-label={t('assets.store.items.picturePreview')}>
+            <div className="rounded-lg bg-store-art-surface p-2" role="img" aria-label={t('assets.store.items.picturePreview')}>
               <StoreItemArt kind={artKind} color={artColor} categoryId={Number(values.category_id) || null} size={80} />
             </div>
             <fieldset className="min-w-0 flex-1 space-y-2" role="radiogroup">
@@ -191,7 +191,7 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
                 {[null, ...STORE_ART_KINDS].map((kind) => <label key={kind ?? 'default'} className="relative cursor-pointer">
                   <input type="radio" name={`${id}-art-kind`} value={kind ?? ''} checked={artKind === kind} onChange={() => setArtKind(kind)}
                     aria-label={t(kind ? `assets.store.items.pictureKinds.${kind}` : 'assets.store.items.pictureDefault')} className="peer sr-only" />
-                  <span className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-border bg-surface peer-checked:border-primary peer-checked:ring-1 peer-checked:ring-primary peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary peer-disabled:opacity-50"
+                  <span className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-border bg-store-art-surface peer-checked:border-primary peer-checked:ring-1 peer-checked:ring-primary peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary peer-disabled:opacity-50"
                     title={t(kind ? `assets.store.items.pictureKinds.${kind}` : 'assets.store.items.pictureDefault')}>
                     <StoreItemArt kind={kind} color={artColor} categoryId={Number(values.category_id) || null} size={44} />
                   </span>

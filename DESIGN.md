@@ -91,6 +91,12 @@ variable and the alias.**
 | `bg-surface`              | `--surface`            | `#ffffff`   | `#131826`   | Card and panel background                                |
 | `bg-surface-raised`       | `--surface-raised`     | `#fafaf6`   | `#1a2034`   | Slightly elevated row in lists, dialog body items        |
 | `bg-surface-tinted`       | `--surface-tinted`     | `#f0eee8`   | `#1f263b`   | Hover wash for rows + interactive surfaces               |
+| `bg-store-art-surface`    | `--store-art-surface`   | `#fafaf6`   | `#fafaf6`   | Fixed light backing for Store item artwork previews, not text/UI surfaces |
+
+Store item Picture pickers use `bg-store-art-surface` behind the large preview
+and every drawing option. The backing intentionally stays light in both themes
+so the brown carton, jar and glove details retain their intended contrast;
+selection rings/checkmarks and surrounding form controls remain theme-aware.
 
 #### 1.1.2 Primary (GSSG navy)
 

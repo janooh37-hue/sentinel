@@ -30,6 +30,7 @@
   --color-shelf: var(--shelf);
   --color-surface-raised: var(--surface-raised);
   --color-surface-tinted: var(--surface-tinted);
+  --color-store-art-surface: var(--store-art-surface);
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-primary-soft: var(--primary-soft);
@@ -104,6 +105,8 @@
   --shelf: #c9c3b4;
   --surface-raised: #fafaf6;
   --surface-tinted: #f0eee8;
+  /* Artwork needs a fixed light ground in both themes, not a themed UI surface. */
+  --store-art-surface: #fafaf6;
   --primary: #0d2845;
   --primary-hover: #1d3a5e;
   --primary-soft: #e8edf3;
