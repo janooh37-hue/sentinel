@@ -262,7 +262,7 @@ describe('Store dashboard', () => {
     renderPage()
     const tile = await screen.findByRole('button', { name: language === 'ar' ? 'شاي 1 كرتون + 4 علبة منتهي الصلاحية' : 'Tea 1 carton + 4 jars Expired' })
     expect(tile).not.toHaveAttribute('aria-label')
-    expect(tile.getAttribute('aria-labelledby')?.split(' ')).toHaveLength(3)
+    expect(tile).not.toHaveAttribute('aria-labelledby')
   })
   it('returns focus to the opening shelf tile when the drawer closes', async () => {
     const user = userEvent.setup()

@@ -1,4 +1,3 @@
-import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { StoreItemArt } from '@/components/StoreItemArt'
 import type { StoreBatchRead, StoreCategoryRead, StoreDashboard, StoreItemRead } from '@/lib/api'
@@ -17,7 +16,6 @@ export function StoreShelves({ items, categories, batches, dashboard, filter, pi
   items: StoreItemRead[]; categories: StoreCategoryRead[]; batches: StoreBatchRead[]; dashboard: StoreDashboard; filter: ShelfFilter; picking: boolean; picked: Record<number, number>; busy: boolean; onSelect: (item: StoreItemRead, opener: HTMLButtonElement) => void; onAdd: (item: StoreItemRead) => void
 }) {
   const { t, i18n } = useTranslation()
-  const id = useId()
   const matching = filter === 'all' ? items : items.filter(item => itemFlags(item.id, dashboard).includes(filter))
   if (!matching.length) return <p role="status" className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">{t(`assets.store.dashboard.${{ all: 'empty', expired: 'noExpiredItems', expiring: 'noExpiringItems', low: 'noLowStock' }[filter]}`)}</p>
   return <div className="space-y-4">{categories.map(category => {
@@ -29,12 +27,14 @@ export function StoreShelves({ items, categories, batches, dashboard, filter, pi
       <div className="grid grid-cols-3 gap-x-2 gap-y-5 md:grid-cols-[repeat(auto-fill,minmax(88px,1fr))]">{list.map(item => {
         const available = availableStock(item.id, batches)
         const disabled = picking && (busy || available === 0)
-        const tileId = `${id}-${item.id}`
-        return <button key={item.id} type="button" aria-labelledby={`${tileId}-name ${tileId}-quantity${!picking && itemFlags(item.id, dashboard).length ? ` ${tileId}-status` : ''}`} disabled={disabled} onClick={event => picking ? onAdd(item) : onSelect(item, event.currentTarget)} className={`relative flex min-h-44 min-w-0 flex-col items-center justify-end gap-1 border-b-[6px] border-[var(--shelf)] px-1 pb-2 pt-8 text-center hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${disabled ? 'opacity-35' : ''}`}>
-          <span id={`${tileId}-status`} className="absolute inset-x-0 top-0 flex min-h-6 justify-center">{picking ? available > 0 && <span aria-hidden className="flex h-7 min-w-7 items-center justify-center rounded-full bg-primary px-1 text-sm font-semibold text-primary-foreground">{picked[item.id] || '+'}</span> : <ItemStatus itemId={item.id} dashboard={dashboard} />}</span>
+        // Named by its own visible content (name, quantity, then the status
+        // badge, which is drawn at the top but read last), so the accessible
+        // name always contains the visible label (WCAG 2.5.3).
+        return <button key={item.id} type="button" disabled={disabled} onClick={event => picking ? onAdd(item) : onSelect(item, event.currentTarget)} className={`relative flex min-h-44 min-w-0 flex-col items-center justify-end gap-1 border-b-[6px] border-[var(--shelf)] px-1 pb-2 pt-8 text-center hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${disabled ? 'opacity-35' : ''}`}>
           <StoreItemArt kind={item.art_kind} color={item.art_color} categoryId={item.category_id} size={72} />
-          <span id={`${tileId}-name`} dir="auto" className="line-clamp-2 min-h-9 text-xs leading-snug">{itemName(item, i18n.language)}</span>
-          <span id={`${tileId}-quantity`} className="text-xs font-medium"><StoreQuantity value={item.on_hand} item={item} /></span>
+          <span dir="auto" className="line-clamp-2 min-h-9 text-xs leading-snug">{itemName(item, i18n.language)}</span>{' '}
+          <span className="text-xs font-medium"><StoreQuantity value={item.on_hand} item={item} /></span>{' '}
+          <span className="absolute inset-x-0 top-0 flex min-h-6 justify-center">{picking ? available > 0 && <span aria-hidden className="flex h-7 min-w-7 items-center justify-center rounded-full bg-primary px-1 text-sm font-semibold text-primary-foreground">{picked[item.id] || '+'}</span> : <ItemStatus itemId={item.id} dashboard={dashboard} />}</span>
         </button>
       })}</div>
     </section>
