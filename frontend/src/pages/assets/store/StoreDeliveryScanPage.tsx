@@ -52,6 +52,8 @@ export function StoreDeliveryScanPage(): React.JSX.Element {
       else if (!result.lines.length) setMessage(t('assets.store.scan.nothingRead'))
     } catch (error) {
       if (active.signal.aborted) return
+      // Upload-policy failures are not valid supporting documents for manual entry.
+      if (error instanceof ApiError && error.code.startsWith('STORE_NOTE_FILE_')) setFile(null)
       setMessage(error instanceof ApiError && error.code === 'STORE_SCAN_TIMEOUT'
         ? t('assets.store.scan.scanTimeout')
         : error instanceof ApiError && error.code === 'STORE_SCAN_TOO_MANY_PAGES'
@@ -83,7 +85,7 @@ export function StoreDeliveryScanPage(): React.JSX.Element {
             {message && <p dir="auto">{message}</p>}
           </div>
           {reading && <Button type="button" variant="secondary" className="min-h-11 self-start" onClick={cancelReading}>{t('assets.store.scan.cancelReading')}</Button>}
-          {message && file && <Button type="button" className="min-h-11 self-start" onClick={() => setManual(true)}>{t('assets.store.scan.manual')}</Button>}
+          {message && <Button type="button" className="min-h-11 self-start" onClick={() => setManual(true)}>{t('assets.store.scan.manual')}</Button>}
           <Link className={buttonVariants({ variant: 'ghost', className: 'min-h-11 self-start whitespace-normal text-start' })} to="/holdings/store/deliveries">{t('assets.store.scan.back')}</Link>
         </section>
       )}

@@ -2442,6 +2442,8 @@ will trip over them.
 - The local photo/PDF is scanned once. Reading is announced and cancellable;
   unavailable OCR or an empty result offers the manual delivery dialog with
   the chosen file already attached.
+- Upload-policy rejection drops the invalid attachment before manual fallback;
+  an OCR timeout or unavailable/empty OCR retains the accepted document.
 - Confirmation reuses `DeliveryLines` through optional props and slots. Local
   row crops retain document coordinates in either UI direction. Unmatched,
   uncertain and missing-quantity rows sort first; the focused summary and
