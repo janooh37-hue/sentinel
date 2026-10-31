@@ -3,7 +3,7 @@
  * the summary (Category, Entries, Days) lists only categories with entries,
  * included-but-empty categories share one quiet line, and only categories
  * with entries get a table. Every table reads what, when, how much, state,
- * then who recorded it.
+ * then who recorded it (by G-number).
  */
 
 import type { TFunction } from 'i18next'
@@ -15,7 +15,7 @@ import { displayViolationValue } from '@/lib/violationTypes'
 
 import type { ActivityStatementItem } from '../statementTypes'
 import { categoryOf, formatStatementDate, type StatementCategory } from '../statementModel'
-import { paperActor, stripOwnName } from './paperText'
+import { paperActor, recorderOf, stripOwnName } from './paperText'
 import type { ActivitySettings } from './printSettings'
 import { tableBlocks, usePaperT, type Column, type ColumnKind, type TableRow } from './paperBlocks'
 import { Mono, NoteLine, ScopeLine, SignatureBlocks, StatementSheet, Txt, type PaperFrame } from './StatementLetterhead'
@@ -45,7 +45,11 @@ function sectionRows(
   employee: EmployeeRead,
 ): { columns: Column[]; rows: TableRow[] } {
   const date = (iso: string | null): string => (iso ? formatStatementDate(iso.slice(0, 10), lang) : '-')
-  const by = (item: ActivityStatementItem): ReactNode => <Txt>{paperActor(item.actor_name, t)}</Txt>
+  const by = (item: ActivityStatementItem): ReactNode => {
+    const recorder = recorderOf(item)
+    if (recorder.kind === 'system') return t('statementPrint.paper.system')
+    return recorder.kind === 'number' ? <Mono>{recorder.id}</Mono> : '-'
+  }
   const col = (key: string, kind: ColumnKind = 'text'): Column => ({
     label: t(`statementPrint.paper.col.${key}`),
     kind,
@@ -145,10 +149,12 @@ function sectionRows(
         ],
         rows: items.map((item) => {
           const counterparty = paperActor(item.counterparty, t)
-          const actor = paperActor(item.actor_name, t)
+          const recorder = recorderOf(item)
+          const recorderText =
+            recorder.kind === 'system' ? t('statementPrint.paper.system') : recorder.kind === 'number' ? recorder.id : ''
           // Said once: when the counterparty is also who recorded it, the
           // recorded-by cell stays empty (the column keeps its place).
-          const sameParty = !!counterparty && counterparty.toLowerCase() === actor.toLowerCase()
+          const sameParty = !!counterparty && counterparty.toLowerCase() === recorderText.toLowerCase()
           return {
             key: key(item),
             cells: [
@@ -157,7 +163,7 @@ function sectionRows(
               item.direction ? t(`ledger.direction.${item.direction}`, { defaultValue: item.direction }) : '-',
               <Txt key="c">{counterparty}</Txt>,
               item.reference ? <Mono>{item.reference}</Mono> : '-',
-              sameParty ? '' : <Txt key="b">{actor}</Txt>,
+              sameParty ? '' : by(item),
             ],
           }
         }),

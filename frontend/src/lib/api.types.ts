@@ -7427,6 +7427,8 @@ export interface components {
             date_only: boolean;
             /** Actor Name */
             actor_name: string | null;
+            /** Actor Employee Id */
+            actor_employee_id: string | null;
             /** Reference */
             reference: string | null;
             /** Template Id */

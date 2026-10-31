@@ -51,6 +51,7 @@ function item(kind: string, sourceId: number, extra: Record<string, unknown> = {
     occurred_at: '2026-09-12T00:00:00',
     date_only: true,
     actor_name: 'Mariam Al Kaabi',
+    actor_employee_id: 'G4602',
     reference: null,
     linked_documents: [],
     ...extra,
@@ -399,6 +400,33 @@ describe('fix round 3: say each fact once', () => {
     expect(sheet().querySelector('[data-section="placement"]')).toBeNull()
   })
 
+  it('prints the recorder as a G-number, the system as System, and a recorder without an employee as -', async () => {
+    getActivityStatement.mockResolvedValue({
+      employee_id: 'G3190',
+      from_date: '2026-01-01',
+      to_date: '2026-10-27',
+      truncated: false,
+      items: [
+        item('absence', 30, { note: 'numbered', actor_name: 'Mariam Al Kaabi', actor_employee_id: 'G4602' }),
+        item('absence', 31, { note: 'unlinked', actor_name: 'Unlinked Admin', actor_employee_id: null }),
+        item('absence', 32, { note: 'automatic', actor_name: 'system', actor_employee_id: null }),
+      ],
+    })
+    renderAt('/employees/G3190/activity/print?period=year&lang=ar&cats=absence')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const recorded = Array.from(sheet().querySelectorAll('[data-section="absence"] tbody tr')).map((row) => {
+      const cells = row.querySelectorAll('td')
+      return [cells[1].textContent, cells[2].textContent]
+    })
+    expect(recorded).toEqual([
+      ['numbered', 'G4602'],
+      ['unlinked', '-'],
+      ['automatic', 'النظام'],
+    ])
+    expect(sheet()).not.toHaveTextContent('Mariam Al Kaabi')
+    expect(sheet()).not.toHaveTextContent('Unlinked Admin')
+  })
+
   it("strips the employee's own name from subjects, prints a shared party once, and localizes system", async () => {
     getActivityStatement.mockResolvedValue({
       employee_id: 'G3190',
@@ -411,12 +439,14 @@ describe('fix round 3: say each fact once', () => {
           direction: 'outgoing',
           counterparty: 'G3095',
           actor_name: 'G3095',
+          actor_employee_id: 'G3095',
         }),
         item('ledger', 21, {
           subject: 'Leave Application Form - أحمد منصور',
           direction: 'incoming',
           counterparty: 'system',
           actor_name: 'Mariam Al Kaabi',
+          actor_employee_id: 'G4602',
         }),
       ],
     })
@@ -431,7 +461,7 @@ describe('fix round 3: say each fact once', () => {
     // Reference is blank in every row, so that column is dropped: Recorded by is now index 4.
     expect(first).toHaveLength(5)
     expect(first[4]).toBe('')
-    expect(second[4]).toBe('Mariam Al Kaabi')
+    expect(second[4]).toBe('G4602')
     expect(second[0]).toBe('Leave Application Form')
     expect(second[3]).toBe('النظام')
     expect(sheet()).not.toHaveTextContent(/\bsystem\b/)

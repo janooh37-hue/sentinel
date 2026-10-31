@@ -342,6 +342,61 @@ def test_actor_names_come_from_real_actors_only(env):
     }
 
 
+def test_recorders_carry_their_employee_number(env):
+    """A user's G-number is their linked employee; no link means no number."""
+    db = env.db
+    env.clerk.employee_id = "G4000"
+    mailer = make_user(db, email="mailer@test.ae")
+    mailer.employee_id = "G4000"
+    day = date(2026, 3, 3)
+
+    def ledger(subject, created_by, hour):
+        return LedgerEntry(
+            entry_date=day,
+            direction="outgoing",
+            channel="letter",
+            counterparty="x",
+            subject=subject,
+            related_employee_id=EMP,
+            created_by=created_by,
+            created_at=datetime(2026, 3, 3, hour),
+        )
+
+    db.add_all(
+        [
+            Absence(employee_id=EMP, date=day, created_by=env.clerk.id),
+            DutyAssignmentEvent(
+                employee_id=EMP,
+                event_type="transfer",
+                to_department="Security",
+                effective_at=datetime(2026, 3, 3, 9),
+                # The admin has no linked employee.
+                actor_user_id=env.admin.id,
+            ),
+            ledger("by number", "g4000", 1),
+            ledger("by email", "MAILER@test.ae", 2),
+            ledger("by system", "system", 3),
+            ledger("by stranger", "Someone Else", 4),
+        ]
+    )
+    db.commit()
+
+    items = _statement(env)["items"]
+    by_kind = {i["kind"]: i["actor_employee_id"] for i in items if i["kind"] != "ledger"}
+    assert by_kind == {"absence": "G4000", "duty_location": None}
+    ledgers = {
+        i["subject"]: (i["actor_name"], i["actor_employee_id"])
+        for i in items
+        if i["kind"] == "ledger"
+    }
+    assert ledgers == {
+        "by number": ("g4000", "G4000"),
+        "by email": ("MAILER@test.ae", "G4000"),
+        "by system": ("system", None),
+        "by stranger": ("Someone Else", None),
+    }
+
+
 def test_unknown_employee_404_and_inverted_range_422(env):
     missing = env.client.get("/api/v1/employees/G0000/statement/activity")
     assert missing.status_code == 404

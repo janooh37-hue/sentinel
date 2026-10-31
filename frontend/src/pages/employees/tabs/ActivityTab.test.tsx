@@ -53,6 +53,7 @@ function item(kind: ActivityStatementItem['kind'], sourceId: number, extra: Part
     occurred_at: '2026-08-10T09:30:00',
     date_only: false,
     actor_name: 'Mariam Al Kaabi',
+    actor_employee_id: null,
     reference: null,
     template_id: null,
     template_name_en: null,

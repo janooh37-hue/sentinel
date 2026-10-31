@@ -14,6 +14,13 @@ The Activity statement is the uncapped sibling of the Employee Detail
 Every source is filtered by the requested period in SQL (inclusive dates; the
 site calendar for timestamped sources). Timestamps are stored as naive UTC and
 are returned as site-local (Asia/Dubai) instants; date-only kinds use 00:00.
+
+Recorders: every item names its recorder's employee number (G-number) in
+``actor_employee_id``. A user maps to one through ``User.employee_id`` (the
+G-number the account signs in with). Ledger rows store their author as free
+text in ``created_by``: a G-number (the usual case) is used as is after a check
+that the employee exists, and an email or a unique display name resolves
+through the matching user. Anything else stays null.
 """
 
 from __future__ import annotations
@@ -169,6 +176,7 @@ def activity_statement(
             for violation in violations
         )
 
+    ledger_items: list[tuple[ActivityStatementItemRead, str | None]] = []
     for entry in db.scalars(
         select(models.LedgerEntry)
         .where(*ledger_filters_for(db, emp.id, user))
@@ -176,19 +184,23 @@ def activity_statement(
         .order_by(models.LedgerEntry.created_at.desc(), models.LedgerEntry.id.desc())
         .limit(fetch)
     ):
-        items.append(
-            ActivityStatementItemRead(
-                kind="ledger",
-                source_id=entry.id,
-                occurred_at=_site(entry.created_at),
-                date_only=False,
-                actor_name=(entry.created_by or "").strip() or None,
-                subject=entry.subject,
-                direction=entry.direction,
-                channel=entry.channel,
-                counterparty=entry.counterparty,
-            )
+        author = (entry.created_by or "").strip() or None
+        item = ActivityStatementItemRead(
+            kind="ledger",
+            source_id=entry.id,
+            occurred_at=_site(entry.created_at),
+            date_only=False,
+            actor_name=author,
+            subject=entry.subject,
+            direction=entry.direction,
+            channel=entry.channel,
+            counterparty=entry.counterparty,
         )
+        ledger_items.append((item, author))
+    authors = _ledger_author_numbers(db, {a for _, a in ledger_items if a is not None})
+    for item, author in ledger_items:
+        item.actor_employee_id = authors.get(author) if author is not None else None
+        items.append(item)
 
     for event in db.scalars(
         select(models.DutyAssignmentEvent)
@@ -244,8 +256,10 @@ def activity_statement(
 
     user_ids = {uid for _, uid in pending_actor if uid is not None}
     names = _user_names(db, user_ids)
+    numbers = _user_employee_ids(db, user_ids)
     for item, uid in pending_actor:
         item.actor_name = names.get(uid) if uid is not None else None
+        item.actor_employee_id = numbers.get(uid) if uid is not None else None
         items.append(item)
 
     items.sort(key=lambda i: (-i.occurred_at.timestamp(), i.kind, -i.source_id))
@@ -335,6 +349,63 @@ def _user_names(db: Session, user_ids: Iterable[int]) -> dict[int, str]:
         ).tuples()
         if name
     }
+
+
+def _user_employee_ids(db: Session, user_ids: Iterable[int]) -> dict[int, str]:
+    """Each user's linked employee number; users without one are left out."""
+    ids = set(user_ids)
+    if not ids:
+        return {}
+    return {
+        uid: employee_id
+        for uid, employee_id in db.execute(
+            select(models.User.id, models.User.employee_id).where(
+                models.User.id.in_(ids), models.User.employee_id.is_not(None)
+            )
+        ).tuples()
+        if employee_id
+    }
+
+
+def _ledger_author_numbers(db: Session, authors: set[str]) -> dict[str, str]:
+    """Ledger ``created_by`` text -> G-number (see the module docstring)."""
+    if not authors:
+        return {}
+    resolved: dict[str, str] = {}
+    employees = {
+        employee_id.upper(): employee_id
+        for employee_id in db.scalars(
+            select(models.Employee.id).where(
+                func.upper(models.Employee.id).in_({a.upper() for a in authors})
+            )
+        )
+    }
+    for author in authors:
+        if author.upper() in employees:
+            resolved[author] = employees[author.upper()]
+    rest = authors - resolved.keys()
+    if not rest:
+        return resolved
+    by_email: dict[str, str] = {}
+    by_name: dict[str, set[str]] = {}
+    for email, display_name, employee_id in db.execute(
+        select(models.User.email, models.User.display_name, models.User.employee_id).where(
+            models.User.employee_id.is_not(None),
+            (func.lower(models.User.email).in_({a.lower() for a in rest}))
+            | models.User.display_name.in_(rest),
+        )
+    ).tuples():
+        if employee_id is None:
+            continue
+        by_email[email.lower()] = employee_id
+        if display_name:
+            by_name.setdefault(display_name, set()).add(employee_id)
+    for author in rest:
+        if author.lower() in by_email:
+            resolved[author] = by_email[author.lower()]
+        elif len(by_name.get(author, ())) == 1:
+            resolved[author] = next(iter(by_name[author]))
+    return resolved
 
 
 def _site(stored_utc: datetime) -> datetime:

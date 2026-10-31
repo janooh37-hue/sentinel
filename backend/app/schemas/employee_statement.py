@@ -50,6 +50,9 @@ class ActivityStatementItemRead(ORMBase):
     occurred_at: datetime
     date_only: bool
     actor_name: str | None = None
+    # The recorder's employee number (G-number): the user's linked employee,
+    # or a ledger author stored as a G-number. Null when none is known.
+    actor_employee_id: str | None = None
     reference: str | None = None
     # document
     template_id: str | None = None
