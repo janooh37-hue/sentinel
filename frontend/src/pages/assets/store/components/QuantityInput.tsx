@@ -14,6 +14,7 @@ import {
   containsUnit,
   countingUnit,
   hasContains,
+  quantityUnit,
   type QuantityParts,
   type StoreUnits,
 } from '../storeUtils'
@@ -30,6 +31,8 @@ interface Props {
   describedBy?: string
   disabled?: boolean
   required?: boolean
+  /** Match read-only note quantities without changing other editors' labels. */
+  pluralUnits?: boolean
 }
 
 const FIELD =
@@ -45,6 +48,7 @@ export function QuantityInput({
   describedBy,
   disabled = false,
   required = false,
+  pluralUnits = false,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const unit = countingUnit(item, i18n.language)
@@ -69,7 +73,7 @@ export function QuantityInput({
           className={cn(FIELD, invalid && 'border-destructive')}
         />
         <span className="shrink-0 text-xs text-muted-foreground" dir="auto">
-          {unit}
+          {pluralUnits ? quantityUnit(Number(value.units), unit, i18n.language) : unit}
         </span>
       </label>
       {contains && (
@@ -97,7 +101,7 @@ export function QuantityInput({
               className={cn(FIELD, invalid && 'border-destructive')}
             />
             <span className="shrink-0 text-xs text-muted-foreground" dir="auto">
-              {containsUnit(item, i18n.language)}
+              {pluralUnits ? quantityUnit(Number(value.loose), containsUnit(item, i18n.language), i18n.language) : containsUnit(item, i18n.language)}
             </span>
           </label>
         </>

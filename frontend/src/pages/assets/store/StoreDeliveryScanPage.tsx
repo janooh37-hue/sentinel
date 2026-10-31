@@ -25,9 +25,16 @@ export function StoreDeliveryScanPage(): React.JSX.Element {
   const controller = useRef<AbortController | null>(null)
   const chooser = useRef<HTMLInputElement>(null)
   const status = useRef<HTMLDivElement>(null)
+  const focusChooser = useRef(false)
 
   useEffect(() => () => controller.current?.abort(), [])
   useEffect(() => { if (reading || message) status.current?.focus() }, [reading, message])
+  useEffect(() => {
+    if (!reading && !scan && focusChooser.current) {
+      chooser.current?.focus()
+      focusChooser.current = false
+    }
+  }, [reading, scan])
 
   async function chooseFile(chosen: File): Promise<void> {
     controller.current?.abort()
@@ -58,13 +65,13 @@ export function StoreDeliveryScanPage(): React.JSX.Element {
     controller.current?.abort()
     setReading(false)
     setMessage(null)
-    chooser.current?.focus()
+    focusChooser.current = true
   }
 
   return (
     <StoreShell title={t('assets.store.scan.title')} description={t('assets.store.scan.description')}>
       {file && scan?.ocr_available && scan.lines.length > 0 ? (
-        <ScanDeliveryConfirm file={file} scan={scan} />
+        <ScanDeliveryConfirm file={file} scan={scan} onChooseAnother={() => { focusChooser.current = true; setScan(null); setFile(null); setMessage(null) }} onManual={() => setManual(true)} />
       ) : (
         <section className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-surface p-4 md:p-6">
           <ScanLine aria-hidden className="h-8 w-8 text-primary" />

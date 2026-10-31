@@ -16,7 +16,7 @@ vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => state.mobile }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
 vi.mock('./components/ScanNotePreview', () => ({
-  ScanNotePreview: ({ render: renderPreview }: { render: (crop: () => null) => React.ReactNode }) => renderPreview(() => null),
+  ScanNotePreview: ({ render: renderPreview }: { render: (crop: () => React.ReactNode) => React.ReactNode }) => renderPreview(() => <img alt="Note crop" />),
 }))
 
 const ITEM: StorePickerItem = {
@@ -154,12 +154,66 @@ describe('Store delivery scan', () => {
     expect(screen.getByText((_, element) => element?.textContent === '1 row needs a look' && element.children.length === 1)).toBeInTheDocument()
     const unmatched = screen.getAllByRole('group', { name: /Line/ }).find((row) => within(row).queryByText('Unknown supplies 8'))!
     expect(within(unmatched).getByRole('combobox', { name: /Store item/ })).toHaveValue('')
-    await user.click(within(unmatched).getByRole('button', { name: 'Skip line 1: not a store item' }))
-    expect(screen.queryByText('Unknown supplies 8')).not.toBeInTheDocument()
+    await user.click(within(unmatched).getByRole('button', { name: 'Not a store item: skip, line 2' }))
+    expect(screen.getByText('Unknown supplies 8').closest('li')).toBeInTheDocument()
     expect(screen.getAllByRole('group', { name: /Line/ })).toHaveLength(1)
     fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2028-09-30' } })
     await user.click(screen.getByRole('button', { name: 'Save delivery' }))
     await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ item_id: ITEM.id, quantity: 53, source_text: SCAN.lines[0]!.raw_text, noted_quantity: 53 })] })))
+  })
+
+  it.each(['en', 'ar'])('places a non-destructive, label-matched skip action last and pairs the crop with on-note quantity (%s)', async (language) => {
+    await i18n.changeLanguage(language)
+    renderPage()
+    fireEvent.change(screen.getByLabelText(i18n.t('assets.store.scan.chooseFile')), { target: { files: [new File(['photo'], 'note.png', { type: 'image/png' })] } })
+    const button = await screen.findByRole('button', { name: i18n.t('assets.store.scan.skipLine', { number: 1 }) })
+    expect(button.getAttribute('aria-label')?.startsWith(button.textContent!)).toBe(true)
+    expect(button).not.toHaveClass('text-accent')
+    expect(button).not.toHaveClass('text-destructive')
+    const row = button.closest('fieldset')!
+    expect(row.lastElementChild).toContainElement(button)
+    const onNote = within(row).getByText(i18n.t('assets.store.scan.onNote')).parentElement!
+    expect(within(onNote).getByRole('img', { name: 'Note crop' })).toBeInTheDocument()
+    if (language === 'en') {
+      expect(within(onNote).getByText('2 cartons + 5 jars')).toBeInTheDocument()
+      expect(within(row).getByText('cartons')).toBeInTheDocument()
+      expect(within(row).getByText('jars')).toBeInTheDocument()
+      fireEvent.change(within(row).getByRole('textbox', { name: 'Coffee: Carton' }), { target: { value: '1' } })
+      expect(within(row).getByText('carton')).toBeInTheDocument()
+    }
+  })
+
+  it('restores skipped rows with their edits, reason, focus and announcement', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await scanFile()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Coffee: loose Jar' }), { target: { value: '3' } })
+    fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2028-09-30' } })
+    await user.type(screen.getByRole('textbox', { name: /Reason for difference/ }), 'Missing jars')
+    await user.click(screen.getByRole('button', { name: 'Not a store item: skip, line 1' }))
+    expect(screen.getByRole('heading', { name: 'Confirm delivery' }).parentElement).toHaveFocus()
+    expect(screen.getByText((_, element) => element?.getAttribute('role') === 'status' && element.textContent === 'Line 1 skipped. You can restore it below.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Restore, line 1' }))
+    expect(screen.getByRole('combobox', { name: /Store item/ })).toHaveFocus()
+    expect(screen.getByRole('textbox', { name: 'Coffee: loose Jar' })).toHaveValue('3')
+    expect(screen.getByLabelText('Expiry date')).toHaveValue('2028-09-30')
+    expect(screen.getByRole('textbox', { name: /Reason for difference/ })).toHaveValue('Missing jars')
+    expect(screen.getByText((_, element) => element?.getAttribute('role') === 'status' && element.textContent === 'Line 1 restored.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Restore, line 1' })).not.toBeInTheDocument()
+  })
+
+  it('offers working choose-another and manual actions when all lines are skipped, retaining the valid photo', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    const file = await scanFile()
+    await user.click(screen.getByRole('button', { name: 'Not a store item: skip, line 1' }))
+    await user.click(screen.getByRole('button', { name: 'Enter delivery manually' }))
+    expect(within(screen.getByRole('dialog')).getByText(file.name)).toBeInTheDocument()
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
+    await user.click(screen.getByRole('button', { name: 'Choose another note' }))
+    expect(screen.getByLabelText('Choose a photo or PDF')).toHaveFocus()
+    expect(screen.queryByRole('heading', { name: 'Confirm delivery' })).not.toBeInTheDocument()
+    expect(api.createStoreDelivery).not.toHaveBeenCalled()
   })
 
   it('retains confirmed state on upload failure and retries only the file upload', async () => {
@@ -207,6 +261,7 @@ describe('Store delivery scan', () => {
     const signal = vi.mocked(api.scanStoreDelivery).mock.calls[0]![1]!
     await user.click(screen.getByRole('button', { name: 'Cancel reading' }))
     expect(signal.aborted).toBe(true)
+    expect(screen.getByLabelText('Choose a photo or PDF')).toHaveFocus()
     await act(async () => resolveScan(SCAN))
     expect(screen.getByLabelText('Choose a photo or PDF')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Confirm delivery' })).not.toBeInTheDocument()
