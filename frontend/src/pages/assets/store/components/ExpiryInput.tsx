@@ -4,6 +4,7 @@
  * is a three-way segmented choice so the state reads from text, not colour.
  */
 
+import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Input } from '@/components/ui/input'
@@ -38,25 +39,52 @@ export function ExpiryInput({
       <div
         role="radiogroup"
         aria-label={t('assets.store.expiryInput.modeAria')}
-        className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-surface p-1"
+        className={cn('grid gap-1 rounded-lg border border-border bg-surface p-1', allowUndated ? 'grid-cols-3' : 'grid-cols-2')}
+        onKeyDown={(event) => {
+          if (disabled) return
+          const modes = MODES.filter((mode) => allowUndated || mode !== 'none')
+          const index = modes.indexOf(value.mode)
+          const direction = getComputedStyle(event.currentTarget).direction
+            || event.currentTarget.closest('[dir]')?.getAttribute('dir')
+          let step = 0
+          if (event.key === 'ArrowRight') step = direction === 'rtl' ? -1 : 1
+          if (event.key === 'ArrowLeft') step = direction === 'rtl' ? 1 : -1
+          if (event.key === 'ArrowDown') step = 1
+          if (event.key === 'ArrowUp') step = -1
+          if (!step) return
+          event.preventDefault()
+          const next = (index + step + modes.length) % modes.length
+          onChange({ ...value, mode: modes[next] })
+          event.currentTarget.querySelectorAll<HTMLInputElement>('input[type="radio"]')[next]?.focus()
+        }}
       >
         {MODES.filter((mode) => allowUndated || mode !== 'none').map((mode) => (
-          <button
+          <label
             key={mode}
-            type="button"
-            role="radio"
-            aria-checked={value.mode === mode}
-            disabled={disabled}
-            onClick={() => onChange({ ...value, mode })}
-            className={cn(
-              'min-h-11 rounded-md px-2 text-[0.8em] font-medium transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              value.mode === mode
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-surface-tinted',
-            )}
+            className="relative flex min-h-11 cursor-pointer items-center justify-center"
           >
-            {t(`assets.store.expiryInput.${mode}`)}
-          </button>
+            <input
+              type="radio"
+              name={`${id}-mode`}
+              value={mode}
+              checked={value.mode === mode}
+              tabIndex={value.mode === mode ? 0 : -1}
+              disabled={disabled}
+              onChange={() => onChange({ ...value, mode })}
+              className="peer sr-only"
+            />
+            <span
+              className={cn(
+                'flex min-h-11 w-full items-center justify-center rounded-md px-2 text-[0.8em] font-medium transition-colors motion-reduce:transition-none peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-disabled:cursor-not-allowed peer-disabled:opacity-50',
+                value.mode === mode
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-surface-tinted',
+              )}
+            >
+              {value.mode === mode && <Check aria-hidden className="me-1 h-3.5 w-3.5 shrink-0" />}
+              {t(`assets.store.expiryInput.${mode}`)}
+            </span>
+          </label>
         ))}
       </div>
       {value.mode === 'date' && (
