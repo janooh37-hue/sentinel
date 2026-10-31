@@ -18,7 +18,7 @@ describe('activity setup <-> URL query', () => {
       preset: 'custom',
       from: '2026-02-03',
       to: '2026-09-30',
-      cats: ['leave', 'document'],
+      cats: ['leave.annual', 'leave.others', 'document'],
       lang: 'ar',
       orient: 'landscape',
       summary: false,
@@ -42,6 +42,23 @@ describe('activity setup <-> URL query', () => {
     })
     // An empty list is "none", not "all".
     expect(parseActivitySettings(new URLSearchParams('cats='), TODAY, 'en').cats).toEqual([])
+  })
+
+  it('reads an older `leave` value as every leave kind', () => {
+    const parsed = parseActivitySettings(new URLSearchParams('cats=leave,document'), TODAY, 'en')
+    expect(parsed.cats).toEqual([
+      'leave.annual',
+      'leave.sick',
+      'leave.compassionate',
+      'leave.duty',
+      'leave.emergency',
+      'leave.hajj',
+      'leave.national-service',
+      'leave.administrative',
+      'leave.leave-permit',
+      'leave.others',
+      'document',
+    ])
   })
 
   it('never prints past today', () => {

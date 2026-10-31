@@ -232,7 +232,7 @@ export function StatementSheet({
   )
 }
 
-/** A single quiet line ("Not included: ...", "No records in this period: ..."). Nothing when empty. */
+/** A single quiet line ("Not included: ..."). Nothing when empty. */
 export function NoteLine({
   label,
   items,

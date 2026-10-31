@@ -121,9 +121,9 @@ describe('activity print setup', () => {
     expect(within(sheet()).getByTestId('statement-scope')).toHaveTextContent('Not included: Violations, Correspondence.')
     expect(sheet().querySelector('[data-section="violation"]')).toBeNull()
     expect(sheet().querySelector('[data-section="ledger"]')).toBeNull()
-    expect(sheet().querySelector('[data-section="leave"]')).not.toBeNull()
+    expect(sheet().querySelector('[data-section="leave.annual"]')).not.toBeNull()
     // The toggle is in the URL, so a reload keeps it.
-    expect(screen.getByTestId('location').textContent).toContain('cats=leave%2Cabsence%2Cdocument%2Cplacement')
+    expect(screen.getByTestId('location').textContent).toContain('leave.others%2Cabsence%2Cdocument%2Cplacement&')
   })
 
   it('carries one signature box, Prepared by, and no reviewer', async () => {
@@ -169,7 +169,24 @@ describe('activity print setup', () => {
       from_date: '2026-01-01',
       to_date: '2026-10-27',
       language: 'en',
-      options: { categories: ['leave', 'document'], summary: false, signature: true, orientation: 'portrait' },
+      options: {
+        categories: [
+          'leave.annual',
+          'leave.sick',
+          'leave.compassionate',
+          'leave.duty',
+          'leave.emergency',
+          'leave.hajj',
+          'leave.national-service',
+          'leave.administrative',
+          'leave.leave-permit',
+          'leave.others',
+          'document',
+        ],
+        summary: false,
+        signature: true,
+        orientation: 'portrait',
+      },
     })
     expect(within(sheet()).getByTestId('statement-reference')).toHaveTextContent('G3190/1/12/7')
   })
@@ -385,19 +402,27 @@ describe('fix round 3: say each fact once', () => {
     expect(identity).not.toHaveTextContent('2026')
   })
 
-  it('summarises only categories with entries and names the empty ones on one line', async () => {
-    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+  it('summarises every requested section, zeros included, and gives each empty section its own line', async () => {
+    renderAt('/employees/G3190/activity/print?period=year&lang=en&cats=leave.annual,leave.sick,absence,document')
     await waitFor(() => expect(sheet()).toBeInTheDocument())
     const summary = sheet().querySelector('[data-section="summary"]') as HTMLElement
-    const leaveRow = Array.from(summary.querySelectorAll('tbody tr')).find((r) => r.textContent?.startsWith('Leaves'))
-    expect(Array.from(leaveRow?.querySelectorAll('td') ?? []).map((td) => td.textContent)).toEqual(['Leaves', '1', '28'])
-    expect(summary).not.toHaveTextContent('Absences')
-    expect(summary).not.toHaveTextContent('Total days')
-    expect(within(sheet()).getByTestId('statement-empty-categories')).toHaveTextContent(
-      'No records in this period: Absences, Placement and status history.',
-    )
-    expect(sheet().querySelector('[data-section="absence"]')).toBeNull()
-    expect(sheet().querySelector('[data-section="placement"]')).toBeNull()
+    const rows = Array.from(summary.querySelectorAll('tbody tr'))
+      .map((r) => Array.from(r.querySelectorAll('td')).map((td) => td.textContent))
+      .filter((cells) => cells.length > 0)
+    expect(rows).toEqual([
+      ['Annual Leave', '1', '28'],
+      ['Sick Leave', '0', '0'],
+      ['Absences', '0', '0'],
+      ['Documents issued', '1', '-'],
+      ['Total', '2', '28'],
+    ])
+    for (const id of ['leave.sick', 'absence']) {
+      const section = sheet().querySelector(`[data-section="${id}"]`) as HTMLElement
+      expect(section.querySelector('table')).toBeNull()
+      expect(section).toHaveTextContent('No records in this period')
+    }
+    expect(sheet().querySelector('[data-section="leave.annual"] table')).not.toBeNull()
+    expect(within(sheet()).queryByTestId('statement-empty-categories')).toBeNull()
   })
 
   it('prints the recorder as a G-number, the system as System, and a recorder without an employee as -', async () => {

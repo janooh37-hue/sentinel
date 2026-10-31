@@ -1,10 +1,14 @@
 /**
  * Shared vocabulary for the employee-file statements: the six categories the
- * screen filters and the paper sections use, the period presets, the print
- * routes, and Western-digit formatting (Arabic uses 0-9, never Arabic-Indic).
+ * screen filters use, the finer sections the printed Activity statement
+ * offers (one per leave kind, then the other categories), the period presets,
+ * the print routes, and Western-digit formatting (Arabic uses 0-9, never
+ * Arabic-Indic).
  */
 
-import type { StatementKind } from './statementTypes'
+import { CANONICAL_KINDS, classifyLeaveType, type KindId } from '@/pages/leaves/report/kinds'
+
+import type { ActivityStatementItem, StatementKind } from './statementTypes'
 
 export type StatementCategory = 'leave' | 'violation' | 'absence' | 'document' | 'ledger' | 'placement'
 
@@ -21,6 +25,50 @@ export const STATEMENT_CATEGORIES: readonly StatementCategory[] = [
 /** Placement and status read as one history; every other kind is its own category. */
 export function categoryOf(kind: StatementKind): StatementCategory {
   return kind === 'duty_location' || kind === 'status' ? 'placement' : kind
+}
+
+/**
+ * One printed section of the Activity statement: a leave kind
+ * (`leave.<slug>`, canonical kinds of `leaves/report/kinds.ts`), or one of
+ * the other categories. The ids are the `cats` URL values.
+ */
+export type LeaveSection = `leave.${string}`
+export type ActivitySection = LeaveSection | Exclude<StatementCategory, 'leave'>
+
+const leaveSlug = (kind: KindId): LeaveSection =>
+  `leave.${kind.toLowerCase().replace(/ leave$/, '').replace(/ /g, '-')}`
+
+/** Leave sections in canonical order, with the kind each one prints. */
+export const LEAVE_SECTIONS: readonly { id: LeaveSection; kind: KindId }[] = CANONICAL_KINDS.map((k) => ({
+  id: leaveSlug(k.id),
+  kind: k.id,
+}))
+
+/** Setup and paper order: every leave kind, then the other categories. */
+export const ACTIVITY_SECTIONS: readonly ActivitySection[] = [
+  ...LEAVE_SECTIONS.map((s) => s.id),
+  'absence',
+  'violation',
+  'document',
+  'ledger',
+  'placement',
+]
+
+/** Sections that count days (leave kinds and absences, one day each). */
+export function sectionCountsDays(section: ActivitySection): boolean {
+  return section === 'absence' || section.startsWith('leave.')
+}
+
+/** The section an item prints in; unknown and legacy leave types land in Others. */
+export function sectionOf(item: Pick<ActivityStatementItem, 'kind' | 'leave_type'>): ActivitySection {
+  if (item.kind === 'leave') return leaveSlug(classifyLeaveType(item.leave_type ?? ''))
+  return categoryOf(item.kind) as Exclude<StatementCategory, 'leave'>
+}
+
+/** Translation key of a section's heading. */
+export function sectionLabelKey(section: ActivitySection): string {
+  const leave = LEAVE_SECTIONS.find((s) => s.id === section)
+  return leave ? `statement.section.leaveKind.${leave.kind}` : `statement.section.${section}`
 }
 
 export type ActivityPreset = 'month' | 'last3' | 'year' | 'all' | 'custom'

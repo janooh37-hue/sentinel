@@ -91,7 +91,19 @@
       "absence": "Absences",
       "document": "Documents issued",
       "ledger": "Correspondence",
-      "placement": "Placement and status history"
+      "placement": "Placement and status history",
+      "leaveKind": {
+        "Annual Leave": "Annual Leave",
+        "Sick Leave": "Sick Leave",
+        "Compassionate Leave": "Compassionate Leave",
+        "Duty Leave": "Duty Leave",
+        "Emergency Leave": "Emergency Leave",
+        "Hajj Leave": "Hajj Leave",
+        "National Service": "National Service",
+        "Administrative Leave": "Administrative Leave",
+        "Leave Permit": "Leave Permit",
+        "Others": "Others"
+      }
     },
     "period": {
       "month": "This month",
@@ -6340,7 +6352,7 @@
       "phone": "Phone",
       "fax": "Fax",
       "col": {
-        "category": "Category",
+        "section": "Section",
         "entries": "Entries",
         "type": "Type",
         "from": "From",

@@ -18,12 +18,13 @@ import { useCapabilities } from '@/lib/useCapabilities'
 
 import {
   ACTIVITY_PRESETS,
+  ACTIVITY_SECTIONS,
   ACTIVITY_STATEMENT_QUERY,
-  STATEMENT_CATEGORIES,
   activityPeriod,
-  categoryOf,
   formatStatementRange,
-  type StatementCategory,
+  sectionLabelKey,
+  sectionOf,
+  type ActivitySection,
 } from '../statementModel'
 import { ActivityPaper } from './ActivityPaper'
 import { PrintSetupShell, SetupNotice } from './PrintSetupShell'
@@ -58,12 +59,12 @@ export function ActivityPrintPage(): React.JSX.Element {
 
   const items = useMemo(() => statement.data?.items ?? [], [statement.data])
   const counts = useMemo(() => {
-    const map = new Map<StatementCategory, number>()
-    for (const item of items) map.set(categoryOf(item.kind), (map.get(categoryOf(item.kind)) ?? 0) + 1)
+    const map = new Map<ActivitySection, number>()
+    for (const item of items) map.set(sectionOf(item), (map.get(sectionOf(item)) ?? 0) + 1)
     return map
   }, [items])
-  const included = STATEMENT_CATEGORIES.filter((c) => settings.cats.includes(c))
-  const entries = included.reduce((sum, c) => sum + (counts.get(c) ?? 0), 0)
+  const included = ACTIVITY_SECTIONS.filter((s) => settings.cats.includes(s))
+  const entries = included.reduce((sum, s) => sum + (counts.get(s) ?? 0), 0)
 
   const flow = useStatementPrint(id, search)
   const issue = usePaperIssue(flow.issued, settings.lang)
@@ -111,18 +112,18 @@ export function ActivityPrintPage(): React.JSX.Element {
       </SetupFieldset>
 
       <SetupFieldset legend={t('statementPrint.sections')}>
-        {STATEMENT_CATEGORIES.map((c) => (
+        {ACTIVITY_SECTIONS.map((s) => (
           <OptionRow
-            key={c}
+            key={s}
             type="checkbox"
-            checked={settings.cats.includes(c)}
-            onChange={(on) => update({ cats: on ? [...settings.cats, c] : settings.cats.filter((x) => x !== c) })}
-            label={t(`statement.section.${c}`)}
-            detail={statement.isSuccess ? <span className="font-mono">{counts.get(c) ?? 0}</span> : undefined}
+            checked={settings.cats.includes(s)}
+            onChange={(on) => update({ cats: on ? [...settings.cats, s] : settings.cats.filter((x) => x !== s) })}
+            label={t(sectionLabelKey(s))}
+            detail={statement.isSuccess ? <span className="font-mono">{counts.get(s) ?? 0}</span> : undefined}
           />
         ))}
         <div className="mt-1.5 flex gap-1.5">
-          <Button variant="secondary" size="xs" onClick={() => update({ cats: [...STATEMENT_CATEGORIES] })}>
+          <Button variant="secondary" size="xs" onClick={() => update({ cats: [...ACTIVITY_SECTIONS] })}>
             {t('statementPrint.all')}
           </Button>
           <Button variant="secondary" size="xs" onClick={() => update({ cats: [] })}>
@@ -233,7 +234,7 @@ export function ActivityPrintPage(): React.JSX.Element {
             }}
             settings={settings}
             items={items}
-            categories={STATEMENT_CATEGORIES}
+            sections={ACTIVITY_SECTIONS}
           />
         ) : (
           <div className="grid h-[297mm] w-[210mm] place-items-center bg-white text-sm text-neutral-600">

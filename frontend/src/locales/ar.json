@@ -91,7 +91,19 @@
       "absence": "الغيابات",
       "document": "المستندات الصادرة",
       "ledger": "المراسلات",
-      "placement": "سجل موقع العمل والحالة"
+      "placement": "سجل موقع العمل والحالة",
+      "leaveKind": {
+        "Annual Leave": "إجازة سنوية",
+        "Sick Leave": "إجازة مرضية",
+        "Compassionate Leave": "إجازة تعزية",
+        "Duty Leave": "إجازة مهمة رسمية",
+        "Emergency Leave": "إجازة طارئة",
+        "Hajj Leave": "إجازة حج",
+        "National Service": "الخدمة الوطنية",
+        "Administrative Leave": "إجازة إدارية",
+        "Leave Permit": "تصريح خروج",
+        "Others": "أخرى"
+      }
     },
     "period": {
       "month": "هذا الشهر",
@@ -6870,7 +6882,7 @@
       "phone": "هاتف",
       "fax": "فاكس",
       "col": {
-        "category": "الفئة",
+        "section": "القسم",
         "entries": "السجلات",
         "type": "النوع",
         "from": "من",

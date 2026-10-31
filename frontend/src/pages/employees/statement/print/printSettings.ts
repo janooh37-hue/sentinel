@@ -4,7 +4,8 @@
  * Activity tab and the Attendance tab link straight into them.
  *
  * Activity: `period` (month|last3|year|all|custom), `from`, `to` (custom only),
- * `cats` (comma list of categories; absent = all, empty = none), `lang` (ar|en),
+ * `cats` (comma list of sections, `ACTIVITY_SECTIONS`; absent = all, empty =
+ * none; the older `leave` value selects every leave kind), `lang` (ar|en),
  * `orient` (portrait|landscape), `summary` (1|0), `sign` (1|0).
  *
  * Attendance: `mode` (month|quarter|ytd|custom), `y` + `m` (month mode),
@@ -14,14 +15,14 @@
 
 import {
   ACTIVITY_PRESETS,
-  STATEMENT_CATEGORIES,
+  ACTIVITY_SECTIONS,
   activityPeriod,
   isIsoDate,
   monthPeriod,
   quarterPeriod,
   type ActivityPreset,
+  type ActivitySection,
   type Period,
-  type StatementCategory,
 } from '../statementModel'
 
 export type PaperLanguage = 'ar' | 'en'
@@ -58,7 +59,7 @@ export interface ActivitySettings {
   /** Inclusive; null = from the start of the record (`all`). */
   from: string | null
   to: string
-  cats: StatementCategory[]
+  cats: ActivitySection[]
   lang: PaperLanguage
   orient: Orientation
   summary: boolean
@@ -79,10 +80,11 @@ export function parseActivitySettings(params: URLSearchParams, today: string, ui
     period = activityPeriod(preset, today) as Period
   }
   const catsRaw = params.get('cats')
+  const wanted = new Set(catsRaw?.split(',') ?? [])
   const cats =
     catsRaw === null
-      ? [...STATEMENT_CATEGORIES]
-      : STATEMENT_CATEGORIES.filter((c) => catsRaw.split(',').includes(c))
+      ? [...ACTIVITY_SECTIONS]
+      : ACTIVITY_SECTIONS.filter((s) => wanted.has(s) || (wanted.has('leave') && s.startsWith('leave.')))
   return {
     preset,
     from: period.from,
@@ -101,8 +103,8 @@ export function activitySearch(settings: ActivitySettings): string {
     if (settings.from) params.set('from', settings.from)
     params.set('to', settings.to)
   }
-  if (settings.cats.length !== STATEMENT_CATEGORIES.length) {
-    params.set('cats', STATEMENT_CATEGORIES.filter((c) => settings.cats.includes(c)).join(','))
+  if (settings.cats.length !== ACTIVITY_SECTIONS.length) {
+    params.set('cats', ACTIVITY_SECTIONS.filter((s) => settings.cats.includes(s)).join(','))
   }
   params.set('lang', settings.lang)
   params.set('orient', settings.orient)
