@@ -130,7 +130,7 @@ function unitPhrase(count: number, unit: string, language: string): string {
   return `${formatNumber(count, language)} ${quantityUnit(count, unit, language)}`
 }
 
-function quantityUnit(count: number, unit: string, language: string): string {
+export function quantityUnit(count: number, unit: string, language: string): string {
   return isArabic(language) ? unit.trim() : pluralEn(unit, count)
 }
 

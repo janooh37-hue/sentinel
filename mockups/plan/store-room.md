@@ -301,10 +301,14 @@ storekeeper corrects it. Same policy as the vehicle-licence scan.
   match_score 0-100, quantity|null, confidence 0-100, page, bbox{x,y,w,h}}],
   ocr_available}`. Rows that are clearly not items (headers, totals) are
   dropped; doubtful rows are returned with `item_id: null`.
-- **Parsing**: per OCR row, take the item text and the quantity; decimals and
-  currency-looking numbers are prices and are ignored. Keep the heuristic in one
-  pure module (`core/extraction/delivery_note.py`) with unit tests on synthetic
-  rows; it is calibrated later on the user's real notes.
+- **Parsing**: per OCR row, take the item text and a real integer quantity column
+  followed by a price column; decimals and currency-looking numbers are prices,
+  not quantities. Drop mostly-column-header rows and descriptions without those
+  quantity/price columns (including titles with a stray trailing integer). Unknown
+  descriptions with valid columns still reach confirmation. Keep pack sizes in the
+  description. Keep the heuristic in one pure module
+  (`core/extraction/delivery_note.py`) with unit tests on synthetic rows; it is
+  calibrated later on the user's real notes.
 - **Item match**: normalise (case, punctuation, Arabic-Indic digits), then
   `rapidfuzz` against item code, `name_en`, `name_ar` and **aliases**. Score ≥ 85
   → `item_id` set; below → null, the user picks.

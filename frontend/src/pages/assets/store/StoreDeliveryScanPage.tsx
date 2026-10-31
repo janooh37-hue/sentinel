@@ -25,9 +25,16 @@ export function StoreDeliveryScanPage(): React.JSX.Element {
   const controller = useRef<AbortController | null>(null)
   const chooser = useRef<HTMLInputElement>(null)
   const status = useRef<HTMLDivElement>(null)
+  const focusChooser = useRef(false)
 
   useEffect(() => () => controller.current?.abort(), [])
   useEffect(() => { if (reading || message) status.current?.focus() }, [reading, message])
+  useEffect(() => {
+    if (!reading && !scan && focusChooser.current) {
+      chooser.current?.focus()
+      focusChooser.current = false
+    }
+  }, [reading, scan])
 
   async function chooseFile(chosen: File): Promise<void> {
     controller.current?.abort()
@@ -45,6 +52,8 @@ export function StoreDeliveryScanPage(): React.JSX.Element {
       else if (!result.lines.length) setMessage(t('assets.store.scan.nothingRead'))
     } catch (error) {
       if (active.signal.aborted) return
+      // Upload-policy failures are not valid supporting documents for manual entry.
+      if (error instanceof ApiError && error.code.startsWith('STORE_NOTE_FILE_')) setFile(null)
       setMessage(error instanceof ApiError && error.code === 'STORE_SCAN_TIMEOUT'
         ? t('assets.store.scan.scanTimeout')
         : error instanceof ApiError && error.code === 'STORE_SCAN_TOO_MANY_PAGES'
@@ -58,13 +67,13 @@ export function StoreDeliveryScanPage(): React.JSX.Element {
     controller.current?.abort()
     setReading(false)
     setMessage(null)
-    chooser.current?.focus()
+    focusChooser.current = true
   }
 
   return (
     <StoreShell title={t('assets.store.scan.title')} description={t('assets.store.scan.description')}>
       {file && scan?.ocr_available && scan.lines.length > 0 ? (
-        <ScanDeliveryConfirm file={file} scan={scan} />
+        <ScanDeliveryConfirm file={file} scan={scan} onChooseAnother={() => { focusChooser.current = true; setScan(null); setFile(null); setMessage(null) }} onManual={() => setManual(true)} />
       ) : (
         <section className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-surface p-4 md:p-6">
           <ScanLine aria-hidden className="h-8 w-8 text-primary" />
@@ -76,7 +85,7 @@ export function StoreDeliveryScanPage(): React.JSX.Element {
             {message && <p dir="auto">{message}</p>}
           </div>
           {reading && <Button type="button" variant="secondary" className="min-h-11 self-start" onClick={cancelReading}>{t('assets.store.scan.cancelReading')}</Button>}
-          {message && file && <Button type="button" className="min-h-11 self-start" onClick={() => setManual(true)}>{t('assets.store.scan.manual')}</Button>}
+          {message && <Button type="button" className="min-h-11 self-start" onClick={() => setManual(true)}>{t('assets.store.scan.manual')}</Button>}
           <Link className={buttonVariants({ variant: 'ghost', className: 'min-h-11 self-start whitespace-normal text-start' })} to="/holdings/store/deliveries">{t('assets.store.scan.back')}</Link>
         </section>
       )}

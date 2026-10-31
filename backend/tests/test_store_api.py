@@ -795,6 +795,42 @@ def test_delivery_scan_matches_items_and_alias_upsert_rematches(
     assert scan()["lines"][1]["match_score"] == 100
 
 
+def test_delivery_scan_drops_headings_and_preserves_misspelled_match(
+    editor: TestClient, category: StoreCategory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.extraction import ocr
+
+    coffee_mate = _item(editor, category, "Coffee-mate 400g")["id"]
+    item_rows = [
+        "Nescafe Classic 190¢g 6 38.50 231.00",
+        "Cofee-mate 400g 4 21.00 84.00",
+        "Lipton Yellow Label Tea 2 55.75 111.50",
+        "Nitrile gloves (box 100) 10 12.00 120.00",
+    ]
+    pages = [
+        _ocr_page(
+            "AL NOOR TRADING LLC",
+            "AL NOOR TRADING LLC 31",
+            "Item Qty Unit price Total",
+            *item_rows,
+            "TOTAL 546.50",
+        )
+    ]
+    monkeypatch.setattr(ocr, "word_boxes_from_bytes", lambda raw, *, lang, timeout: pages)
+
+    response = editor.post(
+        "/api/v1/store/deliveries/scan", files={"file": ("note.pdf", _PDF, "application/pdf")}
+    )
+
+    assert response.status_code == 200, response.text
+    lines = response.json()["lines"]
+    assert [(line["raw_text"], line["quantity"]) for line in lines] == list(
+        zip(item_rows, [6, 4, 2, 10], strict=True)
+    )
+    assert lines[1]["item_id"] == coffee_mate
+    assert all(lines[index]["item_id"] is None for index in (0, 2, 3))
+
+
 @pytest.mark.parametrize("missing_binary", [False, True])
 def test_delivery_scan_ocr_unavailable(
     editor: TestClient,

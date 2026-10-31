@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import * as pdfjsLib from 'pdfjs-dist'
 import type { PDFDocumentLoadingTask, PDFPageProxy, RenderTask } from 'pdfjs-dist'
 
+import { DialogRoot, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import type { StoreDeliveryScan, StoreScanLine } from '@/lib/api'
 import { pdfWorkerUrl } from '@/lib/pdf'
 
@@ -140,6 +141,7 @@ interface CropProps {
 function ScanRowCrop({ source, unavailable, line, pageSize, number }: CropProps): React.JSX.Element {
   const { t } = useTranslation()
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [open, setOpen] = useState(false)
   const [result, setResult] = useState<{ source: LocalSource; line: StoreScanLine; ok: boolean } | null>(null)
   const current = result?.source === source && result.line === line ? result : null
   const invalid = !pageSize || !Number.isFinite(pageSize.width) || !Number.isFinite(pageSize.height)
@@ -155,17 +157,22 @@ function ScanRowCrop({ source, unavailable, line, pageSize, number }: CropProps)
       const { x, y, w, h } = line.bbox
       // OCR may upscale the local image. Map both axes independently and clip
       // in OCR coordinates before sampling, without mirroring under RTL.
-      const left = Math.max(0, x)
-      const top = Math.max(0, y)
-      const right = Math.min(pageSize.width, x + w)
-      const bottom = Math.min(pageSize.height, y + h)
+      const paddingX = Math.max(8, h * 0.5)
+      const paddingY = Math.max(4, h * 0.35)
+      const left = Math.max(0, x - paddingX)
+      const top = Math.max(0, y - paddingY)
+      const right = Math.min(pageSize.width, x + w + paddingX)
+      const bottom = Math.min(pageSize.height, y + h + paddingY)
       if (right <= left || bottom <= top) throw new Error('Crop outside page')
       const sx = left * raster.width / pageSize.width
       const sy = top * raster.height / pageSize.height
       const sw = (right - left) * raster.width / pageSize.width
       const sh = (bottom - top) * raster.height / pageSize.height
-      canvas.width = Math.max(1, Math.ceil(sw))
-      canvas.height = Math.max(1, Math.ceil(sh))
+      // Keep the text at a readable scale, even when the row is much wider
+      // than a phone. The viewport scrolls instead of shrinking the image.
+      const scale = Math.max(1, 48 / sh)
+      canvas.width = Math.max(1, Math.ceil(sw * scale))
+      canvas.height = Math.max(48, Math.ceil(sh * scale))
       const context = canvas.getContext('2d')
       if (!context) throw new Error('Canvas unavailable')
       context.direction = 'ltr'
@@ -186,16 +193,53 @@ function ScanRowCrop({ source, unavailable, line, pageSize, number }: CropProps)
   }
 
   return (
-    <div dir="ltr" className="mb-3 overflow-hidden rounded-md border border-border bg-white" aria-busy={!current?.ok}>
-      <canvas
-        ref={canvasRef}
-        dir="ltr"
-        role="img"
-        aria-label={t('assets.store.scan.cropAlt', { number })}
-        className="block h-auto w-full"
-        style={{ visibility: current?.ok ? 'visible' : 'hidden' }}
-      />
-    </div>
+    <DialogRoot open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          dir="ltr"
+          disabled={!current?.ok}
+          aria-label={`${t('assets.store.scan.cropEnlarge')} ${number}`}
+          aria-busy={!current?.ok}
+          className="mb-3 block min-h-11 w-full min-w-0 overflow-x-auto rounded-md border border-border bg-surface p-2 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span dir="auto" className="mb-1 block text-xs font-medium text-foreground">
+            {t('assets.store.scan.cropEnlarge')} <bdi dir="ltr">{number}</bdi>
+          </span>
+          <span dir="ltr" className="block rounded bg-white">
+            <canvas
+              ref={canvasRef}
+              dir="ltr"
+              role="img"
+              aria-label={t('assets.store.scan.cropAlt', { number })}
+              className="block max-w-none"
+              style={{ height: 48, visibility: current?.ok ? 'visible' : 'hidden' }}
+            />
+          </span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-4xl">
+        <DialogHeader className="pe-14">
+          <DialogTitle>{t('assets.store.scan.cropEnlarge')} <bdi dir="ltr">{number}</bdi></DialogTitle>
+          <DialogDescription>{t('assets.store.scan.cropZoomHint')}</DialogDescription>
+        </DialogHeader>
+        <div dir="ltr" tabIndex={0} className="overflow-auto bg-white p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+          <canvas
+            ref={(canvas) => {
+              const preview = canvasRef.current
+              if (!canvas || !preview) return
+              canvas.width = preview.width * 2
+              canvas.height = preview.height * 2
+              canvas.getContext('2d')?.drawImage(preview, 0, 0, canvas.width, canvas.height)
+            }}
+            role="img"
+            aria-label={t('assets.store.scan.cropAlt', { number })}
+            className="block max-w-none"
+            style={{ height: 96 }}
+          />
+        </div>
+      </DialogContent>
+    </DialogRoot>
   )
 }
 

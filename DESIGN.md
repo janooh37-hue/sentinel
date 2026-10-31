@@ -2482,13 +2482,22 @@ will trip over them.
 - The local photo/PDF is scanned once. Reading is announced and cancellable;
   unavailable OCR or an empty result offers the manual delivery dialog with
   the chosen file already attached.
+- Upload-policy rejection drops the invalid attachment before manual fallback;
+  an OCR timeout or unavailable/empty OCR retains the accepted document.
 - Confirmation reuses `DeliveryLines` through optional props and slots. Local
   row crops retain document coordinates in either UI direction. Unmatched,
   uncertain and missing-quantity rows sort first; the focused summary and
   each flagged row pair warning icons with text.
-- On-note quantities are read-only beside Received. Differences require a
-  reason, expiry is required, and received zero is accepted only when the
-  note lists a positive quantity. Non-store rows can be skipped.
+- On-note crops and quantities stay together beside Received; both quantities
+  use the same pluralised units. Differences require a reason, expiry is
+  required, and received zero is accepted only for positive noted quantities.
+- After submission, validation follows current values on every edit. Errors
+  are translated in the active language and linked to their own inline text;
+  the summary clears when all errors are fixed. Scan expiry requires a date
+  or month from packaging (there is no undated option).
+- Skipping is a secondary end-of-line action. Skipped rows retain edits and
+  can be restored with focus returning to the item. If every row is skipped,
+  offer both another-note selection and manual entry with the valid photo.
 - Delivery creation and file attachment are separate durable steps. Attachment
   failure retains the confirmed rows, disables edits and offers attachment-only
   retry or an explicit finish without the file; retry never creates a second

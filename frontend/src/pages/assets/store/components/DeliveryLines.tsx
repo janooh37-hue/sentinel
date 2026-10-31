@@ -29,13 +29,14 @@ interface Props {
   renderLineActions?: (line: DeliveryLine, index: number) => ReactNode
   renderQuantityAside?: (line: DeliveryLine, index: number) => ReactNode
   quantityLabel?: string
+  pluralQuantityUnits?: boolean
   allowAdd?: boolean
   allowUndated?: boolean
   quantityForItem?: (line: DeliveryLine, item: StorePickerItem | null) => QuantityParts
 }
 
 /** The delivery line editor: item, quantity and expiry per line, add/remove lines. */
-export function DeliveryLines({ idPrefix, lines, onChange, errors, alertId, disabled = false, renderLineStart, renderLineFields, renderLineLegend, renderLineActions, renderQuantityAside, quantityLabel, allowAdd = true, allowUndated = true, quantityForItem }: Props): React.JSX.Element {
+export function DeliveryLines({ idPrefix, lines, onChange, errors, alertId, disabled = false, renderLineStart, renderLineFields, renderLineLegend, renderLineActions, renderQuantityAside, quantityLabel, pluralQuantityUnits, allowAdd = true, allowUndated = true, quantityForItem }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   // Monotonic: a removed line's key (and its errors) is never reused.
   const nextKey = useRef(Math.max(-1, ...lines.map((line) => line.key)) + 1)
@@ -49,25 +50,29 @@ export function DeliveryLines({ idPrefix, lines, onChange, errors, alertId, disa
         return (
           <fieldset key={line.key} disabled={disabled} className="min-w-0 border-t border-border pt-3">
             <legend className="px-1 text-sm font-medium text-foreground">{renderLineLegend?.(line, index) ?? t('assets.store.deliveries.line', { number: index + 1 })}</legend>
-            {renderLineActions ? renderLineActions(line, index) : <div className="mb-2 flex justify-end">
+            {!renderLineActions && <div className="mb-2 flex justify-end">
               <Button type="button" variant="ghost" className="min-h-11 text-accent" disabled={lines.length === 1 || disabled} onClick={() => onChange((current) => current.filter((entry) => entry.key !== line.key))} aria-label={t('assets.store.deliveries.removeLine', { number: index + 1 })}>
                 <Trash2 aria-hidden className="h-4 w-4" />{t('assets.store.deliveries.remove')}
               </Button>
             </div>}
             {renderLineStart?.(line, index)}
             <FieldGrid>
-              <Field id={`${prefix}-item`} label={t('assets.store.deliveries.item')} required full={!!renderQuantityAside} error={issue?.item}>
-                <StoreItemPicker id={`${prefix}-item`} value={line.item?.id ?? null} onChange={(item) => updateLine(line.key, { item, quantity: quantityForItem?.(line, item) ?? { ...EMPTY_QUANTITY } })} disabled={disabled} invalid={!!issue?.item} describedBy={issue?.item ? alertId : undefined} />
+              <Field id={`${prefix}-item`} label={t('assets.store.deliveries.item')} required full={!!renderQuantityAside}>
+                <StoreItemPicker id={`${prefix}-item`} value={line.item?.id ?? null} onChange={(item) => updateLine(line.key, { item, quantity: quantityForItem?.(line, item) ?? { ...EMPTY_QUANTITY } })} disabled={disabled} invalid={!!issue?.item} describedBy={issue?.item ? `${prefix}-item-error ${alertId}` : undefined} />
+                {issue?.item && <span id={`${prefix}-item-error`} role="alert" className="text-xs text-destructive">{issue.item}</span>}
               </Field>
               {renderQuantityAside?.(line, index)}
-              <Field id={`${prefix}-quantity`} label={quantityLabel ?? t('assets.store.deliveries.quantity')} required error={issue?.quantity}>
-                {line.item ? <QuantityInput id={`${prefix}-quantity`} item={line.item} value={line.quantity} onChange={(quantity) => updateLine(line.key, { quantity })} label={itemName(line.item, i18n.language)} invalid={!!issue?.quantity} describedBy={issue?.quantity ? alertId : undefined} disabled={disabled} required /> : <p className="py-3 text-sm text-muted-foreground">{t('assets.store.deliveries.selectItemFirst')}</p>}
+              <Field id={`${prefix}-quantity`} label={quantityLabel ?? t('assets.store.deliveries.quantity')} required>
+                {line.item ? <QuantityInput id={`${prefix}-quantity`} item={line.item} value={line.quantity} onChange={(quantity) => updateLine(line.key, { quantity })} label={itemName(line.item, i18n.language)} invalid={!!issue?.quantity} describedBy={issue?.quantity ? `${prefix}-quantity-error ${alertId}` : undefined} disabled={disabled} required pluralUnits={pluralQuantityUnits} /> : <p className="py-3 text-sm text-muted-foreground">{t('assets.store.deliveries.selectItemFirst')}</p>}
+                {issue?.quantity && <span id={`${prefix}-quantity-error`} role="alert" className="text-xs text-destructive">{issue.quantity}</span>}
               </Field>
-              <Field id={`${prefix}-expiry`} label={t('assets.store.deliveries.expiry')} required full error={issue?.expiry}>
-                <ExpiryInput id={`${prefix}-expiry`} value={line.expiry} onChange={(expiry) => updateLine(line.key, { expiry })} invalid={!!issue?.expiry} describedBy={issue?.expiry ? alertId : undefined} disabled={disabled} allowUndated={allowUndated} />
+              <Field id={`${prefix}-expiry`} label={t('assets.store.deliveries.expiry')} required full>
+                <ExpiryInput id={`${prefix}-expiry`} value={line.expiry} onChange={(expiry) => updateLine(line.key, { expiry })} invalid={!!issue?.expiry} describedBy={issue?.expiry ? `${prefix}-expiry-error ${alertId}` : undefined} disabled={disabled} allowUndated={allowUndated} />
+                {issue?.expiry && <span id={`${prefix}-expiry-error`} role="alert" className="text-xs text-destructive">{issue.expiry}</span>}
               </Field>
               {renderLineFields?.(line, index)}
             </FieldGrid>
+            {renderLineActions && <div className="mt-3 flex justify-end">{renderLineActions(line, index)}</div>}
           </fieldset>
         )
       })}

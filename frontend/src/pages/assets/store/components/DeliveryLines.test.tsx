@@ -50,4 +50,10 @@ describe('DeliveryLines', () => {
     expect(screen.getByTestId('keys')).toHaveTextContent('0,1,2')
     expect(Object.keys(result().errors[2])).toEqual(['item', 'expiry', 'quantity'])
   })
+
+  it('rejects undated scan lines while allowing them in manual delivery entry', () => {
+    const lines = createDeliveryLines([{ item: COFFEE, quantity: { units: '1', loose: '' }, expiry: { mode: 'none', date: '', month: '' } }])
+    expect(validateDeliveryLines(lines, i18n.t).errors).toEqual({})
+    expect(validateDeliveryLines(lines, (key) => key, { allowUndated: false }).errors).toEqual({ 0: { expiry: 'assets.store.scan.expiryRequired' } })
+  })
 })

@@ -28,6 +28,7 @@ _HEADER_WORDS = frozenset(
         "unit",
         "price",
         "amount",
+        "total",
         "no",
         "s",
         "n",
@@ -51,17 +52,18 @@ class DeliveryNoteRow:
 
 
 def parse_row(text: str) -> DeliveryNoteRow | None:
-    """Extract an item description and first non-price integer after it.
+    """Extract a description and an integer quantity followed by a price column.
 
     Pack sizes such as ``12x190g`` remain part of the description. A leading
     integer is a row number; currency-adjacent integers and decimal tokens are
-    prices. With no defensible quantity, return null rather than guessing.
+    prices. Descriptions alone or with a lone trailing integer are not items.
     """
     text = unicodedata.normalize("NFKC", text).translate(_DIGITS).strip()
     normalized = normalize_item_text(text)
     if not normalized or _NON_ITEM.match(text):
         return None
-    if set(normalized.split()) <= _HEADER_WORDS:
+    words = [word for word in normalized.split() if not word.isdigit()]
+    if sum(word in _HEADER_WORDS for word in words) > len(words) / 2:
         return None
     tokens = text.split()
     description: list[str] = []
@@ -81,12 +83,25 @@ def parse_row(text: str) -> DeliveryNoteRow | None:
             )
             if _CURRENCY.fullmatch(previous) or currency_suffix:
                 continue
-            if description and quantity is None:
+            # A quantity precedes a price, not another description/pack token.
+            # OCR can turn "190g" into "1909"; keep that before the real qty.
+            price_follows = (
+                (bool(_PRICE.search(following)) and any(c.isdigit() for c in following))
+                or (bool(_CURRENCY.fullmatch(following)) and bool(re.match(r"^\d", after_currency)))
+                or (
+                    following.isascii()
+                    and following.isdigit()
+                    and bool(_CURRENCY.fullmatch(after_currency))
+                )
+            )
+            if description and price_follows:
                 quantity = int(clean)
+                break
+            if description:
+                description.append(token)
             continue
-        if quantity is None:
-            description.append(token)
+        description.append(token)
     item_text = " ".join(description).strip()
-    if not any(c.isalpha() for c in item_text):
+    if quantity is None or not any(c.isalpha() for c in item_text):
         return None
     return DeliveryNoteRow(item_text=item_text, quantity=quantity)
