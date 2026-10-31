@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { FileText, Plus, ScanLine, Trash2, Truck } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DocumentViewerDialog } from '@/components/ui/document-viewer-dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader } from '@/components/ui/table'
@@ -62,8 +63,8 @@ export function StoreDeliveriesPage(): React.JSX.Element {
   }
 
   return (
-    <StoreShell title={t('assets.store.deliveries.title')} description={t('assets.store.deliveries.description')} actions={editable && <div className="flex flex-wrap gap-2">{!mobile && <Button asChild variant="secondary" className="min-h-11"><Link to="/holdings/store/deliveries/scan"><ScanLine aria-hidden className="h-4 w-4" />{t('assets.store.scan.entry')}</Link></Button>}<Button type="button" className="min-h-11" onClick={() => setDialog(true)}><Plus aria-hidden className="h-4 w-4" />{t('assets.store.deliveries.log')}</Button></div>}>
-      {editable && mobile && <Button asChild variant="secondary" className="min-h-11 self-start"><Link to="/holdings/store/deliveries/scan"><ScanLine aria-hidden className="h-4 w-4" />{t('assets.store.scan.entry')}</Link></Button>}
+    <StoreShell title={t('assets.store.deliveries.title')} description={t('assets.store.deliveries.description')} actions={editable && <div className="flex flex-wrap gap-2">{!mobile && <Link className={buttonVariants({ variant: 'secondary', className: 'min-h-11 whitespace-normal text-start' })} to="/holdings/store/deliveries/scan"><ScanLine aria-hidden className="h-4 w-4 shrink-0" />{t('assets.store.scan.entry')}</Link>}<Button type="button" className="min-h-11" onClick={() => setDialog(true)}><Plus aria-hidden className="h-4 w-4" />{t('assets.store.deliveries.log')}</Button></div>}>
+      {editable && mobile && <Link className={buttonVariants({ variant: 'secondary', className: 'min-h-11 self-start whitespace-normal text-start' })} to="/holdings/store/deliveries/scan"><ScanLine aria-hidden className="h-4 w-4 shrink-0" />{t('assets.store.scan.entry')}</Link>}
       {uploadWarning && <p role="alert" className="rounded-lg border border-warning bg-warning-soft p-3 text-sm text-foreground" dir="auto">{uploadWarning}</p>}
       <StoreQueryState isPending={query.isPending} error={query.error} onRetry={() => void query.refetch()} isEmpty={deliveries.length === 0} emptyIcon={Truck} emptyMessage={t('assets.store.deliveries.empty')} emptyDescription={t(editable ? 'assets.store.deliveries.emptyDescription' : 'assets.store.deliveries.emptyReadOnly')}>
         {mobile ? (

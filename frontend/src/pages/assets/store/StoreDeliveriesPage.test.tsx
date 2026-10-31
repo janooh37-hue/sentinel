@@ -45,6 +45,23 @@ beforeEach(async () => {
 })
 
 describe('Store deliveries', () => {
+  it.each([false, true])('offers the scan entry on desktop and mobile (mobile=%s)', async (mobile) => {
+    state.mobile = mobile
+    renderPage()
+    expect(screen.getByRole('link', { name: 'Scan delivery note' })).toHaveAttribute('href', '/holdings/store/deliveries/scan')
+  })
+
+  it.each([false, true])('shows the noted-versus-received discrepancy and reason (mobile=%s)', async (mobile) => {
+    state.mobile = mobile
+    vi.mocked(api.listStoreDeliveries).mockResolvedValue([{ ...DELIVERY, lines: [{ ...DELIVERY.lines[0], quantity: 51, noted_quantity: 53, difference_reason: 'Two jars missing' }] }])
+    renderPage()
+    expect(await screen.findByText('Two jars missing')).toBeInTheDocument()
+    expect(screen.getByText('2 cartons + 5 jars')).toBeInTheDocument()
+    expect(screen.getByText('2 cartons + 3 jars')).toBeInTheDocument()
+    expect(screen.getByText('On note:')).toBeInTheDocument()
+    expect(screen.getByText('Received:')).toBeInTheDocument()
+  })
+
   it.each([false, true])('renders newest deliveries with batch quantities (mobile=%s)', async (mobile) => {
     state.mobile = mobile
     vi.spyOn(api, 'listStoreDeliveries').mockResolvedValue([DELIVERY, { ...DELIVERY, id: 13, received_on: '2026-10-25', note: 'Most recent' }])
@@ -66,6 +83,7 @@ describe('Store deliveries', () => {
     await screen.findByText('Coffee')
     expect(screen.queryByRole('button', { name: 'Log delivery' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Delete delivery/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Scan delivery note' })).not.toBeInTheDocument()
   })
 
   it.each(['month', 'none'])('logs a delivery with %s expiry in base units', async (mode) => {

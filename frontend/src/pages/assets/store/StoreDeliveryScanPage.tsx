@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { LoaderCircle, ScanLine } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
 import { api, ApiError, type StoreDeliveryScan } from '@/lib/api'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { DeliveryDialog } from './components/DeliveryDialog'
@@ -76,7 +77,7 @@ export function StoreDeliveryScanPage(): React.JSX.Element {
           </div>
           {reading && <Button type="button" variant="secondary" className="min-h-11 self-start" onClick={cancelReading}>{t('assets.store.scan.cancelReading')}</Button>}
           {message && file && <Button type="button" className="min-h-11 self-start" onClick={() => setManual(true)}>{t('assets.store.scan.manual')}</Button>}
-          <Button asChild variant="ghost" className="min-h-11 self-start"><Link to="/holdings/store/deliveries">{t('assets.store.scan.back')}</Link></Button>
+          <Link className={buttonVariants({ variant: 'ghost', className: 'min-h-11 self-start whitespace-normal text-start' })} to="/holdings/store/deliveries">{t('assets.store.scan.back')}</Link>
         </section>
       )}
       <DeliveryDialog open={manual} onOpenChange={setManual} initialFile={file} onSaved={() => navigate('/holdings/store/deliveries')} />

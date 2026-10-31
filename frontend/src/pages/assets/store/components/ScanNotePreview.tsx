@@ -134,9 +134,10 @@ interface CropProps {
   unavailable: boolean
   line: StoreScanLine
   pageSize: StoreDeliveryScan['pages'][number] | undefined
+  number: number
 }
 
-function ScanRowCrop({ source, unavailable, line, pageSize }: CropProps): React.JSX.Element {
+function ScanRowCrop({ source, unavailable, line, pageSize, number }: CropProps): React.JSX.Element {
   const { t } = useTranslation()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [result, setResult] = useState<{ source: LocalSource; line: StoreScanLine; ok: boolean } | null>(null)
@@ -190,7 +191,7 @@ function ScanRowCrop({ source, unavailable, line, pageSize }: CropProps): React.
         ref={canvasRef}
         dir="ltr"
         role="img"
-        aria-label={t('assets.store.scan.cropAlt')}
+        aria-label={t('assets.store.scan.cropAlt', { number })}
         className="block h-auto w-full"
         style={{ visibility: current?.ok ? 'visible' : 'hidden' }}
       />
@@ -227,6 +228,7 @@ export function ScanNotePreview({ file, scan, render }: {
       source={current?.source ?? null}
       unavailable={current !== null && current.source === null}
       line={line}
+      number={scan.lines.indexOf(line) + 1}
       pageSize={scan.pages[line.page]}
     />
   ))

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import type { StoreDeliveryCreate, StoreDeliveryScan, StorePickerItem } from '@/lib/api'
+import { formatNumber } from '@/lib/language'
 import { todayIso } from '@/pages/vehicles/vehicleUtils'
 import { EMPTY_QUANTITY, formatQuantity, isBusinessDate, quantityFromParts, splitBase, storeErrorMessage, useStorePickerItems } from '../storeUtils'
 import { DeliveryLines } from './DeliveryLines'
@@ -108,9 +109,9 @@ function ConfirmForm({ file, scan, items }: Props & { items: StorePickerItem[] }
         <DeliveryLines idPrefix={id} lines={lines} onChange={setLines} errors={lineErrors} alertId={`${id}-alert`} disabled={disabled} allowAdd={false} allowUndated={false} quantityLabel={t('assets.store.scan.received')}
           renderLineLegend={(_line, index) => <Trans i18nKey="assets.store.scan.line" values={{ number: index + 1 }} components={{ number: <bdi dir="ltr" /> }} />}
           quantityForItem={(line, item) => quantityFor(scan.lines[line.key].quantity, item)}
-          renderLineActions={(line) => <Button type="button" variant="ghost" className="mb-2 min-h-11 whitespace-normal text-start text-accent" disabled={disabled} onClick={() => { setLines((current) => current.filter((entry) => entry.key !== line.key)); summary.current?.focus() }}>{t('assets.store.scan.skip')}</Button>}
+          renderLineActions={(line, index) => <Button type="button" variant="ghost" className="mb-2 min-h-11 whitespace-normal text-start text-accent" aria-label={t('assets.store.scan.skipLine', { number: index + 1 })} disabled={disabled} onClick={() => { setLines((current) => current.filter((entry) => entry.key !== line.key)); summary.current?.focus() }}>{t('assets.store.scan.skip')}</Button>}
           renderLineStart={(line) => <div className="mb-3 flex flex-col gap-2">{crop(scan.lines[line.key])}<p dir="auto" className="break-words text-sm">{scan.lines[line.key].raw_text}</p>{needsAttention(line) && <p className="flex items-center gap-2 text-sm font-medium"><AlertTriangle aria-hidden className="h-4 w-4 shrink-0 text-warning" />{t(!line.item ? 'assets.store.scan.unmatched' : 'assets.store.scan.lowConfidence')}</p>}</div>}
-          renderQuantityAside={(line) => <div className="flex flex-col gap-2 text-sm"><span className="font-medium">{t('assets.store.scan.onNote')}</span><output className="py-3">{scan.lines[line.key].quantity == null ? t('assets.store.scan.unknownQuantity') : <bdi dir="ltr" className="font-mono tabular-nums">{line.item ? formatQuantity(scan.lines[line.key].quantity!, line.item, i18n.language) : scan.lines[line.key].quantity}</bdi>}</output></div>}
+          renderQuantityAside={(line) => <div className="flex flex-col gap-2 text-sm"><span className="font-medium">{t('assets.store.scan.onNote')}</span><output className="py-3">{scan.lines[line.key].quantity == null ? t('assets.store.scan.unknownQuantity') : <bdi dir="ltr" className="font-mono tabular-nums">{line.item ? formatQuantity(scan.lines[line.key].quantity!, line.item, i18n.language) : formatNumber(scan.lines[line.key].quantity!, i18n.language)}</bdi>}</output></div>}
           renderLineFields={(line) => {
             const row = scan.lines[line.key]
             const received = line.item ? quantityFromParts(line.quantity, line.item) : null

@@ -32,8 +32,8 @@ export function useScanDeliverySave(file: File) {
     try {
       await api.uploadStoreDeliveryNote(deliveryId.current, file)
       finish()
-    } catch (cause) {
-      setUploadError(t('assets.store.scan.uploadFailed', { error: storeErrorMessage(cause) }))
+    } catch {
+      setUploadError(t('assets.store.scan.uploadFailed'))
     }
   }
 
