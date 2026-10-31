@@ -5,6 +5,11 @@ through the store service, so Item codes are allocated in file order (ST-0001,
 ST-0002, ...) and the count passes the same rules as one entered in the app.
 Refuses to run once any Store item exists, which makes it safe to re-run.
 
+Batch quantities in the file are whole Counting units, as the store counted them;
+an item with ``contains_qty`` is stored in its loose units (quantity * contains).
+``source_name`` is the name as the store's count wrote it; when it differs from
+``name_en`` it is kept as a delivery-note alias so scans still match it.
+
 Usage:
   venv/Scripts/python.exe -X utf8 scripts/store_import_opening.py \
       --json scripts/store_opening_2026-10-29.json --actor admin@example.ae
@@ -60,11 +65,15 @@ class _OpeningBatch(BaseModel):
 
 
 class _OpeningItem(BaseModel):
+    source_name: str | None = None
     name_en: str = Field(min_length=1)
     name_ar: str | None = None
     category: str = Field(min_length=1)
     counting_unit_en: str = Field(min_length=1)
     counting_unit_ar: str = Field(min_length=1)
+    contains_qty: int | None = Field(default=None, ge=2)
+    contains_unit_en: str | None = None
+    contains_unit_ar: str | None = None
     art_kind: str | None = None
     art_color: str | None = None
     batches: list[_OpeningBatch] = Field(min_length=1)
@@ -111,6 +120,9 @@ def import_opening(db: Session, data: dict[str, Any], *, actor: str) -> StoreCou
                     category_id=_category_id(db, entry.category, actor),
                     counting_unit_en=entry.counting_unit_en,
                     counting_unit_ar=entry.counting_unit_ar,
+                    contains_qty=entry.contains_qty,
+                    contains_unit_en=entry.contains_unit_en,
+                    contains_unit_ar=entry.contains_unit_ar,
                     art_kind=entry.art_kind,
                     art_color=entry.art_color,
                 ),
@@ -118,8 +130,15 @@ def import_opening(db: Session, data: dict[str, Any], *, actor: str) -> StoreCou
                 actor_user_id=actor_user_id,
                 commit=False,
             )
+            if entry.source_name and entry.source_name != entry.name_en:
+                store_service.upsert_item_alias(
+                    db, entry.source_name, item.id, actor=actor, actor_user_id=actor_user_id
+                )
+            per_unit = entry.contains_qty or 1
             lines.extend(
-                StoreCountLineInput(item_id=item.id, expiry=batch.expiry, quantity=batch.quantity)
+                StoreCountLineInput(
+                    item_id=item.id, expiry=batch.expiry, quantity=batch.quantity * per_unit
+                )
                 for batch in entry.batches
             )
         count = store_service.create_count(

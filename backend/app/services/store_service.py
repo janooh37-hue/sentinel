@@ -921,37 +921,36 @@ def _validate_delivery_lines(lines: Sequence[StoreDeliveryLineInput]) -> None:
             )
 
 
-def _upsert_delivery_aliases(
+def upsert_item_alias(
     db: Session,
-    lines: Sequence[StoreDeliveryLineInput],
+    text: str,
+    item_id: int,
     *,
     actor: str | None,
     actor_user_id: int | None,
 ) -> None:
-    for line in lines:
-        norm = normalize_item_text(line.source_text or "")
-        if not norm:
-            continue
-        alias = db.scalar(select(StoreItemAlias).where(StoreItemAlias.alias_norm == norm))
-        if alias is not None and alias.item_id == line.item_id:
-            continue
-        previous = alias.item_id if alias is not None else None
-        if alias is None:
-            alias = StoreItemAlias(
-                alias_norm=norm, item_id=line.item_id, created_by_user_id=actor_user_id
-            )
-            db.add(alias)
-        else:
-            alias.item_id = line.item_id
-        db.flush()
-        append_audit(
-            db,
-            action="item_alias.upserted",
-            entity_type="store_item_alias",
-            entity_id=alias.id,
-            actor=actor,
-            payload={"alias_norm": norm, "item_id": line.item_id, "previous_item_id": previous},
-        )
+    """Point the normalised ``text`` at ``item_id`` so a later scan matches it; audited."""
+    norm = normalize_item_text(text)
+    if not norm:
+        return
+    alias = db.scalar(select(StoreItemAlias).where(StoreItemAlias.alias_norm == norm))
+    if alias is not None and alias.item_id == item_id:
+        return
+    previous = alias.item_id if alias is not None else None
+    if alias is None:
+        alias = StoreItemAlias(alias_norm=norm, item_id=item_id, created_by_user_id=actor_user_id)
+        db.add(alias)
+    else:
+        alias.item_id = item_id
+    db.flush()
+    append_audit(
+        db,
+        action="item_alias.upserted",
+        entity_type="store_item_alias",
+        entity_id=alias.id,
+        actor=actor,
+        payload={"alias_norm": norm, "item_id": item_id, "previous_item_id": previous},
+    )
 
 
 SCAN_MAX_PAGES = 5
@@ -1062,7 +1061,10 @@ def create_delivery(
         )
         db.add(row)
         db.flush()
-        _upsert_delivery_aliases(db, payload.lines, actor=actor, actor_user_id=actor_user_id)
+        for line in payload.lines:
+            upsert_item_alias(
+                db, line.source_text or "", line.item_id, actor=actor, actor_user_id=actor_user_id
+            )
         append_audit(
             db,
             action="delivery.created",
