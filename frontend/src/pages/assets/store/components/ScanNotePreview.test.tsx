@@ -1,4 +1,5 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18next from 'react-i18next'
 
@@ -94,12 +95,12 @@ describe('ScanNotePreview', () => {
     await waitFor(() => expect(drawImage).toHaveBeenCalledTimes(2))
     expect(createObjectURL).toHaveBeenCalledExactlyOnceWith(file)
     expect(LocalImage.instances).toHaveLength(1)
-    expect(drawImage).toHaveBeenCalledWith(LocalImage.instances[0], 5, 25, 240, 10, 0, 0, 240, 10)
+    expect(drawImage).toHaveBeenCalledWith(LocalImage.instances[0], 0, 21.5, 250, 17, 0, 0, 706, 48)
     for (const canvas of screen.getAllByRole('img')) {
       expect(canvas).toHaveAttribute('dir', 'ltr')
       expect(canvas).toHaveAccessibleName('assets.store.scan.cropAlt')
       expect(canvas.parentElement).toHaveAttribute('dir', 'ltr')
-      expect(canvas.parentElement).toHaveAttribute('aria-busy', 'false')
+      expect(canvas.closest('button')).toHaveAttribute('aria-busy', 'false')
     }
 
     const canvases = view.container.querySelectorAll('canvas')
@@ -122,7 +123,7 @@ describe('ScanNotePreview', () => {
     expect(pdf.renderPage).toHaveBeenCalledTimes(2)
     expect(pdf.cleanup).toHaveBeenCalledTimes(2)
     expect(createObjectURL).not.toHaveBeenCalled()
-    expect(drawImage.mock.calls[0].slice(1)).toEqual([10, 50, 480, 20, 0, 0, 480, 20])
+    expect(drawImage.mock.calls[0].slice(1)).toEqual([0, 43, 500, 34, 0, 0, 706, 48])
     const pageCanvases = pdf.renderPage.mock.calls.map(([options]) => options.canvas)
 
     view.unmount()
@@ -136,7 +137,35 @@ describe('ScanNotePreview', () => {
     await act(async () => { LocalImage.instances[0].onload?.() })
 
     await waitFor(() => expect(drawImage).toHaveBeenCalledOnce())
-    expect(drawImage).toHaveBeenCalledWith(LocalImage.instances[0], 0, 395, 45, 5, 0, 0, 45, 5)
+    expect(drawImage).toHaveBeenCalledWith(LocalImage.instances[0], 0, 388, 55, 12, 0, 0, 220, 48)
+  })
+
+  it('keeps wide phone crops legible and opens a keyboard-accessible enlargement', async () => {
+    const user = userEvent.setup()
+    const result: StoreDeliveryScan = { ...scan, lines: [{ ...line, bbox: { x: 10, y: 50, w: 900, h: 20 } }] }
+    render(<Rows file={new File(['image'], 'note.jpg', { type: 'image/jpeg' })} result={result} />)
+    await act(async () => { LocalImage.instances[0].onload?.() })
+    const button = screen.getByRole('button', { name: 'assets.store.scan.cropEnlarge 1' })
+    await waitFor(() => expect(button).toBeEnabled())
+    const preview = screen.getByRole('img') as HTMLCanvasElement
+    expect(preview.height).toBeGreaterThanOrEqual(48)
+    expect(preview.width).toBeGreaterThan(322)
+    expect(preview).toHaveStyle({ height: '48px' })
+    expect(preview).toHaveClass('max-w-none')
+    expect(preview.parentElement).toHaveClass('overflow-x-auto')
+    expect(button).toHaveClass('min-h-11')
+
+    button.focus()
+    await user.keyboard('{Enter}')
+    const dialog = await screen.findByRole('dialog', { name: 'assets.store.scan.cropEnlarge 1' })
+    expect(dialog).toContainElement(document.activeElement as HTMLElement)
+    const zoom = dialog.querySelector('canvas')!
+    expect(zoom).toHaveAccessibleName('assets.store.scan.cropAlt')
+    expect(zoom).toHaveStyle({ height: '96px' })
+    expect(zoom.width).toBe(preview.width * 2)
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(button).toHaveFocus()
   })
 
   it('offers an accessible fallback when the local file cannot be decoded', async () => {
