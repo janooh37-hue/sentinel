@@ -2788,9 +2788,16 @@ body {
 }
 .statement-sheet .st-contact span {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 1.2mm;
   white-space: nowrap;
+}
+/* Email, web and phone runs set in the sans with tabular figures: the mono
+   is too wide for one row on portrait A4. Still `bdi dir=ltr`, unbreakable. */
+.statement-sheet .st-contact .st-mono {
+  font-family: 'Inter Variable', 'Inter', sans-serif;
+  font-variant-numeric: tabular-nums;
 }
 /* Meta text never drops under 7.5pt, mono included. */
 .statement-sheet .st-contact .st-mono,
