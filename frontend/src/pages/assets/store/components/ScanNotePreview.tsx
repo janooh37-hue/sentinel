@@ -197,15 +197,16 @@ function ScanRowCrop({ source, unavailable, line, pageSize, number }: CropProps)
       <DialogTrigger asChild>
         <button
           type="button"
+          dir="ltr"
           disabled={!current?.ok}
           aria-label={`${t('assets.store.scan.cropEnlarge')} ${number}`}
           aria-busy={!current?.ok}
-          className="mb-3 block min-h-11 w-full min-w-0 rounded-md border border-border bg-surface p-2 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="mb-3 block min-h-11 w-full min-w-0 overflow-x-auto rounded-md border border-border bg-surface p-2 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <span className="mb-1 block text-xs font-medium text-foreground">
+          <span dir="auto" className="mb-1 block text-xs font-medium text-foreground">
             {t('assets.store.scan.cropEnlarge')} <bdi dir="ltr">{number}</bdi>
           </span>
-          <span dir="ltr" className="block overflow-x-auto rounded bg-white">
+          <span dir="ltr" className="block rounded bg-white">
             <canvas
               ref={canvasRef}
               dir="ltr"

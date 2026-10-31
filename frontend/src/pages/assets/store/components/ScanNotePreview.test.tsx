@@ -140,10 +140,10 @@ describe('ScanNotePreview', () => {
     expect(drawImage).toHaveBeenCalledWith(LocalImage.instances[0], 0, 388, 55, 12, 0, 0, 220, 48)
   })
 
-  it('keeps wide phone crops legible and opens a keyboard-accessible enlargement', async () => {
+  it.each(['ltr', 'rtl'])('keeps wide %s phone crops keyboard-scrollable and opens an accessible enlargement', async (dir) => {
     const user = userEvent.setup()
     const result: StoreDeliveryScan = { ...scan, lines: [{ ...line, bbox: { x: 10, y: 50, w: 900, h: 20 } }] }
-    render(<Rows file={new File(['image'], 'note.jpg', { type: 'image/jpeg' })} result={result} />)
+    render(<div dir={dir}><Rows file={new File(['image'], 'note.jpg', { type: 'image/jpeg' })} result={result} /></div>)
     await act(async () => { LocalImage.instances[0].onload?.() })
     const button = screen.getByRole('button', { name: 'assets.store.scan.cropEnlarge 1' })
     await waitFor(() => expect(button).toBeEnabled())
@@ -152,10 +152,14 @@ describe('ScanNotePreview', () => {
     expect(preview.width).toBeGreaterThan(322)
     expect(preview).toHaveStyle({ height: '48px' })
     expect(preview).toHaveClass('max-w-none')
-    expect(preview.parentElement).toHaveClass('overflow-x-auto')
-    expect(button).toHaveClass('min-h-11')
+    expect(preview.parentElement).not.toHaveClass('overflow-x-auto')
+    expect(button).toHaveClass('min-h-11', 'overflow-x-auto')
+    expect(button).toHaveAttribute('dir', 'ltr')
+    expect(button.tabIndex).toBe(0)
+    expect(button.querySelector('[tabindex]')).toBeNull()
 
-    button.focus()
+    await user.tab()
+    expect(button).toHaveFocus()
     await user.keyboard('{Enter}')
     const dialog = await screen.findByRole('dialog', { name: 'assets.store.scan.cropEnlarge 1' })
     expect(dialog).toContainElement(document.activeElement as HTMLElement)
