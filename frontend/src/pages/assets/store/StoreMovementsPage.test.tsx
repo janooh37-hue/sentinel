@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router-dom'
@@ -26,8 +26,9 @@ describe('Store movements', () => {
     renderPage()
     expect(await screen.findByText('October 2026')).toBeInTheDocument()
     expect(screen.getByText('September 2026')).toBeInTheDocument()
-    expect(screen.getByText('To Rashid · recorded by Officer One')).toBeInTheDocument()
-    expect(screen.getByText('From HQ · recorded by Officer One')).toBeInTheDocument()
+    expect(screen.getByText('To Rashid')).toBeInTheDocument()
+    expect(screen.getByText('From HQ')).toBeInTheDocument()
+    expect(screen.getAllByText(/Recorded/, { exact: false }).length).toBeGreaterThan(0)
     expect(screen.getByText('×3')).toBeInTheDocument()
     const signed = screen.getByText('−3')
     expect(signed).toHaveAttribute('dir', 'ltr')
@@ -42,7 +43,7 @@ describe('Store movements', () => {
     expect(screen.getByText('October 2026')).toBeInTheDocument()
     expect(screen.queryByText('September 2026')).not.toBeInTheDocument()
     await user.clear(screen.getByRole('searchbox')); await user.type(screen.getByRole('searchbox'), 'not found')
-    expect(screen.getByText('No records match this filter.')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('No records match this filter.')
   })
   it('shows all detail lines including noted versus received quantities', async () => {
     const user = userEvent.setup(); renderPage(); await user.click(await screen.findByRole('button', { name: /Monthly delivery.*Tea/ }))
@@ -66,7 +67,7 @@ describe('Store movements', () => {
     await i18n.changeLanguage(language)
     vi.mocked(api.listStoreMovements).mockResolvedValue([{ ...OUT, kind: 'disposed', reason: null }])
     renderPage()
-    expect(await screen.findByText(`${i18n.t('assets.store.movements.kind.disposed')} · ${i18n.t('assets.store.movements.byWho', { name: language === 'ar' ? 'موظف' : 'Officer One' })}`)).toBeInTheDocument()
+    expect(await screen.findByText(i18n.t('assets.store.movements.kind.disposed'), { selector: 'span.mt-1' })).toBeInTheDocument()
     expect(screen.queryByText(i18n.t('assets.store.movements.reason.damaged'), { exact: false })).not.toBeInTheDocument()
   })
   it.each(['in', 'out'] as const)('isolates only signed digits, not Arabic counting and loose units (%s)', async kind => {
@@ -82,5 +83,86 @@ describe('Store movements', () => {
     expect(within(dialog).getByText(kind === 'in' ? '+1' : '−1')).toHaveAttribute('dir', 'ltr')
     expect(within(dialog).getByText('4')).toHaveAttribute('dir', 'ltr')
     for (const bdi of dialog.querySelectorAll('bdi[dir="ltr"]')) expect(bdi).not.toHaveTextContent(/كرتون|علبة/)
+  })
+  it('focuses Close rather than Delete and restores the opening row on Escape', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    const opener = await screen.findByRole('button', { name: /Handover.*Tea/ })
+    await user.click(opener)
+    const dialog = screen.getByRole('dialog', { name: 'Handover' })
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Close' })).toHaveFocus())
+    expect(within(dialog).getByRole('button', { name: 'Delete' })).not.toHaveFocus()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(opener).toHaveFocus())
+  })
+  it('identifies the handover and irreversible action, with Cancel focused by default', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: /Handover.*Tea/ }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
+    const confirm = screen.getByRole('dialog', { name: 'Delete handover?' })
+    expect(confirm).toHaveTextContent('Rashid')
+    expect(confirm).toHaveTextContent('2026-10-31')
+    expect(confirm).toHaveTextContent('Tea ×3')
+    expect(confirm).toHaveTextContent('This cannot be undone.')
+    await waitFor(() => expect(within(confirm).getByRole('button', { name: 'Cancel' })).toHaveFocus())
+    await user.keyboard('{Enter}')
+    expect(api.deleteStoreHandover).not.toHaveBeenCalled()
+  })
+  it('separates the event date from the recording timestamp', async () => {
+    vi.mocked(api.listStoreMovements).mockResolvedValue([{ ...OUT, on: '2026-10-30' }])
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: /Handover.*Tea/ }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Event date').nextElementSibling).toHaveTextContent(/^Oct 30, 2026$/)
+    expect(within(dialog).getByText('Recorded by', { selector: 'dt' }).nextElementSibling).toHaveTextContent(/Recorded Oct 31, 2026.*by Officer One/)
+  })
+  it('distinguishes a true empty feed from filtered results and announces no matches', async () => {
+    vi.mocked(api.listStoreMovements).mockResolvedValue([])
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Deliveries, handovers and disposals will appear here once recorded.')
+    expect(screen.getByRole('status')).toHaveTextContent('No store records yet.')
+    expect(screen.queryByText('No records match this filter.')).not.toBeInTheDocument()
+    await user.type(screen.getByRole('searchbox'), 'Tea')
+    expect(screen.getByRole('status')).toHaveTextContent('No records match this filter.')
+    expect(screen.queryByText('No store records yet.')).not.toBeInTheDocument()
+  })
+  it('shows unknown counts while loading and after an error, rather than zero', async () => {
+    const { promise, reject } = Promise.withResolvers<StoreMovementRead[]>()
+    vi.mocked(api.listStoreMovements).mockReturnValue(promise)
+    renderPage()
+    for (const label of ['All', 'Received', 'Handed out', 'Disposed']) {
+      expect(screen.getByRole('button', { name: `${label}–` })).toBeInTheDocument()
+    }
+    reject(new Error('Unavailable'))
+    await screen.findByRole('alert')
+    for (const label of ['All', 'Received', 'Handed out', 'Disposed']) {
+      expect(screen.getByRole('button', { name: `${label}–` })).toBeInTheDocument()
+    }
+  })
+  it('announces the filtered record count politely', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('October 2026')
+    expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite')
+    expect(screen.getByRole('status')).toHaveTextContent('2 records')
+    await user.type(screen.getByRole('searchbox'), 'Rashid')
+    expect(screen.getByRole('status')).toHaveTextContent('1 record')
+    expect(within(screen.getByRole('status')).getByText('1')).toHaveAttribute('dir', 'ltr')
+  })
+  it('sends labelled inclusive date bounds and clears both dates', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('October 2026')
+    fireEvent.change(screen.getByLabelText('From date'), { target: { value: '2026-10-01' } })
+    await waitFor(() => expect(api.listStoreMovements).toHaveBeenLastCalledWith({ from: '2026-10-01', to: undefined }))
+    fireEvent.change(screen.getByLabelText('To date'), { target: { value: '2026-10-31' } })
+    await waitFor(() => expect(api.listStoreMovements).toHaveBeenLastCalledWith({ from: '2026-10-01', to: '2026-10-31' }))
+    expect(screen.getByLabelText('From date').closest('bdi')).toHaveAttribute('dir', 'ltr')
+    await user.click(screen.getByRole('button', { name: 'Clear dates' }))
+    await waitFor(() => expect(screen.getByLabelText('From date')).toHaveValue(''))
+    expect(screen.getByLabelText('To date')).toHaveValue('')
   })
 })
