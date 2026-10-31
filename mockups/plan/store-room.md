@@ -172,7 +172,8 @@ In order, matching the mockup:
    item: drawing, name (2 lines max), on-hand with unit, and a small status
    badge above it (expired / "30d" / "Low"). Status is never colour alone.
 5. **Recent handovers**: the last 4 Handovers as In & out rows, with "See all
-   in In & out".
+   in In & out". Show each item's quantity with its own counting/loose units;
+   do not sum unlike units into one mixed "units" total.
 6. **Monthly usage and suggested request**: keep the existing usage table (last
    6 months) and suggestions table and their notes as they are, moved here.
 
@@ -197,6 +198,17 @@ by, one note, Recorded by, **Cancel** and **Record handover · N items**. One
 `POST /store/handovers` with all lines. On success: toast "Recorded: N items
 handed to <name>.", leave picking mode, refresh store queries
 (`invalidateStoreQueries`).
+
+The empty picking tray is a compact shelf hint and Cancel action; its form
+appears after the first item is added. The taker and note draft lives above
+the single-item form and tray so transfer between them preserves both fields.
+Submission shows localized "Recording…" and marks the form `aria-busy`.
+The tray measures its obstruction with `ResizeObserver`, reserves bottom
+padding and scroll padding on the dashboard scroller, and restores both on
+close. Its scrollable height follows the visual viewport while the keyboard
+is open, focused controls scroll into view, and the form actions stay sticky.
+Closing picking returns focus to "Hand out items". Expiry dates interpolated
+into the Arabic hint are isolated as LTR runs.
 
 ### In & out (new sub-tab `/holdings/store/movements`)
 
