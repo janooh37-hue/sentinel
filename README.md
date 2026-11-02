@@ -96,6 +96,19 @@ entries, even for admins; draft counts are owner-scoped. Employee detail and
 activity also honor `violations.view`, and linked document metadata inherits the
 owning record's exact-revision read policy, including deleted-record restrictions.
 
+## Employee activity statements
+
+Activity print setup excludes leave and absence sections without `leaves.view`,
+and violation sections without `violations.view`, including categories supplied
+directly in the URL or selected with **All**. The same readable selection drives
+the paper, summary, result totals, and issued print's recorded categories.
+Excluded sections appear in the paper's **Not included** scope, never as zero
+entries or **No records**.
+
+Switching employee activity from **All** to **Custom** seeds the current year
+start and retains editable, URL-backed custom dates through printing. Switching
+from a bounded preset preserves its existing dates.
+
 ## Authorization lifecycle
 
 Temporary capability grants stop at expiry, without waiting for the cleanup

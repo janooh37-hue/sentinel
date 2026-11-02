@@ -5,6 +5,7 @@
  * inclusive); extend/delay live on the record afterwards.
  */
 
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -82,6 +83,7 @@ export function NationalServiceDialog({
       }),
     onSuccess: (row) => {
       void qc.invalidateQueries({ queryKey: ['leaves-list'] })
+      void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
       toast.success(t('leaves.ns.created'))
       onCreated(row.id)
     },

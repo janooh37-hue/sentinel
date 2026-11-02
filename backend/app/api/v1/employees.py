@@ -34,6 +34,7 @@ from app.db.models import Employee, User, VaultFile
 from app.db.session import get_db
 from app.schemas import employee_activity as activity_schemas
 from app.schemas import employee_detail as detail_schemas
+from app.schemas import employee_statement as statement_schemas
 from app.schemas.absence import (
     AbsenceCreate,
     AbsenceCreateResult,
@@ -63,12 +64,14 @@ from app.services import (
     employee_activity_service,
     employee_detail_service,
     employee_service,
+    employee_statement_service,
     leave_service,
     passport_ocr_service,
     perm_service,
     photo_service,
     vault_service,
     violation_service,
+    workforce_access_service,
 )
 from app.services.employee_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
 
@@ -304,6 +307,60 @@ def get_employee_detail(
     if detail is None:
         raise HTTPException(status_code=404, detail="Employee not found")
     return detail
+
+
+# --- Statements (Activity statement + issued print serials) ------------------
+
+
+@router.get(
+    "/{employee_id}/statement/activity",
+    response_model=statement_schemas.ActivityStatementRead,
+)
+def get_activity_statement(
+    employee_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("employees.view"))],
+    from_date: date | None = None,
+    to_date: date | None = None,
+) -> statement_schemas.ActivityStatementRead:
+    """Every readable fact in the employee's record in the period, newest first."""
+    if from_date is not None and to_date is not None and to_date < from_date:
+        raise ValidationFailedError(
+            "STATEMENT_RANGE_INVALID", "The statement period ends before it starts."
+        )
+    statement = employee_statement_service.activity_statement(
+        db, employee_id, user=user, from_date=from_date, to_date=to_date
+    )
+    if statement is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return statement
+
+
+@router.post(
+    "/{employee_id}/statement/prints",
+    response_model=statement_schemas.StatementPrintRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_statement_print(
+    employee_id: str,
+    body: statement_schemas.StatementPrintCreate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> statement_schemas.StatementPrintRead:
+    """Issue the next statement serial: activity needs ``employees.view``;
+    attendance follows the employee attendance read rule exactly."""
+    if body.kind == "attendance":
+        scope = workforce_access_service.employee_attendance_reader_scope(db, user, employee_id)
+        employee = workforce_access_service.employee_in_scope(
+            db, scope=scope, employee_id=employee_id
+        )
+    else:
+        require_capability("employees.view")(user, db)
+        found = db.get(Employee, employee_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        employee = found
+    return employee_statement_service.create_print(db, employee, body, user=user)
 
 
 # --- Leaves (read-only list + balance) ---------------------------------------

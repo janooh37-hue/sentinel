@@ -10,6 +10,7 @@
  * silently hides — false positives shouldn't shout at the operator.
  */
 
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { UserPlus } from 'lucide-react'
@@ -44,6 +45,7 @@ export function EmployeeSuggestionBanner({
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['ledger-entry', entryId] })
       void qc.invalidateQueries({ queryKey: ['ledger'] })
+      void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
       toast.success(
         t('ledger.suggestEmployee.linked'),
         { reference: gnumber },
