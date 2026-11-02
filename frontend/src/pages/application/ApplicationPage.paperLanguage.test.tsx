@@ -106,4 +106,12 @@ describe('Material Request paper language tab', () => {
     })
     expect(saveDraft).toHaveBeenCalledWith(EN, expect.objectContaining({ motivation: 'Stock' }))
   })
+
+  it('keeps the English paper in the Arabic UI when the link asks for it', async () => {
+    await i18n.changeLanguage('ar')
+    renderServices('/services/material_request?paper=en')
+
+    expect(await screen.findByRole('tab', { name: 'English' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/services\/material_request$/)
+  })
 })

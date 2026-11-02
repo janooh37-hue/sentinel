@@ -33,7 +33,7 @@ log = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
-    # Naive UTC — matches app.db.models._utcnow.
+    # Naive UTC — matches app.core.clock.utcnow.
     return datetime.now(UTC).replace(tzinfo=None)
 
 

@@ -16,12 +16,12 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from typing import Any, Final, cast
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
+from app.core.clock import organization_today
 from app.db.models import Employee, Leave, Violation
 from app.schemas.employee import (
     EMPLOYEE_STATUS_ACTIVE,
@@ -40,7 +40,6 @@ from app.services.extraction_service import _MATCH_THRESHOLD, _name_scores
 
 LIST_MAX_LIMIT = 500
 LIST_DEFAULT_LIMIT = 100
-_ORGANIZATION_TIMEZONE = ZoneInfo("Asia/Dubai")
 
 
 def list_employees(
@@ -129,7 +128,7 @@ def list_employees(
         count_stmt = count_stmt.where(clause)
         non_q_clauses.append(clause)
     if present or on_leave:
-        today = datetime.now(_ORGANIZATION_TIMEZONE).date()
+        today = organization_today()
         absence = Employee.leaves.any(
             and_(
                 Leave.deleted_at.is_(None),

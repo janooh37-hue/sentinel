@@ -49,6 +49,8 @@ export interface TemplateField {
   columns?: { key: string; label_en: string; label_ar: string }[]
   /** items_table only: fixed row capacity backing the DOCX's `item(i, …)` cells. */
   max_rows?: number
+  /** Optional store catalogue suggestions; entered rows retain their legacy shape. */
+  item_catalog?: components['schemas']['TemplateField']['item_catalog']
 }
 
 export interface TemplateDetailResponse {

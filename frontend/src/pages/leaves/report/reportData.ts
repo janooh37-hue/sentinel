@@ -6,6 +6,7 @@
 import type { LeaveListItem } from '@/lib/api'
 import { englishPart } from '@/lib/bilingualValue'
 import { UNASSIGNED } from '@/lib/dutyUnits'
+import { lastDayOfMonth } from '@/lib/monthEnd'
 import { classifyLeaveType, CANONICAL_KINDS, type KindId } from './kinds'
 import { canonStatus, countsDays } from '../lifecycle'
 
@@ -64,8 +65,7 @@ export function recordOverlapsYear(r: LeaveListItem, year: number): boolean {
 export interface DayWindow { start: string; end: string }
 
 export function monthWindow(year: number, monthIndex: number): DayWindow {
-  // Date.UTC(y, m+1, 0) = last day of month m; getUTCDate() = its day number.
-  const lastDay = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
+  const lastDay = lastDayOfMonth(year, monthIndex + 1)
   return {
     start: `${year}-${pad(monthIndex)}-01`,
     end: `${year}-${pad(monthIndex)}-${String(lastDay).padStart(2, '0')}`,

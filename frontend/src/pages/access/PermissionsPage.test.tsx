@@ -82,6 +82,7 @@ const pageCaps = [
   'books.view',
   'permits.view',
   'vehicles.view',
+  'store.view',
   'settings.view',
   'expiry.view',
 ]

@@ -1,11 +1,10 @@
 import type { VehicleListItem } from '@/lib/api'
 import { esc, TD_STYLE, thStyle } from '@/lib/basketEmail'
 import type { CopyTableOptions } from '@/lib/copyTable'
+import { isArabic, localized } from '@/lib/language'
 
 import {
   formatLetterDate,
-  isArabic,
-  localized,
   plateLabel,
   type Translate,
 } from './vehicleUtils'

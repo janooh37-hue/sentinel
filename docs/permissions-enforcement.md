@@ -15,7 +15,7 @@ built on top of this model see
 
 `backend/app/core/permissions.py`
 
-- `CAPABILITIES` — the catalog: 60 `Capability(id, group, label, description)` tuples.
+- `CAPABILITIES` — the catalog: 63 `Capability(id, group, label, description)` tuples.
   The `description` is user-facing (it drives the admin permission editor and the
   request UI). Since the 2026-08-23 granular split (§7) every id is atomic — the six
   old bundled ids (`employees.edit` in its old wide sense, `leaves.edit`,
@@ -28,9 +28,9 @@ built on top of this model see
 
 | Role | Resolves to | Contents |
 | --- | --- | --- |
-| `operator` | 17 caps | read-only across the app (`app.access`, `employees.view`, `leaves.view`, `timesheet.view`, `violations.view`, `books.view`, `permits.view`, `ledger.view`, `settings.view`) plus the daily-work writes: `documents.generate`, `documents.scan`, `ledger.create`/`ledger.edit`/`ledger.send`/`ledger.delete` (deletion restored post-split review — operators held it pre-split), and `email.manage` for the user's own mailbox, plus `workforce.self.view` for their own record |
-| `manager` | 39 caps | operator preset minus `workforce.self.view`, plus the atomic management writes: `employees.create`/`employees.edit`/`employees.vault.manage`/`employees.notify`, `leaves.create`/`leaves.edit`/`leaves.delete`, `violations.create`/`violations.edit`/`violations.delete`, `books.create`/`books.edit`/`books.submit`/`books.templates`/`books.approve`/`books.delete`, `permits.create`/`permits.edit`/`permits.revoke`/`permits.delete`, `ledger.delete`, `timesheet.edit`, `submitters.manage`, `editor_templates.manage`. The literal `frozenset` of additions lists 24 ids; unioned with operator's 17 minus the dropped self-view that resolves to 39. Workforce administration still needs an explicit grant + scope |
-| `admin` | all 60 | `ALL_CAPABILITIES` |
+| `operator` | 19 caps | read-only across the app (`app.access`, `employees.view`, `expiry.view`, `leaves.view`, `timesheet.view`, `violations.view`, `books.view`, `permits.view`, `ledger.view`, `settings.view`) plus the daily-work writes: `documents.generate`, `documents.duty_transfer`, `documents.scan`, `ledger.create`/`ledger.edit`/`ledger.send`/`ledger.delete` (deletion restored post-split review — operators held it pre-split), and `email.manage` for the user's own mailbox, plus `workforce.self.view` for their own record |
+| `manager` | 44 caps | operator preset minus `workforce.self.view`, plus the atomic management writes: `inmate_statistics.review`/`inmate_statistics.approve`, `employees.create`/`employees.edit`/`employees.vault.manage`/`employees.notify`, `leaves.create`/`leaves.edit`/`leaves.delete`, `violations.create`/`violations.edit`/`violations.delete`, `books.create`/`books.edit`/`books.submit`/`books.templates`/`books.approve`/`books.delete`, `permits.create`/`permits.edit`/`permits.revoke`/`permits.delete`, `ledger.delete`, `timesheet.edit`, `submitters.manage`, `editor_templates.manage`, and the read-only `store.view`. The literal `frozenset` of additions lists 27 ids; unioned with operator's 19 (sharing `ledger.delete`) minus the dropped self-view that resolves to 44. Workforce administration still needs an explicit grant + scope |
+| `admin` | all 63 | `ALL_CAPABILITIES` |
 
 **Admin-only by default, but delegable.** `books.override_state` (added 2026-08-14) is
 in no preset except `admin`'s `ALL_CAPABILITIES`, so only an admin holds it out of the

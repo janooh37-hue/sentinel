@@ -13,8 +13,8 @@ import type {
 import { api } from '@/lib/api'
 
 import { isolateBidi } from '@/lib/useCapabilityCatalog'
+import { formatNumber, localized } from '@/lib/language'
 
-import { formatNumber, localized } from '../vehicleUtils'
 import { ImportPreviewCounts } from './ImportResultSummary'
 import { ImportRowDetail } from './ImportRowDetail'
 import {

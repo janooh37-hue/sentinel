@@ -1,6 +1,6 @@
 /**
- * The shell every Vehicles dialog is built on, plus the form scaffolding they
- * share, so seven dialogs cannot drift into seven layouts.
+ * The shell every record dialog is built on, plus the form scaffolding they
+ * share, so dialogs across sections cannot drift into separate layouts.
  *
  * Surface: a bottom sheet on phones and a centred modal above `md` — the same
  * responsive treatment (and the same `.bottom-sheet` motion, reduced-motion
@@ -8,13 +8,11 @@
  * the dialog closes, so any state a child form holds is discarded on close and
  * a reopened dialog starts from its defaults — no re-seeding effects.
  *
- * While a mutation is in flight the shell refuses close requests: the
- * add-vehicle flow is three requests, and dismissing it half-way would leave
- * the operator unsure what landed.
+ * While a mutation is in flight the shell refuses close requests: a multi-step
+ * save (create, then upload) dismissed half-way would leave the operator unsure
+ * what landed.
  */
 
-import { useId } from 'react'
-import { useTranslation } from 'react-i18next'
 import { AlertTriangle, X } from 'lucide-react'
 
 import {
@@ -27,7 +25,6 @@ import {
 import { FileUploadZone } from '@/components/ui/file-upload-zone'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { EmployeePicker } from '@/pages/application/EmployeePicker'
 
 const SIZES = {
   md: 'md:max-w-lg',
@@ -45,9 +42,11 @@ interface ShellProps {
   size?: keyof typeof SIZES
   /** Blocks Escape / overlay / close-button dismissal while saving. */
   busy?: boolean
+  returnFocusRef?: React.RefObject<HTMLElement | null>
+  onOpenAutoFocus?: React.ComponentPropsWithoutRef<typeof DialogContent>['onOpenAutoFocus']
 }
 
-export function VehicleDialogShell({
+export function DialogShell({
   open,
   onOpenChange,
   title,
@@ -55,6 +54,8 @@ export function VehicleDialogShell({
   children,
   size = 'lg',
   busy = false,
+  returnFocusRef,
+  onOpenAutoFocus,
 }: ShellProps): React.JSX.Element {
   return (
     <DialogRoot
@@ -65,6 +66,8 @@ export function VehicleDialogShell({
       }}
     >
       <DialogContent
+        returnFocusRef={returnFocusRef}
+        onOpenAutoFocus={onOpenAutoFocus}
         className={cn(
           'bottom-sheet inset-x-0 bottom-0 top-auto max-h-[92dvh] max-w-none translate-x-0 translate-y-0 rounded-b-none rounded-t-2xl',
           'md:inset-auto md:left-1/2 md:top-1/2 md:max-h-[88dvh] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl',
@@ -76,7 +79,7 @@ export function VehicleDialogShell({
           aria-hidden
           className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-hairline md:hidden"
         />
-        <DialogHeader className="pe-10">
+        <DialogHeader className="pe-10 pointer-coarse:pe-16">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
@@ -87,7 +90,7 @@ export function VehicleDialogShell({
 }
 
 /** The scrolling middle of a dialog. */
-export function VehicleDialogBody({
+export function DialogBody({
   children,
   className,
 }: {
@@ -102,11 +105,7 @@ export function VehicleDialogBody({
 }
 
 /** The pinned action row. Actions read end-aligned in both directions. */
-export function VehicleDialogFooter({
-  children,
-}: {
-  children: React.ReactNode
-}): React.JSX.Element {
+export function DialogFooter({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <div className="flex flex-none flex-wrap items-center justify-end gap-2 border-t border-border px-4 py-3">
       {children}
@@ -115,15 +114,11 @@ export function VehicleDialogFooter({
 }
 
 /** Two columns above `sm`, one below. `full` on a field spans both. */
-export function VehicleFieldGrid({
-  children,
-}: {
-  children: React.ReactNode
-}): React.JSX.Element {
+export function FieldGrid({ children }: { children: React.ReactNode }): React.JSX.Element {
   return <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">{children}</div>
 }
 
-export function VehicleField({
+export function Field({
   id,
   label,
   hint,
@@ -167,7 +162,7 @@ export function VehicleField({
  * server rejected. `id` is what the offending controls point at with
  * `aria-describedby`, so a screen reader reaches the reason from the field.
  */
-export function VehicleFormAlert({
+export function FormAlert({
   id,
   message,
 }: {
@@ -179,39 +174,11 @@ export function VehicleFormAlert({
     <p
       id={id}
       role="alert"
-      className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+      className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive-text"
     >
       <AlertTriangle aria-hidden strokeWidth={1.75} className="mt-px h-3.5 w-3.5 shrink-0" />
       <span dir="auto">{message}</span>
     </p>
-  )
-}
-
-/**
- * The optional driver on a fine or an accident report. `EmployeePicker` is a
- * combobox without an id to label, so the group carries the label instead —
- * a screen reader announces «Employee» on entry — and the hint states what an
- * empty selection means, because an imported fine legitimately has no driver.
- */
-export function VehicleEmployeeField({
-  employeeId,
-  onChange,
-  hint,
-}: {
-  employeeId: string | null
-  onChange: (employeeId: string | null) => void
-  hint: string
-}): React.JSX.Element {
-  const { t } = useTranslation()
-  const labelId = useId()
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
-      <Label id={labelId}>{t('vehicles.employeePicker')}</Label>
-      <div role="group" aria-labelledby={labelId}>
-        <EmployeePicker selectedId={employeeId} onSelect={onChange} />
-      </div>
-      <span className="text-[0.72em] leading-snug text-muted-foreground">{hint}</span>
-    </div>
   )
 }
 

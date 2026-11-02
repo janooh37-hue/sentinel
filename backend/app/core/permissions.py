@@ -417,6 +417,22 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "حذف المخالفات والحوادث وسجلات الصيانة وصور المعرض.",
     ),
     Capability(
+        "store.view",
+        "store",
+        "View store",
+        "عرض المخزن",
+        "See Store items, deliveries, stock counts, disposals, and the Store dashboard.",
+        "عرض أصناف المخزن والاستلامات والجرد الشهري والإتلاف ولوحة المخزن.",
+    ),
+    Capability(
+        "store.edit",
+        "store",
+        "Manage store",
+        "إدارة المخزن",
+        "Add and archive Store items, log deliveries, record stock counts and disposals.",
+        "إضافة أصناف المخزن وأرشفتها وتسجيل الاستلامات والجرد الشهري والإتلاف.",
+    ),
+    Capability(
         "ledger.view",
         "ledger",
         "View ledger",
@@ -667,6 +683,7 @@ _MANAGER_EXTRA: Final[frozenset[str]] = frozenset(
         "submitters.manage",
         "editor_templates.manage",
         "timesheet.edit",
+        "store.view",
     }
 )
 

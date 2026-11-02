@@ -92,8 +92,8 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
               className={({ isActive }) =>
                 `topnav-link relative flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 font-medium transition-all duration-200 motion-reduce:!transition-none ${
                   isActive
-                    ? 'font-semibold text-primary after:absolute after:-bottom-[14px] after:left-0 after:right-0 after:h-[3px] after:rounded after:bg-primary'
-                    : 'text-foreground hover:-translate-y-0.5 hover:bg-surface-tinted hover:text-primary motion-reduce:!transform-none'
+                    ? 'font-semibold text-primary-text after:absolute after:-bottom-[14px] after:left-0 after:right-0 after:h-[3px] after:rounded after:bg-primary'
+                    : 'text-foreground hover:-translate-y-0.5 hover:bg-surface-tinted hover:text-primary-text motion-reduce:!transform-none'
                 }`
               }
             >

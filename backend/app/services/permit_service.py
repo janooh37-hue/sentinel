@@ -62,7 +62,7 @@ def _today() -> date:
 
 
 def _utcnow() -> datetime:
-    # Naive UTC — matches app.db.models._utcnow so timestamps compare cleanly.
+    # Naive UTC — matches app.core.clock.utcnow so timestamps compare cleanly.
     return datetime.now(UTC).replace(tzinfo=None)
 
 

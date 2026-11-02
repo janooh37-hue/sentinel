@@ -53,6 +53,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import type { VehicleAccidentRead, VehicleRead, VehicleSiteRead } from '@/lib/api'
+import { isArabic } from '@/lib/language'
 
 import {
   EMPTY_VALUE,
@@ -60,13 +61,12 @@ import {
   formatLetterAed,
   formatLetterDate,
   invalidateVehicleQueries,
-  isArabic,
   plateLabel,
   vehicleErrorMessage,
 } from './vehicleUtils'
 import { PaperFacts, PaperSheet } from './components/PaperSheet'
 import { PlateChip } from './components/PlateChip'
-import { VehicleFormAlert } from './components/VehicleDialogShell'
+import { FormAlert } from '@/components/forms/DialogShell'
 
 /** What the reference line shows before the book exists. The real ref
  *  (`VA-0232`) is minted server-side and announced in the save toast. */
@@ -141,7 +141,7 @@ function AccidentLetter(): React.JSX.Element {
       navigate(`/books/${result.book_id}`)
     },
     onError: (err) => {
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setError(message)
       toast.error(message)
     },
@@ -264,7 +264,7 @@ function AccidentLetter(): React.JSX.Element {
               </p>
             )}
 
-            <VehicleFormAlert id={ERROR_ID} message={error} />
+            <FormAlert id={ERROR_ID} message={error} />
 
             <section className="mt-3 overflow-hidden rounded-xl border border-border bg-surface">
               <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-hairline px-3.5 py-2.5">
