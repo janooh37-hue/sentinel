@@ -117,6 +117,26 @@ it('links remaining decisions to Sent without showing more than five rows', asyn
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
+it('replaces an acknowledged decision with a newer one when the unread total stays level', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderBell()
+    await screen.findByRole('button', { name: 'Notifications, 1 unread' })
+    // Another device acknowledged GS-0048 while a manager decided GS-0049.
+    vi.mocked(api.getDecisionNotices).mockResolvedValue({
+      items: [notice({ book_id: 49, ref_number: 'GS-0049', decided_at: '2026-10-28T09:00:00Z' })],
+      total: 1,
+    })
+    await vi.advanceTimersByTimeAsync(60_000)
+    await user.click(screen.getByRole('button', { name: 'Notifications, 1 unread' }))
+    expect(await screen.findByRole('button', { name: /Approved · GS-0049/ })).toBeVisible()
+    expect(screen.queryByRole('button', { name: /GS-0048/ })).not.toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
 it('marks emails and decisions read and refreshes their unread queries', async () => {
   vi.mocked(api.getLedgerUnreadRecent).mockResolvedValue({ items: [], total_unread: 2 })
   renderBell()

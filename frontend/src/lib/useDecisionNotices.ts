@@ -10,5 +10,8 @@ export function useDecisionNotices() {
     queryFn: api.getDecisionNotices,
     enabled: status === 'authed' && user?.role !== 'inmate_reporter',
     staleTime: 30_000,
+    // The counts stream refetches this only when the total moves, and an
+    // acknowledgement plus a new decision leaves the total level.
+    refetchInterval: 60_000,
   })
 }

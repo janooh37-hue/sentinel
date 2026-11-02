@@ -4,7 +4,7 @@
  * the tab title.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -112,6 +112,35 @@ function fixture(overrides: Record<string, unknown> = {}): unknown {
   }
 }
 
+function decisionNotice(overrides: Record<string, unknown> = {}): ApiModule.DecisionNotice {
+  return {
+    book_id: 48, version_id: 5, ref_number: 'GS-0048', subject: 'Leave request',
+    verdict: 'returned', is_report: false, decided_at: '2026-08-02T09:00:00Z',
+    decider_name: 'Manager Khalid', decider_name_ar: null, note: 'Fix the dates',
+    ...overrides,
+  }
+}
+
+/** A record whose newer revision 6 holds the outcome while revision 5 is displayed. */
+function historicalFixture(): unknown {
+  const base = fixture() as { versions: Record<string, unknown>[] }
+  const older = base.versions[0]!
+  return fixture({
+    selected_version_id: 5,
+    versions: [
+      older,
+      {
+        ...older,
+        id: 6,
+        version_no: 2,
+        approval_steps: [
+          { ...(older.approval_steps as object[])[0], id: 2, decided_at: '2026-08-03T09:00:00Z' },
+        ],
+      },
+    ],
+  })
+}
+
 function renderRecord(entry = '/books/48'): QueryClient {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
@@ -136,20 +165,13 @@ describe('BookRecordPage — header', () => {
     viewport.mobile = false
     mockHas.mockImplementation(() => false)
     vi.mocked(api.getBook).mockReset()
-    vi.mocked(api.markBookSeen).mockClear()
+    vi.mocked(api.markBookSeen).mockReset().mockResolvedValue(undefined)
     vi.mocked(api.getDecisionNotices).mockReset().mockResolvedValue({ items: [], total: 0 })
   })
 
   it('marks a submitter decision seen once when opening its record and refreshes the decision query', async () => {
     vi.mocked(api.getBook).mockResolvedValue(fixture() as never)
-    vi.mocked(api.getDecisionNotices).mockResolvedValueOnce({
-      items: [{
-        book_id: 48, version_id: 5, ref_number: 'GS-0048', subject: 'Leave request',
-        verdict: 'returned', is_report: false, decided_at: '2026-08-02T09:00:00Z',
-        decider_name: 'Manager Khalid', decider_name_ar: null, note: 'Fix the dates',
-      }],
-      total: 1,
-    })
+    vi.mocked(api.getDecisionNotices).mockResolvedValueOnce({ items: [decisionNotice()], total: 1 })
     const qc = renderRecord()
     await screen.findByTestId('record-meta')
     await waitFor(() => {
@@ -163,6 +185,36 @@ describe('BookRecordPage — header', () => {
     renderRecord()
     await screen.findByTestId('record-meta')
     await waitFor(() => expect(api.markBookSeen).toHaveBeenCalledExactlyOnceWith(48))
+  })
+
+  it.each([true, false])('keeps a newer outcome unread while an older revision is displayed (listed=%s)', async (listed) => {
+    vi.mocked(api.getBook).mockResolvedValue(historicalFixture() as never)
+    if (listed) {
+      vi.mocked(api.getDecisionNotices).mockResolvedValue({
+        items: [decisionNotice({ version_id: 6, decided_at: '2026-08-03T09:00:00Z' })],
+        total: 1,
+      })
+    }
+    const qc = renderRecord('/books/48?version_id=5')
+    await screen.findByTestId('record-meta')
+    await waitFor(() =>
+      expect(qc.getQueryState(['notifications', 'decisions', 7])?.status).toBe('success'),
+    )
+    // Observers hear about new data on a zero-delay timer; let the page render it.
+    // (`Promise.withResolvers` is the house style, but tsconfig pins lib ES2023.)
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+    expect(api.markBookSeen).not.toHaveBeenCalled()
+  })
+
+  it('retries a failed acknowledgement when the decisions refresh', async () => {
+    vi.mocked(api.getBook).mockResolvedValue(fixture() as never)
+    vi.mocked(api.getDecisionNotices).mockResolvedValue({ items: [decisionNotice()], total: 1 })
+    vi.mocked(api.markBookSeen).mockRejectedValueOnce(new Error('offline'))
+    const qc = renderRecord()
+    await screen.findByTestId('record-meta')
+    await waitFor(() => expect(api.markBookSeen).toHaveBeenCalledOnce())
+    await qc.refetchQueries({ queryKey: ['notifications', 'decisions'] })
+    await waitFor(() => expect(api.markBookSeen).toHaveBeenCalledTimes(2))
   })
 
   it('does not mark an outcome seen when another user submitted the opened book', async () => {

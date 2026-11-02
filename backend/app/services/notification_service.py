@@ -173,7 +173,9 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
         items.append(
             ActionableItem(
                 kind="decision",
-                ref=f"decision:{step.id}",
+                # Reopening reuses the step row; the verdict time keeps a later
+                # decision from matching the earlier one's push_sent entry.
+                ref=f"decision:{step.id}:{step.decided_at:%Y%m%dT%H%M%S%f}",
                 url=f"/books/{book.id}",
                 label=book.ref_number,
                 subject=book.subject if book.confidentiality == "general" else None,

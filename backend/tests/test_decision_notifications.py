@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.db.models import BookCategory, BookVersion, UserPermission
-from app.services import book_service, notification_service
+from app.services import book_service, notification_service, scheduler_service
 from tests.test_books_approval_log import _client, _submitted_book, _user
 from tests.test_books_approval_log import api_db as api_db
 
@@ -96,6 +96,41 @@ def test_reopened_step_notifies_again_after_new_decision(api_db: Session):
         api_db, book.id, user_id=decider.id, version_id=version.id, decision="returned", note="Fix"
     )
     assert notification_service.relevant_counts(api_db, submitter).decisions == 1
+
+
+def test_redecided_step_pushes_the_new_verdict(
+    api_db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    submitter = _user(api_db, "submitter@x.ae", "manager")
+    decider = _user(api_db, "decider@x.ae", "manager")
+    admin = _user(api_db, "admin@x.ae", "admin")
+    book = _submitted_book(api_db, book_id=1, ref="HR-1", submitter=submitter, approver=decider)
+    version = book.versions[0]
+    pushes: list[str] = []
+    monkeypatch.setattr(
+        scheduler_service.push_service,
+        "send_to_user",
+        lambda _db, user_id, messages, _url: (
+            pushes.append(messages["en"][1]) if user_id == submitter.id else None
+        ),
+    )
+    book_service.decide_step(
+        api_db, book.id, user_id=decider.id, version_id=version.id, decision="rejected", note="No"
+    )
+    scheduler_service._notify_user(api_db, submitter)
+    # Reopened and decided again before the next push tick: the reused step row
+    # must not let the first verdict's ledger entry swallow the second.
+    book_service.override_state(
+        api_db, book.id, target_state="pending", actor=admin, reason="Reopen"
+    )
+    book_service.decide_step(
+        api_db, book.id, user_id=decider.id, version_id=version.id, decision="returned", note="Fix"
+    )
+    scheduler_service._notify_user(api_db, submitter)
+    assert len(pushes) == 2
+    assert pushes[0] != pushes[1]
+    scheduler_service._notify_user(api_db, submitter)
+    assert len(pushes) == 2
 
 
 def test_decision_list_is_newest_five_and_mark_all_is_user_scoped(api_db: Session):
@@ -242,8 +277,7 @@ def test_decision_push_items_redact_only_subject(api_db: Session, level: str):
     ]
     assert len(items) == 1
     item = items[0]
-    assert (item.ref, item.url, item.label, item.verdict, item.is_report) == (
-        f"decision:{book.versions[0].approval_steps[0].id}",
+    assert (item.url, item.label, item.verdict, item.is_report) == (
         "/books/1",
         "HR-1",
         "approved",
