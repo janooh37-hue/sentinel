@@ -680,3 +680,46 @@ questions in `.tmp/approval-store-count.md`. This phase is local to
   explicit zero and added-batch states, then reset/date-change continuation.
   No writer check or reproduction run; coordinator final evidence is pending.
 
+## Recovery acceptance closeout (2026-11-03, implementation `340d556e`)
+
+The pending checkpoints above are dated integration history. The coordinator's
+final checks, raw browser proof and visual review now close implementation
+acceptance for `340d556e`; they do not claim a completed merge or deployment.
+
+- **Checks:** 154 backend passes retained against unchanged backend/migrations;
+  final 38 CountPage passes, with earlier 48 Count/MRF passes retained
+  (overlapping scopes, not an additive total). TypeScript and build passed;
+  lint passed with **0 errors / 29 warnings**, whose age is not established.
+  The exact-head 570-asset build was hash-verified against the real TLS dev
+  runtime, with source-hash identity recorded.
+- **Count/draft runtime:** two real tabs and native storage events protected the
+  other tab's `3/0` draft while exposing this tab's own `2/0` plus note as
+  read-only, keyboard-copyable entries. Pending controls stayed disabled; one
+  real 27-line count POST returned 201 and GET returned 200, including Packet
+  quantity 15 and Nescafe 36. Date-scoped draft clearing/resume, EN/AR Packet
+  unit labels, review-heading focus, and bilingual MRF shelf-name searches
+  filling the original official English description/unit were exercised.
+- **Compatibility:** emulated no-Web-Locks mode retained quantity/note on a
+  blocked date change, permitted changing date after explicit reset, and did
+  not mutate persisted drafts. Unsupported HTTP/LAN browsers remain usable in
+  explicitly volatile mode, with truthful no-autosave/no-resume guidance.
+- **Receiving/disposal:** real OCR with manual correction produced the checked
+  stock change and attachment SHA; the journal recorded one each of receipt,
+  count and disposal. A historical batch with zero stock today remained
+  selectable on its past date without today's cap; switching to today cleared
+  the unavailable selection.
+- **Measured final surfaces:** Arabic 390px receiving review measured
+  **390/390** viewport/document width. Fresh and resized, settled disposal
+  bounds were inline `0..390`, block `96..1000`. The original intermediate
+  458px overflow and clipped capture remain historical observations with
+  **cause unlocated**; no speculative CSS repair or global clipping is claimed.
+- **Reviews/evidence:** required i18n/RTL and migration reviews are clean.
+  Actual Greptile review **5743976520** scored implementation `340d556e`
+  **5/5**. Raw runtime proof is under
+  `/tmp/sentinel-store-count-browser/final-*.json`; the coordinator read that
+  evidence and completed visual review. This documentation-only tip still
+  requires the PR's exact-head review gate.
+- **Limits:** physical devices, screen readers, Word COM and real HQ-note OCR
+  accuracy are not claimed. No broader accessibility certification, merge or
+  deployment completion follows from this closeout.
+
