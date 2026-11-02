@@ -104,6 +104,7 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
   const [discarding, setDiscarding] = useState(false)
   const discardTriggerRef = useRef<HTMLButtonElement | null>(null)
   const discardTitleRef = useRef<HTMLHeadingElement | null>(null)
+  const reviewTitleRef = useRef<HTMLHeadingElement | null>(null)
   const validDate = isBusinessDate(countedOn)
   const expected = useQuery({ queryKey: storeKeys.expected(countedOn), queryFn: () => api.getStoreCountExpected(countedOn), enabled: validDate })
   const picker = useStorePickerItems()
@@ -189,6 +190,10 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
     if (stage !== 'count' || !focusRequest) return
     document.getElementById(`quantity-${focusRequest.key}`)?.focus()
   }, [stage, focusedId, focusRequest])
+
+  useEffect(() => {
+    if (stage === 'review') reviewTitleRef.current?.focus()
+  }, [stage])
 
   useEffect(() => {
     if (discarding) discardTitleRef.current?.focus()
@@ -338,7 +343,7 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
           </ol>
           <Button type="button" className="min-h-11" disabled={!ready} onClick={() => { changeDraft({ ...draftRef.current, started: true }); setStage('count') }}>{t(draftSaved ? 'assets.store.counts.resume' : 'assets.store.counts.start')}</Button>
         </section> : stage === 'review' ? <>
-          <section className={`${panel} space-y-3`}><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">{t('assets.store.counts.reviewTitle')}</h2><Button type="button" variant="secondary" className="min-h-11" onClick={() => setStage('count')}>{t('assets.store.counts.continue')}</Button></div><p className="text-sm text-muted-foreground">{t('assets.store.counts.reviewOnlyEntered')}</p></section>
+          <section className={`${panel} space-y-3`}><div className="flex flex-wrap items-center justify-between gap-3"><h2 ref={reviewTitleRef} tabIndex={-1} className="text-lg font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t('assets.store.counts.reviewTitle')}</h2><Button type="button" variant="secondary" className="min-h-11" onClick={() => setStage('count')}>{t('assets.store.counts.continue')}</Button></div><p className="text-sm text-muted-foreground">{t('assets.store.counts.reviewOnlyEntered')}</p></section>
           {(uncounted.length > 0 || unresolvedMissing) && <section className={`${panel} space-y-3`} aria-labelledby="missing-heading"><h2 id="missing-heading" className="font-semibold">{t('assets.store.counts.stillToCount', { count: uncounted.length })}</h2><p className="text-sm text-muted-foreground">{t('assets.store.counts.missingInstruction')}</p>{uncounted.map(reviewRow)}{unresolvedMissing && <StoreQueryState isPending={missingBatches.isPending} error={missingBatches.error} onRetry={() => { void missingBatches.refetch() }} isEmpty={!missingBatches.isPending && !missingBatches.error} emptyMessage={t('assets.store.counts.missingBatch')} emptyDescription={t('assets.store.counts.refreshMissing')}><span /></StoreQueryState>}</section>}
           <section className={`${panel} space-y-3`} aria-labelledby="entered-heading"><h2 id="entered-heading" className="font-semibold">{t('assets.store.counts.enteredTitle')}</h2>{rows.filter(isCounted).map(reviewRow)}{!entered && <p className="text-sm text-muted-foreground">{t('assets.store.counts.noEntered')}</p>}</section>
           <section className={`${panel} space-y-4`}><label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={confirmed} disabled={uncounted.length > 0 || unresolvedMissing || mutation.isPending} onChange={event => setConfirmed(event.target.checked)} className="h-5 w-5 accent-primary" />{t('assets.store.counts.confirmReview')}</label><Button type="submit" className="min-h-11" disabled={!confirmed || !ready || uncounted.length > 0 || unresolvedMissing || mutation.isPending}>{t(mutation.isPending ? 'assets.store.counts.saving' : 'assets.store.counts.save')}</Button></section>

@@ -23,7 +23,7 @@ export function CountQuantityFields({ id, item, value, label, describedBy, inval
   return <fieldset aria-labelledby={`${id}-context`} className={`grid gap-3 ${contains ? 'sm:grid-cols-2' : ''}`}>
     <legend id={`${id}-context`} className="sr-only">{label}</legend>
     <label htmlFor={id} className="min-w-0 space-y-2 text-sm font-medium">
-      <span className="block">{t(contains ? 'assets.store.counts.fullUnits' : 'assets.store.counts.countIn', { unit })}</span>
+      <span className="block">{t('assets.store.counts.countIn', { unit })}</span>
       <Input id={id} type="text" inputMode="numeric" dir="ltr" autoComplete="off" className="h-12 font-mono text-lg tabular-nums" value={value.units} aria-required="true" aria-invalid={invalid || undefined} aria-describedby={`${id}-context ${describedBy}`} disabled={disabled} onChange={event => onChange({ ...value, units: normalizeDigits(event.target.value) })} />
     </label>
     {contains && <label htmlFor={`${id}-loose`} className="min-w-0 space-y-2 text-sm font-medium">

@@ -625,4 +625,16 @@ questions in `.tmp/approval-store-count.md`. This phase is local to
   reviews, typecheck, lint and build are **pending coordinator validation**.
   Source-branch results above must not be represented as current integration
   passes. No push, PR, merge, publication or deployment is authorized here.
+- Required i18n follow-up: focused count entry now labels the whole-unit field
+  with the item's actual localized counting unit, including non-carton packs.
+  EN/AR guidance refers to unopened packs rather than assuming cartons.
+  Added a bilingual StoreCountPage consumer regression for two packets of ten
+  plus three loose pieces saving 23 base units; existing carton conversions
+  remain covered. This worker did not run tests/build/lint; coordinator validation
+  remains pending.
+- The same required follow-up restores keyboard/screen-reader continuity on
+  entering count review: focus moves to the review heading with the existing
+  receiving-review focus-ring pattern. Consumer regression covers keyboard
+  activation from direct review, final-item review and skip-to-review, then
+  tabbing to Continue counting. These regressions are authored, not run here.
 

@@ -46,13 +46,13 @@ function renderPage(entry = '/holdings/store/counts/new') {
   </MemoryRouter></I18nextProvider></QueryClientProvider>)
   return { ...view, client }
 }
-function countField(context: string, field = 'Full cartons') {
+function countField(context: string, field: string | RegExp = new RegExp(ITEM.counting_unit_en)) {
   return within(screen.getByRole('group', { name: context })).getByRole('textbox', { name: field })
 }
-async function findCountField(context: string, field = 'Full cartons') {
+async function findCountField(context: string, field: string | RegExp = new RegExp(ITEM.counting_unit_en)) {
   return within(await screen.findByRole('group', { name: context })).getByRole('textbox', { name: field })
 }
-function queryCountField(context: string, field = 'Full cartons') {
+function queryCountField(context: string, field: string | RegExp = new RegExp(ITEM.counting_unit_en)) {
   const group = screen.queryByRole('group', { name: context })
   return group ? within(group).queryByRole('textbox', { name: field }) : null
 }
@@ -115,6 +115,54 @@ describe('focused blind stock count', () => {
     await user.click(within(missing).getAllByRole('button')[2])
     expect(await findCountField('Tea · No expiry')).toHaveFocus()
     expect(queryCountField('Coffee · 2028-09')).not.toBeInTheDocument()
+  })
+
+  it.each(['en', 'ar'])('counts a non-carton pack and its loose contents using the recorded units (%s)', async language => {
+    await i18n.changeLanguage(language)
+    const units = {
+      counting_unit_en: 'Packet', counting_unit_ar: 'باكيت',
+      contains_qty: 10, contains_unit_en: 'Piece', contains_unit_ar: 'قطعة',
+    }
+    vi.mocked(api.getStoreCountExpected).mockResolvedValue([{ ...FIRST, ...units }])
+    vi.mocked(api.listStorePickerItems).mockResolvedValue([{ ...ITEM, ...units }])
+    vi.mocked(api.listStoreItems).mockResolvedValue([{ ...SHELF_ITEM, ...units }])
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: i18n.t('assets.store.counts.start') }))
+    const context = `${language === 'ar' ? FIRST.item_name_ar : FIRST.item_name_en} · 2028-09`
+    const batch = within(await screen.findByRole('group', { name: context }))
+    const packField = batch.getByRole('textbox', { name: new RegExp(language === 'ar' ? units.counting_unit_ar : units.counting_unit_en) })
+    const looseField = batch.getByRole('textbox', { name: new RegExp(language === 'ar' ? units.contains_unit_ar : units.contains_unit_en) })
+    expect(packField).toHaveValue('')
+    expect(looseField).toHaveValue('')
+    await user.type(packField, '2')
+    await user.type(looseField, '3')
+    await user.click(screen.getByRole('button', { name: i18n.t('assets.store.counts.review') }))
+    expect(api.createStoreCount).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('checkbox', { name: i18n.t('assets.store.counts.confirmReview') }))
+    await user.click(screen.getByRole('button', { name: i18n.t('assets.store.counts.save') }))
+    await waitFor(() => expect(api.createStoreCount).toHaveBeenCalledWith({
+      counted_on: todayIso(), note: null,
+      lines: [{ item_id: FIRST.item_id, expiry: '2028-09', quantity: 23 }],
+    }))
+  })
+
+  it.each([
+    'assets.store.counts.review',
+    'assets.store.counts.reviewAll',
+    'assets.store.counts.skip',
+  ])('moves keyboard focus into review when activated through %s', async action => {
+    const user = userEvent.setup()
+    renderPage()
+    await start(user)
+    const trigger = screen.getByRole('button', { name: i18n.t(action) })
+    trigger.focus()
+    await user.keyboard('{Enter}')
+    expect(trigger).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: i18n.t('assets.store.counts.reviewTitle') })).toHaveFocus()
+    await user.tab()
+    expect(screen.getByRole('button', { name: i18n.t('assets.store.counts.continue') })).toHaveFocus()
+    expect(api.createStoreCount).not.toHaveBeenCalled()
   })
 
   it('resumes operator-entered values after reload and after save-draft navigation, without submitting', async () => {
@@ -254,7 +302,7 @@ describe('focused blind stock count', () => {
       await user.click(within(fieldset).getByRole('radio', { name: 'Full date' }))
       fireEvent.change(within(fieldset).getByLabelText('Expiry date'), { target: { value: '2028-02-29' } })
       await user.click(within(fieldset).getByRole('button', { name: 'Add batch' }))
-      expect(within(screen.getByRole('group', { name: 'Tea · 2028-02' })).getAllByRole('textbox', { name: 'Full cartons' })).toHaveLength(1)
+      expect(within(screen.getByRole('group', { name: 'Tea · 2028-02' })).getAllByRole('textbox', { name: new RegExp(ITEM.counting_unit_en) })).toHaveLength(1)
       await saveReview(user)
       await waitFor(() => expect(api.createStoreCount).toHaveBeenCalledWith({ counted_on: todayIso(), note: null, lines: [{ item_id: 1, expiry: '2028-02', quantity: 24 }] }))
     } finally { if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous }
@@ -394,7 +442,7 @@ describe('focused blind stock count', () => {
     renderPage()
     await user.click(await screen.findByRole('button', { name: 'بدء العد' }))
     const group = await screen.findByRole('group', { name: 'شاي · 2028-09' })
-    await user.type(within(group).getByRole('textbox', { name: 'كراتين كاملة' }), '٣')
+    await user.type(within(group).getByRole('textbox', { name: new RegExp(FIRST.counting_unit_ar) }), '٣')
     await user.type(within(group).getByRole('textbox', { name: 'مفرد: علبة' }), '٥')
     await user.click(screen.getByRole('button', { name: 'مراجعة الجرد' }))
     const entered = screen.getByRole('region', { name: 'الكميات التي أدخلتها' })
