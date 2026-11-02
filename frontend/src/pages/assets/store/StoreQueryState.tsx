@@ -50,25 +50,7 @@ export function StoreQueryState({
     )
   }
 
-  if (error) {
-    return (
-      <div
-        role="alert"
-        className="flex flex-col items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4"
-      >
-        <p className="flex items-start gap-2 text-sm text-destructive-text">
-          <AlertTriangle aria-hidden strokeWidth={1.75} className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            <span className="font-semibold">{t('assets.store.state.error')}</span>{' '}
-            <span dir="auto">{storeErrorMessage(error)}</span>
-          </span>
-        </p>
-        <Button type="button" variant="secondary" size="sm" className="min-h-11" onClick={onRetry}>
-          {t('assets.store.state.retry')}
-        </Button>
-      </div>
-    )
-  }
+  if (error) return <StoreQueryError error={error} onRetry={onRetry} />
 
   if (isEmpty) {
     return (
@@ -82,4 +64,26 @@ export function StoreQueryState({
   }
 
   return <>{children}</>
+}
+
+/** The failure banner with a retry; render it beside cached data a refresh failed to update. */
+export function StoreQueryError({ error, onRetry }: { error: unknown; onRetry: () => void }): React.JSX.Element {
+  const { t } = useTranslation()
+  return (
+    <div
+      role="alert"
+      className="flex flex-col items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4"
+    >
+      <p className="flex items-start gap-2 text-sm text-destructive-text">
+        <AlertTriangle aria-hidden strokeWidth={1.75} className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>
+          <span className="font-semibold">{t('assets.store.state.error')}</span>{' '}
+          <span dir="auto">{storeErrorMessage(error)}</span>
+        </span>
+      </p>
+      <Button type="button" variant="secondary" size="sm" className="min-h-11" onClick={onRetry}>
+        {t('assets.store.state.retry')}
+      </Button>
+    </div>
+  )
 }

@@ -15,7 +15,7 @@ import { useIsMobile } from '@/lib/useIsMobile'
 import { formatNumber } from '@/lib/language'
 import { todayIso } from '@/pages/vehicles/vehicleUtils'
 import { StoreShell } from './StoreShell'
-import { StoreQueryState } from './StoreQueryState'
+import { StoreQueryError, StoreQueryState } from './StoreQueryState'
 import { ExpiryInput } from './components/ExpiryInput'
 import { QuantityInput } from './components/QuantityInput'
 import { StoreItemPicker } from './components/StoreItemPicker'
@@ -55,11 +55,14 @@ export function StoreCountPage(): React.JSX.Element {
   const editable = useCapabilities().has('store.edit')
   const countId = id === undefined ? null : Number(id)
   const count = useQuery({ queryKey: storeKeys.count(countId ?? 0), queryFn: () => api.getStoreCount(countId!), enabled: countId !== null && editable })
+  // A failed background refresh keeps the cached count: replacing the form would discard every entry.
+  const cached = count.data !== undefined
 
   return (
     <StoreShell title={t(countId === null ? 'assets.store.counts.new' : 'assets.store.counts.edit')} description={t('assets.store.counts.blankInstruction')}>
       {!editable ? <p role="alert">{t('assets.store.counts.readOnly')}</p> : (
-        <StoreQueryState isPending={countId !== null && count.isPending} error={count.error} onRetry={() => { void count.refetch() }} isEmpty={false} emptyMessage="" emptyDescription="">
+        <StoreQueryState isPending={countId !== null && count.isPending} error={cached ? null : count.error} onRetry={() => { void count.refetch() }} isEmpty={false} emptyMessage="" emptyDescription="">
+          {cached && count.error && <StoreQueryError error={count.error} onRetry={() => { void count.refetch() }} />}
           <CountForm key={countId ?? 'new'} saved={count.data} />
         </StoreQueryState>
       )}

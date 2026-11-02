@@ -1343,6 +1343,29 @@ def _require_complete(
         )
 
 
+def _require_count_covers_movements(ledger: _Ledger, proposed: _Count) -> None:
+    """Refuse a new or edited Stock count that leaves later movements short.
+
+    Same-day movements happen after the count, so its quantities must cover every
+    Handover and Disposal until the next count resets the shelf. A Batch the count
+    leaves out reads as zero, so every Batch with stock before it is checked too,
+    as are the Batches of the count it replaces. ``ledger`` gains the proposal.
+    """
+    replaced = next((count for count in ledger.counts if count.id == proposed.id), None)
+    stocked = ledger.stock_before(proposed.counted_on, exclude_count_id=proposed.id)
+    batch_ids = set(proposed.lines) | {batch_id for batch_id, q in stocked.items() if q > 0}
+    start = changed_through = proposed.counted_on
+    if replaced is not None:
+        batch_ids |= set(replaced.lines)
+        start = min(start, replaced.counted_on)
+        changed_through = max(changed_through, replaced.counted_on)
+    ledger.counts = sorted(
+        [count for count in ledger.counts if count.id != proposed.id] + [proposed],
+        key=lambda count: (count.counted_on, count.id),
+    )
+    _require_stock_available(ledger, batch_ids, start, changed_through=changed_through)
+
+
 def create_count(
     db: Session,
     payload: StoreCountWrite,
@@ -1357,6 +1380,11 @@ def create_count(
         _require_month_free(db, month)
         resolved = _resolve_lines(db, payload.lines)
         _require_complete(db, payload.counted_on, resolved)
+        # Id 0 stands for the unsaved count; SQLite never assigns it to a row.
+        _require_count_covers_movements(
+            _load_ledger(db),
+            _Count(0, month, payload.counted_on, {batch.id: q for batch, q in resolved}),
+        )
         row = StoreCount(
             month=month,
             counted_on=payload.counted_on,
@@ -1394,26 +1422,11 @@ def update_count(
         row = _get_count(db, count_id)
         _require_month_free(db, month, exclude_id=row.id)
         old_batch_ids = [line.batch_id for line in row.lines]
-        ledger = _load_ledger(db)
         resolved = _resolve_lines(db, payload.lines, reusable_batch_ids=old_batch_ids)
         _require_complete(db, payload.counted_on, resolved, exclude_count_id=row.id)
-        ledger.counts = sorted(
-            [count for count in ledger.counts if count.id != row.id]
-            + [
-                _Count(
-                    row.id,
-                    month,
-                    payload.counted_on,
-                    {batch.id: quantity for batch, quantity in resolved},
-                )
-            ],
-            key=lambda count: (count.counted_on, count.id),
-        )
-        _require_stock_available(
-            ledger,
-            set(old_batch_ids) | {batch.id for batch, _quantity in resolved},
-            min(row.counted_on, payload.counted_on),
-            changed_through=max(row.counted_on, payload.counted_on),
+        _require_count_covers_movements(
+            _load_ledger(db),
+            _Count(row.id, month, payload.counted_on, {batch.id: q for batch, q in resolved}),
         )
         row.lines.clear()
         db.flush()

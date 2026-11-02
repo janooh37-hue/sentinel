@@ -294,6 +294,69 @@ def test_count_edit_cannot_remove_stock_used_by_movements(
     assert editor.get(f"/api/v1/store/counts/{original['id']}").json() == original
 
 
+@pytest.mark.parametrize("removal", ["handover", "disposal"])
+@pytest.mark.parametrize(
+    ("case", "on_hand"),
+    [("same_day_zero", -8), ("earlier_short", -1), ("omits_archived", -8), ("edit_omits", -8)],
+)
+def test_count_save_cannot_leave_later_movements_short(
+    editor: TestClient,
+    category: StoreCategory,
+    api_db: Session,
+    removal: str,
+    case: str,
+    on_hand: int,
+) -> None:
+    coffee = _item(editor, category)["id"]
+    tea = _item(editor, category, "Tea")["id"]
+    original = _count(editor, date(2026, 9, 20), (coffee, None, 10)).json()
+    assert (
+        _deliver(editor, date(2026, 10, 1), (coffee, None, 10), (tea, None, 10)).status_code == 201
+    )
+    if removal == "handover":
+        assert _handover(editor, date(2026, 10, 5), (tea, 8)).status_code == 201
+    else:
+        assert _dispose(editor, date(2026, 10, 5), tea, None, 8).status_code == 201
+    if case in {"omits_archived", "edit_omits"}:
+        # An archived item is not an expected Batch, so a count may leave it out.
+        row = api_db.get(StoreItem, tea)
+        assert row is not None
+        row.archived_at = utcnow()
+        api_db.commit()
+    counts_before = editor.get("/api/v1/store/counts").json()
+    audits_before = len(api_db.scalars(select(AuditLog)).all())
+    if case == "edit_omits":
+        response = editor.put(
+            f"/api/v1/store/counts/{original['id']}",
+            json={"counted_on": "2026-10-03", "lines": [{"item_id": coffee, "quantity": 20}]},
+        )
+    elif case == "omits_archived":
+        response = _count(editor, date(2026, 10, 3), (coffee, None, 20))
+    elif case == "earlier_short":
+        response = _count(editor, date(2026, 10, 3), (coffee, None, 20), (tea, None, 7))
+    else:
+        response = _count(editor, date(2026, 10, 5), (coffee, None, 20), (tea, None, 0))
+    assert response.status_code == 422, response.text
+    assert _error(response)["code"] == "STORE_INSUFFICIENT_STOCK"
+    assert _error(response)["details"]["on"] == "2026-10-05"
+    assert _error(response)["details"]["on_hand"] == on_hand
+    assert editor.get("/api/v1/store/counts").json() == counts_before
+    assert len(api_db.scalars(select(AuditLog)).all()) == audits_before
+
+
+def test_count_create_covering_movements_until_next_count_is_accepted(
+    editor: TestClient, category: StoreCategory
+) -> None:
+    item = _item(editor, category)["id"]
+    assert _deliver(editor, date(2026, 10, 1), (item, None, 10)).status_code == 201
+    assert _handover(editor, date(2026, 10, 5), (item, 8)).status_code == 201
+    assert _count(editor, date(2026, 11, 1), (item, None, 10)).status_code == 201
+    assert _dispose(editor, date(2026, 11, 2), item, None, 10).status_code == 201
+    # Exactly covers October's handover; November's count supplies its own disposal.
+    assert _count(editor, date(2026, 10, 5), (item, None, 8)).status_code == 201
+    assert _items_by_code(editor)["ST-0001"]["on_hand"] == 0
+
+
 def test_count_reduction_to_exact_consumption_allows_zero_and_next_count_resets(
     editor: TestClient, category: StoreCategory
 ) -> None:

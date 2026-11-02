@@ -176,6 +176,26 @@ describe('blank stock count entry', () => {
     await waitFor(() => expect(api.updateStoreCount).toHaveBeenCalledWith(7, { counted_on: '2026-09-20', note: 'Monthly count', lines: [{ item_id: 1, expiry: '2028-09', quantity: 24 }, { item_id: 1, expiry: null, quantity: 0 }] }))
   })
 
+  it('keeps entries and shows the error when refreshing the saved count fails', async () => {
+    vi.spyOn(api, 'getStoreCountExpected').mockResolvedValue([FIRST])
+    const user = userEvent.setup()
+    const client = renderPage('/holdings/store/counts/7')
+    await user.type(await screen.findByRole('textbox', { name: 'Tea · 2028-09: Carton' }), '3')
+    await user.clear(screen.getByLabelText('Note'))
+    await user.type(screen.getByLabelText('Note'), 'Recounted')
+    vi.spyOn(api, 'getStoreCount').mockRejectedValueOnce(new ApiError(503, 'SERVICE_UNAVAILABLE', 'Server unavailable', {}))
+    await act(() => client.refetchQueries({ queryKey: storeKeys.count(7) }))
+    expect(await screen.findByText('The Store could not be loaded.')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Tea · 2028-09: Carton' })).toHaveValue('3')
+    expect(screen.getByLabelText('Note')).toHaveValue('Recounted')
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(screen.queryByText('The Store could not be loaded.')).not.toBeInTheDocument())
+    expect(screen.getByRole('textbox', { name: 'Tea · 2028-09: Carton' })).toHaveValue('3')
+    await user.type(screen.getByRole('textbox', { name: 'Tea · No expiry: Carton' }), '0')
+    await user.click(screen.getByRole('button', { name: 'Save stock count' }))
+    await waitFor(() => expect(api.updateStoreCount).toHaveBeenCalledWith(7, { counted_on: '2026-09-20', note: 'Recounted', lines: [{ item_id: 1, expiry: '2028-09', quantity: 72 }, { item_id: 1, expiry: null, quantity: 0 }] }))
+  })
+
   it.each([false, true])('marks listed missing batches and resolves additional rows from the server (mobile=%s)', async (mobile) => {
     state.mobile = mobile
     vi.spyOn(api, 'getStoreCountExpected').mockResolvedValue([FIRST])
