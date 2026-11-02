@@ -672,4 +672,11 @@ questions in `.tmp/approval-store-count.md`. This phase is local to
   consumer fixtures now use separate iframe documents/user-event documents,
   retaining role/unit-label assertions without changing production identities.
   Final checks remain coordinator-owned after the follow-up commit.
+- Confirmed volatile-date-loss gate: changing the date is blocked with an
+  accessible explanation while any page-only quantity (including zero), note
+  or added batch exists. Entries and the original date are retained; explicitly
+  resetting the page permits date changes again. Supported per-date persistence
+  is unchanged. Consumer regressions cover retained quantity/note, note-only,
+  explicit zero and added-batch states, then reset/date-change continuation.
+  No writer check or reproduction run; coordinator final evidence is pending.
 

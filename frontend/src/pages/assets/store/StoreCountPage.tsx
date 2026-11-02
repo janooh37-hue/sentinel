@@ -108,6 +108,7 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
   const [focusRequest, setFocusRequest] = useState<{ key: string } | null>(null)
   const [reconciledKeys, setReconciledKeys] = useState<string | null>(null)
   const [discarding, setDiscarding] = useState(false)
+  const [dateChangeBlocked, setDateChangeBlocked] = useState(false)
   const discardTriggerRef = useRef<HTMLButtonElement | null>(null)
   const discardTitleRef = useRef<HTMLHeadingElement | null>(null)
   const reviewTitleRef = useRef<HTMLHeadingElement | null>(null)
@@ -372,6 +373,7 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
     setDraftSaved(false)
     setStorageFailed(false)
     setDiscarding(false)
+    setDateChangeBlocked(false)
     setConfirmed(false)
     setStage('start')
     setMissing([])
@@ -399,16 +401,24 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
     <fieldset disabled={mutation.isPending} className={`${panel} grid gap-4 md:grid-cols-2`}>
       <div>
         <label htmlFor="counted-on" className="mb-1.5 block text-sm font-medium">{t('assets.store.counts.countedOn')}</label>
-        <Input id="counted-on" type="date" dir="ltr" className="h-11 font-mono tabular-nums" value={countedOn} max={todayIso()} required aria-invalid={!validDate || undefined} aria-describedby="count-date-help" onChange={event => {
+        <Input id="counted-on" type="date" dir="ltr" className="h-11 font-mono tabular-nums" value={countedOn} max={todayIso()} required aria-invalid={!validDate || dateChangeBlocked || undefined} aria-describedby="count-date-help" onChange={event => {
           if (!canEdit() || storageFailed && !initial.volatile) return
           const nextDate = event.target.value
+          if (initial.volatile && nextDate !== countedOn && (
+            draftRef.current.note !== '' || draftRef.current.added.length > 0
+            || Object.values(draftRef.current.quantities).some(parts => parts.units !== '' || parts.loose !== '')
+          )) {
+            setDateChangeBlocked(true)
+            return
+          }
+          setDateChangeBlocked(false)
           if (!initial.volatile && isBusinessDate(nextDate) && !selectCountDraftDate(userId, target, nextDate)) {
             setStorageFailed(true)
             return
           }
           onDateChange(nextDate)
         }} />
-        <p id="count-date-help" className={`mt-2 text-sm ${validDate ? 'text-muted-foreground' : 'text-destructive-text'}`}>{t(!validDate ? 'assets.store.counts.invalidDate' : initial.volatile ? 'assets.store.counts.volatileDateHelp' : 'assets.store.counts.dateDraftHelp')}</p>
+        <p id="count-date-help" role={dateChangeBlocked ? 'alert' : undefined} className={`mt-2 text-sm ${validDate && !dateChangeBlocked ? 'text-muted-foreground' : 'text-destructive-text'}`}>{t(dateChangeBlocked ? 'assets.store.counts.volatileDateBlocked' : !validDate ? 'assets.store.counts.invalidDate' : initial.volatile ? 'assets.store.counts.volatileDateHelp' : 'assets.store.counts.dateDraftHelp')}</p>
       </div>
       <div><label htmlFor="count-note" className="mb-1.5 block text-sm font-medium">{t('assets.store.counts.optionalNote')}</label><Textarea id="count-note" dir="auto" value={draft.note} onChange={event => changeDraft({ ...draftRef.current, note: event.target.value })} /></div>
     </fieldset>
