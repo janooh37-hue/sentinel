@@ -11,12 +11,16 @@ export interface CountDraft {
   added: AddedCountBatch[]
 }
 
+export interface CountDraftSnapshot { value: string | null }
+export type DraftStorageResult = 'saved' | 'failed' | 'conflict'
+
 export const emptyCountDraft = (): CountDraft => ({ started: false, note: '', focusedItem: null, quantities: {}, added: [] })
 const prefix = 'sentinel:store-count:v1'
 export const countDraftKey = (userId: number, target: string, date: string) => `${prefix}:${userId}:${target}:${date}`
 const activeKey = (userId: number, target: string) => `${prefix}:${userId}:${target}:active`
 
 export function readCountDraftDate(userId: number, target: string, fallback: string): string {
+  if (!navigator.locks?.request) return fallback
   try {
     const date = localStorage.getItem(activeKey(userId, target))
     return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : fallback
@@ -34,10 +38,14 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export function readCountDraft(userId: number, target: string, date: string): { draft: CountDraft; restored: boolean; failed: boolean } {
+export function readCountDraft(userId: number, target: string, date: string): { draft: CountDraft; restored: boolean; failed: boolean; volatile: boolean; snapshot: CountDraftSnapshot } {
+  const snapshot: CountDraftSnapshot = { value: null }
+  const volatile = !navigator.locks?.request
+  if (volatile) return { draft: emptyCountDraft(), restored: false, failed: false, volatile, snapshot }
   try {
     const raw = localStorage.getItem(countDraftKey(userId, target, date))
-    if (!raw) return { draft: emptyCountDraft(), restored: false, failed: false }
+    snapshot.value = raw
+    if (!raw) return { draft: emptyCountDraft(), restored: false, failed: false, volatile, snapshot }
     const value: unknown = JSON.parse(raw)
     if (!record(value)) throw new Error('Invalid draft')
     const draft = emptyCountDraft()
@@ -58,24 +66,44 @@ export function readCountDraft(userId: number, target: string, date: string): { 
         }
       }
     }
-    return { draft, restored: true, failed: false }
-  } catch { return { draft: emptyCountDraft(), restored: false, failed: true } }
+    return { draft, restored: true, failed: false, volatile, snapshot }
+  } catch { return { draft: emptyCountDraft(), restored: false, failed: true, volatile, snapshot } }
 }
 
-export function writeCountDraft(userId: number, target: string, date: string, draft: CountDraft): boolean {
+/** Compare against this workspace's last successful write, never another tab's event. */
+export function countDraftChanged(userId: number, target: string, date: string, snapshot: CountDraftSnapshot): boolean {
   try {
-    localStorage.setItem(countDraftKey(userId, target, date), JSON.stringify(draft))
-    localStorage.setItem(activeKey(userId, target), date)
-    return true
+    return localStorage.getItem(countDraftKey(userId, target, date)) !== snapshot.value
   } catch { return false }
 }
 
-export function clearCountDraft(userId: number, target: string, date: string): boolean {
+export async function writeCountDraft(userId: number, target: string, date: string, draft: CountDraft, snapshot: CountDraftSnapshot): Promise<DraftStorageResult> {
+  if (!navigator.locks?.request) return 'failed'
   try {
-    localStorage.removeItem(countDraftKey(userId, target, date))
-    if (localStorage.getItem(activeKey(userId, target)) === date) localStorage.removeItem(activeKey(userId, target))
-    return true
-  } catch { return false }
+    const key = countDraftKey(userId, target, date)
+    return await navigator.locks.request<DraftStorageResult>(key, () => {
+      if (localStorage.getItem(key) !== snapshot.value) return 'conflict'
+      const next = JSON.stringify(draft)
+      localStorage.setItem(key, next)
+      snapshot.value = next
+      localStorage.setItem(activeKey(userId, target), date)
+      return 'saved'
+    })
+  } catch { return 'failed' }
+}
+
+export async function clearCountDraft(userId: number, target: string, date: string, snapshot: CountDraftSnapshot): Promise<DraftStorageResult> {
+  if (!navigator.locks?.request) return 'failed'
+  try {
+    const key = countDraftKey(userId, target, date)
+    return await navigator.locks.request<DraftStorageResult>(key, () => {
+      if (localStorage.getItem(key) !== snapshot.value) return 'conflict'
+      localStorage.removeItem(key)
+      snapshot.value = null
+      if (localStorage.getItem(activeKey(userId, target)) === date) localStorage.removeItem(activeKey(userId, target))
+      return 'saved'
+    })
+  } catch { return 'failed' }
 }
 
 /** Unlike receiving, blind counting requires every visible field explicitly entered. */

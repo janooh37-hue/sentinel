@@ -229,7 +229,7 @@ function StoreItemCodeInput({ name, index }: { name: string; index: number }): R
   const listId = useId()
   const query = (code ?? '').trim().toLocaleLowerCase()
   const items = (data ?? []).filter((item) =>
-    [item.code, item.name_en, item.name_ar ?? ''].some((value) =>
+    [item.code, item.name_en, item.name_ar ?? '', item.short_name_en ?? '', item.short_name_ar ?? ''].some((value) =>
       value.toLocaleLowerCase().includes(query),
     ),
   )

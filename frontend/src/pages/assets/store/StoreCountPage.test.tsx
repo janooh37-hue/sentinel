@@ -77,6 +77,18 @@ beforeEach(async () => {
   vi.restoreAllMocks()
   vi.clearAllMocks()
   localStorage.clear()
+  // A shared browser lock queue for independently mounted tab consumers.
+  const queues = new Map<string, Promise<unknown>>()
+  Object.defineProperty(navigator, 'locks', {
+    configurable: true,
+    value: {
+      request<T>(name: string, callback: (lock: Lock) => T | PromiseLike<T>): Promise<T> {
+        const pending = (queues.get(name) ?? Promise.resolve()).then(() => callback({ name, mode: 'exclusive' }))
+        queues.set(name, pending.catch(() => undefined))
+        return pending
+      },
+    },
+  })
   state.editable = true
   state.userId = 1
   await i18n.changeLanguage('en')
@@ -504,5 +516,165 @@ describe('focused blind stock count', () => {
     expect(localStorage.getItem(countDraftKey(1, 'new', '2026-08-01'))).toBe('another date')
     await start(user)
     expect(await findCountField('Tea · 2028-09')).toHaveValue('')
+  })
+
+  it('freezes the reviewed count until its in-flight save completes without deleting newer local edits', async () => {
+    let complete!: (value: StoreCountRead) => void
+    vi.mocked(api.createStoreCount).mockReturnValue(new Promise(resolve => { complete = resolve }))
+    const user = userEvent.setup()
+    const view = renderPage()
+    await start(user)
+    await enter(user, '2028-09', '3', '5')
+    await enter(user, 'No expiry', '0')
+    await user.type(screen.getByLabelText('Note (optional)'), 'Reviewed note')
+    await saveReview(user)
+    await waitFor(() => expect(api.createStoreCount).toHaveBeenCalledWith({
+      counted_on: todayIso(), note: 'Reviewed note',
+      lines: [{ item_id: 1, expiry: '2028-09', quantity: 77 }, { item_id: 1, expiry: null, quantity: 0 }],
+    }))
+    const stored = localStorage.getItem(countDraftKey(1, 'new', todayIso()))
+    const form = view.container.querySelector('form')!
+    for (const control of form.querySelectorAll('button, input, textarea, select')) {
+      expect(control).toBeDisabled()
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Continue counting' }))
+    fireEvent.click(within(screen.getByRole('region', { name: 'Your entered quantities' })).getAllByRole('button')[0])
+    fireEvent.change(screen.getByLabelText('Note (optional)'), { target: { value: 'Unsubmitted replacement' } })
+    fireEvent.change(screen.getByLabelText('Counted on'), { target: { value: '2026-09-22' } })
+    expect(screen.getByRole('heading', { name: i18n.t('assets.store.counts.reviewTitle') })).toBeInTheDocument()
+    expect(screen.getByLabelText('Note (optional)')).toHaveValue('Reviewed note')
+    expect(screen.getByLabelText('Counted on')).toHaveValue(todayIso())
+    expect(localStorage.getItem(countDraftKey(1, 'new', todayIso()))).toBe(stored)
+    await act(async () => { complete(SAVED) })
+    expect(await screen.findByText('Counts destination')).toBeInTheDocument()
+    expect(api.createStoreCount).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['write', 'storage event'])('refuses a stale tab through %s without changing the winning draft', async trigger => {
+    const user = userEvent.setup()
+    const first = renderPage()
+    await start(user)
+    await enter(user, '2028-09', '1')
+    const second = renderPage()
+    const firstUi = within(first.container)
+    const secondUi = within(second.container)
+    const firstField = within(firstUi.getByRole('group', { name: 'Tea · 2028-09' })).getByRole('textbox', { name: /Carton/ })
+    const secondField = within(await secondUi.findByRole('group', { name: 'Tea · 2028-09' })).getByRole('textbox', { name: /Carton/ })
+    fireEvent.change(firstField, { target: { value: '3' } })
+    const key = countDraftKey(1, 'new', todayIso())
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(key)!).quantities['1:2028-09-30'].units).toBe('3'))
+    const winner = localStorage.getItem(key)
+    if (trigger === 'write') fireEvent.change(secondField, { target: { value: '9' } })
+    else act(() => { window.dispatchEvent(new StorageEvent('storage', { key, newValue: winner, storageArea: localStorage })) })
+    expect(await secondUi.findByRole('alert')).toHaveTextContent(i18n.t('assets.store.counts.draftConflict'))
+    expect(secondField).toHaveValue('1')
+    expect(localStorage.getItem(key)).toBe(winner)
+    act(() => { window.dispatchEvent(new StorageEvent('storage', { key, newValue: winner, storageArea: localStorage })) })
+    expect(firstField).toBeEnabled()
+    expect(secondField).toBeDisabled()
+    expect(firstUi.queryByRole('alert')).not.toBeInTheDocument()
+    expect(api.createStoreCount).not.toHaveBeenCalled()
+  })
+
+  it('serializes simultaneous tab writes and retains the losing tab’s unsubmitted entries with a conflict warning', async () => {
+    const user = userEvent.setup()
+    const first = renderPage()
+    await start(user)
+    await enter(user, '2028-09', '1')
+    const second = renderPage()
+    const firstUi = within(first.container)
+    const secondUi = within(second.container)
+    const firstField = within(firstUi.getByRole('group', { name: 'Tea · 2028-09' })).getByRole('textbox', { name: /Carton/ })
+    const secondField = within(await secondUi.findByRole('group', { name: 'Tea · 2028-09' })).getByRole('textbox', { name: /Carton/ })
+    act(() => {
+      fireEvent.change(firstField, { target: { value: '3' } })
+      fireEvent.change(secondField, { target: { value: '9' } })
+    })
+    expect(await secondUi.findByRole('alert')).toHaveTextContent(i18n.t('assets.store.counts.draftConflict'))
+    expect(secondField).toHaveValue('9')
+    expect(secondField).toBeDisabled()
+    expect(JSON.parse(localStorage.getItem(countDraftKey(1, 'new', todayIso()))!).quantities['1:2028-09-30'].units).toBe('3')
+    expect(firstField).toHaveValue('3')
+    expect(api.createStoreCount).not.toHaveBeenCalled()
+  })
+
+  it.each(['save', 'discard'])('protects another tab’s newer draft before stale %s even without a storage event', async action => {
+    const user = userEvent.setup()
+    const first = renderPage()
+    await start(user)
+    await enter(user, '2028-09', '1')
+    await enter(user, 'No expiry', '0')
+    await user.click(screen.getByRole('button', { name: 'Review count' }))
+    await user.click(screen.getByRole('checkbox'))
+    if (action === 'discard') {
+      await user.click(screen.getByRole('button', { name: 'Discard this draft' }))
+    }
+    const second = renderPage()
+    const firstUi = within(first.container)
+    const secondUi = within(second.container)
+    const secondField = within(await secondUi.findByRole('group', { name: 'Tea · 2028-09' })).getByRole('textbox', { name: /Carton/ })
+    fireEvent.change(secondField, { target: { value: '4' } })
+    const key = countDraftKey(1, 'new', todayIso())
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(key)!).quantities['1:2028-09-30'].units).toBe('4'))
+    const winner = localStorage.getItem(key)
+    fireEvent.click(firstUi.getByRole('button', { name: action === 'save' ? 'Save stock count' : 'Discard draft', exact: true }))
+    expect(await firstUi.findByRole('alert')).toHaveTextContent(i18n.t('assets.store.counts.draftConflict'))
+    expect(localStorage.getItem(key)).toBe(winner)
+    expect(secondField).toHaveValue('4')
+    expect(api.createStoreCount).not.toHaveBeenCalled()
+  })
+
+  it('preserves a newer tab draft when an already submitted server save finishes', async () => {
+    let complete!: (value: StoreCountRead) => void
+    vi.mocked(api.createStoreCount).mockReturnValue(new Promise(resolve => { complete = resolve }))
+    const user = userEvent.setup()
+    const first = renderPage()
+    await start(user)
+    await enter(user, '2028-09', '1')
+    await enter(user, 'No expiry', '0')
+    await saveReview(user)
+    await waitFor(() => expect(api.createStoreCount).toHaveBeenCalledTimes(1))
+    const second = renderPage()
+    const secondUi = within(second.container)
+    const secondField = within(await secondUi.findByRole('group', { name: 'Tea · 2028-09' })).getByRole('textbox', { name: /Carton/ })
+    fireEvent.change(secondField, { target: { value: '8' } })
+    const key = countDraftKey(1, 'new', todayIso())
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(key)!).quantities['1:2028-09-30'].units).toBe('8'))
+    const winner = localStorage.getItem(key)
+    await act(async () => { complete(SAVED) })
+    expect(await within(first.container).findByText('Counts destination')).toBeInTheDocument()
+    expect(localStorage.getItem(key)).toBe(winner)
+    expect(secondField).toHaveValue('8')
+    expect(api.createStoreCount).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps HTTP-style browsers usable in memory without overwriting, deleting or falsely resuming a stored draft', async () => {
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined })
+    const key = countDraftKey(1, 'new', todayIso())
+    const stored = JSON.stringify({ started: true, note: 'Other tab', focusedItem: 1, added: [], quantities: { '1:2028-09-30': { units: '9', loose: '0' } } })
+    localStorage.setItem(key, stored)
+    const user = userEvent.setup()
+    renderPage()
+    expect(screen.getByRole('alert')).toHaveTextContent(i18n.t('assets.store.counts.volatileDraft'))
+    await start(user)
+    expect(await findCountField('Tea · 2028-09')).toHaveValue('')
+    await enter(user, '2028-09', '2')
+    await user.click(screen.getByRole('button', { name: 'Save draft & exit' }))
+    expect(screen.queryByText('Counts destination')).not.toBeInTheDocument()
+    expect(localStorage.getItem(key)).toBe(stored)
+    await user.click(screen.getByRole('button', { name: 'Discard this draft' }))
+    await user.click(screen.getByRole('button', { name: 'Discard draft', exact: true }))
+    await start(user)
+    expect(await findCountField('Tea · 2028-09')).toHaveValue('')
+    expect(localStorage.getItem(key)).toBe(stored)
+    await enter(user, '2028-09', '3', '5')
+    await enter(user, 'No expiry', '0')
+    await saveReview(user)
+    await waitFor(() => expect(api.createStoreCount).toHaveBeenCalledWith({
+      counted_on: todayIso(), note: null,
+      lines: [{ item_id: 1, expiry: '2028-09', quantity: 77 }, { item_id: 1, expiry: null, quantity: 0 }],
+    }))
+    expect(await screen.findByText('Counts destination')).toBeInTheDocument()
+    expect(localStorage.getItem(key)).toBe(stored)
   })
 })

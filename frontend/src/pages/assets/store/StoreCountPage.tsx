@@ -29,8 +29,8 @@ import {
   type ExpiryValue, type QuantityParts, storeErrorMessage, storeKeys, useStorePickerItems,
 } from './storeUtils'
 import {
-  clearCountDraft, countedQuantity, emptyCountDraft, readCountDraft, readCountDraftDate,
-  reconcileCountDraft, selectCountDraftDate, writeCountDraft, type CountBatch, type CountDraft,
+  clearCountDraft, countDraftChanged, countDraftKey, countedQuantity, emptyCountDraft, readCountDraft, readCountDraftDate,
+  reconcileCountDraft, selectCountDraftDate, writeCountDraft, type CountBatch, type CountDraft, type DraftStorageResult,
 } from './storeCountDraft'
 
 interface MissingBatch { batch_id: number; item_code: string; expiry_date: string | null }
@@ -92,6 +92,12 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
   const persistedDraftRef = useRef(initial.draft)
   const [storageFailed, setStorageFailed] = useState(initial.failed)
   const [draftSaved, setDraftSaved] = useState(initial.restored)
+  const [draftConflict, setDraftConflict] = useState(false)
+  const conflictRef = useRef(false)
+  const savingRef = useRef(false)
+  const [savePending, setSavePending] = useState(false)
+  const lastWriteRef = useRef<Promise<DraftStorageResult>>(Promise.resolve('saved'))
+  const snapshotRef = useRef({ value: initial.snapshot.value })
   const [stage, setStage] = useState<'start' | 'count' | 'review'>(initial.draft.started ? 'count' : 'start')
   const [confirmed, setConfirmed] = useState(false)
   const [missing, setMissing] = useState<MissingBatch[]>([])
@@ -112,14 +118,48 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
   const categories = useQuery({ queryKey: storeKeys.categories, queryFn: api.listStoreCategories })
   const missingBatches = useQuery({ queryKey: storeKeys.batches(), queryFn: () => api.listStoreBatches(), enabled: missing.length > 0 })
 
+  function markDraftConflict() {
+    conflictRef.current = true
+    setDraftConflict(true)
+    setConfirmed(false)
+  }
+  function checkDraftConflict() {
+    if (initial.volatile) return false
+    if (!conflictRef.current && !countDraftChanged(userId, target, countedOn, snapshotRef.current)) return false
+    markDraftConflict()
+    return true
+  }
+  function canEdit() {
+    return !savingRef.current && !checkDraftConflict()
+  }
+  function blockChanges(event: React.SyntheticEvent) {
+    if (canEdit()) return
+    event.preventDefault()
+    event.stopPropagation()
+  }
+  function persist(next: CountDraft) {
+    persistedDraftRef.current = next
+    const pending = writeCountDraft(userId, target, countedOn, next, snapshotRef.current).then(result => {
+      if (result === 'conflict') markDraftConflict()
+      else {
+        setStorageFailed(result === 'failed')
+        setDraftSaved(result === 'saved')
+      }
+      return result
+    })
+    lastWriteRef.current = pending
+    return pending
+  }
   function changeDraft(next: CountDraft) {
+    if (!canEdit()) return
     draftRef.current = next
     setDraft(next)
-    const success = writeCountDraft(userId, target, countedOn, next)
-    persistedDraftRef.current = next
-    setStorageFailed(!success)
-    setDraftSaved(success)
+    void persist(next)
     setConfirmed(false)
+  }
+  function unlockControls() {
+    savingRef.current = false
+    setSavePending(false)
   }
 
   const rowsByKey = new Map<string, CountBatch>()
@@ -172,7 +212,7 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
   const rowKeys = rows.map(row => batchKey(row.item_id, row.expiry_date)).join('|')
   // Adjust derived membership before rendering. A temporarily pending refetch must
   // never erase an operator's work; only a complete metadata response reconciles it.
-  if (ready && rowKeys !== reconciledKeys) {
+  if (ready && !savingRef.current && !draftConflict && rowKeys !== reconciledKeys) {
     setReconciledKeys(rowKeys)
     const next = reconcileCountDraft(draft, rows)
     if (next !== draft) setDraft(next)
@@ -182,9 +222,26 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
     // The persisted snapshot starts from the unmodified restored draft, not the
     // render-adjusted draft: initial metadata reconciliation must reach storage too.
     draftRef.current = draft
-    if (persistedDraftRef.current === draft) return
-    if (writeCountDraft(userId, target, countedOn, draft)) persistedDraftRef.current = draft
+    if (persistedDraftRef.current === draft || savingRef.current || conflictRef.current) return
+    void persist(draft)
   }, [draft, userId, target, countedOn])
+
+  useEffect(() => {
+    if (initial.volatile) return
+    const key = countDraftKey(userId, target, countedOn)
+    function check() { checkDraftConflict() }
+    function changed(event: StorageEvent) {
+      if (event.key === null || event.key === key) check()
+    }
+    window.addEventListener('storage', changed)
+    window.addEventListener('focus', check)
+    document.addEventListener('visibilitychange', check)
+    return () => {
+      window.removeEventListener('storage', changed)
+      window.removeEventListener('focus', check)
+      document.removeEventListener('visibilitychange', check)
+    }
+  }, [userId, target, countedOn, initial])
 
   useEffect(() => {
     if (stage !== 'count' || !focusRequest) return
@@ -222,11 +279,12 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
 
   const mutation = useMutation({
     mutationFn: (body: StoreCountWrite) => saved ? api.updateStoreCount(saved.id, body) : api.createStoreCount(body),
-    onSuccess: () => {
-      const cleared = clearCountDraft(userId, target, countedOn)
+    onSuccess: async () => {
+      await lastWriteRef.current
+      const cleared = initial.volatile ? 'failed' : conflictRef.current ? 'conflict' : await clearCountDraft(userId, target, countedOn, snapshotRef.current)
       invalidateStoreQueries(queryClient)
       toast.success(t('assets.store.counts.saved'))
-      if (!cleared) toast.error(t('assets.store.counts.clearFailed'))
+      if (cleared !== 'saved') toast.error(t(initial.volatile ? 'assets.store.counts.volatileSaved' : cleared === 'conflict' ? 'assets.store.counts.draftConflict' : 'assets.store.counts.clearFailed'))
       void navigate('/holdings/store/counts')
     },
     onError: error => {
@@ -238,20 +296,24 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
         void queryClient.invalidateQueries({ queryKey: storeKeys.expected(countedOn) })
       }
     },
+    onSettled: unlockControls,
   })
 
   function chooseItem(next: number, key?: string) {
+    if (!canEdit()) return
     changeDraft({ ...draftRef.current, started: true, focusedItem: next })
     setStage('count')
     setFocusRequest({ key: key ?? batchKey(groups.get(next)?.[0]?.item_id ?? next, groups.get(next)?.[0]?.expiry_date ?? null) })
     setAddError('')
   }
   function setQuantity(row: CountBatch, value: QuantityParts) {
+    if (!canEdit()) return
     const key = batchKey(row.item_id, row.expiry_date)
     changeDraft({ ...draftRef.current, quantities: { ...draftRef.current.quantities, [key]: value } })
     setAcknowledgedMissing(previous => [...previous, key])
   }
   function addBatch(selectedId: number | null) {
+    if (!canEdit()) return
     const value = expiryFromValue(expiry)
     const item = picker.data?.find(entry => entry.id === selectedId)
     if (!item || value === undefined) { setAddError(t('assets.store.counts.chooseBatch')); return }
@@ -263,25 +325,39 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
     setFocusRequest({ key })
   }
   function removeBatch(row: CountBatch) {
+    if (!canEdit()) return
     const key = batchKey(row.item_id, row.expiry_date)
     const quantities = { ...draftRef.current.quantities }
     delete quantities[key]
     changeDraft({ ...draftRef.current, quantities, added: draftRef.current.added.filter(entry => batchKey(entry.itemId, entry.expiry) !== key) })
   }
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (stage !== 'review' || !confirmed || mutation.isPending || !ready || uncounted.length || unresolvedMissing) return
+    if (!canEdit() || stage !== 'review' || !confirmed || !ready || uncounted.length || unresolvedMissing) return
+    savingRef.current = true
+    setSavePending(true)
+    await lastWriteRef.current
+    if (checkDraftConflict()) { unlockControls(); return }
     const lines: StoreCountWrite['lines'] = rows.map(row => ({ item_id: row.item_id, expiry: expiryInput(row), quantity: countedQuantity(row, draft.quantities[batchKey(row.item_id, row.expiry_date)])! }))
     mutation.mutate({ counted_on: countedOn, note: draft.note.trim() || null, lines })
   }
-  function exit() {
-    const success = writeCountDraft(userId, target, countedOn, draftRef.current)
-    setStorageFailed(!success)
-    setDraftSaved(success)
-    if (success) void navigate('/holdings/store/counts')
+  async function exit() {
+    if (!canEdit()) return
+    savingRef.current = true
+    setSavePending(true)
+    const result = await persist(draftRef.current)
+    if (result === 'saved') void navigate('/holdings/store/counts')
+    unlockControls()
   }
-  function discard() {
-    if (!clearCountDraft(userId, target, countedOn)) { setStorageFailed(true); return }
+  async function discard() {
+    if (!canEdit()) return
+    savingRef.current = true
+    setSavePending(true)
+    await lastWriteRef.current
+    const cleared = initial.volatile ? 'saved' : await clearCountDraft(userId, target, countedOn, snapshotRef.current)
+    unlockControls()
+    if (cleared === 'conflict') { markDraftConflict(); return }
+    if (cleared === 'failed') { setStorageFailed(true); return }
     const next = emptyCountDraft()
     draftRef.current = next
     persistedDraftRef.current = next
@@ -298,7 +374,7 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
   const existingId = mutation.error instanceof ApiError && mutation.error.code === 'STORE_COUNT_MONTH_EXISTS' && typeof mutation.error.details.count_id === 'number' ? mutation.error.details.count_id : null
   const panel = 'rounded-2xl border border-border bg-surface p-4 md:p-5'
   const progress = t('assets.store.counts.batchProgress', { entered: formatNumber(entered, i18n.language), total: formatNumber(rows.length, i18n.language) })
-  const storageStatus = <p role={storageFailed ? 'alert' : 'status'} className={`text-sm ${storageFailed ? 'text-destructive-text' : 'text-muted-foreground'}`}>{t(storageFailed ? 'assets.store.counts.storageFailed' : draftSaved ? 'assets.store.counts.draftSaved' : 'assets.store.counts.deviceDraft')}</p>
+  const storageStatus = <p role={draftConflict || initial.volatile || storageFailed ? 'alert' : 'status'} className={`text-sm ${draftConflict || initial.volatile || storageFailed ? 'text-destructive-text' : 'text-muted-foreground'}`}>{t(draftConflict ? 'assets.store.counts.draftConflict' : initial.volatile ? 'assets.store.counts.volatileDraft' : storageFailed ? 'assets.store.counts.storageFailed' : draftSaved ? 'assets.store.counts.draftSaved' : 'assets.store.counts.deviceDraft')}</p>
   function enteredSummary(row: CountBatch) {
     const parts = draft.quantities[batchKey(row.item_id, row.expiry_date)]
     if (!isCounted(row) || !parts) return t('assets.store.counts.notCounted')
@@ -312,13 +388,14 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
   }
 
   return <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+    <fieldset disabled={savePending || mutation.isPending || draftConflict} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0" onClickCapture={blockChanges} onChangeCapture={blockChanges}>
     <fieldset disabled={mutation.isPending} className={`${panel} grid gap-4 md:grid-cols-2`}>
       <div>
         <label htmlFor="counted-on" className="mb-1.5 block text-sm font-medium">{t('assets.store.counts.countedOn')}</label>
         <Input id="counted-on" type="date" dir="ltr" className="h-11 font-mono tabular-nums" value={countedOn} max={todayIso()} required aria-invalid={!validDate || undefined} aria-describedby="count-date-help" onChange={event => {
-          if (storageFailed) return
+          if (!canEdit() || storageFailed && !initial.volatile) return
           const nextDate = event.target.value
-          if (isBusinessDate(nextDate) && !selectCountDraftDate(userId, target, nextDate)) {
+          if (!initial.volatile && isBusinessDate(nextDate) && !selectCountDraftDate(userId, target, nextDate)) {
             setStorageFailed(true)
             return
           }
@@ -407,5 +484,7 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
         <Button type="button" variant="secondary" className="min-h-11" onClick={() => { setDiscarding(false); discardTriggerRef.current?.focus() }}>{t('assets.store.counts.keepDraft')}</Button>
       </div>
     </section>}
+    </fieldset>
+    {draftConflict && <Button type="button" variant="secondary" className="min-h-11" disabled={savePending || mutation.isPending} onClick={() => window.location.reload()}>{t('assets.store.counts.reloadDraft')}</Button>}
   </form>
 }

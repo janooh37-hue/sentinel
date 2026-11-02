@@ -637,4 +637,26 @@ questions in `.tmp/approval-store-count.md`. This phase is local to
   receiving-review focus-ring pattern. Consumer regression covers keyboard
   activation from direct review, final-item review and skip-to-review, then
   tabbing to Continue counting. These regressions are authored, not run here.
+- Greptile behavior gates (reviewed source `58bfa9bf`): count-saving now freezes
+  every count-changing control and guards mutation handlers through completion.
+  The MRF picker searches both shelf-name languages while still filling official
+  English descriptions/units. Consumer regressions cover delayed-save edits and
+  distinct official/shelf names in English and Arabic.
+- Same-user/target/date browser drafts now compare each workspace's last stored
+  snapshot before writing, submitting or clearing; Web Locks serialize the
+  compare/write and compare/delete operations. Storage/focus notifications warn
+  stale tabs without adopting or erasing another tab's entries. A draft changed
+  during a server save is retained rather than deleted on completion.
+- HTTP/LAN or unsupported browsers without Web Locks remain usable for counting
+  and normal server saves in explicit volatile mode: visible no-autosave/resume
+  warning, no unlocked browser-draft writes/deletes, no false Save draft & exit,
+  and Discard resets only this page's memory. Pre-existing stored drafts remain
+  untouched. No server/cross-device draft feature is added.
+- Independent-workspace consumer regressions cover stale typing, storage events,
+  simultaneous queued writes, stale save/discard, newer draft preservation after
+  server completion, and unsupported-browser volatile save/discard behavior.
+  Tests/build/lint were not run by this writer; final coordinator proof is pending.
+  The incidental model/schema-parity oracle requested by the fourth bot comment
+  remains intentionally removed; real backfill/ledger/constraint/API coverage is
+  retained, with no newly identified uncovered consumer behavior in that comment.
 
