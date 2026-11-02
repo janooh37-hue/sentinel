@@ -145,16 +145,20 @@ There is **no delivery update endpoint/service** in the pre-existing API. The on
 - `listStoreHandoverTakers()` → GET `/store/handovers/takers`, string[].
 - `listStoreMovements({kind?,q?}={})` → GET `/store/movements?kind=in|out|disposed&q=...`, StoreMovementRead[].
 
-## Migration `0111_store_room` (down `0110_store`)
+## Migration `0112_store_room` (down `0111_store`)
 
-One linear revision `0111_store_room` after `0110_store`. Creates `store_handovers`, `store_handover_lines`, `store_item_aliases`; adds nullable item `art_kind`/`art_color` and delivery-line `noted_quantity`/`difference_reason`. Delivery quantity check becomes >= 0; noted quantity must be null or >= 0. All ALTERs use batch mode, with explicit table recreation for delivery checks. Downgrade drops new tables/columns and deletes quantity-0 delivery lines before restoring > 0; those lines are stock-neutral and cannot exist under the old schema. Existing nonzero delivery rows survive the round trip. Model parity checks include all store models.
+One linear revision `0112_store_room` after `0111_store`, which follows main's unchanged `0110_employee_statement_prints`. Creates `store_handovers`, `store_handover_lines`, `store_item_aliases`; adds nullable item `art_kind`/`art_color` and delivery-line `noted_quantity`/`difference_reason`. Delivery quantity check becomes >= 0; noted quantity must be null or >= 0. All ALTERs use batch mode, with explicit table recreation for delivery checks. Downgrade drops new tables/columns and deletes quantity-0 delivery lines before restoring > 0; those lines are stock-neutral and cannot exist under the old schema. Existing nonzero delivery rows survive the round trip. Model parity checks include all store models.
 
 Alembic reviewer (read-only, per AGENTS.md): no must-fix. Should-fix notes, all
 downgrade data loss: downgrade deletes quantity-0 delivery lines (recorded
 "nothing arrived" discrepancies) and drops handovers/aliases/art/noted columns;
 dropping handovers raises derived on-hand. Back up before any production
-downgrade. Merge order: 0110 must land before 0111; `dev` renumbers at merge
-time (plan: `dev` carries store as `0117_store`).
+downgrade. The 2026-11-02 CI repair renumbers only these branch-new revisions:
+`0110_store` → `0111_store`, `0111_store_room` → `0112_store_room`, without a merge
+revision or schema-operation changes. Historical commit titles and verification
+results below retain their original IDs. Databases already stamped with the old
+branch-only IDs need a separate reviewed transition before using this history;
+this repair does not stamp or migrate any existing database.
 
 ## Rules implemented
 

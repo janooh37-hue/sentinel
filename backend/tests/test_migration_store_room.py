@@ -1,4 +1,4 @@
-"""Migration 0111: linear head and populated, reversible SQLite alterations.
+"""Migration 0112: linear head and populated, reversible SQLite alterations.
 
 Full column, constraint, FK and index model parity is covered by
 test_migration_store's HEAD-based parity test, including the room models.
@@ -18,15 +18,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_store_room_is_single_head() -> None:
     script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
-    assert script.get_heads() == ["0111_store_room"]
-    assert script.get_revision("0111_store_room").down_revision == "0110_store"
+    assert script.get_heads() == ["0112_store_room"]
+    assert script.get_revision("0112_store_room").down_revision == "0111_store"
 
 
 def test_store_room_populated_round_trip(tmp_path: Path) -> None:
     url = f"sqlite:///{tmp_path / 'room.db'}"
     config = Config(str(ROOT / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", url)
-    command.upgrade(config, "0110_store")
+    command.upgrade(config, "0111_store")
     engine = create_engine(url)
     try:
         with engine.begin() as connection:
@@ -86,7 +86,7 @@ def test_store_room_populated_round_trip(tmp_path: Path) -> None:
             connection.execute(
                 text("INSERT INTO store_item_aliases (item_id, alias_norm) VALUES (1, 'tea')")
             )
-        command.downgrade(config, "0110_store")
+        command.downgrade(config, "0111_store")
         inspector = inspect(engine)
         assert not {"store_handovers", "store_handover_lines", "store_item_aliases"} & set(
             inspector.get_table_names()

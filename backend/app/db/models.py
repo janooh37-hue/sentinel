@@ -2658,7 +2658,7 @@ class InmateViolationManualRow(Base):
 
 
 class StoreCategory(Base):
-    """A Store item category (migration 0110); seeded Pantry and Protective."""
+    """A Store item category (migration 0111); seeded Pantry and Protective."""
 
     __tablename__ = "store_categories"
 
@@ -2671,7 +2671,7 @@ class StoreCategory(Base):
 
 
 class StoreItem(Base):
-    """One kind of material the Store holds (migration 0110).
+    """One kind of material the Store holds (migration 0111).
 
     Quantities of the item are integers in base units: loose units when
     ``contains_qty`` is set, otherwise Counting units. Items are archived,
@@ -2722,7 +2722,7 @@ class StoreItem(Base):
 
 
 class StoreBatch(Base):
-    """All of one Store item sharing one expiry date (migration 0110).
+    """All of one Store item sharing one expiry date (migration 0111).
 
     A null ``expiry_date`` is the item's single undated Batch. A month-only
     expiry is stored as that month's last day with ``expiry_month_only``.
@@ -2760,7 +2760,7 @@ class StoreBatch(Base):
 
 
 class StoreDelivery(Base):
-    """One Monthly delivery from HQ (migration 0110), optionally with its note file."""
+    """One Monthly delivery from HQ (migration 0111), optionally with its note file."""
 
     __tablename__ = "store_deliveries"
 
@@ -2809,7 +2809,7 @@ class StoreDeliveryLine(Base):
 
 
 class StoreCount(Base):
-    """One monthly Stock count (migration 0110); at most one per calendar month."""
+    """One monthly Stock count (migration 0111); at most one per calendar month."""
 
     __tablename__ = "store_counts"
 
@@ -2852,7 +2852,7 @@ class StoreCountLine(Base):
 
 
 class StoreDisposal(Base):
-    """Stock removed from a Batch because it expired or was damaged (migration 0110)."""
+    """Stock removed from a Batch because it expired or was damaged (migration 0111)."""
 
     __tablename__ = "store_disposals"
 

@@ -126,7 +126,7 @@ refuses if any Store item exists.
 
 ## Build slices
 
-1. Backend (one writer): models, migration `0110_store`, service, schemas, API,
+1. Backend (one writer): models, migration `0111_store`, service, schemas, API,
    capabilities, dashboard widget ids, `item_catalog`, import script, tests,
    `openapi.json` + `api.types.ts` + `lib/api.ts` store methods/types.
 2. Frontend A: Assets section, Store pages, nav/routes/permissions page,

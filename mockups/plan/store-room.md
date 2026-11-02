@@ -126,13 +126,14 @@ both bounds inclusive; an invalid date or `from` after `to` returns 422. The
 In & out page exposes them as labelled "From date" / "To date" inputs with
 "Clear dates" (not persisted in the URL).
 
-Migration: one new revision after `0110_store` on this branch
+Migration: one new revision `0112_store_room` after `0111_store` on this branch
 (`store_handovers`, `store_handover_lines`, plus the two item drawing columns
 below). Follow the SQLite migration rules, which this branch predates: read them
 with `git show main:backend/app/db/migrations/CLAUDE.md` (single head, batch
 mode for ALTERs).
-The `dev` branch carries this store migration as `0117_store`; renumbering for
-`dev`/`main` happens at merge time, as `assets-store.md` already notes.
+The 2026-11-02 CI repair chains `0111_store` onto main's unchanged
+`0110_employee_statement_prints`; no merge revision is created. Historical
+progress and verification entries below retain their original revision IDs.
 
 Then resync the contract: `/sync-api-types` skill (openapi.json + api.types.ts
 committed together), and add the `api.ts` methods.
@@ -370,7 +371,7 @@ cross-app combobox hook and generic query-state frame (tier C).
 
 1. Wave 1, dedupe: backend writer and frontend writer, disjoint directories.
 2. Wave 2, backend: handovers, movements, drawings, scan, noted vs received,
-   aliases; one migration `0111_store_room` after `0110_store`; contract sync.
+   aliases; one migration `0112_store_room` after `0111_store`; contract sync.
 3. Wave 3, frontend: store-room pages writer and scan/confirm writer.
 4. Reviews (i18n-rtl, alembic), full suite, dev channel, then a UX/best-practice
    review of the new pages.

@@ -11,7 +11,7 @@ Command: `npx -y jscpd@4 --min-tokens 50 --reporters console --format "python,ty
   - `StoreExpiringWidget` / `StoreLowStockWidget` (W:41-51 vs W:38-48)
   - `StoreDisposalsPage` mobile vs desktop, 3 clones (S/StoreDisposalsPage.tsx:52-119)
   - `schemas/store.py:69-81` vs `:88-100`
-  - `0110_store.py:116-121` vs `:143-148`
+  - `0111_store.py:116-121` vs `:143-148` (renumbered from `0110_store.py`)
 - Almost no store-vs-pre-existing clones show up textually, so the findings below are semantic.
 - Re-run the same command after merging and compare the 23.
 

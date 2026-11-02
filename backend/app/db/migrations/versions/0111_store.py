@@ -1,7 +1,7 @@
 """Assets store: categories, items, batches, deliveries, stock counts, disposals.
 
-Revision ID: 0110_store
-Revises: 0109_book_folder_shares
+Revision ID: 0111_store
+Revises: 0110_employee_statement_prints
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0110_store"
-down_revision: str | Sequence[str] | None = "0109_book_folder_shares"
+revision: str = "0111_store"
+down_revision: str | Sequence[str] | None = "0110_employee_statement_prints"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
