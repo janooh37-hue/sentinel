@@ -49,13 +49,18 @@ LIST_DEFAULT_LIMIT = 50
 LIST_MAX_LIMIT = 500
 
 
-def _with_employee_name[T: (LeaveListItem, LeaveRead)](item: T, row: Leave) -> T:
-    """Stamp the joined employee's bilingual name onto a leave schema."""
+def _with_employee_name[T: (LeaveListItem, LeaveRead)](
+    item: T, row: Leave, db: Session, submitters: dict[int, str | None] | None = None
+) -> T:
+    """Stamp employee names and known submission provenance onto a leave schema."""
+    if submitters is None:
+        submitters = leave_service.submitter_g_numbers(db, [row])
     emp = row.employee
     return item.model_copy(
         update={
             "employee_name_en": emp.name_en if emp else None,
             "employee_name_ar": emp.name_ar if emp else None,
+            "submitted_by_g": submitters.get(row.id),
         }
     )
 
@@ -92,6 +97,7 @@ def list_leaves(
         limit=limit,
         offset=offset,
     )
+    submitters = leave_service.submitter_g_numbers(db, rows)
     return LeaveListResponse(
         items=[
             _with_employee_name(
@@ -103,6 +109,8 @@ def list_leaves(
                     }
                 ),
                 r,
+                db,
+                submitters,
             )
             for r in rows
         ],
@@ -168,8 +176,8 @@ def create_leave(
 ) -> LeaveRead:
     """Manual record creation — National Service only (other kinds are born
     from form generation)."""
-    row = leave_service.create_leave(db, payload, actor=_user.email)
-    return _with_employee_name(LeaveRead.model_validate(row), row)
+    row = leave_service.create_leave(db, payload, actor=_user.email, actor_user_id=_user.id)
+    return _with_employee_name(LeaveRead.model_validate(row), row, db)
 
 
 @router.get("/{leave_id}", response_model=LeaveRead)
@@ -179,7 +187,7 @@ def get_leave(
     _user: Annotated[User, Depends(require_capability("leaves.view"))],
 ) -> LeaveRead:
     row = leave_service.get_leave(db, leave_id)
-    return _with_employee_name(LeaveRead.model_validate(row), row)
+    return _with_employee_name(LeaveRead.model_validate(row), row, db)
 
 
 @router.patch("/{leave_id}", response_model=LeaveRead)
@@ -190,7 +198,7 @@ def update_leave(
     _user: Annotated[User, Depends(require_capability("leaves.edit"))],
 ) -> LeaveRead:
     row = leave_service.update_leave(db, leave_id, payload, actor=_user.email)
-    return _with_employee_name(LeaveRead.model_validate(row), row)
+    return _with_employee_name(LeaveRead.model_validate(row), row, db)
 
 
 @router.post("/{leave_id}/amend", response_model=LeaveRead)
@@ -205,7 +213,7 @@ def amend_leave(
     row = leave_service.amend_approved_leave(
         db, leave_id, end_date=payload.end_date, reason=payload.reason, actor=_user.email
     )
-    return _with_employee_name(LeaveRead.model_validate(row), row)
+    return _with_employee_name(LeaveRead.model_validate(row), row, db)
 
 
 @router.post("/{leave_id}/certificate", response_model=LeaveRead)
@@ -219,7 +227,7 @@ async def upload_leave_certificate(
     row = leave_service.add_certificate(
         db, leave_id, upload.filename or "certificate", data, actor=_user.email
     )
-    return _with_employee_name(LeaveRead.model_validate(row), row)
+    return _with_employee_name(LeaveRead.model_validate(row), row, db)
 
 
 @router.post("/{leave_id}/return", response_model=LeaveRead)
@@ -240,7 +248,7 @@ def file_leave_return(
         actor=user.email,
         current_user=user,
     )
-    return _with_employee_name(LeaveRead.model_validate(row), row)
+    return _with_employee_name(LeaveRead.model_validate(row), row, db)
 
 
 @router.get("/{leave_id}/certificate")

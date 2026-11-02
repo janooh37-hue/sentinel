@@ -2175,6 +2175,7 @@
       "notes": "ملاحظات",
       "cancelReasonHint": "سبب الإلغاء إلزامي — يُرسل إلى الموظف.",
       "filed": "تاريخ التقديم",
+      "submittedBy": "مقدَّم من",
       "period": "الفترة",
       "scopedToEmployee": "التقرير: {{name}}",
       "scopedToMonth": "التقرير: {{month}}",

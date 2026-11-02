@@ -12,6 +12,7 @@ import json
 import logging
 import re
 import time
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,7 @@ from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import leave_lifecycle
 from app.core.leave_calc import TOTAL_AVAILABLE_CAP, LeaveBalance
-from app.db.models import AuditLog, Document, Employee, Leave, Manager, User
+from app.db.models import AuditLog, Book, BookVersion, Document, Employee, Leave, Manager, User
 from app.schemas.leave import LeaveBalanceRead, LeaveCreate, LeaveStatus, LeaveUpdate
 from app.services import book_service, document_service, leave_record_sync, user_signature_service
 
@@ -241,6 +242,81 @@ def list_leaves(
     )
     rows = list(db.execute(rows_stmt).scalars().all())
     return rows, total
+
+
+def submitter_g_numbers(db: Session, leaves: Sequence[Leave]) -> dict[int, str | None]:
+    """Original logged-in filer, never the employee or picked signature representative.
+
+    Use the first primary generation's record creator, not a later revision,
+    approval, or return-form actor. New manual leaves record a stable user id
+    in their creation audit payload. Historical email text is not an identity.
+    Resolve the whole page with batched queries.
+    """
+    if not leaves:
+        return {}
+    rows = db.execute(
+        select(Document.leave_id, User.employee_id)
+        .join(Leave, Leave.id == Document.leave_id)
+        .outerjoin(BookVersion, BookVersion.document_id == Document.id)
+        .outerjoin(Book, Book.id == BookVersion.book_id)
+        .outerjoin(User, User.id == Book.created_by_user_id)
+        .where(
+            Document.leave_id.in_([leave.id for leave in leaves]),
+            Document.role == "primary",
+            or_(
+                Document.template_id != "Duty Resumption Form",
+                Leave.leave_type == "Duty Resumption",
+            ),
+        )
+        .order_by(Document.id, BookVersion.id)
+    )
+    submitters: dict[int, str | None] = {}
+    for leave_id, employee_id in rows:
+        if leave_id is not None:
+            submitters.setdefault(leave_id, employee_id)
+    manual = [
+        leave
+        for leave in leaves
+        if leave.id not in submitters
+        and leave_lifecycle.classify_group(leave.leave_type) == "national_service"
+    ]
+    if not manual:
+        return submitters
+    actors: dict[int, int | None] = {}
+    for entity_id, raw_payload in db.execute(
+        select(AuditLog.entity_id, AuditLog.payload)
+        .where(
+            AuditLog.entity_type == "leave",
+            AuditLog.action == "leave.created",
+            AuditLog.entity_id.in_([str(leave.id) for leave in manual]),
+            # Creation audits are appended after the leave is inserted. Bound
+            # by the earliest candidate to use the existing timestamp index.
+            AuditLog.ts >= min(leave.created_at for leave in manual),
+        )
+        .order_by(AuditLog.id)
+    ):
+        if entity_id is None:
+            continue
+        try:
+            payload = json.loads(raw_payload or "{}")
+        except (TypeError, ValueError):
+            payload = {}
+        user_id = payload.get("actor_user_id") if isinstance(payload, dict) else None
+        actors.setdefault(int(entity_id), user_id if type(user_id) is int else None)
+    user_ids = {user_id for user_id in actors.values() if user_id is not None}
+    if user_ids:
+        employees: dict[int, str | None] = {
+            user_id: employee_id
+            for user_id, employee_id in db.execute(
+                select(User.id, User.employee_id).where(User.id.in_(user_ids))
+            )
+        }
+        submitters.update(
+            (leave_id, employees.get(user_id))
+            for leave_id, user_id in actors.items()
+            if user_id is not None
+        )
+    return submitters
 
 
 def awaiting_return_count(db: Session) -> int:
@@ -466,7 +542,13 @@ def amend_approved_leave(
     return row
 
 
-def create_leave(db: Session, payload: LeaveCreate, *, actor: str | None = None) -> Leave:
+def create_leave(
+    db: Session,
+    payload: LeaveCreate,
+    *,
+    actor: str | None = None,
+    actor_user_id: int | None = None,
+) -> Leave:
     """Manual record creation. v1 is National-Service-only — every other kind
     is born from form generation (document_service)."""
     if leave_lifecycle.classify_group(payload.leave_type) != "national_service":
@@ -498,7 +580,13 @@ def create_leave(db: Session, payload: LeaveCreate, *, actor: str | None = None)
     )
     db.add(row)
     db.flush()
-    _audit(db, "leave.created", row.id, actor, {"leave_type": row.leave_type})
+    _audit(
+        db,
+        "leave.created",
+        row.id,
+        actor,
+        {"leave_type": row.leave_type, "actor_user_id": actor_user_id},
+    )
     _enqueue_leave_reevaluation(
         db,
         before=None,

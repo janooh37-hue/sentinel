@@ -2146,8 +2146,10 @@ body {
   #root *:not(canvas) {
     background: transparent !important;
   }
-  /* Desk + region keep their flex centering; only their height caps lift. */
+  /* Keep paper geometry independent of the viewer's persisted screen zoom:
+     an oversized page box otherwise adds a blank sheet and clips its canvas. */
   .print-paper {
+    width: 100% !important;
     height: auto !important;
     max-width: none !important;
     margin: 0 auto !important;
@@ -2162,6 +2164,12 @@ body {
     background: transparent !important;
     box-shadow: none !important;
     padding: 0 !important;
+  }
+  /* PdfPages keeps a screen-only gap between its page boxes. Flex fragmentation
+     carries those gaps past full-sheet pages, creating a blank trailing sheet
+     for multipage records. Printed pages already have their own page breaks. */
+  .print-paper [data-pdf-pages] {
+    gap: 0 !important;
   }
   /* Each rendered PDF page: fill the sheet, centered, never split, and start a
      fresh sheet so multi-page records aren't cropped. `max-height: 100vh` is

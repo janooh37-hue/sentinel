@@ -41,6 +41,7 @@ import { StatusBadge } from './StatusBadge'
 import { LeaveEmployeePicker } from './LeaveEmployeePicker'
 import { leaveEmployeeName } from './leaveEmployeeName'
 import { LeavesReport } from './report/LeavesReport'
+import { dateLocale, fmtDayMonthYear } from './report/fmt'
 import { SendButton } from '@/components/notify/SendButton'
 
 // ─── types ──────────────────────────────────────────────────────────────────
@@ -409,6 +410,22 @@ function LeaveDetailDrawer({
           <div className="flex flex-1 flex-col gap-5 p-5">
             {/* Fields */}
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <div className="col-span-2 flex flex-col gap-0.5">
+                <dt className="text-[0.7em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
+                  {t('leaves.report.filed')}
+                </dt>
+                <dd className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[0.9em]">
+                  <bdi dir="ltr" className="font-mono tabular-nums">
+                    {fmtDayMonthYear(leave.created_at, dateLocale(i18n.language))}
+                  </bdi>
+                  {leave.submitted_by_g ? (
+                    <span className="inline-flex items-baseline gap-1 text-muted-foreground">
+                      <span>{t('leaves.report.submittedBy')}</span>
+                      <bdi dir="ltr" className="font-mono tabular-nums">{leave.submitted_by_g}</bdi>
+                    </span>
+                  ) : null}
+                </dd>
+              </div>
               {([
                 ['leaves.columns.employee', leaveEmployeeName(leave, i18n.language)],
                 ['leaves.columns.leaveType', t(`leaves.type.${leave.leave_type}`, { defaultValue: splitBilingual(leave.leave_type, i18n.language) })],
