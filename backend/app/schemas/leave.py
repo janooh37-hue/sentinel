@@ -88,6 +88,8 @@ class LeaveRead(ORMBase):
     return_doc_path: str | None = None
     return_date: date | None = None
     created_at: datetime
+    # Original logged-in filer's linked G-number; absent provenance stays unknown.
+    submitted_by_g: str | None = None
     updated_at: datetime | None = None
     linked_documents: list[LinkedDocumentRead] = Field(default_factory=list)
 
@@ -113,6 +115,7 @@ class LeaveListItem(ORMBase):
     # Filed return (Duty Resumption) date; the single-employee report lists it.
     return_date: date | None = None
     created_at: datetime
+    submitted_by_g: str | None = None
 
 
 class LeaveListResponse(BaseModel):

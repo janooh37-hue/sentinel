@@ -319,9 +319,13 @@ def list_employee_leaves(
     linked_documents = document_service.documents_for_leaves(
         db, [row.id for row in rows], user=_user
     )
+    submitters = leave_service.submitter_g_numbers(db, rows)
     return [
         LeaveRead.model_validate(row).model_copy(
-            update={"linked_documents": linked_documents.get(row.id, [])}
+            update={
+                "linked_documents": linked_documents.get(row.id, []),
+                "submitted_by_g": submitters.get(row.id),
+            }
         )
         for row in rows
     ]

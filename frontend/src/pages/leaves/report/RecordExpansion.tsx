@@ -135,10 +135,16 @@ export function RecordExpansion({
         <dl className="grid grid-cols-2 content-start gap-x-4 gap-y-3">
           <div className="flex flex-col gap-0.5">
             <dt className={MICRO_LABEL}>{t('leaves.report.filed')}</dt>
-            <dd>
+            <dd className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <bdi dir="ltr" className="font-mono text-[0.82em] text-foreground">
                 {fmtDayMonthYear(row.created_at, locale)}
               </bdi>
+              {row.submitted_by_g ? (
+                <span className="inline-flex items-baseline gap-1 text-[0.82em] text-muted-foreground">
+                  <span>{t('leaves.report.submittedBy')}</span>
+                  <bdi dir="ltr" className="font-mono tabular-nums">{row.submitted_by_g}</bdi>
+                </span>
+              ) : null}
             </dd>
           </div>
           <div className="flex flex-col gap-0.5">

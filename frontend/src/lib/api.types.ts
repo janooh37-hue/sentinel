@@ -12139,6 +12139,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Submitted By G */
+            submitted_by_g?: string | null;
         };
         /** LeaveListResponse */
         LeaveListResponse: {
@@ -12194,6 +12196,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Submitted By G */
+            submitted_by_g?: string | null;
             /** Updated At */
             updated_at?: string | null;
             /** Linked Documents */

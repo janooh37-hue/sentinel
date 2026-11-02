@@ -1963,6 +1963,7 @@
       "notes": "Notes",
       "cancelReasonHint": "A reason is required to cancel — it is sent to the employee.",
       "filed": "Filed",
+      "submittedBy": "Submitted by",
       "period": "Period",
       "scopedToEmployee": "Scoped to {{name}}",
       "scopedToMonth": "Scoped to {{month}}",

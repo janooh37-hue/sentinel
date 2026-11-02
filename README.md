@@ -17,6 +17,15 @@ application only. It is pulled to the office server.
 - Shared vehicle-photo library with reusable named images and lightweight WebP previews
 - Runs as an always-on Windows service on the office LAN
 
+Expanded leave details show the original filer's G-number beside the submission
+date in English and Arabic, including the mobile detail drawer. For generated
+leaves this comes from the first primary document's Record creator, not the
+employee taking leave, the chosen signature representative, or a later approver
+or editor. New manually entered National Service leaves retain the authenticated
+creator's stable user id in their creation audit payload. Legacy/imported leaves,
+older manual entries, and creators without a linked employee show only the date;
+the app does not infer an identity from historical email text.
+
 Email messages, drafts, attachments, and employee-linked mail metadata are private
 to their mailbox owner. Admins can explicitly select **All mail** to read other
 mailboxes (including legacy messages without an owner); editing, deleting,
