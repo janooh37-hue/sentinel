@@ -690,8 +690,9 @@ acceptance for `340d556e`; they do not claim a completed merge or deployment.
   final 38 CountPage passes, with earlier 48 Count/MRF passes retained
   (overlapping scopes, not an additive total). TypeScript and build passed;
   lint passed with **0 errors / 29 warnings**, whose age is not established.
-  The exact-head 570-asset build was hash-verified against the real TLS dev
-  runtime, with source-hash identity recorded.
+  All 570 archived/extracted build files were hash-verified. Eight selected
+  browser HTTP assets matched the final manifest over TLS; runtime source-hash
+  identity was recorded. This is not a claim of 570 HTTP checks.
 - **Count/draft runtime:** two real tabs and native storage events protected the
   other tab's `3/0` draft while exposing this tab's own `2/0` plus note as
   read-only, keyboard-copyable entries. Pending controls stayed disabled; one
