@@ -510,4 +510,7 @@ order by drawing kind, then name.
 - Focused utility and disposal component regressions cover localized quantities,
   zero-stock historical entry, item scoping, date switching and server errors.
   Final English/Arabic Chromium smoke and read-only i18n/RTL review are owned by
-  the coordinator; no API, backend, migration or locale contract changed.
+  the coordinator; no API, backend or migration contract changed.
+- i18n review follow-up: English and Arabic batch-selection messages are
+  date-neutral; empty-state guidance distinguishes today's stock requirement
+  from historical availability and directs users to the original disposal date.
