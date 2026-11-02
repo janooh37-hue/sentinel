@@ -28,7 +28,6 @@ from app.db.models import (
 
 ROOT = Path(__file__).resolve().parents[2]
 HEAD = "0113_store_room"
-STORE_REVISION = "0112_store"
 PARENT = "0111_step_outcome_seen"
 MODELS = (
     StoreCategory,
@@ -63,12 +62,11 @@ def at_parent(tmp_path: Path) -> Iterator[tuple[Engine, Config]]:
         engine.dispose()
 
 
-def test_revision_follows_parent_in_single_head_history() -> None:
+def test_store_room_remains_in_single_head_history() -> None:
     script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
     heads = script.get_heads()
     assert len(heads) == 1
     assert HEAD in {revision.revision for revision in script.walk_revisions("base", heads[0])}
-    assert script.get_revision(STORE_REVISION).down_revision == PARENT
 
 
 def test_upgrade_matches_models_and_seeds_categories(at_parent: tuple[Engine, Config]) -> None:

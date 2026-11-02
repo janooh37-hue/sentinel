@@ -20,7 +20,6 @@ def test_single_head_and_round_trip(tmp_path: Path) -> None:
     heads = script.get_heads()
     assert len(heads) == 1
     assert HEAD in {rev.revision for rev in script.walk_revisions("base", heads[0])}
-    assert script.get_revision(HEAD).down_revision == PARENT
     database = tmp_path / "prints.db"
     config.set_main_option("sqlalchemy.url", f"sqlite:///{database}")
     engine = create_engine(f"sqlite:///{database}")

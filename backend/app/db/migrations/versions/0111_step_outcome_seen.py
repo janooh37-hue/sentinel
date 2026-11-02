@@ -1,33 +1,31 @@
-"""Track submitters' unseen signing-manager outcomes without replaying history.
+"""Reconcile both historical 0110 branches without replaying outcome backfill.
 
 Revision ID: 0111_step_outcome_seen
-Revises: 0110_employee_statement_prints
+Revises: 0110_employee_statement_prints, 0110_step_outcome_seen
+
+PR #273 renamed the already-merged outcome revision to this ID. Retain both
+identities: databases at 0111 (or its store descendants) already have the
+original outcome schema; databases at either 0110 must apply only the missing
+branch. The original 0110 owns the column, backfill and inverse. This merge
+must not acknowledge newer unread decisions or remove the shared column.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 
-import sqlalchemy as sa
-from alembic import op
-
 revision: str = "0111_step_outcome_seen"
-down_revision: str | Sequence[str] | None = "0110_employee_statement_prints"
+down_revision: str | Sequence[str] | None = (
+    "0110_employee_statement_prints",
+    "0110_step_outcome_seen",
+)
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("book_approval_steps") as batch:
-        batch.add_column(sa.Column("outcome_seen_at", sa.DateTime(), nullable=True))
-    op.execute(
-        sa.text(
-            "UPDATE book_approval_steps SET outcome_seen_at = decided_at "
-            "WHERE decided_at IS NOT NULL"
-        )
-    )
+    pass
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("book_approval_steps") as batch:
-        batch.drop_column("outcome_seen_at")
+    pass

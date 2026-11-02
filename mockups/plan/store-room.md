@@ -495,3 +495,22 @@ order by drawing kind, then name.
 - **Open**: HQ MRF lines now carry the clean English name (e.g. "Nescafe
   Classic 190 g", unit Carton) without the "12×"; pack sizes for Green tea,
   Liwa water, big cups, Masafi tissues, nitrile gloves and masks are unknown.
+
+## Greptile frontend follow-up (2026-11-02, PR #273)
+
+- Quantity entry normalizes Arabic-Indic and Extended-Arabic digits in both
+  whole and loose parts before the existing integer validation; blanks,
+  negatives, fractions and invalid text retain their previous rules.
+- Disposal date stays accessible when today's batches are empty. Past dates
+  include all matching item batches, including zero current stock, hide today's
+  on-hand figures, and leave historical availability to the existing backend
+  ledger validation. Today retains the positive-stock filter and stock cap.
+  Switching back clears unavailable batch selections and quantities; retained
+  stocked batches are validated against today's cap again.
+- Focused utility and disposal component regressions cover localized quantities,
+  zero-stock historical entry, item scoping, date switching and server errors.
+  Final English/Arabic Chromium smoke and read-only i18n/RTL review are owned by
+  the coordinator; no API, backend or migration contract changed.
+- i18n review follow-up: English and Arabic batch-selection messages are
+  date-neutral; empty-state guidance distinguishes today's stock requirement
+  from historical availability and directs users to the original disposal date.
