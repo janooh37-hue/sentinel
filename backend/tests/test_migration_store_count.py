@@ -163,7 +163,10 @@ def _snapshot(connection: Connection) -> dict[str, tuple[list[str], list[tuple]]
     return {
         table: (
             [column["name"] for column in inspector.get_columns(table)],
-            [tuple(row) for row in connection.exec_driver_sql(f'SELECT * FROM "{table}" ORDER BY id')],
+            [
+                tuple(row)
+                for row in connection.exec_driver_sql(f'SELECT * FROM "{table}" ORDER BY id')
+            ],
         )
         for table in inspector.get_table_names()
         if table.startswith("store_")
@@ -176,7 +179,9 @@ def _assert_preserved(engine: Engine, before: dict[str, tuple[list[str], list[tu
             selected = ", ".join(f'"{column}"' for column in columns)
             assert [
                 tuple(row)
-                for row in connection.exec_driver_sql(f'SELECT {selected} FROM "{table}" ORDER BY id')
+                for row in connection.exec_driver_sql(
+                    f'SELECT {selected} FROM "{table}" ORDER BY id'
+                )
             ] == rows, table
         assert connection.exec_driver_sql("PRAGMA integrity_check").scalars().all() == ["ok"]
         assert connection.exec_driver_sql("PRAGMA foreign_key_check").all() == []
@@ -217,9 +222,12 @@ def _assert_delivery_integrity(engine: Engine) -> None:
                 connection.execute(text(statement))
         with connection.begin():
             connection.execute(text("DELETE FROM store_deliveries WHERE id = 1"))
-            assert connection.execute(
-                text("SELECT count(*) FROM store_delivery_lines WHERE delivery_id = 1")
-            ).scalar() == 0
+            assert (
+                connection.execute(
+                    text("SELECT count(*) FROM store_delivery_lines WHERE delivery_id = 1")
+                ).scalar()
+                == 0
+            )
             # The separate stock-neutral note discrepancy must not be cascaded.
             assert connection.execute(
                 text("SELECT id, quantity, noted_quantity FROM store_delivery_lines")
@@ -328,7 +336,9 @@ def test_store_count_populated_round_trip(tmp_path: Path) -> None:
         for invalid in (0, -1):
             with pytest.raises(IntegrityError), engine.begin() as connection:
                 connection.execute(
-                    text("UPDATE store_delivery_lines SET carton_contains_qty = :value WHERE id = 1"),
+                    text(
+                        "UPDATE store_delivery_lines SET carton_contains_qty = :value WHERE id = 1"
+                    ),
                     {"value": invalid},
                 )
         _assert_delivery_integrity(engine)
