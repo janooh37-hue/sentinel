@@ -105,6 +105,35 @@ TypeScript 6 for ESLint and API generation, overrides FortuneSheet's vulnerable
 UUID dependency, and applies the Sileo patch. Run
 `pnpm -C frontend install --frozen-lockfile` to reproduce the dependency set.
 
+### Migration history recovery (0110–0113)
+
+Keep both merged `0110` identities: `0110_employee_statement_prints` and
+`0110_step_outcome_seen` independently follow `0109_book_folder_shares`.
+`0111_step_outcome_seen` reconciles them without DDL; `0112_store` and the
+single head `0113_store_room` retain their IDs and parents. PR #273 had renamed
+the original outcome revision, leaving historical databases unable to resolve
+their version. Restoring that revision, rather than stamping or replaying its
+backfill, preserves unread redecisions and later acknowledgement timestamps.
+Databases already at `0111`, `0112` or `0113` already contain the outcome
+schema and do not rerun the restored ancestor.
+
+Rehearse recovery only with an explicit isolated Alembic URL. For a production
+schema-only rehearsal, first compare every reconstructed `sqlite_schema`
+object (including FTS shadow objects) with the read-only capture, then seed
+synthetic rows; never export business rows or copy credentials. A database
+whose recorded revision disagrees with its schema needs separate assessment,
+not a stamp, `upgrade heads`, or ad-hoc production DDL. Deployment and live
+database mutations require a separate operator safety decision.
+
+The migration regressions cover empty databases, each historical branch,
+both branch versions, already-reconciled/store versions, preservation of
+existing approval and statement data, integrity/foreign keys and downgrade.
+Downgrading the reconciliation itself retains both historical versions and
+their schema, even when either parent is the named downgrade target. Relative
+`-1` from this merge is ambiguous; use an explicit revision. Downgrading below
+a feature's owning revision removes that feature's columns/tables and data:
+it is not a production rollback strategy.
+
 ## Employee picker permissions
 
 Service forms can look up employee names with `documents.generate` even when
