@@ -39,12 +39,21 @@ const SAVED: StoreCountRead = {
   created_at: '2026-09-20T10:00:00', updated_at: null, created_by_user_id: 1,
 }
 
-function renderPage(entry = '/holdings/store/counts/new') {
+function renderPage(entry = '/holdings/store/counts/new', container?: HTMLElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   const view = render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><MemoryRouter initialEntries={[entry]}>
     <Routes><Route path="/holdings/store/counts/new" element={<StoreCountPage />} /><Route path="/holdings/store/counts/:id" element={<StoreCountPage />} /><Route path="/holdings/store/counts" element={<div>Counts destination<Link to="/holdings/store/counts/new">Open new count</Link></div>} /></Routes>
-  </MemoryRouter></I18nextProvider></QueryClientProvider>)
+  </MemoryRouter></I18nextProvider></QueryClientProvider>, container ? { container, baseElement: container.ownerDocument.body } : undefined)
   return { ...view, client }
+}
+function renderOtherTab() {
+  const host = render(<iframe title="Independent count tab" />)
+  const tabDocument = host.container.querySelector('iframe')?.contentDocument
+  if (!tabDocument) throw new Error('Independent count tab document is unavailable')
+  return {
+    ...renderPage('/holdings/store/counts/new', tabDocument.body),
+    user: userEvent.setup({ document: tabDocument }),
+  }
 }
 function countField(context: string, field: string | RegExp = new RegExp(ITEM.counting_unit_en)) {
   return within(screen.getByRole('group', { name: context })).getByRole('textbox', { name: field })
@@ -555,7 +564,7 @@ describe('focused blind stock count', () => {
     const first = renderPage()
     await start(user)
     await enter(user, '2028-09', '1')
-    const second = renderPage()
+    const second = renderOtherTab()
     const firstUi = within(first.container)
     const secondUi = within(second.container)
     const firstField = within(firstUi.getByRole('group', { name: 'Tea · 2028-09' })).getByRole('textbox', { name: /Carton/ })
@@ -572,6 +581,18 @@ describe('focused blind stock count', () => {
     act(() => { window.dispatchEvent(new StorageEvent('storage', { key, newValue: winner, storageArea: localStorage })) })
     expect(firstField).toBeEnabled()
     expect(secondField).toBeDisabled()
+    const copy = within(secondUi.getByRole('region', { name: i18n.t('assets.store.counts.copyEntries') }))
+    const copyField = copy.getByRole('textbox', { name: /Carton/ })
+    expect(copyField).toBeEnabled()
+    expect(copyField).toHaveAttribute('readonly')
+    await second.user.click(copyField)
+    expect(copyField).toHaveFocus()
+    await second.user.keyboard('{Control>}a{/Control}')
+    const copied = await second.user.copy()
+    expect(copied?.getData('text/plain')).toBe('1')
+    await second.user.type(copyField, '8')
+    expect(copyField).toHaveValue('1')
+    expect(localStorage.getItem(key)).toBe(winner)
     expect(firstUi.queryByRole('alert')).not.toBeInTheDocument()
     expect(api.createStoreCount).not.toHaveBeenCalled()
   })
@@ -581,7 +602,7 @@ describe('focused blind stock count', () => {
     const first = renderPage()
     await start(user)
     await enter(user, '2028-09', '1')
-    const second = renderPage()
+    const second = renderOtherTab()
     const firstUi = within(first.container)
     const secondUi = within(second.container)
     const firstField = within(firstUi.getByRole('group', { name: 'Tea · 2028-09' })).getByRole('textbox', { name: /Carton/ })
@@ -609,7 +630,7 @@ describe('focused blind stock count', () => {
     if (action === 'discard') {
       await user.click(screen.getByRole('button', { name: 'Discard this draft' }))
     }
-    const second = renderPage()
+    const second = renderOtherTab()
     const firstUi = within(first.container)
     const secondUi = within(second.container)
     const secondField = within(await secondUi.findByRole('group', { name: 'Tea · 2028-09' })).getByRole('textbox', { name: /Carton/ })
@@ -634,7 +655,7 @@ describe('focused blind stock count', () => {
     await enter(user, 'No expiry', '0')
     await saveReview(user)
     await waitFor(() => expect(api.createStoreCount).toHaveBeenCalledTimes(1))
-    const second = renderPage()
+    const second = renderOtherTab()
     const secondUi = within(second.container)
     const secondField = within(await secondUi.findByRole('group', { name: 'Tea · 2028-09' })).getByRole('textbox', { name: /Carton/ })
     fireEvent.change(secondField, { target: { value: '8' } })
@@ -659,11 +680,19 @@ describe('focused blind stock count', () => {
     await start(user)
     expect(await findCountField('Tea · 2028-09')).toHaveValue('')
     await enter(user, '2028-09', '2')
+    fireEvent.change(screen.getByLabelText('Counted on'), { target: { value: '2026-09-22' } })
+    await start(user)
+    expect(await findCountField('Tea · 2028-09')).toHaveValue('')
+    await enter(user, '2028-09', '1')
+    fireEvent.change(screen.getByLabelText('Counted on'), { target: { value: todayIso() } })
+    await start(user)
+    expect(await findCountField('Tea · 2028-09')).toHaveValue('')
+    await enter(user, '2028-09', '2')
     await user.click(screen.getByRole('button', { name: 'Save draft & exit' }))
     expect(screen.queryByText('Counts destination')).not.toBeInTheDocument()
     expect(localStorage.getItem(key)).toBe(stored)
     await user.click(screen.getByRole('button', { name: 'Discard this draft' }))
-    await user.click(screen.getByRole('button', { name: 'Discard draft', exact: true }))
+    await user.click(screen.getByRole('button', { name: i18n.t('assets.store.counts.volatileDiscardConfirm') }))
     await start(user)
     expect(await findCountField('Tea · 2028-09')).toHaveValue('')
     expect(localStorage.getItem(key)).toBe(stored)

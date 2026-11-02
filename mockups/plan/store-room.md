@@ -659,4 +659,17 @@ questions in `.tmp/approval-store-count.md`. This phase is local to
   The incidental model/schema-parity oracle requested by the fourth bot comment
   remains intentionally removed; real backfill/ledger/constraint/API coverage is
   retained, with no newly identified uncovered consumer behavior in that comment.
+- Required source-review follow-up: volatile date help and reset confirmation are
+  explicitly page-only in EN/AR, with no promise of browser resume or deletion.
+  Conflicted tabs expose a focusable, read-only copy section outside disabled
+  mutation controls, containing only this tab's entered quantities/note and
+  identity metadata; copy controls remain disabled during an in-flight save.
+  Consumer regressions cover keyboard selection/copy without mutation and
+  volatile date changes resetting memory without touching stored drafts.
+  These additions are authored only; final coordinator verification is pending.
+- Coordinator's first narrow command reported four failures (no writer rerun):
+  async discard focus return is now deferred until controls re-enable; multi-tab
+  consumer fixtures now use separate iframe documents/user-event documents,
+  retaining role/unit-label assertions without changing production identities.
+  Final checks remain coordinator-owned after the follow-up commit.
 

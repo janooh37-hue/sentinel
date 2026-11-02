@@ -23,7 +23,7 @@ import { StoreItemSummary } from './components/RecordParts'
 import { sortForShelf } from './components/storeShelfModel'
 import { storeDisplayName, type StorePresentationItem } from './storePresentation'
 import {
-  batchExpiryDate, batchKey, categoryName, DEFAULT_EXPIRY,
+  batchExpiryDate, batchKey, categoryName, countingUnit, containsUnit, DEFAULT_EXPIRY,
   EMPTY_QUANTITY, expiryFromValue, expiryInput, formatExpiry, formatQuantity, hasContains,
   invalidateStoreQueries, isBusinessDate, quantityFromParts, quantityIssue,
   type ExpiryValue, type QuantityParts, storeErrorMessage, storeKeys, useStorePickerItems,
@@ -111,6 +111,7 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
   const discardTriggerRef = useRef<HTMLButtonElement | null>(null)
   const discardTitleRef = useRef<HTMLHeadingElement | null>(null)
   const reviewTitleRef = useRef<HTMLHeadingElement | null>(null)
+  const restoreDiscardFocusRef = useRef(false)
   const validDate = isBusinessDate(countedOn)
   const expected = useQuery({ queryKey: storeKeys.expected(countedOn), queryFn: () => api.getStoreCountExpected(countedOn), enabled: validDate })
   const picker = useStorePickerItems()
@@ -257,6 +258,12 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
   }, [discarding])
 
   useEffect(() => {
+    if (savePending || discarding || !restoreDiscardFocusRef.current) return
+    restoreDiscardFocusRef.current = false
+    discardTriggerRef.current?.focus()
+  }, [savePending, discarding])
+
+  useEffect(() => {
     if (!storageFailed) return
     function warn(event: BeforeUnloadEvent) {
       event.preventDefault()
@@ -369,7 +376,7 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
     setStage('start')
     setMissing([])
     mutation.reset()
-    discardTriggerRef.current?.focus()
+    restoreDiscardFocusRef.current = true
   }
   const existingId = mutation.error instanceof ApiError && mutation.error.code === 'STORE_COUNT_MONTH_EXISTS' && typeof mutation.error.details.count_id === 'number' ? mutation.error.details.count_id : null
   const panel = 'rounded-2xl border border-border bg-surface p-4 md:p-5'
@@ -401,7 +408,7 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
           }
           onDateChange(nextDate)
         }} />
-        <p id="count-date-help" className={`mt-2 text-sm ${validDate ? 'text-muted-foreground' : 'text-destructive-text'}`}>{t(validDate ? 'assets.store.counts.dateDraftHelp' : 'assets.store.counts.invalidDate')}</p>
+        <p id="count-date-help" className={`mt-2 text-sm ${validDate ? 'text-muted-foreground' : 'text-destructive-text'}`}>{t(!validDate ? 'assets.store.counts.invalidDate' : initial.volatile ? 'assets.store.counts.volatileDateHelp' : 'assets.store.counts.dateDraftHelp')}</p>
       </div>
       <div><label htmlFor="count-note" className="mb-1.5 block text-sm font-medium">{t('assets.store.counts.optionalNote')}</label><Textarea id="count-note" dir="auto" value={draft.note} onChange={event => changeDraft({ ...draftRef.current, note: event.target.value })} /></div>
     </fieldset>
@@ -477,14 +484,36 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
       setDiscarding(false)
       discardTriggerRef.current?.focus()
     }}>
-      <h2 ref={discardTitleRef} id="discard-title" tabIndex={-1} className="font-semibold">{t('assets.store.counts.discardTitle')}</h2>
-      <p id="discard-description" className="text-sm">{t('assets.store.counts.discardDescription')}</p>
+      <h2 ref={discardTitleRef} id="discard-title" tabIndex={-1} className="font-semibold">{t(initial.volatile ? 'assets.store.counts.volatileDiscardTitle' : 'assets.store.counts.discardTitle')}</h2>
+      <p id="discard-description" className="text-sm">{t(initial.volatile ? 'assets.store.counts.volatileDiscardDescription' : 'assets.store.counts.discardDescription')}</p>
       <div className="flex gap-3">
-        <Button type="button" variant="destructive" className="min-h-11" onClick={discard}>{t('assets.store.counts.discardConfirm')}</Button>
+        <Button type="button" variant="destructive" className="min-h-11" onClick={discard}>{t(initial.volatile ? 'assets.store.counts.volatileDiscardConfirm' : 'assets.store.counts.discardConfirm')}</Button>
         <Button type="button" variant="secondary" className="min-h-11" onClick={() => { setDiscarding(false); discardTriggerRef.current?.focus() }}>{t('assets.store.counts.keepDraft')}</Button>
       </div>
     </section>}
     </fieldset>
-    {draftConflict && <Button type="button" variant="secondary" className="min-h-11" disabled={savePending || mutation.isPending} onClick={() => window.location.reload()}>{t('assets.store.counts.reloadDraft')}</Button>}
+    {draftConflict && <section aria-labelledby="conflict-copy-heading" className={`${panel} min-w-0 space-y-4`}>
+      <h2 id="conflict-copy-heading" className="font-semibold">{t('assets.store.counts.copyEntries')}</h2>
+      <p className="text-sm">{t('assets.store.counts.countedOn')}: <bdi dir="ltr">{countedOn}</bdi></p>
+      <label className="block space-y-2 text-sm">
+        <span>{t('assets.store.counts.note')}</span>
+        <Textarea readOnly dir="auto" value={draft.note} disabled={savePending || mutation.isPending} />
+      </label>
+      {Object.entries(draft.quantities).filter(([, parts]) => parts.units.trim() || parts.loose.trim()).map(([key, parts]) => {
+        const row = rowsByKey.get(key)
+        return <fieldset key={key} className="min-w-0 space-y-3 rounded-xl border border-border p-3">
+          <legend className="text-sm" dir="auto">{row ? `${storeDisplayName(row, i18n.language)} · ${formatExpiry(row, t)}` : key}</legend>
+          <label className="block space-y-2 text-sm">
+            <span>{row ? t('assets.store.counts.countIn', { unit: countingUnit(row, i18n.language) }) : t('assets.store.counts.copyWholeUnits')}</span>
+            <Input readOnly type="text" dir="ltr" value={parts.units} disabled={savePending || mutation.isPending} />
+          </label>
+          {(parts.loose || row && hasContains(row)) && <label className="block space-y-2 text-sm">
+            <span>{row ? t('assets.store.counts.looseUnits', { unit: containsUnit(row, i18n.language) }) : t('assets.store.counts.loose')}</span>
+            <Input readOnly type="text" dir="ltr" value={parts.loose} disabled={savePending || mutation.isPending} />
+          </label>}
+        </fieldset>
+      })}
+      <Button type="button" variant="secondary" className="min-h-11" disabled={savePending || mutation.isPending} onClick={() => window.location.reload()}>{t('assets.store.counts.reloadDraft')}</Button>
+    </section>}
   </form>
 }
