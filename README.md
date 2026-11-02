@@ -46,6 +46,17 @@ New Material Requests retain their employee-signature choice when the manager
 signs. Existing manager-slot papers without a generation-time signing snapshot
 are not automatically recovered or repaired by this change.
 
+Record printing uses the displayed PDF-canvas surface and waits for every source
+page to paint, including attached and landscape PDF pages. Print media removes
+the viewer's inter-page flex gap, which otherwise creates a blank trailing sheet
+on multipage records. It also resets paper width independently of screen zoom:
+an oversized page box can add a blank sheet and clip content even for a one-page
+record. On-screen spacing and zoom are unchanged.
+The regression runs the actual record Print controls and reads Chromium's printed
+PDF back, checking page count and opposite-corner content in Arabic/English,
+desktop/mobile, and at Fit/100%/150%/200% zoom:
+`pnpm -C frontend exec playwright test e2e/record-page-v2.spec.ts -g "print output"`.
+
 Employee identity links are assigned by administrators during registration
 approval or through user management; accounts cannot claim employee records.
 Linked accounts and manager aliases share the employee's canonical signature.
