@@ -146,8 +146,9 @@ Do not blindly stamp a new revision: that can skip the notification column or
 other required schema changes. No compatibility shim or automatic stamp is
 provided. This repair does not inspect or modify deployed databases.
 
-Then resync the contract: `/sync-api-types` skill (openapi.json + api.types.ts
-committed together), and add the `api.ts` methods.
+Then resync the contract with `/sync-api-types` and commit the tracked
+`api.types.ts`; `backend/openapi.json` is ignored local generation input, not a
+committed artifact. Add the `api.ts` methods as needed.
 
 ## Item drawings
 
