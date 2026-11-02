@@ -14,7 +14,6 @@ import i18n from '@/lib/i18n'
 import { formatNumber, isArabic, localized } from '@/lib/language'
 import { normalizeDigits } from '@/lib/utils'
 import { monthEndIso } from '@/lib/monthEnd'
-import { normalizeDigits } from '@/lib/utils'
 import { todayIso } from '@/pages/vehicles/vehicleUtils'
 
 export type Translate = (key: string, options?: Record<string, unknown>) => string
