@@ -36,6 +36,16 @@ designation/contact, and manager signing date do not print because its design
 has no slots. The selected manager fills the center-manager approval; the
 contract-manager and final approvals stay blank for hand signing.
 
+Approval preserves the original generated paper when its form has no manager
+signature slot (including salary-transfer and salary-deduction requests): employee
+signatures, blank signature choices, dates, and other content stay unchanged.
+The manager's approval is recorded without adding a signature to an arbitrary
+position. This also applies to pending older papers without signing snapshots
+or signature markers; the original DOCX must still be available.
+New Material Requests retain their employee-signature choice when the manager
+signs. Existing manager-slot papers without a generation-time signing snapshot
+are not automatically recovered or repaired by this change.
+
 Employee identity links are assigned by administrators during registration
 approval or through user management; accounts cannot claim employee records.
 Linked accounts and manager aliases share the employee's canonical signature.
