@@ -126,14 +126,25 @@ both bounds inclusive; an invalid date or `from` after `to` returns 422. The
 In & out page exposes them as labelled "From date" / "To date" inputs with
 "Clear dates" (not persisted in the URL).
 
-Migration: one new revision `0112_store_room` after `0111_store` on this branch
+Migration: one new revision `0113_store_room` after `0112_store` on this branch
 (`store_handovers`, `store_handover_lines`, plus the two item drawing columns
 below). Follow the SQLite migration rules, which this branch predates: read them
 with `git show main:backend/app/db/migrations/CLAUDE.md` (single head, batch
 mode for ALTERs).
-The 2026-11-02 CI repair chains `0111_store` onto main's unchanged
-`0110_employee_statement_prints`; no merge revision is created. Historical
-progress and verification entries below retain their original revision IDs.
+The 2026-11-02 conflict repair preserves main's `0110_employee_statement_prints`,
+then chains `0111_step_outcome_seen` → `0112_store` → `0113_store_room`, with no
+merge revision. Incoming main had two sibling `0110` revisions; the newly landed
+notification revision is renumbered along with the unmerged Store revisions.
+Historical progress and verification entries below retain their original IDs.
+
+**Previously migrated development databases:** a database already stamped
+`0110_step_outcome_seen`, `0110_store`, `0111_store_room`, `0111_store`, or
+`0112_store_room` cannot automatically upgrade through this renamed history.
+Back it up and deliberately reconcile its
+actual schema and revision state before reuse, or recreate disposable dev data.
+Do not blindly stamp a new revision: that can skip the notification column or
+other required schema changes. No compatibility shim or automatic stamp is
+provided. This repair does not inspect or modify deployed databases.
 
 Then resync the contract: `/sync-api-types` skill (openapi.json + api.types.ts
 committed together), and add the `api.ts` methods.

@@ -205,6 +205,12 @@ function ApprovalRow({ item, tab, dfLocale, onOpen, onPreview }: RowProps): Reac
         )}
       </div>
       <span className="col-start-2 row-start-1 flex items-center gap-1.5 justify-self-end md:col-start-6 md:row-start-1">
+        {tab === 'sent' && item.outcome_unseen && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[0.65em] font-semibold text-primary">
+            <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+            {t('nav.bell.decisionNew')}
+          </span>
+        )}
         {late && (
           <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[0.65em] font-semibold text-warning">
             {t('books.approvals.lateAdvisory')}

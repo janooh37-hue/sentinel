@@ -1,7 +1,7 @@
 """Store handovers, item drawings, aliases and delivery-note quantities.
 
-Revision ID: 0112_store_room
-Revises: 0111_store
+Revision ID: 0113_store_room
+Revises: 0112_store
 
 Downgrade deletes zero-quantity delivery lines (stock-neutral note-only rows)
 before restoring the previous positive-quantity constraint.
@@ -15,8 +15,8 @@ from datetime import datetime
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0112_store_room"
-down_revision: str | Sequence[str] | None = "0111_store"
+revision: str = "0113_store_room"
+down_revision: str | Sequence[str] | None = "0112_store"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

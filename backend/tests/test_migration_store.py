@@ -1,4 +1,4 @@
-"""Migration 0111: Store schema, model parity, seeded categories, reversibility."""
+"""Migration 0112: Store schema, model parity, seeded categories, reversibility."""
 
 from __future__ import annotations
 
@@ -27,9 +27,9 @@ from app.db.models import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0112_store_room"
-STORE_REVISION = "0111_store"
-PARENT = "0110_employee_statement_prints"
+HEAD = "0113_store_room"
+STORE_REVISION = "0112_store"
+PARENT = "0111_step_outcome_seen"
 MODELS = (
     StoreCategory,
     StoreItem,
