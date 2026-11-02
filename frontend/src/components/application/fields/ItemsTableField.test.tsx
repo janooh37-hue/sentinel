@@ -103,6 +103,28 @@ describe('ItemsTableField store picker', () => {
     expect(rows()[0]).toMatchObject({ code: 'ST-0001', description: 'Black tea', unit: 'Carton' })
   })
 
+  it.each(['en', 'ar'])('finds either shelf name while filling only the official HQ identity (%s)', async language => {
+    const item = {
+      ...ITEMS[0], name_en: 'Official procurement description', name_ar: 'الوصف الرسمي للمشتريات',
+      short_name_en: 'Pantry brew', short_name_ar: 'مشروب الضيافة',
+    }
+    vi.mocked(api.listStorePickerItems).mockResolvedValue([item, ITEMS[1]])
+    await i18n.changeLanguage(language)
+    const user = userEvent.setup()
+    renderTable()
+    const code = await screen.findByRole('combobox')
+    for (const query of ['BREW', 'الضيافة']) {
+      await user.clear(code)
+      await user.type(code, query)
+      const option = screen.getByRole('option')
+      expect(option).toHaveTextContent(language === 'ar' ? item.short_name_ar : item.short_name_en)
+      await user.click(option)
+      expect(rows()).toEqual([{
+        ...INITIAL_ROW, code: item.code, description: 'Official procurement description', unit: 'Carton',
+      }])
+    }
+  })
+
   it('allows free text in every cell, including edits after a selection', async () => {
     const user = userEvent.setup()
     renderTable()

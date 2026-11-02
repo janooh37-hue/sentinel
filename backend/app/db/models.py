@@ -2695,6 +2695,13 @@ class StoreItem(Base):
     minimum_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
     art_kind: Mapped[str | None] = mapped_column(String(24), nullable=True)
     art_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    brand_label: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    generic_label_en: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    generic_label_ar: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    short_name_en: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    short_name_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    pack_description_en: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    pack_description_ar: Mapped[str | None] = mapped_column(String(160), nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
@@ -2793,6 +2800,7 @@ class StoreDeliveryLine(Base):
     )
     batch_id: Mapped[int] = mapped_column(ForeignKey("store_batches.id"), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    carton_contains_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
     noted_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     difference_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
@@ -2802,6 +2810,10 @@ class StoreDeliveryLine(Base):
     __table_args__ = (
         UniqueConstraint("delivery_id", "batch_id", name="uq_store_delivery_lines_batch"),
         CheckConstraint("quantity >= 0", name="ck_store_delivery_lines_quantity"),
+        CheckConstraint(
+            "carton_contains_qty IS NULL OR carton_contains_qty >= 1",
+            name="ck_store_delivery_lines_carton_contains",
+        ),
         CheckConstraint(
             "noted_quantity IS NULL OR noted_quantity >= 0",
             name="ck_store_delivery_lines_noted_quantity",

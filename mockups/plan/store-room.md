@@ -131,24 +131,23 @@ Migration: one new revision `0113_store_room` after `0112_store` on this branch
 below). Follow the SQLite migration rules, which this branch predates: read them
 with `git show main:backend/app/db/migrations/CLAUDE.md` (single head, batch
 mode for ALTERs).
-The 2026-11-02 conflict repair preserves main's `0110_employee_statement_prints`,
-then chains `0111_step_outcome_seen` → `0112_store` → `0113_store_room`, with no
-merge revision. Incoming main had two sibling `0110` revisions; the newly landed
-notification revision is renumbered along with the unmerged Store revisions.
+The PR #276 recovery retains both original `0110_employee_statement_prints` and
+`0110_step_outcome_seen` revisions after `0109_book_folder_shares`.
+`0111_step_outcome_seen` reconciles those historical branches without DDL or
+replaying the notification backfill; `0112_store` → `0113_store_room` follows.
+The recovered Store-count feature adds only `0114_store_count` after that chain.
 Historical progress and verification entries below retain their original IDs.
 
-**Previously migrated development databases:** a database already stamped
-`0110_step_outcome_seen`, `0110_store`, `0111_store_room`, `0111_store`, or
-`0112_store_room` cannot automatically upgrade through this renamed history.
-Back it up and deliberately reconcile its
-actual schema and revision state before reuse, or recreate disposable dev data.
-Do not blindly stamp a new revision: that can skip the notification column or
-other required schema changes. No compatibility shim or automatic stamp is
-provided. This repair does not inspect or modify deployed databases.
+**Previously migrated databases:** both historical `0110` identities and
+already-reconciled `0111`/`0112`/`0113` databases retain their upgrade paths.
+Unmerged development-only IDs such as `0110_store`, `0111_store_room`,
+`0111_store`, or `0112_store_room` still require deliberate schema/revision
+assessment or recreation of disposable dev data. Do not blindly stamp a new
+revision, replay historical backfills or mutate a live database for rehearsal.
 
-Then resync the contract with `/sync-api-types` and commit the tracked
-`api.types.ts`; `backend/openapi.json` is ignored local generation input, not a
-committed artifact. Add the `api.ts` methods as needed.
+Then resync the contract with `/sync-api-types` and commit both generated
+`backend/openapi.json` and `frontend/src/lib/api.types.ts`; the approved
+Store-count phase supersedes the earlier ignored-JSON convention.
 
 ## Item drawings
 
@@ -514,3 +513,170 @@ order by drawing kind, then name.
 - i18n review follow-up: English and Arabic batch-selection messages are
   date-neutral; empty-state guidance distinguishes today's stock requirement
   from historical availability and directs users to the original disposal date.
+
+## Progress (2026-11-02, approved Store-count Phase 2)
+
+The user approved the Phase 1 mockup (`d0510039`) as-is and resolved the build
+questions in `.tmp/approval-store-count.md`. This phase is local to
+`feat/store-count`; it is not a new dev-channel publication.
+
+- **Recognition:** optional printed brand (Latin as on the box), translated
+  generic drawing words, shorter bilingual names and a separate wrapping pack
+  line. Existing code-drawn shapes/colours remain; no custom-image upload.
+  The presentation is shared across items, receipts, counts, disposals,
+  shelves, drawers, movements, handovers, pickers and home Store widgets.
+  The HQ MRF still receives the original official English name and unit.
+- **Data:** reversible SQLite migration `0114_store_count` follows
+  `0113_store_room` after recovery integration, adding seven nullable
+  item-presentation fields and nullable per-delivery `carton_contains_qty`.
+  Exact-name backfill covers the 13 opening
+  items without changing stock or conversion data. Import and null-field art
+  backfill scripts carry the same labels. Both `backend/openapi.json` and
+  `frontend/src/lib/api.types.ts` are regenerated and included in this phase,
+  superseding the earlier untracked-OpenAPI convention noted above.
+- **Blind count:** one item/all its expiries; plain full-carton/loose entry;
+  blank is not zero; explicit “Counted none”; shelf-order navigation, progress,
+  illustrated uncounted review and final confirmation. Same-browser drafts
+  contain only operator entries, isolated by user/date/new-versus-edit target.
+  Reload/save-and-exit resume, storage-error messaging, focused discard and
+  draft clearing on save/discard are implemented. Missing batches discovered
+  during save return to an illustrated, blank entry instead of silent completion.
+  No expected/prior quantities are displayed or restored. ADR 0009's usage,
+  suggestions and date-cutoff mathematics are unchanged.
+- **Receiving:** existing OCR gate/upload policy retained; explicit carton,
+  loose-unit and carton-contents proposals replace ambiguous quantity guessing.
+  Prices/bare pack digits do not become quantities. One final all-lines review
+  replaces per-line confirmation. Unmatched rows cannot save; skip/restore,
+  undated batches, manual fallback with the original file and correction reasons
+  remain available. Unknown contents stay whole counting units even when the
+  optional receipt annotation is filled. A carton proposal is not silently
+  applied to a packet-counted item.
+- **Attachment/disposal/dashboard:** a real saved receipt survived a scratch
+  filesystem write failure; retry attached to the same record, and finish
+  without file created no duplicate. Disposal starts with the drawing, then
+  batch/quantity/reason. Live shelf quantities, status/filter chips, handovers,
+  movement history and home Store widgets remain, with shared quantity grammar.
+- **Accessibility fixes exercised in these flows:** AA foreground tokens for
+  active labels/links, heading order, named MRF cells/listbox region, readable
+  optional/placeholder captions, native-file keyboard proxy and phone note-viewer
+  controls. Layout uses logical directions and both English/Arabic labels.
+- **Source-branch automated checks (not rerun on recovery integration):** backend
+  Store/API/handovers/movements/import/OCR and migration selection **123 passed**;
+  broader frontend Store/dashboard/shell/application selection **925 passed
+  (98 files)**; `tsc -b --noEmit` and build passed; lint **0 errors / 27 existing
+  warnings**; Ruff passed on 13 changed Python files. The source branch reported
+  eight unique ADRs and its then-local head `0112_store_count`. Its original
+  migration round trip preserved count lines and ledger constraints; those
+  results are historical evidence, not validation of the recovered `0114`.
+- **Real browser proof:** fresh `.tmp/scratch` data seeded by the opening import
+  and art script (13 items/23 opening batches); real handover and disposal stock
+  deltas; corrected/attached English receipt; genuine unavailable-OCR fallback;
+  bilingual attachment-failure recovery; Arabic OCR requiring operator correction;
+  optional carton contents left empty; a concurrent backdated receipt produced
+  `STORE_COUNT_MISSING_BATCHES` 422, then an explicit count saved 201.
+  Blind edit saved 200; user/date/edit draft isolation and clearing were observed.
+  Existing start-of-day count cutoffs and month-end expiry semantics were used,
+  not changed to fit the smoke.
+- **Visual evidence:** 66 states, eight variants each = **528 Playwright
+  screenshots**, including home Dashboard, at 390/1440 in EN/AR and light/dark.
+  `.tmp/store-count-phase2/final-matrix.json` indexes the latest captures, all
+  **zero axe violations / zero horizontal page overflow**, with no axe rule
+  exclusions. Incomplete axe checks are retained and are not an AA certification.
+  Screenshot files are under `.tmp/store-count-phase2/screenshots/`.
+- **Reviews:** required `.codex/agents/i18n-rtl-reviewer.toml` and
+  `alembic-migration-reviewer.toml` instructions applied by read-only reviewers;
+  all must/should findings closed. Independent behavior review's missing-batch
+  retry, packet rematch and optional “Expiry Date” parser findings were fixed
+  with regression coverage. These were source reviews; runtime evidence above
+  was collected separately.
+- **Handoff:** `.tmp/handoff-store-count.md` contains the Phase 2 commit, file
+  inventory, complete check/failure history, reviews and evidence paths.
+  Think-aloud remains deferred as approved. Physical-device/screen-reader/Word
+  COM and real HQ-note accuracy are not claimed. No push/PR/merge/publish/deploy,
+  no laptop dev database or `.env` copy. Parent integration still owns migration
+  renumbering against its eventual main head and any later dev publication.
+
+## Recovery integration (2026-11-03, validation pending)
+
+- Integrated exact approved research `d0510039` and all 71 implementation paths
+  from `7fca5e04` onto pinned main `77c3ff1e` in isolated branch
+  `feat/store-count-recovery-20261103`. Shared shell/application accessibility
+  changes are included; the source worktree remains read-only.
+- Retained current-main employee statements, notifications and PR #276 historical
+  migration repair. Only the incoming migration is renamed to `0114_store_count`
+  after `0113_store_room`; existing historical revision files are unchanged.
+- Combined the focused count/draft UI with main's cached-count refresh recovery.
+  Disposal retains the accessible date control, historical zero-stock batches,
+  no historical current-stock cap/display, and today's positive-stock validation,
+  alongside the approved drawing-first item choice. Localized quantity parsing
+  and main's backend consumed-stock/date protections remain.
+- Expanded the real SQLite round-trip regression to all 13 approved exact-name
+  backfills, unknown/near-match exclusions, unchanged original columns and all
+  count/delivery/handover/disposal rows, zero-received note rows, constraints,
+  nullable carton annotations and sole-head/retained-history assertions.
+  PR #276's populated historical-upgrade regression now targets `0114`, retaining
+  explicit `0113` and both deployed `0110` starting identities.
+- Both contracts were regenerated from the integrated actual application with
+  `Settings(_env_file=None)` and isolated synthetic paths: OpenAPI **404 paths**;
+  `pnpm -C frontend run gen:api` succeeded with openapi-typescript 7.13.0.
+  Generation created only a scratch log, no database or key files. No real
+  `.env`, shared database or keys were used.
+- Integration checks, browser/EN/AR/RTL coverage, migration round trips, required
+  reviews, typecheck, lint and build are **pending coordinator validation**.
+  Source-branch results above must not be represented as current integration
+  passes. No push, PR, merge, publication or deployment is authorized here.
+- Required i18n follow-up: focused count entry now labels the whole-unit field
+  with the item's actual localized counting unit, including non-carton packs.
+  EN/AR guidance refers to unopened packs rather than assuming cartons.
+  Added a bilingual StoreCountPage consumer regression for two packets of ten
+  plus three loose pieces saving 23 base units; existing carton conversions
+  remain covered. This worker did not run tests/build/lint; coordinator validation
+  remains pending.
+- The same required follow-up restores keyboard/screen-reader continuity on
+  entering count review: focus moves to the review heading with the existing
+  receiving-review focus-ring pattern. Consumer regression covers keyboard
+  activation from direct review, final-item review and skip-to-review, then
+  tabbing to Continue counting. These regressions are authored, not run here.
+- Greptile behavior gates (reviewed source `58bfa9bf`): count-saving now freezes
+  every count-changing control and guards mutation handlers through completion.
+  The MRF picker searches both shelf-name languages while still filling official
+  English descriptions/units. Consumer regressions cover delayed-save edits and
+  distinct official/shelf names in English and Arabic.
+- Same-user/target/date browser drafts now compare each workspace's last stored
+  snapshot before writing, submitting or clearing; Web Locks serialize the
+  compare/write and compare/delete operations. Storage/focus notifications warn
+  stale tabs without adopting or erasing another tab's entries. A draft changed
+  during a server save is retained rather than deleted on completion.
+- HTTP/LAN or unsupported browsers without Web Locks remain usable for counting
+  and normal server saves in explicit volatile mode: visible no-autosave/resume
+  warning, no unlocked browser-draft writes/deletes, no false Save draft & exit,
+  and Discard resets only this page's memory. Pre-existing stored drafts remain
+  untouched. No server/cross-device draft feature is added.
+- Independent-workspace consumer regressions cover stale typing, storage events,
+  simultaneous queued writes, stale save/discard, newer draft preservation after
+  server completion, and unsupported-browser volatile save/discard behavior.
+  Tests/build/lint were not run by this writer; final coordinator proof is pending.
+  The incidental model/schema-parity oracle requested by the fourth bot comment
+  remains intentionally removed; real backfill/ledger/constraint/API coverage is
+  retained, with no newly identified uncovered consumer behavior in that comment.
+- Required source-review follow-up: volatile date help and reset confirmation are
+  explicitly page-only in EN/AR, with no promise of browser resume or deletion.
+  Conflicted tabs expose a focusable, read-only copy section outside disabled
+  mutation controls, containing only this tab's entered quantities/note and
+  identity metadata; copy controls remain disabled during an in-flight save.
+  Consumer regressions cover keyboard selection/copy without mutation and
+  volatile date changes resetting memory without touching stored drafts.
+  These additions are authored only; final coordinator verification is pending.
+- Coordinator's first narrow command reported four failures (no writer rerun):
+  async discard focus return is now deferred until controls re-enable; multi-tab
+  consumer fixtures now use separate iframe documents/user-event documents,
+  retaining role/unit-label assertions without changing production identities.
+  Final checks remain coordinator-owned after the follow-up commit.
+- Confirmed volatile-date-loss gate: changing the date is blocked with an
+  accessible explanation while any page-only quantity (including zero), note
+  or added batch exists. Entries and the original date are retained; explicitly
+  resetting the page permits date changes again. Supported per-date persistence
+  is unchanged. Consumer regressions cover retained quantity/note, note-only,
+  explicit zero and added-batch states, then reset/date-change continuation.
+  No writer check or reproduction run; coordinator final evidence is pending.
+

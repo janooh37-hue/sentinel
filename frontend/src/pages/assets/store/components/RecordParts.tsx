@@ -6,24 +6,30 @@
 
 import { useTranslation } from 'react-i18next'
 
+import { StoreItemArt } from '@/components/StoreItemArt'
 import { cn } from '@/lib/utils'
-import { formatQuantity, formatQuantityParts, itemName, type StoreUnits } from '../storeUtils'
+import { formatQuantity, formatQuantityParts, type StoreUnits } from '../storeUtils'
+import { storeDisplayName, storePackDescription, type StorePresentationItem } from '../storePresentation'
 
-interface ItemRow {
-  item_code: string
-  item_name_en: string
-  item_name_ar?: string | null
+export function StorePackDescription({ item }: { item: StorePresentationItem }): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+  return <span dir="auto" className="block text-xs font-normal text-muted-foreground [overflow-wrap:anywhere]">{storePackDescription(item, i18n.language) ?? t('assets.store.presentation.packNotRecorded')}</span>
 }
 
-/** Code (LTR run) and name. `stacked` puts the code above the name for narrow columns. */
-export function ItemIdentity({ row, stacked = false }: { row: ItemRow; stacked?: boolean }): React.JSX.Element {
+export function StoreItemSummary({ item, size = 80, showCode = false, className }: { item: StorePresentationItem; size?: number; showCode?: boolean; className?: string }): React.JSX.Element {
   const { i18n } = useTranslation()
-  return (
-    <div className={stacked ? 'flex min-w-0 flex-col gap-1' : 'flex flex-wrap items-baseline gap-2'}>
-      <bdi dir="ltr" className={cn('font-mono tabular-nums text-muted-foreground', stacked && 'text-xs')}>{row.item_code}</bdi>
-      <span dir="auto" className="font-medium">{itemName(row, i18n.language)}</span>
-    </div>
-  )
+  return <span className={cn('flex min-w-0 items-center gap-3', className)}>
+    <StoreItemArt kind={item.art_kind} color={item.art_color} categoryId={item.category_id} brandLabel={item.brand_label} labelEn={item.generic_label_en} labelAr={item.generic_label_ar} size={size} className="shrink-0" />
+    <span className="min-w-0 space-y-1">
+      <span dir="auto" className="block font-medium [overflow-wrap:anywhere]">{storeDisplayName(item, i18n.language)}</span>
+      <StorePackDescription item={item} />
+      {showCode && <bdi dir="ltr" className="block font-mono text-xs text-muted-foreground">{item.code ?? item.item_code}</bdi>}
+    </span>
+  </span>
+}
+
+export function ItemIdentity({ row, stacked = false }: { row: StorePresentationItem; stacked?: boolean }): React.JSX.Element {
+  return <StoreItemSummary item={row} size={stacked ? 52 : 44} showCode />
 }
 
 /** Base units as "3 cartons + 5 jars", isolated so the digits keep their order. */

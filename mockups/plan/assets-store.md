@@ -163,6 +163,52 @@ refuses if any Store item exists.
 - Next: user tests on the dev URL, then PR from `feat/assets-store` after
   renumbering the migration onto main's head.
 
+## Approved Store-count Phase 2 (2026-11-02)
+
+- Built on `feat/store-count` after approval of `mockups/plan/store-count/`
+  (`d0510039`). The approval supersedes the prototype's per-line receipt
+  confirmation: receiving has one final review of all lines.
+- Migration `0114_store_count` (recovered after `0113_store_room`) adds optional brand, bilingual generic labels,
+  short shelf names and separate pack descriptions, plus optional per-delivery
+  carton-contents metadata. The 13 exact-name backfills preserve official item
+  names, stock quantities and recorded pack conversions. Unknown contents remain
+  unknown; receipt metadata never invents a conversion.
+- Drawings and short-name/pack-line presentation now cover Store records,
+  shelves, drawers, pickers, movements, handovers, home widgets and the HQ MRF
+  picker. Original English names still fill the HQ paper. New items use drawing
+  kind/colour and labels only; there is no custom-picture upload.
+- Blind counts show one item with all its expiry batches, explicit blank versus
+  zero, progress and illustrated missing-batch review. Only operator-entered
+  values resume locally, scoped by signed-in user, date and new/edit target.
+  Save and confirmed discard clear only that draft. ADR 0009's ledger, usage,
+  suggestion and same-day ordering rules are unchanged.
+- Real scratch-browser checks covered scan correction and all-lines review,
+  unavailable OCR with the file retained, retry after a genuine file-write
+  failure, finish without file, drawing-first disposal, handovers, count resume,
+  blind edit and a real missing-batch race. Optional contents of 24 with 3
+  received cartons increased an unknown-pack item's stock by 3, not 72.
+- Source-branch checks (historical, not recovery-integration results): backend
+  123 passed; frontend 925 passed across 98 files; TypeScript, build and Ruff
+  passed; lint 0 errors (27 existing warnings). Required source i18n/RTL and
+  migration reviews closed, as did the behavior review. Its local Alembic head
+  was `0112_store_count`; the recovered head is `0114_store_count`.
+- Local evidence: `.tmp/store-count-phase2/final-matrix.json` indexes 528
+  Playwright captures, 66 states × EN/AR × light/dark × 390/1440, including the
+  home Dashboard. Latest captures have zero axe violations and zero horizontal
+  page overflow; axe's incomplete checks remain recorded, not claimed as passes.
+  Details and check history are in `.tmp/handoff-store-count.md`.
+- No push, PR, merge, deployment or dev publication in this phase. Parent
+  integration/renumbering and the deferred `think-aloud.md` session remain outside
+  this build; no laptop data or `.env` was copied.
+- Recovery integration (2026-11-03): exact research `d0510039` and all approved
+  implementation paths from `7fca5e04` are integrated on main `77c3ff1e`, retaining
+  PR #276 historical migration recovery, localized quantity input and historical
+  disposal handling. Both API contracts are required committed artifacts.
+  Expanded all-13 backfill/ledger-preservation and historical-upgrade regressions
+  are authored but **not run**; integrated browser/review/check evidence remains
+  pending the coordinator's final pass. No source/dev/production data mutation,
+  push, PR, merge or deployment is part of this integration.
+
 ## Open notes
 
 - Code treats English/Arabic MRF as language variants of one service (Arabic UI

@@ -40,6 +40,7 @@ from app.schemas.store import (  # noqa: E402
     StoreCountRead,
     StoreCountWrite,
     StoreItemCreate,
+    StoreItemPresentation,
     parse_expiry,
 )
 from app.services import store_service  # noqa: E402
@@ -64,7 +65,7 @@ class _OpeningBatch(BaseModel):
         return value
 
 
-class _OpeningItem(BaseModel):
+class _OpeningItem(StoreItemPresentation):
     source_name: str | None = None
     name_en: str = Field(min_length=1)
     name_ar: str | None = None
@@ -115,6 +116,7 @@ def import_opening(db: Session, data: dict[str, Any], *, actor: str) -> StoreCou
             item = store_service.create_item(
                 db,
                 StoreItemCreate(
+                    **entry.model_dump(include=set(StoreItemPresentation.model_fields)),
                     name_en=entry.name_en,
                     name_ar=entry.name_ar,
                     category_id=_category_id(db, entry.category, actor),

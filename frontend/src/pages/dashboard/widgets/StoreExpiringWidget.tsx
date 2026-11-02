@@ -4,17 +4,16 @@ import { useTranslation } from 'react-i18next'
 import { WidgetFrame } from '@/components/dashboard/WidgetFrame'
 import { useFitCount } from '@/components/dashboard/useFitCount'
 import { api } from '@/lib/api'
-import { localized } from '@/lib/language'
-import { itemName } from '@/pages/assets/store/storeUtils'
+import { StoreItemSummary, StoreQuantity } from '@/pages/assets/store/components/RecordParts'
 import { formatDmy } from '@/lib/formatDmy'
-import { PEOPLE_BIG, PEOPLE_LINK, PEOPLE_META, PEOPLE_NAME, PEOPLE_ROW, PeopleFeedback } from './peopleWidgetParts'
+import { PEOPLE_BIG, PEOPLE_LINK, PEOPLE_META, PEOPLE_ROW, PeopleFeedback } from './peopleWidgetParts'
 import type { WidgetProps } from './types'
 
 const TO = '/holdings/store'
 const KEY = 'dashboard.widgets.store_expiring'
 
 export function StoreExpiringWidget({ tier, rows }: WidgetProps): React.JSX.Element {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const query = useQuery({ queryKey: ['store-dashboard'], queryFn: api.getStoreDashboard })
   const data = query.data
   const batches = [...(data?.expired ?? []), ...(data?.expiring_soon ?? [])]
@@ -34,8 +33,8 @@ export function StoreExpiringWidget({ tier, rows }: WidgetProps): React.JSX.Elem
               <li key={batch.batch_id}>
                 <Link to={TO} className={`${PEOPLE_ROW} min-h-11`}>
                   <span className="min-w-0 flex-1">
-                    <span dir="auto" className={PEOPLE_NAME}>{itemName(batch, i18n.language)}</span>
-                    <span className={`${PEOPLE_META} block`}><bdi dir="ltr" className="font-mono tabular-nums">{batch.item_code}</bdi> · <bdi dir="ltr" className="font-mono tabular-nums">{batch.on_hand}</bdi> <span dir="auto">{batch.contains_qty ? localized(batch.contains_unit_ar, batch.contains_unit_en, i18n.language) : localized(batch.counting_unit_ar, batch.counting_unit_en, i18n.language)}</span></span>
+                    <StoreItemSummary item={batch} size={44} />
+                    <span className={`${PEOPLE_META} block`}><bdi dir="ltr" className="font-mono tabular-nums">{batch.item_code}</bdi> · <StoreQuantity value={batch.on_hand} item={batch} /></span>
                   </span>
                   <span className={`${PEOPLE_META} shrink-0 text-end`}>
                     <span className="block">{t(`${KEY}.${index < data.expired.length ? 'expired' : 'expiring'}`)}</span>

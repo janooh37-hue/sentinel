@@ -85,6 +85,15 @@ describe('store quantities', () => {
     expect(quantityFromParts({ units: '٢', loose: 'invalid' }, BOXES)).toBe(2)
   })
 
+  it('accepts Arabic and Persian digits without turning a blank count into zero', () => {
+    expect(quantityFromParts({ units: '٣', loose: '۵' }, JARS)).toBe(77)
+    expect(quantityFromParts({ units: '٠', loose: '' }, JARS)).toBe(0)
+    expect(quantityFromParts({ units: '  ', loose: '' }, JARS)).toBeNull()
+    expect(quantityFromParts({ units: '٢', loose: '۹' }, BOXES)).toBe(2)
+    expect(quantityFromParts({ units: '١٫٥', loose: '' }, JARS)).toBeNaN()
+    expect(quantityFromParts({ units: '-٣', loose: '' }, JARS)).toBeNaN()
+  })
+
   it('reads as cartons and loose units in English and Arabic', async () => {
     expect(formatQuantity(77, JARS)).toBe('3 cartons + 5 jars')
     expect(formatQuantity(24, JARS)).toBe('1 carton')

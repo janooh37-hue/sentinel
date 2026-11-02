@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,7 +8,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError, type StoreDeliveryRead, type StoreDeliveryScan, type StorePickerItem } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { toast } from '@/lib/toast'
-import { todayIso } from '@/pages/vehicles/vehicleUtils'
 import { StoreDeliveryScanPage } from './StoreDeliveryScanPage'
 
 const state = vi.hoisted(() => ({ mobile: false }))
@@ -22,34 +21,44 @@ vi.mock('./components/ScanNotePreview', () => ({
 const ITEM: StorePickerItem = {
   id: 4, code: 'ST-0004', name_en: 'Coffee', name_ar: 'قهوة', counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', contains_qty: 24, contains_unit_en: 'Jar', contains_unit_ar: 'علبة', art_kind: null, art_color: null,
 }
+const UNKNOWN: StorePickerItem = { ...ITEM, id: 5, code: 'ST-0005', name_en: 'Cups', contains_qty: null, contains_unit_en: null, contains_unit_ar: null }
+const PACKET: StorePickerItem = { ...UNKNOWN, id: 6, code: 'ST-0006', name_en: 'Green tea', name_ar: 'شاي أخضر', counting_unit_en: 'Packet', counting_unit_ar: 'علبة' }
 const SCAN: StoreDeliveryScan = {
   pages: [{ width: 1000, height: 800 }],
-  lines: [{ raw_text: 'Coffee 53 125.00', item_id: ITEM.id, match_score: 100, quantity: 53, confidence: 96, page: 0, bbox: { x: 10, y: 50, w: 480, h: 20 } }],
+  lines: [{ raw_text: 'Coffee 2 CTN + 5 loose', item_id: ITEM.id, match_score: 100, cartons: 2, loose_quantity: 5, carton_contains_qty: null, expiry: null, confidence: 96, page: 0, bbox: { x: 10, y: 50, w: 480, h: 20 } }],
   ocr_available: true,
 }
 const DELIVERY: StoreDeliveryRead = {
-  id: 12, received_on: '2026-10-20', note: null, note_file: null,
-  lines: [{ id: 31, batch_id: 9, item_id: ITEM.id, item_code: ITEM.code, item_name_en: ITEM.name_en, item_name_ar: ITEM.name_ar, counting_unit_en: ITEM.counting_unit_en, counting_unit_ar: ITEM.counting_unit_ar, contains_qty: ITEM.contains_qty, contains_unit_en: ITEM.contains_unit_en, contains_unit_ar: ITEM.contains_unit_ar, art_kind: null, art_color: null, expiry_date: '2028-09-30', expiry_month_only: true, quantity: 53, noted_quantity: 53, difference_reason: null }],
+  id: 12, received_on: '2026-10-20', note: null, note_file: null, lines: [],
   created_at: '2026-10-20T10:00:00Z', updated_at: null, created_by_user_id: 1,
 }
+const button = (key: string) => screen.getByRole('button', { name: i18n.t(key) })
+const review = () => button('assets.store.deliveries.review')
+const save = () => button('assets.store.deliveries.save')
+const edit = () => button('assets.store.deliveries.editLines')
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><MemoryRouter initialEntries={['/holdings/store/deliveries/scan']}><Routes><Route path="/holdings/store/deliveries/scan" element={<StoreDeliveryScanPage />} /><Route path="/holdings/store/deliveries" element={<h1>Deliveries destination</h1>} /></Routes></MemoryRouter></I18nextProvider></QueryClientProvider>)
-  return client
 }
-
 function chooseFile() {
   const file = new File(['photo content'], 'delivery.png', { type: 'image/png' })
-  fireEvent.change(screen.getByLabelText('Choose a photo or PDF'), { target: { files: [file] } })
+  fireEvent.change(screen.getByLabelText(i18n.t('assets.store.scan.chooseFile')), { target: { files: [file] } })
   return file
 }
-
 async function scanFile() {
   const file = chooseFile()
-  await screen.findByRole('heading', { name: 'Confirm delivery' })
-  await screen.findByRole('textbox', { name: 'Coffee: Carton' })
+  await screen.findByRole('heading', { name: i18n.t('assets.store.scan.confirmTitle') })
   return file
+}
+function expiry(value = '2028-09-30') {
+  fireEvent.change(screen.getByLabelText(i18n.t('assets.store.expiryInput.dateAria')), { target: { value } })
+}
+async function fillFallback(user: UserEvent) {
+  await screen.findByRole('option', { name: /ST-0004/ })
+  await user.selectOptions(screen.getByRole('combobox', { name: /Store item/ }), '4')
+  await user.type(screen.getByRole('textbox', { name: 'Coffee: Carton' }), '1')
+  await user.click(screen.getByRole('radio', { name: 'No expiry' }))
 }
 
 beforeEach(async () => {
@@ -57,29 +66,28 @@ beforeEach(async () => {
   vi.clearAllMocks()
   state.mobile = false
   await i18n.changeLanguage('en')
-  vi.spyOn(api, 'listStorePickerItems').mockResolvedValue([ITEM])
+  vi.spyOn(api, 'listStorePickerItems').mockResolvedValue([ITEM, UNKNOWN, PACKET])
   vi.spyOn(api, 'scanStoreDelivery').mockResolvedValue(SCAN)
   vi.spyOn(api, 'createStoreDelivery').mockResolvedValue(DELIVERY)
   vi.spyOn(api, 'uploadStoreDeliveryNote').mockResolvedValue(DELIVERY)
 })
 
-describe('Store delivery scan', () => {
-  it.each([false, true])('offers the accepted file types and camera capture only on phones (mobile=%s)', (mobile) => {
+describe('Store delivery receiving', () => {
+  it.each([false, true])('offers camera capture only on phones (mobile=%s)', (mobile) => {
     state.mobile = mobile
     renderPage()
-    const input = screen.getByLabelText('Choose a photo or PDF')
+    const input = screen.getByLabelText(i18n.t('assets.store.scan.chooseFile'))
     expect(input).toHaveAttribute('accept', 'image/*,application/pdf')
     if (mobile) expect(input).toHaveAttribute('capture', 'environment')
     else expect(input).not.toHaveAttribute('capture')
   })
 
-  it('renders the Arabic confirm surface with isolated line numbers and focus on its summary', async () => {
+  it('renders Arabic line numbers with focus on the receiving summary', async () => {
     await i18n.changeLanguage('ar')
     vi.mocked(api.scanStoreDelivery).mockResolvedValue({ ...SCAN, lines: [{ ...SCAN.lines[0], confidence: 30 }] })
     renderPage()
-    const file = new File(['photo content'], 'delivery.png', { type: 'image/png' })
-    fireEvent.change(screen.getByLabelText(i18n.t('assets.store.scan.chooseFile')), { target: { files: [file] } })
-    const heading = await screen.findByRole('heading', { name: i18n.t('assets.store.scan.confirmTitle') })
+    await scanFile()
+    const heading = screen.getByRole('heading', { name: i18n.t('assets.store.scan.confirmTitle') })
     expect(heading.parentElement).toHaveFocus()
     expect(screen.getByText('1', { selector: 'bdi' })).toHaveAttribute('dir', 'ltr')
     expect(screen.getByText(i18n.t('assets.store.scan.onNote'))).toBeInTheDocument()
@@ -87,350 +95,372 @@ describe('Store delivery scan', () => {
     expect(screen.getByRole('button', { name: i18n.t('assets.store.scan.skipLine', { number: 1 }) })).toBeInTheDocument()
   })
 
-  it('automatically reads the file and prefills the real editor in counting units', async () => {
-    renderPage()
-    const file = await scanFile()
-    expect(api.scanStoreDelivery).toHaveBeenCalledWith(file, expect.any(AbortSignal))
-    expect(screen.getByRole('combobox', { name: /Store item/ })).toHaveValue('4')
-    expect(screen.getByRole('textbox', { name: 'Coffee: Carton' })).toHaveValue('53')
-    expect(screen.getByRole('textbox', { name: 'Coffee: loose Jar' })).toHaveValue('0')
-    expect(screen.getByText('Coffee 53 125.00')).toBeInTheDocument()
-    expect(screen.getByText('On note')).toBeInTheDocument()
-    expect(screen.getByLabelText(/Received on/)).toHaveValue(todayIso())
-    expect(screen.getByRole('radio', { name: 'Full date' })).toBeChecked()
-    expect(screen.getByLabelText('Expiry date')).toHaveValue('')
-    expect(api.createStoreDelivery).not.toHaveBeenCalled()
-  })
-
-  it.each(['en', 'ar'])('converts eight note cartons to 192 jars without a false difference (%s)', async (language) => {
+  it.each(['en', 'ar'])('converts eight scanned cartons to 192 jars without a false difference (%s)', async (language) => {
     await i18n.changeLanguage(language)
-    vi.mocked(api.scanStoreDelivery).mockResolvedValue({ ...SCAN, lines: [{ ...SCAN.lines[0], quantity: 8 }] })
+    const user = userEvent.setup()
+    vi.mocked(api.scanStoreDelivery).mockResolvedValue({
+      ...SCAN, lines: [{ ...SCAN.lines[0], cartons: 8, loose_quantity: 0 }],
+    })
     renderPage()
-    fireEvent.change(screen.getByLabelText(i18n.t('assets.store.scan.chooseFile')), { target: { files: [new File(['photo'], 'note.png', { type: 'image/png' })] } })
-    const carton = await screen.findByRole('textbox', { name: language === 'en' ? 'Coffee: Carton' : 'قهوة: كرتون' })
-    expect(carton).toHaveValue('8')
-    expect(screen.getByRole('textbox', { name: i18n.t('assets.store.quantity.looseAria', { label: language === 'en' ? 'Coffee' : 'قهوة', unit: language === 'en' ? 'Jar' : 'علبة' }) })).toHaveValue('0')
+    await scanFile()
+    const label = language === 'en' ? ITEM.name_en : ITEM.name_ar
+    expect(screen.getByRole('textbox', { name: i18n.t('assets.store.quantity.unitsAria', { label, unit: language === 'en' ? 'Carton' : 'كرتون' }) })).toHaveValue('8')
+    expect(screen.getByRole('textbox', { name: i18n.t('assets.store.quantity.looseAria', { label, unit: language === 'en' ? 'Jar' : 'علبة' }) })).toHaveValue('0')
     expect(screen.queryByRole('textbox', { name: new RegExp(i18n.t('assets.store.scan.reason')) })).not.toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText(i18n.t('assets.store.expiryInput.dateAria')), { target: { value: '2028-09-30' } })
-    fireEvent.click(screen.getByRole('button', { name: i18n.t('assets.store.deliveries.save') }))
+    expiry()
+    await user.click(review())
+    expect(api.createStoreDelivery).not.toHaveBeenCalled()
+    await user.click(save())
     await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({
       lines: [expect.objectContaining({ quantity: 192, noted_quantity: 192, difference_reason: null })],
     })))
   })
 
-  it('reinterprets the note in the selected item counting unit after matching and rematching', async () => {
-    const single = { ...ITEM, id: 5, name_en: 'Gloves', name_ar: 'قفازات', counting_unit_en: 'Pair', contains_qty: null, contains_unit_en: null, contains_unit_ar: null }
-    vi.mocked(api.listStorePickerItems).mockResolvedValue([ITEM, single])
-    vi.mocked(api.scanStoreDelivery).mockResolvedValue({ ...SCAN, lines: [{ ...SCAN.lines[0], quantity: 8, item_id: null }] })
-    renderPage()
-    chooseFile()
-    const picker = await screen.findByRole('combobox', { name: /Store item/ })
-    fireEvent.change(picker, { target: { value: '4' } })
-    expect(screen.getByRole('textbox', { name: 'Coffee: Carton' })).toHaveValue('8')
-    expect(screen.getByText('8 cartons')).toBeInTheDocument()
-    fireEvent.change(picker, { target: { value: '5' } })
-    expect(screen.getByRole('textbox', { name: 'Gloves: Pair' })).toHaveValue('8')
-    expect(screen.getByText('8 pairs')).toBeInTheDocument()
-    expect(screen.queryByRole('textbox', { name: /Reason for difference/ })).not.toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2028-09-30' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save delivery' }))
-    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({
-      lines: [expect.objectContaining({ item_id: 5, quantity: 8, noted_quantity: 8, difference_reason: null })],
-    })))
-  })
-
-  it('requires a reason for a received difference and saves source, noted quantity and reason', async () => {
+  it('reads once, reviews every line, edits back without losing values, then saves only the reviewed values', async () => {
     const user = userEvent.setup()
+    vi.mocked(api.scanStoreDelivery).mockResolvedValue({ ...SCAN, lines: [SCAN.lines[0], { ...SCAN.lines[0], raw_text: 'Cups 3 CTN', item_id: UNKNOWN.id, cartons: 3, loose_quantity: null, carton_contains_qty: 50, expiry: '2029-01' }] })
     renderPage()
     const file = await scanFile()
-    const loose = screen.getByRole('textbox', { name: 'Coffee: loose Jar' })
-    await user.clear(loose)
-    await user.type(loose, '3')
-    await user.click(screen.getByRole('radio', { name: 'Month only' }))
-    fireEvent.change(screen.getByLabelText('Expiry month'), { target: { value: '2028-09' } })
-    await user.click(screen.getByRole('button', { name: 'Save delivery' }))
-    expect(screen.getByText('Enter a reason when the received quantity differs from the note.')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Coffee: Carton' })).toHaveValue('2')
+    expect(screen.getByRole('textbox', { name: 'Coffee: loose Jar' })).toHaveValue('5')
+    expect(screen.getAllByRole('img', { name: 'Note crop' })).toHaveLength(2)
+    const dates = screen.getAllByLabelText('Expiry date')
+    fireEvent.change(dates[0], { target: { value: '2028-09-30' } })
+    expect(screen.getByLabelText('Expiry month')).toHaveValue('2029-01')
+    await user.click(review())
+    expect(screen.getByRole('heading', { name: i18n.t('assets.store.deliveries.reviewTitle') })).toHaveFocus()
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    expect(screen.getByText('Coffee')).toBeInTheDocument()
+    expect(screen.getByText('Cups')).toBeInTheDocument()
     expect(api.createStoreDelivery).not.toHaveBeenCalled()
-    await user.type(screen.getByRole('textbox', { name: /Reason for difference/ }), 'Three extra jars')
-    await user.click(screen.getByRole('button', { name: 'Save delivery' }))
-    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({
-      received_on: todayIso(),
-      lines: [{ item_id: ITEM.id, expiry: '2028-09', quantity: 1275, source_text: SCAN.lines[0]!.raw_text, noted_quantity: 1272, difference_reason: 'Three extra jars' }],
-    })))
-    expect(api.createStoreDelivery).toHaveBeenCalledTimes(1)
-    await waitFor(() => expect(api.uploadStoreDeliveryNote).toHaveBeenCalledWith(DELIVERY.id, file))
-    expect(await screen.findByRole('heading', { name: 'Deliveries destination' })).toBeInTheDocument()
-  })
-
-  it('allows zero received against a positive noted quantity with a required reason', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await scanFile()
-    for (const name of ['Coffee: Carton', 'Coffee: loose Jar']) {
-      const input = screen.getByRole('textbox', { name })
-      await user.clear(input)
-      await user.type(input, '0')
-    }
-    fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2028-09-30' } })
-    await user.click(screen.getByRole('button', { name: 'Save delivery' }))
-    expect(screen.getByText('Enter a reason when the received quantity differs from the note.')).toBeInTheDocument()
-    expect(api.createStoreDelivery).not.toHaveBeenCalled()
-    await user.type(screen.getByRole('textbox', { name: /Reason for difference/ }), 'Nothing arrived')
-    await user.click(screen.getByRole('button', { name: 'Save delivery' }))
-    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({
-      lines: [{ item_id: ITEM.id, expiry: '2028-09-30', quantity: 0, source_text: SCAN.lines[0]!.raw_text, noted_quantity: 1272, difference_reason: 'Nothing arrived' }],
-    })))
-    expect(api.createStoreDelivery).toHaveBeenCalledTimes(1)
-  })
-
-  it('flags unmatched rows and skips a row without including it in the save payload', async () => {
-    vi.mocked(api.scanStoreDelivery).mockResolvedValue({ ...SCAN, lines: [...SCAN.lines, { ...SCAN.lines[0]!, raw_text: 'Unknown supplies 8', item_id: null, match_score: 20, quantity: 8, confidence: 30 }] })
-    const user = userEvent.setup()
-    renderPage()
-    await scanFile()
-    expect(screen.getByText((_, element) => element?.textContent === '1 row needs a look' && element.children.length === 1)).toBeInTheDocument()
-    const unmatched = screen.getAllByRole('group', { name: /Line/ }).find((row) => within(row).queryByText('Unknown supplies 8'))!
-    expect(within(unmatched).getByRole('combobox', { name: /Store item/ })).toHaveValue('')
-    await user.click(within(unmatched).getByRole('button', { name: 'Not a store item: skip, line 2' }))
-    expect(screen.getByText('Unknown supplies 8').closest('li')).toBeInTheDocument()
-    expect(screen.getAllByRole('group', { name: /Line/ })).toHaveLength(1)
-    fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2028-09-30' } })
-    await user.click(screen.getByRole('button', { name: 'Save delivery' }))
-    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ item_id: ITEM.id, quantity: 1272, source_text: SCAN.lines[0]!.raw_text, noted_quantity: 1272 })] })))
-  })
-
-  it.each(['en', 'ar'])('places a non-destructive, label-matched skip action last and pairs the crop with on-note quantity (%s)', async (language) => {
-    await i18n.changeLanguage(language)
-    renderPage()
-    fireEvent.change(screen.getByLabelText(i18n.t('assets.store.scan.chooseFile')), { target: { files: [new File(['photo'], 'note.png', { type: 'image/png' })] } })
-    const button = await screen.findByRole('button', { name: i18n.t('assets.store.scan.skipLine', { number: 1 }) })
-    expect(button.getAttribute('aria-label')?.startsWith(button.textContent!)).toBe(true)
-    expect(button).not.toHaveClass('text-accent')
-    expect(button).not.toHaveClass('text-destructive')
-    const row = button.closest('fieldset')!
-    expect(row.lastElementChild).toContainElement(button)
-    const onNote = within(row).getByText(i18n.t('assets.store.scan.onNote')).parentElement!
-    expect(within(onNote).getByRole('img', { name: 'Note crop' })).toBeInTheDocument()
-    if (language === 'en') {
-      expect(within(onNote).getByText('53 cartons')).toBeInTheDocument()
-      expect(within(row).getByText('cartons')).toBeInTheDocument()
-      expect(within(row).getByText('jars')).toBeInTheDocument()
-      fireEvent.change(within(row).getByRole('textbox', { name: 'Coffee: Carton' }), { target: { value: '1' } })
-      expect(within(row).getByText('carton')).toBeInTheDocument()
-    }
-  })
-
-  it('restores skipped rows with their edits, reason, focus and announcement', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await scanFile()
+    await user.click(edit())
+    expect(screen.getByRole('textbox', { name: 'Coffee: loose Jar' })).toHaveValue('5')
     fireEvent.change(screen.getByRole('textbox', { name: 'Coffee: loose Jar' }), { target: { value: '3' } })
-    fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2028-09-30' } })
-    await user.type(screen.getByRole('textbox', { name: /Reason for difference/ }), 'Missing jars')
-    await user.click(screen.getByRole('button', { name: 'Not a store item: skip, line 1' }))
-    expect(screen.getByRole('button', { name: 'Restore, line 1' })).toHaveFocus()
-    expect(screen.getByText((_, element) => element?.getAttribute('role') === 'status' && element.textContent === 'Line 1 skipped. You can restore it below.')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Restore, line 1' }))
-    expect(screen.getByRole('combobox', { name: /Store item/ })).toHaveFocus()
-    expect(screen.getByRole('textbox', { name: 'Coffee: loose Jar' })).toHaveValue('3')
-    expect(screen.getByLabelText('Expiry date')).toHaveValue('2028-09-30')
-    expect(screen.getByRole('textbox', { name: /Reason for difference/ })).toHaveValue('Missing jars')
-    expect(screen.getByText((_, element) => element?.getAttribute('role') === 'status' && element.textContent === 'Line 1 restored.')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Restore, line 1' })).not.toBeInTheDocument()
+    await user.type(screen.getByRole('textbox', { name: /Reason for difference/ }), 'Two missing')
+    await user.click(review())
+    await user.click(save())
+    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({ lines: [
+      expect.objectContaining({ item_id: ITEM.id, quantity: 51, carton_contains_qty: null, noted_quantity: 53, difference_reason: 'Two missing' }),
+      expect.objectContaining({ item_id: UNKNOWN.id, quantity: 3, carton_contains_qty: 50, expiry: '2029-01', noted_quantity: 3 }),
+    ] })))
+    expect(api.scanStoreDelivery).toHaveBeenCalledTimes(1)
+    expect(api.createStoreDelivery).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(api.uploadStoreDeliveryNote).toHaveBeenCalledWith(12, file))
   })
 
-  it('offers working choose-another and manual actions when all lines are skipped, retaining the valid photo', async () => {
+  it('records explicitly undated scanned goods after final review without inventing an expiry or pack conversion', async () => {
     const user = userEvent.setup()
+    vi.mocked(api.scanStoreDelivery).mockResolvedValue({
+      ...SCAN,
+      lines: [{ ...SCAN.lines[0], item_id: UNKNOWN.id, cartons: 3, loose_quantity: null }],
+    })
     renderPage()
-    const file = await scanFile()
-    await user.click(screen.getByRole('button', { name: 'Not a store item: skip, line 1' }))
-    await user.click(screen.getByRole('button', { name: 'Enter delivery manually' }))
-    expect(within(screen.getByRole('dialog')).getByText(file.name)).toBeInTheDocument()
-    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
-    await user.click(screen.getByRole('button', { name: 'Choose another note' }))
-    expect(screen.getByLabelText('Choose a photo or PDF')).toHaveFocus()
-    expect(screen.queryByRole('heading', { name: 'Confirm delivery' })).not.toBeInTheDocument()
+    await scanFile()
+    await user.click(screen.getByRole('radio', { name: 'No expiry' }))
+    await user.click(review())
     expect(api.createStoreDelivery).not.toHaveBeenCalled()
+    await user.click(save())
+    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [expect.objectContaining({
+        item_id: UNKNOWN.id, expiry: null, quantity: 3, carton_contains_qty: null,
+      })],
+    })))
   })
 
-  it('retains confirmed state on upload failure and retries only the file upload', async () => {
-    vi.mocked(api.uploadStoreDeliveryNote).mockRejectedValueOnce(new ApiError(503, 'UNAVAILABLE', 'Upload unavailable')).mockResolvedValue(DELIVERY)
+  it('does not review or save an active unmatched line; skipped rows remain explicit and reversible with edits', async () => {
     const user = userEvent.setup()
+    vi.mocked(api.scanStoreDelivery).mockResolvedValue({ ...SCAN, lines: [SCAN.lines[0], { ...SCAN.lines[0], raw_text: 'Unmatched row 8 CTN', item_id: null, cartons: 8, match_score: 0 }] })
     renderPage()
-    const file = await scanFile()
-    fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2028-09-30' } })
-    await user.click(screen.getByRole('button', { name: 'Save delivery' }))
-    expect(await screen.findByText('The delivery was recorded, but the delivery note was not uploaded. Retry the upload or finish without the file.')).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Coffee: Carton' })).toHaveValue('53')
-    expect(screen.getByRole('textbox', { name: 'Coffee: loose Jar' })).toHaveValue('0')
-    expect(screen.getByRole('button', { name: 'Finish without file' })).toBeInTheDocument()
-    expect(api.createStoreDelivery).toHaveBeenCalledTimes(1)
-    await user.click(screen.getByRole('button', { name: 'Retry file upload' }))
-    expect(await screen.findByRole('heading', { name: 'Deliveries destination' })).toBeInTheDocument()
-    expect(api.createStoreDelivery).toHaveBeenCalledTimes(1)
-    expect(api.uploadStoreDeliveryNote).toHaveBeenCalledTimes(2)
-    expect(vi.mocked(api.uploadStoreDeliveryNote).mock.calls).toEqual([[DELIVERY.id, file], [DELIVERY.id, file]])
+    await scanFile()
+    for (const input of screen.getAllByLabelText('Expiry date')) fireEvent.change(input, { target: { value: '2028-09-30' } })
+    await user.click(review())
+    expect(screen.queryByRole('heading', { name: i18n.t('assets.store.deliveries.reviewTitle') })).not.toBeInTheDocument()
+    const unmatched = screen.getAllByRole('combobox').find((node) => (node as HTMLSelectElement).value === '')!
+    expect(unmatched).toHaveAttribute('aria-invalid', 'true')
+    expect(api.createStoreDelivery).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: i18n.t('assets.store.scan.skipLine', { number: 2 }) }))
+    await user.click(review())
+    expect(screen.getByText('Unmatched row 8 CTN')).toBeInTheDocument()
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    expect(api.createStoreDelivery).not.toHaveBeenCalled()
+    await user.click(save())
+    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ item_id: ITEM.id, quantity: 53 })] })))
   })
 
-  it('finishes an already saved delivery without the attachment and never creates it again', async () => {
-    vi.mocked(api.uploadStoreDeliveryNote).mockRejectedValue(new ApiError(503, 'UNAVAILABLE', 'Upload unavailable'))
+  it('preserves skipped edits and discrepancy reasons, and omits only explicitly skipped lines from the final save', async () => {
     const user = userEvent.setup()
     renderPage()
     await scanFile()
-    fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2028-09-30' } })
-    await user.click(screen.getByRole('button', { name: 'Save delivery' }))
-    await user.click(await screen.findByRole('button', { name: 'Finish without file' }))
-    expect(await screen.findByRole('heading', { name: 'Deliveries destination' })).toBeInTheDocument()
+    expiry()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Coffee: loose Jar' }), { target: { value: '3' } })
+    await user.type(screen.getByRole('textbox', { name: /Reason for difference/ }), 'Missing jars')
+    await user.click(screen.getByRole('button', { name: i18n.t('assets.store.scan.skipLine', { number: 1 }) }))
+    const restore = screen.getByRole('button', { name: i18n.t('assets.store.scan.restoreLine', { number: 1 }) })
+    expect(restore).toHaveFocus()
+    await user.click(restore)
+    expect(screen.getByRole('combobox')).toHaveFocus()
+    expect(screen.getByRole('textbox', { name: 'Coffee: loose Jar' })).toHaveValue('3')
+    expect(screen.getByRole('textbox', { name: /Reason for difference/ })).toHaveValue('Missing jars')
+    await user.click(review())
+    expect(screen.getByText(/Missing jars/)).toBeInTheDocument()
+    await user.click(save())
+    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ quantity: 51, difference_reason: 'Missing jars' })] })))
+  })
+
+  it('requires a discrepancy reason even for zero received, but allows zero against a positive note', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await scanFile()
+    expiry()
+    for (const name of ['Coffee: Carton', 'Coffee: loose Jar']) fireEvent.change(screen.getByRole('textbox', { name }), { target: { value: '0' } })
+    await user.click(review())
+    const reason = screen.getByRole('textbox', { name: /Reason for difference/ })
+    expect(reason).toHaveAttribute('aria-invalid', 'true')
+    expect(api.createStoreDelivery).not.toHaveBeenCalled()
+    await user.type(reason, 'Nothing arrived')
+    expect(reason).not.toHaveAttribute('aria-invalid')
+    await user.click(review())
+    await user.click(save())
+    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ quantity: 0, noted_quantity: 53, difference_reason: 'Nothing arrived' })] })))
+  })
+
+  it('rejects inconsistent pack metadata without changing the known item conversion, while blank is allowed', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await scanFile()
+    expiry()
+    const contents = screen.getByLabelText(i18n.t('assets.store.deliveries.contentsOptional'))
+    fireEvent.change(contents, { target: { value: '12' } })
+    await user.click(review())
+    expect(contents).toHaveAttribute('aria-invalid', 'true')
+    expect(api.createStoreDelivery).not.toHaveBeenCalled()
+    fireEvent.change(contents, { target: { value: '' } })
+    await user.click(review())
+    await user.click(save())
+    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ quantity: 53, carton_contains_qty: null })] })))
+    expect(ITEM.contains_qty).toBe(24)
+  })
+
+  it.each([true, false])('uses the same empty editable form and retains its file when OCR returns no lines (available=%s)', async (available) => {
+    const user = userEvent.setup()
+    vi.mocked(api.scanStoreDelivery).mockResolvedValue({ pages: [], lines: [], ocr_available: available })
+    renderPage()
+    const file = await scanFile()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByText(file.name)).toBeInTheDocument()
+    await fillFallback(user)
+    await user.click(review())
+    expect(api.createStoreDelivery).not.toHaveBeenCalled()
+    await user.click(edit())
+    expect(screen.getByRole('textbox', { name: 'Coffee: Carton' })).toHaveValue('1')
+    await user.click(review())
+    await user.click(save())
+    await waitFor(() => expect(api.uploadStoreDeliveryNote).toHaveBeenCalledWith(12, file))
+    expect(api.scanStoreDelivery).toHaveBeenCalledTimes(1)
+    expect(api.createStoreDelivery).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['STORE_NOTE_FILE_INVALID', 'STORE_SCAN_TIMEOUT'])('retains only accepted files after reading failure (%s)', async (code) => {
+    const user = userEvent.setup()
+    vi.mocked(api.scanStoreDelivery).mockRejectedValue(new ApiError(422, code, 'Reading failed'))
+    renderPage()
+    const file = await scanFile()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    if (code === 'STORE_SCAN_TIMEOUT') expect(screen.getByText(file.name)).toBeInTheDocument()
+    else expect(screen.queryByText(file.name)).not.toBeInTheDocument()
+    await fillFallback(user)
+    await user.click(review())
+    await user.click(save())
+    await screen.findByRole('heading', { name: 'Deliveries destination' })
+    expect(api.createStoreDelivery).toHaveBeenCalledTimes(1)
+    if (code === 'STORE_SCAN_TIMEOUT') expect(api.uploadStoreDeliveryNote).toHaveBeenCalledWith(12, file)
+    else expect(api.uploadStoreDeliveryNote).not.toHaveBeenCalled()
+  })
+
+  it('freezes reviewed rows after durable creation and retries only attachment upload', async () => {
+    const user = userEvent.setup()
+    vi.mocked(api.uploadStoreDeliveryNote).mockRejectedValueOnce(new Error('Upload unavailable')).mockResolvedValue(DELIVERY)
+    renderPage()
+    const file = await scanFile()
+    expiry()
+    await user.click(review())
+    await user.click(save())
+    const retry = await screen.findByRole('button', { name: i18n.t('assets.store.scan.retryUpload') })
+    expect(screen.queryByRole('button', { name: i18n.t('assets.store.deliveries.editLines') })).not.toBeInTheDocument()
+    expect(screen.getByText('Coffee')).toBeInTheDocument()
+    await user.click(retry)
+    await screen.findByRole('heading', { name: 'Deliveries destination' })
+    expect(api.createStoreDelivery).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(api.uploadStoreDeliveryNote).mock.calls).toEqual([[12, file], [12, file]])
+  })
+
+  it('finishes an already created delivery without a failed attachment, without creating it again', async () => {
+    const user = userEvent.setup()
+    vi.mocked(api.uploadStoreDeliveryNote).mockRejectedValue(new Error('Upload unavailable'))
+    renderPage()
+    await scanFile()
+    expiry()
+    await user.click(review())
+    await user.click(save())
+    await user.click(await screen.findByRole('button', { name: i18n.t('assets.store.scan.finishWithoutFile') }))
+    await screen.findByRole('heading', { name: 'Deliveries destination' })
     expect(api.createStoreDelivery).toHaveBeenCalledTimes(1)
     expect(api.uploadStoreDeliveryNote).toHaveBeenCalledTimes(1)
-    expect(toast.warning).toHaveBeenCalledWith('Delivery recorded without the delivery-note file.')
+    expect(toast.warning).toHaveBeenCalledWith(i18n.t('assets.store.scan.savedWithoutFile'))
   })
 
-  it('cancels reading and ignores a late scan response', async () => {
-    // The project's ES2023 lib predates Promise.withResolvers.
-    let resolveScan!: (result: StoreDeliveryScan) => void
-    const promise = new Promise<StoreDeliveryScan>((resolve) => { resolveScan = resolve })
-    vi.mocked(api.scanStoreDelivery).mockReturnValue(promise)
+  it('keeps skipped scan rows visible when entering a fresh manual line on the same page', async () => {
     const user = userEvent.setup()
     renderPage()
-    chooseFile()
-    expect(await screen.findByText('Reading the delivery note…')).toBeInTheDocument()
-    const signal = vi.mocked(api.scanStoreDelivery).mock.calls[0]![1]!
-    await user.click(screen.getByRole('button', { name: 'Cancel reading' }))
-    expect(signal.aborted).toBe(true)
-    expect(screen.getByLabelText('Choose a photo or PDF')).toHaveFocus()
-    await act(async () => resolveScan(SCAN))
-    expect(screen.getByLabelText('Choose a photo or PDF')).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Confirm delivery' })).not.toBeInTheDocument()
-    expect(api.createStoreDelivery).not.toHaveBeenCalled()
+    const file = await scanFile()
+    await user.click(screen.getByRole('button', { name: i18n.t('assets.store.scan.skipLine', { number: 1 }) }))
+    await user.click(button('assets.store.scan.manual'))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByText(file.name)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: i18n.t('assets.store.scan.restoreLine', { number: 1 }) })).toBeInTheDocument()
+    await user.selectOptions(screen.getByRole('combobox'), '5')
+    await user.type(screen.getByRole('textbox', { name: 'Cups: Carton' }), '2')
+    expiry()
+    await user.click(review())
+    expect(screen.getByRole('heading', { name: i18n.t('assets.store.scan.skippedLines') })).toBeInTheDocument()
+    await user.click(save())
+    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ item_id: 5, quantity: 2, source_text: null, noted_quantity: null })] })))
+    expect(api.scanStoreDelivery).toHaveBeenCalledTimes(1)
   })
 
-  it.each([true, false])('opens the manual dialog with the same attachment when OCR is empty (available=%s)', async (available) => {
-    vi.mocked(api.scanStoreDelivery).mockResolvedValue({ pages: [], lines: [], ocr_available: available })
+  it('keeps ambiguous quantities blank and revalidates missing fields as they are entered', async () => {
     const user = userEvent.setup()
-    renderPage()
-    const file = chooseFile()
-    await user.click(await screen.findByRole('button', { name: 'Enter delivery manually' }))
-    const dialog = within(screen.getByRole('dialog'))
-    expect(dialog.getByText(file.name)).toBeInTheDocument()
-    await dialog.findByRole('option', { name: /ST-0004/ })
-    await user.selectOptions(dialog.getByRole('combobox', { name: /Store item/ }), '4')
-    await user.type(dialog.getByRole('textbox', { name: 'Coffee: Carton' }), '1')
-    await user.click(dialog.getByRole('radio', { name: 'No expiry' }))
-    await user.click(dialog.getByRole('button', { name: 'Save delivery' }))
-    await waitFor(() => expect(api.uploadStoreDeliveryNote).toHaveBeenCalledWith(DELIVERY.id, file))
-    expect(api.createStoreDelivery).toHaveBeenCalledTimes(1)
-    expect(toast.success).toHaveBeenCalledWith('Delivery recorded.')
-  })
-
-  it('revalidates expiry, quantity and received date on change and links each inline error', async () => {
-    const user = userEvent.setup()
+    vi.mocked(api.scanStoreDelivery).mockResolvedValue({ ...SCAN, lines: [{ ...SCAN.lines[0], cartons: null, loose_quantity: null }] })
     renderPage()
     await scanFile()
     const units = screen.getByRole('textbox', { name: 'Coffee: Carton' })
     const loose = screen.getByRole('textbox', { name: 'Coffee: loose Jar' })
     const date = screen.getByLabelText(/Received on/)
-    fireEvent.change(units, { target: { value: '' } })
-    fireEvent.change(loose, { target: { value: '' } })
+    expect(units).toHaveValue('')
+    expect(loose).toHaveValue('')
+    await user.click(review())
+    expect(units).toHaveAttribute('aria-invalid', 'true')
+    expect(units).toHaveFocus()
     fireEvent.change(date, { target: { value: '' } })
-    await user.click(screen.getByRole('button', { name: 'Save delivery' }))
-    const expiry = screen.getByLabelText('Expiry date')
-    expect(expiry).toHaveAccessibleDescription(/Enter a complete expiry date or month from the packaging/)
-    expect(expiry).not.toHaveAccessibleDescription(/No expiry/)
-    expect(units).toHaveAccessibleDescription(/Enter a whole received quantity/)
-    expect(loose).toHaveAccessibleDescription(/Enter a whole received quantity/)
-    expect(date).toHaveAccessibleDescription('Enter a received date on or before today.')
-    for (const input of [expiry, units, loose, date]) {
+    await user.click(review())
+    const expiryDate = screen.getByLabelText('Expiry date')
+    for (const input of [expiryDate, units, loose, date]) {
+      expect(input).toHaveAttribute('aria-invalid', 'true')
       const errorId = input.getAttribute('aria-describedby')!.split(' ')[0]
       expect(document.getElementById(errorId)).toHaveAttribute('role', 'alert')
+      expect(input).toHaveAccessibleDescription()
     }
-    fireEvent.change(date, { target: { value: todayIso() } })
+    fireEvent.change(date, { target: { value: '2020-01-02' } })
     expect(date).not.toHaveAttribute('aria-invalid')
-    fireEvent.change(expiry, { target: { value: '2028-09-30' } })
-    expect(expiry).not.toHaveAttribute('aria-invalid')
-    fireEvent.change(units, { target: { value: '53' } })
-    fireEvent.change(loose, { target: { value: '0' } })
+    fireEvent.change(expiryDate, { target: { value: '2028-09-30' } })
+    expect(expiryDate).not.toHaveAttribute('aria-invalid')
+    await user.type(units, '1')
     expect(units).not.toHaveAttribute('aria-invalid')
-    expect(loose).not.toHaveAttribute('aria-invalid')
-    expect(screen.queryByText('Correct the indicated fields before saving.')).not.toBeInTheDocument()
     expect(screen.queryAllByRole('alert')).toHaveLength(0)
+    await user.click(review())
     expect(api.createStoreDelivery).not.toHaveBeenCalled()
+    await user.click(save())
+    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ quantity: 24, noted_quantity: null })] })))
   })
 
-  it('moves focus to the first invalid field after a failed save, again on a repeat attempt, and keeps the summary alert', async () => {
+  it('accepts Arabic digits through edit, final review and saving without changing conversion', async () => {
     const user = userEvent.setup()
+    await i18n.changeLanguage('ar')
     renderPage()
     await scanFile()
-    const expiry = screen.getByLabelText('Expiry date')
-    await user.click(screen.getByRole('button', { name: 'Save delivery' }))
-    expect(expiry).toHaveFocus()
-    expect(screen.getByText('Correct the indicated fields before saving.').closest('[role="alert"]')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Save delivery' }))
-    expect(expiry).toHaveFocus()
+    const label = i18n.t('assets.store.quantity.unitsAria', { label: 'قهوة', unit: 'كرتون' })
+    fireEvent.change(screen.getByRole('textbox', { name: label }), { target: { value: '٢' } })
+    expiry()
+    await user.click(review())
     expect(api.createStoreDelivery).not.toHaveBeenCalled()
+    await user.click(edit())
+    expect(screen.getByRole('textbox', { name: label })).toHaveValue('2')
+    await user.click(review())
+    await user.click(save())
+    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ quantity: 53 })] })))
   })
 
-  it('retranslates existing errors on language change and clears reason and summary immediately when fixed', async () => {
+  it('keeps a skipped manual item Arabic and restores its undated receipt through review, edit and save', async () => {
     const user = userEvent.setup()
+    await i18n.changeLanguage('ar')
     renderPage()
     await scanFile()
-    fireEvent.change(screen.getByRole('textbox', { name: 'Coffee: loose Jar' }), { target: { value: '3' } })
-    fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2028-09-30' } })
-    await user.click(screen.getByRole('button', { name: 'Save delivery' }))
-    expect(screen.getByRole('textbox', { name: /Reason for difference/ })).toHaveAccessibleDescription(i18n.t('assets.store.scan.reasonRequired'))
-    await act(async () => { await i18n.changeLanguage('ar') })
-    expect(screen.queryByText('Enter a reason when the received quantity differs from the note.')).not.toBeInTheDocument()
-    const reason = screen.getByRole('textbox', { name: new RegExp(i18n.t('assets.store.scan.reason')) })
-    expect(reason).toHaveAccessibleDescription(i18n.t('assets.store.scan.reasonRequired'))
-    await user.type(reason, 'عبوتان ناقصتان')
-    expect(reason).not.toHaveAttribute('aria-invalid')
-    expect(reason).not.toHaveAttribute('aria-describedby')
-    expect(screen.queryAllByRole('alert')).toHaveLength(0)
+    await user.click(screen.getByRole('button', { name: i18n.t('assets.store.scan.skipLine', { number: 1 }) }))
+    await user.click(button('assets.store.scan.manual'))
+    await user.selectOptions(screen.getByRole('combobox'), String(ITEM.id))
+    const quantityLabel = i18n.t('assets.store.quantity.unitsAria', { label: ITEM.name_ar, unit: ITEM.counting_unit_ar })
+    await user.type(screen.getByRole('textbox', { name: quantityLabel }), '١')
+    await user.click(screen.getByRole('radio', { name: i18n.t('assets.store.expiryInput.none') }))
+    await user.click(screen.getByRole('button', { name: i18n.t('assets.store.scan.skipLine', { number: 2 }) }))
+    const restore = screen.getByRole('button', { name: i18n.t('assets.store.scan.restoreLine', { number: 2 }) })
+    const skippedManual = within(restore.closest('li')!)
+    expect(skippedManual.getByText(ITEM.name_ar!)).toBeInTheDocument()
+    expect(skippedManual.queryByText(ITEM.name_en)).not.toBeInTheDocument()
+    await user.click(restore)
+    expect(screen.getByRole('textbox', { name: quantityLabel })).toHaveValue('1')
+    expect(screen.getByRole('radio', { name: i18n.t('assets.store.expiryInput.none') })).toBeChecked()
+    await user.click(review())
+    expect(screen.getByText(i18n.t('assets.store.expiry.none'))).toBeInTheDocument()
     expect(api.createStoreDelivery).not.toHaveBeenCalled()
+    await user.click(edit())
+    expect(screen.getByRole('radio', { name: i18n.t('assets.store.expiryInput.none') })).toBeChecked()
+    await user.click(review())
+    await user.click(save())
+    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [expect.objectContaining({ item_id: ITEM.id, expiry: null, quantity: 24, source_text: null, noted_quantity: null })],
+    })))
   })
 
-  it('clears item errors on selection and duplicate-batch errors on changing expiry', async () => {
-    vi.mocked(api.scanStoreDelivery).mockResolvedValue({ ...SCAN, lines: [SCAN.lines[0], { ...SCAN.lines[0], item_id: null }] })
+  it.each([true, false])('never converts scanned cartons into Green tea packets, including item rematching (initial packet match=%s)', async (initialPacketMatch) => {
     const user = userEvent.setup()
+    vi.mocked(api.scanStoreDelivery).mockResolvedValue({
+      ...SCAN,
+      lines: [{ ...SCAN.lines[0], raw_text: 'Green tea 3 CTN', item_id: initialPacketMatch ? PACKET.id : ITEM.id, cartons: 3, loose_quantity: null, carton_contains_qty: 50 }],
+    })
     renderPage()
     await scanFile()
-    await user.click(screen.getByRole('button', { name: 'Save delivery' }))
-    const picker = screen.getAllByRole('combobox', { name: /Store item/ }).find((input) => (input as HTMLSelectElement).value === '')!
-    expect(picker).toHaveAccessibleDescription(/Select a Store item/)
-    await user.selectOptions(picker, '4')
-    expect(picker).not.toHaveAttribute('aria-invalid')
-    const expiries = screen.getAllByLabelText('Expiry date')
-    for (const input of expiries) fireEvent.change(input, { target: { value: '2028-09-30' } })
-    expect(expiries[1]).toHaveAccessibleDescription(/This item and expiry already appear/)
-    fireEvent.change(expiries[1], { target: { value: '2028-10-31' } })
-    expect(screen.queryAllByRole('alert')).toHaveLength(0)
-  })
-
-  it.each(['STORE_NOTE_FILE_BAD_FORMAT', 'STORE_NOTE_FILE_TOO_LARGE', 'STORE_NOTE_FILE_EMPTY', 'STORE_NOTE_FILE_INVALID'])('does not attach a rejected scan file to manual entry (%s)', async (code) => {
-    vi.mocked(api.scanStoreDelivery).mockRejectedValue(new ApiError(422, code, 'Rejected scan file'))
-    const user = userEvent.setup()
-    renderPage()
-    const file = new File(['not an image'], code === 'STORE_NOTE_FILE_BAD_FORMAT' ? 'not-image.txt' : 'invalid.png', { type: 'text/plain' })
-    fireEvent.change(screen.getByLabelText('Choose a photo or PDF'), { target: { files: [file] } })
-    await user.click(await screen.findByRole('button', { name: 'Enter delivery manually' }))
-    const dialog = within(screen.getByRole('dialog'))
-    expect(dialog.queryByText(file.name)).not.toBeInTheDocument()
-    await dialog.findByRole('option', { name: /ST-0004/ })
-    await user.selectOptions(dialog.getByRole('combobox', { name: /Store item/ }), '4')
-    await user.type(dialog.getByRole('textbox', { name: 'Coffee: Carton' }), '1')
-    await user.click(dialog.getByRole('radio', { name: 'No expiry' }))
-    await user.click(dialog.getByRole('button', { name: 'Save delivery' }))
-    expect(await screen.findByRole('heading', { name: 'Deliveries destination' })).toBeInTheDocument()
+    if (!initialPacketMatch) {
+      const cartons = screen.getByRole('textbox', { name: 'Coffee: Carton' })
+      expect(cartons).toHaveValue('3')
+      fireEvent.change(cartons, { target: { value: '4' } })
+      await user.selectOptions(screen.getByRole('combobox'), String(PACKET.id))
+    }
+    const packets = screen.getByRole('textbox', { name: 'Green tea: Packet' })
+    expect(packets).toHaveValue('')
+    expect(screen.getByText('Green tea 3 CTN')).toBeInTheDocument()
+    expect(screen.getByText(i18n.t('assets.store.scan.unknownQuantity'))).toBeInTheDocument()
+    await user.click(screen.getByRole('radio', { name: i18n.t('assets.store.expiryInput.none') }))
+    await user.click(review())
+    expect(packets).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.queryByRole('heading', { name: i18n.t('assets.store.deliveries.reviewTitle') })).not.toBeInTheDocument()
+    expect(api.createStoreDelivery).not.toHaveBeenCalled()
+    await user.type(packets, '9')
+    await user.click(review())
+    expect(api.createStoreDelivery).not.toHaveBeenCalled()
+    await user.click(edit())
+    expect(screen.getByRole('textbox', { name: 'Green tea: Packet' })).toHaveValue('9')
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: String(PACKET.id) } })
+    expect(screen.getByRole('textbox', { name: 'Green tea: Packet' })).toHaveValue('9')
+    await user.click(review())
+    await user.click(save())
+    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [expect.objectContaining({ item_id: PACKET.id, quantity: 9, noted_quantity: null, carton_contains_qty: 50, source_text: 'Green tea 3 CTN', difference_reason: null })],
+    })))
+    expect(api.scanStoreDelivery).toHaveBeenCalledTimes(1)
     expect(api.createStoreDelivery).toHaveBeenCalledTimes(1)
-    expect(api.uploadStoreDeliveryNote).not.toHaveBeenCalled()
   })
 
-  it('keeps a valid note for manual entry after a reading timeout', async () => {
-    vi.mocked(api.scanStoreDelivery).mockRejectedValue(new ApiError(422, 'STORE_SCAN_TIMEOUT', 'Timed out'))
+  it('cancels reading and ignores a late scan response', async () => {
+    let resolveScan!: (result: StoreDeliveryScan) => void
+    vi.mocked(api.scanStoreDelivery).mockReturnValue(new Promise((resolve) => { resolveScan = resolve }))
     const user = userEvent.setup()
     renderPage()
-    const file = chooseFile()
-    await user.click(await screen.findByRole('button', { name: 'Enter delivery manually' }))
-    expect(within(screen.getByRole('dialog')).getByText(file.name)).toBeInTheDocument()
+    chooseFile()
+    const signal = vi.mocked(api.scanStoreDelivery).mock.calls[0]![1]!
+    await user.click(await screen.findByRole('button', { name: i18n.t('assets.store.scan.cancelReading') }))
+    expect(signal.aborted).toBe(true)
+    await act(async () => resolveScan(SCAN))
+    expect(screen.getByLabelText(i18n.t('assets.store.scan.chooseFile'))).toHaveFocus()
+    expect(api.createStoreDelivery).not.toHaveBeenCalled()
   })
 })

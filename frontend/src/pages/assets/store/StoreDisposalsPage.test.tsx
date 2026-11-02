@@ -62,6 +62,20 @@ beforeEach(async () => {
 })
 
 describe('Store disposals', () => {
+  it('preserves drawer item preselection and selects its earliest stocked expiry', async () => {
+    vi.mocked(api.listStoreBatches).mockResolvedValue([
+      { ...BATCH, id: 95, expiry_date: '2027-01-01', days_to_expiry: 60 },
+      BATCH,
+      { ...BATCH, id: 96, item_id: 14, item_name_en: 'Water' },
+    ])
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><DisposalDialog open itemId={12} onOpenChange={vi.fn()} /></I18nextProvider></QueryClientProvider>)
+    expect(await screen.findByRole('textbox', { name: 'Quantity: Carton' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Tea/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByRole('button', { name: /Water/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Expired' })).toBeChecked()
+  })
+
   it.each([false, true])('renders newest first with Batch quantity, expiry and reason (mobile=%s)', async (mobile) => {
     state.mobile = mobile
     vi.spyOn(api, 'listStoreDisposals').mockResolvedValue([
@@ -112,6 +126,7 @@ describe('Store disposals', () => {
     const invalidate = vi.spyOn(client, 'invalidateQueries')
     await user.click(screen.getByRole('button', { name: 'Record disposal' }))
     const dialog = within(screen.getByRole('dialog'))
+    await user.click(await dialog.findByRole('button', { name: /Tea/ }))
     await user.click(await dialog.findByRole('combobox', { name: /Batch/ }))
     await user.click(screen.getByRole('option', { name: /ST-0012/ }))
     expect(dialog.getByRole('radio', { name: 'Expired' })).toBeChecked()
@@ -132,6 +147,7 @@ describe('Store disposals', () => {
     renderPage()
     await user.click(screen.getByRole('button', { name: 'Record disposal' }))
     const dialog = within(screen.getByRole('dialog'))
+    await user.click(await dialog.findByRole('button', { name: /Tea/ }))
     await user.click(await dialog.findByRole('combobox', { name: /Batch/ }))
     await user.click(screen.getByRole('option', { name: /ST-0012/ }))
     await user.type(dialog.getByRole('textbox', { name: 'Quantity: Carton' }), '3')
@@ -145,6 +161,7 @@ describe('Store disposals', () => {
     renderPage()
     await user.click(screen.getByRole('button', { name: 'Record disposal' }))
     const dialog = within(screen.getByRole('dialog'))
+    await user.click(await dialog.findByRole('button', { name: /Tea/ }))
     await user.click(await dialog.findByRole('combobox', { name: /Batch/ }))
     await user.click(screen.getByRole('option', { name: /ST-0012/ }))
     await user.type(dialog.getByRole('textbox', { name: 'Quantity: Carton' }), quantity)
@@ -163,6 +180,8 @@ describe('Store disposals', () => {
     renderPage()
     await user.click(screen.getByRole('button', { name: 'Record disposal' }))
     const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.getByRole('combobox', { name: /Batch/ })).toBeDisabled()
+    await user.click(await dialog.findByRole('button', { name: /Tea/ }))
     await user.click(await dialog.findByRole('combobox', { name: /Batch/ }))
     expect(screen.queryByRole('option', { name: /ST-0014/ })).not.toBeInTheDocument()
     await user.click(screen.getByRole('option', { name: /ST-0012/ }))
@@ -202,6 +221,7 @@ describe('Store disposals', () => {
     const dialog = within(screen.getByRole('dialog'))
     const date = dialog.getByLabelText(/Disposal date/)
     fireEvent.change(date, { target: { value: '2026-01-01' } })
+    await user.click(await dialog.findByRole('button', { name: /Tea/ }))
     await user.click(await dialog.findByRole('combobox', { name: /Batch/ }))
     await user.click(screen.getByRole('option', { name: /ST-0012/ }))
     await user.type(dialog.getByRole('textbox', { name: 'Quantity: Carton' }), '3')
@@ -222,6 +242,7 @@ describe('Store disposals', () => {
     const dialog = within(screen.getByRole('dialog'))
     const date = dialog.getByLabelText(/Disposal date/)
     fireEvent.change(date, { target: { value: '2026-01-01' } })
+    await user.click(await dialog.findByRole('button', { name: /Tea/ }))
     await user.click(await dialog.findByRole('combobox', { name: /Batch/ }))
     await user.click(screen.getByRole('option', { name: /ST-0012/ }))
     await user.type(dialog.getByRole('textbox', { name: 'Quantity: Carton' }), '3')
@@ -246,6 +267,7 @@ describe('Store disposals', () => {
     await user.click(screen.getByRole('button', { name: 'Record disposal' }))
     const dialog = within(screen.getByRole('dialog'))
     fireEvent.change(dialog.getByLabelText(/Disposal date/), { target: { value: '2026-01-01' } })
+    await user.click(await dialog.findByRole('button', { name: /Tea/ }))
     await user.click(await dialog.findByRole('combobox', { name: /Batch/ }))
     await user.click(screen.getByRole('option', { name: /ST-0012/ }))
     await user.type(dialog.getByRole('textbox', { name: 'Quantity: loose Jar' }), '1')
@@ -275,6 +297,7 @@ describe('Store disposals', () => {
     renderPage()
     await user.click(screen.getByRole('button', { name: 'Record disposal' }))
     const dialog = within(screen.getByRole('dialog'))
+    await user.click(await dialog.findByRole('button', { name: /Tea/ }))
     await user.click(await dialog.findByRole('combobox', { name: /Batch/ }))
     await user.click(screen.getByRole('option', { name: /ST-0012/ }))
     await user.type(dialog.getByRole('textbox', { name: 'Quantity: Carton' }), '1')

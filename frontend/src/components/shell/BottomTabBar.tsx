@@ -58,7 +58,7 @@ function DockSlotVisual({ Icon, label, count, active = false, selected = false }
       <span
         className={cn(
           'w-full text-center text-[10.5px] font-medium leading-tight [overflow-wrap:anywhere]',
-          active ? 'text-primary' : 'text-muted-foreground',
+          active ? 'text-primary-text' : 'text-muted-foreground',
         )}
       >
         {label}

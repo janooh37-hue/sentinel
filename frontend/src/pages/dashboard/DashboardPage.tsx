@@ -310,6 +310,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
+      <h1 className="sr-only">{t('nav.dashboard')}</h1>
       <div className="min-h-0 flex-1">
         <PullToRefresh scrollerClassName={editing ? 'max-sm:scroll-pb-32' : ''}>
           <div

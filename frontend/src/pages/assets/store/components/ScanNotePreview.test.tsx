@@ -16,7 +16,7 @@ vi.mock('react-i18next', async (importOriginal) => {
 import { ScanNotePreview } from './ScanNotePreview'
 
 const line: StoreScanLine = {
-  raw_text: 'Coffee 8', item_id: 1, match_score: 95, quantity: 8,
+  raw_text: 'Coffee 8 CTN', item_id: 1, match_score: 95, cartons: 8, loose_quantity: null, carton_contains_qty: null, expiry: null,
   confidence: 95, page: 0, bbox: { x: 10, y: 50, w: 480, h: 20 },
 }
 const scan: StoreDeliveryScan = {

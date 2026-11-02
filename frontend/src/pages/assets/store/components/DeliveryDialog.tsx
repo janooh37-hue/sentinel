@@ -12,7 +12,8 @@ import { toast } from '@/lib/toast'
 import { todayIso } from '@/pages/vehicles/vehicleUtils'
 import { invalidateStoreQueries, isBusinessDate, storeErrorMessage } from '../storeUtils'
 import { DeliveryLines } from './DeliveryLines'
-import { createDeliveryLines, type DeliveryLineErrors, validateDeliveryLines } from './deliveryLineModel'
+import { DeliveryReview } from './DeliveryReview'
+import { createDeliveryLines, validateDeliveryLines } from './deliveryLineModel'
 
 interface Props {
   open: boolean
@@ -38,11 +39,14 @@ function DeliveryForm({ onOpenChange, onSaved, onBusyChange, initialFile }: Omit
   const qc = useQueryClient()
   const id = useId()
   const [lines, setLines] = useState(() => createDeliveryLines())
-  const [lineErrors, setLineErrors] = useState<DeliveryLineErrors>({})
+  const [submitted, setSubmitted] = useState(false)
+  const [reviewing, setReviewing] = useState(false)
+  const checked = validateDeliveryLines(lines, t)
+  const lineErrors = submitted ? checked.errors : {}
   const [message, setMessage] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(initialFile ?? null)
   const [fileError, setFileError] = useState<string | null>(null)
-  const { register, handleSubmit, formState: { errors } } = useForm<HeaderValues>({ defaultValues: { received_on: todayIso(), note: '' } })
+  const { register, handleSubmit, getValues, formState: { errors } } = useForm<HeaderValues>({ defaultValues: { received_on: todayIso(), note: '' } })
   const mutation = useMutation({
     onMutate: () => onBusyChange(true),
     onSettled: () => onBusyChange(false),
@@ -72,12 +76,13 @@ function DeliveryForm({ onOpenChange, onSaved, onBusyChange, initialFile }: Omit
 
   function submit(values: HeaderValues): void {
     setMessage(null)
-    const { errors: invalid, payload } = validateDeliveryLines(lines, t)
-    setLineErrors(invalid)
+    setSubmitted(true)
+    const { errors: invalid, payload } = checked
     if (Object.keys(invalid).length || fileError) {
       setMessage(t('assets.store.deliveries.correctFields'))
       return
     }
+    if (!reviewing) { setReviewing(true); return }
     mutation.mutate({ received_on: values.received_on, note: values.note.trim() || null, lines: payload })
   }
 
@@ -94,6 +99,7 @@ function DeliveryForm({ onOpenChange, onSaved, onBusyChange, initialFile }: Omit
     <form className="flex min-h-0 flex-1 flex-col" noValidate onSubmit={handleSubmit(submit)}>
       <DialogBody>
         <FormAlert id={`${id}-alert`} message={message} />
+        {reviewing ? <DeliveryReview lines={lines} receivedOn={getValues('received_on')} note={getValues('note')} file={file} /> : <>
         <FieldGrid>
           <Field id={`${id}-date`} label={t('assets.store.deliveries.receivedOn')} required error={errors.received_on?.message}>
             <Input id={`${id}-date`} type="date" dir="ltr" max={todayIso()} className="min-h-11 font-mono tabular-nums" aria-invalid={!!errors.received_on || undefined} {...register('received_on', {
@@ -115,10 +121,11 @@ function DeliveryForm({ onOpenChange, onSaved, onBusyChange, initialFile }: Omit
             {t('assets.store.deliveries.clearFile')}
           </Button>
         )}
+        </>}
       </DialogBody>
       <DialogFooter>
-        <Button type="button" variant="secondary" className="min-h-11" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>{t('common.cancel')}</Button>
-        <Button type="submit" className="min-h-11" disabled={mutation.isPending}>{t(mutation.isPending ? 'assets.store.deliveries.saving' : 'assets.store.deliveries.save')}</Button>
+        <Button type="button" variant="secondary" className="min-h-11" onClick={() => { if (reviewing) setReviewing(false); else onOpenChange(false) }} disabled={mutation.isPending}>{t(reviewing ? 'assets.store.deliveries.editLines' : 'common.cancel')}</Button>
+        <Button type="submit" className="min-h-11" disabled={mutation.isPending}>{t(mutation.isPending ? 'assets.store.deliveries.saving' : reviewing ? 'assets.store.deliveries.save' : 'assets.store.deliveries.review')}</Button>
       </DialogFooter>
     </form>
   )

@@ -12,7 +12,7 @@ PARENT = "0109_book_folder_shares"
 OUTCOME = "0110_step_outcome_seen"
 PRINTS = "0110_employee_statement_prints"
 RECONCILED = "0111_step_outcome_seen"
-HEAD = "0113_store_room"
+HEAD = "0114_store_count"
 
 
 def _config(database: Path) -> Config:
@@ -120,7 +120,16 @@ def _assert_preserved(connection: Connection, before: dict) -> None:
 
 @pytest.mark.parametrize(
     "starting_revisions",
-    [(PARENT,), (PRINTS,), (OUTCOME,), (PRINTS, OUTCOME), (RECONCILED,), ("0112_store",), (HEAD,)],
+    [
+        (PARENT,),
+        (PRINTS,),
+        (OUTCOME,),
+        (PRINTS, OUTCOME),
+        (RECONCILED,),
+        ("0112_store",),
+        ("0113_store_room",),
+        (HEAD,),
+    ],
     ids=[
         "shared-parent",
         "prints-only",
@@ -129,6 +138,7 @@ def _assert_preserved(connection: Connection, before: dict) -> None:
         "renamed-outcome",
         "store",
         "store-room",
+        "store-count",
     ],
 )
 def test_populated_deployed_paths_preserve_rows(

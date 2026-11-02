@@ -12,7 +12,7 @@ export function WidgetEmpty({ message, to, action }: { message: string; to?: str
   return (
     <div className={`${WIDGET_SUPPORT} flex shrink-0 flex-col items-start gap-0.5 pt-1 text-muted-foreground`}>
       <p>{message}</p>
-      {to && <Link to={to} className="rounded-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{action}</Link>}
+      {to && <Link to={to} className="rounded-sm font-medium text-primary-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{action}</Link>}
     </div>
   )
 }
@@ -38,7 +38,7 @@ export function WidgetFrame({ title, count, viewAllTo, compact = false, children
         </h3>
         {viewAllTo && <TooltipProvider><Tooltip>
           <TooltipTrigger asChild>
-            <Link to={viewAllTo} aria-label={viewAllLabel} className="inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-sm text-[0.75em] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Link to={viewAllTo} aria-label={viewAllLabel} className="inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-sm text-[0.75em] font-medium text-primary-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               {!compact && <span className="hidden @[20rem]/widget:inline">{t('dashboard.viewAll')}</span>}
               <ChevronRight aria-hidden className="size-3.5 rtl:rotate-180" />
             </Link>

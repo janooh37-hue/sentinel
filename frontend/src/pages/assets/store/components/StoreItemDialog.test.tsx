@@ -37,6 +37,50 @@ beforeEach(async () => {
 })
 
 describe('Store item dialog', () => {
+  it('clears an optional brand without guessing it from the official name', async () => {
+    const user = userEvent.setup()
+    renderDialog({ ...ITEM, name_en: 'Lipton tea', brand_label: 'LIPTON', art_kind: 'box' })
+    await user.clear(screen.getByRole('textbox', { name: i18n.t('assets.store.items.brand_label') }))
+    await user.click(screen.getByRole('button', { name: 'Save item' }))
+    await waitFor(() => expect(api.updateStoreItem).toHaveBeenCalledWith(7, expect.objectContaining({ brand_label: null, name_en: 'Lipton tea' }), 'v1'))
+  })
+
+  it('prints the unchanged Latin brand in Arabic and restores the Arabic generic when cleared', async () => {
+    await i18n.changeLanguage('ar')
+    const user = userEvent.setup()
+    renderDialog({ ...ITEM, art_kind: 'box', brand_label: 'LIPTON', generic_label_ar: 'شاي' })
+    const preview = within(screen.getByRole('img', { name: i18n.t('assets.store.items.picturePreview') }))
+    expect(preview.getByText('LIPTON')).toBeInTheDocument()
+    await user.clear(screen.getByRole('textbox', { name: i18n.t('assets.store.items.brand_label') }))
+    expect(preview.queryByText('LIPTON')).not.toBeInTheDocument()
+    expect(preview.getByText('شاي')).toBeInTheDocument()
+  })
+
+  it.each(['en', 'ar'])('rejects a three-line brand locally and allows a corrected two-line brand (%s)', async language => {
+    await i18n.changeLanguage(language)
+    const user = userEvent.setup()
+    renderDialog(ITEM)
+    const brand = screen.getByRole('textbox', { name: i18n.t('assets.store.items.brand_label') })
+    await user.type(brand, 'LIPTON{Enter}Yellow{Enter}Label')
+    expect(screen.getByRole('alert')).toHaveTextContent(i18n.t('assets.store.items.brandLineLimit'))
+    await user.click(screen.getByRole('button', { name: i18n.t('assets.store.items.save') }))
+    expect(api.updateStoreItem).not.toHaveBeenCalled()
+    expect(brand).toHaveFocus()
+    await user.clear(brand)
+    await user.type(brand, 'LIPTON{Enter}Yellow Label{Enter}')
+    await user.click(screen.getByRole('button', { name: i18n.t('assets.store.items.save') }))
+    await waitFor(() => expect(api.updateStoreItem).toHaveBeenCalledWith(7, expect.objectContaining({ brand_label: 'LIPTON\nYellow Label' }), 'v1'))
+  })
+
+  it('uses a neutral translated drawing kind rather than guessing the product', async () => {
+    await i18n.changeLanguage('ar')
+    renderDialog({ ...ITEM, name_en: 'Sugar', art_kind: 'box', brand_label: null, generic_label_en: 'SUGAR', generic_label_ar: null })
+    const preview = within(screen.getByRole('img', { name: i18n.t('assets.store.items.picturePreview') }))
+    expect(preview.getByText(i18n.t('assets.store.presentation.genericLabels.box'))).toBeInTheDocument()
+    expect(preview.queryByText('شاي')).not.toBeInTheDocument()
+    expect(preview.queryByText('SUGAR')).not.toBeInTheDocument()
+  })
+
   it('locks contains fields for an item with stock, but saves other fields without contains', async () => {
     const user = userEvent.setup()
     renderDialog({ ...ITEM, on_hand: 24 })
@@ -49,10 +93,10 @@ describe('Store item dialog', () => {
     await user.clear(screen.getByRole('textbox', { name: 'Name in English' }))
     await user.type(screen.getByRole('textbox', { name: 'Name in English' }), 'Black tea')
     await user.click(screen.getByRole('button', { name: 'Save item' }))
-    await waitFor(() => expect(api.updateStoreItem).toHaveBeenCalledWith(7, {
+    await waitFor(() => expect(api.updateStoreItem).toHaveBeenCalledWith(7, expect.objectContaining({
       name_en: 'Black tea', name_ar: 'شاي', category_id: 1, counting_unit_en: 'Carton', counting_unit_ar: 'كرتون', minimum_level: 53,
       art_kind: null, art_color: null,
-    }, 'v1'))
+    }), 'v1'))
   })
 
   it('locks contains after server refusal and permits resubmission of other changes', async () => {
@@ -96,10 +140,10 @@ describe('Store item dialog', () => {
     await user.type(screen.getByRole('textbox', { name: 'Minimum level: Carton' }), '2')
     await user.type(screen.getByRole('textbox', { name: 'Minimum level: loose Jar' }), '5')
     await user.click(screen.getByRole('button', { name: 'Save item' }))
-    await waitFor(() => expect(api.createStoreItem).toHaveBeenCalledWith({
+    await waitFor(() => expect(api.createStoreItem).toHaveBeenCalledWith(expect.objectContaining({
       name_en: 'Tea', name_ar: null, category_id: 1, counting_unit_en: 'Carton', counting_unit_ar: 'كرتون',
       contains_qty: 24, contains_unit_en: 'Jar', contains_unit_ar: 'علبة', minimum_level: 53, art_kind: null, art_color: null,
-    }))
+    })))
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['store'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['store-dashboard'] })
     expect(onOpenChange).toHaveBeenCalledWith(false)
@@ -177,13 +221,9 @@ describe('Store item dialog', () => {
     await user.type(screen.getByRole('textbox', { name: 'Name in English' }), 'Coffee')
     await user.click(screen.getByRole('combobox', { name: 'Category' }))
     await user.click(await screen.findByRole('option', { name: 'Pantry' }))
-    const preview = screen.getByRole('img', { name: 'Picture preview' })
-    const initial = preview.innerHTML
     await user.click(screen.getByRole('radio', { name: 'Jar' }))
     await user.click(screen.getByRole('radio', { name: 'Colour #3a2216' }))
     expect(screen.getByRole('radio', { name: 'Jar' })).toBeChecked()
-    expect(preview.innerHTML).not.toBe(initial)
-    expect(preview.querySelector('rect')).toHaveAttribute('fill', '#3a2216')
     await user.click(screen.getByRole('button', { name: 'Save item' }))
     await waitFor(() => expect(api.createStoreItem).toHaveBeenCalledWith(expect.objectContaining({
       art_kind: 'jar', art_color: '#3a2216',

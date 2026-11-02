@@ -1,4 +1,4 @@
-"""OPERATOR: fill missing Store drawing fields from the opening-stock JSON.
+"""OPERATOR: fill missing Store drawing and presentation fields from opening JSON.
 
 Usage: python scripts/store_set_art.py --json scripts/store_opening_2026-10-29.json --actor admin@example.ae
 Existing non-null fields are never overwritten. Items match by exact name_en.
@@ -23,6 +23,7 @@ from app.db import session as db_session  # noqa: E402
 from app.db.models import StoreItem  # noqa: E402
 from app.db.repos._locking import begin_immediate_if_idle  # noqa: E402
 from app.db.repos.audit_repo import append_audit  # noqa: E402
+from app.schemas.store import StoreItemPresentation  # noqa: E402
 from app.services.store_service import _check_art  # noqa: E402
 
 
@@ -31,6 +32,7 @@ def set_art(db: Session, data: dict[str, Any], *, actor: str) -> int:
     entries = {entry["name_en"]: entry for entry in data["items"]}
     for entry in entries.values():
         _check_art(entry.get("art_kind"), entry.get("art_color"))
+        entry.update(StoreItemPresentation.model_validate(entry).model_dump())
     begin_immediate_if_idle(db)
     changed = 0
     try:
@@ -38,7 +40,7 @@ def set_art(db: Session, data: dict[str, Any], *, actor: str) -> int:
             entry = entries[item.name_en]
             fields = {
                 key: entry[key].lower() if key == "art_color" else entry[key]
-                for key in ("art_kind", "art_color")
+                for key in ("art_kind", "art_color", *StoreItemPresentation.model_fields)
                 if getattr(item, key) is None and entry.get(key) is not None
             }
             if not fields:
@@ -70,7 +72,7 @@ def main() -> int:
     data = json.loads(args.json.read_text(encoding="utf-8"))
     with db_session.SessionLocal() as db:
         changed = set_art(db, data, actor=args.actor)
-    print(f"updated drawings for {changed} Store items")
+    print(f"updated drawings/presentation for {changed} Store items")
     return 0
 
 

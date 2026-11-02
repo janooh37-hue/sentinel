@@ -105,17 +105,24 @@ TypeScript 6 for ESLint and API generation, overrides FortuneSheet's vulnerable
 UUID dependency, and applies the Sileo patch. Run
 `pnpm -C frontend install --frozen-lockfile` to reproduce the dependency set.
 
-### Migration history recovery (0110–0113)
+### Migration history recovery (0110–0114)
 
 Keep both merged `0110` identities: `0110_employee_statement_prints` and
 `0110_step_outcome_seen` independently follow `0109_book_folder_shares`.
-`0111_step_outcome_seen` reconciles them without DDL; `0112_store` and the
-single head `0113_store_room` retain their IDs and parents. PR #273 had renamed
+`0111_step_outcome_seen` reconciles them without DDL; `0112_store` and
+`0113_store_room` retain their IDs and parents. PR #273 had renamed
 the original outcome revision, leaving historical databases unable to resolve
 their version. Restoring that revision, rather than stamping or replaying its
 backfill, preserves unread redecisions and later acknowledgement timestamps.
 Databases already at `0111`, `0112` or `0113` already contain the outcome
 schema and do not rerun the restored ancestor.
+`0114_store_count` now follows `0113_store_room` as the sole head, adding
+nullable item-presentation fields and delivery-only carton contents. It
+backfills only the 13 exact approved item names; official names, recorded
+conversions and existing count/delivery/handover/disposal values are unchanged.
+Downgrading to `0113_store_room` removes only this new presentation/annotation
+schema, not the retained historical revisions or Store ledger.
+
 
 Rehearse recovery only with an explicit isolated Alembic URL. For a production
 schema-only rehearsal, first compare every reconstructed `sqlite_schema`

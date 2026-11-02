@@ -63,7 +63,41 @@ class StoreCategoryRead(ORMBase):
 # ── Store items ──────────────────────────────────────────────────────────────
 
 
-class StoreItemCreate(BaseModel):
+class StoreItemPresentation(BaseModel):
+    brand_label: str | None = Field(default=None, max_length=40)
+    generic_label_en: str | None = Field(default=None, max_length=32)
+    generic_label_ar: str | None = Field(default=None, max_length=32)
+    short_name_en: str | None = Field(default=None, max_length=128)
+    short_name_ar: str | None = Field(default=None, max_length=128)
+    pack_description_en: str | None = Field(default=None, max_length=160)
+    pack_description_ar: str | None = Field(default=None, max_length=160)
+
+    @field_validator(
+        "brand_label",
+        "generic_label_en",
+        "generic_label_ar",
+        "short_name_en",
+        "short_name_ar",
+        "pack_description_en",
+        "pack_description_ar",
+        mode="before",
+    )
+    @classmethod
+    def _strip_presentation(cls, value: str | None) -> str | None:
+        return _strip(value) if isinstance(value, str) else value
+
+    @field_validator("brand_label", mode="before")
+    @classmethod
+    def _brand_has_at_most_two_lines(cls, value: str | None) -> str | None:
+        if not isinstance(value, str):
+            return value
+        lines = value.strip().splitlines()
+        if len(lines) > 2:
+            raise ValueError("brand_label must have at most two printed lines")
+        return "\n".join(lines) or None
+
+
+class StoreItemCreate(StoreItemPresentation):
     name_en: str = Field(min_length=1, max_length=255)
     name_ar: str | None = Field(default=None, max_length=255)
     category_id: int
@@ -82,7 +116,7 @@ class StoreItemCreate(BaseModel):
         return _strip(value)
 
 
-class StoreItemUpdate(BaseModel):
+class StoreItemUpdate(StoreItemPresentation):
     """Partial update; send ``contains_qty`` with both units, or all three null."""
 
     name_en: str | None = Field(default=None, min_length=1, max_length=255)
@@ -103,7 +137,7 @@ class StoreItemUpdate(BaseModel):
         return _strip(value)
 
 
-class StoreItemRead(ORMBase):
+class StoreItemRead(StoreItemPresentation, ORMBase):
     id: int
     code: str
     name_en: str
@@ -125,7 +159,7 @@ class StoreItemRead(ORMBase):
     version: str
 
 
-class StorePickerItem(BaseModel):
+class StorePickerItem(StoreItemPresentation):
     id: int
     code: str
     name_en: str
@@ -142,7 +176,7 @@ class StorePickerItem(BaseModel):
 # ── Batches and lines ────────────────────────────────────────────────────────
 
 
-class StoreItemRef(ORMBase):
+class StoreItemRef(StoreItemPresentation, ORMBase):
     """The Store item fields every Batch-level row carries."""
 
     item_id: int
@@ -183,9 +217,15 @@ class _LineInput(BaseModel):
 
 class StoreDeliveryLineInput(_LineInput):
     quantity: int = Field(ge=0)
+    carton_contains_qty: int | None = Field(default=None, ge=1)
     source_text: str | None = None
     noted_quantity: int | None = Field(default=None, ge=0)
     difference_reason: str | None = Field(default=None, max_length=200)
+
+    @field_validator("carton_contains_qty", mode="before")
+    @classmethod
+    def _blank_contents_is_null(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
 
     @field_validator("source_text", "difference_reason")
     @classmethod
@@ -203,6 +243,7 @@ class StoreLineRead(StoreItemRef):
     expiry_date: date_t | None
     expiry_month_only: bool
     quantity: int
+    carton_contains_qty: int | None = None
     noted_quantity: int | None = None
     difference_reason: str | None = None
 
@@ -250,7 +291,10 @@ class StoreScanLine(BaseModel):
     raw_text: str
     item_id: int | None
     match_score: float = Field(ge=0, le=100)
-    quantity: int | None
+    cartons: int | None = Field(default=None, ge=0)
+    loose_quantity: int | None = Field(default=None, ge=0)
+    carton_contains_qty: int | None = Field(default=None, ge=1)
+    expiry: str | None = None
     confidence: float = Field(ge=0, le=100)
     page: int = Field(ge=0, description="Zero-based page index.")
     bbox: StoreScanBox

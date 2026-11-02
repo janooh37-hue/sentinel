@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { StorePickerItem } from '@/lib/api'
-import { localized } from '@/lib/language'
+import { StoreItemSummary } from '@/pages/assets/store/components/RecordParts'
 import { useStorePickerItems } from '@/pages/assets/store/storeUtils'
 import type { FieldProps, TemplateField } from '../types'
 
@@ -84,6 +84,8 @@ export function ItemsTableField({
   const { fields, append, remove } = useFieldArray({ control, name })
   const error = (errors[name] as { message?: string } | undefined)?.message
   const atCap = typeof maxRows === 'number' && fields.length >= maxRows
+  const rowLabel = (column: string, index: number): string =>
+    t('application.itemsTable.cellLabel', { label: column, row: index + 1 })
 
   const onQtyChange = (idx: number, val: string) => {
     setValue(`${name}.${idx}.qty`, val, { shouldDirty: true })
@@ -108,7 +110,7 @@ export function ItemsTableField({
         </Button>
       </div>
       <div className="overflow-x-auto rounded-md border border-hairline bg-surface-tinted">
-        <table className="w-full border-collapse text-sm [&_td]:px-2 [&_td]:py-1.5 [&_th]:px-2 [&_th]:py-2 [&_tbody_tr]:border-t [&_tbody_tr]:border-hairline">
+        <table aria-label={label} className="w-full border-collapse text-sm [&_td]:px-2 [&_td]:py-1.5 [&_th]:px-2 [&_th]:py-2 [&_tbody_tr]:border-t [&_tbody_tr]:border-hairline">
           <thead>
             <tr className="border-b border-hairline text-xs font-semibold uppercase tracking-[0.04em] text-muted-foreground [&_th]:text-start">
               <th scope="col" className="w-12">#</th>
@@ -127,7 +129,7 @@ export function ItemsTableField({
                   <th scope="col">{t('application.itemsTable.remarks', { defaultValue: 'Remarks' })}</th>
                 </>
               )}
-              <th scope="col" className="w-10" />
+              <th scope="col" className="w-10">{t('common.delete')}</th>
             </tr>
           </thead>
           <tbody>
@@ -143,6 +145,7 @@ export function ItemsTableField({
                 <td>
                   <Input
                     {...register(`${name}.${idx}.sno`)}
+                    aria-label={rowLabel('#', idx)}
                     defaultValue={String(idx + 1)}
                     className="h-8 px-2"
                   />
@@ -150,7 +153,7 @@ export function ItemsTableField({
                 {columns ? (
                   columns.map((col) => (
                     <td key={col.key}>
-                      <Input {...register(`${name}.${idx}.${col.key}`)} className="h-8 px-2" />
+                      <Input {...register(`${name}.${idx}.${col.key}`)} aria-label={rowLabel(isAr ? col.label_ar : col.label_en, idx)} className="h-8 px-2" />
                     </td>
                   ))
                 ) : (
@@ -159,19 +162,20 @@ export function ItemsTableField({
                       {itemCatalog === 'store' ? (
                         <StoreItemCodeInput name={name} index={idx} />
                       ) : (
-                        <Input {...register(`${name}.${idx}.code`)} className="h-8 px-2" />
+                        <Input {...register(`${name}.${idx}.code`)} aria-label={rowLabel(t('application.itemsTable.code'), idx)} className="h-8 px-2" />
                       )}
                     </td>
                     <td>
-                      <Input {...register(`${name}.${idx}.description`)} dir="auto" className="h-8 px-2" />
+                      <Input {...register(`${name}.${idx}.description`)} aria-label={rowLabel(t('application.itemsTable.description'), idx)} dir="auto" className="h-8 px-2" />
                     </td>
                     <td>
-                      <Input {...register(`${name}.${idx}.unit`)} dir="auto" className="h-8 px-2" />
+                      <Input {...register(`${name}.${idx}.unit`)} aria-label={rowLabel(t('application.itemsTable.unit'), idx)} dir="auto" className="h-8 px-2" />
                     </td>
                     <td>
                       <Input
                         type="text"
                         inputMode="numeric"
+                        aria-label={rowLabel(t('application.itemsTable.qty'), idx)}
                         defaultValue={
                           (getValues(`${name}.${idx}.qty`) as string | undefined) ??
                           (getValues(`${name}.${idx}.quantity`) as string | undefined) ??
@@ -182,7 +186,7 @@ export function ItemsTableField({
                       />
                     </td>
                     <td>
-                      <Input {...register(`${name}.${idx}.remarks`)} className="h-8 px-2" />
+                      <Input {...register(`${name}.${idx}.remarks`)} aria-label={rowLabel(t('application.itemsTable.remarks'), idx)} className="h-8 px-2" />
                     </td>
                   </>
                 )}
@@ -225,7 +229,7 @@ function StoreItemCodeInput({ name, index }: { name: string; index: number }): R
   const listId = useId()
   const query = (code ?? '').trim().toLocaleLowerCase()
   const items = (data ?? []).filter((item) =>
-    [item.code, item.name_en, item.name_ar ?? ''].some((value) =>
+    [item.code, item.name_en, item.name_ar ?? '', item.short_name_en ?? '', item.short_name_ar ?? ''].some((value) =>
       value.toLocaleLowerCase().includes(query),
     ),
   )
@@ -290,7 +294,7 @@ function StoreItemCodeInput({ name, index }: { name: string; index: number }): R
           inputRef.current = element
         }}
         role={isSuccess ? 'combobox' : undefined}
-        aria-label={isSuccess ? t('application.itemsTable.picker.label', { row: index + 1 }) : undefined}
+        aria-label={t('application.itemsTable.picker.label', { row: index + 1 })}
         aria-expanded={isSuccess ? expanded : undefined}
         aria-controls={expanded ? listId : undefined}
         aria-autocomplete={isSuccess ? 'list' : undefined}
@@ -341,6 +345,8 @@ function StoreItemCodeInput({ name, index }: { name: string; index: number }): R
       {expanded && createPortal(
         <div
           ref={panelRef}
+          role="region"
+          aria-label={t('application.itemsTable.picker.options')}
           dir={isAr ? 'rtl' : 'ltr'}
           className="fixed z-[70] overflow-y-auto rounded-md border border-border bg-surface py-1 shadow-md"
         >
@@ -357,10 +363,7 @@ function StoreItemCodeInput({ name, index }: { name: string; index: number }): R
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => choose(item)}
               >
-                <bdi dir="ltr" className="font-mono tabular-nums">{item.code}</bdi>
-                <span dir="auto" className="min-w-0 flex-1 break-words">
-                  {localized(item.name_ar, item.name_en, i18n.language)}
-                </span>
+                <StoreItemSummary item={item} size={44} showCode className="flex-1" />
                 {optionIndex === activeIndex && <Check aria-hidden="true" className="size-4 shrink-0" />}
               </button>
             ))}

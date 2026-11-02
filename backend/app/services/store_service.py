@@ -342,8 +342,24 @@ def _item_on_hand(db: Session, ledger: _Ledger, as_of: date) -> dict[int, int]:
 # ── Read builders ────────────────────────────────────────────────────────────
 
 
+_PRESENTATION_FIELDS = (
+    "brand_label",
+    "generic_label_en",
+    "generic_label_ar",
+    "short_name_en",
+    "short_name_ar",
+    "pack_description_en",
+    "pack_description_ar",
+)
+
+
+def _presentation(item: StoreItem) -> dict[str, str | None]:
+    return {key: getattr(item, key) for key in _PRESENTATION_FIELDS}
+
+
 def _item_ref(item: StoreItem) -> dict[str, Any]:
     return {
+        **_presentation(item),
         "item_id": item.id,
         "item_code": item.code,
         "item_name_en": item.name_en,
@@ -373,6 +389,9 @@ def _line_read(
         expiry_date=batch.expiry_date,
         expiry_month_only=batch.expiry_month_only,
         quantity=line.quantity,
+        carton_contains_qty=line.carton_contains_qty
+        if isinstance(line, StoreDeliveryLine)
+        else None,
         noted_quantity=line.noted_quantity if isinstance(line, StoreDeliveryLine) else None,
         difference_reason=line.difference_reason if isinstance(line, StoreDeliveryLine) else None,
     )
@@ -384,6 +403,7 @@ def _item_etag(row: StoreItem) -> str:
 
 def _item_read(row: StoreItem, on_hand: int) -> StoreItemRead:
     return StoreItemRead(
+        **_presentation(row),
         id=row.id,
         code=row.code,
         name_en=row.name_en,
@@ -577,6 +597,7 @@ def list_picker_items(db: Session) -> list[StorePickerItem]:
     ).all()
     return [
         StorePickerItem(
+            **_presentation(row),
             id=row.id,
             code=row.code,
             name_en=row.name_en,
@@ -649,6 +670,7 @@ def create_item(
     with _write(db, commit=commit):
         _get_category(db, payload.category_id)
         row = StoreItem(
+            **{key: getattr(payload, key) for key in _PRESENTATION_FIELDS},
             code=_next_code(db),
             name_en=payload.name_en.strip(),
             name_ar=payload.name_ar,
@@ -1003,7 +1025,9 @@ def scan_delivery(db: Session, *, filename: str, data: bytes, media_type: str) -
             )
         # word_boxes_from_bytes does not acquire the gate itself.
         with ocr.OCR_GATE:
-            pages = ocr.word_boxes_from_bytes(data, lang="eng", timeout=SCAN_PAGE_TIMEOUT_SECONDS)
+            pages = ocr.word_boxes_from_bytes(
+                data, lang="ara+eng", timeout=SCAN_PAGE_TIMEOUT_SECONDS
+            )
     except ocr.OcrTimeoutError as exc:
         raise ValidationFailedError(
             "STORE_SCAN_TIMEOUT",
@@ -1051,7 +1075,10 @@ def scan_delivery(db: Session, *, filename: str, data: bytes, media_type: str) -
                     raw_text=raw_text,
                     item_id=choices[best[0]] if best and score >= 85 else None,
                     match_score=score,
-                    quantity=parsed.quantity,
+                    cartons=parsed.cartons,
+                    loose_quantity=parsed.loose_quantity,
+                    carton_contains_qty=parsed.carton_contains_qty,
+                    expiry=parsed.expiry,
                     confidence=max(0.0, min(100.0, sum(w.confidence for w in words) / len(words))),
                     page=page_index,
                     bbox=StoreScanBox(x=left, y=top, w=right - left, h=bottom - top),
@@ -1075,6 +1102,17 @@ def create_delivery(
     _validate_delivery_lines(payload.lines)
     with _write(db):
         resolved = _resolve_lines(db, payload.lines)
+        for (batch, _quantity), line in zip(resolved, payload.lines, strict=True):
+            if (
+                line.carton_contains_qty is not None
+                and batch.item.contains_qty is not None
+                and line.carton_contains_qty != batch.item.contains_qty
+            ):
+                raise ValidationFailedError(
+                    "STORE_DELIVERY_CONTAINS_MISMATCH",
+                    "Carton contents must match the item's recorded conversion.",
+                    item_id=line.item_id,
+                )
         row = StoreDelivery(
             received_on=payload.received_on,
             note=payload.note,
@@ -1083,6 +1121,7 @@ def create_delivery(
                 StoreDeliveryLine(
                     batch_id=batch.id,
                     quantity=quantity,
+                    carton_contains_qty=line.carton_contains_qty,
                     noted_quantity=line.noted_quantity,
                     difference_reason=line.difference_reason,
                 )

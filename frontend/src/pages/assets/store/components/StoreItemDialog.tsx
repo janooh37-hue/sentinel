@@ -7,6 +7,7 @@ import { StoreItemArt } from '@/components/StoreItemArt'
 import { STORE_ART_COLORS, STORE_ART_KINDS } from '@/components/storeArtCatalog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ApiError, api, type StoreCategoryCreate, type StoreCategoryRead, type StoreItemCreate, type StoreItemRead, type StoreItemUpdate } from '@/lib/api'
 import { toast } from '@/lib/toast'
@@ -61,6 +62,13 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
   })
   const [artKind, setArtKind] = useState<string | null>(item?.art_kind ?? null)
   const [artColor, setArtColor] = useState<string | null>(item?.art_color ?? null)
+  const [presentation, setPresentation] = useState({
+    brand_label: item?.brand_label ?? '',
+    generic_label_en: item?.generic_label_en ?? '', generic_label_ar: item?.generic_label_ar ?? '',
+    short_name_en: item?.short_name_en ?? '', short_name_ar: item?.short_name_ar ?? '',
+    pack_description_en: item?.pack_description_en ?? '', pack_description_ar: item?.pack_description_ar ?? '',
+  })
+  const brandError = presentation.brand_label.trim().split(/\r?\n/).length > 2 ? t('assets.store.items.brandLineLimit') : null
   const artColors = artColor && !STORE_ART_COLORS.some((color) => color === artColor) ? [...STORE_ART_COLORS, artColor] : STORE_ART_COLORS
   const [contains, setContains] = useState(item?.contains_qty != null)
   const [locked, setLocked] = useState(item != null && item.on_hand > 0)
@@ -135,6 +143,10 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
     <form className="flex min-h-0 flex-1 flex-col" onSubmit={(event) => {
       event.preventDefault()
       if (busy) return
+      if (brandError) {
+        document.getElementById(`${id}-brand_label`)?.focus()
+        return
+      }
       const minimumLevel = quantityFromParts(minimum, units)
       if (!values.name_en.trim() || !values.category_id || !values.counting_unit_en.trim() || !values.counting_unit_ar.trim() ||
         (!locked && contains && (!/^\d+$/.test(values.contains_qty) || !Number.isSafeInteger(Number(values.contains_qty)) || Number(values.contains_qty) < 2 || !values.contains_unit_en.trim() || !values.contains_unit_ar.trim())) ||
@@ -146,7 +158,11 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
       mutation.mutate({ name_en: values.name_en.trim(), name_ar: values.name_ar.trim() || null,
         category_id: Number(values.category_id), counting_unit_en: values.counting_unit_en.trim(), counting_unit_ar: values.counting_unit_ar.trim(),
         contains_qty: units.contains_qty, contains_unit_en: units.contains_unit_en?.trim() || null, contains_unit_ar: units.contains_unit_ar?.trim() || null,
-        minimum_level: minimumLevel, art_kind: artKind, art_color: artColor })
+        minimum_level: minimumLevel, art_kind: artKind, art_color: artColor,
+        brand_label: presentation.brand_label.trim() || null,
+        generic_label_en: presentation.generic_label_en.trim() || null, generic_label_ar: presentation.generic_label_ar.trim() || null,
+        short_name_en: presentation.short_name_en.trim() || null, short_name_ar: presentation.short_name_ar.trim() || null,
+        pack_description_en: presentation.pack_description_en.trim() || null, pack_description_ar: presentation.pack_description_ar.trim() || null })
     }}>
       <DialogBody>
         <FormAlert id={alertId} message={error} />
@@ -183,7 +199,7 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
           <p className="text-xs text-muted-foreground">{t('assets.store.items.pictureHint')}</p>
           <div className="flex flex-wrap items-center gap-4">
             <div className="rounded-lg bg-store-art-surface p-2" role="img" aria-label={t('assets.store.items.picturePreview')}>
-              <StoreItemArt kind={artKind} color={artColor} categoryId={Number(values.category_id) || null} size={80} />
+              <StoreItemArt kind={artKind} color={artColor} categoryId={Number(values.category_id) || null} brandLabel={presentation.brand_label} labelEn={presentation.generic_label_en} labelAr={presentation.generic_label_ar} size={100} />
             </div>
             <fieldset className="min-w-0 flex-1 space-y-2" role="radiogroup">
               <legend className="text-xs font-medium">{t('assets.store.items.pictureKind')}</legend>
@@ -193,7 +209,7 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
                     aria-label={t(kind ? `assets.store.items.pictureKinds.${kind}` : 'assets.store.items.pictureDefault')} className="peer sr-only" />
                   <span className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-border bg-store-art-surface peer-checked:border-primary peer-checked:ring-1 peer-checked:ring-primary peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary peer-disabled:opacity-50"
                     title={t(kind ? `assets.store.items.pictureKinds.${kind}` : 'assets.store.items.pictureDefault')}>
-                    <StoreItemArt kind={kind} color={artColor} categoryId={Number(values.category_id) || null} size={44} />
+                    <StoreItemArt kind={kind} color={artColor} categoryId={Number(values.category_id) || null} brandLabel={presentation.brand_label} labelEn={presentation.generic_label_en} labelAr={presentation.generic_label_ar} size={44} />
                   </span>
                   <span aria-hidden="true" className="absolute end-0 top-0 hidden rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground peer-checked:block">✓</span>
                 </label>)}
@@ -213,6 +229,10 @@ function ItemForm({ item, onOpenChange, onBusyChange }: {
               </label>)}
             </div>
           </fieldset>
+          <FieldGrid>{(Object.keys(presentation) as (keyof typeof presentation)[]).map(key => <Field key={key} id={`${id}-${key}`} label={t(`assets.store.items.${key}`)}>
+            {key === 'brand_label' ? <Textarea id={`${id}-${key}`} dir="ltr" rows={2} value={presentation[key]} maxLength={40} disabled={busy} aria-invalid={!!brandError} aria-describedby={brandError ? `${id}-brand-error` : undefined} onChange={event => setPresentation(old => ({ ...old, [key]: event.target.value }))} /> : <Input id={`${id}-${key}`} dir={key.endsWith('_ar') ? 'rtl' : 'ltr'} value={presentation[key]} maxLength={key.startsWith('generic') ? 32 : key.startsWith('short') ? 128 : 160} disabled={busy} onChange={event => setPresentation(old => ({ ...old, [key]: event.target.value }))} className="min-h-11" />}
+            {key === 'brand_label' && brandError && <p id={`${id}-brand-error`} role="alert" className="text-sm text-accent">{brandError}</p>}
+          </Field>)}</FieldGrid>
         </fieldset>
         <FieldGrid>
           {textField('counting_unit_en', 'countingUnitEn', true)}

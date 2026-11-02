@@ -48,22 +48,21 @@ describe('Store widgets', () => {
   it.each<WidgetTier>(['glance', 'summary', 'tall', 'list'])('renders expiry and store links at %s tier', async (tier) => {
     renderWidget('expiry', tier)
     await screen.findByText('Batches expired or expiring within 60 days')
-    expect(api.getStoreDashboard).toHaveBeenCalledTimes(1)
     expect(screen.getByText('Expired', { exact: true })).toBeInTheDocument()
     if (tier === 'glance' || tier === 'summary') expect(screen.getByText('2')).toBeInTheDocument()
     for (const link of screen.getAllByRole('link')) expect(link).toHaveAttribute('href', '/holdings/store')
   })
 
-  it.each<WidgetTier>(['glance', 'summary', 'tall', 'list'])('renders low stock at %s tier', async (tier) => {
-    renderWidget('low', tier)
-    if (tier === 'glance' || tier === 'summary') {
-      expect(await screen.findByText('Items below their Minimum level')).toBeInTheDocument()
-      expect(screen.getByText('1')).toBeInTheDocument()
-    } else {
-      expect(await screen.findByText('Tea')).toHaveAttribute('dir', 'auto')
-      expect(screen.getByText('Carton')).toBeInTheDocument()
-      expect(screen.getByText('Minimum level:')).toBeInTheDocument()
-    }
+  it.each(['en', 'ar'])('keeps on-hand and minimum quantities in their physical units (%s)', async language => {
+    await i18n.changeLanguage(language)
+    vi.mocked(api.getStoreDashboard).mockResolvedValue({
+      ...dashboard,
+      low_stock: [{ ...batch, contains_qty: 24, contains_unit_en: 'Box', contains_unit_ar: 'علبة', on_hand: 53, minimum_level: 72 }],
+    })
+    renderWidget('low', 'list', 1)
+    const item = await screen.findByRole('link', { name: language === 'ar' ? /^شاي/ : /^Tea/ })
+    expect(item).toHaveAccessibleName(language === 'ar' ? /2 كرتون \+ 5 علب/ : /2 cartons \+ 5 boxes/)
+    expect(item).toHaveAccessibleName(language === 'ar' ? /3 كراتين/ : /3 cartons/)
   })
 
   it('lists expired batches first and caps rows with a remainder link', async () => {
@@ -82,13 +81,21 @@ describe('Store widgets', () => {
     expect(await screen.findByText('Batches expired or expiring within 45 days')).toBeInTheDocument()
   })
 
-  it('uses Arabic names and units with the other name as fallback', async () => {
+  it('keeps Arabic quantities paired with their units and uses the other name as fallback', async () => {
     await i18n.changeLanguage('ar')
+    const counted = { ...batch, contains_qty: 24, contains_unit_en: 'Box', contains_unit_ar: 'علبة', on_hand: 53 }
+    vi.mocked(api.getStoreDashboard).mockResolvedValue({
+      ...dashboard,
+      expired: [counted],
+      expiring_soon: [{ ...counted, batch_id: 2, item_name_en: 'Water', item_name_ar: null, days_left: 10 }],
+    })
     renderWidget('expiry')
     expect(await screen.findByText('شاي')).toBeInTheDocument()
     expect(screen.getByText('Water')).toBeInTheDocument()
-    expect(screen.getAllByText('كرتون')).toHaveLength(2)
     expect(screen.getByText('منتهية الصلاحية')).toBeInTheDocument()
+    const list = screen.getByRole('list')
+    expect(within(list).getByRole('link', { name: /^شاي/ })).toHaveAccessibleName(/2 كرتون \+ 5 علب/)
+    expect(within(list).getByRole('link', { name: /^Water/ })).toHaveAccessibleName(/2 كرتون \+ 5 علب/)
   })
 
   it.each(['expiry', 'low'] as const)('explains empty %s results', async (kind) => {

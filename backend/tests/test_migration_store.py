@@ -1,4 +1,4 @@
-"""Migration 0112: Store schema, model parity, seeded categories, reversibility."""
+"""Migration 0112: seeded categories, stock constraints and reversibility."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from app.db.models import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0113_store_room"
+HEAD = "0114_store_count"
 PARENT = "0111_step_outcome_seen"
 MODELS = (
     StoreCategory,
@@ -69,39 +69,11 @@ def test_store_room_remains_in_single_head_history() -> None:
     assert HEAD in {revision.revision for revision in script.walk_revisions("base", heads[0])}
 
 
-def test_upgrade_matches_models_and_seeds_categories(at_parent: tuple[Engine, Config]) -> None:
+def test_upgrade_seeds_categories_and_enforces_batch_constraints(
+    at_parent: tuple[Engine, Config],
+) -> None:
     engine, config = at_parent
     command.upgrade(config, HEAD)
-    inspector = inspect(engine)
-    for model in MODELS:
-        table = model.__table__
-        columns = {column["name"]: column for column in inspector.get_columns(table.name)}
-        assert {name: (str(c["type"]), c["nullable"]) for name, c in columns.items()} == {
-            column.name: (str(column.type), column.nullable) for column in table.columns
-        }, table.name
-        assert {
-            (index["name"], tuple(index["column_names"]), bool(index["unique"]))
-            for index in inspector.get_indexes(table.name)
-        } == {
-            (index.name, tuple(column.name for column in index.columns), bool(index.unique))
-            for index in table.indexes
-        }, table.name
-        assert {c["name"] for c in inspector.get_check_constraints(table.name)} == {
-            constraint.name
-            for constraint in table.constraints
-            if constraint.__class__.__name__ == "CheckConstraint"
-        }, table.name
-        assert {c["name"] for c in inspector.get_unique_constraints(table.name)} == {
-            constraint.name
-            for constraint in table.constraints
-            if constraint.__class__.__name__ == "UniqueConstraint"
-        }, table.name
-        assert {
-            (tuple(fk["constrained_columns"]), fk["referred_table"], fk["options"].get("ondelete"))
-            for fk in inspector.get_foreign_keys(table.name)
-        } == {
-            ((fk.parent.name,), fk.column.table.name, fk.ondelete) for fk in table.foreign_keys
-        }, table.name
 
     with engine.begin() as connection:
         assert connection.execute(

@@ -754,7 +754,12 @@ def test_delivery_scan_matches_items_and_alias_upsert_rematches(
             "Grand Total 1100.00",
         )
     ]
-    monkeypatch.setattr(ocr, "word_boxes_from_bytes", lambda raw, *, lang, timeout: pages)
+
+    def boxes(raw: bytes, *, lang: str, timeout: float) -> list[Any]:
+        assert lang == "ara+eng"
+        return pages
+
+    monkeypatch.setattr(ocr, "word_boxes_from_bytes", boxes)
     before_audit = len(api_db.scalars(select(AuditLog)).all())
 
     def scan() -> dict:
@@ -770,7 +775,9 @@ def test_delivery_scan_matches_items_and_alias_upsert_rematches(
     assert result["pages"] == [{"width": 1000, "height": 800}]
     assert len(result["lines"]) == 2
     line = result["lines"][0]
-    assert (line["item_id"], line["match_score"], line["quantity"]) == (first, 100, 8)
+    assert (line["item_id"], line["match_score"], line["cartons"]) == (first, 100, None)
+    assert "quantity" not in line
+    assert line["loose_quantity"] is None and line["carton_contains_qty"] is None
     assert line["confidence"] == 90 and line["page"] == 0
     assert line["bbox"] == {"x": 10, "y": 50, "w": 480, "h": 20}
     assert result["lines"][1]["item_id"] is None
@@ -827,9 +834,8 @@ def test_delivery_scan_drops_headings_and_preserves_misspelled_match(
 
     assert response.status_code == 200, response.text
     lines = response.json()["lines"]
-    assert [(line["raw_text"], line["quantity"]) for line in lines] == list(
-        zip(item_rows, [6, 4, 2, 10], strict=True)
-    )
+    assert [line["raw_text"] for line in lines] == item_rows
+    assert all(line["cartons"] is None and "quantity" not in line for line in lines)
     assert lines[1]["item_id"] == coffee_mate
     assert all(lines[index]["item_id"] is None for index in (0, 2, 3))
 
@@ -954,3 +960,251 @@ def test_zero_received_line_does_not_create_a_zero_usage_window(
     # The zero line still shows in delivery details and the In & out feed.
     feed = editor.get("/api/v1/store/movements", params={"kind": "in"}).json()
     assert any(line["quantity"] == 0 for row in feed for line in row["lines"])
+
+
+_LABELS = {
+    "brand_label": "LIPTON\nYellow Label",
+    "generic_label_en": "Tea",
+    "generic_label_ar": "شاي",
+    "short_name_en": "Lipton Yellow Label",
+    "short_name_ar": "ليبتون الأصفر",
+    "pack_description_en": "24 boxes \u00d7 400 g",
+    "pack_description_ar": "24 علبة \u00d7 400 غ",
+}
+
+
+def test_item_presentation_round_trip_references_and_blind_expected(
+    editor: TestClient,
+    category: StoreCategory,
+) -> None:
+    item = _item(
+        editor,
+        category,
+        "Official tea 400 g",
+        **{key: f"  {value}  " for key, value in _LABELS.items()},
+    )
+    assert {key: item[key] for key in _LABELS} == _LABELS
+    delivered = _deliver(editor, date(2026, 11, 2), (item["id"], "2028-01", 5))
+    assert delivered.status_code == 201
+    references = [
+        editor.get("/api/v1/store/items/picker").json()[0],
+        editor.get("/api/v1/store/batches", params={"item_id": item["id"]}).json()[0],
+        delivered.json()["lines"][0],
+    ]
+    expected = editor.get(
+        "/api/v1/store/counts/expected",
+        params={"counted_on": "2026-12-01"},
+    ).json()[0]
+    references.append(expected)
+    for reference in references:
+        assert {key: reference[key] for key in _LABELS} == _LABELS
+    assert not {"quantity", "on_hand", "noted_quantity", "expected_quantity"} & expected.keys()
+    assert delivered.json()["lines"][0]["carton_contains_qty"] is None
+    cleared = editor.patch(
+        f"/api/v1/store/items/{item['id']}",
+        headers={"If-Match": item["version"]},
+        json={key: (None if index % 2 else "   ") for index, key in enumerate(_LABELS)},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert all(cleared.json()[key] is None for key in _LABELS)
+    assert cleared.json()["name_en"] == "Official tea 400 g"
+    assert editor.get("/api/v1/store/items/picker").json()[0]["brand_label"] is None
+    assert editor.get("/api/v1/store/items").json()[0]["on_hand"] == 5
+
+
+@pytest.mark.parametrize(
+    ("field", "limit"),
+    [
+        ("brand_label", 40),
+        ("generic_label_en", 32),
+        ("generic_label_ar", 32),
+        ("short_name_en", 128),
+        ("short_name_ar", 128),
+        ("pack_description_en", 160),
+        ("pack_description_ar", 160),
+    ],
+)
+def test_item_presentation_length_limits_create_and_update(
+    editor: TestClient,
+    category: StoreCategory,
+    field: str,
+    limit: int,
+) -> None:
+    rejected = editor.post(
+        "/api/v1/store/items",
+        json={
+            "name_en": "Tea",
+            "category_id": category.id,
+            field: "x" * (limit + 1),
+        },
+    )
+    assert rejected.status_code == 422
+    item = _item(editor, category, **{field: "x" * limit})
+    rejected = editor.patch(
+        f"/api/v1/store/items/{item['id']}",
+        headers={"If-Match": item["version"]},
+        json={field: "x" * (limit + 1)},
+    )
+    assert rejected.status_code == 422
+
+
+def test_optional_delivery_contents_do_not_convert_unknown_whole_units(
+    editor: TestClient,
+    category: StoreCategory,
+) -> None:
+    item = _item(editor, category)
+    response = editor.post(
+        "/api/v1/store/deliveries",
+        json={
+            "received_on": TODAY.isoformat(),
+            "lines": [{"item_id": item["id"], "quantity": 3, "carton_contains_qty": 24}],
+        },
+    )
+    assert response.status_code == 201, response.text
+    line = response.json()["lines"][0]
+    assert (line["quantity"], line["carton_contains_qty"], line["contains_qty"]) == (3, 24, None)
+    reread = editor.get(f"/api/v1/store/deliveries/{response.json()['id']}").json()
+    assert reread["lines"][0]["carton_contains_qty"] == 24
+    stock = editor.get("/api/v1/store/items").json()[0]
+    assert stock["on_hand"] == 3 and stock["contains_qty"] is None
+    for invalid in (0, -1):
+        rejected = editor.post(
+            "/api/v1/store/deliveries",
+            json={
+                "received_on": TODAY.isoformat(),
+                "lines": [{"item_id": item["id"], "quantity": 3, "carton_contains_qty": invalid}],
+            },
+        )
+        assert rejected.status_code == 422
+
+
+def test_delivery_contents_mismatch_rejected_without_item_or_stock_mutation(
+    editor: TestClient,
+    category: StoreCategory,
+) -> None:
+    item = _item(
+        editor, category, contains_qty=12, contains_unit_en="Jar", contains_unit_ar="مرطبان"
+    )
+    for contents, status in ((24, 422), (12, 201), (None, 201)):
+        response = editor.post(
+            "/api/v1/store/deliveries",
+            json={
+                "received_on": TODAY.isoformat(),
+                "lines": [{"item_id": item["id"], "quantity": 12, "carton_contains_qty": contents}],
+            },
+        )
+        assert response.status_code == status, response.text
+        if status == 422:
+            assert _error(response)["code"] == "STORE_DELIVERY_CONTAINS_MISMATCH"
+        else:
+            assert response.json()["lines"][0]["carton_contains_qty"] == contents
+    stock = editor.get("/api/v1/store/items").json()[0]
+    assert (stock["contains_qty"], stock["on_hand"]) == (12, 24)
+
+
+def test_scan_proposes_source_units_and_arabic_expiry_without_writes(
+    editor: TestClient,
+    category: StoreCategory,
+    api_db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.extraction import ocr
+    from app.db.models import StoreDelivery
+
+    item = _item(editor, category, "Liwa water", name_ar="مياه ليوا")["id"]
+    raw = "مياه ليوا \u0663 كرتون \u0662 مفرد محتويات \u0662\u0664 الصلاحية \u0662\u0660\u0662\u0667/\u0660\u0665"
+    monkeypatch.setattr(ocr, "word_boxes_from_bytes", lambda *args, **kwargs: [_ocr_page(raw)])
+    response = editor.post(
+        "/api/v1/store/deliveries/scan",
+        files={"file": ("note.pdf", _PDF, "application/pdf")},
+    )
+    assert response.status_code == 200, response.text
+    line = response.json()["lines"][0]
+    assert (
+        line["item_id"],
+        line["cartons"],
+        line["loose_quantity"],
+        line["carton_contains_qty"],
+        line["expiry"],
+    ) == (item, 3, 2, 24, "2027-05")
+    assert line["raw_text"] == raw and line["bbox"]["w"] > 0
+    assert "quantity" not in line
+    assert api_db.scalars(select(StoreDelivery)).all() == []
+
+
+def test_blank_delivery_contents_are_optional_and_non_delivery_lines_have_none(
+    editor: TestClient,
+    category: StoreCategory,
+) -> None:
+    item = _item(editor, category)["id"]
+    response = editor.post(
+        "/api/v1/store/deliveries",
+        json={
+            "received_on": "2026-11-01",
+            "lines": [{"item_id": item, "quantity": 3, "carton_contains_qty": "  "}],
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["lines"][0]["carton_contains_qty"] is None
+    counted = _count(editor, date(2026, 12, 1), (item, None, 3))
+    assert counted.status_code == 201, counted.text
+    assert counted.json()["lines"][0]["carton_contains_qty"] is None
+
+
+def test_brand_label_two_lines_round_trip_and_extra_lines_rejected(
+    editor: TestClient,
+    category: StoreCategory,
+) -> None:
+    item = _item(editor, category, brand_label="LIPTON\r\nYellow Label")
+    assert item["brand_label"] == "LIPTON\nYellow Label"
+    for brand in ("One\nTwo\nThree", "One\n\nThree", "One\u2028Two\u2028Three"):
+        created = editor.post(
+            "/api/v1/store/items",
+            json={
+                "name_en": "Rejected brand",
+                "category_id": category.id,
+                "brand_label": brand,
+            },
+        )
+        assert created.status_code == 422
+        updated = editor.patch(
+            f"/api/v1/store/items/{item['id']}",
+            headers={"If-Match": item["version"]},
+            json={"brand_label": brand},
+        )
+        assert updated.status_code == 422
+    reread = editor.get("/api/v1/store/items/picker").json()[0]
+    assert reread["brand_label"] == "LIPTON\nYellow Label"
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [
+        ("brand_label", 123),
+        ("generic_label_en", ["Tea"]),
+        ("pack_description_ar", {"text": "علبة"}),
+    ],
+)
+def test_item_presentation_rejects_non_text_without_server_error(
+    editor: TestClient,
+    category: StoreCategory,
+    field: str,
+    invalid: object,
+) -> None:
+    rejected = editor.post(
+        "/api/v1/store/items",
+        json={
+            "name_en": "Tea",
+            "category_id": category.id,
+            field: invalid,
+        },
+    )
+    assert rejected.status_code == 422
+    item = _item(editor, category, brand_label="LIPTON")
+    rejected = editor.patch(
+        f"/api/v1/store/items/{item['id']}",
+        headers={"If-Match": item["version"]},
+        json={field: invalid},
+    )
+    assert rejected.status_code == 422
+    assert editor.get("/api/v1/store/items/picker").json()[0]["brand_label"] == "LIPTON"
