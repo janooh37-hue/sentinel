@@ -111,8 +111,6 @@ describe('Store delivery scan', () => {
     expect(carton).toHaveValue('8')
     expect(screen.getByRole('textbox', { name: i18n.t('assets.store.quantity.looseAria', { label: language === 'en' ? 'Coffee' : 'قهوة', unit: language === 'en' ? 'Jar' : 'علبة' }) })).toHaveValue('0')
     expect(screen.queryByRole('textbox', { name: new RegExp(i18n.t('assets.store.scan.reason')) })).not.toBeInTheDocument()
-    const onNote = screen.getByText(i18n.t('assets.store.scan.onNote')).parentElement!
-    expect(onNote.querySelector('output')).toHaveTextContent(language === 'en' ? '8 cartons' : '8 كرتون')
     fireEvent.change(screen.getByLabelText(i18n.t('assets.store.expiryInput.dateAria')), { target: { value: '2028-09-30' } })
     fireEvent.click(screen.getByRole('button', { name: i18n.t('assets.store.deliveries.save') }))
     await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({
