@@ -8,6 +8,7 @@ import {
   batchExpiryDate,
   batchKey,
   expiryFromValue,
+  formatContains,
   formatExpiry,
   formatQuantity,
   formatQuantityParts,
@@ -34,6 +35,7 @@ const BOXES: StoreUnits = {
   contains_unit_en: null,
   contains_unit_ar: null,
 }
+const CARTONS: StoreUnits = { ...BOXES, counting_unit_en: 'Carton', counting_unit_ar: 'كرتون' }
 
 const t = i18n.t.bind(i18n)
 
@@ -68,10 +70,31 @@ describe('store quantities', () => {
     expect(formatQuantity(-24, JARS)).toBe('−1 carton')
     expect(formatQuantity(-3, JARS)).toBe('−3 jars')
     await i18n.changeLanguage('ar')
-    expect(formatQuantity(77, JARS)).toBe('3 كرتون + 5 علبة')
-    expect(formatQuantity(-3, BOXES)).toBe('−3 صندوق')
+    expect(formatQuantity(77, JARS)).toBe('3 كراتين + 5 علب')
+    expect(formatQuantity(-3, BOXES)).toBe('−3 صناديق')
     expect(formatQuantity(-24, JARS)).toBe('−1 كرتون')
-    expect(formatQuantity(-3, JARS)).toBe('−3 علبة')
+    expect(formatQuantity(-3, JARS)).toBe('−3 علب')
+  })
+
+  it.each([
+    [0, '0 كرتون'],
+    [1, '1 كرتون'],
+    [2, '2 كرتون'],
+    [3, '3 كراتين'],
+    [10, '10 كراتين'],
+    [11, '11 كرتونًا'],
+    [99, '99 كرتونًا'],
+    [100, '100 كرتون'],
+    [103, '103 كراتين'],
+  ] as const)('agrees the Arabic noun with %s', (count, expected) => {
+    expect(formatQuantity(count, CARTONS, 'ar')).toBe(expected)
+  })
+
+  it('puts the accusative ending on a feminine noun and leaves unknown nouns alone', () => {
+    expect(formatQuantity(14, { ...BOXES, counting_unit_ar: 'علبة' }, 'ar')).toBe('14 علبةً')
+    expect(formatQuantity(5, { ...BOXES, counting_unit_ar: 'وعاء' }, 'ar')).toBe('5 وعاء')
+    expect(formatQuantity(11, { ...BOXES, counting_unit_ar: 'وعاء' }, 'ar')).toBe('11 وعاء')
+    expect(formatContains({ ...JARS, contains_qty: 12, contains_unit_ar: 'مرطبان' }, 'ar')).toBe('1 كرتون = 12 مرطبانًا')
   })
 
   it.each([

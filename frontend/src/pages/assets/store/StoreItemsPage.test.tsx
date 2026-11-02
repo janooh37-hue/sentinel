@@ -131,9 +131,9 @@ describe('Store items register', () => {
     expect(await screen.findByText('ضيافة')).toBeInTheDocument()
     expect(screen.getByText('رصيد منخفض')).toBeInTheDocument()
     // An LTR run would pair each Arabic unit with the wrong number.
-    expect(screen.getByText('2 كرتون + 5 علبة')).toHaveAttribute('dir', 'auto')
-    expect(screen.getByText('3 كرتون')).toHaveAttribute('dir', 'auto')
-    expect(screen.getByText('1 كرتون = 24 علبة')).toHaveAttribute('dir', 'auto')
+    expect(screen.getByText('2 كرتون + 5 علب')).toHaveAttribute('dir', 'auto')
+    expect(screen.getByText('3 كراتين')).toHaveAttribute('dir', 'auto')
+    expect(screen.getByText('1 كرتون = 24 علبةً')).toHaveAttribute('dir', 'auto')
     expect(screen.getByText('شاي')).toHaveClass('font-medium')
     expect(screen.getByText('شاي')).toHaveAttribute('lang', 'ar')
     expect(screen.getByText('Tea')).toHaveAttribute('lang', 'en')

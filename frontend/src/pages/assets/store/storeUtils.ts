@@ -126,12 +126,44 @@ function pluralEn(unit: string, count: number): string {
   return `${word}s`
 }
 
+/** Broken plurals for the unit nouns the Store uses; "3–10 cartons" takes these. */
+const AR_PLURALS: Record<string, string> = {
+  'كرتون': 'كراتين',
+  'علبة': 'علب',
+  'مرطبان': 'مرطبانات',
+  'رزمة': 'رزم',
+  'كيس': 'أكياس',
+  'قطعة': 'قطع',
+  'صندوق': 'صناديق',
+  'زجاجة': 'زجاجات',
+  'باكيت': 'باكيتات',
+}
+
+const AR_PLURAL_RULES = new Intl.PluralRules('ar')
+
+/**
+ * The Arabic unit noun that agrees with a written number: 3–10 take the plural
+ * (٣ كراتين), 11–99 the accusative singular (١٤ كرتونًا), the rest the singular
+ * (١ كرتون، ١٠٠ كرتون). Nouns outside `AR_PLURALS` are shown exactly as typed:
+ * their endings (وعاء، كغ) do not follow one rule.
+ */
+function pluralAr(unit: string, count: number): string {
+  const word = unit.trim()
+  const plural = Object.hasOwn(AR_PLURALS, word) ? AR_PLURALS[word] : null
+  if (plural == null) return word
+  switch (AR_PLURAL_RULES.select(Math.abs(count))) {
+    case 'few': return plural
+    case 'many': return word.endsWith('ة') ? `${word}ً` : `${word}ًا`
+    default: return word
+  }
+}
+
 function unitPhrase(count: number, unit: string, language: string): string {
   return `${formatNumber(count, language)} ${quantityUnit(count, unit, language)}`
 }
 
 export function quantityUnit(count: number, unit: string, language: string): string {
-  return isArabic(language) ? unit.trim() : pluralEn(unit, count)
+  return isArabic(language) ? pluralAr(unit, count) : pluralEn(unit, count)
 }
 
 /** Separate numbers from translated units so signed runs can be isolated LTR. */

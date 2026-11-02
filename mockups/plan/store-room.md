@@ -440,3 +440,39 @@ Built by dtop writers in waves, each reviewed before merge into `feat/store-room
   for OCR calibration (field accuracy: item match, quantity). Then PR from
   `feat/store-room` (contains `feat/assets-store`) after renumbering migrations
   onto main's head at that time.
+
+## Progress (2026-10-31, names, numbers and shelves)
+
+User feedback on the dev URL: names like "Nescafe Classic 12×190g" over
+"14 كرتون" and "30 يوما" were unclear; icons too small; shelves unsorted.
+Agreed with the user: stock is handed out by piece, pack or carton; pack
+readings as listed in the opening JSON; unknown sizes stay whole units; shelf
+order by drawing kind, then name.
+
+- **Data** (`b9d3f8b1`): the opening JSON keeps the WhatsApp spelling as
+  `source_name`, gives clean `name_en`, `name_ar`, and `contains_qty` + units
+  for 7 items (Nescafe 12 jars, Coffee-mate 15 jars, Yellow Label 24 boxes, Red
+  Label 36 boxes, Rainbow 96 tins, coffee cups 50 sleeves, vinyl gloves 10
+  boxes). Quantities in the file stay as counted (cartons); the import
+  multiplies them. The WhatsApp spelling becomes a delivery-note alias
+  (`store_service.upsert_item_alias`, shared with deliveries).
+  `scripts/store_apply_packs.py` converts an already-imported store (dev):
+  renames, fills Arabic, sets contents, multiplies every count, delivery,
+  disposal and handover line and the Minimum level; idempotent.
+- **Frontend**: Arabic counted nouns agree with the number for known unit nouns
+  (3 كراتين, 14 كرتونًا, 100 كرتون; custom units unchanged). Expiry badge names
+  the soonest Batch: "2 cartons · expires in 30d" / "2 كرتون · انتهاء بعد 30
+  يومًا"; "Low stock". Drawings 72 → 104 px, text-sm names (3 lines) and
+  quantities. Shelves sort by drawing kind, then name (`sortForShelf`). Items
+  with contents hand out with a carton stepper and a piece stepper; drawer
+  expiry pins read whole cartons.
+- **Checks**: backend `-k store` 121 passed (1 unraisable-warning setup flake,
+  passes alone); frontend store suite 218/218, `tsc`, eslint clean. i18n-rtl
+  review: one should-fix (tanween on custom units) fixed.
+- **Dev**: cherry-picked as `-x` commits; dev DB backed up to
+  `gssg.db.before-store-packs-2026-10-31`, then `store_apply_packs.py` updated 13
+  items (re-run: 0). Smoke at 390 px Arabic and 1440 px English: counts,
+  badges, order and drawer checked.
+- **Open**: HQ MRF lines now carry the clean English name (e.g. "Nescafe
+  Classic 190 g", unit Carton) without the "12×"; pack sizes for Green tea,
+  Liwa water, big cups, Masafi tissues, nitrile gloves and masks are unknown.
