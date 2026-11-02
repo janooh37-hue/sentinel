@@ -38,12 +38,14 @@ def _linked_employee_id(db: Session, user_id: int | None) -> str | None:
 
 def _require_employee_signature_edit(db: Session, actor: User, user_id: int | None) -> str | None:
     employee_id = _linked_employee_id(db, user_id)
-    if employee_id is not None and not perm_service.has_capability(db, actor, "employees.edit"):
+    if employee_id is not None and not perm_service.has_capability(
+        db, actor, "employees.signature.manage"
+    ):
         raise AppError(
             "FORBIDDEN",
-            "Missing capability: employees.edit",
+            "Missing capability: employees.signature.manage",
             http_status=403,
-            details={"capability": "employees.edit"},
+            details={"capability": "employees.signature.manage"},
         )
     return employee_id
 

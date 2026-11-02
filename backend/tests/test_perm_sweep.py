@@ -16,10 +16,33 @@ def test_set_override_with_expiry_persists(db_session):
 def test_sweep_deletes_only_expired_grants(db_session):
     u = make_user(db_session)
     now = datetime.now(UTC).replace(tzinfo=None)
-    db_session.add(UserPermission(user_id=u.id, capability="leaves.edit", effect="grant", expires_at=now - timedelta(minutes=1)))
-    db_session.add(UserPermission(user_id=u.id, capability="books.view", effect="grant", expires_at=now + timedelta(hours=1)))
-    db_session.add(UserPermission(user_id=u.id, capability="violations.view", effect="grant", expires_at=None))
-    db_session.add(UserPermission(user_id=u.id, capability="ledger.send", effect="deny", expires_at=now - timedelta(days=1)))
+    db_session.add(
+        UserPermission(
+            user_id=u.id,
+            capability="leaves.delete",
+            effect="grant",
+            expires_at=now - timedelta(minutes=1),
+        )
+    )
+    db_session.add(
+        UserPermission(
+            user_id=u.id,
+            capability="books.view",
+            effect="grant",
+            expires_at=now + timedelta(hours=1),
+        )
+    )
+    db_session.add(
+        UserPermission(user_id=u.id, capability="violations.view", effect="grant", expires_at=None)
+    )
+    db_session.add(
+        UserPermission(
+            user_id=u.id,
+            capability="ledger.send",
+            effect="deny",
+            expires_at=now - timedelta(days=1),
+        )
+    )
     db_session.commit()
     n = perm_service.sweep_expired_grants(db_session)
     assert n == 1

@@ -33,6 +33,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SignatureDrawPanel } from '@/components/signature/SignatureDrawPanel'
 import { api, type SubmitterRead, apiErrorMessage } from '@/lib/api'
 import { invalidateSignatures } from '@/lib/globalRefresh'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 export interface EmployeeSignatureCardProps {
   /** RHF field carrying a drawn/uploaded PNG data URL (`employee_sig_path`). */
@@ -56,6 +57,9 @@ export function EmployeeSignatureCard({
   const qc = useQueryClient()
   const { control, setValue } = useFormContext()
   const [replaceMode, setReplaceMode] = useState(false)
+  // Writing the profile signature is its own capability; without it a drawn
+  // signature still signs this form, it just isn't offered for the profile.
+  const canSaveToProfile = useCapabilities().has('employees.signature.manage')
 
   const query = useQuery({
     queryKey: ['employee-signature', employeeId],
@@ -312,6 +316,7 @@ export function EmployeeSignatureCard({
                   void onUse(dataUrl, saveToProfile)
                 }
                 onCancel={() => setReplaceMode(false)}
+                showSaveToProfile={canSaveToProfile}
               />
             )}
           </div>
@@ -320,6 +325,7 @@ export function EmployeeSignatureCard({
             onUse={(dataUrl, saveToProfile) =>
               void onUse(dataUrl, saveToProfile)
             }
+            showSaveToProfile={canSaveToProfile}
           />
         )}
       </CardContent>

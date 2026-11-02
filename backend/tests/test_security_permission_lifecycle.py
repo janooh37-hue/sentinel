@@ -108,13 +108,13 @@ def test_expiry_uses_current_role_not_grant_time_role(
     target = make_user(api_db, role=initial_role, email="role-target@lifecycle.test")
     admin_client, target_client = _client(api_db, admin.id), _client(api_db, target.id)
     url = f"/api/v1/auth/users/{target.id}/permissions"
-    # leaves.edit is a manager default but an additional operator grant.
+    # leaves.delete is a manager default but an additional operator grant.
     assert (
-        admin_client.put(url, json={"capability": "leaves.edit", "effect": "deny"}).status_code
+        admin_client.put(url, json={"capability": "leaves.delete", "effect": "deny"}).status_code
         == 200
     )
     grant = {
-        "capability": "leaves.edit",
+        "capability": "leaves.delete",
         "effect": "grant",
         "expires_at": (datetime.now(UTC) + timedelta(hours=2)).isoformat(),
     }
@@ -124,27 +124,27 @@ def test_expiry_uses_current_role_not_grant_time_role(
         else admin_client.put(url, json=grant)
     )
     assert issued.status_code == 200, issued.text
-    assert "leaves.edit" in target_client.get("/api/v1/auth/me/capabilities").json()
+    assert "leaves.delete" in target_client.get("/api/v1/auth/me/capabilities").json()
     changed = admin_client.patch(
         f"/api/v1/auth/users/{target.id}/role", json={"role": current_role}
     )
     assert changed.status_code == 200, changed.text
     api_db.expire_all()
-    row = api_db.get(UserPermission, (target.id, "leaves.edit"))
+    row = api_db.get(UserPermission, (target.id, "leaves.delete"))
     assert row is not None
     row.expires_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=1)
     api_db.commit()
     expired_at = row.expires_at
-    assert "leaves.edit" not in target_client.get("/api/v1/auth/me/capabilities").json()
+    assert "leaves.delete" not in target_client.get("/api/v1/auth/me/capabilities").json()
     api_db.expire_all()
     assert row.effect == "grant" and row.expires_at == expired_at
-    assert "leaves.edit" in admin_client.get("/api/v1/auth/me/capabilities").json()
+    assert "leaves.delete" in admin_client.get("/api/v1/auth/me/capabilities").json()
     assert perm_service.sweep_expired_grants(api_db) == 1
     api_db.expire_all()
-    row = api_db.get(UserPermission, (target.id, "leaves.edit"))
+    row = api_db.get(UserPermission, (target.id, "leaves.delete"))
     if current_role == "manager":
         assert row is not None and row.effect == "deny" and row.expires_at is None
     else:
         assert row is None
-    assert "leaves.edit" not in target_client.get("/api/v1/auth/me/capabilities").json()
-    assert "leaves.edit" in admin_client.get("/api/v1/auth/me/capabilities").json()
+    assert "leaves.delete" not in target_client.get("/api/v1/auth/me/capabilities").json()
+    assert "leaves.delete" in admin_client.get("/api/v1/auth/me/capabilities").json()

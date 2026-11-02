@@ -2,7 +2,7 @@
 """Atomic people-domain gates: create/edit/vault/delete are independently denyable.
 
 The pinpoint scenario: a manager with a ``deny`` override on one atomic child
-keeps every other action. Operator (view-only) gets 403 everywhere writey.
+keeps every other action, and a denied child closes only its own routes.
 
 Auth pattern mirrors test_workforce_api_permissions.py: shared ``api_db``
 fixture (temp-file SQLite, cross-thread safe), override get_db +
@@ -45,8 +45,10 @@ def _employee(db: Session, emp_id: str = "E1") -> Employee:
     return e
 
 
-def test_operator_cannot_create_employee(api_db):
+def test_create_employee_needs_employees_create(api_db):
     u = _user(api_db, "operator", "op@x.ae")
+    api_db.add(UserPermission(user_id=u.id, capability="employees.create", effect="deny"))
+    api_db.commit()
     r = _client(api_db, u).post("/api/v1/employees", json={})
     assert r.status_code == 403
     assert r.json()["error"]["details"]["capability"] == "employees.create"

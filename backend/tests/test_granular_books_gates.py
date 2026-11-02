@@ -3,7 +3,7 @@
 denyable.
 
 The pinpoint scenario: a manager with a ``deny`` override on one atomic child
-keeps every other action. Operator (view-only) gets 403 everywhere writey.
+keeps every other action, and a denied child closes only its own routes.
 
 Auth pattern mirrors test_granular_people_gates.py: shared ``api_db`` fixture
 (temp-file SQLite, cross-thread safe), override get_db + get_current_user,
@@ -55,16 +55,20 @@ def test_books_gate_split(api_db):
     assert r.status_code in (404, 422)
 
 
-def test_operator_cannot_create_book(api_db):
+def test_create_book_needs_books_create(api_db):
     u = _user(api_db, "operator", "opbk@x.ae")
+    api_db.add(UserPermission(user_id=u.id, capability="books.create", effect="deny"))
+    api_db.commit()
     r = _client(api_db, u).post("/api/v1/books", json={})
     assert r.status_code == 403
     assert r.json()["error"]["details"]["capability"] == "books.create"
 
 
 def test_word_template_reads_need_books_edit(api_db):
-    """GET reads re-gated to books.edit (composers); operator holds neither."""
+    """GET reads re-gated to books.edit (composers)."""
     u = _user(api_db, "operator", "tpl@x.ae")
+    api_db.add(UserPermission(user_id=u.id, capability="books.edit", effect="deny"))
+    api_db.commit()
     r = _client(api_db, u).get("/api/v1/books/word-templates")
     assert r.status_code == 403
     assert r.json()["error"]["details"]["capability"] == "books.edit"

@@ -15,7 +15,7 @@ built on top of this model see
 
 `backend/app/core/permissions.py`
 
-- `CAPABILITIES` — the catalog: 60 `Capability(id, group, label, description)` tuples.
+- `CAPABILITIES` — the catalog of `Capability(id, group, label, description)` tuples.
   The `description` is user-facing (it drives the admin permission editor and the
   request UI). Since the 2026-08-23 granular split (§7) every id is atomic — the six
   old bundled ids (`employees.edit` in its old wide sense, `leaves.edit`,
@@ -26,11 +26,32 @@ built on top of this model see
   admin preset resolves to.
 - `ROLE_DEFAULTS` — three presets keyed by role:
 
-| Role | Resolves to | Contents |
+| Role | Shown as | Contents |
 | --- | --- | --- |
-| `operator` | 17 caps | read-only across the app (`app.access`, `employees.view`, `leaves.view`, `timesheet.view`, `violations.view`, `books.view`, `permits.view`, `ledger.view`, `settings.view`) plus the daily-work writes: `documents.generate`, `documents.scan`, `ledger.create`/`ledger.edit`/`ledger.send`/`ledger.delete` (deletion restored post-split review — operators held it pre-split), and `email.manage` for the user's own mailbox, plus `workforce.self.view` for their own record |
-| `manager` | 39 caps | operator preset minus `workforce.self.view`, plus the atomic management writes: `employees.create`/`employees.edit`/`employees.vault.manage`/`employees.notify`, `leaves.create`/`leaves.edit`/`leaves.delete`, `violations.create`/`violations.edit`/`violations.delete`, `books.create`/`books.edit`/`books.submit`/`books.templates`/`books.approve`/`books.delete`, `permits.create`/`permits.edit`/`permits.revoke`/`permits.delete`, `ledger.delete`, `timesheet.edit`, `submitters.manage`, `editor_templates.manage`. The literal `frozenset` of additions lists 24 ids; unioned with operator's 17 minus the dropped self-view that resolves to 39. Workforce administration still needs an explicit grant + scope |
-| `admin` | all 60 | `ALL_CAPABILITIES` |
+| `operator` | Employee / «موظف» | views the whole app and does the daily work: `app.access`, every `*.view` it held before (`employees`, `expiry`, `leaves`, `timesheet`, `violations`, `books`, `permits`, `ledger`, `settings`), plus create/edit on `employees` (`employees.create`/`employees.edit`/`employees.vault.manage`), `leaves.create`/`leaves.edit`, `violations.create`/`violations.edit`, `books.create`/`books.edit`/`books.submit`, `permits.create`/`permits.edit`, `documents.generate`/`documents.duty_transfer`/`documents.scan`, the ledger writes `ledger.create`/`ledger.edit`/`ledger.send`/`ledger.delete` (deletion predates the split), `email.manage` for the user's own mailbox, and `workforce.self.view` for their own record |
+| `manager` | Manager / «مدير» | operator preset minus `workforce.self.view`, plus anything destructive, approving, governing shared configuration, or acting on someone's identity: `leaves.delete`, `violations.delete`, `books.delete`, `permits.revoke`/`permits.delete`, `books.approve`, `books.templates`, `editor_templates.manage`, `submitters.manage`, `timesheet.edit` (cell correction and month close), `employees.notify`, `employees.signature.manage`, and `inmate_statistics.review`/`inmate_statistics.approve`. Workforce administration still needs an explicit grant + scope |
+| `admin` | Admin | `ALL_CAPABILITIES` |
+
+`leaves.edit` also gates marking and clearing employee absences
+(`/employees/{id}/absences`), so employees record absences too. Closing a
+time-sheet month stays on the manager-only `timesheet.edit`.
+
+`tests/test_permissions_catalog.py` pins the policy instead of counts: the operator
+preset must hold the daily-work writes and none of the manager-only ones, and the
+manager preset must contain everything the operator does.
+
+**Employee signatures (added 2026-10-28).** Writing an employee's profile signature
+(`POST`/`DELETE /employees/{id}/signature`, and the employee-linked manager alias
+mutations in `manager_service`) needs `employees.signature.manage`, not
+`employees.edit`. A linked user signs approvals with that same file, so the
+operator preset can edit employee files without being able to replace a
+manager's signature. Migration `0110_employee_signature_capability` copied
+every per-user `employees.edit` grant or deny to the new capability.
+
+**Vehicles are not in any preset.** Only admins hold `vehicles.*` by default.
+`vehicle_reminder_service.recipients` pushes licence and maintenance reminders to
+every active user holding `vehicles.view`, so adding it to a preset would page that
+whole role daily. Grant it per user to the people who run the fleet.
 
 **Admin-only by default, but delegable.** `books.override_state` (added 2026-08-14) is
 in no preset except `admin`'s `ALL_CAPABILITIES`, so only an admin holds it out of the

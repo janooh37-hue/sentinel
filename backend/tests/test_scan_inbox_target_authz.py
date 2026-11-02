@@ -101,11 +101,11 @@ def _snapshot(db: Session, item_id: int, book_id: int) -> dict[str, object]:
     }
 
 
-# An operator holds documents.scan + books.view but neither books.edit nor
-# employees.vault.manage. The manager-with-deny rows prove the check is the
-# capability, not the role name.
-_NO_BOOK_EDIT = [("operator", ()), ("manager", ("books.edit",))]
-_NO_VAULT = [("operator", ()), ("manager", ("employees.vault.manage",))]
+# Both roles hold books.edit and employees.vault.manage by default, so each row
+# denies the capability under test: the check is the capability, not the role
+# name.
+_NO_BOOK_EDIT = [("operator", ("books.edit",)), ("manager", ("books.edit",))]
+_NO_VAULT = [("operator", ("employees.vault.manage",)), ("manager", ("employees.vault.manage",))]
 
 
 @pytest.mark.parametrize(("role", "deny"), _NO_BOOK_EDIT)

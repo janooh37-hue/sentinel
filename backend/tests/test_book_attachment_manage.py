@@ -96,7 +96,9 @@ def test_delete_attachment_out_of_range_404(api_db, tmp_path) -> None:
 
 def test_delete_attachment_requires_manage(api_db, tmp_path) -> None:
     _book_with_attachments(api_db, tmp_path)
-    c = _client(api_db, _user(api_db, role="operator"))
+    op = _user(api_db, role="operator")
+    perm_service.set_user_override(api_db, op.id, "books.edit", "deny")
+    c = _client(api_db, op)
     assert c.request("DELETE", "/api/v1/books/1/attachments/0").status_code == 403
 
 

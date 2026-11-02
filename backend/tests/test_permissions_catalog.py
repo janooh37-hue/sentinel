@@ -5,7 +5,6 @@ from app.db.models import BookCategory
 
 
 def test_static_catalog_has_complete_bilingual_request_policy_metadata():
-    assert len(CAPABILITIES) == 60
     for cap in CAPABILITIES:
         assert cap.label_en.strip(), cap.id
         assert cap.label_ar.strip(), cap.id
@@ -34,14 +33,55 @@ def test_static_catalog_has_complete_bilingual_request_policy_metadata():
     }
 
 
-def test_static_role_default_counts_are_preserved():
-    assert {
-        role: len(caps) for role, caps in ROLE_DEFAULTS.items() if role != "inmate_reporter"
-    } == {
-        "operator": 19,
-        "manager": 43,
-        "admin": 60,
+_OPERATOR_DAILY_WORK = frozenset(
+    {
+        "employees.create",
+        "employees.edit",
+        "employees.vault.manage",
+        "leaves.create",
+        "leaves.edit",
+        "violations.create",
+        "violations.edit",
+        "books.create",
+        "books.edit",
+        "books.submit",
+        "permits.create",
+        "permits.edit",
+        "documents.generate",
     }
+)
+
+
+def test_operator_preset_does_the_daily_work():
+    assert ROLE_DEFAULTS["operator"] >= _OPERATOR_DAILY_WORK
+
+
+def test_operator_preset_holds_no_destructive_approval_or_identity_capability():
+    """Deletes, approval, shared configuration, outbound notices, and other
+    people's signatures stay with managers; ledger.delete predates the split."""
+    manager_only = {
+        "employees.signature.manage",
+        "employees.notify",
+        "leaves.delete",
+        "violations.delete",
+        "books.delete",
+        "books.approve",
+        "books.templates",
+        "books.override_state",
+        "books.secret",
+        "permits.revoke",
+        "permits.delete",
+        "timesheet.edit",
+        "submitters.manage",
+        "editor_templates.manage",
+        "settings.edit",
+        "inmate_statistics.approve",
+    }
+    assert manager_only.isdisjoint(ROLE_DEFAULTS["operator"])
+
+
+def test_manager_preset_includes_everything_an_operator_does():
+    assert ROLE_DEFAULTS["operator"] - {"workforce.self.view"} <= ROLE_DEFAULTS["manager"]
 
 
 def test_inmate_reporter_preset_is_exactly_its_fixed_ceiling():
@@ -84,7 +124,7 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     db_session.commit()
 
     catalog = capability_catalog_service.list_catalog(db_session)
-    assert len(catalog) == 60 + (2 * (len(SERVICE_IDS) + 1)) + 15 + 2
+    assert len(catalog) == len(CAPABILITIES) + (2 * (len(SERVICE_IDS) + 1)) + 15 + 2
     assert len({entry.id for entry in catalog}) == len(catalog)
 
     dynamic = catalog[len(CAPABILITIES) :]
@@ -253,6 +293,7 @@ def test_manager_preset_resolves_atomic_equivalents():
         "employees.create",
         "employees.edit",
         "employees.vault.manage",
+        "employees.signature.manage",
         "leaves.create",
         "leaves.edit",
         "leaves.delete",

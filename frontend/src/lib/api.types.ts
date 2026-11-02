@@ -2197,7 +2197,7 @@ export interface paths {
         put?: never;
         /**
          * Create Manager
-         * @description Create a manager; employee-linked accounts also require ``employees.edit``.
+         * @description Create a manager; employee-linked accounts also require ``employees.signature.manage``.
          */
         post: operations["create_manager_api_v1_managers_post"];
         delete?: never;
@@ -2221,7 +2221,7 @@ export interface paths {
         head?: never;
         /**
          * Update Manager
-         * @description Update a manager; employee-linked user assignments also require employees.edit.
+         * @description Update a manager; employee-linked user assignments also require employees.signature.manage.
          */
         patch: operations["update_manager_api_v1_managers__manager_id__patch"];
         trace?: never;

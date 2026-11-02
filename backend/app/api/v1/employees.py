@@ -618,7 +618,7 @@ def _signature_path_for(employee_id: str) -> Path:
 async def upload_signature(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("employees.edit"))],
+    _user: Annotated[User, Depends(require_capability("employees.signature.manage"))],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> dict[str, str]:
     employee_service.get_employee(db, employee_id)
@@ -666,7 +666,7 @@ def get_employee_signature(
 def delete_employee_signature(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("employees.edit"))],
+    _user: Annotated[User, Depends(require_capability("employees.signature.manage"))],
 ) -> Response:
     """Remove the employee's saved signature. Idempotent."""
     employee_service.get_employee(db, employee_id)

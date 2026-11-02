@@ -335,10 +335,11 @@ def test_dav_blocked_for_missing_owner(client: TestClient, api_db: Session, tmp_
     assert r.status_code == 404
 
 
-def test_dav_book_put_requires_operator_edit_grant(client: TestClient, api_db: Session, tmp_path):
+def test_dav_book_put_requires_books_edit(client: TestClient, api_db: Session, tmp_path):
     path = tmp_path / "operator.docx"
     path.write_bytes(b"PK-original")
     owner = _make_owner(api_db, role="operator")
+    perm_service.set_user_override(api_db, user_id=owner.id, capability="books.edit", effect="deny")
     session = _make_session(api_db, working_path=str(path), token="operator", owner=owner)
     url = "/dav/operator/operator.docx"
     assert not perm_service.has_capability(api_db, owner, "books.edit")
