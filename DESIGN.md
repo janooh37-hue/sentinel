@@ -1181,6 +1181,24 @@ border-b border-hairline px-4 py-3
 - Preview snippet below that (truncated, `text-xs text-muted-foreground/80`,
   `dir="auto"`)
 
+**Submitter decision rows:**
+
+- Immediately below the awaiting-approval reminder, show up to five unseen signing-manager
+  decisions, newest first. They share the mail row's keyboard focus, logical layout,
+  truncated subject (`dir="auto"`), and short date format. The shared phone panel remains
+  the sole touch scroller; row targets have a 44px minimum on coarse pointers.
+- A 32px tone-soft circle contains Check (`bg-success-soft text-success`) for approval,
+  Undo2 (`bg-warning-soft text-warning`) for return, or X (`bg-accent-soft text-accent`)
+  for rejection. The verdict word also leads the title, so color is never the only signal.
+- Title: `Approved · REF` (or Returned / Rejected); approved reports say Reviewed.
+  The reference is direction-isolated. Below it: subject, then the localized manager name
+  with a “By” label and the timestamp at inline-end. Returned/rejected notes have one
+  muted, truncated, direction-aware preview line.
+- Decision totals contribute to the trigger badge and empty-state check. “+N more decisions”
+  opens Approvals → Sent; opening a decision marks the record seen and opens its pinned
+  version in the Sent context. “Mark all read” is available for unread mail or decisions
+  and clears both authorized categories. Inmate reporters do not receive this panel.
+
 **Footer:**
 
 - Optional `"+ N more unread"` line when `total_unread > items.length`.

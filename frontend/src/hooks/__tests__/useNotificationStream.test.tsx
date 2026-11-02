@@ -12,6 +12,7 @@ import { useNotificationStream } from '../useNotificationStream'
 
 const ZERO: NotificationCounts = {
   approvals: 0,
+  decisions: 0,
   leaves: 0,
   scans: 0,
   emails: 0,
@@ -87,6 +88,18 @@ describe('useNotificationStream', () => {
     es.emit({ ...ZERO, scans: 1, emails: 2 })
     expect(invalidated).toEqual([['ledger', 'unread-recent'], ['ledger-unread-count']])
     expect(qc.getQueryData(['notifications', 'counts'])).toEqual({ ...ZERO, scans: 1, emails: 2 })
+  })
+
+  it('refreshes decisions and the Sent log when a decision count changes', () => {
+    getCounts.mockReturnValue(NEVER)
+    const { invalidated } = mount()
+    const es = FakeEventSource.last!
+    es.emit(ZERO)
+    es.emit({ ...ZERO, decisions: 1 })
+    expect(invalidated).toEqual([['notifications', 'decisions'], ['books', 'approval-log']])
+    invalidated.length = 0
+    es.emit(ZERO)
+    expect(invalidated).toEqual([['notifications', 'decisions'], ['books', 'approval-log']])
   })
 
   it('applies the same targeted refetch when the safety poll sees a change', async () => {

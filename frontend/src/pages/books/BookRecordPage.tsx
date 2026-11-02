@@ -43,6 +43,7 @@ import {
 } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useDecisionNotices } from '@/lib/useDecisionNotices'
 import { canFileSignedCopy, canSendForApproval, footerActionFor, inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
 import { reportReviewOf, signedSourceOf, type ReportReview } from './bookStateLabel'
 import { changesRequestedCount, isApproverAssignee, myPendingReviewerStep } from '@/components/books/reviewers'
@@ -561,6 +562,37 @@ function BookRecordPageBody(): React.JSX.Element {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [book?.id, myStep?.id, myStep?.seen_at])
+
+  const decisionsQuery = useDecisionNotices()
+  const unseenDecision = decisionsQuery.data?.items.find((item) => item.book_id === book?.id)
+  // The server clears the current revision's outcome, so acknowledge only while
+  // that revision is on screen, never while an older one is being browsed.
+  const showsCurrentOutcome =
+    isLiveCurrentVersion && (unseenDecision == null || unseenDecision.version_id === current?.id)
+  // The bell list is capped at five, so the submitter also acknowledges on open.
+  const isSubmitter = book != null && user != null && book.submitted_by_user_id === user.id
+  const decisionKey = !showsCurrentOutcome
+    ? null
+    : unseenDecision
+      ? `${user?.id}:${unseenDecision.book_id}:${unseenDecision.version_id}:${unseenDecision.decided_at}`
+      : isSubmitter && decisionsQuery.isSuccess ? `${user?.id}:${book?.id}` : null
+  const seenDecisionRef = useRef<string | null>(null)
+  useEffect(() => {
+    const seen = seenDecisionRef.current
+    if (!book || !decisionKey || seen === decisionKey || seen?.startsWith(`${decisionKey}:`)) return
+    seenDecisionRef.current = decisionKey
+    void api.markBookSeen(book.id).then(
+      () => {
+        void qc.invalidateQueries({ queryKey: ['notifications', 'decisions'] })
+        void qc.invalidateQueries({ queryKey: ['books', 'approval-log'] })
+      },
+      () => {
+        // Release the claim so the next decisions refresh retries it.
+        if (seenDecisionRef.current === decisionKey) seenDecisionRef.current = seen
+      },
+    )
+    // dataUpdatedAt re-runs this on every decisions refresh: the retry cadence.
+  }, [book, decisionKey, decisionsQuery.dataUpdatedAt, qc])
 
   // Annotation overlay (Slice 3). Marks live on the current version; shown while
   // the book is in an active review state.
