@@ -55,7 +55,7 @@ export const SelectTrigger = React.forwardRef<
       'focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/20',
       'data-[state=open]:border-primary data-[state=open]:ring-[3px] data-[state=open]:ring-primary/20',
       'disabled:cursor-not-allowed disabled:opacity-50',
-      'data-[placeholder]:text-faint',
+      'data-[placeholder]:text-muted-foreground',
       className,
     )}
     {...props}

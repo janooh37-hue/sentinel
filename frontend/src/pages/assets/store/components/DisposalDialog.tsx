@@ -27,7 +27,7 @@ import {
 } from '../storeUtils'
 import { QuantityInput } from './QuantityInput'
 import { ExpiryText } from './ExpiryText'
-import { StoreQuantity } from './RecordParts'
+import { StoreItemSummary, StoreQuantity } from './RecordParts'
 
 interface Props {
   open: boolean
@@ -49,6 +49,7 @@ export function DisposalDialog({ open, onOpenChange, itemId }: Props): React.JSX
   const id = useId()
   const alertId = `${id}-alert`
   const [serverError, setServerError] = useState<string | null>(null)
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(itemId ?? null)
   const batchesQuery = useQuery({
     queryKey: storeKeys.batches(),
     queryFn: () => api.listStoreBatches(),
@@ -61,7 +62,9 @@ export function DisposalDialog({ open, onOpenChange, itemId }: Props): React.JSX
   const disposedOn = useWatch({ control, name: 'disposed_on' })
   const historical = isBusinessDate(disposedOn) && disposedOn < todayIso()
   // The batch API reports today's balance, not availability on a past date.
-  const batches = batchesQuery.data?.filter((batch) => (historical || batch.on_hand > 0) && (itemId == null || batch.item_id === itemId)) ?? []
+  const availableBatches = batchesQuery.data?.filter((batch) => (historical || batch.on_hand > 0) && (itemId == null || batch.item_id === itemId)) ?? []
+  const itemOptions = availableBatches.filter((batch, index, rows) => rows.findIndex(row => row.item_id === batch.item_id) === index)
+  const batches = availableBatches.filter(batch => batch.item_id === selectedItemId)
   const batch = batches.find((option) => String(option.id) === batchId)
   const maxQuantity = historical ? undefined : batch?.on_hand
   useEffect(() => {
@@ -110,7 +113,17 @@ export function DisposalDialog({ open, onOpenChange, itemId }: Props): React.JSX
               },
             })} />
           </Field>
-          <StoreQueryState isPending={batchesQuery.isPending} error={batchesQuery.error} onRetry={() => { void batchesQuery.refetch() }} isEmpty={batches.length === 0} emptyMessage={t('assets.store.disposals.noBatches')} emptyDescription={t('assets.store.disposals.noBatchesDescription')}>
+          <StoreQueryState isPending={batchesQuery.isPending} error={batchesQuery.error} onRetry={() => { void batchesQuery.refetch() }} isEmpty={availableBatches.length === 0} emptyMessage={t('assets.store.disposals.noBatches')} emptyDescription={t('assets.store.disposals.noBatchesDescription')}>
+            <fieldset disabled={mutation.isPending} className="space-y-2">
+              <legend className="text-sm font-medium">{t('assets.store.presentation.chooseDisposalItem')}</legend>
+              <div className="grid max-h-64 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">{itemOptions.map(option => <button key={option.item_id} type="button" aria-pressed={selectedItemId === option.item_id} className="rounded-2xl border border-border p-2 text-start aria-pressed:border-primary aria-pressed:bg-surface-tinted" onClick={() => {
+                setSelectedItemId(option.item_id)
+                setValue('batchId', '')
+                setValue('quantity', EMPTY_QUANTITY)
+                clearErrors(['batchId', 'quantity'])
+                setServerError(null)
+              }}><StoreItemSummary item={option} size={60} /></button>)}</div>
+            </fieldset>
             <Field id={`${id}-batch`} label={t('assets.store.disposals.batch')} required>
               <Controller control={control} name="batchId" rules={{ validate: (value) => batches.some((option) => String(option.id) === value) || t('assets.store.disposals.batchRequired') }} render={({ field }) => (
                 <Select value={field.value} onValueChange={(value) => {
@@ -120,7 +133,7 @@ export function DisposalDialog({ open, onOpenChange, itemId }: Props): React.JSX
                   setValue('quantity', EMPTY_QUANTITY)
                   clearErrors(['quantity', 'batchId'])
                   setServerError(null)
-                }} disabled={mutation.isPending}>
+                }} disabled={mutation.isPending || selectedItemId == null}>
                   <SelectTrigger ref={field.ref} id={`${id}-batch`} className="min-h-11 text-start motion-reduce:transition-none" aria-invalid={!!errors.batchId} aria-describedby={errors.batchId ? alertId : undefined} aria-required>
                     <SelectValue placeholder={t('assets.store.disposals.chooseBatch')} />
                   </SelectTrigger>
@@ -149,7 +162,7 @@ export function DisposalDialog({ open, onOpenChange, itemId }: Props): React.JSX
                 )} />
               </Field>
             )}
-            <fieldset disabled={mutation.isPending} className="flex flex-col gap-1.5">
+            {batch && <fieldset disabled={mutation.isPending} className="flex flex-col gap-1.5">
               <legend className="text-sm font-medium">{t('assets.store.disposals.reason')}</legend>
               <div className="flex flex-wrap gap-3">
                 {(['expired', 'damaged'] as const).map((reason) => (
@@ -159,7 +172,7 @@ export function DisposalDialog({ open, onOpenChange, itemId }: Props): React.JSX
                   </label>
                 ))}
               </div>
-            </fieldset>
+            </fieldset>}
             <Field id={`${id}-note`} label={t('assets.store.disposals.note')}>
               <Textarea id={`${id}-note`} dir="auto" disabled={mutation.isPending} {...register('note')} />
             </Field>

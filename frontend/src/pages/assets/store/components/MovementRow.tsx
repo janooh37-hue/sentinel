@@ -12,8 +12,9 @@ import { localized } from '@/lib/language'
 import { toast } from '@/lib/toast'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
-import { formatExpiry, invalidateStoreQueries, itemName, storeErrorMessage } from '../storeUtils'
-import { ItemIdentity, SignedStoreQuantity, StoreQuantity } from './RecordParts'
+import { formatExpiry, invalidateStoreQueries, storeErrorMessage } from '../storeUtils'
+import { ItemIdentity, StorePackDescription, SignedStoreQuantity, StoreQuantity } from './RecordParts'
+import { storeDisplayName as itemName } from '../storePresentation'
 
 type Line = StoreMovementRead['lines'][number]
 function summedItems(movement: StoreMovementRead): Line[] {
@@ -41,9 +42,9 @@ export function MovementRow({ movement, onSelect, stacked = false, showLineUnits
   return <button type="button" onClick={() => onSelect(movement)} className="flex min-h-20 w-full items-center gap-3 border-b border-border px-3 py-4 text-start last:border-0 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-4">
     <KindIcon kind={movement.kind} /><span className="sr-only">{t(`assets.store.movements.kind.${movement.kind}`)}</span>
     <span className={cn('hidden w-20 shrink-0 text-sm', !stacked && 'sm:block')}><bdi dir="ltr">{dateText(movement.on, i18n.language, { day: 'numeric', month: 'short' })}</bdi></span>
-    <span className={cn('hidden shrink-0 items-center', !stacked && 'sm:flex')}>{items.slice(0, 3).map((line, index) => <StoreItemArt key={line.item_id} kind={line.art_kind} color={line.art_color} size={36} className={index ? '-ms-3' : ''} />)}</span>
+    <span className="flex shrink-0 items-center">{items.slice(0, 3).map((line, index) => <StoreItemArt key={line.item_id} kind={line.art_kind} color={line.art_color} brandLabel={line.brand_label} labelEn={line.generic_label_en} labelAr={line.generic_label_ar} size={36} className={index ? '-ms-3' : ''} />)}</span>
     <span className="min-w-0 flex-1">
-      <span className="block text-sm font-semibold [overflow-wrap:anywhere]">{items.map((line, index) => <span key={line.item_id}>{index > 0 && ' · '}<bdi>{itemName(line, i18n.language)}</bdi>{showLineUnits ? <> · <StoreQuantity value={line.quantity} item={line} /></> : <> <bdi dir="ltr" className="font-normal text-muted-foreground">×{line.quantity}</bdi></>}</span>)}</span>
+      <span className="block text-sm font-semibold [overflow-wrap:anywhere]">{items.map((line, index) => <span key={line.item_id}>{index > 0 && ' · '}<bdi>{itemName(line, i18n.language)}</bdi>{showLineUnits ? <> · <StoreQuantity value={line.quantity} item={line} /></> : <> <bdi dir="ltr" className="font-normal text-muted-foreground">×{line.quantity}</bdi></>}<StorePackDescription item={line} /></span>)}</span>
       <span className="mt-1 block text-xs text-muted-foreground [overflow-wrap:anywhere]">{who}</span>
       <span className="mt-1 block text-xs text-muted-foreground [overflow-wrap:anywhere]"><Trans i18nKey="assets.store.movements.recordedAt" values={{ date: dateText(movement.created_at, i18n.language, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }), name: recorder }} components={{ date: <bdi dir="ltr" />, name: <bdi /> }} /></span>
       <span className={cn('mt-1 block text-xs text-muted-foreground', !stacked && 'sm:hidden')}><bdi dir="ltr">{dateText(movement.on, i18n.language, { day: 'numeric', month: 'short', year: 'numeric' })}</bdi></span>
@@ -77,7 +78,6 @@ export function MovementDetailDialog({ movement, open, onOpenChange }: { movemen
       {movement.note_file && <a className="flex min-h-11 items-center gap-2 text-sm text-primary underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href={movement.note_file.url} download={movement.note_file.name}><FileText aria-hidden className="size-4" />{t('assets.store.movements.file')}: <bdi>{movement.note_file.name}</bdi></a>}
       <h3 className="text-sm font-semibold">{t('assets.store.movements.lines')}</h3>
       <ul className="divide-y divide-border">{movement.lines.map(line => <li key={line.id} className="flex items-start gap-3 py-3">
-        <StoreItemArt kind={line.art_kind} color={line.art_color} size={44} />
         <div className="min-w-0 flex-1">
           <ItemIdentity row={line} stacked />
           <p className="text-xs text-muted-foreground">{line.expiry_date ? <span title={formatExpiry(line, t)}>{t('assets.store.movements.batchExpiring', { date: dateText(line.expiry_date, i18n.language, { ...(line.expiry_month_only ? {} : { day: 'numeric' as const }), month: 'short', year: 'numeric' }) })}</span> : t('assets.store.movements.undated')}</p>

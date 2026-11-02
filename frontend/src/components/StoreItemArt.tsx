@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react'
-
-import { STORE_ART_COLORS } from './storeArtCatalog'
+import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import { isArabic } from '@/lib/language'
+import { STORE_ART_COLORS, STORE_ART_KINDS } from './storeArtCatalog'
 
 function shade(hex: string, amount: number): string {
   const value = Number.parseInt(hex.slice(1), 16)
@@ -10,14 +11,45 @@ function shade(hex: string, amount: number): string {
   }).join('')
 }
 
-/** Flat, decorative drawings; the neighbouring item name provides the label. */
-export function StoreItemArt({ kind, color, categoryId, size = 48, className }: {
+/** Code-drawn shelf recognition; neighbouring text supplies its accessible name. */
+export function StoreItemArt({ kind, color, categoryId, size = 48, className, brandLabel, labelEn, labelAr }: {
   kind?: string | null
   color?: string | null
   categoryId?: number | null
   size?: number
   className?: string
+  brandLabel?: string | null
+  labelEn?: string | null
+  labelAr?: string | null
 }): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+  const arabic = isArabic(i18n.language)
+  const brand = brandLabel?.trim()
+  const drawingKind = STORE_ART_KINDS.find(value => value === kind) ?? 'carton'
+  const fallback = t(`assets.store.presentation.genericLabels.${drawingKind}`)
+  const label = brand || (arabic ? labelAr?.trim() || fallback : labelEn?.trim() || fallback)
+  const lines = label.split('\n')
+  const front = ['box', 'gloves', 'mask', 'carton', 'tissue'].includes(kind ?? 'carton')
+  const centerX = front ? 53 : 60
+  const labelY = kind === 'jar' ? 68 : kind === 'box' ? 72 : kind === 'canister' ? 57 : kind === 'gloves' || kind === 'mask' ? 94 : kind === 'tissue' ? 72 : kind === 'water' ? 69 : kind === 'tins' ? 74 : 67
+  const baseline = lines.length > 1 ? Math.min(labelY, 89) : labelY
+  const labelWidth = kind === 'canister' ? 43 : kind === 'cups' ? 28 : kind === 'bigcups' ? 38 : kind === 'tins' || kind === 'water' ? 64 : front ? 49 : 52
+  const fontSize = lines.some(line => line.length > 9) ? 7.2 : 8.6
+  const svgRef = useRef<SVGSVGElement>(null)
+  useLayoutEffect(() => {
+    let active = true
+    const fit = () => {
+      if (!active) return
+      svgRef.current?.querySelectorAll('text').forEach(text => {
+        text.setAttribute('font-size', String(fontSize))
+        const width = text.getComputedTextLength?.() ?? 0
+        if (width > labelWidth - 4) text.setAttribute('font-size', String(fontSize * (labelWidth - 4) / width))
+      })
+    }
+    fit()
+    void document.fonts?.ready.then(fit)
+    return () => { active = false }
+  }, [label, labelWidth, fontSize, arabic])
   const main = color && /^#[\da-f]{6}$/i.test(color) ? color : STORE_ART_COLORS[Math.abs(categoryId ?? 0) % STORE_ART_COLORS.length]
   const dark = shade(main, -0.22)
   const light = shade(main, 0.18)
@@ -88,8 +120,12 @@ export function StoreItemArt({ kind, color, categoryId, size = 48, className }: 
     </>); break
     default: drawing = box(<path d="M53 46v58M53 46l12-10" stroke={secondary} strokeWidth="3" />)
   }
-  return <svg viewBox="0 0 120 120" width={size} height={size} className={className} aria-hidden="true" focusable="false">
+  return <svg ref={svgRef} viewBox="20 20 80 90" width={size} height={size} className={className} aria-hidden="true" focusable="false">
     <ellipse cx="60" cy="105" rx="36" ry="5" fill="#000" opacity=".12" />
     {drawing}
+    <g pointerEvents="none">
+      <rect x={centerX - labelWidth / 2} y={baseline - 11} width={labelWidth} height={lines.length > 1 ? 23 : 16} rx="1.5" fill="#fffdf7" opacity=".97" />
+      {lines.map((line, index) => <text key={index} x={centerX} y={baseline + index * 10} textAnchor="middle" direction={brand || !arabic ? 'ltr' : 'rtl'} style={{ unicodeBidi: 'isolate' }} fontFamily={arabic && !brand ? 'Noto Sans Arabic, sans-serif' : '"Inter Variable", Inter, sans-serif'} fontWeight="700" fontSize={fontSize} fill="#192c40">{line}</text>)}
+    </g>
   </svg>
 }

@@ -2,14 +2,13 @@ import { useId, useLayoutEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import { StoreItemArt } from '@/components/StoreItemArt'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { api, type StoreItemRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { toast } from '@/lib/toast'
 import { containsUnit, countingUnit, hasContains, invalidateStoreQueries, itemName, quantityUnit, splitBase, storeErrorMessage, storeKeys } from '../storeUtils'
-import { StoreQuantity } from './RecordParts'
+import { StoreItemSummary, StoreQuantity } from './RecordParts'
 
 export function QuantityStepper({ value, max, onChange, label, disabled = false, minimum = 1 }: { value: number; max: number; onChange: (value: number) => void; label: string; disabled?: boolean; minimum?: number }) {
   const { t } = useTranslation()
@@ -136,7 +135,7 @@ export function HandoverTray({ items, picked, maximum, onChange, onCancel, onSuc
   return <section ref={trayRef} aria-label={t('assets.store.handovers.title')} style={{ insetBlockEnd: 'max(var(--handover-nav-offset), var(--handover-keyboard-offset, 0px))' }} className="fixed inset-s-0 inset-e-0 z-40 max-h-[min(60dvh,calc(var(--handover-viewport-height,100dvh)-1rem))] overflow-y-auto scroll-pb-20 border-t border-border bg-surface px-4 py-3 shadow-2xl [--handover-nav-offset:calc(5.5rem+var(--safe-bottom))] md:pb-[max(1rem,var(--safe-bottom))] md:[--handover-nav-offset:0px]">
     {!selected.length ? <div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{t('assets.store.handovers.empty')}</p><Button type="button" variant="secondary" className="min-h-11 shrink-0" onClick={onCancel}>{t('common.cancel')}</Button></div> : <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-2">
       <div><h2 className="mb-2 font-semibold">{t('assets.store.handovers.title')} · {t('assets.store.dashboard.shelfItems', { count: selected.length })}</h2>
-        <div className="max-h-40 space-y-1 overflow-y-auto">{selected.map(item => <div key={item.id} className="flex flex-wrap items-center gap-2"><StoreItemArt kind={item.art_kind} color={item.art_color} categoryId={item.category_id} size={38} /><span dir="auto" className="min-w-0 flex-1 text-sm">{itemName(item, i18n.language)}<span className="block text-xs text-muted-foreground"><StoreQuantity value={picked[item.id]} item={item} /></span></span><ItemQuantityStepper item={item} label={itemName(item, i18n.language)} value={picked[item.id]} max={maximum(item.id)} minimum={0} disabled={busy} onChange={quantity => onChange(item.id, quantity)} /></div>)}</div>
+        <div className="max-h-40 space-y-1 overflow-y-auto">{selected.map(item => <div key={item.id} className="flex flex-wrap items-center gap-2"><div className="min-w-0 flex-1"><StoreItemSummary item={item} size={44} /><span className="block text-xs text-muted-foreground"><StoreQuantity value={picked[item.id]} item={item} /></span></div><ItemQuantityStepper item={item} label={itemName(item, i18n.language)} value={picked[item.id]} max={maximum(item.id)} minimum={0} disabled={busy} onChange={quantity => onChange(item.id, quantity)} /></div>)}</div>
       </div>
       <HandoverForm multi lines={selected.map(item => ({ item_id: item.id, quantity: picked[item.id] }))} draft={draft} onDraftChange={onDraftChange} onCancel={onCancel} onSuccess={onSuccess} busyChanged={busyChanged} />
     </div>}

@@ -43,7 +43,6 @@ export function FileUploadZone({
     <div
       role="button"
       tabIndex={0}
-      aria-label={label}
       onClick={() => !blocked && inputRef.current?.click()}
       onKeyDown={(e) => {
         if ((e.key === 'Enter' || e.key === ' ') && !blocked) {
@@ -75,8 +74,7 @@ export function FileUploadZone({
         ref={inputRef}
         type="file"
         accept={accept}
-        className="sr-only"
-        tabIndex={-1}
+        hidden
         onChange={(e) => handleFiles(e.target.files)}
         onClick={(e) => {
           ;(e.target as HTMLInputElement).value = ''
@@ -85,12 +83,11 @@ export function FileUploadZone({
       {busy ? (
         <>
           <Loader2
-            role="status"
-            aria-label={busyLabel ?? t('common.loading')}
+            aria-hidden
             strokeWidth={2}
             className="h-5 w-5 animate-spin text-primary motion-reduce:animate-none"
           />
-          <span className="text-xs text-muted-foreground">
+          <span role="status" className="text-xs text-muted-foreground">
             {busyLabel ?? t('common.loading')}
           </span>
         </>

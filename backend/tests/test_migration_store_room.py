@@ -1,8 +1,4 @@
-"""Migration 0113: linear head and populated, reversible SQLite alterations.
-
-Full column, constraint, FK and index model parity is covered by
-test_migration_store's HEAD-based parity test, including the room models.
-"""
+"""Migration 0113: linear history and populated, reversible SQLite alterations."""
 
 from pathlib import Path
 
@@ -18,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_store_room_is_single_head() -> None:
     script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
-    assert script.get_heads() == ["0113_store_room"]
+    assert script.get_heads() == ["0114_store_count"]
     assert script.get_revision("0113_store_room").down_revision == "0112_store"
 
 

@@ -8,7 +8,7 @@ import { toast } from '@/lib/toast'
 import { invalidateStoreQueries, storeErrorMessage } from '../storeUtils'
 
 /** Delivery creation is durable. Only the attachment is retried after it succeeds. */
-export function useScanDeliverySave(file: File) {
+export function useScanDeliverySave(file: File | null) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -30,7 +30,7 @@ export function useScanDeliverySave(file: File) {
     if (deliveryId.current == null) return
     setUploadFailed(false)
     try {
-      await api.uploadStoreDeliveryNote(deliveryId.current, file)
+      if (file) await api.uploadStoreDeliveryNote(deliveryId.current, file)
       finish()
     } catch {
       setUploadFailed(true)

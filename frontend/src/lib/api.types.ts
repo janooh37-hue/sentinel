@@ -15441,6 +15441,20 @@ export interface components {
         };
         /** StoreBatchRead */
         StoreBatchRead: {
+            /** Brand Label */
+            brand_label?: string | null;
+            /** Generic Label En */
+            generic_label_en?: string | null;
+            /** Generic Label Ar */
+            generic_label_ar?: string | null;
+            /** Short Name En */
+            short_name_en?: string | null;
+            /** Short Name Ar */
+            short_name_ar?: string | null;
+            /** Pack Description En */
+            pack_description_en?: string | null;
+            /** Pack Description Ar */
+            pack_description_ar?: string | null;
             /** Item Id */
             item_id: number;
             /** Item Code */
@@ -15580,6 +15594,20 @@ export interface components {
         };
         /** StoreDashboardBatch */
         StoreDashboardBatch: {
+            /** Brand Label */
+            brand_label?: string | null;
+            /** Generic Label En */
+            generic_label_en?: string | null;
+            /** Generic Label Ar */
+            generic_label_ar?: string | null;
+            /** Short Name En */
+            short_name_en?: string | null;
+            /** Short Name Ar */
+            short_name_ar?: string | null;
+            /** Pack Description En */
+            pack_description_en?: string | null;
+            /** Pack Description Ar */
+            pack_description_ar?: string | null;
             /** Item Id */
             item_id: number;
             /** Item Code */
@@ -15615,6 +15643,20 @@ export interface components {
         };
         /** StoreDashboardLowStock */
         StoreDashboardLowStock: {
+            /** Brand Label */
+            brand_label?: string | null;
+            /** Generic Label En */
+            generic_label_en?: string | null;
+            /** Generic Label Ar */
+            generic_label_ar?: string | null;
+            /** Short Name En */
+            short_name_en?: string | null;
+            /** Short Name Ar */
+            short_name_ar?: string | null;
+            /** Pack Description En */
+            pack_description_en?: string | null;
+            /** Pack Description Ar */
+            pack_description_ar?: string | null;
             /** Item Id */
             item_id: number;
             /** Item Code */
@@ -15668,6 +15710,8 @@ export interface components {
             expiry?: string | null;
             /** Quantity */
             quantity: number;
+            /** Carton Contains Qty */
+            carton_contains_qty?: number | null;
             /** Source Text */
             source_text?: string | null;
             /** Noted Quantity */
@@ -15742,6 +15786,20 @@ export interface components {
         };
         /** StoreDisposalRead */
         StoreDisposalRead: {
+            /** Brand Label */
+            brand_label?: string | null;
+            /** Generic Label En */
+            generic_label_en?: string | null;
+            /** Generic Label Ar */
+            generic_label_ar?: string | null;
+            /** Short Name En */
+            short_name_en?: string | null;
+            /** Short Name Ar */
+            short_name_ar?: string | null;
+            /** Pack Description En */
+            pack_description_en?: string | null;
+            /** Pack Description Ar */
+            pack_description_ar?: string | null;
             /** Item Id */
             item_id: number;
             /** Item Code */
@@ -15799,6 +15857,20 @@ export interface components {
          * @description A Batch the count must include. Never carries a quantity (ADR 0009).
          */
         StoreExpectedBatch: {
+            /** Brand Label */
+            brand_label?: string | null;
+            /** Generic Label En */
+            generic_label_en?: string | null;
+            /** Generic Label Ar */
+            generic_label_ar?: string | null;
+            /** Short Name En */
+            short_name_en?: string | null;
+            /** Short Name Ar */
+            short_name_ar?: string | null;
+            /** Pack Description En */
+            pack_description_en?: string | null;
+            /** Pack Description Ar */
+            pack_description_ar?: string | null;
             /** Item Id */
             item_id: number;
             /** Item Code */
@@ -15878,6 +15950,20 @@ export interface components {
         };
         /** StoreItemCreate */
         StoreItemCreate: {
+            /** Brand Label */
+            brand_label?: string | null;
+            /** Generic Label En */
+            generic_label_en?: string | null;
+            /** Generic Label Ar */
+            generic_label_ar?: string | null;
+            /** Short Name En */
+            short_name_en?: string | null;
+            /** Short Name Ar */
+            short_name_ar?: string | null;
+            /** Pack Description En */
+            pack_description_en?: string | null;
+            /** Pack Description Ar */
+            pack_description_ar?: string | null;
             /** Name En */
             name_en: string;
             /** Name Ar */
@@ -15909,6 +15995,20 @@ export interface components {
         };
         /** StoreItemRead */
         StoreItemRead: {
+            /** Brand Label */
+            brand_label?: string | null;
+            /** Generic Label En */
+            generic_label_en?: string | null;
+            /** Generic Label Ar */
+            generic_label_ar?: string | null;
+            /** Short Name En */
+            short_name_en?: string | null;
+            /** Short Name Ar */
+            short_name_ar?: string | null;
+            /** Pack Description En */
+            pack_description_en?: string | null;
+            /** Pack Description Ar */
+            pack_description_ar?: string | null;
             /** Id */
             id: number;
             /** Code */
@@ -15955,6 +16055,20 @@ export interface components {
          * @description Partial update; send ``contains_qty`` with both units, or all three null.
          */
         StoreItemUpdate: {
+            /** Brand Label */
+            brand_label?: string | null;
+            /** Generic Label En */
+            generic_label_en?: string | null;
+            /** Generic Label Ar */
+            generic_label_ar?: string | null;
+            /** Short Name En */
+            short_name_en?: string | null;
+            /** Short Name Ar */
+            short_name_ar?: string | null;
+            /** Pack Description En */
+            pack_description_en?: string | null;
+            /** Pack Description Ar */
+            pack_description_ar?: string | null;
             /** Name En */
             name_en?: string | null;
             /** Name Ar */
@@ -15980,6 +16094,20 @@ export interface components {
         };
         /** StoreLineRead */
         StoreLineRead: {
+            /** Brand Label */
+            brand_label?: string | null;
+            /** Generic Label En */
+            generic_label_en?: string | null;
+            /** Generic Label Ar */
+            generic_label_ar?: string | null;
+            /** Short Name En */
+            short_name_en?: string | null;
+            /** Short Name Ar */
+            short_name_ar?: string | null;
+            /** Pack Description En */
+            pack_description_en?: string | null;
+            /** Pack Description Ar */
+            pack_description_ar?: string | null;
             /** Item Id */
             item_id: number;
             /** Item Code */
@@ -16012,6 +16140,8 @@ export interface components {
             expiry_month_only: boolean;
             /** Quantity */
             quantity: number;
+            /** Carton Contains Qty */
+            carton_contains_qty?: number | null;
             /** Noted Quantity */
             noted_quantity?: number | null;
             /** Difference Reason */
@@ -16052,6 +16182,20 @@ export interface components {
         };
         /** StorePickerItem */
         StorePickerItem: {
+            /** Brand Label */
+            brand_label?: string | null;
+            /** Generic Label En */
+            generic_label_en?: string | null;
+            /** Generic Label Ar */
+            generic_label_ar?: string | null;
+            /** Short Name En */
+            short_name_en?: string | null;
+            /** Short Name Ar */
+            short_name_ar?: string | null;
+            /** Pack Description En */
+            pack_description_en?: string | null;
+            /** Pack Description Ar */
+            pack_description_ar?: string | null;
             /** Id */
             id: number;
             /** Code */
@@ -16094,8 +16238,14 @@ export interface components {
             item_id: number | null;
             /** Match Score */
             match_score: number;
-            /** Quantity */
-            quantity: number | null;
+            /** Cartons */
+            cartons?: number | null;
+            /** Loose Quantity */
+            loose_quantity?: number | null;
+            /** Carton Contains Qty */
+            carton_contains_qty?: number | null;
+            /** Expiry */
+            expiry?: string | null;
             /** Confidence */
             confidence: number;
             /**
@@ -16114,6 +16264,20 @@ export interface components {
         };
         /** StoreSuggestion */
         StoreSuggestion: {
+            /** Brand Label */
+            brand_label?: string | null;
+            /** Generic Label En */
+            generic_label_en?: string | null;
+            /** Generic Label Ar */
+            generic_label_ar?: string | null;
+            /** Short Name En */
+            short_name_en?: string | null;
+            /** Short Name Ar */
+            short_name_ar?: string | null;
+            /** Pack Description En */
+            pack_description_en?: string | null;
+            /** Pack Description Ar */
+            pack_description_ar?: string | null;
             /** Item Id */
             item_id: number;
             /** Item Code */
@@ -16154,6 +16318,20 @@ export interface components {
         };
         /** StoreUsageRow */
         StoreUsageRow: {
+            /** Brand Label */
+            brand_label?: string | null;
+            /** Generic Label En */
+            generic_label_en?: string | null;
+            /** Generic Label Ar */
+            generic_label_ar?: string | null;
+            /** Short Name En */
+            short_name_en?: string | null;
+            /** Short Name Ar */
+            short_name_ar?: string | null;
+            /** Pack Description En */
+            pack_description_en?: string | null;
+            /** Pack Description Ar */
+            pack_description_ar?: string | null;
             /** Item Id */
             item_id: number;
             /** Item Code */

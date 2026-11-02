@@ -169,7 +169,7 @@ export function AttachmentsBlock({
             {requiredFilled >= requiredTotal ? ' ✓' : ''}
           </span>
         ) : (
-          <span className="text-[0.72em] font-medium text-faint">
+          <span className="text-[0.72em] font-medium text-muted-foreground">
             {t('application.attachments.optional')}
           </span>
         )}

@@ -5,7 +5,7 @@ import type { DashboardOnLeaveItem } from '@/lib/api'
 import { splitBilingual } from '@/lib/bilingualValue'
 import { summaryEmployeeName } from './peopleWidgetData'
 
-export const PEOPLE_LINK = 'rounded-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+export const PEOPLE_LINK = 'rounded-sm text-primary-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 export const PEOPLE_BIG = 'font-mono text-[2em] font-bold leading-none tracking-tight tabular-nums text-foreground'
 export const PEOPLE_ROW = 'flex min-w-0 items-center gap-2 rounded-lg py-2 text-start hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
 export const PEOPLE_META = `${WIDGET_SUPPORT} text-muted-foreground`

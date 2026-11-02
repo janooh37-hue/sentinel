@@ -187,3 +187,30 @@ def test_apply_packs_converts_a_store_imported_in_cartons(
 
     assert packs.apply_packs(db_session, data, actor="storekeeper@test.ae") == 0
     assert store_service.list_items(db_session)[1].on_hand == 300
+
+
+def test_opening_presentation_and_setter_preserve_operator_overrides(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.schemas.store import StoreItemPresentation
+
+    monkeypatch.setattr(store_service, "organization_today", lambda: date(2026, 10, 29))
+    data = json.loads(OPENING.read_text(encoding="utf-8"))
+    _script().import_opening(db_session, data, actor="storekeeper@test.ae")
+    items = db_session.scalars(select(StoreItem).order_by(StoreItem.id)).all()
+    for item, entry in zip(items, data["items"], strict=True):
+        assert {key: getattr(item, key) for key in StoreItemPresentation.model_fields} == {
+            key: entry[key] for key in StoreItemPresentation.model_fields
+        }
+        assert item.name_en == entry["name_en"]
+    items[0].brand_label = None
+    items[0].short_name_ar = None
+    items[0].pack_description_en = "Operator verified pack"
+    db_session.commit()
+    setter = _load("store_set_art")
+    assert setter.set_art(db_session, data, actor="storekeeper@test.ae") == 1
+    assert items[0].brand_label == data["items"][0]["brand_label"]
+    assert items[0].short_name_ar == data["items"][0]["short_name_ar"]
+    assert items[0].pack_description_en == "Operator verified pack"
+    assert setter.set_art(db_session, data, actor="storekeeper@test.ae") == 0

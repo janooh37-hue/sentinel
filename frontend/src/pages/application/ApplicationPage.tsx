@@ -1194,6 +1194,7 @@ function StandardApplicationPage(): React.JSX.Element {
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
+      <h1 className="sr-only">{t('nav.services')}</h1>
       <div className="mx-auto w-full max-w-[1320px] flex-1 px-4 pb-10 pt-6 sm:px-8">
         {selectedTemplate === null ? (
           /* ───────────────── Services gallery ───────────────── */
@@ -1977,7 +1978,7 @@ function TabButton({
       className={[
         'relative inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 py-1.5 text-[0.78em] font-medium transition-colors md:min-h-0',
         active
-          ? 'bg-primary-soft text-primary'
+          ? 'bg-primary-soft text-primary-text'
           : 'text-muted-foreground hover:bg-surface-tinted hover:text-foreground',
         disabled ? 'cursor-not-allowed opacity-40' : '',
       ]

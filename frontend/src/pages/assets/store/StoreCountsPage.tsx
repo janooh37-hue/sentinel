@@ -30,7 +30,7 @@ export function StoreCountsPage(): React.JSX.Element {
     return next
   })
   const month = (count: StoreCountRead) => editable ? (
-    <Link className="inline-flex min-h-11 items-center font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" to={`/holdings/store/counts/${count.id}`}>
+    <Link className="inline-flex min-h-11 items-center font-semibold text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" to={`/holdings/store/counts/${count.id}`}>
       <bdi dir="ltr" className="font-mono tabular-nums">{count.month}</bdi>
     </Link>
   ) : (

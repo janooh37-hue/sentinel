@@ -10,7 +10,7 @@ import { api, type StoreItemRead } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
-import { isArabic } from '@/lib/language'
+import { StoreItemSummary } from './components/RecordParts'
 import { StoreItemDialog } from './components/StoreItemDialog'
 import { StoreQueryState } from './StoreQueryState'
 import { StoreShell } from './StoreShell'
@@ -47,8 +47,7 @@ export function StoreItemsPage(): React.JSX.Element {
     </Button>}
   </div>
   const name = (item: StoreItemRead) => <div className="flex flex-col gap-1">
-    <span dir="auto" lang={isArabic(i18n.language) && item.name_ar ? 'ar' : 'en'} className="font-medium">{itemName(item, i18n.language)}</span>
-    {item.name_ar && <span dir="auto" lang={isArabic(i18n.language) ? 'en' : 'ar'} className="text-sm text-muted-foreground">{isArabic(i18n.language) ? item.name_en : item.name_ar}</span>}
+    <StoreItemSummary item={item} size={72} />
     {item.archived_at && <span className="text-xs font-semibold text-muted-foreground">{t('assets.store.items.archived')}</span>}
   </div>
   const stock = (item: StoreItemRead) => <div className="flex flex-col gap-1">

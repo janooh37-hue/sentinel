@@ -45,7 +45,7 @@ export function StoreDeliveriesPage(): React.JSX.Element {
   function attachment(file: StoreDeliveryNoteFile | null): React.ReactNode {
     if (!file) return <span className="text-muted-foreground">{t('assets.store.deliveries.noAttachment')}</span>
     return (
-      <button type="button" onClick={() => setViewer(file)} aria-label={t('assets.store.deliveries.viewNote', { name: file.name })} className="flex min-h-11 max-w-full items-center gap-2 rounded-lg border border-border p-2 text-start text-sm text-primary transition-colors hover:bg-surface-tinted motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <button type="button" onClick={() => setViewer(file)} aria-label={t('assets.store.deliveries.viewNote', { name: file.name })} className="flex min-h-11 max-w-full items-center gap-2 rounded-lg border border-border p-2 text-start text-sm text-primary-text transition-colors hover:bg-surface-tinted motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         {file.media_type.startsWith('image/') ? <img src={file.url} alt="" loading="lazy" className="h-14 w-14 shrink-0 rounded object-cover" /> : <FileText aria-hidden className="h-5 w-5 shrink-0" />}
         <span dir="auto" className="min-w-0 break-words">{file.name}</span>
       </button>
@@ -58,13 +58,13 @@ export function StoreDeliveriesPage(): React.JSX.Element {
   }
 
   function deliveryQuantity(line: StoreLineRead): React.ReactNode {
-    if (line.noted_quantity == null || line.noted_quantity === line.quantity) return <StoreQuantity value={line.quantity} item={line} />
-    return <div className="flex flex-col gap-1"><span>{t('assets.store.scan.onNote')}: <StoreQuantity value={line.noted_quantity} item={line} /></span><span>{t('assets.store.scan.received')}: <StoreQuantity value={line.quantity} item={line} /></span>{line.difference_reason && <p dir="auto" className="break-words text-muted-foreground">{line.difference_reason}</p>}</div>
+    const quantity = line.noted_quantity == null || line.noted_quantity === line.quantity ? <StoreQuantity value={line.quantity} item={line} /> : <div className="flex flex-col gap-1"><span>{t('assets.store.scan.onNote')}: <StoreQuantity value={line.noted_quantity} item={line} /></span><span>{t('assets.store.scan.received')}: <StoreQuantity value={line.quantity} item={line} /></span>{line.difference_reason && <p dir="auto" className="break-words text-muted-foreground">{line.difference_reason}</p>}</div>
+    return <div className="flex flex-col gap-1">{quantity}{line.carton_contains_qty != null && <p className="text-sm text-muted-foreground">{t('assets.store.deliveries.contentsDisplay')}: <bdi dir="ltr">{line.carton_contains_qty}</bdi></p>}</div>
   }
 
   return (
-    <StoreShell title={t('assets.store.deliveries.title')} description={t('assets.store.deliveries.description')} actions={editable && <div className="flex flex-wrap gap-2">{!mobile && <Link className={buttonVariants({ variant: 'secondary', className: 'min-h-11 whitespace-normal text-start' })} to="/holdings/store/deliveries/scan"><ScanLine aria-hidden className="h-4 w-4 shrink-0" />{t('assets.store.scan.entry')}</Link>}<Button type="button" className="min-h-11" onClick={() => setDialog(true)}><Plus aria-hidden className="h-4 w-4" />{t('assets.store.deliveries.log')}</Button></div>}>
-      {editable && mobile && <Link className={buttonVariants({ variant: 'secondary', className: 'min-h-11 self-start whitespace-normal text-start' })} to="/holdings/store/deliveries/scan"><ScanLine aria-hidden className="h-4 w-4 shrink-0" />{t('assets.store.scan.entry')}</Link>}
+    <StoreShell title={t('assets.store.deliveries.title')} description={t('assets.store.deliveries.description')} actions={editable && <div className="flex flex-wrap gap-2">{!mobile && <Link className={buttonVariants({ className: 'min-h-11 whitespace-normal text-start' })} to="/holdings/store/deliveries/scan"><ScanLine aria-hidden className="h-4 w-4 shrink-0" />{t('assets.store.scan.entry')}</Link>}<Button type="button" variant="secondary" className="min-h-11" onClick={() => setDialog(true)}><Plus aria-hidden className="h-4 w-4" />{t('assets.store.deliveries.log')}</Button></div>}>
+      {editable && mobile && <Link className={buttonVariants({ className: 'min-h-11 self-start whitespace-normal text-start' })} to="/holdings/store/deliveries/scan"><ScanLine aria-hidden className="h-4 w-4 shrink-0" />{t('assets.store.scan.entry')}</Link>}
       {uploadWarning && <p role="alert" className="rounded-lg border border-warning bg-warning-soft p-3 text-sm text-foreground" dir="auto">{uploadWarning}</p>}
       <StoreQueryState isPending={query.isPending} error={query.error} onRetry={() => void query.refetch()} isEmpty={deliveries.length === 0} emptyIcon={Truck} emptyMessage={t('assets.store.deliveries.empty')} emptyDescription={t(editable ? 'assets.store.deliveries.emptyDescription' : 'assets.store.deliveries.emptyReadOnly')}>
         {mobile ? (

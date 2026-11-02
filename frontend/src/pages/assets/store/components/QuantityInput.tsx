@@ -8,7 +8,7 @@
 import { useTranslation } from 'react-i18next'
 
 import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
+import { cn, normalizeDigits } from '@/lib/utils'
 
 import {
   containsUnit,
@@ -69,7 +69,7 @@ export function QuantityInput({
           aria-required={required || undefined}
           disabled={disabled}
           value={value.units}
-          onChange={(event) => onChange({ ...value, units: event.target.value })}
+          onChange={(event) => onChange({ ...value, units: normalizeDigits(event.target.value) })}
           className={cn(FIELD, invalid && 'border-destructive')}
         />
         <span className="shrink-0 text-xs text-muted-foreground" dir="auto">
@@ -97,7 +97,7 @@ export function QuantityInput({
               aria-describedby={describedBy}
               disabled={disabled}
               value={value.loose}
-              onChange={(event) => onChange({ ...value, loose: event.target.value })}
+              onChange={(event) => onChange({ ...value, loose: normalizeDigits(event.target.value) })}
               className={cn(FIELD, invalid && 'border-destructive')}
             />
             <span className="shrink-0 text-xs text-muted-foreground" dir="auto">

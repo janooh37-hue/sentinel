@@ -4,6 +4,9 @@ import { Plus, Trash2 } from 'lucide-react'
 
 import { Field, FieldGrid } from '@/components/forms/DialogShell'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { normalizeDigits } from '@/lib/utils'
+import { StoreItemSummary } from './RecordParts'
 import { EMPTY_QUANTITY, itemName } from '../storeUtils'
 import type { QuantityParts } from '../storeUtils'
 import type { StorePickerItem } from '@/lib/api'
@@ -56,6 +59,7 @@ export function DeliveryLines({ idPrefix, lines, onChange, errors, alertId, disa
               </Button>
             </div>}
             {renderLineStart?.(line, index)}
+            {line.item && <StoreItemSummary item={line.item} size={72} className="mb-4" />}
             <FieldGrid>
               <Field id={`${prefix}-item`} label={t('assets.store.deliveries.item')} required full={!!renderQuantityAside}>
                 <StoreItemPicker id={`${prefix}-item`} value={line.item?.id ?? null} onChange={(item) => updateLine(line.key, { item, quantity: quantityForItem?.(line, item) ?? { ...EMPTY_QUANTITY } })} disabled={disabled} invalid={!!issue?.item} describedBy={issue?.item ? `${prefix}-item-error ${alertId}` : undefined} />
@@ -65,6 +69,11 @@ export function DeliveryLines({ idPrefix, lines, onChange, errors, alertId, disa
               <Field id={`${prefix}-quantity`} label={quantityLabel ?? t('assets.store.deliveries.quantity')} required>
                 {line.item ? <QuantityInput id={`${prefix}-quantity`} item={line.item} value={line.quantity} onChange={(quantity) => updateLine(line.key, { quantity })} label={itemName(line.item, i18n.language)} invalid={!!issue?.quantity} describedBy={issue?.quantity ? `${prefix}-quantity-error ${alertId}` : undefined} disabled={disabled} required pluralUnits={pluralQuantityUnits} /> : <p className="py-3 text-sm text-muted-foreground">{t('assets.store.deliveries.selectItemFirst')}</p>}
                 {issue?.quantity && <span id={`${prefix}-quantity-error`} role="alert" className="text-xs text-destructive">{issue.quantity}</span>}
+              </Field>
+              <Field id={`${prefix}-contents`} label={t('assets.store.deliveries.contentsOptional')}>
+                <Input id={`${prefix}-contents`} type="text" dir="ltr" inputMode="numeric" autoComplete="off" className="min-h-11 font-mono tabular-nums" value={line.cartonContainsQty} onChange={(event) => updateLine(line.key, { cartonContainsQty: normalizeDigits(event.target.value) })} disabled={disabled} aria-invalid={!!issue?.cartonContainsQty || undefined} aria-describedby={`${prefix}-contents-hint${issue?.cartonContainsQty ? ` ${prefix}-contents-error` : ''}`} />
+                <p id={`${prefix}-contents-hint`} className="text-sm text-muted-foreground">{t('assets.store.deliveries.contentsHint')}</p>
+                {issue?.cartonContainsQty && <span id={`${prefix}-contents-error`} role="alert" className="text-xs text-destructive">{issue.cartonContainsQty}</span>}
               </Field>
               <Field id={`${prefix}-expiry`} label={t('assets.store.deliveries.expiry')} required full>
                 <ExpiryInput id={`${prefix}-expiry`} value={line.expiry} onChange={(expiry) => updateLine(line.key, { expiry })} invalid={!!issue?.expiry} describedBy={issue?.expiry ? `${prefix}-expiry-error ${alertId}` : undefined} disabled={disabled} allowUndated={allowUndated} />

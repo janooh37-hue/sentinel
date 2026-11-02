@@ -1,15 +1,14 @@
-/**
- * Delivery line model and validator shared by every surface that records what
- * arrived: the manual delivery dialog today, a prefilled confirm page later.
- */
+/** Delivery entry values shared by manual receiving, scan editing and final review. */
 
 import type { StoreDeliveryCreate, StorePickerItem } from '@/lib/api'
+import { normalizeDigits } from '@/lib/utils'
 import {
   batchKey,
   DEFAULT_EXPIRY,
   EMPTY_QUANTITY,
   expiryFromValue,
   type ExpiryValue,
+  hasContains,
   quantityFromParts,
   quantityIssue,
   type QuantityParts,
@@ -22,11 +21,12 @@ export interface DeliveryLine {
   item: StorePickerItem | null
   expiry: ExpiryValue
   quantity: QuantityParts
+  cartonContainsQty: string
 }
 
 export type DeliveryLineInit = Partial<Omit<DeliveryLine, 'key'>>
 
-export type DeliveryLineErrors = Record<number, { item?: string; expiry?: string; quantity?: string }>
+export type DeliveryLineErrors = Record<number, { item?: string; expiry?: string; quantity?: string; cartonContainsQty?: string }>
 
 /** Per-line errors and the API lines. When `errors` is empty, `payload[i]` is `lines[i]`. */
 export interface DeliveryLinesCheck {
@@ -35,7 +35,7 @@ export interface DeliveryLinesCheck {
 }
 
 export function newDeliveryLine(key: number, init: DeliveryLineInit = {}): DeliveryLine {
-  return { key, item: null, expiry: { ...DEFAULT_EXPIRY }, quantity: { ...EMPTY_QUANTITY }, ...init }
+  return { key, item: null, expiry: { ...DEFAULT_EXPIRY }, quantity: { ...EMPTY_QUANTITY }, cartonContainsQty: '', ...init }
 }
 
 /** Editor lines keyed 0..n-1: one blank line by default, or prefilled ones. */
@@ -62,11 +62,15 @@ export function validateDeliveryLines(
     if (expiry === undefined || (expiry === null && options.allowUndated === false)) issue.expiry = t(options.allowUndated === false ? 'assets.store.scan.expiryRequired' : 'assets.store.deliveries.expiryRequired')
     const quantity = line.item ? quantityFromParts(line.quantity, line.item) : null
     if (quantityIssue(quantity, { min: options.minimumQuantity?.(line) ?? 1 })) issue.quantity = t('assets.store.deliveries.quantityRequired')
+    const contentsText = normalizeDigits(line.cartonContainsQty).trim()
+    const contents = contentsText === '' ? null : /^\d+$/.test(contentsText) ? Number(contentsText) : NaN
+    if (contents != null && (!Number.isSafeInteger(contents) || contents < 1)) issue.cartonContainsQty = t('assets.store.deliveries.contentsInvalid')
+    else if (contents != null && line.item && hasContains(line.item) && contents !== line.item.contains_qty) issue.cartonContainsQty = t('assets.store.deliveries.contentsMismatch', { count: line.item.contains_qty })
     if (line.item && expiry !== undefined) {
       const key = batchKey(line.item.id, expiry)
       if (seen.has(key)) issue.expiry = t('assets.store.deliveries.duplicateLine')
       seen.add(key)
-      if (quantity != null) payload.push({ item_id: line.item.id, expiry, quantity })
+      if (quantity != null) payload.push({ item_id: line.item.id, expiry, quantity, carton_contains_qty: contents })
     }
     if (Object.keys(issue).length) errors[line.key] = issue
   }

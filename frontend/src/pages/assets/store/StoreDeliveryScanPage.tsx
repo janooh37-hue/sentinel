@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { LoaderCircle, ScanLine } from 'lucide-react'
 
@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { api, ApiError, type StoreDeliveryScan } from '@/lib/api'
 import { useIsMobile } from '@/lib/useIsMobile'
-import { DeliveryDialog } from './components/DeliveryDialog'
 import { ScanDeliveryConfirm } from './components/ScanDeliveryConfirm'
 import { StoreShell } from './StoreShell'
 import { storeErrorMessage } from './storeUtils'
@@ -15,13 +14,11 @@ import { storeErrorMessage } from './storeUtils'
 export function StoreDeliveryScanPage(): React.JSX.Element {
   const { t } = useTranslation()
   const mobile = useIsMobile()
-  const navigate = useNavigate()
   const id = useId()
   const [file, setFile] = useState<File | null>(null)
   const [scan, setScan] = useState<StoreDeliveryScan | null>(null)
   const [reading, setReading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-  const [manual, setManual] = useState(false)
   const controller = useRef<AbortController | null>(null)
   const chooser = useRef<HTMLInputElement>(null)
   const status = useRef<HTMLDivElement>(null)
@@ -58,6 +55,7 @@ export function StoreDeliveryScanPage(): React.JSX.Element {
         ? t('assets.store.scan.scanTimeout')
         : error instanceof ApiError && error.code === 'STORE_SCAN_TOO_MANY_PAGES'
           ? t('assets.store.scan.tooManyPages') : storeErrorMessage(error))
+      setScan({ pages: [], lines: [], ocr_available: false })
     } finally {
       if (!active.signal.aborted) setReading(false)
     }
@@ -72,8 +70,11 @@ export function StoreDeliveryScanPage(): React.JSX.Element {
 
   return (
     <StoreShell title={t('assets.store.scan.title')} description={t('assets.store.scan.description')}>
-      {file && scan?.ocr_available && scan.lines.length > 0 ? (
-        <ScanDeliveryConfirm file={file} scan={scan} onChooseAnother={() => { focusChooser.current = true; setScan(null); setFile(null); setMessage(null) }} onManual={() => setManual(true)} />
+      {scan && !reading ? (
+        <div className="flex min-w-0 flex-col gap-4">
+          {message && <p role="status" dir="auto" className="rounded-xl border border-border bg-surface p-4">{message}</p>}
+          <ScanDeliveryConfirm file={file} scan={scan} onChooseAnother={() => { focusChooser.current = true; setScan(null); setFile(null); setMessage(null) }} />
+        </div>
       ) : (
         <section className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-surface p-4 md:p-6">
           <ScanLine aria-hidden className="h-8 w-8 text-primary" />
@@ -85,11 +86,9 @@ export function StoreDeliveryScanPage(): React.JSX.Element {
             {message && <p dir="auto">{message}</p>}
           </div>
           {reading && <Button type="button" variant="secondary" className="min-h-11 self-start" onClick={cancelReading}>{t('assets.store.scan.cancelReading')}</Button>}
-          {message && <Button type="button" className="min-h-11 self-start" onClick={() => setManual(true)}>{t('assets.store.scan.manual')}</Button>}
           <Link className={buttonVariants({ variant: 'ghost', className: 'min-h-11 self-start whitespace-normal text-start' })} to="/holdings/store/deliveries">{t('assets.store.scan.back')}</Link>
         </section>
       )}
-      <DeliveryDialog open={manual} onOpenChange={setManual} initialFile={file} onSaved={() => navigate('/holdings/store/deliveries')} />
     </StoreShell>
   )
 }

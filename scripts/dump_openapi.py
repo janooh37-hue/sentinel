@@ -1,8 +1,8 @@
 """Dump the FastAPI app's OpenAPI schema to ``backend/openapi.json``.
 
-The frontend reads that file via ``npm run gen:api`` to regenerate its TypeScript
-types. Keeping the JSON committed (no — gitignored, see backend/.gitignore note)
-means CI / a fresh checkout can produce types without standing up the backend.
+The frontend reads that file via ``pnpm run gen:api`` to regenerate its TypeScript
+types. Commit both generated contracts together after schema changes, as required
+by sync-api-types and the approved Store-count integration.
 
 Run me with the project venv:
 

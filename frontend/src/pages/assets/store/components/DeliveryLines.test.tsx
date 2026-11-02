@@ -18,7 +18,7 @@ function Harness({ initial }: { initial: DeliveryLineInit[] }) {
   const [lines, setLines] = useState(() => createDeliveryLines(initial))
   const result = validateDeliveryLines(lines, i18n.t)
   return <>
-    <DeliveryLines idPrefix="d" lines={lines} onChange={setLines} errors={{}} alertId="d-alert" renderLineFields={(line) => <p>Slot {line.key}</p>} />
+    <DeliveryLines idPrefix="d" lines={lines} onChange={setLines} errors={result.errors} alertId="d-alert" />
     <output data-testid="keys">{lines.map((line) => line.key).join(',')}</output>
     <output data-testid="result">{JSON.stringify(result)}</output>
   </>
@@ -42,9 +42,8 @@ describe('DeliveryLines', () => {
     const lines = await screen.findAllByRole('group', { name: /Line/ })
     expect(lines).toHaveLength(2)
     expect(within(lines[0]).getByRole('textbox', { name: 'Coffee: Carton' })).toHaveValue('2')
-    expect(within(lines[0]).getByText('Slot 0')).toBeInTheDocument()
     expect(result()).toEqual({ errors: {}, payload: [
-      { item_id: 4, expiry: '2028-09', quantity: 53 }, { item_id: 4, expiry: null, quantity: 24 },
+      { item_id: 4, expiry: '2028-09', quantity: 53, carton_contains_qty: null }, { item_id: 4, expiry: null, quantity: 24, carton_contains_qty: null },
     ] })
     await user.click(screen.getByRole('button', { name: 'Add line' }))
     expect(screen.getByTestId('keys')).toHaveTextContent('0,1,2')
@@ -55,5 +54,24 @@ describe('DeliveryLines', () => {
     const lines = createDeliveryLines([{ item: COFFEE, quantity: { units: '1', loose: '' }, expiry: { mode: 'none', date: '', month: '' } }])
     expect(validateDeliveryLines(lines, i18n.t).errors).toEqual({})
     expect(validateDeliveryLines(lines, (key) => key, { allowUndated: false }).errors).toEqual({ 0: { expiry: 'assets.store.scan.expiryRequired' } })
+  })
+
+  it('records optional shipment contents without converting unknown whole counting units', async () => {
+    const user = userEvent.setup()
+    const unknown = { ...COFFEE, contains_qty: null, contains_unit_en: null, contains_unit_ar: null }
+    render(<QueryClientProvider client={new QueryClient()}><I18nextProvider i18n={i18n}><Harness initial={[
+      { item: unknown, quantity: { units: '3', loose: '' }, expiry: { mode: 'none', date: '', month: '' } },
+    ]} /></I18nextProvider></QueryClientProvider>)
+    expect(screen.queryByRole('textbox', { name: 'Coffee: loose Jar' })).not.toBeInTheDocument()
+    const contents = screen.getByLabelText(i18n.t('assets.store.deliveries.contentsOptional'))
+    await user.type(contents, '٥٠')
+    expect(result().payload).toEqual([{ item_id: 4, expiry: null, quantity: 3, carton_contains_qty: 50 }])
+    await user.clear(contents)
+    expect(result().payload).toEqual([{ item_id: 4, expiry: null, quantity: 3, carton_contains_qty: null }])
+  })
+
+  it.each(['0', '-1', '1.5', 'not a number', '9007199254740992'])('rejects invalid optional shipment contents (%s)', (value) => {
+    const lines = createDeliveryLines([{ item: COFFEE, quantity: { units: '1', loose: '' }, expiry: { mode: 'none', date: '', month: '' }, cartonContainsQty: value }])
+    expect(validateDeliveryLines(lines, (key) => key).errors[0].cartonContainsQty).toBe('assets.store.deliveries.contentsInvalid')
   })
 })

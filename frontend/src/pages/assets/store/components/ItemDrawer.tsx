@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import type { StoreBatchRead, StoreDashboard, StoreItemRead, StoreMovementRead } from '@/lib/api'
-import { categoryName, formatExpiry, itemName, splitBase, type StoreUnits } from '../storeUtils'
+import { categoryName, formatExpiry, splitBase, type StoreUnits } from '../storeUtils'
 import { HandoverForm, ItemQuantityStepper, type HandoverDraft } from './HandoverTray'
 import { MovementRow } from './MovementRow'
-import { StoreQuantity } from './RecordParts'
+import { StorePackDescription, StoreQuantity } from './RecordParts'
+import { storeDisplayName } from '../storePresentation'
 import { ItemStatus } from './StoreShelves'
 import { availableStock } from './storeShelfModel'
 
@@ -59,10 +60,11 @@ export function ItemDrawer({ item, batches, dashboard, movements, editable, open
   const usage = dashboard.usage.rows.find(row => row.item_id === item.id)?.values.filter((value): value is number => value != null)
   const average = usage?.length ? usage.reduce((sum, value) => sum + value, 0) / usage.length : null
   return <Sheet open={open} onOpenChange={nextOpen => { if (!nextOpen && !busy) onClose() }}><SheetContent returnFocusRef={returnFocusRef} onCloseAutoFocus={event => { if (!open) event.preventDefault() }} aria-describedby={undefined} className="start-auto end-0 w-full max-w-[460px] overflow-hidden p-0 data-[state=open]:animate-none data-[state=closed]:animate-none">
-    <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border bg-surface p-4"><SheetTitle dir="auto" className="min-w-0 text-lg font-semibold [overflow-wrap:anywhere]">{itemName(item, i18n.language)}</SheetTitle><SheetClose asChild><Button variant="secondary" className="min-h-11 shrink-0" disabled={busy}>{t('common.close')}</Button></SheetClose></header>
+    <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border bg-surface p-4"><SheetTitle dir="auto" className="min-w-0 text-lg font-semibold [overflow-wrap:anywhere]">{storeDisplayName(item, i18n.language)}</SheetTitle><SheetClose asChild><Button variant="secondary" className="min-h-11 shrink-0" disabled={busy}>{t('common.close')}</Button></SheetClose></header>
     <div className="min-h-0 flex-1 overflow-y-auto p-4">
     <article className="space-y-5 rounded-2xl border border-border bg-surface p-4">
-      <div className="flex items-start gap-3"><StoreItemArt kind={item.art_kind} color={item.art_color} categoryId={item.category_id} size={100} /><div className="min-w-0 flex-1"><p className="mt-1 text-xs text-muted-foreground"><bdi dir="ltr">{item.code}</bdi> · {categoryName(item.category, i18n.language)}</p><p className="my-3 text-xl font-semibold"><StoreQuantity value={item.on_hand} item={item} /></p>
+      <StorePackDescription item={item} />
+      <div className="flex items-start gap-3"><StoreItemArt kind={item.art_kind} color={item.art_color} categoryId={item.category_id} brandLabel={item.brand_label} labelEn={item.generic_label_en} labelAr={item.generic_label_ar} size={100} /><div className="min-w-0 flex-1"><p className="mt-1 text-xs text-muted-foreground"><bdi dir="ltr">{item.code}</bdi> · {categoryName(item.category, i18n.language)}</p><p className="my-3 text-xl font-semibold"><StoreQuantity value={item.on_hand} item={item} /></p>
         <div aria-hidden className="relative h-2 rounded bg-surface-tinted"><div className="h-full rounded bg-primary" style={{ width: `${Math.max(0, item.on_hand) / capacity * 100}%` }} />{item.minimum_level != null && <span className="absolute -top-1 h-4 w-0.5 bg-foreground" style={{ insetInlineStart: `${item.minimum_level / capacity * 100}%` }} />}</div>
         <p className="my-2 text-xs text-muted-foreground">{t('assets.store.dashboard.minimum')}: {item.minimum_level == null ? '—' : <StoreQuantity value={item.minimum_level} item={item} />}</p><div className="flex flex-wrap gap-1"><ItemStatus all itemId={item.id} dashboard={dashboard} /></div>
       </div></div>

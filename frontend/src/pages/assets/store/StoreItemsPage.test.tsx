@@ -41,14 +41,12 @@ beforeEach(async () => {
 })
 
 describe('Store items register', () => {
-  it.each([false, true])('renders bilingual names, units and low stock (mobile=%s)', async (mobile) => {
+  it.each([false, true])('renders item identity, units and low stock (mobile=%s)', async (mobile) => {
     state.mobile = mobile
     renderPage()
     expect(await screen.findByText('Tea')).toHaveAttribute('dir', 'auto')
-    expect(screen.getByText('شاي')).toHaveAttribute('dir', 'auto')
     expect(screen.getByText('ST-0007')).toHaveAttribute('dir', 'ltr')
     expect(screen.getByText('Pantry')).toBeInTheDocument()
-    expect(screen.getByText('1 Carton = 24 jars')).toBeInTheDocument()
     expect(screen.getByText('2 cartons + 5 jars')).toBeInTheDocument()
     expect(screen.getByText('3 cartons')).toBeInTheDocument()
     expect(screen.getByText('Low stock')).toBeInTheDocument()
@@ -133,11 +131,7 @@ describe('Store items register', () => {
     // An LTR run would pair each Arabic unit with the wrong number.
     expect(screen.getByText('2 كرتون + 5 علب')).toHaveAttribute('dir', 'auto')
     expect(screen.getByText('3 كراتين')).toHaveAttribute('dir', 'auto')
-    expect(screen.getByText('1 كرتون = 24 علبةً')).toHaveAttribute('dir', 'auto')
-    expect(screen.getByText('شاي')).toHaveClass('font-medium')
-    expect(screen.getByText('شاي')).toHaveAttribute('lang', 'ar')
-    expect(screen.getByText('Tea')).toHaveAttribute('lang', 'en')
-    expect(screen.getByText('شاي').nextElementSibling).toBe(screen.getByText('Tea'))
+    expect(screen.getByText('شاي')).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: 'إظهار المؤرشف' })).toBeInTheDocument()
   })
 })
