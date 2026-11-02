@@ -638,7 +638,7 @@ describe('focused blind stock count', () => {
     const key = countDraftKey(1, 'new', todayIso())
     await waitFor(() => expect(JSON.parse(localStorage.getItem(key)!).quantities['1:2028-09-30'].units).toBe('4'))
     const winner = localStorage.getItem(key)
-    fireEvent.click(firstUi.getByRole('button', { name: action === 'save' ? 'Save stock count' : 'Discard draft', exact: true }))
+    fireEvent.click(firstUi.getByRole('button', { name: action === 'save' ? /^Save stock count$/ : /^Discard draft$/ }))
     expect(await firstUi.findByRole('alert')).toHaveTextContent(i18n.t('assets.store.counts.draftConflict'))
     expect(localStorage.getItem(key)).toBe(winner)
     expect(secondField).toHaveValue('4')
