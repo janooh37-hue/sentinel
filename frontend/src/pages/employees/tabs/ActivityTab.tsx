@@ -202,7 +202,7 @@ export function ActivityTab({
           language={language}
           onPrint={() => navigate(activityPrintPath(employeeId, printSearch.toString()))}
           onPreset={(next) =>
-            writePeriod(next === 'custom' ? { period: next, from: period.from ?? '', to: period.to } : { period: next })
+            writePeriod(next === 'custom' ? { period: next, from: period.from ?? `${today.slice(0, 4)}-01-01`, to: period.to } : { period: next })
           }
           onCustom={(from, to) => writePeriod({ period: 'custom', from, to })}
         />

@@ -126,6 +126,52 @@ describe('activity print setup', () => {
     expect(screen.getByTestId('location').textContent).toContain('leave.others%2Cabsence%2Cdocument%2Cplacement&')
   })
 
+  it.each([
+    { blocked: ['leaves.view'], sections: ['violation', 'document', 'ledger', 'placement'], entries: 3 },
+    { blocked: ['violations.view'], sections: ['leave.annual', 'absence', 'document', 'ledger', 'placement'], entries: 3 },
+    { blocked: ['leaves.view', 'violations.view'], sections: ['document', 'ledger', 'placement'], entries: 2 },
+  ])('excludes unreadable sections throughout setup and print: $blocked', async ({ blocked, sections, entries }) => {
+    const user = userEvent.setup()
+    blocked.forEach((cap) => denied.add(cap))
+    // Keep withheld rows in the fixture too: cached rows must not affect the
+    // paper or totals when the user's current capabilities no longer allow them.
+    createStatementPrint.mockResolvedValue({ reference: 'G3190/1/12/8', printed_at: '2026-10-27T11:20:00' })
+    renderAt('/employees/G3190/activity/print?period=year&lang=en&cats=leave,absence,violation,document,ledger,placement')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+
+    if (blocked.includes('leaves.view')) {
+      expect(screen.queryByRole('checkbox', { name: /^Annual Leave/ })).toBeNull()
+      expect(screen.queryByRole('checkbox', { name: /^Absences/ })).toBeNull()
+      expect(sheet().querySelector('[data-section="leave.annual"]')).toBeNull()
+      expect(sheet().querySelector('[data-section="absence"]')).toBeNull()
+      expect(within(sheet()).getByTestId('statement-scope')).toHaveTextContent('Annual Leave')
+    }
+    if (blocked.includes('violations.view')) {
+      expect(screen.queryByRole('checkbox', { name: /^Violations/ })).toBeNull()
+      expect(sheet().querySelector('[data-section="violation"]')).toBeNull()
+      expect(within(sheet()).getByTestId('statement-scope')).toHaveTextContent('Violations')
+    }
+    const summary = sheet().querySelector('[data-section="summary"]') as HTMLElement
+    if (blocked.includes('leaves.view')) {
+      expect(within(summary).queryByText('Annual Leave')).toBeNull()
+      expect(within(summary).queryByText('Absences')).toBeNull()
+    }
+    if (blocked.includes('violations.view')) expect(within(summary).queryByText('Violations')).toBeNull()
+    expect(screen.getByText(`${entries} entries`, { exact: true })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'None' }))
+    await user.click(screen.getByRole('button', { name: 'All' }))
+    await user.click(screen.getByRole('button', { name: 'Print' }))
+    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1))
+    const categories = createStatementPrint.mock.calls[0][1].options.categories as string[]
+    expect(categories).toEqual(expect.arrayContaining(sections))
+    if (blocked.includes('leaves.view')) {
+      expect(categories.some((s) => s.startsWith('leave.'))).toBe(false)
+      expect(categories).not.toContain('absence')
+    }
+    if (blocked.includes('violations.view')) expect(categories).not.toContain('violation')
+  })
+
   it('carries one signature box, Prepared by, and no reviewer', async () => {
     renderAt('/employees/G3190/activity/print?period=year&lang=en')
     await waitFor(() => expect(sheet()).toBeInTheDocument())

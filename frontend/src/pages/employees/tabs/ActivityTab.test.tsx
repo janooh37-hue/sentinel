@@ -154,6 +154,53 @@ describe('ActivityTab period', () => {
     await waitFor(() => expect(getActivityStatement).toHaveBeenLastCalledWith('G100', { to_date: '2026-10-27' }))
   })
 
+  it.each(['en', 'ar'])('keeps Custom editable after All in %s and prints the selected dates', async (language) => {
+    await i18n.changeLanguage(language)
+    renderActivity([], '?tab=activity&period=all')
+    await screen.findByTestId('activity-summary')
+    expect(getActivityStatement).toHaveBeenLastCalledWith('G100', { to_date: '2026-10-27' })
+
+    const period = screen.getByLabelText(i18n.t('activityStatement.periodLabel'))
+    fireEvent.change(period, { target: { value: 'custom' } })
+
+    expect(period).toHaveValue('custom')
+    expect(screen.getByLabelText(i18n.t('activityStatement.from'))).toHaveValue('2026-01-01')
+    expect(screen.getByLabelText(i18n.t('activityStatement.to'))).toHaveValue('2026-10-27')
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/employees/G100?tab=activity&period=custom&from=2026-01-01&to=2026-10-27',
+    )
+    await waitFor(() =>
+      expect(getActivityStatement).toHaveBeenLastCalledWith('G100', { from_date: '2026-01-01', to_date: '2026-10-27' }),
+    )
+
+    fireEvent.change(screen.getByLabelText(i18n.t('activityStatement.from')), { target: { value: '2026-03-01' } })
+    fireEvent.change(screen.getByLabelText(i18n.t('activityStatement.to')), { target: { value: '2026-04-30' } })
+    await waitFor(() =>
+      expect(getActivityStatement).toHaveBeenLastCalledWith('G100', { from_date: '2026-03-01', to_date: '2026-04-30' }),
+    )
+    expect(period).toHaveValue('custom')
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('activityStatement.printAction') }))
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/employees/G100/activity/print?period=custom&from=2026-03-01&to=2026-04-30',
+    )
+  })
+
+  it.each([
+    ['month', '2026-10-01'],
+    ['last3', '2026-07-27'],
+    ['year', '2026-01-01'],
+  ])('preserves the %s bounds when selecting Custom', async (preset, from) => {
+    renderActivity([], `?tab=activity&period=${preset}`)
+    await screen.findByTestId('activity-summary')
+
+    fireEvent.change(screen.getByLabelText('Period'), { target: { value: 'custom' } })
+
+    expect(screen.getByLabelText('Period')).toHaveValue('custom')
+    expect(screen.getByLabelText('From')).toHaveValue(from)
+    expect(screen.getByLabelText('To')).toHaveValue('2026-10-27')
+  })
+
   it('restores a custom range from the URL and refetches when an end date is edited', async () => {
     renderActivity([item('document', 1, { template_name_en: 'Salary Certificate' })], '?tab=activity&period=custom&from=2026-03-01&to=2026-04-30')
     await screen.findByTestId('activity-summary')

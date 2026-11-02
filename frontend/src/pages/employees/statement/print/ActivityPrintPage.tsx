@@ -39,13 +39,24 @@ export function ActivityPrintPage(): React.JSX.Element {
   const { has } = useCapabilities()
   const today = siteToday()
   const ui = i18n.language.startsWith('ar') ? 'ar' : 'en'
-  const settings = useMemo(() => parseActivitySettings(params, today, i18n.language), [params, today, i18n.language])
+  const canViewLeaves = has('employees.view') && has('leaves.view')
+  const canViewViolations = has('violations.view')
+  const sections = useMemo(
+    () => ACTIVITY_SECTIONS.filter((s) =>
+      s.startsWith('leave.') || s === 'absence' ? canViewLeaves : s !== 'violation' || canViewViolations,
+    ),
+    [canViewLeaves, canViewViolations],
+  )
+  const requested = useMemo(() => parseActivitySettings(params, today, i18n.language), [params, today, i18n.language])
+  // URL defaults and hand-edited categories never turn withheld data into
+  // certified empty sections. The same readable scope drives every surface.
+  const settings: ActivitySettings = { ...requested, cats: requested.cats.filter((s) => sections.includes(s)) }
   const search = activitySearch(settings)
   const update = (patch: Partial<ActivitySettings>): void =>
     setParams(activitySearch({ ...settings, ...patch }), { replace: true })
 
   const employee = useQuery({
-    queryKey: ['employee-detail', id, has('employees.view') && has('leaves.view')],
+    queryKey: ['employee-detail', id, canViewLeaves],
     queryFn: () => api.getEmployeeDetail(id),
     enabled: id !== '',
   })
@@ -57,13 +68,16 @@ export function ActivityPrintPage(): React.JSX.Element {
     staleTime: 60_000,
   })
 
-  const items = useMemo(() => statement.data?.items ?? [], [statement.data])
+  const items = useMemo(
+    () => (statement.data?.items ?? []).filter((item) => sections.includes(sectionOf(item))),
+    [statement.data, sections],
+  )
   const counts = useMemo(() => {
     const map = new Map<ActivitySection, number>()
     for (const item of items) map.set(sectionOf(item), (map.get(sectionOf(item)) ?? 0) + 1)
     return map
   }, [items])
-  const included = ACTIVITY_SECTIONS.filter((s) => settings.cats.includes(s))
+  const included = sections.filter((s) => settings.cats.includes(s))
   const entries = included.reduce((sum, s) => sum + (counts.get(s) ?? 0), 0)
 
   const flow = useStatementPrint(id, search)
@@ -112,7 +126,7 @@ export function ActivityPrintPage(): React.JSX.Element {
       </SetupFieldset>
 
       <SetupFieldset legend={t('statementPrint.sections')}>
-        {ACTIVITY_SECTIONS.map((s) => (
+        {sections.map((s) => (
           <OptionRow
             key={s}
             type="checkbox"
@@ -123,7 +137,7 @@ export function ActivityPrintPage(): React.JSX.Element {
           />
         ))}
         <div className="mt-1.5 flex gap-1.5">
-          <Button variant="secondary" size="xs" onClick={() => update({ cats: [...ACTIVITY_SECTIONS] })}>
+          <Button variant="secondary" size="xs" onClick={() => update({ cats: [...sections] })}>
             {t('statementPrint.all')}
           </Button>
           <Button variant="secondary" size="xs" onClick={() => update({ cats: [] })}>
@@ -234,7 +248,7 @@ export function ActivityPrintPage(): React.JSX.Element {
             }}
             settings={settings}
             items={items}
-            sections={ACTIVITY_SECTIONS}
+            sections={sections}
           />
         ) : (
           <div className="grid h-[297mm] w-[210mm] place-items-center bg-white text-sm text-neutral-600">

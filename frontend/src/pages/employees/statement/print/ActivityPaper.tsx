@@ -17,6 +17,7 @@ import { displayViolationValue } from '@/lib/violationTypes'
 
 import type { ActivityStatementItem } from '../statementTypes'
 import {
+  ACTIVITY_SECTIONS,
   formatStatementDate,
   sectionCountsDays,
   sectionLabelKey,
@@ -33,7 +34,7 @@ interface Props {
   settings: ActivitySettings
   /** Every item in the period, all sections. */
   items: ActivityStatementItem[]
-  /** Order the sections print in. */
+  /** Readable sections in paper order; never render withheld sections as empty. */
   sections: readonly ActivitySection[]
 }
 
@@ -267,7 +268,9 @@ function placementCells(item: ActivityStatementItem, lang: 'ar' | 'en', t: TFunc
 export function ActivityPaper({ frame, settings, items, sections }: Props): React.JSX.Element {
   const t = usePaperT(settings.lang)
   const included = sections.filter((s) => settings.cats.includes(s))
-  const excluded = sections.filter((s) => !settings.cats.includes(s))
+  // Exclusions name both deliberately unselected and unreadable sections,
+  // so a restricted paper never implies a complete, clean employee record.
+  const excluded = ACTIVITY_SECTIONS.filter((s) => !included.includes(s))
   const bySection = new Map<ActivitySection, ActivityStatementItem[]>()
   for (const item of items) {
     const s = sectionOf(item)
