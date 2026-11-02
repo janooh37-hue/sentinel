@@ -214,7 +214,7 @@ function CountWorkspace({ userId, target, saved, countedOn, onDateChange }: { us
   const rowKeys = rows.map(row => batchKey(row.item_id, row.expiry_date)).join('|')
   // Adjust derived membership before rendering. A temporarily pending refetch must
   // never erase an operator's work; only a complete metadata response reconciles it.
-  if (ready && !savingRef.current && !draftConflict && rowKeys !== reconciledKeys) {
+  if (ready && !savePending && !draftConflict && rowKeys !== reconciledKeys) {
     setReconciledKeys(rowKeys)
     const next = reconcileCountDraft(draft, rows)
     if (next !== draft) setDraft(next)
