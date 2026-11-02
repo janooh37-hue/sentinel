@@ -60,6 +60,31 @@ describe('store quantities', () => {
     expect(quantityFromParts({ units: '1.5', loose: '' }, BOXES)).toBeNaN()
   })
 
+  it.each([
+    ['3', '5'],
+    ['٣', '٥'],
+    ['۳', '۵'],
+    ['٣', '۵'],
+  ])('parses whole and loose digits %s + %s as the same base units', (units, loose) => {
+    expect(quantityFromParts({ units, loose }, JARS)).toBe(77)
+    expect(quantityFromParts({ units: ` ${units} `, loose: '' }, BOXES)).toBe(3)
+    expect(quantityFromParts({ units: '', loose }, JARS)).toBe(5)
+  })
+
+  it.each(['-١', '-۱', '١.٥', '۱.۵', '١٫٥', '۱۲x', '1 ٢'])(
+    'keeps invalid localized quantity %s invalid in either part',
+    (value) => {
+      expect(quantityFromParts({ units: value, loose: '' }, JARS)).toBeNaN()
+      expect(quantityFromParts({ units: '', loose: value }, JARS)).toBeNaN()
+    },
+  )
+
+  it('preserves blank, zero and ignored loose input for whole-unit items', () => {
+    expect(quantityFromParts({ units: ' ', loose: ' ' }, JARS)).toBeNull()
+    expect(quantityFromParts({ units: '٠', loose: '۰' }, JARS)).toBe(0)
+    expect(quantityFromParts({ units: '٢', loose: 'invalid' }, BOXES)).toBe(2)
+  })
+
   it('reads as cartons and loose units in English and Arabic', async () => {
     expect(formatQuantity(77, JARS)).toBe('3 cartons + 5 jars')
     expect(formatQuantity(24, JARS)).toBe('1 carton')

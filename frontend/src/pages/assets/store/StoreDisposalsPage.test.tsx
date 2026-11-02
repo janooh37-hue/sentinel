@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router-dom'
@@ -10,6 +10,7 @@ import i18n from '@/lib/i18n'
 import { todayIso } from '@/pages/vehicles/vehicleUtils'
 
 import { StoreDisposalsPage } from './StoreDisposalsPage'
+import { DisposalDialog } from './components/DisposalDialog'
 
 const state = vi.hoisted(() => ({ mobile: false, editable: true }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => state.mobile }))
@@ -34,12 +35,14 @@ const DISPOSAL: StoreDisposalRead = {
   note: 'Removed from pantry shelf', created_by_user_id: 1, created_at: '2026-09-10T10:00:00',
 }
 
-function renderPage() {
+function renderPage(itemId?: number) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
       <I18nextProvider i18n={i18n}>
-        <MemoryRouter initialEntries={['/holdings/store/disposals']}><StoreDisposalsPage /></MemoryRouter>
+        <MemoryRouter initialEntries={['/holdings/store/disposals']}>
+          {itemId == null ? <StoreDisposalsPage /> : <DisposalDialog open onOpenChange={vi.fn()} itemId={itemId} />}
+        </MemoryRouter>
       </I18nextProvider>
     </QueryClientProvider>,
   )
@@ -167,6 +170,88 @@ describe('Store disposals', () => {
     await user.click(dialog.getByRole('combobox', { name: /Batch/ }))
     await user.click(screen.getByRole('option', { name: /ST-0013/ }))
     expect(dialog.getByRole('radio', { name: 'Damaged' })).toBeChecked()
+  })
+
+  it.each([0, 12])('submits historical quantities above today\'s %s balance for the matching item', async (onHand) => {
+    vi.spyOn(api, 'listStoreBatches').mockResolvedValue([
+      { ...BATCH, on_hand: onHand },
+      { ...BATCH, id: 92, item_id: 99, item_code: 'OTHER-ITEM', on_hand: 0 },
+    ])
+    const user = userEvent.setup()
+    renderPage(BATCH.item_id)
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.change(dialog.getByLabelText(/Disposal date/), { target: { value: '2026-01-01' } })
+    await user.click(await dialog.findByRole('combobox', { name: /Batch/ }))
+    expect(screen.queryByRole('option', { name: /OTHER-ITEM/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /ST-0012/ })).not.toHaveTextContent('On hand')
+    await user.click(screen.getByRole('option', { name: /ST-0012/ }))
+    expect(dialog.queryByText(/On hand/)).not.toBeInTheDocument()
+    await user.type(dialog.getByRole('textbox', { name: 'Quantity: Carton' }), '٣')
+    await user.type(dialog.getByRole('textbox', { name: 'Quantity: loose Jar' }), '۵')
+    await user.click(dialog.getByRole('button', { name: 'Record disposal' }))
+    await waitFor(() => expect(api.createStoreDisposal).toHaveBeenCalledWith({
+      disposed_on: '2026-01-01', item_id: 12, expiry: '2025-09', quantity: 77, reason: 'expired', note: null,
+    }))
+  })
+
+  it('clears an empty historical Batch and its quantity when switching back to today', async () => {
+    vi.spyOn(api, 'listStoreBatches').mockResolvedValue([{ ...BATCH, on_hand: 0 }])
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Record disposal' }))
+    const dialog = within(screen.getByRole('dialog'))
+    const date = dialog.getByLabelText(/Disposal date/)
+    fireEvent.change(date, { target: { value: '2026-01-01' } })
+    await user.click(await dialog.findByRole('combobox', { name: /Batch/ }))
+    await user.click(screen.getByRole('option', { name: /ST-0012/ }))
+    await user.type(dialog.getByRole('textbox', { name: 'Quantity: Carton' }), '3')
+    fireEvent.change(date, { target: { value: todayIso() } })
+    expect(dialog.getByRole('button', { name: 'Record disposal' })).toBeDisabled()
+    expect(dialog.queryByRole('textbox', { name: 'Quantity: Carton' })).not.toBeInTheDocument()
+    expect(api.createStoreDisposal).not.toHaveBeenCalled()
+    fireEvent.change(date, { target: { value: '2026-01-01' } })
+    await user.click(await dialog.findByRole('combobox', { name: /Batch/ }))
+    await user.click(screen.getByRole('option', { name: /ST-0012/ }))
+    expect(dialog.getByRole('textbox', { name: 'Quantity: Carton' })).toHaveValue('')
+  })
+
+  it('reapplies today\'s cap to retained quantities and clears that error for a past date', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Record disposal' }))
+    const dialog = within(screen.getByRole('dialog'))
+    const date = dialog.getByLabelText(/Disposal date/)
+    fireEvent.change(date, { target: { value: '2026-01-01' } })
+    await user.click(await dialog.findByRole('combobox', { name: /Batch/ }))
+    await user.click(screen.getByRole('option', { name: /ST-0012/ }))
+    await user.type(dialog.getByRole('textbox', { name: 'Quantity: Carton' }), '3')
+    fireEvent.change(date, { target: { value: todayIso() } })
+    expect(dialog.getAllByText(/On hand/).length).toBeGreaterThan(0)
+    await user.click(dialog.getByRole('button', { name: 'Record disposal' }))
+    expect(await dialog.findByRole('alert')).toHaveTextContent("The disposal quantity cannot exceed this Batch's on-hand quantity.")
+    expect(api.createStoreDisposal).not.toHaveBeenCalled()
+    fireEvent.change(date, { target: { value: '2026-01-01' } })
+    expect(dialog.queryByRole('alert')).not.toBeInTheDocument()
+    await user.click(dialog.getByRole('button', { name: 'Record disposal' }))
+    await waitFor(() => expect(api.createStoreDisposal).toHaveBeenCalledWith(expect.objectContaining({
+      disposed_on: '2026-01-01', quantity: 72,
+    })))
+  })
+
+  it('shows backend historical-availability errors without applying today\'s cap', async () => {
+    vi.spyOn(api, 'listStoreBatches').mockResolvedValue([{ ...BATCH, on_hand: 0 }])
+    vi.spyOn(api, 'createStoreDisposal').mockRejectedValue(new ApiError(422, 'STORE_DISPOSAL_EXCEEDS_STOCK', 'Historical availability exceeded'))
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Record disposal' }))
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.change(dialog.getByLabelText(/Disposal date/), { target: { value: '2026-01-01' } })
+    await user.click(await dialog.findByRole('combobox', { name: /Batch/ }))
+    await user.click(screen.getByRole('option', { name: /ST-0012/ }))
+    await user.type(dialog.getByRole('textbox', { name: 'Quantity: loose Jar' }), '1')
+    await user.click(dialog.getByRole('button', { name: 'Record disposal' }))
+    expect(await dialog.findByRole('alert')).toHaveTextContent('A Disposal cannot remove more than the Batch has on hand.')
+    expect(api.createStoreDisposal).toHaveBeenCalledWith(expect.objectContaining({ disposed_on: '2026-01-01', quantity: 1 }))
   })
 
   it('deletes only after confirmation and refreshes stock queries', async () => {

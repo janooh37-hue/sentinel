@@ -13,6 +13,7 @@ import { api, apiErrorMessage } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { formatNumber, isArabic, localized } from '@/lib/language'
 import { monthEndIso } from '@/lib/monthEnd'
+import { normalizeDigits } from '@/lib/utils'
 import { todayIso } from '@/pages/vehicles/vehicleUtils'
 
 export type Translate = (key: string, options?: Record<string, unknown>) => string
@@ -243,8 +244,8 @@ export const EMPTY_QUANTITY: QuantityParts = { units: '', loose: '' }
 /** Base units, or null when nothing was entered. Either part blank counts as 0
  *  once the other is filled. Negative or non-integer input yields NaN. */
 export function quantityFromParts(parts: QuantityParts, item: StoreUnits): number | null {
-  const units = parts.units.trim()
-  const loose = hasContains(item) ? parts.loose.trim() : ''
+  const units = normalizeDigits(parts.units).trim()
+  const loose = hasContains(item) ? normalizeDigits(parts.loose).trim() : ''
   if (units === '' && loose === '') return null
   const parse = (raw: string): number => (raw === '' ? 0 : /^\d+$/.test(raw) ? Number(raw) : NaN)
   const whole = parse(units)

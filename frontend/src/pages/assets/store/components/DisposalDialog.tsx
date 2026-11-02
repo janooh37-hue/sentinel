@@ -54,12 +54,23 @@ export function DisposalDialog({ open, onOpenChange, itemId }: Props): React.JSX
     queryFn: () => api.listStoreBatches(),
     enabled: open,
   })
-  const batches = batchesQuery.data?.filter((batch) => batch.on_hand > 0 && (itemId == null || batch.item_id === itemId)) ?? []
   const { register, control, handleSubmit, setValue, clearErrors, formState: { errors } } = useForm<Values>({
     defaultValues: { batchId: '', quantity: EMPTY_QUANTITY, disposed_on: todayIso(), reason: 'damaged', note: '' },
   })
   const batchId = useWatch({ control, name: 'batchId' })
+  const disposedOn = useWatch({ control, name: 'disposed_on' })
+  const historical = isBusinessDate(disposedOn) && disposedOn < todayIso()
+  // The batch API reports today's balance, not availability on a past date.
+  const batches = batchesQuery.data?.filter((batch) => (historical || batch.on_hand > 0) && (itemId == null || batch.item_id === itemId)) ?? []
   const batch = batches.find((option) => String(option.id) === batchId)
+  const maxQuantity = historical ? undefined : batch?.on_hand
+  useEffect(() => {
+    if (batchId && !batch) {
+      setValue('batchId', '')
+      setValue('quantity', EMPTY_QUANTITY)
+      clearErrors(['quantity', 'batchId'])
+    }
+  }, [batchId, batch, setValue, clearErrors])
   const firstBatch = itemId == null ? undefined : [...batches].sort((a, b) => (a.expiry_date ?? '9999').localeCompare(b.expiry_date ?? '9999'))[0]
   useEffect(() => {
     if (open && !batchId && firstBatch) {
@@ -83,12 +94,22 @@ export function DisposalDialog({ open, onOpenChange, itemId }: Props): React.JSX
       <form noValidate className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit((values) => {
         if (!batch) return
         const quantity = quantityFromParts(values.quantity, batch)
-        if (quantity === null || quantityIssue(quantity, { min: 1, max: batch.on_hand })) return
+        if (quantity === null || quantityIssue(quantity, { min: 1, max: maxQuantity })) return
         setServerError(null)
         mutation.mutate({ disposed_on: values.disposed_on, item_id: batch.item_id, expiry: expiryInput(batch), quantity, reason: values.reason, note: values.note.trim() || null })
       })}>
         <DialogBody>
           <FormAlert id={alertId} message={serverError ?? validationError} />
+          <Field id={`${id}-date`} label={t('assets.store.disposals.disposedOn')} required>
+            <Input id={`${id}-date`} type="date" max={todayIso()} dir="ltr" className="min-h-11 font-mono tabular-nums" disabled={mutation.isPending} aria-invalid={!!errors.disposed_on} aria-describedby={errors.disposed_on ? alertId : undefined} {...register('disposed_on', {
+              required: t('assets.store.disposals.dateRequired'),
+              validate: (value) => isBusinessDate(value) || t('assets.store.errors.dateInFuture'),
+              onChange: () => {
+                clearErrors(['quantity', 'batchId'])
+                setServerError(null)
+              },
+            })} />
+          </Field>
           <StoreQueryState isPending={batchesQuery.isPending} error={batchesQuery.error} onRetry={() => { void batchesQuery.refetch() }} isEmpty={batches.length === 0} emptyMessage={t('assets.store.disposals.noBatches')} emptyDescription={t('assets.store.disposals.noBatchesDescription')}>
             <Field id={`${id}-batch`} label={t('assets.store.disposals.batch')} required>
               <Controller control={control} name="batchId" rules={{ validate: (value) => batches.some((option) => String(option.id) === value) || t('assets.store.disposals.batchRequired') }} render={({ field }) => (
@@ -108,9 +129,8 @@ export function DisposalDialog({ open, onOpenChange, itemId }: Props): React.JSX
                       <SelectItem key={option.id} value={String(option.id)} className="min-h-11">
                         <bdi dir="ltr" className="font-mono tabular-nums">{option.item_code}</bdi>{' · '}
                         <span dir="auto">{itemName(option, i18n.language)}</span>{' · '}
-                        <ExpiryText batch={option} />{' · '}
-                        {t('assets.store.disposals.onHand')}{': '}
-                        <StoreQuantity value={option.on_hand} item={option} />
+                        <ExpiryText batch={option} />
+                        {!historical && <>{' · '}{t('assets.store.disposals.onHand')}{': '}<StoreQuantity value={option.on_hand} item={option} /></>}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -119,9 +139,9 @@ export function DisposalDialog({ open, onOpenChange, itemId }: Props): React.JSX
             </Field>
             {batch && (
               <Field id={`${id}-quantity`} label={t('assets.store.disposals.quantity')} required>
-                <p className="text-xs text-muted-foreground">{t('assets.store.disposals.onHand')}{': '}<StoreQuantity value={batch.on_hand} item={batch} /></p>
+                {!historical && <p className="text-xs text-muted-foreground">{t('assets.store.disposals.onHand')}{': '}<StoreQuantity value={batch.on_hand} item={batch} /></p>}
                 <Controller control={control} name="quantity" rules={{ validate: (value) => {
-                  const issue = quantityIssue(quantityFromParts(value, batch), { min: 1, max: batch.on_hand })
+                  const issue = quantityIssue(quantityFromParts(value, batch), { min: 1, max: maxQuantity })
                   if (issue === 'aboveMax') return t('assets.store.disposals.quantityExceedsStock')
                   return !issue || t('assets.store.disposals.quantityRequired')
                 } }} render={({ field }) => (
@@ -140,9 +160,6 @@ export function DisposalDialog({ open, onOpenChange, itemId }: Props): React.JSX
                 ))}
               </div>
             </fieldset>
-            <Field id={`${id}-date`} label={t('assets.store.disposals.disposedOn')} required>
-              <Input id={`${id}-date`} type="date" max={todayIso()} dir="ltr" className="min-h-11 font-mono tabular-nums" disabled={mutation.isPending} aria-invalid={!!errors.disposed_on} aria-describedby={errors.disposed_on ? alertId : undefined} {...register('disposed_on', { required: t('assets.store.disposals.dateRequired'), validate: (value) => isBusinessDate(value) || t('assets.store.errors.dateInFuture') })} />
-            </Field>
             <Field id={`${id}-note`} label={t('assets.store.disposals.note')}>
               <Textarea id={`${id}-note`} dir="auto" disabled={mutation.isPending} {...register('note')} />
             </Field>
