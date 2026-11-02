@@ -4,6 +4,24 @@ Branch `feat/store-room-be`, worktree `/home/amh/Projects/sentinel/.worktrees/ro
 All paths below are under `/api/v1`. Reads need `store.view`, mutations `store.edit`
 (picker keeps `store.view OR documents.generate`).
 
+## Stock protection for delivery deletion and count edits
+
+- Deleting a Monthly delivery and editing a Stock count validate the proposed
+  per-Batch balances before removing persisted lines or writing deletion audit
+  records. A change that would leave stock negative returns 422
+  `STORE_INSUFFICIENT_STOCK`, with `batch_id`, `on` (business date), and `on_hand`
+  (the proposed negative balance).
+- Validation includes Handovers and Disposals at every affected movement date,
+  not just today's balance: a later replenishment or count cannot hide a
+  historical shortfall. Count edits also check removed Batch lines and both the
+  old and new dates when a count moves.
+- Counts reset balances; movements on a count's day happen after that count.
+  The next unaffected count ends the validation window. Zero remaining stock is
+  valid, and derived usage is unchanged.
+- Rejected mutations roll back as one Store write, retaining delivery-note files,
+  existing lines, Batches, and audit history. No schema or API shape changes.
+
+
 ## Commits (on top of `5a1d471d`)
 
 | Hash | Slice |

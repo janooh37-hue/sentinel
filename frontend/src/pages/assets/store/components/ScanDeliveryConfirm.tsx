@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import type { StoreDeliveryCreate, StoreDeliveryScan, StorePickerItem } from '@/lib/api'
 import { formatNumber } from '@/lib/language'
 import { todayIso } from '@/pages/vehicles/vehicleUtils'
-import { EMPTY_QUANTITY, formatQuantity, isBusinessDate, quantityFromParts, splitBase, storeErrorMessage, useStorePickerItems } from '../storeUtils'
+import { EMPTY_QUANTITY, formatQuantity, isBusinessDate, quantityFromParts, splitBase, storeErrorMessage, toBaseUnits, useStorePickerItems } from '../storeUtils'
 import { DeliveryLines } from './DeliveryLines'
 import { createDeliveryLines, type DeliveryLine, type DeliveryLineErrors, validateDeliveryLines } from './deliveryLineModel'
 import { ScanNotePreview } from './ScanNotePreview'
@@ -64,7 +64,7 @@ function ConfirmForm({ file, scan, items, onChooseAnother, onManual }: Props & {
     }
     const row = scan.lines[line.key]
     const received = line.item ? quantityFromParts(line.quantity, line.item) : null
-    if (row.quantity != null && received != null && Number.isSafeInteger(received) && received !== row.quantity && !reasons[line.key]?.trim()) reasonErrors[line.key] = 'assets.store.scan.reasonRequired'
+    if (row.quantity != null && received != null && Number.isSafeInteger(received) && received !== notedQuantity(row.quantity, line.item) && !reasons[line.key]?.trim()) reasonErrors[line.key] = 'assets.store.scan.reasonRequired'
   }
   const invalidDate = !isBusinessDate(receivedOn)
   const dateError = submitted && invalidDate ? t('assets.store.scan.dateRequired') : null
@@ -124,7 +124,8 @@ function ConfirmForm({ file, scan, items, onChooseAnother, onManual }: Props & {
       lines: checked.payload.map((line, index) => {
         const key = lines[index].key
         const row = scan.lines[key]
-        return { ...line, source_text: row.raw_text, noted_quantity: row.quantity, difference_reason: line.quantity !== row.quantity && row.quantity != null ? reasons[key]?.trim() || null : null }
+        const noted = notedQuantity(row.quantity, lines[index].item)
+        return { ...line, source_text: row.raw_text, noted_quantity: noted, difference_reason: line.quantity !== noted && noted != null ? reasons[key]?.trim() || null : null }
       }),
     }
     void save.save(body)
@@ -151,11 +152,11 @@ function ConfirmForm({ file, scan, items, onChooseAnother, onManual }: Props & {
           quantityForItem={(line, item) => quantityFor(scan.lines[line.key].quantity, item)}
           renderLineActions={(line) => <Button type="button" variant="ghost" className="min-h-11 whitespace-normal text-start" aria-label={t('assets.store.scan.skipLine', { number: line.key + 1 })} disabled={disabled} onClick={() => skipLine(line)}>{t('assets.store.scan.skip')}</Button>}
           renderLineStart={(line) => needsAttention(line) && <p className="mb-3 flex items-center gap-2 text-sm font-medium"><AlertTriangle aria-hidden className="h-4 w-4 shrink-0 text-warning" />{t(!line.item ? 'assets.store.scan.unmatched' : 'assets.store.scan.lowConfidence')}</p>}
-          renderQuantityAside={(line) => <div className="flex min-w-0 flex-col gap-2 text-sm"><span className="font-medium">{t('assets.store.scan.onNote')}</span>{crop(scan.lines[line.key])}<p dir="auto" className="break-words text-muted-foreground">{scan.lines[line.key].raw_text}</p><output>{scan.lines[line.key].quantity == null ? t('assets.store.scan.unknownQuantity') : <bdi dir="ltr" className="font-mono tabular-nums">{line.item ? formatQuantity(scan.lines[line.key].quantity!, line.item, i18n.language) : formatNumber(scan.lines[line.key].quantity!, i18n.language)}</bdi>}</output></div>}
+          renderQuantityAside={(line) => <div className="flex min-w-0 flex-col gap-2 text-sm"><span className="font-medium">{t('assets.store.scan.onNote')}</span>{crop(scan.lines[line.key])}<p dir="auto" className="break-words text-muted-foreground">{scan.lines[line.key].raw_text}</p><output>{scan.lines[line.key].quantity == null ? t('assets.store.scan.unknownQuantity') : <bdi dir="ltr" className="font-mono tabular-nums">{line.item ? formatQuantity(notedQuantity(scan.lines[line.key].quantity, line.item)!, line.item, i18n.language) : formatNumber(scan.lines[line.key].quantity!, i18n.language)}</bdi>}</output></div>}
           renderLineFields={(line) => {
             const row = scan.lines[line.key]
             const received = line.item ? quantityFromParts(line.quantity, line.item) : null
-            if (row.quantity == null || received == null || !Number.isSafeInteger(received) || received === row.quantity) return null
+            if (row.quantity == null || received == null || !Number.isSafeInteger(received) || received === notedQuantity(row.quantity, line.item)) return null
             const error = submitted && reasonErrors[line.key] ? t(reasonErrors[line.key]) : null
             return <Field id={`${id}-${line.key}-reason`} label={t('assets.store.scan.reason')} required full><Textarea id={`${id}-${line.key}-reason`} dir="auto" maxLength={200} required value={reasons[line.key] ?? ''} onChange={(event) => setReasons((current) => ({ ...current, [line.key]: event.target.value }))} disabled={disabled} aria-invalid={!!error || undefined} aria-describedby={error ? `${id}-${line.key}-reason-error` : undefined} />{error && <span id={`${id}-${line.key}-reason-error`} role="alert" className="text-xs text-destructive">{error}</span>}</Field>
           }} />
@@ -181,7 +182,14 @@ function ConfirmForm({ file, scan, items, onChooseAnother, onManual }: Props & {
   )
 }
 
-function quantityFor(base: number | null, item: StorePickerItem | null) {
+/** Scan rows carry the note's counting-unit quantity, not stored base units.
+ * No separate stated-unit field is exposed by the scan API. */
+function notedQuantity(quantity: number | null, item: StorePickerItem | null): number | null {
+  return quantity == null || !item ? null : toBaseUnits(quantity, 0, item)
+}
+
+function quantityFor(quantity: number | null, item: StorePickerItem | null) {
+  const base = notedQuantity(quantity, item)
   if (base == null || !item) return { ...EMPTY_QUANTITY }
   const parts = splitBase(base, item)
   return { units: String(parts.units), loose: String(parts.loose) }

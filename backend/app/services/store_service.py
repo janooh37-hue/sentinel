@@ -289,6 +289,36 @@ def _load_ledger(db: Session) -> _Ledger:
     return _Ledger(counts=counts, events=events)
 
 
+def _require_stock_available(
+    ledger: _Ledger, batch_ids: set[int], start: date, *, changed_through: date
+) -> None:
+    """Check a proposed ledger until the next unaffected count resets stock."""
+    next_count = next(
+        (count.counted_on for count in ledger.counts if count.counted_on > changed_through),
+        None,
+    )
+    today = organization_today()
+    points = (
+        {start}
+        | {event.on for event in ledger.events if event.batch_id in batch_ids}
+        | {count.counted_on for count in ledger.counts}
+    )
+    for point in sorted(points):
+        if point < start or point > today or (next_count is not None and point >= next_count):
+            continue
+        balances = ledger.on_hand(point)
+        for batch_id in sorted(batch_ids):
+            quantity = balances.get(batch_id, 0)
+            if quantity < 0:
+                raise ValidationFailedError(
+                    "STORE_INSUFFICIENT_STOCK",
+                    "This change would leave a Batch with insufficient stock.",
+                    batch_id=batch_id,
+                    on=point.isoformat(),
+                    on_hand=quantity,
+                )
+
+
 def _item_totals(per_batch: dict[int, int], item_of: dict[int, int]) -> defaultdict[int, int]:
     """Sum per-batch balances into per-item totals; missing items read as 0."""
     totals: defaultdict[int, int] = defaultdict(int)
@@ -1093,6 +1123,13 @@ def delete_delivery(db: Session, delivery_id: int, *, actor: str | None = None) 
     with _write(db):
         row = _get_delivery(db, delivery_id)
         batch_ids = [line.batch_id for line in row.lines]
+        ledger = _load_ledger(db)
+        ledger.events.extend(
+            _Event(line.batch_id, row.received_on, -line.quantity, "in") for line in row.lines
+        )
+        _require_stock_available(
+            ledger, set(batch_ids), row.received_on, changed_through=row.received_on
+        )
         old_file = row.note_file_path
         append_audit(
             db,
@@ -1355,10 +1392,29 @@ def update_count(
         row = _get_count(db, count_id)
         _require_month_free(db, month, exclude_id=row.id)
         old_batch_ids = [line.batch_id for line in row.lines]
-        row.lines.clear()
-        db.flush()
+        ledger = _load_ledger(db)
         resolved = _resolve_lines(db, payload.lines, reusable_batch_ids=old_batch_ids)
         _require_complete(db, payload.counted_on, resolved, exclude_count_id=row.id)
+        ledger.counts = sorted(
+            [count for count in ledger.counts if count.id != row.id]
+            + [
+                _Count(
+                    row.id,
+                    month,
+                    payload.counted_on,
+                    {batch.id: quantity for batch, quantity in resolved},
+                )
+            ],
+            key=lambda count: (count.counted_on, count.id),
+        )
+        _require_stock_available(
+            ledger,
+            set(old_batch_ids) | {batch.id for batch, _quantity in resolved},
+            min(row.counted_on, payload.counted_on),
+            changed_through=max(row.counted_on, payload.counted_on),
+        )
+        row.lines.clear()
+        db.flush()
         row.month = month
         row.counted_on = payload.counted_on
         row.note = payload.note

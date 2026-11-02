@@ -225,3 +225,86 @@ def test_store_handover_permissions(
     assert client.delete(f"/api/v1/store/handovers/{row['id']}").status_code == (
         204 if cap == "store.edit" else 403
     )
+
+
+@pytest.mark.parametrize("removal", ["handover", "disposal"])
+def test_delivery_delete_checks_historical_balance_and_preserves_all_lines(
+    editor: TestClient, category: StoreCategory, api_db: Session, removal: str
+) -> None:
+    coffee = _item(editor, category)["id"]
+    tea = _item(editor, category, "Tea")["id"]
+    delivery = _deliver(editor, date(2026, 10, 1), (coffee, None, 10), (tea, None, 10)).json()
+    if removal == "handover":
+        assert _handover(editor, date(2026, 10, 5), (tea, 8)).status_code == 201
+    else:
+        assert _dispose(editor, date(2026, 10, 5), tea, None, 8).status_code == 201
+    # Replenishment and a later count must not conceal the earlier shortfall.
+    assert _deliver(editor, date(2026, 10, 10), (tea, None, 10)).status_code == 201
+    assert _count(editor, date(2026, 11, 1), (coffee, None, 10), (tea, None, 10)).status_code == 201
+    audits_before = len(api_db.scalars(select(AuditLog)).all())
+    response = editor.delete(f"/api/v1/store/deliveries/{delivery['id']}")
+    assert response.status_code == 422, response.text
+    assert _error(response)["code"] == "STORE_INSUFFICIENT_STOCK"
+    assert _error(response)["details"]["on"] == "2026-10-05"
+    assert editor.get(f"/api/v1/store/deliveries/{delivery['id']}").json() == delivery
+    assert len(api_db.scalars(select(AuditLog)).all()) == audits_before
+    assert [row["on_hand"] for row in _items_by_code(editor).values()] == [10, 10]
+
+
+def test_delivery_before_count_can_be_deleted_when_count_supplies_consumption(
+    editor: TestClient, category: StoreCategory
+) -> None:
+    item = _item(editor, category)["id"]
+    delivery = _deliver(editor, date(2026, 10, 1), (item, None, 10)).json()
+    assert _count(editor, date(2026, 11, 1), (item, None, 5)).status_code == 201
+    assert _handover(editor, date(2026, 11, 1), (item, 5)).status_code == 201
+    assert editor.delete(f"/api/v1/store/deliveries/{delivery['id']}").status_code == 204
+    assert _items_by_code(editor)["ST-0001"]["on_hand"] == 0
+
+
+@pytest.mark.parametrize("removal", ["handover", "disposal"])
+@pytest.mark.parametrize("edit", ["reduce", "omit", "move_later", "move_earlier"])
+def test_count_edit_cannot_remove_stock_used_by_movements(
+    editor: TestClient, category: StoreCategory, removal: str, edit: str
+) -> None:
+    coffee = _item(editor, category)["id"]
+    tea = _item(editor, category, "Tea")["id"]
+    original = _count(editor, date(2026, 10, 10), (coffee, None, 10), (tea, None, 10)).json()
+    if edit == "move_earlier":
+        # The intervening count would supersede the moved count.
+        assert (
+            _count(editor, date(2026, 9, 20), (coffee, None, 1), (tea, None, 1)).status_code == 201
+        )
+    if removal == "handover":
+        assert _handover(editor, date(2026, 10, 10), (tea, 8)).status_code == 201
+    else:
+        assert _dispose(editor, date(2026, 10, 10), tea, None, 8).status_code == 201
+    assert _deliver(editor, date(2026, 10, 20), (tea, None, 10)).status_code == 201
+    assert _count(editor, date(2026, 11, 1), (coffee, None, 10), (tea, None, 10)).status_code == 201
+    lines = [{"item_id": coffee, "quantity": 10}]
+    if edit != "omit":
+        lines.append({"item_id": tea, "quantity": 7 if edit == "reduce" else 10})
+    on = {"move_later": "2026-10-11", "move_earlier": "2026-08-01"}.get(edit, "2026-10-10")
+    response = editor.put(
+        f"/api/v1/store/counts/{original['id']}",
+        json={"counted_on": on, "lines": lines},
+    )
+    assert response.status_code == 422, response.text
+    assert _error(response)["code"] == "STORE_INSUFFICIENT_STOCK"
+    assert editor.get(f"/api/v1/store/counts/{original['id']}").json() == original
+
+
+def test_count_reduction_to_exact_consumption_allows_zero_and_next_count_resets(
+    editor: TestClient, category: StoreCategory
+) -> None:
+    item = _item(editor, category)["id"]
+    original = _count(editor, date(2026, 10, 1), (item, None, 10)).json()
+    assert _handover(editor, date(2026, 10, 1), (item, 8)).status_code == 201
+    assert _count(editor, date(2026, 11, 1), (item, None, 20)).status_code == 201
+    assert _dispose(editor, date(2026, 11, 1), item, None, 15).status_code == 201
+    response = editor.put(
+        f"/api/v1/store/counts/{original['id']}",
+        json={"counted_on": "2026-10-01", "lines": [{"item_id": item, "quantity": 8}]},
+    )
+    assert response.status_code == 200, response.text
+    assert _items_by_code(editor)["ST-0001"]["on_hand"] == 5

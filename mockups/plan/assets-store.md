@@ -24,6 +24,12 @@ multiple stores, Client material requests (Arabic MRF) in stock numbers.
   `contains_qty`, otherwise Counting units. `contains_qty` cannot change once the
   item has any delivery, count, or disposal line (`STORE_ITEM_CONTAINS_LOCKED`).
   The UI enters "N cartons + M loose" and converts.
+  Delivery-note scan numeric quantities are interpreted in the selected item's
+  Counting unit (not stored base units); confirming or rematching converts both
+  received and noted quantities with that item's contains rule. For example,
+  8 cartons containing 24 jars save as 192 base units, with no difference reason
+  unless the received quantity actually differs. The scan route requires both
+  `store.view` (including its item picker) and `store.edit`, like Stock count entry.
 - **Batch** = (item, expiry). Expiry is a date or null (undated batch, one per
   item). Month-only expiry is stored as the month's last day with
   `expiry_month_only = true`. Batches are created on first use by a delivery or a

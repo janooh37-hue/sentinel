@@ -87,19 +87,58 @@ describe('Store delivery scan', () => {
     expect(screen.getByRole('button', { name: i18n.t('assets.store.scan.skipLine', { number: 1 }) })).toBeInTheDocument()
   })
 
-  it('automatically reads the file and prefills the real editor in base units', async () => {
+  it('automatically reads the file and prefills the real editor in counting units', async () => {
     renderPage()
     const file = await scanFile()
     expect(api.scanStoreDelivery).toHaveBeenCalledWith(file, expect.any(AbortSignal))
     expect(screen.getByRole('combobox', { name: /Store item/ })).toHaveValue('4')
-    expect(screen.getByRole('textbox', { name: 'Coffee: Carton' })).toHaveValue('2')
-    expect(screen.getByRole('textbox', { name: 'Coffee: loose Jar' })).toHaveValue('5')
+    expect(screen.getByRole('textbox', { name: 'Coffee: Carton' })).toHaveValue('53')
+    expect(screen.getByRole('textbox', { name: 'Coffee: loose Jar' })).toHaveValue('0')
     expect(screen.getByText('Coffee 53 125.00')).toBeInTheDocument()
     expect(screen.getByText('On note')).toBeInTheDocument()
     expect(screen.getByLabelText(/Received on/)).toHaveValue(todayIso())
     expect(screen.getByRole('radio', { name: 'Full date' })).toBeChecked()
     expect(screen.getByLabelText('Expiry date')).toHaveValue('')
     expect(api.createStoreDelivery).not.toHaveBeenCalled()
+  })
+
+  it.each(['en', 'ar'])('converts eight note cartons to 192 jars without a false difference (%s)', async (language) => {
+    await i18n.changeLanguage(language)
+    vi.mocked(api.scanStoreDelivery).mockResolvedValue({ ...SCAN, lines: [{ ...SCAN.lines[0], quantity: 8 }] })
+    renderPage()
+    fireEvent.change(screen.getByLabelText(i18n.t('assets.store.scan.chooseFile')), { target: { files: [new File(['photo'], 'note.png', { type: 'image/png' })] } })
+    const carton = await screen.findByRole('textbox', { name: language === 'en' ? 'Coffee: Carton' : 'قهوة: كرتون' })
+    expect(carton).toHaveValue('8')
+    expect(screen.getByRole('textbox', { name: i18n.t('assets.store.quantity.looseAria', { label: language === 'en' ? 'Coffee' : 'قهوة', unit: language === 'en' ? 'Jar' : 'علبة' }) })).toHaveValue('0')
+    expect(screen.queryByRole('textbox', { name: new RegExp(i18n.t('assets.store.scan.reason')) })).not.toBeInTheDocument()
+    const onNote = screen.getByText(i18n.t('assets.store.scan.onNote')).parentElement!
+    expect(onNote.querySelector('output')).toHaveTextContent(language === 'en' ? '8 cartons' : '8 كرتون')
+    fireEvent.change(screen.getByLabelText(i18n.t('assets.store.expiryInput.dateAria')), { target: { value: '2028-09-30' } })
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('assets.store.deliveries.save') }))
+    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [expect.objectContaining({ quantity: 192, noted_quantity: 192, difference_reason: null })],
+    })))
+  })
+
+  it('reinterprets the note in the selected item counting unit after matching and rematching', async () => {
+    const single = { ...ITEM, id: 5, name_en: 'Gloves', name_ar: 'قفازات', counting_unit_en: 'Pair', contains_qty: null, contains_unit_en: null, contains_unit_ar: null }
+    vi.mocked(api.listStorePickerItems).mockResolvedValue([ITEM, single])
+    vi.mocked(api.scanStoreDelivery).mockResolvedValue({ ...SCAN, lines: [{ ...SCAN.lines[0], quantity: 8, item_id: null }] })
+    renderPage()
+    chooseFile()
+    const picker = await screen.findByRole('combobox', { name: /Store item/ })
+    fireEvent.change(picker, { target: { value: '4' } })
+    expect(screen.getByRole('textbox', { name: 'Coffee: Carton' })).toHaveValue('8')
+    expect(screen.getByText('8 cartons')).toBeInTheDocument()
+    fireEvent.change(picker, { target: { value: '5' } })
+    expect(screen.getByRole('textbox', { name: 'Gloves: Pair' })).toHaveValue('8')
+    expect(screen.getByText('8 pairs')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /Reason for difference/ })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2028-09-30' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save delivery' }))
+    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [expect.objectContaining({ item_id: 5, quantity: 8, noted_quantity: 8, difference_reason: null })],
+    })))
   })
 
   it('requires a reason for a received difference and saves source, noted quantity and reason', async () => {
@@ -114,11 +153,11 @@ describe('Store delivery scan', () => {
     await user.click(screen.getByRole('button', { name: 'Save delivery' }))
     expect(screen.getByText('Enter a reason when the received quantity differs from the note.')).toBeInTheDocument()
     expect(api.createStoreDelivery).not.toHaveBeenCalled()
-    await user.type(screen.getByRole('textbox', { name: /Reason for difference/ }), 'Two jars missing')
+    await user.type(screen.getByRole('textbox', { name: /Reason for difference/ }), 'Three extra jars')
     await user.click(screen.getByRole('button', { name: 'Save delivery' }))
     await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({
       received_on: todayIso(),
-      lines: [{ item_id: ITEM.id, expiry: '2028-09', quantity: 51, source_text: SCAN.lines[0]!.raw_text, noted_quantity: 53, difference_reason: 'Two jars missing' }],
+      lines: [{ item_id: ITEM.id, expiry: '2028-09', quantity: 1275, source_text: SCAN.lines[0]!.raw_text, noted_quantity: 1272, difference_reason: 'Three extra jars' }],
     })))
     expect(api.createStoreDelivery).toHaveBeenCalledTimes(1)
     await waitFor(() => expect(api.uploadStoreDeliveryNote).toHaveBeenCalledWith(DELIVERY.id, file))
@@ -141,7 +180,7 @@ describe('Store delivery scan', () => {
     await user.type(screen.getByRole('textbox', { name: /Reason for difference/ }), 'Nothing arrived')
     await user.click(screen.getByRole('button', { name: 'Save delivery' }))
     await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({
-      lines: [{ item_id: ITEM.id, expiry: '2028-09-30', quantity: 0, source_text: SCAN.lines[0]!.raw_text, noted_quantity: 53, difference_reason: 'Nothing arrived' }],
+      lines: [{ item_id: ITEM.id, expiry: '2028-09-30', quantity: 0, source_text: SCAN.lines[0]!.raw_text, noted_quantity: 1272, difference_reason: 'Nothing arrived' }],
     })))
     expect(api.createStoreDelivery).toHaveBeenCalledTimes(1)
   })
@@ -159,7 +198,7 @@ describe('Store delivery scan', () => {
     expect(screen.getAllByRole('group', { name: /Line/ })).toHaveLength(1)
     fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2028-09-30' } })
     await user.click(screen.getByRole('button', { name: 'Save delivery' }))
-    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ item_id: ITEM.id, quantity: 53, source_text: SCAN.lines[0]!.raw_text, noted_quantity: 53 })] })))
+    await waitFor(() => expect(api.createStoreDelivery).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ item_id: ITEM.id, quantity: 1272, source_text: SCAN.lines[0]!.raw_text, noted_quantity: 1272 })] })))
   })
 
   it.each(['en', 'ar'])('places a non-destructive, label-matched skip action last and pairs the crop with on-note quantity (%s)', async (language) => {
@@ -175,7 +214,7 @@ describe('Store delivery scan', () => {
     const onNote = within(row).getByText(i18n.t('assets.store.scan.onNote')).parentElement!
     expect(within(onNote).getByRole('img', { name: 'Note crop' })).toBeInTheDocument()
     if (language === 'en') {
-      expect(within(onNote).getByText('2 cartons + 5 jars')).toBeInTheDocument()
+      expect(within(onNote).getByText('53 cartons')).toBeInTheDocument()
       expect(within(row).getByText('cartons')).toBeInTheDocument()
       expect(within(row).getByText('jars')).toBeInTheDocument()
       fireEvent.change(within(row).getByRole('textbox', { name: 'Coffee: Carton' }), { target: { value: '1' } })
@@ -224,8 +263,8 @@ describe('Store delivery scan', () => {
     fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2028-09-30' } })
     await user.click(screen.getByRole('button', { name: 'Save delivery' }))
     expect(await screen.findByText('The delivery was recorded, but the delivery note was not uploaded. Retry the upload or finish without the file.')).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Coffee: Carton' })).toHaveValue('2')
-    expect(screen.getByRole('textbox', { name: 'Coffee: loose Jar' })).toHaveValue('5')
+    expect(screen.getByRole('textbox', { name: 'Coffee: Carton' })).toHaveValue('53')
+    expect(screen.getByRole('textbox', { name: 'Coffee: loose Jar' })).toHaveValue('0')
     expect(screen.getByRole('button', { name: 'Finish without file' })).toBeInTheDocument()
     expect(api.createStoreDelivery).toHaveBeenCalledTimes(1)
     await user.click(screen.getByRole('button', { name: 'Retry file upload' }))
@@ -311,8 +350,8 @@ describe('Store delivery scan', () => {
     expect(date).not.toHaveAttribute('aria-invalid')
     fireEvent.change(expiry, { target: { value: '2028-09-30' } })
     expect(expiry).not.toHaveAttribute('aria-invalid')
-    fireEvent.change(units, { target: { value: '2' } })
-    fireEvent.change(loose, { target: { value: '5' } })
+    fireEvent.change(units, { target: { value: '53' } })
+    fireEvent.change(loose, { target: { value: '0' } })
     expect(units).not.toHaveAttribute('aria-invalid')
     expect(loose).not.toHaveAttribute('aria-invalid')
     expect(screen.queryByText('Correct the indicated fields before saving.')).not.toBeInTheDocument()

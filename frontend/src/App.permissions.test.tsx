@@ -134,7 +134,7 @@ const routes = [
   ['/holdings/store/movements', ['store.view'], 'store-movements-page'],
   ['/holdings/store/items', ['store.view'], 'store-items-page'],
   ['/holdings/store/deliveries', ['store.view'], 'store-deliveries-page'],
-  ['/holdings/store/deliveries/scan', ['store.edit'], 'store-delivery-scan-page'],
+  ['/holdings/store/deliveries/scan', ['store.view', 'store.edit'], 'store-delivery-scan-page'],
   ['/holdings/store/counts', ['store.view'], 'store-counts-page'],
   ['/holdings/store/counts/new', ['store.view', 'store.edit'], 'store-count-page'],
   ['/holdings/store/counts/7', ['store.view', 'store.edit'], 'store-count-page'],
@@ -214,6 +214,18 @@ describe('App route capability gates', () => {
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
       expect(screen.queryByText('vehicle-edit-page')).not.toBeInTheDocument()
+    },
+  )
+
+  it.each(['store.view', 'store.edit', 'documents.generate'])(
+    'denies delivery scan when %s is the only granted capability',
+    async (capability) => {
+      capabilityState.allowed = new Set([capability])
+      window.history.pushState({}, '', '/holdings/store/deliveries/scan')
+      render(<App />)
+
+      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+      expect(screen.queryByText('store-delivery-scan-page')).not.toBeInTheDocument()
     },
   )
 

@@ -388,10 +388,13 @@ def test_disposal_is_bounded_by_on_hand_and_deleting_records_drops_unused_batche
     assert disposal.status_code == 201
     assert _items_by_code(editor)["ST-0001"]["on_hand"] == 0
 
-    assert editor.delete(f"/api/v1/store/deliveries/{delivery['id']}").status_code == 204
-    # The disposal still uses the Batch.
+    refused = editor.delete(f"/api/v1/store/deliveries/{delivery['id']}")
+    assert refused.status_code == 422
+    assert _error(refused)["code"] == "STORE_INSUFFICIENT_STOCK"
+    # A rejected deletion preserves both the delivery and its Batch.
     assert len(api_db.scalars(select(StoreBatch)).all()) == 1
     assert editor.delete(f"/api/v1/store/disposals/{disposal.json()['id']}").status_code == 204
+    assert editor.delete(f"/api/v1/store/deliveries/{delivery['id']}").status_code == 204
     api_db.expire_all()
     assert api_db.scalars(select(StoreBatch)).all() == []
 

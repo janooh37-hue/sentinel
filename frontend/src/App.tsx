@@ -536,8 +536,10 @@ function Shell(): React.JSX.Element {
               <Route
                 path="/holdings/store/deliveries/scan"
                 element={
-                  <RequireCapability cap="store.edit">
-                    <StoreDeliveryScanPage />
+                  <RequireCapability cap="store.view">
+                    <RequireCapability cap="store.edit">
+                      <StoreDeliveryScanPage />
+                    </RequireCapability>
                   </RequireCapability>
                 }
               />
