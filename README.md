@@ -17,6 +17,15 @@ application only. It is pulled to the office server.
 - Shared vehicle-photo library with reusable named images and lightweight WebP previews
 - Runs as an always-on Windows service on the office LAN
 
+Expanded leave details show the original filer's G-number beside the submission
+date in English and Arabic, including the mobile detail drawer. For generated
+leaves this comes from the first primary document's Record creator, not the
+employee taking leave, the chosen signature representative, or a later approver
+or editor. New manually entered National Service leaves retain the authenticated
+creator's stable user id in their creation audit payload. Legacy/imported leaves,
+older manual entries, and creators without a linked employee show only the date;
+the app does not infer an identity from historical email text.
+
 Email messages, drafts, attachments, and employee-linked mail metadata are private
 to their mailbox owner. Admins can explicitly select **All mail** to read other
 mailboxes (including legacy messages without an owner); editing, deleting,
@@ -35,6 +44,27 @@ signature fields are not offered on the Arabic form. Requester name,
 designation/contact, and manager signing date do not print because its design
 has no slots. The selected manager fills the center-manager approval; the
 contract-manager and final approvals stay blank for hand signing.
+
+Approval preserves the original generated paper when its form has no manager
+signature slot (including salary-transfer and salary-deduction requests): employee
+signatures, blank signature choices, dates, and other content stay unchanged.
+The manager's approval is recorded without adding a signature to an arbitrary
+position. This also applies to pending older papers without signing snapshots
+or signature markers; the original DOCX must still be available.
+New Material Requests retain their employee-signature choice when the manager
+signs. Existing manager-slot papers without a generation-time signing snapshot
+are not automatically recovered or repaired by this change.
+
+Record printing uses the displayed PDF-canvas surface and waits for every source
+page to paint, including attached and landscape PDF pages. Print media removes
+the viewer's inter-page flex gap, which otherwise creates a blank trailing sheet
+on multipage records. It also resets paper width independently of screen zoom:
+an oversized page box can add a blank sheet and clip content even for a one-page
+record. On-screen spacing and zoom are unchanged.
+The regression runs the actual record Print controls and reads Chromium's printed
+PDF back, checking page count and opposite-corner content in Arabic/English,
+desktop/mobile, and at Fit/100%/150%/200% zoom:
+`pnpm -C frontend exec playwright test e2e/record-page-v2.spec.ts -g "print output"`.
 
 Employee identity links are assigned by administrators during registration
 approval or through user management; accounts cannot claim employee records.
@@ -95,6 +125,19 @@ Dashboard correspondence includes only the caller's email and shared non-email
 entries, even for admins; draft counts are owner-scoped. Employee detail and
 activity also honor `violations.view`, and linked document metadata inherits the
 owning record's exact-revision read policy, including deleted-record restrictions.
+
+## Employee activity statements
+
+Activity print setup excludes leave and absence sections without `leaves.view`,
+and violation sections without `violations.view`, including categories supplied
+directly in the URL or selected with **All**. The same readable selection drives
+the paper, summary, result totals, and issued print's recorded categories.
+Excluded sections appear in the paper's **Not included** scope, never as zero
+entries or **No records**.
+
+Switching employee activity from **All** to **Custom** seeds the current year
+start and retains editable, URL-backed custom dates through printing. Switching
+from a bounded preset preserves its existing dates.
 
 ## Authorization lifecycle
 

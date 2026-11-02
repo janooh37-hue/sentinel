@@ -48,7 +48,7 @@ from app.core.constants import (
     VEHICLE_LETTER_FORMS,
 )
 from app.core.dateutils import excel_date_to_datetime
-from app.core.docx_engine import aztec_corner_for, syncs_general_book_footer
+from app.core.docx_engine import DocxEngine, aztec_corner_for, syncs_general_book_footer
 from app.core.docx_render import _arabic_clock, _arabic_weekday
 from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_ALIASES, SERVICE_IDS
 from app.core.html_text import html_to_text
@@ -399,7 +399,7 @@ _SUBMITTER_SIGN_FORMS: frozenset[str] = frozenset(
 # submitter's signature is the only one available for the employee slot.
 _SUBMITTER_AUTO_SIGN_FORMS: frozenset[str] = frozenset({"Employee Clearance Form"})
 
-# Reserved ``BookVersion.fields`` key holding a chain form's generation-time
+# Reserved ``BookVersion.fields`` key holding a chain/in-app form's generation-time
 # signing snapshot (issue date, employee/submitter embed, notify choice).
 _SIGNING_KEY = "_signing"
 
@@ -2234,11 +2234,15 @@ def generate_document(
         revise_book=revise_book,
     )
 
-    # Chain forms are re-rendered when the manager signs, possibly days later:
-    # freeze the issue date and the employee/submitter signature and notify
-    # choices so the signed copy reproduces this paper (render_signed_artifact).
+    # Forms re-rendered into a manager slot need frozen generation-time issue
+    # dates and employee/submitter choices. Auto forms without a manager slot
+    # retain their authoritative original DOCX when approved instead.
     fields = {k: v for k, v in fields.items() if k != _SIGNING_KEY}
-    if commit and signing_path == "chain" and template_id != "Inmate Conduct Violations":
+    if (
+        commit
+        and signing_path in {"chain", "in_app"}
+        and template_id != "Inmate Conduct Violations"
+    ):
         if revise_book is not None:
             # The revise screen hides the notify switch, so the request flag carries
             # no choice: keep the newest snapshot's (none: revisions never notified).
@@ -3158,12 +3162,11 @@ def render_signed_artifact(
     converter: artifact_service.PdfConverter | None = None,
     signing_snapshot: Mapping[str, Any] | None = None,
 ) -> artifact_service.ArtifactResult:
-    """Re-render ``version``'s document with the signer's signature embedded in
-    the manager slot (``sig1_path``); return the retained ``ArtifactResult``
-    (DOCX path + PDF conversion outcome) — callers select
-    ``.conversion.pdf_path`` or ``.docx_path`` for their existing publication
-    behavior; ``signature_placement_service`` retains BOTH for its paired
-    artifact registry.
+    """Produce the approved artifact, adding the signer's manager signature only
+    when the form has a slot. Forms without one copy the retained original
+    DOCX unchanged, preserving all signatures and generation-time content.
+    Return the retained ``ArtifactResult`` (DOCX + PDF conversion outcome);
+    callers keep their existing publication and paired-artifact behavior.
 
     Reuses the version's stored ``template_id`` + ``fields`` + the book's
     employee. Does NOT allocate a ref, Book, or new version — this is a derived
@@ -3200,6 +3203,23 @@ def render_signed_artifact(
             "TEMPLATE_UNKNOWN",
             f"Unknown template {template_id!r}",
             details={"template_id": template_id},
+        )
+    if not DocxEngine(get_settings().templates_dir).has_manager_signature_slot(template_id):
+        # Approval adds no drawing to a paper without a manager slot. Its retained
+        # DOCX is authoritative, including pre-snapshot/unmarked signatures and
+        # signatures whose saved profile image has since changed or disappeared.
+        source = _authored_docx_of(db, version)
+        if source is None:
+            raise AppError(
+                "SOURCE_DOCX_MISSING",
+                "ملف الكتاب الأصلي غير موجود على القرص — لا يمكن التوقيع",
+                http_status=409,
+            )
+        out_dir = output_dir or _output_dir_for_admin(template_id)
+        return artifact_service.produce_from_docx(
+            source_path=source,
+            destination=out_dir / f"{source.stem}_signed.docx",
+            converter=converter or convert_docx_to_pdf,
         )
     employee = db.get(Employee, book.employee_id) if book.employee_id else None
     fields = dict(version.fields or {})

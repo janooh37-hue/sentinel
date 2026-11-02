@@ -1386,6 +1386,21 @@ class DocxEngine:
     def __init__(self, templates_dir: Path | str) -> None:
         self.templates_dir = Path(templates_dir)
 
+    def has_manager_signature_slot(self, form_type: str) -> bool:
+        """Whether rendering can place a manager signature, including code-placed blocks."""
+        from docxtpl import DocxTemplate
+
+        short = _normalize_form_type(form_type)
+        spec = self._REGISTRY[short]
+        if spec.get("post_process") in (
+            _pp_general_book,
+            _pp_leave_permit,
+            _pp_admin_leave,
+        ):
+            return True
+        template = DocxTemplate(str(self.templates_dir / TEMPLATE_FILES[short]))
+        return "manager_sig" in template.get_undeclared_template_variables()
+
     def fill(
         self,
         form_type: str,

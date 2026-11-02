@@ -1,0 +1,572 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import i18n from 'i18next'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import ar from '@/locales/ar.json'
+
+const { getEmployeeDetail, getActivityStatement, createStatementPrint, getEmployeeAttendance, denied } = vi.hoisted(() => ({
+  getEmployeeDetail: vi.fn(),
+  getActivityStatement: vi.fn(),
+  createStatementPrint: vi.fn(),
+  getEmployeeAttendance: vi.fn(),
+  denied: new Set<string>(),
+}))
+
+vi.mock('@/lib/api', async (orig) => {
+  const real = await orig<typeof import('@/lib/api')>()
+  return {
+    ...real,
+    api: { ...real.api, getEmployeeDetail, getActivityStatement, createStatementPrint, getEmployeeAttendance },
+  }
+})
+
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ capabilities: new Set<string>(), isLoading: false, has: (cap: string) => !denied.has(cap) }),
+}))
+
+vi.mock('@/components/employees/useAttendanceAttention', () => ({ siteToday: () => '2026-10-27' }))
+
+import { ActivityPrintPage } from './ActivityPrintPage'
+import { AttendancePrintPage } from './AttendancePrintPage'
+
+const EMPLOYEE = {
+  id: 'G3190',
+  name_en: 'Ahmed Mansour',
+  name_ar: 'أحمد منصور',
+  position: 'Security Guard',
+  position_ar: 'حارس أمن',
+  department: 'Operations',
+  duty_unit: 'Al Wathba Site',
+  duty_post: 'Main Gate',
+  doj: '2019-03-14',
+}
+
+function item(kind: string, sourceId: number, extra: Record<string, unknown> = {}) {
+  return {
+    kind,
+    source_id: sourceId,
+    occurred_at: '2026-09-12T00:00:00',
+    date_only: true,
+    actor_name: 'Mariam Al Kaabi',
+    actor_employee_id: 'G4602',
+    reference: null,
+    linked_documents: [],
+    ...extra,
+  }
+}
+
+const ITEMS = [
+  item('leave', 1, { leave_type: 'Annual', start_date: '2026-09-01', end_date: '2026-09-28', days: 28, leave_status: 'Approved' }),
+  item('violation', 2, { violation_type: 'Late arrival', action_taken: 'Written warning', deduction_days: 1 }),
+  item('document', 3, { template_name_en: 'Salary certificate', template_name_ar: 'شهادة راتب', reference: 'HR/77' }),
+  item('ledger', 4, { subject: 'Transfer request', direction: 'incoming', counterparty: 'Employee' }),
+]
+
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location">{location.search}</output>
+}
+
+function renderAt(path: string) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/employees/:id/activity/print" element={<ActivityPrintPage />} />
+          <Route path="/employees/:id/attendance/print" element={<AttendancePrintPage />} />
+        </Routes>
+        <LocationProbe />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+const sheet = (): HTMLElement => document.querySelector('table.statement-sheet') as HTMLElement
+
+beforeAll(() => {
+  i18n.addResourceBundle('ar', 'translation', ar, true, true)
+})
+
+beforeEach(() => {
+  getEmployeeDetail.mockResolvedValue({ employee: EMPLOYEE })
+  getActivityStatement.mockResolvedValue({ employee_id: 'G3190', from_date: '2026-01-01', to_date: '2026-10-27', items: ITEMS, truncated: false })
+  getEmployeeAttendance.mockImplementation((_id: string, params: { from_date: string; to_date: string }) =>
+    Promise.resolve({ employee_id: 'G3190', from_date: params.from_date, to_date: params.to_date, days: [] }),
+  )
+  vi.spyOn(window, 'print').mockImplementation(() => undefined)
+})
+
+afterEach(() => {
+  vi.clearAllMocks()
+  denied.clear()
+  vi.restoreAllMocks()
+})
+
+describe('activity print setup', () => {
+  it('prints no scope line when every section is in, and names only the exclusions otherwise', async () => {
+    const user = userEvent.setup()
+    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+
+    expect(within(sheet()).queryByTestId('statement-scope')).toBeNull()
+    expect(sheet().querySelector('[data-section="violation"]')).not.toBeNull()
+
+    await user.click(screen.getByRole('checkbox', { name: /^Violations/ }))
+    await user.click(screen.getByRole('checkbox', { name: /^Correspondence/ }))
+
+    expect(within(sheet()).getByTestId('statement-scope')).toHaveTextContent('Not included: Violations, Correspondence.')
+    expect(sheet().querySelector('[data-section="violation"]')).toBeNull()
+    expect(sheet().querySelector('[data-section="ledger"]')).toBeNull()
+    expect(sheet().querySelector('[data-section="leave.annual"]')).not.toBeNull()
+    // The toggle is in the URL, so a reload keeps it.
+    expect(screen.getByTestId('location').textContent).toContain('leave.others%2Cabsence%2Cdocument%2Cplacement&')
+  })
+
+  it.each([
+    { blocked: ['leaves.view'], sections: ['violation', 'document', 'ledger', 'placement'], entries: 3 },
+    { blocked: ['violations.view'], sections: ['leave.annual', 'absence', 'document', 'ledger', 'placement'], entries: 3 },
+    { blocked: ['leaves.view', 'violations.view'], sections: ['document', 'ledger', 'placement'], entries: 2 },
+  ])('excludes unreadable sections throughout setup and print: $blocked', async ({ blocked, sections, entries }) => {
+    const user = userEvent.setup()
+    blocked.forEach((cap) => denied.add(cap))
+    // Keep withheld rows in the fixture too: cached rows must not affect the
+    // paper or totals when the user's current capabilities no longer allow them.
+    createStatementPrint.mockResolvedValue({ reference: 'G3190/1/12/8', printed_at: '2026-10-27T11:20:00' })
+    renderAt('/employees/G3190/activity/print?period=year&lang=en&cats=leave,absence,violation,document,ledger,placement')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+
+    if (blocked.includes('leaves.view')) {
+      expect(screen.queryByRole('checkbox', { name: /^Annual Leave/ })).toBeNull()
+      expect(screen.queryByRole('checkbox', { name: /^Absences/ })).toBeNull()
+      expect(sheet().querySelector('[data-section="leave.annual"]')).toBeNull()
+      expect(sheet().querySelector('[data-section="absence"]')).toBeNull()
+      expect(within(sheet()).getByTestId('statement-scope')).toHaveTextContent('Annual Leave')
+    }
+    if (blocked.includes('violations.view')) {
+      expect(screen.queryByRole('checkbox', { name: /^Violations/ })).toBeNull()
+      expect(sheet().querySelector('[data-section="violation"]')).toBeNull()
+      expect(within(sheet()).getByTestId('statement-scope')).toHaveTextContent('Violations')
+    }
+    const summary = sheet().querySelector('[data-section="summary"]') as HTMLElement
+    if (blocked.includes('leaves.view')) {
+      expect(within(summary).queryByText('Annual Leave')).toBeNull()
+      expect(within(summary).queryByText('Absences')).toBeNull()
+    }
+    if (blocked.includes('violations.view')) expect(within(summary).queryByText('Violations')).toBeNull()
+    expect(screen.getByText(`${entries} entries`, { exact: true })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'None' }))
+    await user.click(screen.getByRole('button', { name: 'All' }))
+    await user.click(screen.getByRole('button', { name: 'Print' }))
+    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1))
+    const categories = createStatementPrint.mock.calls[0][1].options.categories as string[]
+    expect(categories).toEqual(expect.arrayContaining(sections))
+    if (blocked.includes('leaves.view')) {
+      expect(categories.some((s) => s.startsWith('leave.'))).toBe(false)
+      expect(categories).not.toContain('absence')
+    }
+    if (blocked.includes('violations.view')) expect(categories).not.toContain('violation')
+  })
+
+  it('carries one signature box, Prepared by, and no reviewer', async () => {
+    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const boxes = within(sheet()).getAllByTestId('statement-signature')
+    expect(boxes).toHaveLength(1)
+    expect(boxes[0]).toHaveTextContent('Prepared by')
+    expect(sheet()).not.toHaveTextContent(/review/i)
+  })
+
+  it('issues a reference, puts it on the paper, then prints', async () => {
+    const user = userEvent.setup()
+    createStatementPrint.mockImplementation(async () => {
+      // The dialog must not open before the reference is issued.
+      expect(window.print).not.toHaveBeenCalled()
+      return {
+        id: 7,
+        employee_id: 'G3190',
+        kind: 'activity',
+        serial: 7,
+        reference: 'G3190/1/12/7',
+        from_date: '2026-01-01',
+        to_date: '2026-10-27',
+        language: 'en',
+        printed_at: '2026-10-27T11:20:00',
+        printed_by_name: 'Mariam Al Kaabi',
+      }
+    })
+    vi.mocked(window.print).mockImplementation(() => {
+      // What the dialog snapshots: the issued reference is already on the paper.
+      expect(within(sheet()).getByTestId('statement-reference')).toHaveTextContent('G3190/1/12/7')
+    })
+    renderAt('/employees/G3190/activity/print?period=year&lang=en&cats=leave,document&summary=0')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    expect(within(sheet()).getByTestId('statement-reference')).toHaveTextContent('Assigned when printed')
+
+    await user.click(screen.getByRole('button', { name: 'Print' }))
+
+    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1))
+    expect(createStatementPrint).toHaveBeenCalledWith('G3190', {
+      kind: 'activity',
+      from_date: '2026-01-01',
+      to_date: '2026-10-27',
+      language: 'en',
+      options: {
+        categories: [
+          'leave.annual',
+          'leave.sick',
+          'leave.compassionate',
+          'leave.duty',
+          'leave.emergency',
+          'leave.hajj',
+          'leave.national-service',
+          'leave.administrative',
+          'leave.leave-permit',
+          'leave.others',
+          'document',
+        ],
+        summary: false,
+        signature: true,
+        orientation: 'portrait',
+      },
+    })
+    expect(within(sheet()).getByTestId('statement-reference')).toHaveTextContent('G3190/1/12/7')
+  })
+
+  it('does not print when the reference cannot be issued', async () => {
+    const user = userEvent.setup()
+    createStatementPrint.mockRejectedValue(new Error('Server unavailable'))
+    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Print' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The statement was not printed.')
+    expect(window.print).not.toHaveBeenCalled()
+    expect(within(sheet()).getByTestId('statement-reference')).toHaveTextContent('Assigned when printed')
+  })
+
+  it('prints Western digits only on the Arabic paper', async () => {
+    renderAt('/employees/G3190/activity/print?period=year&lang=ar')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    expect(sheet()).toHaveAttribute('dir', 'rtl')
+    expect(sheet().textContent).toMatch(/2026/)
+    expect(sheet().textContent).toContain('28')
+    expect(sheet().textContent).not.toMatch(/[\u0660-\u0669\u06F0-\u06F9]/)
+  })
+})
+
+describe('attendance print setup', () => {
+  it('fetches one request per calendar month', async () => {
+    renderAt('/employees/G3190/attendance/print?mode=custom&from=2026-06-15&to=2026-09-10&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const ranges = getEmployeeAttendance.mock.calls.map(([, params]) => `${params.from_date}..${params.to_date}`)
+    expect(ranges.sort()).toEqual([
+      '2026-06-15..2026-06-30',
+      '2026-07-01..2026-07-31',
+      '2026-08-01..2026-08-31',
+      '2026-09-01..2026-09-10',
+    ])
+  })
+
+  it('carries two signature boxes: Prepared by and the employee, no reviewer', async () => {
+    renderAt('/employees/G3190/attendance/print?mode=month&y=2026&m=9&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const boxes = within(sheet()).getAllByTestId('statement-signature')
+    expect(boxes.map((b) => b.firstChild?.textContent)).toEqual(['Prepared by', 'Employee acknowledgement'])
+    expect(sheet()).not.toHaveTextContent(/review/i)
+  })
+
+  it('orders weekdays by paper language and closes the last week', async () => {
+    const { unmount } = renderAt('/employees/G3190/attendance/print?mode=month&y=2026&m=10&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const headers = (): string[] => within(sheet()).getAllByTestId('calendar-weekday').map((h) => h.textContent ?? '')
+    expect(headers()[0]).toBe('Sun')
+    let cells = within(sheet()).getAllByTestId(/calendar-(day|blank)/)
+    expect(cells.length % 7).toBe(0)
+    unmount()
+
+    renderAt('/employees/G3190/attendance/print?mode=month&y=2026&m=10&lang=ar')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    expect(headers()[0]).toBe('السبت')
+    cells = within(sheet()).getAllByTestId(/calendar-(day|blank)/)
+    expect(cells.length % 7).toBe(0)
+    expect(cells.slice(-6).every((c) => c.dataset.testid === 'calendar-blank')).toBe(true)
+    expect(sheet().textContent).not.toMatch(/[\u0660-\u0669\u06F0-\u06F9]/)
+  })
+
+  it('shows an explicit error and refuses to print when a month fails to load', async () => {
+    getEmployeeAttendance.mockImplementation((_id: string, params: { from_date: string; to_date: string }) =>
+      params.from_date.startsWith('2026-08')
+        ? Promise.reject(new Error('timeout'))
+        : Promise.resolve({ employee_id: 'G3190', from_date: params.from_date, to_date: params.to_date, days: [] }),
+    )
+    renderAt('/employees/G3190/attendance/print?mode=quarter&y=2026&q=3&lang=en')
+    expect(await screen.findByText(/Attendance for August 2026 could not be loaded/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Print' })).toBeDisabled()
+    expect(sheet()).toBeNull()
+  })
+})
+
+/** A promise resolved from outside (the lib target predates `Promise.withResolvers`). */
+function deferred(): { promise: Promise<unknown>; resolve: (value: unknown) => void } {
+  let resolve: (value: unknown) => void = () => undefined
+  const promise = new Promise((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
+describe('fix round', () => {
+  it('prints a cancelled scheduled change as cancelled, never as an effective change', async () => {
+    getActivityStatement.mockResolvedValue({
+      employee_id: 'G3190',
+      from_date: '2026-01-01',
+      to_date: '2026-10-27',
+      truncated: false,
+      items: [
+        item('status', 9, {
+          from_status: 'Active',
+          to_status: 'Resigned',
+          effective_date: '2026-11-30',
+          status_event_kind: 'scheduled_cancelled',
+        }),
+        item('status', 10, {
+          from_status: 'Active',
+          to_status: 'Transferred',
+          effective_date: '2026-12-01',
+          status_event_kind: 'scheduled',
+        }),
+      ],
+    })
+    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const section = sheet().querySelector('[data-section="placement"]') as HTMLElement
+    expect(section).toHaveTextContent('Scheduled change cancelled')
+    expect(section).toHaveTextContent('Resigned did not take effect')
+    expect(section).not.toHaveTextContent('Active to Resigned')
+    expect(section).not.toHaveTextContent('Effective 30 Nov 2026')
+    expect(section).toHaveTextContent('Scheduled status change')
+    expect(section).toHaveTextContent('Scheduled for 1 Dec 2026')
+  })
+
+  it('freezes the settings while the reference is being issued', async () => {
+    const user = userEvent.setup()
+    const pending = deferred()
+    createStatementPrint.mockReturnValue(pending.promise)
+    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Print' }))
+
+    expect(screen.getByRole('checkbox', { name: /^Violations/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'English' })).toBeDisabled()
+    pending.resolve({ id: 1, reference: 'G3190/1/12/1', printed_at: '2026-10-27T11:20:00', printed_by_name: null })
+    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /^Violations/ })).toBeEnabled())
+  })
+
+  it('does not print a changed setup with a reference issued for the old one', async () => {
+    const user = userEvent.setup()
+    const pending = deferred()
+    createStatementPrint.mockReturnValue(pending.promise)
+    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Print' }))
+    // The column is frozen; force a change anyway to model any other path
+    // that moves the setup (URL navigation) while the request is in flight.
+    const checkbox = screen.getByRole('checkbox', { name: /^Violations/ })
+    const fieldset = checkbox.closest('aside')?.querySelector('fieldset') as HTMLFieldSetElement
+    fieldset.disabled = false
+    fieldset.removeAttribute('inert')
+    await user.click(checkbox)
+    pending.resolve({ id: 1, reference: 'G3190/1/12/1', printed_at: '2026-10-27T11:20:00', printed_by_name: null })
+
+    expect(await screen.findByText(/settings changed while the reference was being issued/)).toBeInTheDocument()
+    expect(window.print).not.toHaveBeenCalled()
+    expect(within(sheet()).getByTestId('statement-reference')).toHaveTextContent('Assigned when printed')
+  })
+
+  it('refuses to print a truncated activity list and says why', async () => {
+    getActivityStatement.mockResolvedValue({ employee_id: 'G3190', from_date: null, to_date: '2026-10-27', items: ITEMS, truncated: true })
+    renderAt('/employees/G3190/activity/print?period=all&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Print' })).toBeDisabled()
+    expect(screen.getByTestId('print-blocked')).toHaveTextContent('Choose a shorter period')
+  })
+
+  it('marks withheld leave and absence as withheld, not rest, and withholds absence and punctuality', async () => {
+    denied.add('leaves.view')
+    getEmployeeAttendance.mockImplementation((_id: string, params: { from_date: string; to_date: string }) =>
+      Promise.resolve({
+        employee_id: 'G3190',
+        from_date: params.from_date,
+        to_date: params.to_date,
+        days: [
+          { operational_date: '2026-09-02', shift_code: 'noon', presence_state: 'excused_leave', punch_count: 0, punches: [] },
+          { operational_date: '2026-09-03', shift_code: 'noon', presence_state: 'absent', punch_count: 0, punches: [] },
+        ],
+      }),
+    )
+    renderAt('/employees/G3190/attendance/print?mode=month&y=2026&m=9&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const cell = (day: string): HTMLElement =>
+      within(sheet())
+        .getAllByTestId('calendar-day')
+        .find((c) => c.querySelector('.dn')?.textContent === day) as HTMLElement
+    expect(cell('2').dataset.state).toBe('withheld')
+    expect(cell('3').dataset.state).toBe('withheld')
+    // The cell is glyph + times; the legend names the withheld glyph.
+    expect(within(sheet()).getByText(/Withheld: leave or absence/)).toBeInTheDocument()
+    const summary = sheet().querySelector('[data-section="summary"]') as HTMLElement
+    const value = (label: string): string | null | undefined =>
+      Array.from(summary.querySelectorAll('td.k')).find((k) => k.textContent === label)?.nextElementSibling?.textContent
+    // 30 days, 2 withheld: 28 rest days, not 30.
+    expect(value('Rest days')).toBe('28')
+    expect(value('Absent')).toBe('Withheld')
+    expect(value('Punctuality')).toMatch(/^Withheld/)
+  })
+})
+
+describe('fix round 3: say each fact once', () => {
+  it('prints one masthead and keeps title, period and G-number out of the page-1 identity', async () => {
+    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const head = sheet().querySelector('thead') as HTMLElement
+    expect(within(head).getAllByTestId('statement-head')).toHaveLength(1)
+    expect(head).toHaveTextContent('Activity statement')
+    expect(head).toHaveTextContent('G3190')
+    expect(sheet().querySelectorAll('h1')).toHaveLength(1)
+    const identity = within(sheet()).getByTestId('statement-identity')
+    expect(identity).toHaveTextContent('Ahmed Mansour')
+    expect(identity).not.toHaveTextContent('G3190')
+    expect(identity).not.toHaveTextContent('Activity statement')
+    expect(identity).not.toHaveTextContent('2026')
+  })
+
+  it('summarises every requested section, zeros included, and gives each empty section its own line', async () => {
+    renderAt('/employees/G3190/activity/print?period=year&lang=en&cats=leave.annual,leave.sick,absence,document')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const summary = sheet().querySelector('[data-section="summary"]') as HTMLElement
+    const rows = Array.from(summary.querySelectorAll('tbody tr'))
+      .map((r) => Array.from(r.querySelectorAll('td')).map((td) => td.textContent))
+      .filter((cells) => cells.length > 0)
+    expect(rows).toEqual([
+      ['Annual Leave', '1', '28'],
+      ['Sick Leave', '0', '0'],
+      ['Absences', '0', '0'],
+      ['Documents issued', '1', '-'],
+      ['Total', '2', '28'],
+    ])
+    for (const id of ['leave.sick', 'absence']) {
+      const section = sheet().querySelector(`[data-section="${id}"]`) as HTMLElement
+      expect(section.querySelector('table')).toBeNull()
+      expect(section).toHaveTextContent('No records in this period')
+    }
+    expect(sheet().querySelector('[data-section="leave.annual"] table')).not.toBeNull()
+    expect(within(sheet()).queryByTestId('statement-empty-categories')).toBeNull()
+  })
+
+  it('prints the recorder as a G-number, the system as System, and a recorder without an employee as -', async () => {
+    getActivityStatement.mockResolvedValue({
+      employee_id: 'G3190',
+      from_date: '2026-01-01',
+      to_date: '2026-10-27',
+      truncated: false,
+      items: [
+        item('absence', 30, { note: 'numbered', actor_name: 'Mariam Al Kaabi', actor_employee_id: 'G4602' }),
+        item('absence', 31, { note: 'unlinked', actor_name: 'Unlinked Admin', actor_employee_id: null }),
+        item('absence', 32, { note: 'automatic', actor_name: 'system', actor_employee_id: null }),
+      ],
+    })
+    renderAt('/employees/G3190/activity/print?period=year&lang=ar&cats=absence')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const recorded = Array.from(sheet().querySelectorAll('[data-section="absence"] tbody tr')).map((row) => {
+      const cells = row.querySelectorAll('td')
+      return [cells[1].textContent, cells[2].textContent]
+    })
+    expect(recorded).toEqual([
+      ['numbered', 'G4602'],
+      ['unlinked', '-'],
+      ['automatic', 'النظام'],
+    ])
+    expect(sheet()).not.toHaveTextContent('Mariam Al Kaabi')
+    expect(sheet()).not.toHaveTextContent('Unlinked Admin')
+  })
+
+  it("strips the employee's own name from subjects, prints a shared party once, and prints the paper's language", async () => {
+    getActivityStatement.mockResolvedValue({
+      employee_id: 'G3190',
+      from_date: '2026-01-01',
+      to_date: '2026-10-27',
+      truncated: false,
+      items: [
+        item('ledger', 20, {
+          subject: 'Administrative Leave Form — AHMED MANSOUR',
+          subject_en: 'Administrative Leave Form — AHMED MANSOUR',
+          subject_ar: 'طلب إجازة إدارية — AHMED MANSOUR',
+          direction: 'outgoing',
+          counterparty: 'G3095',
+          actor_name: 'G3095',
+          actor_employee_id: 'G3095',
+        }),
+        item('ledger', 21, {
+          subject: 'Free text subject',
+          subject_en: null,
+          subject_ar: null,
+          direction: 'incoming',
+          counterparty: 'system',
+          actor_name: 'Mariam Al Kaabi',
+          actor_employee_id: 'G4602',
+        }),
+      ],
+    })
+    const { unmount } = renderAt('/employees/G3190/activity/print?period=year&lang=ar')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const cells = (row: Element): string[] => Array.from(row.querySelectorAll('td')).map((td) => td.textContent ?? '')
+    const ledgerRows = (): string[][] => Array.from(sheet().querySelectorAll('[data-section="ledger"] tbody tr')).map(cells)
+    const [first, second] = ledgerRows()
+    // Subject, Date, Direction, Counterparty, (Reference), Recorded by.
+    expect(first[0]).toBe('طلب إجازة إدارية')
+    expect(first[3]).toBe('G3095')
+    // Reference is blank in every row, so that column is dropped: Recorded by is now index 4.
+    expect(first).toHaveLength(5)
+    expect(first[4]).toBe('')
+    expect(second[4]).toBe('G4602')
+    // No Arabic form known: the stored subject prints as is.
+    expect(second[0]).toBe('Free text subject')
+    expect(second[3]).toBe('النظام')
+    expect(sheet()).not.toHaveTextContent(/\bsystem\b/)
+    unmount()
+
+    renderAt('/employees/G3190/activity/print?period=year&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    expect(ledgerRows()[0][0]).toBe('Administrative Leave Form')
+  })
+
+  it('prints an empty exceptions list as one line, not an empty table', async () => {
+    renderAt('/employees/G3190/attendance/print?mode=month&y=2026&m=9&lang=en')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const section = sheet().querySelector('[data-section="exceptions"]') as HTMLElement
+    expect(section.querySelector('table')).toBeNull()
+    expect(section).toHaveTextContent('No exceptions in this period')
+  })
+
+  it.each([
+    ['activity', 'en', '/employees/G3190/activity/print?period=year&lang=en'],
+    ['activity', 'ar', '/employees/G3190/activity/print?period=year&lang=ar'],
+    ['attendance', 'en', '/employees/G3190/attendance/print?mode=month&y=2026&m=9&lang=en'],
+    ['attendance', 'ar', '/employees/G3190/attendance/print?mode=month&y=2026&m=9&lang=ar'],
+  ])('the %s statement (%s) carries exactly one wordmark, in the repeating head', async (_kind, _lang, path) => {
+    renderAt(path)
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const wordmarks = sheet().querySelectorAll('img[src*="wordmark"]')
+    expect(wordmarks).toHaveLength(1)
+    expect(sheet().querySelector('thead')?.contains(wordmarks[0])).toBe(true)
+    expect(sheet().querySelector('tbody img[src*="wordmark"]')).toBeNull()
+  })
+})

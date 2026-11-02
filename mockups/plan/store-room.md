@@ -7,6 +7,12 @@ this file says otherwise).
 Worktree: `/home/amh/Projects/sentinel-wt/store-room`, branch `feat/store-room`,
 cut from `feat/assets-store` at `691635e1`.
 
+Stock-shortage refusal: deleting a delivery or reducing a stock count that
+supports recorded handovers or disposals shows a specific English/Arabic
+`assets.store.errors.insufficientStock` message through `storeErrorMessage`.
+The message explains that those removal records must be reduced or deleted
+first; the backend ledger protection and shared formatter remain unchanged.
+
 Visual reference: `mockups/store-room.html`. Open it in a browser. It is a single
 file with sample data and runs on its own. Use the **Sample data** switch for the
 two states ("Today (1 count)" is the real situation; "After 3 months" shows usage,
