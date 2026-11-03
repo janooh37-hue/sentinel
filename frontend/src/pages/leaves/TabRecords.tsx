@@ -414,7 +414,7 @@ function LeaveDetailDrawer({
                 <dt className="text-[0.7em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
                   {t('leaves.report.filed')}
                 </dt>
-                <dd className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[0.9em]">
+                <dd className="flex flex-col items-start gap-2 text-[0.9em]">
                   <bdi dir="ltr" className="font-mono tabular-nums">
                     {fmtDayMonthYear(leave.created_at, dateLocale(i18n.language))}
                   </bdi>

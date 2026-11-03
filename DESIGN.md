@@ -474,6 +474,14 @@ utilities and the `rtl:` variant do the work.
 | `text-left`      | `text-start`        | text-align: start                              |
 | `text-right`     | `text-end`          | text-align: end                                |
 
+**Leave submission metadata:** In the phone detail sheet
+(`pages/leaves/TabRecords.tsx`) and desktop register expansion
+(`pages/leaves/report/RecordExpansion.tsx`), the filed date and optional
+submitter attribution stack with `flex-col items-start gap-2`. Both share the
+label's locale-start edge (right in Arabic, left in English); the attribution
+keeps its `inline-flex gap-1` label/G-number grouping and `<bdi dir="ltr">`
+identifier isolation. An unknown submitter renders no attribution row.
+
 **`rtl:` variant** is used **only** when a *physical* transform needs to
 mirror — the cases on the Dashboard are:
 
