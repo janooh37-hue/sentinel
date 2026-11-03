@@ -1,8 +1,11 @@
 name: PR Agent
 
 # AI review of every pull request, tuned by .pr_agent.toml (rules learned from
-# greptile-apps' findings on this repo). Comment `/review`, `/improve`, or
-# `/ask <question>` on a PR to run a tool on demand.
+# greptile-apps' findings on this repo). The automatic review is posted in
+# Greptile's shape by scripts/pr_review_comment.py: a confidence score out of 5,
+# the findings with their fixes, and prompts to paste into a coding agent.
+# Comment `/improve`, `/ask <question>`, or `/review` (PR Agent's own format)
+# on a PR to run a tool on demand.
 on:
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize]
@@ -10,13 +13,54 @@ on:
     types: [created]
 
 concurrency:
-  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}-${{ github.event_name }}
   cancel-in-progress: true
 
+env:
+  # main as of 2026-11-03; these steps hold OPENAI_KEY and a write token, so bump the pin deliberately.
+  PR_AGENT_REF: eef5358f8c8b4a3e481eb7b8920c6771d64504d7
+
 jobs:
-  pr_agent_job:
-    # Skip bots (Greptile, Dependabot) and comments on plain issues.
-    if: ${{ github.event.sender.type != 'Bot' && (github.event_name == 'pull_request' || github.event.issue.pull_request) }}
+  review:
+    # Skip bot PRs (Dependabot); fork PRs get no secrets and fail at the model call.
+    if: ${{ github.event_name == 'pull_request' && github.event.sender.type != 'Bot' && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/pr_review_comment.py
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PR Agent
+        run: pip install "pr-agent[github] @ git+https://github.com/The-PR-Agent/pr-agent@${PR_AGENT_REF}"
+      - name: Review (writes review.json, posts nothing)
+        env:
+          OPENAI__KEY: ${{ secrets.OPENAI_KEY }}
+          GITHUB__USER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CONFIG__GIT_PROVIDER: github
+          CONFIG__PUBLISH_OUTPUT: "false"
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          pr-agent --pr_url "$PR_URL" --json-output review.json review
+          # The CLI exits 0 even when the review fails; the file is the real signal.
+          test -s review.json || { echo "::error::PR Agent wrote no review; see the log above."; exit 1; }
+      - name: Post review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python scripts/pr_review_comment.py review.json --post
+
+  commands:
+    # PR comments only, not plain issues; skip bots (Greptile replies).
+    if: ${{ github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.sender.type != 'Bot' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -24,15 +68,7 @@ jobs:
       pull-requests: write
     steps:
       - name: PR Agent action step
-        # main as of 2026-11-03; the step holds OPENAI_KEY and a write token, so bump the pin deliberately.
         uses: the-pr-agent/pr-agent@eef5358f8c8b4a3e481eb7b8920c6771d64504d7
         env:
           OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Keep the author's PR description (and Greptile's summary) intact.
-          github_action_config.auto_describe: "false"
-          github_action_config.auto_review: "true"
-          github_action_config.auto_improve: "true"
-          # Re-review on each push; the review comment is updated in place.
-          github_action_config.handle_push_trigger: "true"
-          github_action_config.push_commands: '["/review"]'

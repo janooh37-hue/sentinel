@@ -3,11 +3,17 @@
 #
 # The review rules below are distilled from the findings greptile-apps left on
 # PRs #271-#282: the classes of bug it caught here, and the way it reports them.
+# They are a checklist added to PR Agent's general review, not a limit on it.
 # Refresh them when Greptile (or a human) keeps catching a class missing here.
+#
+# Automatic reviews run with publish_output=false and are posted by
+# scripts/pr_review_comment.py in Greptile's shape (confidence score out of 5,
+# findings, fix prompts). That script reads the "P1: "/"P2: " header prefix and
+# the merge recommendation requested below.
 
 [pr_reviewer]
 num_max_findings = 6
-inline_key_issues = true
+require_merge_recommendation = true
 require_estimate_effort_to_review = true
 require_tests_review = true
 require_security_review = true
@@ -17,13 +23,14 @@ extra_instructions = """\
 Review like a senior engineer who owns production for GSSG Manager: a FastAPI/SQLite backend, a \
 React/Vite/TypeScript frontend, Word/DOCX templates, and bilingual (English and Arabic) staff users.
 
-How to report each finding:
-- Start with a short title naming the consequence a user or operator sees, not the code \
-("Arabic quantities cannot be saved", "Later decisions lose their push").
-- Then one concrete scenario that triggers it, with real values (deliver 10, hand out 8, count 0 -> -8).
-- Then the fix, naming the function, file, or check to change.
-- Tag it P1 (wrong data, lost user input, broken upgrade or deploy, permission leak, a flow that \
-cannot be finished) or P2 (degraded or misleading behaviour with a workaround).
+How to report each finding (key_issues_to_review):
+- issue_header: "P1: " or "P2: ", then a short title naming the consequence a user or operator \
+sees, not the code ("P1: Arabic quantities cannot be saved", "P2: Later decisions lose their push"). \
+P1 = wrong data, lost user input, broken upgrade or deploy, permission leak, or a flow that cannot \
+be finished. P2 = degraded or misleading behaviour with a workaround.
+- issue_content: first one concrete scenario that triggers it, with real values (deliver 10, hand \
+out 8, count 0 -> -8); then a blank line and the fix, naming the function, file, or check to \
+change, specific enough that a coding agent can apply it without asking.
 - Report only defects you can trace in this diff. No style, naming, or formatting notes: ruff and \
 eslint own those.
 
