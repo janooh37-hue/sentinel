@@ -1,15 +1,15 @@
-# PR Agent (github.com/The-PR-Agent/pr-agent) repository settings.
-# Read from the default branch, so edits apply to PRs opened after they merge.
+# PR Agent settings for this repository, applied on top of the shared rules in
+# janooh37-hue/pr-agent-settings (the GitHub App that reviews every repo).
+# Read from the default branch, so edits apply to PRs reviewed after they merge.
 #
 # The review rules below are distilled from the findings greptile-apps left on
 # PRs #271-#282: the classes of bug it caught here, and the way it reports them.
 # They are a checklist added to PR Agent's general review, not a limit on it.
 # Refresh them when Greptile (or a human) keeps catching a class missing here.
 #
-# Automatic reviews run with publish_output=false and are posted by
-# scripts/pr_review_comment.py in Greptile's shape (confidence score out of 5,
-# findings, fix prompts). That script reads the "P1: "/"P2: " header prefix and
-# the merge recommendation requested below.
+# extra_instructions replaces the shared one, so it repeats the reporting rules:
+# the app's Greptile-style comment (confidence score out of 5, findings, fix
+# prompts) reads the "P1: "/"P2: " header prefix and the merge recommendation.
 
 [pr_reviewer]
 num_max_findings = 6
