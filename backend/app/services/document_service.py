@@ -3328,7 +3328,15 @@ def render_signed_artifact(
     if _submitter_signs_employee_cell(template_id, submitter_id, embed_signature):
         assert submitter_id is not None  # _submitter_signs_employee_cell requires it
         data["employee_sig_path"] = _submitter_sign_path(db, submitter_id)
-    if template_id in _MANAGER_SIGN_DATE_FORMS:
+    # Administrative Leave's ``today`` is the branch section's date: once the
+    # branch stage is frozen, keep its own signing day (restored by
+    # _build_template_data) rather than the project manager's.
+    branch_date_frozen = (
+        template_id in form_policy.BRANCH_MANAGER_STAGE_FORMS
+        and approval_stage != "branch_manager"
+        and bool(data.get("branch_manager_sig_path"))
+    )
+    if template_id in _MANAGER_SIGN_DATE_FORMS and not branch_date_frozen:
         signed_on = (
             version.signed_at.replace(tzinfo=UTC).astimezone()
             if version.signed_at is not None

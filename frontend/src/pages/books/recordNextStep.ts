@@ -187,13 +187,19 @@ export function relativeAgo(iso: string | null | undefined, now: number, locale:
   return new Date(then).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+// The step that decided the record: the LAST decided approver by step_order
+// (in a branch → project chain the project manager gives final approval).
 function decisionStep(
   steps: BookApprovalStepRead[],
   states: string[],
 ): BookApprovalStepRead | undefined {
   const decided = steps.filter((s) => states.includes(s.state))
-  const approver = decided.find((s) => s.kind !== 'reviewer')
-  return approver ?? decided[0]
+  const approvers = decided.filter((s) => s.kind !== 'reviewer')
+  const last = approvers.reduce<BookApprovalStepRead | undefined>(
+    (acc, s) => (acc === undefined || s.step_order >= acc.step_order ? s : acc),
+    undefined,
+  )
+  return last ?? decided[0]
 }
 
 function step(

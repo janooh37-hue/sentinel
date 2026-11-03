@@ -1,5 +1,6 @@
 """Generated leave records are settled by their record's signing chain, not Leaves PATCH."""
 
+import copy
 import hashlib
 import io
 import threading
@@ -1280,6 +1281,12 @@ def test_admin_branch_sign_is_partial_and_final_replays_frozen_signature(
     assert branch_digest in _media(partial_path)
     branch_image.unlink()
     resolve.reset_mock()
+    # The branch manager signed on an earlier day than the project manager.
+    fields = copy.deepcopy(version.fields)
+    fields["_signing"]["stages"]["branch_manager"]["signed_on"] = "01/01/2026"
+    version.fields = fields
+    env.db.flush()
+    frozen["signed_on"] = "01/01/2026"
     book_service.sign_book(env.db, book.id, user_id=env.signer.id, version_id=version.id)
     assert [call.args[0].id for call in resolve.call_args_list] == [env.signer.id]
     assert version.fields["_signing"]["stages"]["branch_manager"] == frozen
@@ -1293,6 +1300,7 @@ def test_admin_branch_sign_is_partial_and_final_replays_frozen_signature(
     assert any(note in cell.text for cell in final_doc.tables[2].rows[1].cells)
     assert final_doc.tables[2].rows[3].cells[1]._tc.xpath(".//w:drawing")
     assert final_doc.tables[3]._tbl.xpath(".//w:drawing")
+    assert final_doc.tables[2].rows[2].cells[1].text.strip() == "01/01/2026"
     assert sorted(
         drawing.role for drawing in signature_layout.inspect_signature_drawings(final_path)
     ) == ["branch_manager", "manager"]

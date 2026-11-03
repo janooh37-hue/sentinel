@@ -129,6 +129,20 @@ describe('sequential approval stages', () => {
     expect(recordNextStep(next, ctxOf({ isAssignee: true })).status).toMatchObject({ key: 'pendingStageMine', vars: { stage: 'books.approval.projectManager' } })
   })
 
+  it('names the project manager (final signer) once both stages approve', () => {
+    const done = bookOf('approved', {
+      signedPdfUrl: '/signed.pdf',
+      steps: [
+        { ...branch, state: 'approved', decided_at: '2026-09-20T08:00:00' },
+        { ...project, state: 'approved', decided_at: '2026-09-22T09:00:00', assignee_name: 'Saeed' },
+      ],
+    })
+    expect(recordNextStep(done, ctxOf()).status).toEqual({
+      key: 'approved',
+      vars: { name: 'Saeed', date: '2026-09-22' },
+    })
+  })
+
   it.each([undefined, 'future_stage'])('uses the generic pending status for unknown stage %s', (stage_label) => {
     const pending = recordNextStep(bookOf('pending', { steps: [stepOf({ stage_label })] }), ctxOf({ isAssignee: true }))
     expect(pending.status).toMatchObject({ key: 'pendingMine', vars: {} })
