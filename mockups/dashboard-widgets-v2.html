@@ -406,7 +406,7 @@ workforce:{src:'employees',cap:'employees.view',status:'fix',
  render(w,h,tier){
   const to='/employees';
   const top=head(this.label(),to)+`<div class="big">412<small>${L('working','على رأس العمل')}</small></div>`;
-  const chips=`<div class="chips">${[[388,L('our staff','موظفونا'),'var(--primary)','/employees?status=Active'],[379,L('on site','في الموقع'),'var(--success)','/employees?status=Active'],[24,L('loaned','معارون'),'var(--info)','/employees?status=Loaned'],[9,L('on leave','في إجازة'),'var(--warning)','/leaves?status=Approved&from=2026-10-23&to=2026-10-23']].map(c=>`<a href="#" data-to="${c[3]}"><span class="dot" style="background:${c[2]}"></span><b>${c[0]}</b>${c[1]}</a>`).join('')}</div>`;
+  const chips=`<div class="chips">${[[388,L('our staff','موظفونا'),'var(--primary)','/employees?status=Active'],[379,L('on site','في الموقع'),'var(--success)','/employees?status=Active'],[24,L('loaned','ملحق'),'var(--info)','/employees?status=Loaned'],[9,L('on leave','في إجازة'),'var(--warning)','/leaves?status=Approved&from=2026-10-23&to=2026-10-23']].map(c=>`<a href="#" data-to="${c[3]}"><span class="dot" style="background:${c[2]}"></span><b>${c[0]}</b>${c[1]}</a>`).join('')}</div>`;
   if(tier==='glance') return top+`<div class="sub"><span class="dot" style="background:var(--success)"></span>${L('379 on site','379 في الموقع')}</div>`;
   return top+chips;
  }},
