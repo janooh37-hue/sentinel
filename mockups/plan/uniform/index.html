@@ -3,71 +3,161 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Assets · Uniform — approval mockup</title>
+<title>Assets: Uniform (approval mockup)</title>
 <style>
 @font-face{font-family:Inter;src:url("../store-count/inter-latin-wght-normal.woff2") format("woff2");font-weight:100 900;font-display:swap}
 @font-face{font-family:"Noto Sans Arabic";src:url("../store-count/noto-sans-arabic-arabic-400-normal.woff2") format("woff2");font-weight:400 600;font-display:swap;unicode-range:U+0600-06FF,U+0750-077F,U+08A0-08FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFC}
 @font-face{font-family:"Noto Sans Arabic";src:url("../store-count/noto-sans-arabic-arabic-700-normal.woff2") format("woff2");font-weight:700 900;font-display:swap;unicode-range:U+0600-06FF,U+0750-077F,U+08A0-08FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFC}
-:root{font-size:19px;--bg:#f5f4f1;--surface:#fff;--art:#fafaf6;--tinted:#f0eee8;--text:#1c1f24;--muted:#5a6068;--primary:#0d2845;--primary-text:#0d2845;--on-primary:#fff;--border:#e6e4dd;--strong:#d4d1c8;--warning:#924508;--warning-soft:#fbedd8;--hero:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);color-scheme:light}
-:root[data-theme=dark]{--bg:#0a0e18;--surface:#131826;--art:#fafaf6;--tinted:#1f263b;--text:#e6e9f2;--muted:#a3adc1;--primary:#5778cf;--primary-text:#a7bdf5;--on-primary:#0a0e18;--border:#2a3148;--strong:#3a4360;--warning:#fbbf24;--warning-soft:#3a2a10;--hero:linear-gradient(135deg,#050816 0%,#0d1428 50%,#1a2540 100%);color-scheme:dark}
+
+/* Achromatic ledger (tasteskill app style, seed 2089055445) with the GSSG brand kept:
+   the app's ground, ink and navy; navy is the one data hue, on the size cells only. */
+:root{
+  --ground:#f5f4f1;--surface:#fff;--raised:#f0eee8;--active:#e9e7e1;
+  --border:#e6e4dd;--rule:#efece5;--control:#d4d1c8;
+  --text:#1c1f24;--muted:#5a6068;
+  --primary:#0d2845;--on-primary:#fff;--data:#0d2845;--focus:#0d2845;
+  --art:#fafaf6;
+  --hero:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%); /* taste-skill-ignore: the app's real Assets band, --hero-grad in frontend/src/index.css */
+  --radius-card:8px;--radius-control:6px;
+  --gap:24px;--pad:20px;--edge:32px;
+  font-size:16px;color-scheme:light}
+:root[data-theme=dark]{
+  --ground:#0a0e18;--surface:#131826;--raised:#1a2034;--active:#1f263b;
+  --border:#2a3148;--rule:#1f263b;--control:#3a4360;
+  --text:#e6e9f2;--muted:#a3adc1;
+  --primary:#e6e9f2;--on-primary:#0a0e18;--data:#a7bdf5;--focus:#a7bdf5;
+  --hero:linear-gradient(135deg,#050816 0%,#0d1428 50%,#1a2540 100%);color-scheme:dark} /* taste-skill-ignore: dark --hero-grad from frontend/src/index.css */
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased}
-[lang=ar] body{font-family:"Noto Sans Arabic",Inter,system-ui,sans-serif}
-button,input{font:inherit;color:inherit}
-button{cursor:pointer;min-height:44px;padding:.45em .9em;border:1px solid var(--strong);border-radius:.55em;background:var(--surface);font-size:.84em;font-weight:600}
-button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
-.primary{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+body{margin:0;background:var(--ground);color:var(--text);font:14px/20px Inter,system-ui,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+[lang=ar] body{font-family:"Noto Sans Arabic",Inter,system-ui,sans-serif;line-height:22px}
+button,input,select{font:inherit;color:inherit}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
 .skip{position:absolute;inset-inline-start:-999px}.skip:focus{inset-inline-start:1em;top:1em;z-index:9;background:var(--surface);padding:.5em}
-.proto{display:flex;flex-wrap:wrap;gap:.5em;align-items:center;justify-content:space-between;padding:.35em 1em;font-size:.72em;background:var(--tinted);border-block-end:1px solid var(--border)}
-.proto .controls{display:flex;gap:.4em}.proto button{min-height:36px;font-size:1em}
-.hero{background:var(--hero);color:#fff;padding-block-start:1em}
-.wrap{max-width:1400px;margin-inline:auto;padding-inline:1.6em}
-.eyebrow{margin:0;font-size:.72em;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.7)}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* Mockup controls: not part of the screen. */
+.proto{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;padding:6px var(--edge);background:var(--raised);font-size:13px;color:var(--muted)}
+.proto .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.proto button,.proto select{height:32px;padding:0 10px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);color:var(--text);font-size:13px}
+
+/* The app's Assets band, as StoreShell renders it. */
+.hero{background:var(--hero);color:#fff;padding-block-start:16px}
+.wrap{max-width:1400px;margin-inline:auto;padding-inline:var(--edge)}
+.eyebrow{margin:0;font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.72)}
 [lang=ar] .eyebrow{letter-spacing:normal}
-.tagline{margin:.1em 0 .6em;font-size:.84em;color:rgba(255,255,255,.8)}
-.sectiontabs{display:flex;gap:.25em;align-items:flex-end}
-.sectiontabs a{display:inline-flex;align-items:center;min-height:44px;padding:.55em 1em;border-start-start-radius:.75em;border-start-end-radius:.75em;font-size:.84em;font-weight:600;color:rgba(255,255,255,.7);text-decoration:none}
+.tagline{margin:2px 0 12px;font-size:13px;color:rgba(255,255,255,.82)}
+.sectiontabs{display:flex;gap:4px;align-items:flex-end}
+.sectiontabs a{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border-start-start-radius:12px;border-start-end-radius:12px;font-size:14px;font-weight:600;color:rgba(255,255,255,.72);text-decoration:none}
 .sectiontabs a:hover{background:rgba(255,255,255,.1);color:#fff}
-.sectiontabs a[aria-current=page]{background:var(--bg);color:var(--primary-text)}
-.pagehead{display:flex;flex-wrap:wrap;gap:.8em;justify-content:space-between;align-items:flex-start;padding-block:1.1em .4em}
-h1{margin:0;font-size:1.45em;letter-spacing:-.01em}[lang=ar] h1{letter-spacing:normal}
-.pagehead p{margin:.2em 0 0;font-size:.84em;color:var(--muted)}
-.sample{display:inline-block;margin-block-start:.5em;padding:.15em .6em;border-radius:999px;background:var(--warning-soft);color:var(--warning);font-size:.72em;font-weight:600}
-.totals{display:grid;grid-template-columns:repeat(2,minmax(0,13em));gap:.7em;margin-block:.6em 1.2em}
-.stat{background:var(--surface);border:1px solid var(--border);border-radius:.8em;padding:.7em .9em}
-.stat .label{font-size:.76em;color:var(--muted)}
-.stat .value{font-size:1.6em;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
-.stat .hint{font-size:.68em;color:var(--muted)}
-section.group{margin-block-end:1.4em}
-.grouphead{display:flex;align-items:baseline;gap:.6em;flex-wrap:wrap;margin-block-end:.6em}
-.grouphead h2{margin:0;font-size:1.02em}
-.grouphead span{font-size:.76em;color:var(--muted)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(15.5em,1fr));gap:.7em}
-.card{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.75em;align-items:start;width:100%;min-height:0;padding:.7em;text-align:start;background:var(--surface);border:1px solid var(--border);border-radius:.8em;font-weight:400;font-size:1em}
-.card:hover{border-color:var(--strong)}
-.art{display:block;width:88px;height:88px;border-radius:.6em;background:var(--art)}
-.card .nm{display:block;font-size:.86em;font-weight:700;line-height:1.3}
-.card .desc{display:block;margin:.1em 0 .35em;font-size:.7em;color:var(--muted)}
-.card .total{font-size:.76em;font-weight:600}
-.card .total b{font-size:1.25em;font-variant-numeric:tabular-nums}
-.chips{display:flex;flex-wrap:wrap;gap:.25em;margin-block-start:.35em}
-.chips>span{display:inline-flex;gap:.3em;padding:.05em .45em;border:1px solid var(--border);border-radius:.4em;font-size:.68em;font-variant-numeric:tabular-nums;direction:ltr}
-.chips>span.zero{color:var(--muted);border-style:dashed}
-.chips b{font-weight:700}
-dialog{width:min(30em,calc(100vw - 1.5em));max-height:calc(100dvh - 1.5em);border:1px solid var(--border);border-radius:1em;padding:0;background:var(--surface);color:var(--text)}
-dialog::backdrop{background:rgba(5,10,20,.5)}
-.dlg{display:flex;flex-direction:column;gap:.8em;padding:1.1em}
-.dlghead{display:flex;gap:.8em;align-items:center}
-.dlghead .art{width:100px;height:100px}
-.dlghead h2{margin:0;font-size:1.05em}.dlghead p{margin:.1em 0 0;font-size:.76em;color:var(--muted)}
-.sizes{display:grid;grid-template-columns:repeat(auto-fill,minmax(6em,1fr));gap:.5em;margin:0;padding:0;border:0}
-.sizes legend{font-size:.8em;font-weight:600;margin-block-end:.4em;padding:0}
-.sizes label{display:flex;flex-direction:column;gap:.15em;font-size:.76em;font-weight:600}
-.sizes input{min-height:44px;width:100%;padding:.3em .5em;border:1px solid var(--strong);border-radius:.5em;background:var(--surface);direction:ltr;text-align:start;font-variant-numeric:tabular-nums}
-.dlgfoot{display:flex;gap:.5em;justify-content:space-between;align-items:center;flex-wrap:wrap}
-.dlgfoot .sum{font-size:.8em;color:var(--muted)}.dlgfoot .actions{display:flex;gap:.5em}
-.toast{position:fixed;inset-block-end:1em;inset-inline:0;margin-inline:auto;width:max-content;max-width:calc(100vw - 2em);padding:.5em 1em;border-radius:.6em;background:var(--text);color:var(--bg);font-size:.8em}
-@media(max-width:740px){.wrap{padding-inline:.85em}h1{font-size:1.25em}.totals{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.art{width:80px;height:80px}}
+.sectiontabs a[aria-current=page]{background:var(--ground);color:var(--text)}
+
+/* Title row */
+.titlerow{padding-block:28px 20px}
+h1{margin:0;font-size:24px;line-height:32px;font-weight:700;letter-spacing:-.01em}
+[lang=ar] h1{letter-spacing:normal;line-height:36px}
+.finding{margin:4px 0 0;font-size:15px;color:var(--muted)}
+.finding b{color:var(--text);font-weight:600}
+
+/* One left edge from the title to the last row. The summary is one panel split by 1px
+   dividers (240 + 240 + the rest); the stock table runs the full canvas below it. */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card)}
+.summary{display:grid;grid-template-columns:240px 240px minmax(0,1fr);margin:0}
+.sumpanel{margin-block-end:var(--gap)}
+.summary>div{padding:16px var(--pad)}
+.summary>div+div{border-inline-start:1px solid var(--border)}
+.summary dt{font-size:13px;color:var(--muted)}
+.summary dd{margin:2px 0 0}
+.figure{display:block;font-size:24px;line-height:32px;font-weight:500}
+.sub{display:block;font-size:13px;line-height:18px;color:var(--muted)}
+.panel h2{margin:0;font-size:16px;line-height:24px;font-weight:600}
+.panelhead{padding:16px var(--pad) 0}
+
+/* Stock table */
+.stock{container-type:inline-size}
+table{width:100%;border-collapse:collapse}
+thead th{padding:12px 12px 8px;font-size:13px;font-weight:400;color:var(--muted);text-align:start;white-space:nowrap}
+th.num,td.num{text-align:end}
+thead th:first-child,tbody td:first-child{padding-inline-start:var(--pad)}
+thead th:last-child,tbody td:last-child{padding-inline-end:var(--pad)}
+tbody.group th{padding:20px var(--pad) 6px;text-align:start;font-weight:600;font-size:14px}
+tbody.group th span{margin-inline-start:8px;font-weight:400;font-size:13px;color:var(--muted)}
+tbody tr.piece td{padding:12px;vertical-align:middle;border-block-start:1px solid var(--rule)}
+tbody.group tr:first-child + tr.piece td{border-block-start:0}
+.ident{display:flex;gap:12px;align-items:center;min-width:0}
+.art{flex:none;display:block;width:56px;height:56px;border-radius:var(--radius-control);background:var(--art)}
+.name{display:block;font-weight:600}
+.desc{display:block;font-size:13px;line-height:18px;color:var(--muted)}
+.instock{font-size:16px;font-weight:500}
+.unit{font-size:12px;color:var(--muted);font-weight:400;margin-inline-start:3px}
+
+/* The size ladder: one cell per size, shaded in the one data hue by its share of the piece's
+   largest size. Zero is a dashed empty slot with a printed 0. The smallest size sits at the
+   reading start, so the ladder mirrors in Arabic; each cell's own text stays upright. */
+.ladder{display:flex;flex-wrap:wrap;gap:4px;margin:0;padding:0;list-style:none}
+.ladder li>span{unicode-bidi:isolate}
+.ladder li{display:grid;place-items:center;width:48px;height:46px;border-radius:var(--radius-control);background:color-mix(in srgb,var(--data) calc(var(--t) * 100%),var(--surface))}
+.ladder li.one{width:auto;padding-inline:10px}
+.ladder .sz{font-size:12px;line-height:16px;color:var(--text);opacity:.8}
+.ladder .q{font-size:14px;line-height:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.ladder li.zero{background:transparent;outline:1px dashed var(--control);outline-offset:-1px}
+.ladder li.zero .q{color:var(--muted);font-weight:400}
+.ghost{height:32px;padding:0 12px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap}
+.ghost:hover{background:var(--raised)}
+.ghost:active{transform:translateY(1px)}
+
+/* Out of stock, inside the summary */
+.outlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px 16px;margin:6px 0 0;padding:0;list-style:none}
+.outlist li{display:flex;align-items:center;gap:10px;min-height:40px}
+.outlist .art{width:36px;height:36px}
+.outlist .what{min-width:0}
+.outlist .sizes{font-weight:600}
+.empty{margin:6px 0 0;color:var(--muted)}
+.stock{margin-block-end:48px}
+
+/* States */
+.bar{display:inline-block;height:14px;border-radius:3px;background:var(--active);vertical-align:middle}
+.ladder li.skel{background:var(--active)}
+.error{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:16px var(--pad) 20px}
+.textbtn{border:0;background:none;padding:0 4px;min-height:32px;font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+
+/* Editor */
+dialog{width:min(520px,calc(100vw - 32px));max-height:calc(100dvh - 32px);padding:0;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface);color:var(--text);box-shadow:0 16px 40px rgba(10,20,40,.18)}
+dialog::backdrop{background:rgba(5,10,20,.45)}
+.dlg{display:grid;gap:20px;padding:var(--pad)}
+.dlghead{display:flex;gap:16px;align-items:center}
+.dlghead .art{width:88px;height:88px}
+.dlghead h2{margin:0;font-size:18px;line-height:26px}
+.sizes-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:16px 12px;margin:0;padding:0;border:0}
+.sizes-form legend{padding:0;margin-block-end:10px;font-size:14px;font-weight:500}
+.sizes-form label{display:grid;gap:6px;font-size:13px;font-weight:500}
+.sizes-form input{height:40px;width:100%;padding:0 10px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);direction:ltr;text-align:start;font-variant-numeric:tabular-nums}
+.dlgfoot{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center}
+.dlgfoot .actions{display:flex;gap:8px}
+.primary{height:36px;padding:0 16px;border:1px solid var(--primary);border-radius:var(--radius-control);background:var(--primary);color:var(--on-primary);font-weight:600;cursor:pointer}
+.secondary{height:36px;padding:0 16px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);font-weight:500;cursor:pointer}
+.toast{position:fixed;inset-block-end:16px;inset-inline:0;margin-inline:auto;width:max-content;max-width:calc(100vw - 32px);padding:10px 16px;border-radius:var(--radius-control);background:var(--text);color:var(--ground);font-size:13px;box-shadow:0 8px 24px rgba(10,20,40,.2)}
+
+/* Narrow table: each piece becomes two lines, its ladder on the second. */
+@container (max-width: 760px){
+  thead{display:none}
+  tbody tr.piece{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"ident total action" "ladder ladder ladder";gap:10px 12px;padding:12px var(--pad);border-block-start:1px solid var(--rule)}
+  tbody.group tr:first-child + tr.piece{border-block-start:0}
+  tbody tr.piece td{padding:0!important;border:0}
+  tbody tr.piece td:nth-child(1){grid-area:ident}
+  tbody tr.piece td:nth-child(2){grid-area:total;align-self:center}
+  tbody tr.piece td:nth-child(3){grid-area:ladder}
+  tbody tr.piece td:nth-child(4){grid-area:action;align-self:center}
+}
+@media (max-width:720px){
+  :root{--edge:16px;--pad:16px}
+  .summary{grid-template-columns:1fr 1fr}
+  .summary>div:nth-child(3){grid-column:1/-1;border-inline-start:0;border-block-start:1px solid var(--border)}
+  .titlerow{padding-block:20px 16px}
+  .ghost{height:44px}
+}
+@media (prefers-reduced-motion:reduce){.ghost:active{transform:none}}
 </style>
 </head>
 <body>
@@ -75,185 +165,128 @@ dialog::backdrop{background:rgba(5,10,20,.5)}
 <div id="app"></div>
 <dialog id="editor" aria-labelledby="dlg-title"></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="./data.js"></script>
+<script src="./art.js"></script>
 <script>
 'use strict'
 const params = new URLSearchParams(location.search)
-const state = { lang: params.get('lang') === 'ar' ? 'ar' : 'en', theme: params.get('theme') === 'dark' ? 'dark' : 'light' }
+const state = {
+  lang: params.get('lang') === 'ar' ? 'ar' : 'en',
+  theme: params.get('theme') === 'dark' ? 'dark' : 'light',
+  view: ['readonly', 'loading', 'error'].includes(params.get('view')) ? params.get('view') : 'edit',
+}
+const { items, groups, total, pieces, suits } = window.UNIFORM
+
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+function arCount(n, forms) { // forms: [one, two, few (3-10), many (11+)]
+  if (n === 1) return forms[0]
+  if (n === 2) return forms[1]
+  return `${n} ${n <= 10 ? forms[2] : forms[3]}`
+}
 
 const T = {
   en: {
-    proto: 'Approval mockup — static, nothing is saved',
-    docTitle: 'Assets · Uniform — approval mockup',
-    lang: 'العربية', theme: s => s === 'dark' ? 'Light' : 'Dark',
+    docTitle: 'Assets: Uniform (approval mockup)',
+    proto: 'Approval mockup. Sample quantities, nothing is saved.',
+    other: 'العربية', theme: s => s === 'dark' ? 'Light theme' : 'Dark theme',
+    preview: 'Preview', views: { edit: 'Store manager', readonly: 'View only', loading: 'Loading', error: 'Load failed' },
     assets: 'Assets', tagline: 'Store-room stock of uniform pieces by size.',
     sections: 'Assets sections', store: 'Store', uniform: 'Uniform',
-    title: 'Uniform', desc: 'How many of each piece are in the store room, by size. Choose a piece to update its quantities.',
-    sample: 'Sample quantities, not real stock',
-    totalPieces: 'Total pieces', totalPiecesHint: 'Every piece on the shelf; a suit counts as one piece',
-    suits: 'Full suits', suitsHint: 'Blazer, trousers and white shirt together',
-    formal: 'Formal suit', formalNote: 'The suit is kept as one whole unit',
-    guard: 'Guard uniform', guardNote: 'Counted piece by piece',
-    total: 'In stock', sizes: 'Quantity by size', save: 'Save', cancel: 'Cancel',
-    sum: n => `Total: ${n}`, saved: 'Sample only — quantities change on this page, nothing is saved.',
+    title: 'Uniform',
+    findingNone: 'Every size of every piece is on the shelf.',
+    finding: (s, p) => `<b>${plural(s, 'size', 'sizes')}</b> out of stock across ${plural(p, 'piece', 'pieces')}.`,
+    piece: 'Piece', inStock: 'In stock', bySize: 'Quantity by size', action: 'Action', update: 'Update',
     oneSize: 'One size',
+    totals: 'Totals', totalPieces: 'Total pieces', totalPiecesSub: 'A suit counts as one piece', suits: 'Full suits', suitsSub: 'Blazer, trousers, white shirt',
+    out: 'Out of stock', outNone: 'Nothing is out of stock.',
+    error: 'Couldn\'t load uniform stock.', retry: 'Retry',
+    sizes: 'Quantity by size', save: 'Save', cancel: 'Cancel', sum: n => `Total ${n}`,
+    saved: 'Quantities changed on this page only. Nothing is saved.',
   },
   ar: {
-    proto: 'نموذج للاعتماد — ثابت ولا يحفظ أي بيانات',
-    docTitle: 'الأصول · الملابس — نموذج للاعتماد',
-    lang: 'English', theme: s => s === 'dark' ? 'فاتح' : 'داكن',
+    docTitle: 'الأصول: الملابس (نموذج للاعتماد)',
+    proto: 'نموذج للاعتماد. الكميات تجريبية ولا يُحفظ شيء.',
+    other: 'English', theme: s => s === 'dark' ? 'المظهر الفاتح' : 'المظهر الداكن',
+    preview: 'المعاينة', views: { edit: 'مسؤول المخزن', readonly: 'عرض فقط', loading: 'جارٍ التحميل', error: 'تعذّر التحميل' },
     assets: 'الأصول', tagline: 'رصيد قطع الزي في المخزن حسب المقاس.',
     sections: 'أقسام الأصول', store: 'المخزن', uniform: 'الملابس',
-    title: 'الملابس', desc: 'عدد كل قطعة في المخزن حسب المقاس. اختر القطعة لتحديث كمياتها.',
-    sample: 'كميات تجريبية وليست الرصيد الفعلي',
-    totalPieces: 'إجمالي القطع', totalPiecesHint: 'كل القطع الموجودة في المخزن؛ البدلة تُحسب قطعة واحدة',
-    suits: 'البدلات الكاملة', suitsHint: 'سترة وبنطال وقميص أبيض معاً',
-    formal: 'البدلة الرسمية', formalNote: 'تُحفظ البدلة وحدةً كاملة',
-    guard: 'زي الحراسة', guardNote: 'يُحسب قطعةً قطعة',
-    total: 'الرصيد', sizes: 'الكمية حسب المقاس', save: 'حفظ', cancel: 'إلغاء',
-    sum: n => `الإجمالي: ${n}`, saved: 'نموذج فقط — تتغير الكميات في هذه الصفحة ولا يُحفظ شيء.',
+    title: 'الملابس',
+    findingNone: 'جميع مقاسات كل القطع متوفرة في المخزن.',
+    finding: (s, p) => `نفد من المخزن <b>${arCount(s, ['مقاس واحد', 'مقاسان', 'مقاسات', 'مقاسًا'])}</b> في ${arCount(p, ['قطعة واحدة', 'قطعتين', 'قطع', 'قطعة'])}.`,
+    piece: 'القطعة', inStock: 'الرصيد', bySize: 'الكمية حسب المقاس', action: 'الإجراء', update: 'تحديث',
     oneSize: 'مقاس موحد',
+    totals: 'الإجماليات', totalPieces: 'إجمالي القطع', totalPiecesSub: 'تُحسب البدلة قطعة واحدة', suits: 'البدلات الكاملة', suitsSub: 'سترة وبنطال وقميص أبيض',
+    out: 'نفد من المخزن', outNone: 'لا يوجد مقاس نافد.',
+    error: 'تعذّر تحميل رصيد الملابس.', retry: 'إعادة المحاولة',
+    sizes: 'الكمية حسب المقاس', save: 'حفظ', cancel: 'إلغاء', sum: n => `الإجمالي ${n}`,
+    saved: 'تغيّرت الكميات في هذه الصفحة فقط ولم يُحفظ شيء.',
   },
-}
-
-const LETTERS = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL']
-const SHOES = ['38', '39', '40', '41', '42', '43', '44', '45', '46', '47']
-const WAIST = ['28', '30', '32', '34', '36', '38', '40', '42', '44']
-
-// Sample numbers only: they demonstrate the layout and are not real stock.
-const ITEMS = [
-  { id: 'suit', group: 'formal', art: 'suit', en: 'Formal suit', ar: 'بدلة رسمية', dEn: 'Navy blazer, navy trousers, white shirt', dAr: 'سترة كحلية وبنطال كحلي وقميص أبيض', sizes: LETTERS, qty: [2, 6, 9, 5, 3, 1] },
-  { id: 'formal-shoes', group: 'formal', art: 'shoes', en: 'Formal shoes', ar: 'حذاء رسمي', dEn: 'Black', dAr: 'أسود', sizes: SHOES, qty: [0, 1, 2, 4, 5, 4, 3, 1, 0, 0] },
-  { id: 'polo', group: 'guard', art: 'polo', en: 'Polo shirt', ar: 'قميص بولو', dEn: 'Olive, with logo', dAr: 'زيتي، مع الشعار', sizes: LETTERS, qty: [4, 14, 22, 15, 7, 2] },
-  { id: 'cargo', group: 'guard', art: 'cargo', en: 'Cargo trousers', ar: 'بنطال كارغو', dEn: 'Khaki', dAr: 'خاكي', sizes: WAIST, qty: [1, 5, 10, 13, 9, 6, 3, 1, 0] },
-  { id: 'belt', group: 'guard', art: 'belt', en: 'Belt', ar: 'حزام', dEn: 'Brown, silver buckle', dAr: 'بني بإبزيم فضي', sizes: ['S', 'M', 'L', 'XL'], qty: [6, 18, 16, 8] },
-  { id: 'boots', group: 'guard', art: 'boots', en: 'Field boots', ar: 'حذاء ميداني', dEn: 'Tan, lace-up', dAr: 'بيج برباط', sizes: SHOES, qty: [0, 2, 5, 8, 10, 8, 5, 2, 1, 0] },
-  { id: 'cap', group: 'guard', art: 'cap', en: 'Cap', ar: 'قبعة', dEn: 'Olive, with logo', dAr: 'زيتية، مع الشعار', sizes: ['S', 'M', 'L'], qty: [9, 21, 12] },
-  { id: 'socks', group: 'guard', art: 'socks', en: 'Socks', ar: 'جوارب', dEn: 'Khaki, pairs', dAr: 'خاكي، أزواج', sizes: ['one'], qty: [64] },
-]
-
-function shade(hex, amount) {
-  const v = Number.parseInt(hex.slice(1), 16)
-  return '#' + [v >> 16, (v >> 8) & 255, v & 255].map(c => {
-    const n = Math.round(amount < 0 ? c * (1 + amount) : c + (255 - c) * amount)
-    return Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0')
-  }).join('')
-}
-
-// The unit's globe badge from the photo: red target ring around a blue globe.
-const badge = (x, y, r = 5) => `<g transform="translate(${x} ${y})"><circle r="${r}" fill="#fff" stroke="#c8102e" stroke-width="${r * 0.28}"/><circle r="${r * 0.68}" fill="#2a5aa0"/><path d="M${-r * 0.4} ${-r * 0.2}q${r * 0.3} ${-r * 0.4} ${r * 0.6} 0q${-r * 0.1} ${r * 0.4} ${-r * 0.6} 0zM${r * 0.1} ${r * 0.15}q${r * 0.3} ${-r * 0.1} ${r * 0.4} ${r * 0.3}l${-r * 0.3} ${r * 0.2}z" fill="#e9eef5"/><path d="M0 ${-r * 1.15}v${r * 0.5}M0 ${r * 1.15}v${-r * 0.5}M${-r * 1.15} 0h${r * 0.5}M${r * 1.15} 0h${-r * 0.5}" stroke="#c8102e" stroke-width="${r * 0.18}"/></g>`
-
-// Fixed drawings, one per piece — no shape or colour picker (not customisable).
-const DRAW = {
-  suit() {
-    const navy = '#22345a', dark = shade(navy, -0.3), trousers = shade(navy, -0.18)
-    return `<path d="M60 30q0-6 4-6t3 4" fill="none" stroke="#8a8f98" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M44 82h15l-1 22H46zM61 82h15l-2 22H62z" fill="${trousers}"/>
-      <path d="M46 104h12M62 104h12" stroke="${dark}" stroke-width="1.4"/>
-      <path d="M38 38q-8 3-9 12l-2 32h8l2-30z" fill="${dark}"/><path d="M82 38q8 3 9 12l2 32h-8l-2-30z" fill="${dark}"/>
-      <path d="M38 38l12-5 10 12 10-12 12 5 3 46H35z" fill="${navy}"/>
-      <path d="M51 34l9 30 9-30-9 9z" fill="#fff"/><path d="M51 34l4 7 5-2zM69 34l-4 7-5-2z" fill="#e9e7e1"/>
-      <circle cx="60" cy="50" r=".9" fill="#c9c6bd"/><circle cx="60" cy="56" r=".9" fill="#c9c6bd"/>
-      <path d="M50 33l-5 13 6 1 9 19-8-28zM70 33l5 13-6 1-9 19 8-28z" fill="${dark}"/>
-      <path d="M60 66v18" stroke="${dark}" stroke-width="1"/>
-      <circle cx="62.5" cy="71" r="1.3" fill="${dark}"/><circle cx="62.5" cy="77" r="1.3" fill="${dark}"/>
-      <path d="M40 73h12v2.6H40zM68 73h12v2.6H68z" fill="${dark}"/>
-      ${badge(74, 52, 4.4)}`
-  },
-  shoes() {
-    const shoe = (dx, dy, fill) => `<g transform="translate(${dx} ${dy})">
-      <path d="M30 100V87q0-8 8-9l10-1q4 6 12 8l16 3q12 2 12 10v2z" fill="${fill}"/>
-      <path d="M28 99h64q2 0 2 2v2q0 2-2 2H30q-2 0-2-2z" fill="#fff" stroke="#d9d6cc" stroke-width=".8"/>
-      <path d="M50 80l7 2.4M53 77.6l7 2.4" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></g>`
-    return shoe(-8, -9, '#3a3d45') + shoe(4, 0, '#1d1f24')
-  },
-  boots() {
-    const tan = '#c8a57a'
-    const boot = (dx, dy, fill) => `<g transform="translate(${dx} ${dy})">
-      <path d="M34 100V62q0-4 4-4h16q4 0 4 4v18q4 3 14 5l12 3q8 2 8 9v3z" fill="${fill}"/>
-      <rect x="34" y="57" width="24" height="5" rx="2" fill="${shade(fill, -0.2)}"/>
-      <path d="M48 64l8 4M56 64l-8 4M48 71l8 4M56 71l-8 4M50 78l8 3" stroke="${shade(fill, -0.45)}" stroke-width="1.2" stroke-linecap="round"/>
-      <path d="M32 99h66v5q0 2-2 2H34q-2 0-2-2z" fill="#6b4a2b"/>
-      <path d="M38 106v-2M46 106v-2M54 106v-2M62 106v-2M70 106v-2M78 106v-2M86 106v-2M94 106v-2" stroke="#4a321c" stroke-width="2"/></g>`
-    return boot(-10, -10, shade(tan, -0.12)) + boot(0, 0, tan)
-  },
-  polo() {
-    const olive = '#556642', dark = shade(olive, -0.28)
-    return `<path d="M45 32l-9 4-13 13 9 10 6-6v49h44V53l6 6 9-10-13-13-9-4q-15 7-30 0z" fill="${olive}"/>
-      <path d="M32 59l-9-10M88 59l9-10" stroke="${dark}" stroke-width="2"/>
-      <path d="M45 32l7 12 8-7zM75 32l-7 12-8-7z" fill="${dark}"/>
-      <rect x="57" y="38" width="6" height="18" rx="1" fill="${shade(olive, -0.12)}" stroke="${dark}" stroke-width=".6"/>
-      <circle cx="60" cy="44" r="1.4" fill="#b9bdb3"/><circle cx="60" cy="50" r="1.4" fill="#b9bdb3"/>
-      <path d="M38 99h44" stroke="${dark}" stroke-width="1.4"/>
-      ${badge(72, 55, 4.6)}`
-  },
-  cargo() {
-    const khaki = '#c9b38e', dark = shade(khaki, -0.3), light = shade(khaki, 0.12)
-    return `<rect x="36" y="28" width="48" height="8" rx="1" fill="${shade(khaki, -0.1)}"/>
-      <path d="M41 28v8M54 28v8M66 28v8M79 28v8" stroke="${dark}" stroke-width="1.6"/>
-      <path d="M36 36h48l2 68H64l-4-48-4 48H34z" fill="${khaki}"/>
-      <path d="M60 36v20M60 56l-3-6" stroke="${dark}" stroke-width="1" fill="none"/>
-      <path d="M38 39q6 6 12 0M82 39q-6 6-12 0" stroke="${dark}" stroke-width="1" fill="none"/>
-      <rect x="35.5" y="63" width="13" height="17" rx="1.5" fill="${light}" stroke="${dark}" stroke-width=".8"/>
-      <rect x="35" y="62" width="14" height="5" rx="1" fill="${shade(khaki, -0.08)}" stroke="${dark}" stroke-width=".8"/>
-      <rect x="72" y="63" width="13" height="17" rx="1.5" fill="${light}" stroke="${dark}" stroke-width=".8"/>
-      <rect x="71.5" y="62" width="14" height="5" rx="1" fill="${shade(khaki, -0.08)}" stroke="${dark}" stroke-width=".8"/>
-      <path d="M34.5 99h22M64 99h22" stroke="${dark}" stroke-width="1.2"/>`
-  },
-  belt() {
-    const brown = '#7a5233'
-    return `<path d="M30 68a30 17 0 0 1 60 0" fill="none" stroke="${shade(brown, -0.3)}" stroke-width="10"/>
-      <path d="M30 68a30 17 0 0 0 60 0" fill="none" stroke="${brown}" stroke-width="10"/>
-      <path d="M32 66a28 15 0 0 0 56 0" fill="none" stroke="${shade(brown, 0.2)}" stroke-width="1" opacity=".7"/>
-      <circle cx="78" cy="80.5" r="1.2" fill="${shade(brown, -0.5)}"/><circle cx="83" cy="77.5" r="1.2" fill="${shade(brown, -0.5)}"/><circle cx="87" cy="74" r="1.2" fill="${shade(brown, -0.5)}"/>
-      <rect x="49" y="77" width="22" height="15" rx="2" fill="#a9adb3" stroke="#7d828a" stroke-width="1"/>
-      <rect x="53" y="80.5" width="14" height="8" rx="1" fill="#c9ccd1"/>`
-  },
-  cap() {
-    const olive = '#556642', dark = shade(olive, -0.3)
-    return `<path d="M32 80q0-34 28-36 28 2 28 36z" fill="${olive}"/>
-      <path d="M60 44v36M60 44q-14 8-16 36M60 44q14 8 16 36" stroke="${dark}" stroke-width=".9" fill="none"/>
-      <circle cx="60" cy="44.5" r="2.2" fill="${dark}"/>
-      <path d="M32 80h56" stroke="${dark}" stroke-width="2"/>
-      <path d="M30 81q30-5 60 0-5 15-30 15T30 81z" fill="${dark}"/>
-      <path d="M36 84q24-3 48 0" stroke="${shade(olive, -0.45)}" stroke-width=".8" fill="none"/>
-      ${badge(60, 66, 6)}`
-  },
-  socks() {
-    const khaki = '#c4ac82'
-    const sock = (dx, dy, fill) => `<g transform="translate(${dx} ${dy})">
-      <path d="M38 34h18v38l18 10q8 4 4 12-4 6-12 2L42 84q-6-3-4-10z" fill="${fill}"/>
-      <rect x="38" y="34" width="18" height="9" fill="${shade(fill, -0.18)}"/>
-      <path d="M42 34v9M46 34v9M50 34v9M54 34v9" stroke="${shade(fill, -0.35)}" stroke-width=".8"/>
-      <path d="M66 96q4 2 8-1 4-4 1-9z" fill="${shade(fill, -0.2)}"/>
-      <path d="M38 76q2 7 8 9l-2-11z" fill="${shade(fill, -0.2)}"/></g>`
-    return sock(12, -6, shade(khaki, -0.12)) + sock(0, 2, khaki)
-  },
-}
-
-function art(kind, cls = 'art') {
-  return `<svg class="${cls}" viewBox="20 20 80 90" aria-hidden="true" focusable="false"><ellipse cx="60" cy="106" rx="36" ry="4.5" fill="#000" opacity=".12"/>${DRAW[kind]()}</svg>`
 }
 
 const t = () => T[state.lang]
-const total = item => item.qty.reduce((a, b) => a + b, 0)
-const sizeLabel = s => s === 'one' ? t().oneSize : s
-const name = item => state.lang === 'ar' ? item.ar : item.en
-const desc = item => state.lang === 'ar' ? item.dAr : item.dEn
 const fmt = n => n.toLocaleString(state.lang === 'ar' ? 'ar-AE' : 'en-GB', { numberingSystem: 'latn' })
+const L = (o, k = '') => state.lang === 'ar' ? o[k ? k + 'Ar' : 'ar'] : o[k ? k + 'En' : 'en']
+const nameOf = item => L(item)
+const descOf = item => state.lang === 'ar' ? item.dAr : item.dEn
+const sizeLabel = s => s === 'one' ? t().oneSize : s
+const canEdit = () => state.view === 'edit'
+const outOfStock = () => items.map(i => ({ item: i, sizes: i.sizes.filter((_, k) => i.qty[k] === 0) })).filter(o => o.sizes.length)
 
-function card(item) {
-  const chips = item.sizes.map((s, i) => `<span class="${item.qty[i] ? '' : 'zero'}"><span>${sizeLabel(s)}</span><b>${fmt(item.qty[i])}</b></span>`).join('')
-  return `<button type="button" class="card" data-item="${item.id}">
-    ${art(item.art)}
-    <span><span class="nm">${name(item)}</span><span class="desc">${desc(item)}</span>
-    <span class="total">${t().total}: <b>${fmt(total(item))}</b></span>
-    <span class="chips">${chips}</span></span></button>`
+function ladder(item) {
+  const s = t()
+  if (state.view === 'loading') return `<ul class="ladder" aria-hidden="true">${item.sizes.map(() => '<li class="skel"></li>').join('')}</ul>`
+  const max = Math.max(1, ...item.qty)
+  return `<ul class="ladder" aria-label="${s.bySize}">${item.sizes.map((sz, k) => {
+    const q = item.qty[k]
+    const shade = q ? (0.07 + 0.38 * q / max).toFixed(3) : 0
+    return `<li class="${q ? '' : 'zero'}${sz === 'one' ? ' one' : ''}" style="--t:${shade}"><span class="sz">${sizeLabel(sz)}</span><span class="q">${fmt(q)}</span></li>`
+  }).join('')}</ul>`
 }
 
-function group(key) {
-  const items = ITEMS.filter(i => i.group === key)
-  return `<section class="group" aria-labelledby="g-${key}"><div class="grouphead"><h2 id="g-${key}">${t()[key]}</h2><span>${t()[key + 'Note']}</span></div>
-    <div class="grid">${items.map(card).join('')}</div></section>`
+function row(item) {
+  const s = t()
+  const stock = state.view === 'loading' ? '<span class="bar" style="width:32px"></span>' : `<span class="instock num">${fmt(total(item))}</span>`
+  return `<tr class="piece">
+    <td><div class="ident">${window.uniformArt(item.art)}<div><span class="name">${nameOf(item)}</span><span class="desc">${descOf(item)}</span></div></div></td>
+    <td class="num">${stock}</td>
+    <td>${ladder(item)}</td>
+    ${canEdit() ? `<td class="num"><button type="button" class="ghost" data-item="${item.id}" aria-label="${s.update}: ${nameOf(item)}">${s.update}</button></td>` : '<td></td>'}
+  </tr>`
+}
+
+function stockPanel() {
+  const s = t()
+  if (state.view === 'error') return `<section class="panel stock" aria-labelledby="stock-h"><div class="panelhead"><h2 id="stock-h">${s.bySize}</h2></div>
+    <p class="error" role="alert"><span>${s.error}</span><button type="button" class="textbtn" id="retry">${s.retry}</button></p></section>`
+  return `<section class="panel stock" aria-labelledby="stock-h"><h2 id="stock-h" class="sr">${s.bySize}</h2>
+    <table><thead><tr><th scope="col">${s.piece}</th><th scope="col" class="num">${s.inStock}</th><th scope="col">${s.bySize}</th><th scope="col"><span class="sr">${s.action}</span></th></tr></thead>
+    ${groups.map(g => `<tbody class="group"><tr><th scope="colgroup" colspan="4">${L(g)}<span>${L(g, 'note')}</span></th></tr>
+      ${items.filter(i => i.group === g.id).map(row).join('')}</tbody>`).join('')}
+    </table></section>`
+}
+
+function summary() {
+  const s = t()
+  const value = n => state.view === 'loading' ? '<span class="bar" style="width:56px;height:24px"></span>' : state.view === 'error' ? '<span style="color:var(--muted)">-</span>' : fmt(n)
+  const out = outOfStock()
+  let outBody
+  if (state.view === 'loading') outBody = `<ul class="outlist" aria-hidden="true">${[0, 1, 2].map(() => '<li><span class="bar" style="width:36px;height:36px"></span><span class="bar" style="width:120px"></span></li>').join('')}</ul>`
+  else if (state.view === 'error') outBody = '<p class="empty">-</p>'
+  else if (!out.length) outBody = `<p class="empty">${s.outNone}</p>`
+  else outBody = `<ul class="outlist">${out.map(o => `<li>${window.uniformArt(o.item.art)}<span class="what">${nameOf(o.item)} <span class="sizes">${o.sizes.map(sizeLabel).join(state.lang === 'ar' ? '، ' : ', ')}</span></span></li>`).join('')}</ul>`
+  return `<section class="panel sumpanel" aria-label="${s.totals}"><dl class="summary">
+    <div><dt>${s.totalPieces}</dt><dd><span class="figure">${value(pieces())}</span><span class="sub">${s.totalPiecesSub}</span></dd></div>
+    <div><dt>${s.suits}</dt><dd><span class="figure">${value(suits())}</span><span class="sub">${s.suitsSub}</span></dd></div>
+    <div><dt>${s.out}</dt><dd>${outBody}</dd></div>
+  </dl></section>`
+}
+
+function finding() {
+  const s = t()
+  if (state.view !== 'edit' && state.view !== 'readonly') return ''
+  const out = outOfStock()
+  const n = out.reduce((a, o) => a + o.sizes.length, 0)
+  return `<p class="finding">${n ? s.finding(n, out.length) : s.findingNone}</p>`
 }
 
 function render() {
@@ -262,50 +295,49 @@ function render() {
   document.documentElement.lang = state.lang
   document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr'
   document.documentElement.dataset.theme = state.theme
-  const pieces = ITEMS.reduce((a, i) => a + total(i), 0)
-  const suits = total(ITEMS.find(i => i.id === 'suit'))
   document.getElementById('app').innerHTML = `
-    <div class="proto"><span>${s.proto}</span><span class="controls">
-      <button type="button" id="lang" lang="${state.lang === 'ar' ? 'en' : 'ar'}">${s.lang}</button><button type="button" id="theme">${s.theme(state.theme)}</button></span></div>
+    <div class="proto" role="region" aria-label="Mockup controls / عناصر التحكم في النموذج"><span>${s.proto}</span><span class="controls">
+      <label>${s.preview} <select id="view">${Object.entries(s.views).map(([k, v]) => `<option value="${k}"${k === state.view ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+      <button type="button" id="lang" lang="${state.lang === 'ar' ? 'en' : 'ar'}">${s.other}</button>
+      <button type="button" id="theme">${s.theme(state.theme)}</button></span></div>
     <header class="hero"><div class="wrap"><p class="eyebrow">${s.assets}</p><p class="tagline">${s.tagline}</p>
       <nav class="sectiontabs" aria-label="${s.sections}"><a href="#">${s.store}</a><a href="#" aria-current="page">${s.uniform}</a></nav></div></header>
-    <main id="main" class="wrap">
-      <div class="pagehead"><div><h1>${s.title}</h1><p>${s.desc}</p><span class="sample">${s.sample}</span></div></div>
-      <div class="totals">
-        <div class="stat"><div class="label">${s.totalPieces}</div><div class="value">${fmt(pieces)}</div><div class="hint">${s.totalPiecesHint}</div></div>
-        <div class="stat"><div class="label">${s.suits}</div><div class="value">${fmt(suits)}</div><div class="hint">${s.suitsHint}</div></div>
-      </div>
-      ${group('formal')}${group('guard')}
+    <main id="main" class="wrap" aria-busy="${state.view === 'loading'}">
+      <div class="titlerow"><h1>${s.title}</h1>${finding()}</div>
+      ${summary()}${stockPanel()}
     </main>`
   document.getElementById('lang').onclick = () => { state.lang = state.lang === 'ar' ? 'en' : 'ar'; sync(); render() }
   document.getElementById('theme').onclick = () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; sync(); render() }
-  document.querySelectorAll('[data-item]').forEach(b => { b.onclick = () => openEditor(b.dataset.item) })
+  document.getElementById('view').onchange = e => { state.view = e.target.value; sync(); render() }
+  document.getElementById('retry')?.addEventListener('click', () => { state.view = 'edit'; sync(); render() })
+  document.querySelectorAll('[data-item]').forEach(b => { b.onclick = () => openEditor(b.dataset.item, b) })
 }
 
 function sync() {
   const q = new URLSearchParams(location.search)
-  q.set('lang', state.lang); q.set('theme', state.theme)
+  q.set('lang', state.lang); q.set('theme', state.theme); q.set('view', state.view); q.delete('edit')
   history.replaceState(null, '', '?' + q)
 }
 
-function openEditor(id) {
-  const item = ITEMS.find(i => i.id === id)
+function openEditor(id, opener) {
+  const item = items.find(i => i.id === id)
   const s = t()
   const dlg = document.getElementById('editor')
   dlg.innerHTML = `<form method="dialog" class="dlg">
-    <div class="dlghead">${art(item.art)}<div><h2 id="dlg-title">${name(item)}</h2><p>${desc(item)}</p></div></div>
-    <fieldset class="sizes"><legend>${s.sizes}</legend>
-      ${item.sizes.map((sz, i) => `<label>${sizeLabel(sz)}<input inputmode="numeric" pattern="[0-9]*" name="q${i}" value="${item.qty[i]}"></label>`).join('')}</fieldset>
-    <div class="dlgfoot"><span class="sum" id="dlg-sum">${s.sum(fmt(total(item)))}</span>
-      <span class="actions"><button type="button" id="dlg-cancel">${s.cancel}</button><button class="primary" value="save">${s.save}</button></span></div></form>`
+    <div class="dlghead">${window.uniformArt(item.art)}<div><h2 id="dlg-title">${nameOf(item)}</h2><span class="desc">${descOf(item)}</span></div></div>
+    <fieldset class="sizes-form"><legend>${s.sizes}</legend>
+      ${item.sizes.map((sz, k) => `<label>${sizeLabel(sz)}<input inputmode="numeric" pattern="[0-9]*" name="q${k}" value="${item.qty[k]}" autocomplete="off"></label>`).join('')}</fieldset>
+    <div class="dlgfoot"><span class="num" id="dlg-sum">${s.sum(fmt(total(item)))}</span>
+      <span class="actions"><button type="button" class="secondary" id="dlg-cancel">${s.cancel}</button><button class="primary" value="save">${s.save}</button></span></div></form>`
   const inputs = [...dlg.querySelectorAll('input')]
   const read = () => inputs.map(el => Math.max(0, Number.parseInt(el.value, 10) || 0))
   inputs.forEach(el => { el.oninput = () => { document.getElementById('dlg-sum').textContent = s.sum(fmt(read().reduce((a, b) => a + b, 0))) } })
   document.getElementById('dlg-cancel').onclick = () => dlg.close()
   dlg.onclose = () => {
-    if (dlg.returnValue !== 'save') return
-    item.qty = read(); dlg.returnValue = ''
-    render(); toast(s.saved)
+    const saved = dlg.returnValue === 'save'
+    dlg.returnValue = ''
+    if (saved) { item.qty = read(); render(); toast(s.saved) }
+    document.querySelector(`[data-item="${id}"]`)?.focus() ?? opener?.focus()
   }
   dlg.showModal()
 }
@@ -313,11 +345,11 @@ function openEditor(id) {
 function toast(msg) {
   const el = document.getElementById('toast')
   el.textContent = msg; el.hidden = false
-  clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true }, 3200)
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true }, 3600)
 }
 
 render()
-if (params.get('edit')) openEditor(params.get('edit'))
+if (params.get('edit') && canEdit()) openEditor(params.get('edit'))
 </script>
 </body>
 </html>
