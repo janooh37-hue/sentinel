@@ -70,27 +70,20 @@ def _render(form: str, data: dict, tmp_path: Path):
     return Document(str(out))
 
 
-def _signer_paragraphs(doc):
-    return list(doc.paragraphs) + doc.tables[-1].rows[-1].cells[0].paragraphs
+def _signer_cell_paragraphs(doc):
+    return doc.tables[-1].rows[-1].cells[0].paragraphs
 
 
 def _manager_block_paragraphs(doc):
-    return [p for p in _signer_paragraphs(doc) if p.text.strip() in (_MANAGER, _TITLE)]
-
-
-def _is_left_aligned(paragraph) -> bool:
-    if paragraph.alignment != WD_ALIGN_PARAGRAPH.LEFT:
-        return False
-    pPr = paragraph._p.find(qn("w:pPr"))
-    return pPr is None or pPr.find(qn("w:bidi")) is None
+    return [p for p in _signer_cell_paragraphs(doc) if p.text.strip() in (_MANAGER, _TITLE)]
 
 
 def _para_above_name(doc):
-    """The paragraph above the manager name, either body-level or in its cell."""
-    body = _signer_paragraphs(doc)
-    for i, p in enumerate(body):
+    """The paragraph above the manager name in the final notes cell."""
+    cell = _signer_cell_paragraphs(doc)
+    for i, p in enumerate(cell):
         if p.text.strip() == _MANAGER and i > 0:
-            return body[i - 1]
+            return cell[i - 1]
     return None
 
 
@@ -100,25 +93,26 @@ FORMS = ("Leave Permit Form", "Administrative Leave Form")
 # --- signature lands above the name, floated behind text -------------------
 
 
-def test_signature_floats_above_name_in_its_signer_block(tmp_path):
+def test_signature_sits_centred_above_name_in_the_notes_cell(tmp_path):
     for form in FORMS:
         doc = _render(form, _with_manager(_make_sig_png(tmp_path / "s.png")), tmp_path)
+        assert _MANAGER not in [p.text.strip() for p in doc.paragraphs], (
+            f"{form}: signer block escaped the notes cell"
+        )
         anchor = _para_above_name(doc)
-        assert anchor is not None, f"{form}: name paragraph not found"
-        axml = anchor._p.xml
-        assert "w:drawing" in axml, f"{form}: signature not on the line above the name"
-        assert 'behindDoc="1"' in axml, f"{form}: signature not floated behind text"
-        assert "wp:inline" not in axml, f"{form}: signature still inline"
-        notes_has_signature = "w:drawing" in doc.tables[-1]._tbl.xml
-        assert notes_has_signature == (form == "Administrative Leave Form")
+        assert anchor is not None, f"{form}: name not in the notes cell"
+        assert "w:drawing" in anchor._p.xml, f"{form}: signature not on the line above the name"
+        assert anchor.alignment == WD_ALIGN_PARAGRAPH.CENTER, f"{form}: signature not centred"
 
 
-def test_manager_block_left_aligned(tmp_path):
+def test_manager_block_centred(tmp_path):
     for form in FORMS:
         doc = _render(form, _with_manager(_make_sig_png(tmp_path / "s.png")), tmp_path)
         paras = _manager_block_paragraphs(doc)
         assert len(paras) == 2, f"{form}: expected name + title, got {len(paras)}"
-        assert all(_is_left_aligned(p) for p in paras), f"{form}: block not left-aligned"
+        assert all(p.alignment == WD_ALIGN_PARAGRAPH.CENTER for p in paras), (
+            f"{form}: block not centred"
+        )
 
 
 def test_admin_leave_branch_signature_cell_is_blank(tmp_path):
@@ -186,7 +180,7 @@ def test_redesigned_leave_forms_render_values_in_their_cells(tmp_path):
 def test_no_manager_hides_designation_and_signature(tmp_path):
     for form in FORMS:
         doc = _render(form, _base(), tmp_path)  # no manager_* fields at all
-        body_text = "\n".join(p.text for p in _signer_paragraphs(doc))
+        body_text = "\n".join(p.text for p in _signer_cell_paragraphs(doc))
         assert DEFAULT_MANAGER_TITLE not in body_text, f"{form}: designation shown with no manager"
         assert "w:drawing" not in doc.element.body.xml, f"{form}: stray signature with no manager"
 
