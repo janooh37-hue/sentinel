@@ -15,7 +15,7 @@
   --ground:#f5f4f1;--surface:#fff;--raised:#f0eee8;--active:#e9e7e1;
   --border:#e6e4dd;--rule:#efece5;--control:#d4d1c8;
   --text:#1c1f24;--muted:#5a6068;
-  --primary:#0d2845;--on-primary:#fff;--data:#0d2845;--focus:#0d2845;
+  --primary:#1c1f24;--on-primary:#fff;--data:#0d2845;--focus:#0d2845;
   --art:#fafaf6;
   --hero:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%); /* taste-skill-ignore: the app's real Assets band, --hero-grad in frontend/src/index.css */
   --radius-card:8px;--radius-control:6px;
@@ -212,6 +212,42 @@ dialog.give{width:min(880px,calc(100vw - 32px))}
 .givestatus{display:grid;justify-items:end;text-align:end;margin-inline-start:auto}
 .reason{font-size:13px;color:var(--muted)}
 .toast{position:fixed;inset-block-end:16px;inset-inline:0;margin-inline:auto;width:max-content;max-width:calc(100vw - 32px);padding:10px 16px;border-radius:var(--radius-control);background:var(--text);color:var(--ground);font-size:13px;box-shadow:0 8px 24px rgba(10,20,40,.2)}
+.titleactions{display:flex;flex-wrap:wrap;gap:8px}
+.field{display:grid;gap:6px;font-size:13px;font-weight:500;min-width:0}
+.field input,.field select,.addsize input{width:100%;height:40px;padding-inline:10px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface)}
+.field-error{color:var(--text);font-size:13px;font-weight:400;min-height:0}
+.field-error:empty{display:none}
+[aria-invalid=true]{outline:2px solid var(--text);outline-offset:1px}
+.fieldpair{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.addsize{display:flex;gap:8px;align-items:end}
+.addsize .field{flex:1}
+.sizechips{display:flex;gap:6px;flex-wrap:wrap;margin-block-start:10px}
+.sizechip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--control);border-radius:6px;padding:4px 8px}
+.sizechip button{border:0;background:none;cursor:pointer;min-height:32px}
+.drawinggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;border:0;padding:0;margin:0}
+.drawinggrid legend{font-weight:600;margin-block-end:8px}
+.drawingtile{display:grid;justify-items:center;gap:4px;padding:8px;border:1px solid var(--control);border-radius:6px;font-size:13px;cursor:pointer;text-align:center}
+.drawingtile:has(input:checked){outline:2px solid var(--text);outline-offset:-2px}
+.drawingtile .art{width:56px;height:56px}
+.drawingtile input{accent-color:var(--text)}
+.drawingpreview{display:flex;align-items:center;gap:16px}
+.drawingpreview .art{width:88px;height:88px}
+.returnrow{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:12px;padding-block:12px;border-block-end:1px solid var(--rule)}
+.returnrow .art{width:44px;height:44px}
+.returnrow .stepper{margin:0}
+.holdlist{margin-block:12px 0}
+.holdlist h3{margin:0 0 6px;font-size:14px}
+.holdlist .lines{padding:0}
+.holdlist .lines li{min-height:40px}
+.return-list{list-style:none;margin:0;padding:8px var(--pad)}
+.return-list>li+li{border-block-start:1px solid var(--rule)}
+.return-card{display:block;width:100%;padding:14px 0;border:0;background:none;text-align:start;cursor:pointer}
+.return-card[aria-current=true]{background:var(--raised)}
+.return-card .rechead{margin:0 0 8px}
+.return-pieces{display:flex;flex-wrap:wrap;gap:8px;margin-block:8px}
+.return-pieces>span{display:inline-flex;align-items:center;gap:4px}
+.return-pieces .art{width:30px;height:30px}
+@media(max-width:720px){.titleactions{width:100%}.titleactions .primary{flex:1}.fieldpair{grid-template-columns:1fr}.returnrow{grid-template-columns:36px minmax(0,1fr)}.returnrow .stepper{grid-column:2}.returnrow .art{width:36px;height:36px}}
 
 /* Narrow stock table: each piece becomes two lines, its ladder on the second. */
 @container (max-width: 760px){
@@ -260,6 +296,8 @@ dialog.give{width:min(880px,calc(100vw - 32px))}
 <div id="app"></div>
 <dialog id="editor" aria-labelledby="dlg-title"></dialog>
 <dialog id="give" class="give" aria-labelledby="give-title"></dialog>
+<dialog id="return-form" class="give" aria-labelledby="return-title"></dialog>
+<dialog id="item-form" class="give" aria-labelledby="item-title"></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <script src="./data.js"></script>
 <script src="./art.js"></script>
@@ -272,14 +310,16 @@ const state = {
   lang: params.get('lang') === 'ar' ? 'ar' : 'en',
   theme: params.get('theme') === 'dark' ? 'dark' : 'light',
   view: ['readonly', 'loading', 'error'].includes(params.get('view')) ? params.get('view') : 'edit',
-  tab: params.get('tab') === 'received' ? 'received' : 'stock',
+  tab: ['received', 'returns'].includes(params.get('tab')) ? params.get('tab') : 'stock',
   person: params.get('person') || null,
-  open: Boolean(params.get('person')),
+  returnId: params.get('return') || null,
+  open: Boolean(params.get('person') || params.get('return')),
   q: '',
 }
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 function arCount(n, forms) { // forms: [one, two, few (3-10), many (11+)]
+  if (n === 0) return `0 ${forms[3].replace(/ًا$/, '')}`
   if (n === 1) return forms[0]
   if (n === 2) return forms[1]
   return `${n} ${n <= 10 ? forms[2] : forms[3]}`
@@ -321,6 +361,20 @@ const T = {
     giveCount: n => plural(n, 'item', 'items'),
     needEmployee: 'Choose the employee taking the uniform.', needPiece: 'Choose a size for at least one piece.',
     giveSave: 'Hand out', given: (n, who) => `Recorded: ${plural(n, 'item', 'items')} handed to ${who}.`,
+    tabReturns: 'Returns', returnLabel: 'Return', recordReturn: 'Record return', returnTitle: 'Record return', returnedBy: 'Returned by',
+    receivedBy: n => `Received by ${n}`, receiver: n => `Received by ${n} (you)`,
+    returnsNone: 'No uniform has been returned yet.', returnSearch: 'Search returns', errorReturns: "Couldn't load returns.",
+    returnFinding: n => `${plural(n, 'return', 'returns')} recorded.`, returnCount: n => plural(n, 'return', 'returns'),
+    returnedPieces: 'Pieces returned', currentlyHolds: 'Currently holds', holdsNone: 'No uniform currently held.',
+    holdsN: n => `Holds ${plural(n, 'item', 'items')}`, needReturnEmployee: 'Choose the employee returning uniform.', needReturnQty: 'Choose at least one quantity to return.',
+    returnSaved: n => `Recorded return: ${plural(n, 'item', 'items')}.`, returnEmpty: 'No employees currently hold uniform.',
+    addSize: 'Add size', size: 'Size', add: 'Add', sizeRequired: 'Enter a size.', sizeDuplicate: 'This size already exists.',
+    sizes: 'Sizes', addItem: 'Add item', nameEn: 'Name in English', nameAr: 'Name in Arabic',
+    descEn: 'Description in English', descAr: 'Description in Arabic', group: 'Group', preset: 'Size preset',
+    presets: { letters: 'Letters S-XXXL', shoe: 'Shoe 38-47', waist: 'Waist 28-44', one: 'One size' },
+    defaultQty: 'Hand-out default quantity', drawing: 'Drawing', previewDrawing: 'Selected drawing',
+    required: 'This name is required.', sizesRequired: 'Keep at least one size.', qtyRequired: 'Enter a whole quantity of at least 1.',
+    removeSize: n => `Remove size ${n}`, itemSaved: 'Item added on this page, with zero stock.',
   },
   ar: {
     docTitle: 'الأصول: الملابس (نموذج للاعتماد)',
@@ -356,6 +410,21 @@ const T = {
     giveCount: n => arCount(n, AR_PIECES),
     needEmployee: 'اختر الموظف المستلم.', needPiece: 'اختر مقاسًا لقطعة واحدة على الأقل.',
     giveSave: 'صرف', given: (n, who) => `تم التسجيل: صرف ${arCount(n, ['قطعة واحدة', 'قطعتين', 'قطع', 'قطعة'])} إلى ${who}.`,
+    tabReturns: 'المرتجعات', returnLabel: 'إرجاع', recordReturn: 'تسجيل إرجاع', returnTitle: 'تسجيل إرجاع', returnedBy: 'الموظف المُرجِع',
+    receivedBy: n => `استلمه: ${n}`, receiver: n => `استلمه: ${n} (أنت)`,
+    returnsNone: 'لم تُرجع ملابس بعد.', returnSearch: 'البحث في المرتجعات', errorReturns: 'تعذّر تحميل المرتجعات.',
+    returnFinding: n => `سجلات الإرجاع: ${n}.`, returnCount: n => `سجلات الإرجاع: ${n}`,
+    returnedPieces: 'القطع المُرجعة', currentlyHolds: 'الملابس الموجودة لديه حاليًا', holdsNone: 'لا توجد ملابس لديه حاليًا.',
+    holdsN: n => `لديه ${arCount(n, ['قطعة واحدة', 'قطعتان', 'قطع', 'قطعة'])}`,
+    needReturnEmployee: 'اختر الموظف الذي يُرجع الملابس.', needReturnQty: 'اختر كمية واحدة على الأقل لإرجاعها.',
+    returnSaved: n => `تم تسجيل إرجاع ${arCount(n, ['قطعة واحدة', 'قطعتين', 'قطع', 'قطعة'])}.`, returnEmpty: 'لا توجد ملابس لدى أي موظف حاليًا.',
+    addSize: 'إضافة مقاس', size: 'المقاس', add: 'إضافة', sizeRequired: 'أدخل مقاسًا.', sizeDuplicate: 'هذا المقاس موجود بالفعل.',
+    sizes: 'المقاسات', addItem: 'إضافة قطعة', nameEn: 'الاسم بالإنجليزية', nameAr: 'الاسم بالعربية',
+    descEn: 'الوصف بالإنجليزية', descAr: 'الوصف بالعربية', group: 'المجموعة', preset: 'مجموعة المقاسات',
+    presets: { letters: 'حروف من S إلى XXXL', shoe: 'أحذية من 38 إلى 47', waist: 'خصر من 28 إلى 44', one: 'مقاس موحد' },
+    defaultQty: 'الكمية الافتراضية للصرف', drawing: 'الرسم', previewDrawing: 'الرسم المختار',
+    required: 'الاسم مطلوب.', sizesRequired: 'أبقِ مقاسًا واحدًا على الأقل.', qtyRequired: 'أدخل عددًا صحيحًا لا يقل عن 1.',
+    removeSize: n => `إزالة المقاس ${n}`, itemSaved: 'أُضيفت القطعة في هذه الصفحة برصيد صفر.',
   },
 }
 
@@ -363,8 +432,8 @@ const t = () => T[state.lang]
 const fmt = n => n.toLocaleString(state.lang === 'ar' ? 'ar-AE' : 'en-GB', { numberingSystem: 'latn' })
 const fmtDate = iso => new Date(iso + 'T00:00:00').toLocaleDateString(state.lang === 'ar' ? 'ar-AE' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric', numberingSystem: 'latn' })
 const L = (o, k = '') => state.lang === 'ar' ? o[k ? k + 'Ar' : 'ar'] : o[k ? k + 'En' : 'en']
-const nameOf = o => L(o)
-const descOf = item => state.lang === 'ar' ? item.dAr : item.dEn
+const nameOf = o => esc(L(o))
+const descOf = item => esc(state.lang === 'ar' ? item.dAr : item.dEn)
 const posOf = e => L(e, 'pos')
 const sizeLabel = s => s === 'one' ? t().oneSize : s
 const canEdit = () => state.view === 'edit'
@@ -373,6 +442,8 @@ const stockItems = () => items.filter(i => i.tracking === 'stock')
 const outOfStock = () => stockItems().map(i => ({ item: i, sizes: i.sizes.filter((_, k) => i.qty[k] === 0) })).filter(o => o.sizes.length)
 const lastRecord = id => U.records.find(r => r.employee === id)
 const searchIcon = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.3-3.3"/></svg>'
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const szText = size => `<bdi dir="ltr">${esc(sizeLabel(size))}</bdi>`
 
 /* ---------- Stock tab ---------- */
 
@@ -383,7 +454,7 @@ function ladder(item) {
   return `<ul class="ladder" aria-label="${s.bySize}">${item.sizes.map((sz, k) => {
     const q = item.qty[k]
     const shade = q ? (0.07 + 0.38 * q / max).toFixed(3) : 0
-    return `<li class="${q ? '' : 'zero'}${sz === 'one' ? ' one' : ''}" style="--t:${shade}"><span class="sz">${sizeLabel(sz)}</span><span class="q">${fmt(q)}</span></li>`
+    return `<li class="${q ? '' : 'zero'}${sz === 'one' ? ' one' : ''}" style="--t:${shade}"><span class="sz">${szText(sz)}</span><span class="q">${fmt(q)}</span></li>`
   }).join('')}</ul>`
 }
 
@@ -394,7 +465,7 @@ function holderChips() {
   if (!hs.length) return `<p class="empty">${s.noHolders}</p>`
   return `<ul class="holders" aria-label="${s.holdersList}">${hs.map(h => {
     const e = U.employee(h.employee)
-    return `<li><a class="holder" href="?tab=received&person=${h.employee}" data-person="${h.employee}" title="${nameOf(e)}" aria-label="${nameOf(e)}, ${h.employee}, ${s.sizeIs(h.size)}"><span class="gid">${h.employee}</span><b>${h.size}</b></a></li>`
+    return `<li><a class="holder" href="?tab=received&person=${h.employee}" data-person="${h.employee}" title="${nameOf(e)}" aria-label="${nameOf(e)} · ${h.employee} · ${s.sizeIs(h.sizes.map(sz => esc(sizeLabel(sz))).join(state.lang === 'ar' ? '، ' : ', '))}"><span class="gid">${h.employee}</span><b>${h.sizes.map(szText).join(state.lang === 'ar' ? '، ' : ', ')}</b></a></li>`
   }).join('')}</ul>`
 }
 
@@ -403,7 +474,7 @@ function row(item) {
   const holders = item.tracking === 'holders'
   const stock = holders ? '<span class="dash">-</span>' : state.view === 'loading' ? '<span class="bar" style="width:32px"></span>' : `<span class="instock">${fmt(U.total(item))}</span>`
   const sub = holders && state.view !== 'loading' ? `<span class="desc">${s.heldBy(U.holders().length)}</span>` : ''
-  const action = canEdit() && !holders ? `<button type="button" class="ghost" data-item="${item.id}" aria-label="${s.update}: ${nameOf(item)}">${s.update}</button>` : ''
+  const action = canEdit() ? `<button type="button" class="ghost" data-item="${item.id}" aria-label="${holders ? s.addSize : s.update}: ${nameOf(item)}">${holders ? s.addSize : s.update}</button>` : ''
   return `<tr class="piece">
     <td><div class="ident">${art(item.art)}<div><span class="name">${nameOf(item)}</span><span class="desc">${descOf(item)}</span>${sub}</div></div></td>
     <td class="num">${stock}</td>
@@ -420,7 +491,7 @@ function stockView() {
   if (state.view === 'loading') outBody = `<ul class="outlist" aria-hidden="true">${[0, 1, 2].map(() => '<li><span class="bar" style="width:36px;height:36px"></span><span class="bar" style="width:120px"></span></li>').join('')}</ul>`
   else if (state.view === 'error') outBody = '<p class="empty">-</p>'
   else if (!out.length) outBody = `<p class="empty">${s.outNone}</p>`
-  else outBody = `<ul class="outlist">${out.map(o => `<li>${art(o.item.art)}<span>${nameOf(o.item)} <span class="sizes">${o.sizes.map(sizeLabel).join(state.lang === 'ar' ? '، ' : ', ')}</span></span></li>`).join('')}</ul>`
+  else outBody = `<ul class="outlist">${out.map(o => `<li>${art(o.item.art)}<span>${nameOf(o.item)} <span class="sizes">${o.sizes.map(szText).join(state.lang === 'ar' ? '، ' : ', ')}</span></span></li>`).join('')}</ul>`
   const summary = `<section class="panel sumpanel" aria-label="${s.summary}"><dl class="summary">
     <div><dt>${s.shelf}</dt><dd><span class="figure">${value(U.shelfPieces())}</span><span class="sub">${s.shelfSub}</span></dd></div>
     <div><dt>${s.holdersK}</dt><dd><span class="figure">${value(U.holders().length)}</span><span class="sub">${s.holdersSub}</span></dd></div>
@@ -450,10 +521,11 @@ function personDetail(p) {
   return `<section class="panel detail" aria-labelledby="pd-h">
     <div class="dhead"><button type="button" class="secondary back" data-back>${s.back}</button>
       <h2 id="pd-h">${nameOf(e)}</h2><span class="desc"><span class="gid">${e.id}</span> · ${posOf(e)}</span>
-      ${holder ? `<p class="holds">${s.holdsSuit(holder.size)}</p>` : ''}</div>
-    <ol class="recs">${p.records.map(r => `<li class="rec">
-      <div class="rechead"><span class="recdate">${fmtDate(r.date)}</span><span class="desc">${s.handedOutBy(nameOf(U.employee(r.givenBy)))}</span></div>
-      <ul class="lines">${r.lines.map(l => { const it = U.item(l.item); return `<li>${art(it.art)}<span><span class="name">${nameOf(it)}</span><span class="desc">${l.size === 'one' ? s.oneSize : s.sizeIs(l.size)}</span></span><span class="lqty">× ${fmt(l.qty)}</span></li>` }).join('')}</ul>
+      ${holder ? `<p class="holds">${s.holdsSuit(holder.sizes.map(szText).join(state.lang === 'ar' ? '، ' : ', '))}</p>` : ''}
+      <div class="holdlist"><h3>${s.currentlyHolds}</h3>${U.holdings(e.id).length ? recordLines(U.holdings(e.id)) : `<p class="empty">${s.holdsNone}</p>`}</div></div>
+    <ol class="recs">${[...p.records.map(r => ({ ...r, returned: false })), ...U.returns.filter(r => r.employee === e.id).map(r => ({ ...r, returned: true }))].sort((a, b) => b.date.localeCompare(a.date)).map(r => `<li class="rec">
+      <div class="rechead"><span class="recdate">${r.returned ? s.returnLabel + ' · ' : ''}${fmtDate(r.date)}</span><span class="desc">${r.returned ? s.receivedBy(nameOf(U.employee(r.receivedBy))) : s.handedOutBy(nameOf(U.employee(r.givenBy)))}</span></div>
+      ${recordLines(r.lines)}
     </li>`).join('')}</ol></section>`
 }
 
@@ -479,7 +551,7 @@ function receivedView() {
     : `<tr><td colspan="3"><p class="empty">${all.length ? s.noMatch : s.receivedNone}</p></td></tr>`
   return `<div class="master${state.open ? ' open' : ''}">
     <section class="panel list" aria-labelledby="rl-h"><h2 id="rl-h" class="sr">${s.tabReceived}</h2>
-      <div class="toolbar"><label class="search">${searchIcon}<span class="sr">${s.searchLabel}</span><input id="rq" type="search" value="${state.q}" placeholder="${s.searchPh}" autocomplete="off"></label>
+      <div class="toolbar"><label class="search">${searchIcon}<span class="sr">${s.searchLabel}</span><input id="rq" type="search" value="${esc(state.q)}" placeholder="${s.searchPh}" autocomplete="off"></label>
         <span class="count">${loading ? '' : s.people(people.length)}</span></div>
       <table class="people"><thead><tr><th scope="col">${s.colEmployee}</th><th scope="col">${s.colReceived}</th><th scope="col" class="num">${s.colLast}</th></tr></thead>
         <tbody>${rows}</tbody></table>
@@ -488,11 +560,34 @@ function receivedView() {
   </div>`
 }
 
+function recordLines(lines) {
+  return `<ul class="lines">${lines.map(l => { const it = U.item(l.item); return `<li>${art(it.art)}<span><span class="name">${nameOf(it)}</span><span class="desc">${szText(l.size)}</span></span><span class="lqty">× ${fmt(l.qty)}</span></li>` }).join('')}</ul>`
+}
+
+function returnsView() {
+  const s = t()
+  if (state.view === 'error') return `<section class="panel"><p class="error" role="alert">${s.errorReturns}<button class="textbtn" data-retry>${s.retry}</button></p></section>`
+  const loading = state.view === 'loading'
+  const records = U.returns.filter(matches)
+  const selected = records.find(r => r.id === state.returnId) || records[0]
+  return `<div class="master${state.open ? ' open' : ''}">
+    <section class="panel list" aria-labelledby="returns-h"><h2 id="returns-h" class="sr">${s.tabReturns}</h2>
+      <div class="toolbar"><label class="search">${searchIcon}<span class="sr">${s.returnSearch}</span><input id="rq" type="search" value="${esc(state.q)}" placeholder="${s.searchPh}"></label><span class="count">${loading ? '' : s.returnCount(records.length)}</span></div>
+      <ol class="return-list">${loading ? [1, 2, 3, 4].map(() => '<li style="padding-block:20px"><span class="bar" style="width:70%"></span><p><span class="bar" style="width:45%"></span></p></li>').join('') : records.length ? records.map(r => {
+        const e = U.employee(r.employee)
+        return `<li><button class="return-card" data-return="${r.id}"${selected?.id === r.id ? ' aria-current="true"' : ''}>
+          <span class="rechead"><span class="name">${nameOf(e)}</span><span>${fmtDate(r.date)}</span></span>
+          <span class="desc gid">${e.id}</span><span class="return-pieces">${r.lines.map(l => `<span>${art(U.item(l.item).art)}<span class="sr">${nameOf(U.item(l.item))}</span>× ${fmt(l.qty)}</span>`).join('')}</span>
+          <span class="desc">${s.receivedBy(nameOf(U.employee(r.receivedBy)))}</span></button></li>`
+      }).join('') : `<li><p class="empty">${U.returns.length ? s.noMatch : s.returnsNone}</p></li>`}</ol></section>
+    ${!loading && selected ? `<section class="panel detail" aria-labelledby="return-h"><div class="dhead"><button class="secondary back" data-return-back>${s.back}</button><h2 id="return-h">${nameOf(U.employee(selected.employee))}</h2><span class="desc"><span class="gid">${selected.employee}</span> · ${fmtDate(selected.date)}</span><p class="holds">${s.receivedBy(nameOf(U.employee(selected.receivedBy)))}</p></div><div class="rec"><h3 class="flabel">${s.returnedPieces}</h3>${recordLines(selected.lines)}<p>${s.itemsN(U.lineCount(selected))}</p></div></section>` : ''}</div>`
+}
 /* ---------- Page ---------- */
 
 function subline() {
   const s = t()
   if (state.view === 'loading' || state.view === 'error') return ''
+  if (state.tab === 'returns') return `<p class="finding">${U.returns.length ? s.returnFinding(U.returns.length) : s.returnsNone}</p>`
   if (state.tab === 'received') {
     const people = U.recipients()
     return `<p class="finding">${people.length ? s.receivedLine(people.length, fmtDate(U.records[0].date)) : s.receivedNone}</p>`
@@ -516,10 +611,10 @@ function render(focusId) {
       <button type="button" id="theme">${s.theme(state.theme)}</button></span></div>
     <header class="hero"><div class="wrap"><p class="eyebrow">${s.assets}</p><p class="tagline">${s.tagline}</p>
       <nav class="sectiontabs" aria-label="${s.sections}"><a href="#">${s.store}</a><a href="#" aria-current="page">${s.uniform}</a></nav></div></header>
-    <nav class="subtabs" aria-label="${s.pages}"><div class="wrap">${tabLink('stock', s.tabStock)}${tabLink('received', s.tabReceived)}</div></nav>
+    <nav class="subtabs" aria-label="${s.pages}"><div class="wrap">${tabLink('stock', s.tabStock)}${tabLink('received', s.tabReceived)}${tabLink('returns', s.tabReturns)}</div></nav>
     <main id="main" class="wrap" aria-busy="${state.view === 'loading'}">
-      <div class="titlerow"><div><h1>${s.title}</h1>${subline()}</div>${canEdit() ? `<button type="button" class="primary" id="handout">${s.handOut}</button>` : ''}</div>
-      ${state.tab === 'received' ? receivedView() : stockView()}
+      <div class="titlerow"><div><h1>${s.title}</h1>${subline()}</div>${canEdit() ? `<div class="titleactions">${state.tab === 'stock' ? `<button class="secondary" id="add-item">${s.addItem}</button>` : ''}${state.tab === 'returns' ? `<button class="secondary" id="handout">${s.handOut}</button><button class="primary" id="record-return">${s.recordReturn}</button>` : `<button type="button" class="primary" id="handout">${s.handOut}</button>`}</div>` : ''}</div>
+      ${state.tab === 'received' ? receivedView() : state.tab === 'returns' ? returnsView() : stockView()}
     </main>`
   const on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn))
   on('#lang', 'click', () => { state.lang = state.lang === 'ar' ? 'en' : 'ar'; sync(); render() })
@@ -532,6 +627,10 @@ function render(focusId) {
   on('[data-back]', 'click', () => { const id = state.person; state.open = false; sync(); render(); document.querySelector(`[data-person="${id}"]`)?.focus() })
   on('#handout', 'click', openGive)
   on('#rq', 'input', e => { state.q = e.target.value; render('rq') })
+  on('#add-item', 'click', openAddItem)
+  on('#record-return', 'click', openReturn)
+  on('[data-return]', 'click', e => { state.returnId = e.currentTarget.dataset.return; state.open = true; sync(); render('return-h') })
+  on('[data-return-back]', 'click', () => { const id = state.returnId; state.open = false; sync(); render(); document.querySelector(`[data-return="${id}"]`)?.focus() })
   if (focusId) {
     const el = document.getElementById(focusId)
     if (el) { if (el.tagName !== 'INPUT') el.setAttribute('tabindex', '-1'); el.focus(); if (el.tagName === 'INPUT') el.setSelectionRange(el.value.length, el.value.length) }
@@ -542,6 +641,7 @@ function sync() {
   const q = new URLSearchParams()
   q.set('lang', state.lang); q.set('theme', state.theme); q.set('view', state.view); q.set('tab', state.tab)
   if (state.tab === 'received' && state.person && state.open) q.set('person', state.person)
+  if (state.tab === 'returns' && state.returnId && state.open) q.set('return', state.returnId)
   history.replaceState(null, '', '?' + q)
 }
 
@@ -549,25 +649,38 @@ function sync() {
 
 function openEditor(id) {
   const item = U.item(id)
-  const s = t()
-  const dlg = document.getElementById('editor')
-  dlg.innerHTML = `<form method="dialog" class="dlg">
-    <div class="dlghead">${art(item.art)}<div><h2 id="dlg-title">${nameOf(item)}</h2><span class="desc">${descOf(item)}</span></div></div>
-    <fieldset class="sizes-form"><legend>${s.bySize}</legend>
-      ${item.sizes.map((sz, k) => `<label>${sizeLabel(sz)}<input inputmode="numeric" pattern="[0-9]*" name="q${k}" value="${item.qty[k]}" autocomplete="off"></label>`).join('')}</fieldset>
-    <div class="dlgfoot"><span id="dlg-sum">${s.sum(fmt(U.total(item)))}</span>
-      <span class="actions"><button type="button" class="secondary" id="dlg-cancel">${s.cancel}</button><button class="primary" value="save">${s.save}</button></span></div></form>`
-  const inputs = [...dlg.querySelectorAll('input')]
-  const read = () => inputs.map(el => Math.max(0, Number.parseInt(el.value, 10) || 0))
-  inputs.forEach(el => { el.oninput = () => { document.getElementById('dlg-sum').textContent = s.sum(fmt(read().reduce((a, b) => a + b, 0))) } })
-  document.getElementById('dlg-cancel').onclick = () => dlg.close()
-  dlg.onclose = () => {
-    const saved = dlg.returnValue === 'save'
-    dlg.returnValue = ''
-    if (saved) { item.qty = read(); render(); toast(s.saved) }
-    document.querySelector(`[data-item="${id}"]`)?.focus()
+  if (!item) return
+  const s = t(), dlg = document.getElementById('editor')
+  const sizes = [...item.sizes], qty = item.qty ? [...item.qty] : []
+  const holders = item.tracking === 'holders'
+  dlg.innerHTML = `<form class="dlg" novalidate><div class="dlghead">${art(item.art)}<div><h2 id="dlg-title">${holders ? s.addSize + ': ' : ''}${nameOf(item)}</h2><span class="desc">${descOf(item)}</span></div></div>
+    <fieldset class="sizes-form"><legend>${holders ? s.sizes : s.bySize}</legend><div id="size-rows" style="display:contents"></div></fieldset>
+    ${!sizes.includes('one') ? `<div><div class="addsize"><label class="field" for="new-size">${s.addSize}<input id="new-size" aria-describedby="size-error" maxlength="20"></label><button type="button" class="secondary" id="size-add">${s.add}</button></div><span class="field-error" id="size-error" role="alert"></span></div>` : ''}
+    <div class="dlgfoot"><span id="dlg-sum"></span><span class="actions"><button type="button" class="secondary" id="dlg-cancel">${s.cancel}</button><button class="primary">${s.save}</button></span></div></form>`
+  const refreshTotal = () => { document.getElementById('dlg-sum').textContent = holders ? '' : s.sum(fmt(qty.reduce((n, q) => n + q, 0))) }
+  const drawRows = () => {
+    document.getElementById('size-rows').innerHTML = sizes.map((sz, k) => holders ? `<span class="sizechip">${szText(sz)}</span>` : `<label>${szText(sz)}<input inputmode="numeric" type="number" min="0" step="1" name="q${k}" value="${qty[k]}" data-quantity="${k}"></label>`).join('')
+    dlg.querySelectorAll('[data-quantity]').forEach(input => input.oninput = () => { qty[Number(input.dataset.quantity)] = Math.max(0, Math.floor(Number(input.value) || 0)); refreshTotal() })
+    refreshTotal()
   }
-  dlg.showModal()
+  dlg.querySelector('#size-add')?.addEventListener('click', () => {
+    const input = document.getElementById('new-size'), value = input.value.trim()
+    const error = !value ? s.sizeRequired : sizes.some(sz => sz.toLowerCase() === value.toLowerCase()) ? s.sizeDuplicate : ''
+    document.getElementById('size-error').textContent = error
+    input.setAttribute('aria-invalid', String(Boolean(error)))
+    if (error) { input.focus(); return }
+    sizes.push(value); if (!holders) qty.push(0)
+    drawRows(); input.value = ''; input.focus()
+  })
+  document.getElementById('dlg-cancel').onclick = () => dlg.close()
+  dlg.querySelector('form').onsubmit = e => {
+    e.preventDefault()
+    item.sizes = sizes
+    if (!holders) item.qty = qty
+    dlg.close(); render(); toast(s.saved)
+  }
+  dlg.onclose = () => document.querySelector(`[data-item="${id}"]`)?.focus()
+  drawRows(); dlg.showModal()
 }
 
 /* ---------- Hand-out form ---------- */
@@ -586,7 +699,7 @@ function openGive() {
     <div class="opts" role="radiogroup" aria-labelledby="pn-${item.id}">
       ${['none', ...item.sizes].map(sz => {
         const out = sz !== 'none' && item.tracking === 'stock' && maxFor(item, sz) === 0
-        return `<label class="opt${sz === 'none' ? ' none' : ''}"><input type="radio" name="sz-${item.id}" value="${sz}"${sz === 'none' ? ' checked' : ''}${out ? ' disabled' : ''}><span>${sz === 'none' ? s.none : sizeLabel(sz)}${out ? `<span class="sr">, ${s.noneLeft}</span>` : ''}</span></label>`
+        return `<label class="opt${sz === 'none' ? ' none' : ''}"><input type="radio" name="sz-${item.id}" value="${esc(sz)}"${sz === 'none' ? ' checked' : ''}${out ? ' disabled' : ''}><span>${sz === 'none' ? s.none : szText(sz)}${out ? `<span class="sr">, ${s.noneLeft}</span>` : ''}</span></label>`
       }).join('')}
     </div></div>`
 
@@ -611,30 +724,7 @@ function openGive() {
     document.getElementById('give-reason').textContent = reason
     document.getElementById('give-save').disabled = Boolean(reason)
   }
-  function renderTaker(focus) {
-    const box = document.getElementById('taker')
-    if (g.employee) {
-      const e = U.employee(g.employee)
-      const last = lastRecord(e.id)
-      box.innerHTML = `<div class="taker"><div><span class="name">${nameOf(e)}</span><span class="desc"><span class="gid">${e.id}</span> · ${posOf(e)}</span><span class="desc">${last ? s.lastReceived(fmtDate(last.date)) : s.neverReceived}</span></div>
-        <button type="button" class="secondary" id="taker-change">${s.change}</button></div>`
-      document.getElementById('taker-change').onclick = () => { g.employee = null; renderTaker(true); refreshFoot() }
-      if (focus) document.getElementById('taker-change').focus()
-      return
-    }
-    box.innerHTML = `<label class="search" style="width:min(420px,100%)">${searchIcon}<span class="sr">${s.takenBy}</span><input id="taker-q" type="search" placeholder="${s.pickerPh}" autocomplete="off" aria-controls="taker-results"></label><ul id="taker-results" class="results" aria-live="polite"></ul>`
-    const input = document.getElementById('taker-q')
-    input.onkeydown = e => { if (e.key === 'Enter') e.preventDefault() }
-    input.oninput = () => {
-      const q = input.value.trim().toLowerCase()
-      const list = document.getElementById('taker-results')
-      if (!q) { list.innerHTML = ''; return }
-      const found = U.employees.filter(e => [e.id, e.en, e.ar].some(v => v.toLowerCase().includes(q))).slice(0, 6)
-      list.innerHTML = found.length ? found.map(e => `<li><div><span class="name">${nameOf(e)}</span><span class="desc"><span class="gid">${e.id}</span> · ${posOf(e)}</span></div><button type="button" class="secondary" data-pick="${e.id}">${s.choose}</button></li>`).join('') : `<li class="note">${s.pickerEmpty}</li>`
-      list.querySelectorAll('[data-pick]').forEach(b => { b.onclick = () => { g.employee = b.dataset.pick; renderTaker(true); refreshFoot() } })
-    }
-    if (focus) input.focus()
-  }
+  const renderTaker = focus => employeePicker(document.getElementById('taker'), g.employee, U.employees, s.takenBy, id => { g.employee = id; renderTaker(true); refreshFoot() }, focus)
 
   dlg.querySelectorAll('.pf').forEach(pf => {
     const item = U.item(pf.dataset.piece)
@@ -679,6 +769,130 @@ function openGive() {
   document.getElementById('taker-q')?.focus()
 }
 
+/* Shared employee picker for hand-outs and returns. */
+function employeePicker(box, selected, employees, label, choose, focus) {
+  const s = t()
+  if (selected) {
+    const e = U.employee(selected), last = lastRecord(selected)
+    box.innerHTML = `<div class="taker"><div><span class="name">${nameOf(e)}</span><span class="desc"><span class="gid">${e.id}</span> · ${posOf(e)}</span><span class="desc">${last ? s.lastReceived(fmtDate(last.date)) : s.neverReceived}</span></div><button type="button" class="secondary" id="${box.id}-change">${s.change}</button></div>`
+    box.querySelector('button').onclick = () => choose(null)
+    if (focus) box.querySelector('button').focus()
+    return
+  }
+  box.innerHTML = `<label class="field"><span class="sr">${label}</span><span class="search" style="width:min(420px,100%)">${searchIcon}<input id="${box.id}-q" type="search" placeholder="${s.pickerPh}" autocomplete="off" aria-controls="${box.id}-results"></span></label><ul id="${box.id}-results" class="results" aria-live="polite"></ul>${employees.length ? '' : `<p class="empty">${s.returnEmpty}</p>`}`
+  const input = box.querySelector('input'), list = box.querySelector('ul')
+  input.onkeydown = e => { if (e.key === 'Enter') e.preventDefault() }
+  input.oninput = () => {
+    const q = input.value.trim().toLowerCase()
+    if (!q) { list.innerHTML = ''; return }
+    const found = employees.filter(e => [e.id, e.en, e.ar].some(v => v.toLowerCase().includes(q))).slice(0, 6)
+    list.innerHTML = found.length ? found.map(e => `<li><div><span class="name">${nameOf(e)}</span><span class="desc"><span class="gid">${e.id}</span> · ${posOf(e)}</span></div><button type="button" class="secondary" data-pick="${e.id}">${s.choose}</button></li>`).join('') : `<li class="note">${s.pickerEmpty}</li>`
+    list.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => choose(b.dataset.pick))
+  }
+  if (focus) input.focus()
+}
+
+function openReturn() {
+  const s = t(), dlg = document.getElementById('return-form')
+  let employee = null, rows = []
+  dlg.innerHTML = `<form class="giveform" novalidate><div class="givehead"><h2 id="return-title">${s.returnTitle}</h2></div>
+    <div class="givebody"><div class="flabel">${s.returnedBy}</div><div id="return-picker"></div><section aria-labelledby="return-held"><h3 id="return-held" class="flabel">${s.currentlyHolds}</h3><div id="return-rows"><p class="empty">${s.needReturnEmployee}</p></div></section></div>
+    <div class="givefoot"><div><span class="name">${s.receiver(nameOf(U.employee(U.currentUser)))}</span><span class="desc">${s.today(fmtDate(U.today))}</span></div><div class="givestatus"><span id="return-count"></span><span id="return-reason" class="reason"></span></div><div class="actions"><button type="button" class="secondary" id="return-cancel">${s.cancel}</button><button class="primary" id="return-save" aria-describedby="return-reason">${s.save}</button></div></div></form>`
+  const total = () => rows.reduce((n, l) => n + l.returnQty, 0)
+  const refresh = () => {
+    const reason = !employee ? s.needReturnEmployee : !total() ? s.needReturnQty : ''
+    dlg.querySelector('#return-count').textContent = total() ? s.itemsN(total()) : ''
+    dlg.querySelector('#return-reason').textContent = reason
+    dlg.querySelector('#return-save').disabled = Boolean(reason)
+  }
+  const drawPicker = focus => employeePicker(dlg.querySelector('#return-picker'), employee, U.employees.filter(e => U.holdings(e.id).length), s.returnedBy, id => {
+    employee = id
+    rows = id ? U.holdings(id).map(l => ({ ...l, returnQty: 0 })) : []
+    drawPicker(true); drawRows(); refresh()
+  }, focus)
+  const drawRows = () => {
+    dlg.querySelector('#return-rows').innerHTML = rows.length ? rows.map((l, k) => {
+      const item = U.item(l.item), accessibleName = `${nameOf(item)} · ${esc(sizeLabel(l.size))}`
+      return `<div class="returnrow" data-return-row="${k}">${art(item.art)}<div><span class="name">${nameOf(item)}</span><span class="desc">${szText(l.size)} · ${s.holdsN(l.qty)}</span></div><div class="stepper"><button type="button" data-step="-1" aria-label="${s.dec(accessibleName)}">−</button><input type="number" min="0" max="${l.qty}" step="1" value="0" aria-label="${s.qtyOf(accessibleName)}"><button type="button" data-step="1" aria-label="${s.inc(accessibleName)}">+</button></div></div>`
+    }).join('') : `<p class="empty">${employee ? s.holdsNone : s.needReturnEmployee}</p>`
+    dlg.querySelectorAll('[data-return-row]').forEach(row => {
+      const l = rows[Number(row.dataset.returnRow)], input = row.querySelector('input'), [dec, inc] = row.querySelectorAll('button')
+      const set = value => { l.returnQty = Math.min(l.qty, Math.max(0, Math.floor(Number(value) || 0))); input.value = l.returnQty; dec.disabled = !l.returnQty; inc.disabled = l.returnQty === l.qty; refresh() }
+      dec.onclick = () => set(l.returnQty - 1); inc.onclick = () => set(l.returnQty + 1); input.oninput = () => set(input.value); set(0)
+    })
+  }
+  dlg.querySelector('#return-cancel').onclick = () => dlg.close()
+  dlg.querySelector('form').onsubmit = e => {
+    e.preventDefault()
+    if (!employee || !total()) return
+    const lines = rows.filter(l => l.returnQty > 0).map(l => ({ item: l.item, size: l.size, qty: l.returnQty }))
+    for (const l of lines) { const item = U.item(l.item); if (item.tracking === 'stock') item.qty[item.sizes.indexOf(l.size)] += l.qty }
+    const record = { id: `T-new-${U.returns.length + 1}`, date: U.today, employee, receivedBy: U.currentUser, lines }
+    U.returns.unshift(record); state.returnId = record.id; state.open = true
+    dlg.close(); render(); toast(s.returnSaved(U.lineCount(record)))
+  }
+  dlg.onclose = () => document.getElementById('record-return')?.focus()
+  drawPicker(false); refresh(); dlg.showModal(); dlg.querySelector('input')?.focus()
+}
+
+function openAddItem() {
+  const s = t(), dlg = document.getElementById('item-form')
+  const catalog = window.UNIFORM_ART_KINDS || [
+    { kind: 'generic', en: 'Folded garments', ar: 'ملابس مطوية' }, { kind: 'suit', en: 'Suit', ar: 'بدلة' },
+    { kind: 'shoes', en: 'Shoes', ar: 'حذاء' }, { kind: 'boots', en: 'Boots', ar: 'حذاء ميداني' },
+    { kind: 'polo', en: 'Polo shirt', ar: 'قميص بولو' }, { kind: 'cargo', en: 'Trousers', ar: 'بنطال' },
+    { kind: 'belt', en: 'Belt', ar: 'حزام' }, { kind: 'cap', en: 'Cap', ar: 'قبعة' }, { kind: 'socks', en: 'Socks', ar: 'جوارب' },
+  ]
+  const presets = { letters: ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'], shoe: ['38', '39', '40', '41', '42', '43', '44', '45', '46', '47'], waist: ['28', '30', '32', '34', '36', '38', '40', '42', '44'], one: ['one'] }
+  let sizes = [...presets.letters], drawing = 'generic'
+  const field = (key, label, dir) => `<label class="field" for="item-${key}">${label}<input id="item-${key}" name="${key}"${dir ? ` dir="${dir}"` : ''} ${key === 'en' || key === 'ar' ? 'required' : ''} aria-describedby="error-${key}" maxlength="120"><span class="field-error" id="error-${key}" role="alert"></span></label>`
+  dlg.innerHTML = `<form class="giveform" novalidate><div class="givehead"><h2 id="item-title">${s.addItem}</h2></div><div class="givebody">
+    <div class="fieldpair" style="margin-block-start:16px">${field('en', s.nameEn, 'ltr')}${field('ar', s.nameAr, 'rtl')}${field('dEn', s.descEn, 'ltr')}${field('dAr', s.descAr, 'rtl')}
+      <label class="field">${s.group}<select id="item-group">${groups.map(g => `<option value="${g.id}">${L(g)}</option>`).join('')}</select></label>
+      <label class="field">${s.defaultQty}<input id="item-qty" type="number" min="1" step="1" value="2" aria-describedby="error-qty"><span id="error-qty" class="field-error" role="alert"></span></label></div>
+    <section aria-labelledby="item-sizes-h"><h3 class="flabel" id="item-sizes-h">${s.sizes}</h3><label class="field">${s.preset}<select id="item-preset">${Object.entries(s.presets).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label><div class="sizechips" id="item-sizes"></div>
+      <div class="addsize"><label class="field" for="item-new-size">${s.addSize}<input id="item-new-size" maxlength="20" aria-describedby="item-size-error"></label><button type="button" class="secondary" id="item-size-add">${s.add}</button></div><span class="field-error" id="item-size-error" role="alert"></span></section>
+    <section aria-labelledby="drawing-h"><h3 class="flabel" id="drawing-h">${s.drawing}</h3><div class="drawingpreview" id="drawing-preview"></div><fieldset class="drawinggrid"><legend class="sr">${s.drawing}</legend>${catalog.map(k => `<label class="drawingtile">${art(k.kind)}<span>${L(k)}</span><input type="radio" name="drawing" value="${k.kind}"${k.kind === drawing ? ' checked' : ''}></label>`).join('')}</fieldset></section></div>
+    <div class="givefoot"><div class="actions" style="margin-inline-start:auto"><button type="button" class="secondary" id="item-cancel">${s.cancel}</button><button class="primary">${s.save}</button></div></div></form>`
+  const sizeError = message => { dlg.querySelector('#item-size-error').textContent = message; dlg.querySelector('#item-new-size').setAttribute('aria-invalid', String(Boolean(message))) }
+  const drawSizes = () => {
+    dlg.querySelector('#item-sizes').innerHTML = sizes.map((sz, k) => `<span class="sizechip">${szText(sz)}<button type="button" data-remove="${k}" aria-label="${s.removeSize(esc(sizeLabel(sz)))}">×</button></span>`).join('')
+    dlg.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => { sizes.splice(Number(b.dataset.remove), 1); drawSizes() })
+  }
+  const preview = () => { dlg.querySelector('#drawing-preview').innerHTML = `${art(drawing)}<span>${s.previewDrawing}: ${L(catalog.find(k => k.kind === drawing) || catalog[0])}</span>` }
+  dlg.querySelector('#item-preset').onchange = e => { sizes = [...presets[e.target.value]]; drawSizes(); sizeError('') }
+  dlg.querySelector('#item-size-add').onclick = () => {
+    const input = dlg.querySelector('#item-new-size'), value = input.value.trim()
+    const error = !value ? s.sizeRequired : sizes.some(sz => sz.toLowerCase() === value.toLowerCase()) ? s.sizeDuplicate : ''
+    sizeError(error)
+    if (!error) { sizes.push(value); drawSizes(); input.value = '' }
+    input.focus()
+  }
+  dlg.querySelectorAll('[name=drawing]').forEach(r => r.onchange = () => { drawing = r.value; preview() })
+  dlg.querySelector('#item-cancel').onclick = () => dlg.close()
+  dlg.querySelector('form').onsubmit = e => {
+    e.preventDefault()
+    const values = Object.fromEntries(['en', 'ar', 'dEn', 'dAr'].map(key => [key, dlg.querySelector(`#item-${key}`).value.trim()]))
+    let first = null
+    for (const key of ['en', 'ar']) {
+      const input = dlg.querySelector(`#item-${key}`), error = values[key] ? '' : s.required
+      dlg.querySelector(`#error-${key}`).textContent = error; input.setAttribute('aria-invalid', String(Boolean(error)))
+      if (error && !first) first = input
+    }
+    const qtyInput = dlg.querySelector('#item-qty'), defaultQty = Number(qtyInput.value)
+    const qtyError = !Number.isInteger(defaultQty) || defaultQty < 1
+    dlg.querySelector('#error-qty').textContent = qtyError ? s.qtyRequired : ''; qtyInput.setAttribute('aria-invalid', String(qtyError))
+    if (qtyError && !first) first = qtyInput
+    sizeError(sizes.length ? '' : s.sizesRequired)
+    if (!sizes.length && !first) first = dlg.querySelector('#item-new-size')
+    if (first) { first.focus(); return }
+    items.push({ id: `custom-${items.length + 1}`, group: dlg.querySelector('#item-group').value, art: drawing, tracking: 'stock', defaultQty, ...values, sizes: [...sizes], qty: sizes.map(() => 0) })
+    dlg.close(); render(); toast(s.itemSaved)
+  }
+  dlg.onclose = () => document.getElementById('add-item')?.focus()
+  drawSizes(); preview(); dlg.showModal(); dlg.querySelector('#item-en').focus()
+}
+
 function toast(msg) {
   const el = document.getElementById('toast')
   el.textContent = msg; el.hidden = false
@@ -688,6 +902,8 @@ function toast(msg) {
 render()
 if (canEdit() && params.get('edit')) openEditor(params.get('edit'))
 if (canEdit() && params.get('give')) openGive()
+if (canEdit() && params.get('returnForm')) openReturn()
+if (canEdit() && params.get('addItem')) openAddItem()
 </script>
 </body>
 </html>
