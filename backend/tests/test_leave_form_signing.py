@@ -124,6 +124,20 @@ def test_admin_leave_branch_signature_cell_is_blank(tmp_path):
     assert "x" not in cell.text.lower(), "literal 'x' placeholder not cleared"
 
 
+def test_admin_leave_branch_manager_notes_fill_the_branch_row(tmp_path):
+    notes = "موافق على الإجازة\nبشرط تسليم المهام"
+    doc = _render("Administrative Leave Form", {**_base(), "branch_manager_notes": notes}, tmp_path)
+    branch = doc.tables[2]
+    assert branch.rows[0].cells[0].text.strip() == "إجراءات مدير الفرع"
+    assert branch.rows[1].cells[0].text == notes
+    assert notes.splitlines()[0] not in branch.rows[3].cells[1].text
+
+
+def test_admin_leave_without_notes_keeps_branch_row_blank(tmp_path):
+    doc = _render("Administrative Leave Form", _base(), tmp_path)
+    assert doc.tables[2].rows[1].cells[0].text.strip() == ""
+
+
 def test_redesigned_leave_forms_render_values_in_their_cells(tmp_path):
     data = {
         **_base(),
