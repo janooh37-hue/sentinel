@@ -31,6 +31,7 @@ window.UNIFORM = {
   groups: [
     { id: 'formal', en: 'Formal', ar: 'رسمي', noteEn: 'Suits are tracked by the employee who holds them', noteAr: 'تُتابع البدلات حسب الموظف الذي يحملها' },
     { id: 'guard', en: 'Guard uniform', ar: 'زي الحراسة', noteEn: 'Counted piece by piece', noteAr: 'يُحسب قطعةً قطعة' },
+    { id: 'winter', en: 'Winter uniform', ar: 'الزي الشتوي', noteEn: 'Sample seasonal pieces, counted by size', noteAr: 'قطع موسمية تجريبية تُحسب حسب المقاس' },
   ],
 
   // tracking: 'holders' = no shelf count, listed by the G number holding it; 'stock' = counted by size.
@@ -43,10 +44,15 @@ window.UNIFORM = {
     { id: 'boots', group: 'guard', art: 'boots', tracking: 'stock', defaultQty: 2, en: 'Field boots', ar: 'حذاء ميداني', dEn: 'Tan, lace-up', dAr: 'بيج برباط', sizes: SHOES, qty: [0, 2, 5, 8, 10, 8, 5, 2, 1, 0] },
     { id: 'cap', group: 'guard', art: 'cap', tracking: 'stock', defaultQty: 1, en: 'Cap', ar: 'قبعة', dEn: 'Khaki, with logo', dAr: 'خاكي، مع الشعار', sizes: ['one'], qty: [42] },
     { id: 'socks', group: 'guard', art: 'socks', tracking: 'stock', defaultQty: 2, en: 'Socks', ar: 'جوارب', dEn: 'Khaki, pairs', dAr: 'خاكي، أزواج', sizes: ['one'], qty: [64] },
+    { id: 'winter-jacket', group: 'winter', art: 'parka', artColor: '', tracking: 'stock', defaultQty: 1, en: 'Winter jacket', ar: 'سترة شتوية', dEn: 'Insulated, hooded', dAr: 'مبطنة بغطاء للرأس', sizes: LETTERS, qty: [3, 8, 12, 10, 5, 2] },
+    { id: 'fleece', group: 'winter', art: 'fleece', artColor: '', tracking: 'stock', defaultQty: 1, en: 'Fleece jacket', ar: 'سترة صوف صناعي', dEn: 'Zip-up mid layer', dAr: 'طبقة وسطى بسحّاب', sizes: LETTERS, qty: [4, 10, 14, 11, 6, 3] },
+    { id: 'beanie', group: 'winter', art: 'beanie', artColor: '', tracking: 'stock', defaultQty: 1, en: 'Beanie', ar: 'قبعة محبوكة', dEn: 'Knitted, one size', dAr: 'محبوكة بمقاس موحد', sizes: ['one'], qty: [32] },
   ],
 
   // Hand-out records, newest first. givenBy is the signed-in account that saved the record.
   records: [
+    { id: 'R-0014', date: '2026-11-03', employee: 'G3117', givenBy: 'G2741', lines: [{ item: 'winter-jacket', size: 'M', qty: 1 }, { item: 'fleece', size: 'M', qty: 1 }, { item: 'beanie', size: 'one', qty: 1 }] },
+    { id: 'R-0013', date: '2026-11-03', employee: 'G3105', givenBy: 'G2741', lines: [{ item: 'winter-jacket', size: 'L', qty: 1 }, { item: 'fleece', size: 'L', qty: 1 }, { item: 'beanie', size: 'one', qty: 1 }] },
     { id: 'R-0012', date: '2026-11-02', employee: 'G3222', givenBy: 'G2741', lines: [{ item: 'polo', size: 'L', qty: 2 }, { item: 'cargo', size: '34', qty: 2 }, { item: 'belt', size: 'one', qty: 1 }, { item: 'boots', size: '42', qty: 2 }, { item: 'cap', size: 'one', qty: 1 }, { item: 'socks', size: 'one', qty: 2 }] },
     { id: 'R-0011', date: '2026-10-30', employee: 'G3105', givenBy: 'G2741', lines: [{ item: 'cap', size: 'one', qty: 1 }] },
     { id: 'R-0010', date: '2026-10-29', employee: 'G3215', givenBy: 'G2741', lines: [{ item: 'suit', size: 'L', qty: 2 }] },
@@ -138,4 +144,7 @@ for (const r of [...U.records.map(r => ({ ...r, sign: 1 })), ...U.returns.map(r 
 console.assert(U.shelfPieces() === shelfBeforeReturns + restocked, 'shelf snapshot plus returned stock reconciles')
 console.assert(U.holdings('G3222').find(l => l.item === 'polo' && l.size === 'L')?.qty === 2, 'return example holds two L polos')
 console.assert(U.holders().length === 4, 'fully returned suit is not a holder')
+console.assert(U.items.filter(i => i.group === 'winter').reduce((n, i) => n + U.total(i), 0) === 120, 'sample winter shelf totals 120')
+console.assert(U.records.filter(r => ['R-0013', 'R-0014'].includes(r.id)).reduce((n, r) => n + U.lineCount(r), 0) === 6, 'two sample winter hand-outs total six pieces')
+console.assert(U.holdings('G3105').filter(l => U.item(l.item).group === 'winter').reduce((n, l) => n + l.qty, 0) === 3, 'winter holdings reconcile with hand-out')
 }

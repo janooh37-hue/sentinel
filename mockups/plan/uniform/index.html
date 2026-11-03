@@ -167,7 +167,6 @@ tbody.group tr:first-child + tr.piece td{border-block-start:0}
 /* Dialogs */
 dialog{width:min(520px,calc(100vw - 32px));max-height:calc(100dvh - 32px);padding:0;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface);color:var(--text);box-shadow:0 16px 40px rgba(10,20,40,.18)}
 dialog::backdrop{background:rgba(5,10,20,.45)}
-.dlg{display:grid;gap:20px;padding:var(--pad)}
 .dlghead{display:flex;gap:16px;align-items:center}
 .dlghead .art{width:88px;height:88px}
 .dlghead h2,.givehead h2{margin:0;font-size:18px;line-height:26px}
@@ -175,7 +174,6 @@ dialog::backdrop{background:rgba(5,10,20,.45)}
 .sizes-form legend{padding:0;margin-block-end:10px;font-size:14px;font-weight:500}
 .sizes-form label{display:grid;gap:6px;font-size:13px;font-weight:500}
 .sizes-form input{height:40px;width:100%;padding:0 10px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);direction:ltr;text-align:start}
-.dlgfoot{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center}
 .actions{display:flex;gap:8px}
 
 /* Hand-out form */
@@ -224,11 +222,11 @@ dialog.give{width:min(880px,calc(100vw - 32px))}
 .sizechips{display:flex;gap:6px;flex-wrap:wrap;margin-block-start:10px}
 .sizechip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--control);border-radius:6px;padding:4px 8px}
 .sizechip button{border:0;background:none;cursor:pointer;min-height:32px}
-.drawinggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;border:0;padding:0;margin:0}
+.drawinggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;border:0;padding:0;margin:0}
 .drawinggrid legend{font-weight:600;margin-block-end:8px}
 .drawingtile{display:grid;justify-items:center;gap:4px;padding:8px;border:1px solid var(--control);border-radius:6px;font-size:13px;cursor:pointer;text-align:center}
 .drawingtile:has(input:checked){outline:2px solid var(--text);outline-offset:-2px}
-.drawingtile .art{width:56px;height:56px}
+.drawingtile .art{width:44px;height:44px}
 .drawingtile input{accent-color:var(--text)}
 .drawingpreview{display:flex;align-items:center;gap:16px}
 .drawingpreview .art{width:88px;height:88px}
@@ -248,6 +246,19 @@ dialog.give{width:min(880px,calc(100vw - 32px))}
 .return-pieces>span{display:inline-flex;align-items:center;gap:4px}
 .return-pieces .art{width:30px;height:30px}
 @media(max-width:720px){.titleactions{width:100%}.titleactions .primary{flex:1}.fieldpair{grid-template-columns:1fr}.returnrow{grid-template-columns:36px minmax(0,1fr)}.returnrow .stepper{grid-column:2}.returnrow .art{width:36px;height:36px}}
+.drawingcatalog{max-block-size:340px;min-inline-size:0;overflow:auto;overscroll-behavior:contain;border:0;margin:0;padding:4px}
+.drawinggroup{margin:0 0 16px}
+.drawinggroup h4{font-size:14px;margin:8px 0;font-weight:600}
+.drawingtile:focus-within{outline:2px solid var(--focus);outline-offset:1px}
+.drawingpreview{position:sticky;inset-block-start:0;z-index:1;margin-block-end:12px;padding-block:8px;background:var(--surface)}
+.colourgrid{display:flex;flex-wrap:wrap;gap:8px;border:0;padding:0;margin:16px 0}
+.colourgrid legend{font-size:14px;font-weight:600;margin-block-end:8px}
+.colourchoice{display:flex;align-items:center;gap:6px;min-block-size:44px;padding:6px 8px;border:1px solid var(--control);border-radius:6px;font-size:13px;cursor:pointer}
+.colourchoice input{accent-color:var(--text)}
+.swatch{inline-size:18px;block-size:18px;flex:none;border:1px solid var(--control);border-radius:50%;background:var(--swatch)}
+.colourchoice:has(input:checked){outline:2px solid var(--text);outline-offset:-2px}
+.customcolour{display:grid;justify-items:start;gap:8px}
+.customcolour input{inline-size:64px;block-size:44px;border:1px solid var(--control);padding:4px;border-radius:6px;background:var(--surface)}
 
 /* Narrow stock table: each piece becomes two lines, its ladder on the second. */
 @container (max-width: 760px){
@@ -294,7 +305,7 @@ dialog.give{width:min(880px,calc(100vw - 32px))}
 <body>
 <a class="skip" href="#main">Skip to content / الانتقال إلى المحتوى</a>
 <div id="app"></div>
-<dialog id="editor" aria-labelledby="dlg-title"></dialog>
+<dialog id="editor" class="give" aria-labelledby="dlg-title"></dialog>
 <dialog id="give" class="give" aria-labelledby="give-title"></dialog>
 <dialog id="return-form" class="give" aria-labelledby="return-title"></dialog>
 <dialog id="item-form" class="give" aria-labelledby="item-title"></dialog>
@@ -347,7 +358,7 @@ const T = {
     heldBy: n => `Held by ${plural(n, 'employee', 'employees')}`, noHolders: 'No one holds a suit yet.', holdersList: 'Suit holders by G-number',
     error: 'Couldn\'t load uniform stock.', errorPeople: 'Couldn\'t load the hand-out records.', retry: 'Retry',
     save: 'Save', cancel: 'Cancel', sum: n => `Total ${n}`,
-    saved: 'Quantities changed on this page only. Nothing is saved.',
+    saved: 'Item updated on this page only. Nothing is saved.',
     searchLabel: 'Search received', searchPh: 'Search by name or G-number',
     people: n => plural(n, 'person', 'people'), noMatch: 'No one matches this search.',
     colEmployee: 'Employee', colReceived: 'Pieces received', colLast: 'Last hand-out',
@@ -375,6 +386,8 @@ const T = {
     defaultQty: 'Hand-out default quantity', drawing: 'Drawing', previewDrawing: 'Selected drawing',
     required: 'This name is required.', sizesRequired: 'Keep at least one size.', qtyRequired: 'Enter a whole quantity of at least 1.',
     removeSize: n => `Remove size ${n}`, itemSaved: 'Item added on this page, with zero stock.',
+    colour: 'Colour', customColour: 'Custom colour', pickColour: 'Pick a custom colour', colourDefault: 'Drawing default', editItem: 'Edit item',
+    colours: { navy: 'Navy', olive: 'Olive', khaki: 'Khaki', tan: 'Tan', black: 'Black', charcoal: 'Charcoal grey', white: 'White', brown: 'Brown', maroon: 'Maroon' },
   },
   ar: {
     docTitle: 'الأصول: الملابس (نموذج للاعتماد)',
@@ -396,7 +409,7 @@ const T = {
     heldBy: n => `يحملها ${arCount(n, ['موظف واحد', 'موظفان', 'موظفين', 'موظفًا'])}`, noHolders: 'لا يحمل أحد بدلة بعد.', holdersList: 'حاملو البدلات حسب الرقم الوظيفي',
     error: 'تعذّر تحميل رصيد الملابس.', errorPeople: 'تعذّر تحميل سجلات الصرف.', retry: 'إعادة المحاولة',
     save: 'حفظ', cancel: 'إلغاء', sum: n => `الإجمالي ${n}`,
-    saved: 'تغيّرت الكميات في هذه الصفحة فقط ولم يُحفظ شيء.',
+    saved: 'تغيّرت بيانات القطعة في هذه الصفحة فقط ولم يُحفظ شيء.',
     searchLabel: 'البحث في المستلمين', searchPh: 'ابحث بالاسم أو الرقم الوظيفي',
     people: n => arCount(n, ['شخص واحد', 'شخصان', 'أشخاص', 'شخصًا']), noMatch: 'لا يوجد موظف مطابق للبحث.',
     colEmployee: 'الموظف', colReceived: 'القطع المستلمة', colLast: 'آخر صرف',
@@ -425,6 +438,8 @@ const T = {
     defaultQty: 'الكمية الافتراضية للصرف', drawing: 'الرسم', previewDrawing: 'الرسم المختار',
     required: 'الاسم مطلوب.', sizesRequired: 'أبقِ مقاسًا واحدًا على الأقل.', qtyRequired: 'أدخل عددًا صحيحًا لا يقل عن 1.',
     removeSize: n => `إزالة المقاس ${n}`, itemSaved: 'أُضيفت القطعة في هذه الصفحة برصيد صفر.',
+    colour: 'اللون', customColour: 'لون مخصص', pickColour: 'اختر لونًا مخصصًا', colourDefault: 'لون الرسم الأصلي', editItem: 'تعديل القطعة',
+    colours: { navy: 'كحلي', olive: 'زيتي', khaki: 'خاكي', tan: 'بني فاتح', black: 'أسود', charcoal: 'رمادي فحمي', white: 'أبيض', brown: 'بني', maroon: 'عنابي' },
   },
 }
 
@@ -437,7 +452,7 @@ const descOf = item => esc(state.lang === 'ar' ? item.dAr : item.dEn)
 const posOf = e => L(e, 'pos')
 const sizeLabel = s => s === 'one' ? t().oneSize : s
 const canEdit = () => state.view === 'edit'
-const art = (kind, cls) => window.uniformArt(kind, cls)
+const art = (item, cls) => window.uniformArt(item.art, cls, { color: item.artColor })
 const stockItems = () => items.filter(i => i.tracking === 'stock')
 const outOfStock = () => stockItems().map(i => ({ item: i, sizes: i.sizes.filter((_, k) => i.qty[k] === 0) })).filter(o => o.sizes.length)
 const lastRecord = id => U.records.find(r => r.employee === id)
@@ -474,9 +489,9 @@ function row(item) {
   const holders = item.tracking === 'holders'
   const stock = holders ? '<span class="dash">-</span>' : state.view === 'loading' ? '<span class="bar" style="width:32px"></span>' : `<span class="instock">${fmt(U.total(item))}</span>`
   const sub = holders && state.view !== 'loading' ? `<span class="desc">${s.heldBy(U.holders().length)}</span>` : ''
-  const action = canEdit() ? `<button type="button" class="ghost" data-item="${item.id}" aria-label="${holders ? s.addSize : s.update}: ${nameOf(item)}">${holders ? s.addSize : s.update}</button>` : ''
+  const action = canEdit() ? `<button type="button" class="ghost" data-item="${item.id}" aria-label="${s.update}: ${nameOf(item)}">${s.update}</button>` : ''
   return `<tr class="piece">
-    <td><div class="ident">${art(item.art)}<div><span class="name">${nameOf(item)}</span><span class="desc">${descOf(item)}</span>${sub}</div></div></td>
+    <td><div class="ident">${art(item)}<div><span class="name">${nameOf(item)}</span><span class="desc">${descOf(item)}</span>${sub}</div></div></td>
     <td class="num">${stock}</td>
     <td>${holders ? holderChips() : ladder(item)}</td>
     <td class="num">${action}</td>
@@ -491,7 +506,7 @@ function stockView() {
   if (state.view === 'loading') outBody = `<ul class="outlist" aria-hidden="true">${[0, 1, 2].map(() => '<li><span class="bar" style="width:36px;height:36px"></span><span class="bar" style="width:120px"></span></li>').join('')}</ul>`
   else if (state.view === 'error') outBody = '<p class="empty">-</p>'
   else if (!out.length) outBody = `<p class="empty">${s.outNone}</p>`
-  else outBody = `<ul class="outlist">${out.map(o => `<li>${art(o.item.art)}<span>${nameOf(o.item)} <span class="sizes">${o.sizes.map(szText).join(state.lang === 'ar' ? '، ' : ', ')}</span></span></li>`).join('')}</ul>`
+  else outBody = `<ul class="outlist">${out.map(o => `<li>${art(o.item)}<span>${nameOf(o.item)} <span class="sizes">${o.sizes.map(szText).join(state.lang === 'ar' ? '، ' : ', ')}</span></span></li>`).join('')}</ul>`
   const summary = `<section class="panel sumpanel" aria-label="${s.summary}"><dl class="summary">
     <div><dt>${s.shelf}</dt><dd><span class="figure">${value(U.shelfPieces())}</span><span class="sub">${s.shelfSub}</span></dd></div>
     <div><dt>${s.holdersK}</dt><dd><span class="figure">${value(U.holders().length)}</span><span class="sub">${s.holdersSub}</span></dd></div>
@@ -545,7 +560,7 @@ function receivedView() {
       const sel = selected && p.employee === selected.employee
       return `<tr class="${sel ? 'sel' : ''}">
         <td><button type="button" class="prow" data-person="${p.employee}" ${sel ? 'aria-current="true"' : ''}><span class="name">${nameOf(e)}</span><span class="desc"><span class="gid">${e.id}</span> · ${posOf(e)}</span></button></td>
-        <td><span class="thumbs" aria-hidden="true">${kinds.map(k => art(U.item(k).art)).join('')}</span><span class="sr">${kinds.map(k => nameOf(U.item(k))).join(', ')}</span><span class="desc">${s.itemsN(count)}</span></td>
+        <td><span class="thumbs" aria-hidden="true">${kinds.map(k => art(U.item(k))).join('')}</span><span class="sr">${kinds.map(k => nameOf(U.item(k))).join(state.lang === 'ar' ? '، ' : ', ')}</span><span class="desc">${s.itemsN(count)}</span></td>
         <td class="num">${fmtDate(p.records[0].date)}<span class="desc">${s.handouts(p.records.length)}</span></td></tr>`
     }).join('')
     : `<tr><td colspan="3"><p class="empty">${all.length ? s.noMatch : s.receivedNone}</p></td></tr>`
@@ -561,7 +576,7 @@ function receivedView() {
 }
 
 function recordLines(lines) {
-  return `<ul class="lines">${lines.map(l => { const it = U.item(l.item); return `<li>${art(it.art)}<span><span class="name">${nameOf(it)}</span><span class="desc">${szText(l.size)}</span></span><span class="lqty">× ${fmt(l.qty)}</span></li>` }).join('')}</ul>`
+  return `<ul class="lines">${lines.map(l => { const it = U.item(l.item); return `<li>${art(it)}<span><span class="name">${nameOf(it)}</span><span class="desc">${szText(l.size)}</span></span><span class="lqty">× ${fmt(l.qty)}</span></li>` }).join('')}</ul>`
 }
 
 function returnsView() {
@@ -577,7 +592,7 @@ function returnsView() {
         const e = U.employee(r.employee)
         return `<li><button class="return-card" data-return="${r.id}"${selected?.id === r.id ? ' aria-current="true"' : ''}>
           <span class="rechead"><span class="name">${nameOf(e)}</span><span>${fmtDate(r.date)}</span></span>
-          <span class="desc gid">${e.id}</span><span class="return-pieces">${r.lines.map(l => `<span>${art(U.item(l.item).art)}<span class="sr">${nameOf(U.item(l.item))}</span>× ${fmt(l.qty)}</span>`).join('')}</span>
+          <span class="desc gid">${e.id}</span><span class="return-pieces">${r.lines.map(l => `<span>${art(U.item(l.item))}<span class="sr">${nameOf(U.item(l.item))}</span>× ${fmt(l.qty)}</span>`).join('')}</span>
           <span class="desc">${s.receivedBy(nameOf(U.employee(r.receivedBy)))}</span></button></li>`
       }).join('') : `<li><p class="empty">${U.returns.length ? s.noMatch : s.returnsNone}</p></li>`}</ol></section>
     ${!loading && selected ? `<section class="panel detail" aria-labelledby="return-h"><div class="dhead"><button class="secondary back" data-return-back>${s.back}</button><h2 id="return-h">${nameOf(U.employee(selected.employee))}</h2><span class="desc"><span class="gid">${selected.employee}</span> · ${fmtDate(selected.date)}</span><p class="holds">${s.receivedBy(nameOf(U.employee(selected.receivedBy)))}</p></div><div class="rec"><h3 class="flabel">${s.returnedPieces}</h3>${recordLines(selected.lines)}<p>${s.itemsN(U.lineCount(selected))}</p></div></section>` : ''}</div>`
@@ -653,10 +668,11 @@ function openEditor(id) {
   const s = t(), dlg = document.getElementById('editor')
   const sizes = [...item.sizes], qty = item.qty ? [...item.qty] : []
   const holders = item.tracking === 'holders'
-  dlg.innerHTML = `<form class="dlg" novalidate><div class="dlghead">${art(item.art)}<div><h2 id="dlg-title">${holders ? s.addSize + ': ' : ''}${nameOf(item)}</h2><span class="desc">${descOf(item)}</span></div></div>
+  dlg.innerHTML = `<form class="giveform" novalidate><div class="givehead dlghead">${art(item)}<div><h2 id="dlg-title">${s.editItem}: ${nameOf(item)}</h2><span class="desc">${descOf(item)}</span></div></div><div class="givebody" style="display:grid;gap:20px;padding-block:20px">
     <fieldset class="sizes-form"><legend>${holders ? s.sizes : s.bySize}</legend><div id="size-rows" style="display:contents"></div></fieldset>
     ${!sizes.includes('one') ? `<div><div class="addsize"><label class="field" for="new-size">${s.addSize}<input id="new-size" aria-describedby="size-error" maxlength="20"></label><button type="button" class="secondary" id="size-add">${s.add}</button></div><span class="field-error" id="size-error" role="alert"></span></div>` : ''}
-    <div class="dlgfoot"><span id="dlg-sum"></span><span class="actions"><button type="button" class="secondary" id="dlg-cancel">${s.cancel}</button><button class="primary">${s.save}</button></span></div></form>`
+    <div id="editor-art"></div></div><div class="givefoot"><span id="dlg-sum"></span><span class="actions"><button type="button" class="secondary" id="dlg-cancel">${s.cancel}</button><button class="primary">${s.save}</button></span></div></form>`
+  const drawingChoice = drawingPicker(dlg.querySelector('#editor-art'), item)
   const refreshTotal = () => { document.getElementById('dlg-sum').textContent = holders ? '' : s.sum(fmt(qty.reduce((n, q) => n + q, 0))) }
   const drawRows = () => {
     document.getElementById('size-rows').innerHTML = sizes.map((sz, k) => holders ? `<span class="sizechip">${szText(sz)}</span>` : `<label>${szText(sz)}<input inputmode="numeric" type="number" min="0" step="1" name="q${k}" value="${qty[k]}" data-quantity="${k}"></label>`).join('')
@@ -677,6 +693,7 @@ function openEditor(id) {
     e.preventDefault()
     item.sizes = sizes
     if (!holders) item.qty = qty
+    Object.assign(item, drawingChoice())
     dlg.close(); render(); toast(s.saved)
   }
   dlg.onclose = () => document.querySelector(`[data-item="${id}"]`)?.focus()
@@ -693,7 +710,7 @@ function openGive() {
   const me = U.employee(U.currentUser)
 
   const pieceField = item => `<div class="pf" data-piece="${item.id}">
-    ${art(item.art)}
+    ${art(item)}
     <div><span class="name" id="pn-${item.id}">${nameOf(item)}</span><span class="desc">${descOf(item)}</span>
       <div class="stepper" hidden><button type="button" data-step="-1" aria-label="${s.dec(nameOf(item))}">−</button><input inputmode="numeric" pattern="[0-9]*" value="${item.defaultQty}" aria-label="${s.qtyOf(nameOf(item))}"><button type="button" data-step="1" aria-label="${s.inc(nameOf(item))}">+</button></div></div>
     <div class="opts" role="radiogroup" aria-labelledby="pn-${item.id}">
@@ -813,7 +830,7 @@ function openReturn() {
   const drawRows = () => {
     dlg.querySelector('#return-rows').innerHTML = rows.length ? rows.map((l, k) => {
       const item = U.item(l.item), accessibleName = `${nameOf(item)} · ${esc(sizeLabel(l.size))}`
-      return `<div class="returnrow" data-return-row="${k}">${art(item.art)}<div><span class="name">${nameOf(item)}</span><span class="desc">${szText(l.size)} · ${s.holdsN(l.qty)}</span></div><div class="stepper"><button type="button" data-step="-1" aria-label="${s.dec(accessibleName)}">−</button><input type="number" min="0" max="${l.qty}" step="1" value="0" aria-label="${s.qtyOf(accessibleName)}"><button type="button" data-step="1" aria-label="${s.inc(accessibleName)}">+</button></div></div>`
+      return `<div class="returnrow" data-return-row="${k}">${art(item)}<div><span class="name">${nameOf(item)}</span><span class="desc">${szText(l.size)} · ${s.holdsN(l.qty)}</span></div><div class="stepper"><button type="button" data-step="-1" aria-label="${s.dec(accessibleName)}">−</button><input type="number" min="0" max="${l.qty}" step="1" value="0" aria-label="${s.qtyOf(accessibleName)}"><button type="button" data-step="1" aria-label="${s.inc(accessibleName)}">+</button></div></div>`
     }).join('') : `<p class="empty">${employee ? s.holdsNone : s.needReturnEmployee}</p>`
     dlg.querySelectorAll('[data-return-row]').forEach(row => {
       const l = rows[Number(row.dataset.returnRow)], input = row.querySelector('input'), [dec, inc] = row.querySelectorAll('button')
@@ -835,16 +852,53 @@ function openReturn() {
   drawPicker(false); refresh(); dlg.showModal(); dlg.querySelector('input')?.focus()
 }
 
+/* One staged drawing/colour choice, shared by Add item and Update. */
+function drawingPicker(box, initial) {
+  const s = t(), prefix = box.id
+  const catalog = window.UNIFORM_ART_KINDS || [
+    { kind: 'generic', en: 'Folded garments', ar: 'ملابس مطوية', defaultColor: '#c9b38e' },
+    { kind: 'suit', en: 'Suit', ar: 'بدلة', defaultColor: '#22345a' },
+    { kind: 'shoes', en: 'Shoes', ar: 'حذاء', defaultColor: '#1d1f24' },
+    { kind: 'boots', en: 'Boots', ar: 'حذاء ميداني', defaultColor: '#c8a57a' },
+    { kind: 'polo', en: 'Polo shirt', ar: 'قميص بولو', defaultColor: '#556642' },
+    { kind: 'cargo', en: 'Cargo trousers', ar: 'بنطال بجيوب جانبية', defaultColor: '#c9b38e' },
+    { kind: 'belt', en: 'Belt', ar: 'حزام', defaultColor: '#7a5233' },
+    { kind: 'cap', en: 'Cap', ar: 'قبعة', defaultColor: '#c9b38e' },
+    { kind: 'socks', en: 'Socks', ar: 'جوارب', defaultColor: '#c4ac82' },
+  ]
+  const drawingGroups = window.UNIFORM_ART_KINDS && window.UNIFORM_ART_GROUPS || [{ id: 'all', en: T.en.drawing, ar: T.ar.drawing }]
+  const colours = { navy: '#23364e', olive: '#64705c', khaki: '#b7aa82', tan: '#c3a47c', black: '#252525', charcoal: '#55585b', white: '#f4f3ed', brown: '#765b3e', maroon: '#743b46' }
+  let kind = initial.art, color = initial.artColor || ''
+  const selectedKind = () => catalog.find(k => k.kind === kind) || catalog.find(k => k.kind === 'generic') || catalog[0]
+  const defaultColor = () => selectedKind().defaultColor
+  const initialPreset = !color ? 'default' : Object.keys(colours).find(key => colours[key].toLowerCase() === color.toLowerCase()) || 'custom'
+  box.innerHTML = `<section aria-labelledby="${prefix}-h"><h3 class="flabel" id="${prefix}-h">${s.drawing}</h3>
+    <div class="drawingpreview" id="${prefix}-preview" aria-live="polite"></div>
+    <fieldset class="drawingcatalog"><legend class="sr">${s.drawing}</legend>${drawingGroups.map(group => {
+      const kinds = catalog.filter(k => (k.group || 'all') === group.id)
+      return kinds.length ? `<div class="drawinggroup" role="group" aria-labelledby="${prefix}-g-${group.id}"><h4 id="${prefix}-g-${group.id}">${L(group)}</h4><div class="drawinggrid">${kinds.map(k => `<label class="drawingtile">${art({ art: k.kind })}<span>${L(k)}</span><input type="radio" name="${prefix}-drawing" value="${k.kind}"${k.kind === kind ? ' checked' : ''}></label>`).join('')}</div></div>` : ''
+    }).join('')}</fieldset>
+    <fieldset class="colourgrid"><legend>${s.colour}</legend>${[['default', ''], ...Object.entries(colours)].map(([key, value]) => `<label class="colourchoice"><input type="radio" name="${prefix}-colour" value="${key}"${key === initialPreset ? ' checked' : ''}><span class="swatch" ${key === 'default' ? 'data-default-swatch' : ''} style="--swatch:${value || defaultColor()}" aria-hidden="true"></span><span>${key === 'default' ? s.colourDefault : s.colours[key]}</span></label>`).join('')}
+      <label class="colourchoice"><input type="radio" name="${prefix}-colour" value="custom"${initialPreset === 'custom' ? ' checked' : ''}><span>${s.customColour}</span></label></fieldset>
+    <label class="field customcolour" for="${prefix}-custom">${s.pickColour}<input id="${prefix}-custom" type="color" value="${color || defaultColor()}"></label></section>`
+  const custom = box.querySelector('input[type=color]')
+  const preview = () => {
+    const preset = box.querySelector(`[name="${prefix}-colour"]:checked`).value
+    const colourName = preset === 'default' ? s.colourDefault : preset === 'custom' ? s.customColour : s.colours[preset]
+    box.querySelector('.drawingpreview').innerHTML = `${art({ art: kind, artColor: color })}<span>${s.previewDrawing}: ${L(selectedKind())}<span class="desc">${s.colour}: ${colourName}${preset === 'custom' ? ` <bdi dir="ltr">${color}</bdi>` : ''}</span></span>`
+    box.querySelector('[data-default-swatch]').style.setProperty('--swatch', defaultColor())
+  }
+  box.querySelectorAll(`[name="${prefix}-drawing"]`).forEach(input => input.onchange = () => { kind = input.value; if (!color) custom.value = defaultColor(); preview() })
+  box.querySelectorAll(`[name="${prefix}-colour"]`).forEach(input => input.onchange = () => { color = input.value === 'default' ? '' : input.value === 'custom' ? custom.value : colours[input.value]; custom.value = color || defaultColor(); preview() })
+  custom.oninput = () => { color = custom.value; box.querySelector(`[name="${prefix}-colour"][value=custom]`).checked = true; preview() }
+  preview()
+  return () => ({ art: kind, artColor: color })
+}
+
 function openAddItem() {
   const s = t(), dlg = document.getElementById('item-form')
-  const catalog = window.UNIFORM_ART_KINDS || [
-    { kind: 'generic', en: 'Folded garments', ar: 'ملابس مطوية' }, { kind: 'suit', en: 'Suit', ar: 'بدلة' },
-    { kind: 'shoes', en: 'Shoes', ar: 'حذاء' }, { kind: 'boots', en: 'Boots', ar: 'حذاء ميداني' },
-    { kind: 'polo', en: 'Polo shirt', ar: 'قميص بولو' }, { kind: 'cargo', en: 'Trousers', ar: 'بنطال' },
-    { kind: 'belt', en: 'Belt', ar: 'حزام' }, { kind: 'cap', en: 'Cap', ar: 'قبعة' }, { kind: 'socks', en: 'Socks', ar: 'جوارب' },
-  ]
   const presets = { letters: ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'], shoe: ['38', '39', '40', '41', '42', '43', '44', '45', '46', '47'], waist: ['28', '30', '32', '34', '36', '38', '40', '42', '44'], one: ['one'] }
-  let sizes = [...presets.letters], drawing = 'generic'
+  let sizes = [...presets.letters]
   const field = (key, label, dir) => `<label class="field" for="item-${key}">${label}<input id="item-${key}" name="${key}"${dir ? ` dir="${dir}"` : ''} ${key === 'en' || key === 'ar' ? 'required' : ''} aria-describedby="error-${key}" maxlength="120"><span class="field-error" id="error-${key}" role="alert"></span></label>`
   dlg.innerHTML = `<form class="giveform" novalidate><div class="givehead"><h2 id="item-title">${s.addItem}</h2></div><div class="givebody">
     <div class="fieldpair" style="margin-block-start:16px">${field('en', s.nameEn, 'ltr')}${field('ar', s.nameAr, 'rtl')}${field('dEn', s.descEn, 'ltr')}${field('dAr', s.descAr, 'rtl')}
@@ -852,14 +906,14 @@ function openAddItem() {
       <label class="field">${s.defaultQty}<input id="item-qty" type="number" min="1" step="1" value="2" aria-describedby="error-qty"><span id="error-qty" class="field-error" role="alert"></span></label></div>
     <section aria-labelledby="item-sizes-h"><h3 class="flabel" id="item-sizes-h">${s.sizes}</h3><label class="field">${s.preset}<select id="item-preset">${Object.entries(s.presets).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label><div class="sizechips" id="item-sizes"></div>
       <div class="addsize"><label class="field" for="item-new-size">${s.addSize}<input id="item-new-size" maxlength="20" aria-describedby="item-size-error"></label><button type="button" class="secondary" id="item-size-add">${s.add}</button></div><span class="field-error" id="item-size-error" role="alert"></span></section>
-    <section aria-labelledby="drawing-h"><h3 class="flabel" id="drawing-h">${s.drawing}</h3><div class="drawingpreview" id="drawing-preview"></div><fieldset class="drawinggrid"><legend class="sr">${s.drawing}</legend>${catalog.map(k => `<label class="drawingtile">${art(k.kind)}<span>${L(k)}</span><input type="radio" name="drawing" value="${k.kind}"${k.kind === drawing ? ' checked' : ''}></label>`).join('')}</fieldset></section></div>
+    <div id="item-art"></div></div>
     <div class="givefoot"><div class="actions" style="margin-inline-start:auto"><button type="button" class="secondary" id="item-cancel">${s.cancel}</button><button class="primary">${s.save}</button></div></div></form>`
+  const drawingChoice = drawingPicker(dlg.querySelector('#item-art'), { art: 'generic', artColor: '' })
   const sizeError = message => { dlg.querySelector('#item-size-error').textContent = message; dlg.querySelector('#item-new-size').setAttribute('aria-invalid', String(Boolean(message))) }
   const drawSizes = () => {
     dlg.querySelector('#item-sizes').innerHTML = sizes.map((sz, k) => `<span class="sizechip">${szText(sz)}<button type="button" data-remove="${k}" aria-label="${s.removeSize(esc(sizeLabel(sz)))}">×</button></span>`).join('')
     dlg.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => { sizes.splice(Number(b.dataset.remove), 1); drawSizes() })
   }
-  const preview = () => { dlg.querySelector('#drawing-preview').innerHTML = `${art(drawing)}<span>${s.previewDrawing}: ${L(catalog.find(k => k.kind === drawing) || catalog[0])}</span>` }
   dlg.querySelector('#item-preset').onchange = e => { sizes = [...presets[e.target.value]]; drawSizes(); sizeError('') }
   dlg.querySelector('#item-size-add').onclick = () => {
     const input = dlg.querySelector('#item-new-size'), value = input.value.trim()
@@ -868,7 +922,6 @@ function openAddItem() {
     if (!error) { sizes.push(value); drawSizes(); input.value = '' }
     input.focus()
   }
-  dlg.querySelectorAll('[name=drawing]').forEach(r => r.onchange = () => { drawing = r.value; preview() })
   dlg.querySelector('#item-cancel').onclick = () => dlg.close()
   dlg.querySelector('form').onsubmit = e => {
     e.preventDefault()
@@ -886,11 +939,11 @@ function openAddItem() {
     sizeError(sizes.length ? '' : s.sizesRequired)
     if (!sizes.length && !first) first = dlg.querySelector('#item-new-size')
     if (first) { first.focus(); return }
-    items.push({ id: `custom-${items.length + 1}`, group: dlg.querySelector('#item-group').value, art: drawing, tracking: 'stock', defaultQty, ...values, sizes: [...sizes], qty: sizes.map(() => 0) })
+    items.push({ id: `custom-${items.length + 1}`, group: dlg.querySelector('#item-group').value, ...drawingChoice(), tracking: 'stock', defaultQty, ...values, sizes: [...sizes], qty: sizes.map(() => 0) })
     dlg.close(); render(); toast(s.itemSaved)
   }
   dlg.onclose = () => document.getElementById('add-item')?.focus()
-  drawSizes(); preview(); dlg.showModal(); dlg.querySelector('#item-en').focus()
+  drawSizes(); dlg.showModal(); dlg.querySelector('#item-en').focus()
 }
 
 function toast(msg) {
