@@ -36,13 +36,14 @@ a{color:inherit}
 .num{font-variant-numeric:tabular-nums}
 .skip{position:absolute;inset-inline-start:-999px}.skip:focus{inset-inline-start:1em;top:1em;z-index:9;background:var(--surface);padding:.5em}
 .sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.gid{unicode-bidi:isolate;direction:ltr}
 
 /* Mockup controls: not part of the screen. */
 .proto{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;padding:6px var(--edge);background:var(--raised);font-size:13px;color:var(--muted)}
 .proto .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .proto button,.proto select{height:32px;padding:0 10px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);color:var(--text);font-size:13px}
 
-/* The app's Assets band, as StoreShell renders it. */
+/* The app's Assets band, as StoreShell renders it, then the Uniform sub-tabs like StoreSubTabs. */
 .hero{background:var(--hero);color:#fff;padding-block-start:16px}
 .wrap{max-width:1400px;margin-inline:auto;padding-inline:var(--edge)}
 .eyebrow{margin:0;font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.72)}
@@ -52,9 +53,14 @@ a{color:inherit}
 .sectiontabs a{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border-start-start-radius:12px;border-start-end-radius:12px;font-size:14px;font-weight:600;color:rgba(255,255,255,.72);text-decoration:none}
 .sectiontabs a:hover{background:rgba(255,255,255,.1);color:#fff}
 .sectiontabs a[aria-current=page]{background:var(--ground);color:var(--text)}
+.subtabs{border-block-end:1px solid var(--border)}
+.subtabs .wrap{display:flex;gap:4px;overflow-x:auto}
+.subtabs a{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border-block-end:2px solid transparent;font-size:14px;font-weight:500;color:var(--muted);text-decoration:none;white-space:nowrap}
+.subtabs a:hover{color:var(--text)}
+.subtabs a[aria-current=page]{border-color:var(--primary);color:var(--text);font-weight:600}
 
 /* Title row */
-.titlerow{padding-block:28px 20px}
+.titlerow{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-start;justify-content:space-between;padding-block:28px 20px}
 h1{margin:0;font-size:24px;line-height:32px;font-weight:700;letter-spacing:-.01em}
 [lang=ar] h1{letter-spacing:normal;line-height:36px}
 .finding{margin:4px 0 0;font-size:15px;color:var(--muted)}
@@ -72,15 +78,14 @@ h1{margin:0;font-size:24px;line-height:32px;font-weight:700;letter-spacing:-.01e
 .figure{display:block;font-size:24px;line-height:32px;font-weight:500}
 .sub{display:block;font-size:13px;line-height:18px;color:var(--muted)}
 .panel h2{margin:0;font-size:16px;line-height:24px;font-weight:600}
-.panelhead{padding:16px var(--pad) 0}
 
-/* Stock table */
-.stock{container-type:inline-size}
+/* Tables (stock and received) */
 table{width:100%;border-collapse:collapse}
 thead th{padding:12px 12px 8px;font-size:13px;font-weight:400;color:var(--muted);text-align:start;white-space:nowrap}
 th.num,td.num{text-align:end}
 thead th:first-child,tbody td:first-child{padding-inline-start:var(--pad)}
 thead th:last-child,tbody td:last-child{padding-inline-end:var(--pad)}
+.stock{container-type:inline-size;margin-block-end:48px}
 tbody.group th{padding:20px var(--pad) 6px;text-align:start;font-weight:600;font-size:14px}
 tbody.group th span{margin-inline-start:8px;font-weight:400;font-size:13px;color:var(--muted)}
 tbody tr.piece td{padding:12px;vertical-align:middle;border-block-start:1px solid var(--rule)}
@@ -90,7 +95,7 @@ tbody.group tr:first-child + tr.piece td{border-block-start:0}
 .name{display:block;font-weight:600}
 .desc{display:block;font-size:13px;line-height:18px;color:var(--muted)}
 .instock{font-size:16px;font-weight:500}
-.unit{font-size:12px;color:var(--muted);font-weight:400;margin-inline-start:3px}
+.dash{color:var(--muted)}
 
 /* The size ladder: one cell per size, shaded in the one data hue by its share of the piece's
    largest size. Zero is a dashed empty slot with a printed 0. The smallest size sits at the
@@ -100,82 +105,178 @@ tbody.group tr:first-child + tr.piece td{border-block-start:0}
 .ladder li{display:grid;place-items:center;width:48px;height:46px;border-radius:var(--radius-control);background:color-mix(in srgb,var(--data) calc(var(--t) * 100%),var(--surface))}
 .ladder li.one{width:auto;padding-inline:10px}
 .ladder .sz{font-size:12px;line-height:16px;color:var(--text);opacity:.8}
-.ladder .q{font-size:14px;line-height:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.ladder .q{font-size:14px;line-height:18px;font-weight:600}
 .ladder li.zero{background:transparent;outline:1px dashed var(--control);outline-offset:-1px}
 .ladder li.zero .q{color:var(--muted);font-weight:400}
+.ladder li.skel{background:var(--active)}
+
+/* Suit holders: one chip per G number, the suit size beside it. */
+.holders{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+.holder{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 10px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);text-decoration:none;font-size:13px}
+.holder:hover{background:var(--raised)}
+.holder b{font-weight:600}
+
 .ghost{height:32px;padding:0 12px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap}
 .ghost:hover{background:var(--raised)}
-.ghost:active{transform:translateY(1px)}
+.ghost:active,.primary:active,.secondary:active{transform:translateY(1px)}
+.primary{height:36px;padding:0 16px;border:1px solid var(--primary);border-radius:var(--radius-control);background:var(--primary);color:var(--on-primary);font-weight:600;cursor:pointer;white-space:nowrap}
+.primary:disabled{opacity:.55;cursor:not-allowed}
+.secondary{height:36px;padding:0 16px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);font-weight:500;cursor:pointer;white-space:nowrap}
 
 /* Out of stock, inside the summary */
 .outlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px 16px;margin:6px 0 0;padding:0;list-style:none}
 .outlist li{display:flex;align-items:center;gap:10px;min-height:40px}
 .outlist .art{width:36px;height:36px}
-.outlist .what{min-width:0}
 .outlist .sizes{font-weight:600}
 .empty{margin:6px 0 0;color:var(--muted)}
-.stock{margin-block-end:48px}
+
+/* Received: the people list beside the selected person's detail. 1376 = 912 + 24 + 440. */
+.master{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:var(--gap);align-items:start;margin-block-end:48px}
+.toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px var(--pad) 4px}
+.search{display:flex;align-items:center;gap:8px;width:min(316px,100%);height:36px;padding-inline:10px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface)}
+.search:focus-within{outline:2px solid var(--focus);outline-offset:1px}
+.search svg{flex:none;color:var(--muted)}
+.search input{flex:1;min-width:0;height:100%;border:0;background:transparent;outline:none}
+.count{font-size:13px;color:var(--muted)}
+.people td{padding:10px 12px;border-block-start:1px solid var(--rule);vertical-align:middle}
+.people tr.sel td{background:var(--active)}
+.prow{display:block;width:100%;padding:0;border:0;background:none;text-align:start;cursor:pointer}
+.prow:hover .name{text-decoration:underline;text-underline-offset:3px}
+.thumbs{display:flex;flex-wrap:wrap;gap:2px}
+.thumbs .art{width:30px;height:30px;border-radius:4px}
+.detail{position:sticky;top:16px;max-height:calc(100dvh - 32px);overflow:auto}
+.dhead{padding:16px var(--pad) 12px;border-block-end:1px solid var(--border)}
+.dhead h2{font-size:18px;line-height:26px}
+.holds{margin:8px 0 0;font-size:13px}
+.back{display:none}
+.recs{margin:0;padding:4px 0 8px;list-style:none}
+.rec{padding:12px var(--pad)}
+.rec+.rec{border-block-start:1px solid var(--rule)}
+.rechead{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;justify-content:space-between;margin-block-end:6px}
+.recdate{font-weight:600}
+.lines{margin:0;padding:0;list-style:none}
+.lines li{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:10px;align-items:center;min-height:44px}
+.lines .art{width:36px;height:36px}
+.lqty{font-weight:600}
 
 /* States */
 .bar{display:inline-block;height:14px;border-radius:3px;background:var(--active);vertical-align:middle}
-.ladder li.skel{background:var(--active)}
 .error{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:16px var(--pad) 20px}
 .textbtn{border:0;background:none;padding:0 4px;min-height:32px;font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 
-/* Editor */
+/* Dialogs */
 dialog{width:min(520px,calc(100vw - 32px));max-height:calc(100dvh - 32px);padding:0;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface);color:var(--text);box-shadow:0 16px 40px rgba(10,20,40,.18)}
 dialog::backdrop{background:rgba(5,10,20,.45)}
 .dlg{display:grid;gap:20px;padding:var(--pad)}
 .dlghead{display:flex;gap:16px;align-items:center}
 .dlghead .art{width:88px;height:88px}
-.dlghead h2{margin:0;font-size:18px;line-height:26px}
+.dlghead h2,.givehead h2{margin:0;font-size:18px;line-height:26px}
 .sizes-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:16px 12px;margin:0;padding:0;border:0}
 .sizes-form legend{padding:0;margin-block-end:10px;font-size:14px;font-weight:500}
 .sizes-form label{display:grid;gap:6px;font-size:13px;font-weight:500}
-.sizes-form input{height:40px;width:100%;padding:0 10px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);direction:ltr;text-align:start;font-variant-numeric:tabular-nums}
+.sizes-form input{height:40px;width:100%;padding:0 10px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);direction:ltr;text-align:start}
 .dlgfoot{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center}
-.dlgfoot .actions{display:flex;gap:8px}
-.primary{height:36px;padding:0 16px;border:1px solid var(--primary);border-radius:var(--radius-control);background:var(--primary);color:var(--on-primary);font-weight:600;cursor:pointer}
-.secondary{height:36px;padding:0 16px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);font-weight:500;cursor:pointer}
+.actions{display:flex;gap:8px}
+
+/* Hand-out form */
+dialog.give{width:min(880px,calc(100vw - 32px))}
+.giveform{display:flex;flex-direction:column;max-height:calc(100dvh - 34px)}
+.givehead{padding:16px var(--pad);border-block-end:1px solid var(--border)}
+.givebody{overflow:auto;padding:4px var(--pad) 16px}
+.flabel{margin:16px 0 8px;font-size:14px;font-weight:600}
+.results{margin:6px 0 0;padding:0;list-style:none;border:1px solid var(--border);border-radius:var(--radius-control)}
+.results:empty{display:none}
+.results li{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:8px 12px}
+.results li+li{border-block-start:1px solid var(--rule)}
+.results .note{color:var(--muted)}
+.taker{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--raised)}
+.pf{display:grid;grid-template-columns:44px minmax(150px,210px) minmax(0,1fr);gap:8px 14px;align-items:center;padding-block:10px}
+.pf+.pf{border-block-start:1px solid var(--rule)}
+.pf>.art{width:44px;height:44px}
+.opts{display:flex;flex-wrap:wrap;gap:4px}
+.opt{position:relative}
+.opt input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
+.opt span{display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:36px;padding:0 10px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);font-size:13px;font-weight:500;unicode-bidi:isolate}
+.opt input:checked+span{background:var(--text);border-color:var(--text);color:var(--surface);font-weight:600}
+.opt.none input:checked+span{background:var(--raised);border-color:var(--control);color:var(--text)}
+.opt input:focus-visible+span{outline:2px solid var(--focus);outline-offset:2px}
+.opt input:disabled{cursor:not-allowed}
+.opt input:disabled+span{border-style:dashed;color:var(--muted);background:transparent}
+.stepper{display:inline-flex;align-items:center;margin-block-start:6px;border:1px solid var(--control);border-radius:var(--radius-control)}
+.stepper[hidden]{display:none}
+.stepper button{width:32px;height:32px;border:0;background:none;font-size:16px;cursor:pointer}
+.stepper button:disabled{color:var(--muted);cursor:not-allowed}
+.stepper input{width:40px;height:32px;border:0;border-inline:1px solid var(--rule);background:transparent;text-align:center}
+.qlabel{font-size:12px;color:var(--muted);margin-inline-end:8px}
+.givefoot{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between;padding:12px var(--pad);border-block-start:1px solid var(--border);background:var(--surface)}
+.givestatus{display:grid;justify-items:end;text-align:end;margin-inline-start:auto}
+.reason{font-size:13px;color:var(--muted)}
 .toast{position:fixed;inset-block-end:16px;inset-inline:0;margin-inline:auto;width:max-content;max-width:calc(100vw - 32px);padding:10px 16px;border-radius:var(--radius-control);background:var(--text);color:var(--ground);font-size:13px;box-shadow:0 8px 24px rgba(10,20,40,.2)}
 
-/* Narrow table: each piece becomes two lines, its ladder on the second. */
+/* Narrow stock table: each piece becomes two lines, its ladder on the second. */
 @container (max-width: 760px){
-  thead{display:none}
-  tbody tr.piece{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"ident total action" "ladder ladder ladder";gap:10px 12px;padding:12px var(--pad);border-block-start:1px solid var(--rule)}
-  tbody.group tr:first-child + tr.piece{border-block-start:0}
-  tbody tr.piece td{padding:0!important;border:0}
-  tbody tr.piece td:nth-child(1){grid-area:ident}
-  tbody tr.piece td:nth-child(2){grid-area:total;align-self:center}
-  tbody tr.piece td:nth-child(3){grid-area:ladder}
-  tbody tr.piece td:nth-child(4){grid-area:action;align-self:center}
+  .stock thead{display:none}
+  .stock tbody tr.piece{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"ident total action" "ladder ladder ladder";gap:10px 12px;padding:12px var(--pad);border-block-start:1px solid var(--rule)}
+  .stock tbody.group tr:first-child + tr.piece{border-block-start:0}
+  .stock tbody tr.piece td{padding:0!important;border:0}
+  .stock tbody tr.piece td:nth-child(1){grid-area:ident}
+  .stock tbody tr.piece td:nth-child(2){grid-area:total;align-self:center}
+  .stock tbody tr.piece td:nth-child(3){grid-area:ladder}
+  .stock tbody tr.piece td:nth-child(4){grid-area:action;align-self:center}
+}
+/* One region at a time below 1000px: the list, or the chosen person with a back button. */
+@media (max-width:1000px){
+  .master{grid-template-columns:1fr}
+  .master.open .list{display:none}
+  .master:not(.open) .detail{display:none}
+  .detail{position:static;max-height:none}
+  .back{display:inline-flex;margin-block-end:8px}
+  .people tr.sel td{background:none}
 }
 @media (max-width:720px){
   :root{--edge:16px;--pad:16px}
   .summary{grid-template-columns:1fr 1fr}
   .summary>div:nth-child(3){grid-column:1/-1;border-inline-start:0;border-block-start:1px solid var(--border)}
   .titlerow{padding-block:20px 16px}
+  .titlerow .primary{width:100%;height:44px}
   .ghost{height:44px}
+  .people thead{display:none}
+  .people tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:10px var(--pad);border-block-start:1px solid var(--rule)}
+  .people td{padding:0!important;border:0}
+  .people td:nth-child(2){grid-column:1/-1;grid-row:2}
+  dialog.give{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;border-radius:0;margin:0}
+  .giveform{height:100dvh;max-height:100dvh}
+  .pf{grid-template-columns:44px minmax(0,1fr)}
+  .pf .opts{grid-column:1/-1}
+  .opt span{min-width:44px;height:44px}
+  .givefoot .actions{width:100%}
+  .givefoot .actions button{flex:1;height:44px}
 }
-@media (prefers-reduced-motion:reduce){.ghost:active{transform:none}}
+@media (prefers-reduced-motion:reduce){.ghost:active,.primary:active,.secondary:active{transform:none}}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content / الانتقال إلى المحتوى</a>
 <div id="app"></div>
 <dialog id="editor" aria-labelledby="dlg-title"></dialog>
+<dialog id="give" class="give" aria-labelledby="give-title"></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <script src="./data.js"></script>
 <script src="./art.js"></script>
 <script>
 'use strict'
 const params = new URLSearchParams(location.search)
+const U = window.UNIFORM
+const { items, groups } = U
 const state = {
   lang: params.get('lang') === 'ar' ? 'ar' : 'en',
   theme: params.get('theme') === 'dark' ? 'dark' : 'light',
   view: ['readonly', 'loading', 'error'].includes(params.get('view')) ? params.get('view') : 'edit',
+  tab: params.get('tab') === 'received' ? 'received' : 'stock',
+  person: params.get('person') || null,
+  open: Boolean(params.get('person')),
+  q: '',
 }
-const { items, groups, total, pieces, suits } = window.UNIFORM
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 function arCount(n, forms) { // forms: [one, two, few (3-10), many (11+)]
@@ -183,54 +284,97 @@ function arCount(n, forms) { // forms: [one, two, few (3-10), many (11+)]
   if (n === 2) return forms[1]
   return `${n} ${n <= 10 ? forms[2] : forms[3]}`
 }
+const AR_PIECES = ['قطعة واحدة', 'قطعتان', 'قطع', 'قطعة'] // standalone count (nominative)
 
 const T = {
   en: {
     docTitle: 'Assets: Uniform (approval mockup)',
-    proto: 'Approval mockup. Sample quantities, nothing is saved.',
+    proto: 'Approval mockup. Sample people and quantities, nothing is saved.',
     other: 'العربية', theme: s => s === 'dark' ? 'Light theme' : 'Dark theme',
     preview: 'Preview', views: { edit: 'Store manager', readonly: 'View only', loading: 'Loading', error: 'Load failed' },
-    assets: 'Assets', tagline: 'Store-room stock of uniform pieces by size.',
+    assets: 'Assets', tagline: 'Uniform stock by size, and who has received it.',
     sections: 'Assets sections', store: 'Store', uniform: 'Uniform',
-    title: 'Uniform',
+    pages: 'Uniform pages', tabStock: 'Stock', tabReceived: 'Received',
+    title: 'Uniform', handOut: 'Hand out uniform',
     findingNone: 'Every size of every piece is on the shelf.',
     finding: (s, p) => `<b>${plural(s, 'size', 'sizes')}</b> out of stock across ${plural(p, 'piece', 'pieces')}.`,
+    receivedLine: (p, d) => `<b>${plural(p, 'person', 'people')}</b> received uniform. The latest hand-out was on ${d}.`,
+    receivedNone: 'No uniform has been handed out yet.',
     piece: 'Piece', inStock: 'In stock', bySize: 'Quantity by size', action: 'Action', update: 'Update',
-    oneSize: 'One size',
-    totals: 'Totals', totalPieces: 'Total pieces', totalPiecesSub: 'A suit counts as one piece', suits: 'Full suits', suitsSub: 'Blazer, trousers, white shirt',
+    oneSize: 'One size', sizeIs: s => `Size ${s}`,
+    summary: 'Summary', shelf: 'Pieces on the shelf', shelfSub: 'Suits are not counted here', holdersK: 'Suit holders', holdersSub: 'Employees holding a formal suit',
     out: 'Out of stock', outNone: 'Nothing is out of stock.',
-    error: 'Couldn\'t load uniform stock.', retry: 'Retry',
-    sizes: 'Quantity by size', save: 'Save', cancel: 'Cancel', sum: n => `Total ${n}`,
+    heldBy: n => `Held by ${plural(n, 'employee', 'employees')}`, noHolders: 'No one holds a suit yet.', holdersList: 'Suit holders by G-number',
+    error: 'Couldn\'t load uniform stock.', errorPeople: 'Couldn\'t load the hand-out records.', retry: 'Retry',
+    save: 'Save', cancel: 'Cancel', sum: n => `Total ${n}`,
     saved: 'Quantities changed on this page only. Nothing is saved.',
+    searchLabel: 'Search received', searchPh: 'Search by name or G-number',
+    people: n => plural(n, 'person', 'people'), noMatch: 'No one matches this search.',
+    colEmployee: 'Employee', colReceived: 'Pieces received', colLast: 'Last hand-out',
+    handouts: n => plural(n, 'hand-out', 'hand-outs'),
+    back: 'Back to the list', holdsSuit: s => `Holds a formal suit, size ${s}.`,
+    handedOutBy: n => `Handed out by ${n}`, itemsN: n => plural(n, 'item', 'items'),
+    giveTitle: 'Hand out uniform', takenBy: 'Taken by', pickerPh: 'Search by name or G-number', choose: 'Choose', change: 'Change',
+    pickerEmpty: 'No employee matches.', lastReceived: d => `Last received uniform on ${d}`, neverReceived: 'Has not received uniform before',
+    none: 'None', noneLeft: 'none left', qty: 'Quantity', dec: n => `Decrease ${n}`, inc: n => `Increase ${n}`, qtyOf: n => `Quantity of ${n}`,
+    giver: n => `Handed out by ${n} (you)`, today: d => `Today, ${d}`,
+    giveCount: n => plural(n, 'item', 'items'),
+    needEmployee: 'Choose the employee taking the uniform.', needPiece: 'Choose a size for at least one piece.',
+    giveSave: 'Hand out', given: (n, who) => `Recorded: ${plural(n, 'item', 'items')} handed to ${who}.`,
   },
   ar: {
     docTitle: 'الأصول: الملابس (نموذج للاعتماد)',
-    proto: 'نموذج للاعتماد. الكميات تجريبية ولا يُحفظ شيء.',
+    proto: 'نموذج للاعتماد. الأشخاص والكميات تجريبية ولا يُحفظ شيء.',
     other: 'English', theme: s => s === 'dark' ? 'المظهر الفاتح' : 'المظهر الداكن',
     preview: 'المعاينة', views: { edit: 'مسؤول المخزن', readonly: 'عرض فقط', loading: 'جارٍ التحميل', error: 'تعذّر التحميل' },
-    assets: 'الأصول', tagline: 'رصيد قطع الزي في المخزن حسب المقاس.',
+    assets: 'الأصول', tagline: 'رصيد الملابس حسب المقاس ومن استلمها.',
     sections: 'أقسام الأصول', store: 'المخزن', uniform: 'الملابس',
-    title: 'الملابس',
+    pages: 'صفحات الملابس', tabStock: 'الرصيد', tabReceived: 'المستلمون',
+    title: 'الملابس', handOut: 'صرف ملابس',
     findingNone: 'جميع مقاسات كل القطع متوفرة في المخزن.',
     finding: (s, p) => `نفد من المخزن <b>${arCount(s, ['مقاس واحد', 'مقاسان', 'مقاسات', 'مقاسًا'])}</b> في ${arCount(p, ['قطعة واحدة', 'قطعتين', 'قطع', 'قطعة'])}.`,
+    receivedLine: (p, d) => `استلم الملابس <b>${arCount(p, ['موظف واحد', 'موظفان', 'موظفين', 'موظفًا'])}</b>، وكان آخر صرف في ${d}.`,
+    receivedNone: 'لم تُصرف ملابس بعد.',
     piece: 'القطعة', inStock: 'الرصيد', bySize: 'الكمية حسب المقاس', action: 'الإجراء', update: 'تحديث',
-    oneSize: 'مقاس موحد',
-    totals: 'الإجماليات', totalPieces: 'إجمالي القطع', totalPiecesSub: 'تُحسب البدلة قطعة واحدة', suits: 'البدلات الكاملة', suitsSub: 'سترة وبنطال وقميص أبيض',
+    oneSize: 'مقاس موحد', sizeIs: s => `المقاس ${s}`,
+    summary: 'الملخص', shelf: 'القطع في المخزن', shelfSub: 'لا تُحتسب البدلات هنا', holdersK: 'حاملو البدلات', holdersSub: 'موظفون يحملون بدلة رسمية',
     out: 'نفد من المخزن', outNone: 'لا يوجد مقاس نافد.',
-    error: 'تعذّر تحميل رصيد الملابس.', retry: 'إعادة المحاولة',
-    sizes: 'الكمية حسب المقاس', save: 'حفظ', cancel: 'إلغاء', sum: n => `الإجمالي ${n}`,
+    heldBy: n => `يحملها ${arCount(n, ['موظف واحد', 'موظفان', 'موظفين', 'موظفًا'])}`, noHolders: 'لا يحمل أحد بدلة بعد.', holdersList: 'حاملو البدلات حسب الرقم الوظيفي',
+    error: 'تعذّر تحميل رصيد الملابس.', errorPeople: 'تعذّر تحميل سجلات الصرف.', retry: 'إعادة المحاولة',
+    save: 'حفظ', cancel: 'إلغاء', sum: n => `الإجمالي ${n}`,
     saved: 'تغيّرت الكميات في هذه الصفحة فقط ولم يُحفظ شيء.',
+    searchLabel: 'البحث في المستلمين', searchPh: 'ابحث بالاسم أو الرقم الوظيفي',
+    people: n => arCount(n, ['شخص واحد', 'شخصان', 'أشخاص', 'شخصًا']), noMatch: 'لا يوجد موظف مطابق للبحث.',
+    colEmployee: 'الموظف', colReceived: 'القطع المستلمة', colLast: 'آخر صرف',
+    handouts: n => arCount(n, ['مرة واحدة', 'مرتان', 'مرات', 'مرة']),
+    back: 'العودة إلى القائمة', holdsSuit: s => `يحمل بدلة رسمية مقاس ${s}.`,
+    handedOutBy: n => `المسلِّم: ${n}`, itemsN: n => arCount(n, AR_PIECES),
+    giveTitle: 'صرف ملابس', takenBy: 'المستلم', pickerPh: 'ابحث بالاسم أو الرقم الوظيفي', choose: 'اختيار', change: 'تغيير',
+    pickerEmpty: 'لا يوجد موظف مطابق.', lastReceived: d => `آخر استلام للملابس في ${d}`, neverReceived: 'لم يستلم ملابس من قبل',
+    none: 'بدون', noneLeft: 'نفد', qty: 'الكمية', dec: n => `إنقاص ${n}`, inc: n => `زيادة ${n}`, qtyOf: n => `كمية ${n}`,
+    giver: n => `المسلِّم: ${n} (أنت)`, today: d => `اليوم، ${d}`,
+    giveCount: n => arCount(n, AR_PIECES),
+    needEmployee: 'اختر الموظف المستلم.', needPiece: 'اختر مقاسًا لقطعة واحدة على الأقل.',
+    giveSave: 'صرف', given: (n, who) => `تم التسجيل: صرف ${arCount(n, ['قطعة واحدة', 'قطعتين', 'قطع', 'قطعة'])} إلى ${who}.`,
   },
 }
 
 const t = () => T[state.lang]
 const fmt = n => n.toLocaleString(state.lang === 'ar' ? 'ar-AE' : 'en-GB', { numberingSystem: 'latn' })
+const fmtDate = iso => new Date(iso + 'T00:00:00').toLocaleDateString(state.lang === 'ar' ? 'ar-AE' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric', numberingSystem: 'latn' })
 const L = (o, k = '') => state.lang === 'ar' ? o[k ? k + 'Ar' : 'ar'] : o[k ? k + 'En' : 'en']
-const nameOf = item => L(item)
+const nameOf = o => L(o)
 const descOf = item => state.lang === 'ar' ? item.dAr : item.dEn
+const posOf = e => L(e, 'pos')
 const sizeLabel = s => s === 'one' ? t().oneSize : s
 const canEdit = () => state.view === 'edit'
-const outOfStock = () => items.map(i => ({ item: i, sizes: i.sizes.filter((_, k) => i.qty[k] === 0) })).filter(o => o.sizes.length)
+const art = (kind, cls) => window.uniformArt(kind, cls)
+const stockItems = () => items.filter(i => i.tracking === 'stock')
+const outOfStock = () => stockItems().map(i => ({ item: i, sizes: i.sizes.filter((_, k) => i.qty[k] === 0) })).filter(o => o.sizes.length)
+const lastRecord = id => U.records.find(r => r.employee === id)
+const searchIcon = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.3-3.3"/></svg>'
+
+/* ---------- Stock tab ---------- */
 
 function ladder(item) {
   const s = t()
@@ -243,58 +387,128 @@ function ladder(item) {
   }).join('')}</ul>`
 }
 
+function holderChips() {
+  const s = t()
+  if (state.view === 'loading') return `<ul class="holders" aria-hidden="true">${[0, 1, 2, 3].map(() => '<li><span class="bar" style="width:84px;height:34px"></span></li>').join('')}</ul>`
+  const hs = U.holders()
+  if (!hs.length) return `<p class="empty">${s.noHolders}</p>`
+  return `<ul class="holders" aria-label="${s.holdersList}">${hs.map(h => {
+    const e = U.employee(h.employee)
+    return `<li><a class="holder" href="?tab=received&person=${h.employee}" data-person="${h.employee}" title="${nameOf(e)}" aria-label="${nameOf(e)}, ${h.employee}, ${s.sizeIs(h.size)}"><span class="gid">${h.employee}</span><b>${h.size}</b></a></li>`
+  }).join('')}</ul>`
+}
+
 function row(item) {
   const s = t()
-  const stock = state.view === 'loading' ? '<span class="bar" style="width:32px"></span>' : `<span class="instock num">${fmt(total(item))}</span>`
+  const holders = item.tracking === 'holders'
+  const stock = holders ? '<span class="dash">-</span>' : state.view === 'loading' ? '<span class="bar" style="width:32px"></span>' : `<span class="instock">${fmt(U.total(item))}</span>`
+  const sub = holders && state.view !== 'loading' ? `<span class="desc">${s.heldBy(U.holders().length)}</span>` : ''
+  const action = canEdit() && !holders ? `<button type="button" class="ghost" data-item="${item.id}" aria-label="${s.update}: ${nameOf(item)}">${s.update}</button>` : ''
   return `<tr class="piece">
-    <td><div class="ident">${window.uniformArt(item.art)}<div><span class="name">${nameOf(item)}</span><span class="desc">${descOf(item)}</span></div></div></td>
+    <td><div class="ident">${art(item.art)}<div><span class="name">${nameOf(item)}</span><span class="desc">${descOf(item)}</span>${sub}</div></div></td>
     <td class="num">${stock}</td>
-    <td>${ladder(item)}</td>
-    ${canEdit() ? `<td class="num"><button type="button" class="ghost" data-item="${item.id}" aria-label="${s.update}: ${nameOf(item)}">${s.update}</button></td>` : '<td></td>'}
+    <td>${holders ? holderChips() : ladder(item)}</td>
+    <td class="num">${action}</td>
   </tr>`
 }
 
-function stockPanel() {
+function stockView() {
   const s = t()
-  if (state.view === 'error') return `<section class="panel stock" aria-labelledby="stock-h"><div class="panelhead"><h2 id="stock-h">${s.bySize}</h2></div>
-    <p class="error" role="alert"><span>${s.error}</span><button type="button" class="textbtn" id="retry">${s.retry}</button></p></section>`
-  return `<section class="panel stock" aria-labelledby="stock-h"><h2 id="stock-h" class="sr">${s.bySize}</h2>
+  const value = n => state.view === 'loading' ? '<span class="bar" style="width:56px;height:24px"></span>' : state.view === 'error' ? '<span class="dash">-</span>' : fmt(n)
+  const out = outOfStock()
+  let outBody
+  if (state.view === 'loading') outBody = `<ul class="outlist" aria-hidden="true">${[0, 1, 2].map(() => '<li><span class="bar" style="width:36px;height:36px"></span><span class="bar" style="width:120px"></span></li>').join('')}</ul>`
+  else if (state.view === 'error') outBody = '<p class="empty">-</p>'
+  else if (!out.length) outBody = `<p class="empty">${s.outNone}</p>`
+  else outBody = `<ul class="outlist">${out.map(o => `<li>${art(o.item.art)}<span>${nameOf(o.item)} <span class="sizes">${o.sizes.map(sizeLabel).join(state.lang === 'ar' ? '، ' : ', ')}</span></span></li>`).join('')}</ul>`
+  const summary = `<section class="panel sumpanel" aria-label="${s.summary}"><dl class="summary">
+    <div><dt>${s.shelf}</dt><dd><span class="figure">${value(U.shelfPieces())}</span><span class="sub">${s.shelfSub}</span></dd></div>
+    <div><dt>${s.holdersK}</dt><dd><span class="figure">${value(U.holders().length)}</span><span class="sub">${s.holdersSub}</span></dd></div>
+    <div><dt>${s.out}</dt><dd>${outBody}</dd></div></dl></section>`
+  if (state.view === 'error') return summary + `<section class="panel stock" aria-labelledby="stock-h"><h2 id="stock-h" class="sr">${s.bySize}</h2>
+    <p class="error" role="alert"><span>${s.error}</span><button type="button" class="textbtn" data-retry>${s.retry}</button></p></section>`
+  return summary + `<section class="panel stock" aria-labelledby="stock-h"><h2 id="stock-h" class="sr">${s.bySize}</h2>
     <table><thead><tr><th scope="col">${s.piece}</th><th scope="col" class="num">${s.inStock}</th><th scope="col">${s.bySize}</th><th scope="col"><span class="sr">${s.action}</span></th></tr></thead>
     ${groups.map(g => `<tbody class="group"><tr><th scope="colgroup" colspan="4">${L(g)}<span>${L(g, 'note')}</span></th></tr>
       ${items.filter(i => i.group === g.id).map(row).join('')}</tbody>`).join('')}
     </table></section>`
 }
 
-function summary() {
-  const s = t()
-  const value = n => state.view === 'loading' ? '<span class="bar" style="width:56px;height:24px"></span>' : state.view === 'error' ? '<span style="color:var(--muted)">-</span>' : fmt(n)
-  const out = outOfStock()
-  let outBody
-  if (state.view === 'loading') outBody = `<ul class="outlist" aria-hidden="true">${[0, 1, 2].map(() => '<li><span class="bar" style="width:36px;height:36px"></span><span class="bar" style="width:120px"></span></li>').join('')}</ul>`
-  else if (state.view === 'error') outBody = '<p class="empty">-</p>'
-  else if (!out.length) outBody = `<p class="empty">${s.outNone}</p>`
-  else outBody = `<ul class="outlist">${out.map(o => `<li>${window.uniformArt(o.item.art)}<span class="what">${nameOf(o.item)} <span class="sizes">${o.sizes.map(sizeLabel).join(state.lang === 'ar' ? '، ' : ', ')}</span></span></li>`).join('')}</ul>`
-  return `<section class="panel sumpanel" aria-label="${s.totals}"><dl class="summary">
-    <div><dt>${s.totalPieces}</dt><dd><span class="figure">${value(pieces())}</span><span class="sub">${s.totalPiecesSub}</span></dd></div>
-    <div><dt>${s.suits}</dt><dd><span class="figure">${value(suits())}</span><span class="sub">${s.suitsSub}</span></dd></div>
-    <div><dt>${s.out}</dt><dd>${outBody}</dd></div>
-  </dl></section>`
+/* ---------- Received tab ---------- */
+
+function matches(p) {
+  const q = state.q.trim().toLowerCase()
+  if (!q) return true
+  const e = U.employee(p.employee)
+  return [e.id, e.en, e.ar].some(v => v.toLowerCase().includes(q))
 }
 
-function finding() {
+function personDetail(p) {
   const s = t()
-  if (state.view !== 'edit' && state.view !== 'readonly') return ''
+  const e = U.employee(p.employee)
+  const holder = U.holders().find(h => h.employee === p.employee)
+  return `<section class="panel detail" aria-labelledby="pd-h">
+    <div class="dhead"><button type="button" class="secondary back" data-back>${s.back}</button>
+      <h2 id="pd-h">${nameOf(e)}</h2><span class="desc"><span class="gid">${e.id}</span> · ${posOf(e)}</span>
+      ${holder ? `<p class="holds">${s.holdsSuit(holder.size)}</p>` : ''}</div>
+    <ol class="recs">${p.records.map(r => `<li class="rec">
+      <div class="rechead"><span class="recdate">${fmtDate(r.date)}</span><span class="desc">${s.handedOutBy(nameOf(U.employee(r.givenBy)))}</span></div>
+      <ul class="lines">${r.lines.map(l => { const it = U.item(l.item); return `<li>${art(it.art)}<span><span class="name">${nameOf(it)}</span><span class="desc">${l.size === 'one' ? s.oneSize : s.sizeIs(l.size)}</span></span><span class="lqty">× ${fmt(l.qty)}</span></li>` }).join('')}</ul>
+    </li>`).join('')}</ol></section>`
+}
+
+function receivedView() {
+  const s = t()
+  if (state.view === 'error') return `<section class="panel"><p class="error" role="alert"><span>${s.errorPeople}</span><button type="button" class="textbtn" data-retry>${s.retry}</button></p></section>`
+  const all = U.recipients()
+  const people = all.filter(matches)
+  const loading = state.view === 'loading'
+  const selected = people.find(p => p.employee === state.person) ?? people[0]
+  const rows = loading
+    ? [0, 1, 2, 3, 4].map(() => '<tr><td><span class="bar" style="width:180px"></span></td><td><span class="bar" style="width:140px;height:30px"></span></td><td class="num"><span class="bar" style="width:80px"></span></td></tr>').join('')
+    : people.length ? people.map(p => {
+      const e = U.employee(p.employee)
+      const kinds = [...new Set(p.records.flatMap(r => r.lines.map(l => l.item)))]
+      const count = p.records.reduce((a, r) => a + U.lineCount(r), 0)
+      const sel = selected && p.employee === selected.employee
+      return `<tr class="${sel ? 'sel' : ''}">
+        <td><button type="button" class="prow" data-person="${p.employee}" ${sel ? 'aria-current="true"' : ''}><span class="name">${nameOf(e)}</span><span class="desc"><span class="gid">${e.id}</span> · ${posOf(e)}</span></button></td>
+        <td><span class="thumbs" aria-hidden="true">${kinds.map(k => art(U.item(k).art)).join('')}</span><span class="sr">${kinds.map(k => nameOf(U.item(k))).join(', ')}</span><span class="desc">${s.itemsN(count)}</span></td>
+        <td class="num">${fmtDate(p.records[0].date)}<span class="desc">${s.handouts(p.records.length)}</span></td></tr>`
+    }).join('')
+    : `<tr><td colspan="3"><p class="empty">${all.length ? s.noMatch : s.receivedNone}</p></td></tr>`
+  return `<div class="master${state.open ? ' open' : ''}">
+    <section class="panel list" aria-labelledby="rl-h"><h2 id="rl-h" class="sr">${s.tabReceived}</h2>
+      <div class="toolbar"><label class="search">${searchIcon}<span class="sr">${s.searchLabel}</span><input id="rq" type="search" value="${state.q}" placeholder="${s.searchPh}" autocomplete="off"></label>
+        <span class="count">${loading ? '' : s.people(people.length)}</span></div>
+      <table class="people"><thead><tr><th scope="col">${s.colEmployee}</th><th scope="col">${s.colReceived}</th><th scope="col" class="num">${s.colLast}</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+    </section>
+    ${!loading && selected ? personDetail(selected) : ''}
+  </div>`
+}
+
+/* ---------- Page ---------- */
+
+function subline() {
+  const s = t()
+  if (state.view === 'loading' || state.view === 'error') return ''
+  if (state.tab === 'received') {
+    const people = U.recipients()
+    return `<p class="finding">${people.length ? s.receivedLine(people.length, fmtDate(U.records[0].date)) : s.receivedNone}</p>`
+  }
   const out = outOfStock()
   const n = out.reduce((a, o) => a + o.sizes.length, 0)
   return `<p class="finding">${n ? s.finding(n, out.length) : s.findingNone}</p>`
 }
 
-function render() {
+function render(focusId) {
   const s = t()
   document.title = s.docTitle
   document.documentElement.lang = state.lang
   document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr'
   document.documentElement.dataset.theme = state.theme
+  const tabLink = (id, label) => `<a href="?tab=${id}" data-tab="${id}"${state.tab === id ? ' aria-current="page"' : ''}>${label}</a>`
   document.getElementById('app').innerHTML = `
     <div class="proto" role="region" aria-label="Mockup controls / عناصر التحكم في النموذج"><span>${s.proto}</span><span class="controls">
       <label>${s.preview} <select id="view">${Object.entries(s.views).map(([k, v]) => `<option value="${k}"${k === state.view ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
@@ -302,32 +516,46 @@ function render() {
       <button type="button" id="theme">${s.theme(state.theme)}</button></span></div>
     <header class="hero"><div class="wrap"><p class="eyebrow">${s.assets}</p><p class="tagline">${s.tagline}</p>
       <nav class="sectiontabs" aria-label="${s.sections}"><a href="#">${s.store}</a><a href="#" aria-current="page">${s.uniform}</a></nav></div></header>
+    <nav class="subtabs" aria-label="${s.pages}"><div class="wrap">${tabLink('stock', s.tabStock)}${tabLink('received', s.tabReceived)}</div></nav>
     <main id="main" class="wrap" aria-busy="${state.view === 'loading'}">
-      <div class="titlerow"><h1>${s.title}</h1>${finding()}</div>
-      ${summary()}${stockPanel()}
+      <div class="titlerow"><div><h1>${s.title}</h1>${subline()}</div>${canEdit() ? `<button type="button" class="primary" id="handout">${s.handOut}</button>` : ''}</div>
+      ${state.tab === 'received' ? receivedView() : stockView()}
     </main>`
-  document.getElementById('lang').onclick = () => { state.lang = state.lang === 'ar' ? 'en' : 'ar'; sync(); render() }
-  document.getElementById('theme').onclick = () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; sync(); render() }
-  document.getElementById('view').onchange = e => { state.view = e.target.value; sync(); render() }
-  document.getElementById('retry')?.addEventListener('click', () => { state.view = 'edit'; sync(); render() })
-  document.querySelectorAll('[data-item]').forEach(b => { b.onclick = () => openEditor(b.dataset.item, b) })
+  const on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener(ev, fn))
+  on('#lang', 'click', () => { state.lang = state.lang === 'ar' ? 'en' : 'ar'; sync(); render() })
+  on('#theme', 'click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; sync(); render() })
+  on('#view', 'change', e => { state.view = e.target.value; sync(); render() })
+  on('[data-retry]', 'click', () => { state.view = 'edit'; sync(); render() })
+  on('[data-tab]', 'click', e => { e.preventDefault(); state.tab = e.currentTarget.dataset.tab; state.open = false; sync(); render() })
+  on('[data-item]', 'click', e => openEditor(e.currentTarget.dataset.item))
+  on('[data-person]', 'click', e => { e.preventDefault(); state.tab = 'received'; state.person = e.currentTarget.dataset.person; state.open = true; state.q = ''; sync(); render('pd-h') })
+  on('[data-back]', 'click', () => { const id = state.person; state.open = false; sync(); render(); document.querySelector(`[data-person="${id}"]`)?.focus() })
+  on('#handout', 'click', openGive)
+  on('#rq', 'input', e => { state.q = e.target.value; render('rq') })
+  if (focusId) {
+    const el = document.getElementById(focusId)
+    if (el) { if (el.tagName !== 'INPUT') el.setAttribute('tabindex', '-1'); el.focus(); if (el.tagName === 'INPUT') el.setSelectionRange(el.value.length, el.value.length) }
+  }
 }
 
 function sync() {
-  const q = new URLSearchParams(location.search)
-  q.set('lang', state.lang); q.set('theme', state.theme); q.set('view', state.view); q.delete('edit')
+  const q = new URLSearchParams()
+  q.set('lang', state.lang); q.set('theme', state.theme); q.set('view', state.view); q.set('tab', state.tab)
+  if (state.tab === 'received' && state.person && state.open) q.set('person', state.person)
   history.replaceState(null, '', '?' + q)
 }
 
-function openEditor(id, opener) {
-  const item = items.find(i => i.id === id)
+/* ---------- Stock quantity editor ---------- */
+
+function openEditor(id) {
+  const item = U.item(id)
   const s = t()
   const dlg = document.getElementById('editor')
   dlg.innerHTML = `<form method="dialog" class="dlg">
-    <div class="dlghead">${window.uniformArt(item.art)}<div><h2 id="dlg-title">${nameOf(item)}</h2><span class="desc">${descOf(item)}</span></div></div>
-    <fieldset class="sizes-form"><legend>${s.sizes}</legend>
+    <div class="dlghead">${art(item.art)}<div><h2 id="dlg-title">${nameOf(item)}</h2><span class="desc">${descOf(item)}</span></div></div>
+    <fieldset class="sizes-form"><legend>${s.bySize}</legend>
       ${item.sizes.map((sz, k) => `<label>${sizeLabel(sz)}<input inputmode="numeric" pattern="[0-9]*" name="q${k}" value="${item.qty[k]}" autocomplete="off"></label>`).join('')}</fieldset>
-    <div class="dlgfoot"><span class="num" id="dlg-sum">${s.sum(fmt(total(item)))}</span>
+    <div class="dlgfoot"><span id="dlg-sum">${s.sum(fmt(U.total(item)))}</span>
       <span class="actions"><button type="button" class="secondary" id="dlg-cancel">${s.cancel}</button><button class="primary" value="save">${s.save}</button></span></div></form>`
   const inputs = [...dlg.querySelectorAll('input')]
   const read = () => inputs.map(el => Math.max(0, Number.parseInt(el.value, 10) || 0))
@@ -337,19 +565,129 @@ function openEditor(id, opener) {
     const saved = dlg.returnValue === 'save'
     dlg.returnValue = ''
     if (saved) { item.qty = read(); render(); toast(s.saved) }
-    document.querySelector(`[data-item="${id}"]`)?.focus() ?? opener?.focus()
+    document.querySelector(`[data-item="${id}"]`)?.focus()
   }
   dlg.showModal()
+}
+
+/* ---------- Hand-out form ---------- */
+
+function openGive() {
+  const s = t()
+  const g = { employee: null, picks: Object.fromEntries(items.map(i => [i.id, { size: 'none', qty: i.defaultQty }])) }
+  const dlg = document.getElementById('give')
+  const maxFor = (item, size) => item.tracking === 'stock' ? item.qty[item.sizes.indexOf(size)] : 5
+  const me = U.employee(U.currentUser)
+
+  const pieceField = item => `<div class="pf" data-piece="${item.id}">
+    ${art(item.art)}
+    <div><span class="name" id="pn-${item.id}">${nameOf(item)}</span><span class="desc">${descOf(item)}</span>
+      <div class="stepper" hidden><button type="button" data-step="-1" aria-label="${s.dec(nameOf(item))}">−</button><input inputmode="numeric" pattern="[0-9]*" value="${item.defaultQty}" aria-label="${s.qtyOf(nameOf(item))}"><button type="button" data-step="1" aria-label="${s.inc(nameOf(item))}">+</button></div></div>
+    <div class="opts" role="radiogroup" aria-labelledby="pn-${item.id}">
+      ${['none', ...item.sizes].map(sz => {
+        const out = sz !== 'none' && item.tracking === 'stock' && maxFor(item, sz) === 0
+        return `<label class="opt${sz === 'none' ? ' none' : ''}"><input type="radio" name="sz-${item.id}" value="${sz}"${sz === 'none' ? ' checked' : ''}${out ? ' disabled' : ''}><span>${sz === 'none' ? s.none : sizeLabel(sz)}${out ? `<span class="sr">, ${s.noneLeft}</span>` : ''}</span></label>`
+      }).join('')}
+    </div></div>`
+
+  dlg.innerHTML = `<form method="dialog" class="giveform" novalidate>
+    <div class="givehead"><h2 id="give-title">${s.giveTitle}</h2></div>
+    <div class="givebody">
+      <section aria-labelledby="taker-l"><h3 id="taker-l" class="flabel">${s.takenBy}</h3><div id="taker"></div></section>
+      ${groups.map(gr => `<section aria-labelledby="gg-${gr.id}"><h3 id="gg-${gr.id}" class="flabel">${L(gr)}</h3>${items.filter(i => i.group === gr.id).map(pieceField).join('')}</section>`).join('')}
+    </div>
+    <div class="givefoot">
+      <div><span class="name">${s.giver(nameOf(me))}</span><span class="desc">${s.today(fmtDate(U.today))}</span></div>
+      <div class="givestatus"><span id="give-count"></span><span id="give-reason" class="reason"></span></div>
+      <div class="actions"><button type="button" class="secondary" id="give-cancel">${s.cancel}</button><button class="primary" id="give-save" value="give" aria-describedby="give-reason">${s.giveSave}</button></div>
+    </div></form>`
+
+  const chosen = () => items.filter(i => g.picks[i.id].size !== 'none')
+  const count = () => chosen().reduce((a, i) => a + g.picks[i.id].qty, 0)
+  function refreshFoot() {
+    const n = count()
+    document.getElementById('give-count').textContent = n ? s.giveCount(n) : ''
+    const reason = !g.employee ? s.needEmployee : !n ? s.needPiece : ''
+    document.getElementById('give-reason').textContent = reason
+    document.getElementById('give-save').disabled = Boolean(reason)
+  }
+  function renderTaker(focus) {
+    const box = document.getElementById('taker')
+    if (g.employee) {
+      const e = U.employee(g.employee)
+      const last = lastRecord(e.id)
+      box.innerHTML = `<div class="taker"><div><span class="name">${nameOf(e)}</span><span class="desc"><span class="gid">${e.id}</span> · ${posOf(e)}</span><span class="desc">${last ? s.lastReceived(fmtDate(last.date)) : s.neverReceived}</span></div>
+        <button type="button" class="secondary" id="taker-change">${s.change}</button></div>`
+      document.getElementById('taker-change').onclick = () => { g.employee = null; renderTaker(true); refreshFoot() }
+      if (focus) document.getElementById('taker-change').focus()
+      return
+    }
+    box.innerHTML = `<label class="search" style="width:min(420px,100%)">${searchIcon}<span class="sr">${s.takenBy}</span><input id="taker-q" type="search" placeholder="${s.pickerPh}" autocomplete="off" aria-controls="taker-results"></label><ul id="taker-results" class="results" aria-live="polite"></ul>`
+    const input = document.getElementById('taker-q')
+    input.onkeydown = e => { if (e.key === 'Enter') e.preventDefault() }
+    input.oninput = () => {
+      const q = input.value.trim().toLowerCase()
+      const list = document.getElementById('taker-results')
+      if (!q) { list.innerHTML = ''; return }
+      const found = U.employees.filter(e => [e.id, e.en, e.ar].some(v => v.toLowerCase().includes(q))).slice(0, 6)
+      list.innerHTML = found.length ? found.map(e => `<li><div><span class="name">${nameOf(e)}</span><span class="desc"><span class="gid">${e.id}</span> · ${posOf(e)}</span></div><button type="button" class="secondary" data-pick="${e.id}">${s.choose}</button></li>`).join('') : `<li class="note">${s.pickerEmpty}</li>`
+      list.querySelectorAll('[data-pick]').forEach(b => { b.onclick = () => { g.employee = b.dataset.pick; renderTaker(true); refreshFoot() } })
+    }
+    if (focus) input.focus()
+  }
+
+  dlg.querySelectorAll('.pf').forEach(pf => {
+    const item = U.item(pf.dataset.piece)
+    const stepper = pf.querySelector('.stepper')
+    const qInput = stepper.querySelector('input')
+    const [dec, inc] = stepper.querySelectorAll('button')
+    const setQty = v => {
+      const pick = g.picks[item.id]
+      const max = maxFor(item, pick.size)
+      pick.qty = Math.min(Math.max(1, v || 1), max)
+      qInput.value = pick.qty
+      dec.disabled = pick.qty <= 1
+      inc.disabled = pick.qty >= max
+      refreshFoot()
+    }
+    pf.querySelectorAll('input[type=radio]').forEach(r => r.addEventListener('change', () => {
+      g.picks[item.id].size = r.value
+      stepper.hidden = r.value === 'none'
+      if (r.value !== 'none') setQty(g.picks[item.id].qty); else refreshFoot()
+    }))
+    dec.onclick = () => setQty(g.picks[item.id].qty - 1)
+    inc.onclick = () => setQty(g.picks[item.id].qty + 1)
+    qInput.onchange = () => setQty(Number.parseInt(qInput.value, 10))
+  })
+  document.getElementById('give-cancel').onclick = () => dlg.close()
+  dlg.onclose = () => {
+    const ok = dlg.returnValue === 'give'
+    dlg.returnValue = ''
+    if (ok && g.employee && count()) {
+      const lines = chosen().map(i => ({ item: i.id, size: g.picks[i.id].size, qty: g.picks[i.id].qty }))
+      for (const l of lines) { const it = U.item(l.item); if (it.tracking === 'stock') it.qty[it.sizes.indexOf(l.size)] -= l.qty }
+      U.records.unshift({ id: `R-new-${U.records.length + 1}`, date: U.today, employee: g.employee, givenBy: U.currentUser, lines })
+      state.person = g.employee
+      render()
+      toast(s.given(count(), nameOf(U.employee(g.employee))))
+    }
+    document.getElementById('handout')?.focus()
+  }
+  renderTaker(false)
+  refreshFoot()
+  dlg.showModal()
+  document.getElementById('taker-q')?.focus()
 }
 
 function toast(msg) {
   const el = document.getElementById('toast')
   el.textContent = msg; el.hidden = false
-  clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true }, 3600)
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true }, 4200)
 }
 
 render()
-if (params.get('edit') && canEdit()) openEditor(params.get('edit'))
+if (canEdit() && params.get('edit')) openEditor(params.get('edit'))
+if (canEdit() && params.get('give')) openGive()
 </script>
 </body>
 </html>
