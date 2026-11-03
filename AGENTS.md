@@ -27,9 +27,12 @@ pnpm -C frontend run lint
 pnpm -C frontend exec tsc -b --noEmit
 pnpm -C frontend run build
 pnpm -C frontend run e2e
+pnpm -C frontend run e2e:agentic
 ```
 
-Use the narrowest relevant check while iterating. The full backend suite takes about 25 minutes on `GSSGLT`: run it once, in the background, with no timeout. Combined frontend checks can exhaust memory on this host. `main` is not format-clean, so format only the files you change; `ruff format .` rewrites about 190 unrelated files. CI (`.github/workflows/checks.yml`) runs `ruff check`, `scripts/check_numbering.py`, and a format check of changed files on every pull request.
+Use the narrowest relevant check while iterating. The full backend suite takes about 25 minutes on `GSSGLT`: run it once, in the background, with no timeout. Combined frontend checks can exhaust memory on this host. `main` is not format-clean, so format only the files you change; `ruff format .` rewrites about 190 unrelated files. CI (`.github/workflows/checks.yml`) runs `ruff check`, `scripts/check_numbering.py`, and a format check of changed files on every pull request; PR Agent (`.github/workflows/pr-agent.yml`, rules in `.pr_agent.toml`) reviews every pull request.
+
+`e2e` runs the Playwright specs in `frontend/e2e/*.spec.ts`. `e2e:agentic` runs `frontend/e2e/agentic/*.e2e.ts` with [e2e](https://e2e.tester.army): each run boots a throwaway stack from `frontend/e2e/agentic/stack.mjs`, and `agent.*` steps use the machine's `codex login`. It needs Linux or WSL. Use the `e2e` skill to write or fix these tests.
 
 Service operations:
 
