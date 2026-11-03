@@ -907,15 +907,47 @@ def _pp_leave_permit(doc: Any, ctx: dict[str, Any]) -> None:
 
 
 def _pp_admin_leave(doc: Any, ctx: dict[str, Any]) -> None:
-    """Centre the manager signer block inside the final notes box, and leave
-    the separate branch-manager التوقيع cell clean for a manual signature."""
+    """Fill the branch-stage notes and centred inline signature, then the
+    separate project-manager signer block in the final notes box."""
     try:
-        branch_sig_cell = doc.tables[2].rows[3].cells[1]
+        branch_table = doc.tables[2]
+        branch_sig_cell = branch_table.rows[3].cells[1]
         for para in branch_sig_cell.paragraphs:
             if para.text and "x" in para.text.lower():
                 replace_paragraph_text(para, "")
+        branch_sig_path = ctx.get("branch_manager_sig_path")
+        if branch_sig_path:
+            anchor = branch_sig_cell.paragraphs[0]
+            fill_image_behind_text_in_paragraph(
+                anchor,
+                branch_sig_path,
+                width_inches=float(ctx.get("_sig_size_mm", DEFAULT_SIG_SIZE_MM)) / 25.4,
+                dilate_radius_px=int(ctx.get("_sig_boldness", DEFAULT_SIG_BOLDNESS)),
+                signature_role="branch_manager",
+                keep_inline=True,
+            )
+            anchor.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        notes = str(ctx.get("branch_manager_notes", "") or "").strip()
+        if notes:
+            from copy import deepcopy
+
+            notes_para = branch_table.rows[1].cells[0].paragraphs[0]
+            first, *rest = notes.splitlines()
+            replace_paragraph_text(notes_para, first, align_center=True)
+            run = notes_para.runs[0]
+            for line in rest:
+                run.add_break()
+                run.add_text(line)
+            # Match the other Arabic values: take the leave-reason value's
+            # run formatting (font, complex-script size, bold, rtl).
+            reason_runs = doc.tables[1].rows[1].cells[1].paragraphs[0].runs
+            source_rpr = reason_runs[0]._r.rPr if reason_runs else None
+            if source_rpr is not None:
+                if run._r.rPr is not None:
+                    run._r.remove(run._r.rPr)
+                run._r.insert(0, deepcopy(source_rpr))
     except IndexError:
-        log.warning("Admin Leave: branch التوقيع cell (t2 r3 c1) missing")
+        log.warning("Admin Leave: branch manager rows (t2 r1/r3) missing")
     manager_cell = doc.tables[3].rows[1].cells[0]
     _place_manager_sig_above_name(manager_cell, ctx)
     _finalize_manager_block(manager_cell, ctx)

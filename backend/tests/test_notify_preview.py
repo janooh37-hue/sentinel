@@ -349,6 +349,9 @@ def test_approved_revision_preview_matches_deduplicated_send(
     if original_status == "settled_leave" and template != "Leave Application Form":
         pytest.skip("Only Annual Leave has a later Leaves-page verdict")
     employee, signer, manager = revision_env
+    branch = User(email="branch@preview.test", password_hash="x", role="manager", status="active")
+    api_db.add(branch)
+    api_db.commit()
 
     def generate(**kwargs):
         result = document_service.generate_document(
@@ -369,9 +372,14 @@ def test_approved_revision_preview_matches_deduplicated_send(
             book.id,
             submitted_by_user_id=signer.id,
             approver_user_id=signer.id,
+            branch_approver_user_id=branch.id,
             priority="normal",
             reviewer_user_ids=[],
         )
+        if template == "Administrative Leave Form":
+            book_service.sign_book(
+                api_db, book.id, user_id=branch.id, version_id=book.versions[-1].id
+            )
         book_service.sign_book(api_db, book.id, user_id=signer.id, version_id=book.versions[-1].id)
         assert book.approval_state == "approved"
 

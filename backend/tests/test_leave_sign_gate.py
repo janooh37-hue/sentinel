@@ -1,5 +1,6 @@
 """Generated leave records are settled by their record's signing chain, not Leaves PATCH."""
 
+import copy
 import hashlib
 import io
 import threading
@@ -17,7 +18,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
-from app.core import docx_engine, form_policy, leave_lifecycle
+from app.core import docx_engine, form_policy, leave_lifecycle, signature_layout
 from app.db import session as session_mod
 from app.db.models import (
     REF_SEQUENCE_ID,
@@ -88,7 +89,8 @@ def _make_gate_env(db_session, tmp_path, monkeypatch):
         monkeypatch.setitem(form_policy.SIGNING_PATHS, template, "chain")
     employee = Employee(id="G-GATE", name_en="Gate Employee", status="Active")
     signer = User(email="signer@gate.test", password_hash="x", role="admin", status="active")
-    db_session.add_all([employee, signer, BookCategory(id="HR", prefix="HR")])
+    branch = User(email="branch@gate.test", password_hash="x", role="manager", status="active")
+    db_session.add_all([employee, signer, branch, BookCategory(id="HR", prefix="HR")])
     db_session.flush()
     manager = Manager(name_en="Gate Manager", user_id=signer.id)
     db_session.add(manager)
@@ -108,7 +110,7 @@ def _make_gate_env(db_session, tmp_path, monkeypatch):
     send = Mock()
     monkeypatch.setattr(notify_dispatch, "send_for_event", send)
     return SimpleNamespace(
-        db=db_session, employee=employee, signer=signer, manager=manager, send=send
+        db=db_session, employee=employee, signer=signer, branch=branch, manager=manager, send=send
     )
 
 
@@ -142,9 +144,19 @@ def submit(env, book):
         book.id,
         submitted_by_user_id=env.signer.id,
         approver_user_id=env.signer.id,
+        branch_approver_user_id=(
+            env.branch.id if book.versions[-1].template_id == "Administrative Leave Form" else None
+        ),
         priority="normal",
         reviewer_user_ids=[],
     )
+
+
+def finish_signing(env, book):
+    version = book.versions[-1]
+    if version.template_id == "Administrative Leave Form":
+        book_service.sign_book(env.db, book.id, user_id=env.branch.id, version_id=version.id)
+    book_service.sign_book(env.db, book.id, user_id=env.signer.id, version_id=version.id)
 
 
 @pytest.mark.parametrize("template", ["Leave Permit Form", "Administrative Leave Form"])
@@ -165,7 +177,7 @@ def test_generated_leave_waits_for_signing_and_sends_once(gate_env, monkeypatch,
     monkeypatch.setattr(notify_dispatch, "auto_send_for_book", autosend)
     submit(env, book)
     env.send.assert_not_called()
-    book_service.sign_book(env.db, book.id, user_id=env.signer.id, version_id=version.id)
+    finish_signing(env, book)
     assert book.approval_state == "approved"
     assert leave.status == "Approved"
     autosend.assert_called_once_with(env.db, book.id, sent_by=env.signer.id)
@@ -188,7 +200,7 @@ def test_reject_and_return_send_nothing(gate_env):
     book_service.decide_step(
         env.db,
         book.id,
-        user_id=env.signer.id,
+        user_id=env.branch.id,
         version_id=book.versions[-1].id,
         decision="returned",
         note="Correct dates",
@@ -198,7 +210,7 @@ def test_reject_and_return_send_nothing(gate_env):
     book_service.decide_step(
         env.db,
         book.id,
-        user_id=env.signer.id,
+        user_id=env.branch.id,
         version_id=book.versions[-1].id,
         decision="rejected",
         note="Not granted",
@@ -234,7 +246,7 @@ def test_revision_reuses_leave_even_when_dates_change(gate_env):
     book_service.decide_step(
         env.db,
         book.id,
-        user_id=env.signer.id,
+        user_id=env.branch.id,
         version_id=book.versions[-1].id,
         decision="rejected",
         note="Correct dates",
@@ -261,7 +273,11 @@ def decide(env, book, decision):
     book_service.decide_step(
         env.db,
         book.id,
-        user_id=env.signer.id,
+        user_id=(
+            env.branch.id
+            if book.versions[-1].template_id == "Administrative Leave Form"
+            else env.signer.id
+        ),
         version_id=book.versions[-1].id,
         decision=decision,
         note=decision,
@@ -362,9 +378,7 @@ def test_a_reissue_takes_over_a_rejected_leave(gate_env, template):
     env.db.refresh(leave)
     assert leave.status == "Pending"
     submit(env, reissue)
-    book_service.sign_book(
-        env.db, reissue.id, user_id=env.signer.id, version_id=reissue.versions[-1].id
-    )
+    finish_signing(env, reissue)
     env.db.refresh(leave)
     assert leave.status == "Approved"
     assert env.send.call_count == 1
@@ -485,9 +499,7 @@ def test_a_word_revision_of_a_rejected_owner_waits_for_a_takeover_in_flight(
     reissue = env.db.get_one(Book, reissue.id)
     assert book_service.leave_owner(env.db, leave.id) is reissue
     submit(env, reissue)
-    book_service.sign_book(
-        env.db, reissue.id, user_id=env.signer.id, version_id=reissue.versions[-1].id
-    )
+    finish_signing(env, reissue)
     assert env.db.get_one(Leave, leave.id).status == "Approved"
     assert env.send.call_count == 1
 
@@ -596,9 +608,7 @@ def test_a_revision_onto_a_rejected_records_leave_takes_it_over(gate_env, templa
     assert second_leave.status == "Pending"
     env.db.refresh(first_leave)
     assert (first_leave.start_date, first_leave.status) == (date(2026, 10, 20), "Pending")
-    book_service.sign_book(
-        env.db, revised.id, user_id=env.signer.id, version_id=revised.versions[-1].id
-    )
+    finish_signing(env, revised)
     env.db.refresh(first_leave)
     env.db.refresh(second_leave)
     assert first_leave.status == "Approved"
@@ -637,9 +647,7 @@ def test_a_revision_keeps_the_notify_opt_out(gate_env, template):
     revised, _leave = generate(env, template, revise_of_book_id=book.id, notify_employee=True)
     assert revised.versions[-1].fields["_signing"]["notify_employee"] is False
     submit(env, revised)
-    book_service.sign_book(
-        env.db, book.id, user_id=env.signer.id, version_id=revised.versions[-1].id
-    )
+    finish_signing(env, revised)
     env.db.refresh(leave)
     assert leave.status == "Approved"
     env.send.assert_not_called()
@@ -656,6 +664,45 @@ def _word_revision(env, book):
     )
     env.db.refresh(book)
     return book.versions[-1]
+
+
+def test_admin_leave_word_revision_cannot_be_submitted(gate_env, monkeypatch):
+    env = gate_env
+    monkeypatch.setattr(word_book_service, "get_settings", document_service.get_settings)
+    book, leave = generate(env, "Administrative Leave Form", notify_employee=False)
+    version = _word_revision(env, book)
+    assert version.fields == {}
+    with pytest.raises(document_service.ValidationFailedError) as caught:
+        submit(env, book)
+    assert caught.value.code == "BRANCH_STAGE_WORD_REVISION_UNSUPPORTED"
+    assert caught.value.http_status == 422
+    assert version.approval_steps == []
+    assert book.approval_state == "none"
+    assert leave.status == "Pending"
+    env.send.assert_not_called()
+
+
+def test_stage_signature_inherits_previous_signing_snapshot(gate_env, monkeypatch, tmp_path):
+    env = gate_env
+    monkeypatch.setattr(word_book_service, "get_settings", document_service.get_settings)
+    book, _leave = generate(env, "Administrative Leave Form", notify_employee=False)
+    original = book.versions[-1]
+    expected = dict(original.fields["_signing"])
+    version = _word_revision(env, book)
+    image = tmp_path / "branch.png"
+    Image.new("RGBA", (100, 40), (255, 0, 0, 255)).save(image)
+    snapshot = document_service.freeze_stage_signature(
+        version,
+        stage="branch_manager",
+        signature_path=image,
+        user_id=env.branch.id,
+        note="Checked",
+    )
+    assert {key: snapshot[key] for key in expected} == expected
+    assert snapshot["notify_employee"] is False
+    assert snapshot["stages"]["branch_manager"]["user_id"] == env.branch.id
+    assert original.fields["_signing"] == expected
+    assert version.fields == {}
 
 
 @pytest.mark.parametrize("notify", [True, False])
@@ -866,7 +913,7 @@ def test_signed_admin_leave_dates_the_manager_approval(gate_env, monkeypatch):
     monkeypatch.setattr(document_service, "datetime", Later)
     monkeypatch.setattr(docx_engine, "datetime", Later)
     version = book.versions[-1]
-    book_service.sign_book(env.db, book.id, user_id=env.signer.id, version_id=version.id)
+    finish_signing(env, book)
     signed = _document_xml(_data_path(env, version.signed_pdf_path))
     assert "01/01/2030" in signed  # manager approval date ({{ today }})
 
@@ -1133,4 +1180,151 @@ def test_deleted_leave_gets_no_message_on_signing(gate_env, template, fields):
     leave_service.soft_delete_leave(env.db, leave.id)
     _sign(env, book)
     assert book.approval_state == "approved"
+    env.send.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "selection,expected_code",
+    [
+        ("missing", "BRANCH_APPROVER_REQUIRED"),
+        ("same", "BRANCH_APPROVER_SAME_AS_PROJECT"),
+        ("inactive", "APPROVER_NOT_ELIGIBLE"),
+        ("unprivileged", "APPROVER_NOT_ELIGIBLE"),
+        ("unknown", "APPROVER_NOT_ELIGIBLE"),
+    ],
+)
+def test_admin_leave_requires_distinct_eligible_branch_approver(gate_env, selection, expected_code):
+    env = gate_env
+    book, leave = generate(env, "Administrative Leave Form")
+    branch_id = env.branch.id
+    if selection == "missing":
+        branch_id = None
+    elif selection == "same":
+        branch_id = env.signer.id
+    elif selection == "inactive":
+        env.branch.status = "inactive"
+    elif selection == "unprivileged":
+        env.branch.role = "operator"
+    elif selection == "unknown":
+        branch_id = 999999
+    env.db.commit()
+    with pytest.raises(document_service.ValidationFailedError) as caught:
+        book_service.submit_for_approval(
+            env.db,
+            book.id,
+            submitted_by_user_id=env.signer.id,
+            approver_user_id=env.signer.id,
+            branch_approver_user_id=branch_id,
+            priority="normal",
+            reviewer_user_ids=[],
+        )
+    assert caught.value.code == expected_code
+    assert book.approval_state == "none"
+    assert book.versions[-1].approval_steps == []
+    assert leave.status == "Pending"
+    env.send.assert_not_called()
+
+
+def test_admin_branch_sign_is_partial_and_final_replays_frozen_signature(
+    gate_env, tmp_path, monkeypatch
+):
+    env = gate_env
+    branch_image = tmp_path / "branch.png"
+    project_image = tmp_path / "project.png"
+    Image.new("RGBA", (100, 40), (255, 0, 0, 255)).save(branch_image)
+    Image.new("RGBA", (100, 40), (0, 0, 255, 255)).save(project_image)
+    resolve = Mock(
+        side_effect=lambda user: branch_image if user.id == env.branch.id else project_image
+    )
+    monkeypatch.setattr(book_service.user_signature_service, "resolve_signature", resolve)
+    book, leave = generate(env, "Administrative Leave Form")
+    version = book.versions[-1]
+    submit(env, book)
+    assert [
+        (step.step_order, step.stage_label, step.assignee_user_id, step.kind)
+        for step in sorted(version.approval_steps, key=lambda step: step.step_order)
+    ] == [
+        (0, "branch_manager", env.branch.id, "approver"),
+        (1, "project_manager", env.signer.id, "approver"),
+    ]
+    with pytest.raises(document_service.ValidationFailedError) as caught:
+        book_service.sign_book(env.db, book.id, user_id=env.signer.id, version_id=version.id)
+    assert caught.value.code == "NOT_YOUR_STEP"
+    note = "Branch checked staffing — موافق"
+    book_service.sign_book(env.db, book.id, user_id=env.branch.id, version_id=version.id, note=note)
+    assert book.approval_state == version.status == "pending"
+    assert leave.status == "Pending"
+    assert version.signed_pdf_path is None
+    assert version.signed_at is None
+    assert version.signed_by_user_id is None
+    assert version.manager_sig_embedded is False
+    assert version.signed_base_pdf_path is None
+    assert version.signature_revision == 0
+    env.send.assert_not_called()
+    partial = env.db.get_one(Document, version.document_id)
+    partial_path = _data_path(env, partial.docx_path)
+    partial_doc = docx.Document(partial_path)
+    assert any(note in cell.text for cell in partial_doc.tables[2].rows[1].cells)
+    assert partial_doc.tables[2].rows[3].cells[1]._tc.xpath(".//w:drawing")
+    assert not partial_doc.tables[3]._tbl.xpath(".//w:drawing")
+    assert [
+        drawing.role for drawing in signature_layout.inspect_signature_drawings(partial_path)
+    ] == ["branch_manager"]
+    frozen = dict(version.fields["_signing"]["stages"]["branch_manager"])
+    assert frozen["note"] == note
+    assert frozen["user_id"] == env.branch.id
+    retained = _data_path(env, frozen["signature_path"])
+    assert retained != branch_image
+    assert retained.read_bytes() == branch_image.read_bytes()
+    assert version.approval_steps[0].note == note
+    branch_digest = signature_layout.inspect_signature_drawings(partial_path)[0].image_sha256
+    assert branch_digest in _media(partial_path)
+    branch_image.unlink()
+    resolve.reset_mock()
+    # The branch manager signed on an earlier day than the project manager.
+    fields = copy.deepcopy(version.fields)
+    fields["_signing"]["stages"]["branch_manager"]["signed_on"] = "01/01/2026"
+    version.fields = fields
+    env.db.flush()
+    frozen["signed_on"] = "01/01/2026"
+    book_service.sign_book(env.db, book.id, user_id=env.signer.id, version_id=version.id)
+    assert [call.args[0].id for call in resolve.call_args_list] == [env.signer.id]
+    assert version.fields["_signing"]["stages"]["branch_manager"] == frozen
+    assert book.approval_state == version.status == "approved"
+    assert leave.status == "Approved"
+    assert version.signed_by_user_id == env.signer.id
+    assert version.signed_at is not None
+    final_path = _data_path(env, version.signed_pdf_path)
+    assert branch_digest in _media(final_path)
+    final_doc = docx.Document(final_path)
+    assert any(note in cell.text for cell in final_doc.tables[2].rows[1].cells)
+    assert final_doc.tables[2].rows[3].cells[1]._tc.xpath(".//w:drawing")
+    assert final_doc.tables[3]._tbl.xpath(".//w:drawing")
+    assert final_doc.tables[2].rows[2].cells[1].text.strip() == "01/01/2026"
+    assert sorted(
+        drawing.role for drawing in signature_layout.inspect_signature_drawings(final_path)
+    ) == ["branch_manager", "manager"]
+    assert env.send.call_count == 1
+
+
+@pytest.mark.parametrize("stage", ["branch_manager", "project_manager"])
+def test_admin_leave_rejection_at_either_stage_rejects_without_employee_message(gate_env, stage):
+    env = gate_env
+    book, leave = generate(env, "Administrative Leave Form")
+    submit(env, book)
+    version = book.versions[-1]
+    if stage == "project_manager":
+        book_service.sign_book(
+            env.db, book.id, user_id=env.branch.id, version_id=version.id, note="Staffing checked"
+        )
+    book_service.decide_step(
+        env.db,
+        book.id,
+        user_id=env.branch.id if stage == "branch_manager" else env.signer.id,
+        version_id=version.id,
+        decision="rejected",
+        note="Not granted",
+    )
+    assert book.approval_state == version.status == "rejected"
+    assert leave.status == "Rejected"
     env.send.assert_not_called()

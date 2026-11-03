@@ -2,14 +2,14 @@
 """Regression tests for the Leave Permit (301-004) and Administrative Leave
 (301-005) redesigned papers: field placement and signer block:
 
-  1. The manager signature floats *behind text* (zero layout height) on the
-     signature line just ABOVE the manager name: below Leave Permit's notes
-     box, inside Admin Leave's notes box, never in the branch التوقيع cell.
-  2. On Admin Leave the branch-manager التوقيع cell is left blank (no image, no
-     literal "x" placeholder) for a separate manual signature.
-  3. The manager name + title block is LEFT-aligned and consistent.
-  4. With NO manager selected, the standalone designation (DEFAULT_MANAGER_TITLE)
-     is not left stranded at the foot of the form, and no signature is placed.
+  1. The project-manager signature sits inline and centred on the signature
+     line just ABOVE the manager name in the final notes cell.
+  2. On Admin Leave the branch-manager signature sits inline and centred in
+     the separate التوقيع cell, with notes in the branch notes row. Without
+     a branch signature the cell stays blank (including no "x" placeholder).
+  3. Both approvers have distinct tracked signature roles and identities.
+  4. With NO project manager selected, the standalone designation
+     (DEFAULT_MANAGER_TITLE) and project-manager signature are hidden.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 from zipfile import ZipFile
 
+import pytest
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
@@ -24,6 +25,11 @@ from PIL import Image
 
 from app.core.constants import DEFAULT_MANAGER_TITLE
 from app.core.docx_engine import DocxEngine
+from app.core.signature_layout import (
+    inspect_signature_drawings,
+    parse_marker_descr,
+    role_for_sig_key,
+)
 from app.services.document_service import _TEMPLATES_DIR
 
 _MANAGER = "سعيد راشد اليحيائي"
@@ -90,7 +96,7 @@ def _para_above_name(doc):
 FORMS = ("Leave Permit Form", "Administrative Leave Form")
 
 
-# --- signature lands above the name, floated behind text -------------------
+# --- project signature lands centred above the name ------------------------
 
 
 def test_signature_sits_centred_above_name_in_the_notes_cell(tmp_path):
@@ -115,13 +121,148 @@ def test_manager_block_centred(tmp_path):
         )
 
 
-def test_admin_leave_branch_signature_cell_is_blank(tmp_path):
+def test_admin_leave_branch_signature_cell_is_blank_without_branch_signature(tmp_path):
     doc = _render(
         "Administrative Leave Form", _with_manager(_make_sig_png(tmp_path / "s.png")), tmp_path
     )
     cell = doc.tables[2].rows[3].cells[1]
-    assert "w:drawing" not in cell._tc.xml, "signature must not sit in the branch التوقيع cell"
+    assert "w:drawing" not in cell._tc.xml, "project signature must not occupy the branch cell"
     assert "x" not in cell.text.lower(), "literal 'x' placeholder not cleared"
+
+
+@pytest.mark.parametrize("size_mm", [None, 26.5, 45])
+def test_admin_leave_branch_signature_is_centred_inline_and_tracked(tmp_path, size_mm):
+    sig = _make_sig_png(tmp_path / "branch.png")
+    notes = "موافق على الإجازة\nبشرط تسليم المهام"
+    data = {**_base(), "branch_manager_sig_path": str(sig), "branch_manager_notes": notes}
+    if size_mm is not None:
+        data["_sig_size_mm"] = size_mm
+    doc = _render("Administrative Leave Form", data, tmp_path)
+
+    cell = doc.tables[2].rows[3].cells[1]
+    inlines = cell._tc.xpath(".//wp:inline")
+    assert len(inlines) == 1
+    assert not cell._tc.xpath(".//wp:anchor"), "branch signature must never float"
+    assert cell.paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.CENTER
+    assert "x" not in cell.text.lower()
+    assert doc.tables[2].rows[1].cells[0].text == notes
+    assert "w:drawing" not in doc.tables[3]._tbl.xml, "branch stage must not sign the final box"
+    assert DEFAULT_MANAGER_TITLE not in doc.tables[3]._tbl.xml
+
+    drawings = inspect_signature_drawings(tmp_path / "form.docx")
+    assert len(drawings) == 1
+    drawing = drawings[0]
+    assert drawing.role == "branch_manager"
+    expected_size_mm = min(int(size_mm if size_mm is not None else 32), 32)
+    assert drawing.width_emu == pytest.approx(expected_size_mm * 36000, abs=1)
+    docpr = inlines[0].find(qn("wp:docPr"))
+    assert parse_marker_descr(docpr.get("descr")) == ("branch_manager", drawing.signature_id)
+    assert role_for_sig_key("branch_manager_sig_path") == "branch_manager"
+
+
+def test_admin_leave_branch_and_project_signatures_have_separate_roles_and_identities(tmp_path):
+    # Reuse identical image bytes: the occurrence markers, not the media part,
+    # must distinguish branch and project-manager approval signatures.
+    sig = _make_sig_png(tmp_path / "shared.png")
+    notes = "موافق"
+    doc = _render(
+        "Administrative Leave Form",
+        {
+            **_with_manager(sig),
+            "branch_manager_sig_path": str(sig),
+            "branch_manager_notes": notes,
+        },
+        tmp_path,
+    )
+    branch_cell = doc.tables[2].rows[3].cells[1]
+    project_anchor = _para_above_name(doc)
+    assert project_anchor is not None
+    branch_inlines = branch_cell._tc.xpath(".//wp:inline")
+    project_inlines = project_anchor._p.xpath(".//wp:inline")
+    assert len(branch_inlines) == len(project_inlines) == 1
+    assert not branch_cell._tc.xpath(".//wp:anchor")
+    assert (
+        branch_cell.paragraphs[0].alignment == project_anchor.alignment == WD_ALIGN_PARAGRAPH.CENTER
+    )
+    assert doc.tables[2].rows[1].cells[0].text == notes
+
+    drawings = inspect_signature_drawings(tmp_path / "form.docx")
+    assert len(drawings) == 2
+    by_role = {drawing.role: drawing for drawing in drawings}
+    assert set(by_role) == {"branch_manager", "manager"}
+    branch = by_role["branch_manager"]
+    project = by_role["manager"]
+    assert branch.signature_id != project.signature_id
+    assert branch.image_sha256 == project.image_sha256
+    assert branch.width_emu == project.width_emu
+    assert branch.height_emu == project.height_emu
+    assert parse_marker_descr(branch_inlines[0].find(qn("wp:docPr")).get("descr")) == (
+        "branch_manager",
+        branch.signature_id,
+    )
+    assert parse_marker_descr(project_inlines[0].find(qn("wp:docPr")).get("descr")) == (
+        "manager",
+        project.signature_id,
+    )
+
+
+def test_admin_leave_branch_only_signature_activates_placement_tracking(
+    db_session, tmp_path, monkeypatch
+):
+    from app.config import Settings
+    from app.db.models import BookVersion
+    from app.schemas.signature_placement import SignatureRead
+    from app.services import signature_placement_service
+
+    settings = Settings(data_dir=tmp_path, templates_dir=_TEMPLATES_DIR)
+    monkeypatch.setattr(signature_placement_service, "get_settings", lambda: settings)
+    _render(
+        "Administrative Leave Form",
+        {**_base(), "branch_manager_sig_path": str(_make_sig_png(tmp_path / "branch.png"))},
+        tmp_path,
+    )
+    version = BookVersion(id=1, book_id=1, version_no=1, signature_revision=0)
+    row = signature_placement_service.capture_initial_revision(
+        db_session,
+        version=version,
+        source_kind=signature_placement_service.SOURCE_KIND_APPROVAL,
+        signer_user_id=5,
+        docx_path=tmp_path / "form.docx",
+        primary_pdf_path=None,
+        published_pdf_path=None,
+    )
+    assert row is not None
+    assert row.revision == version.signature_revision == 1
+    assert row.signer_user_id == 5
+    retained = settings.data_dir / row.docx_path
+    assert retained != tmp_path / "form.docx"
+    assert retained.read_bytes() == (tmp_path / "form.docx").read_bytes()
+    (drawing,) = inspect_signature_drawings(retained)
+    response = SignatureRead(
+        id=drawing.signature_id,
+        role=drawing.role,
+        page=None,
+        x=None,
+        y=None,
+        width_pt=None,
+        height_pt=None,
+        image_url=f"/api/v1/documents/1/signatures/{drawing.signature_id}/image",
+    )
+    assert response.role == "branch_manager"
+
+
+def test_admin_leave_branch_manager_notes_fill_the_branch_row(tmp_path):
+    notes = "موافق على الإجازة\nبشرط تسليم المهام"
+    doc = _render("Administrative Leave Form", {**_base(), "branch_manager_notes": notes}, tmp_path)
+    branch = doc.tables[2]
+    assert branch.rows[0].cells[0].text.strip() == "إجراءات مدير الفرع"
+    assert branch.rows[1].cells[0].text == notes
+    assert notes.splitlines()[0] not in branch.rows[3].cells[1].text
+
+
+def test_admin_leave_without_notes_keeps_branch_row_blank(tmp_path):
+    doc = _render("Administrative Leave Form", _base(), tmp_path)
+    assert doc.tables[2].rows[1].cells[0].text.strip() == ""
 
 
 def test_redesigned_leave_forms_render_values_in_their_cells(tmp_path):

@@ -1479,6 +1479,26 @@ def _build_template_data(
                 key == "today" and template_id in _MANAGER_SIGN_DATE_FORMS
             ):
                 data[key] = issued
+    if template_id in form_policy.BRANCH_MANAGER_STAGE_FORMS:
+        # Only a completed server-owned approval snapshot can author this section.
+        data.pop("branch_manager_notes", None)
+        data.pop("branch_manager_sig_path", None)
+        stages = signing.get("stages", {}) if isinstance(signing, dict) else {}
+        branch = stages.get("branch_manager") if isinstance(stages, dict) else None
+        if isinstance(branch, dict):
+            data["branch_manager_notes"] = branch.get("note") or ""
+            raw_path = branch.get("signature_path")
+            if isinstance(raw_path, str):
+                path = Path(raw_path)
+                path = path if path.is_absolute() else get_settings().data_dir / path
+                if not path.is_file():
+                    raise AppError(
+                        "SIGNATURE_SOURCE_UNAVAILABLE",
+                        "The frozen branch-manager signature is unavailable.",
+                        http_status=409,
+                    )
+                data["branch_manager_sig_path"] = str(path)
+            data["today"] = branch.get("signed_on") or data.get("today")
 
     # The exit forms use an independent interviewer selection. The UI sends
     # picker IDs as strings; resolve to a Submitter without affecting the
@@ -2301,6 +2321,12 @@ def generate_document(
     # dates and employee/submitter choices. Auto forms without a manager slot
     # retain their authoritative original DOCX when approved instead.
     fields = {k: v for k, v in fields.items() if k != _SIGNING_KEY}
+    if template_id in form_policy.BRANCH_MANAGER_STAGE_FORMS:
+        fields = {
+            k: v
+            for k, v in fields.items()
+            if k not in {"branch_manager_notes", "branch_manager_sig_path"}
+        }
     if (
         commit
         and signing_path in {"chain", "in_app"}
@@ -3174,6 +3200,44 @@ def _sign_authored_docx(
     return artifact
 
 
+def freeze_stage_signature(
+    version: BookVersion, *, stage: str, signature_path: Path, user_id: int, note: str | None
+) -> dict[str, Any]:
+    """Retain immutable image bytes and facts, independent of later profile edits."""
+    fields = version.fields or {}
+    raw_signing = fields.get(_SIGNING_KEY)
+    if not isinstance(raw_signing, dict):
+        raw_signing = next(
+            (
+                snapshot
+                for earlier in reversed(version.book.versions)
+                if earlier.version_no < version.version_no
+                and isinstance(snapshot := (earlier.fields or {}).get(_SIGNING_KEY), dict)
+            ),
+            None,
+        )
+    signing: dict[str, Any] = dict(raw_signing) if isinstance(raw_signing, dict) else {}
+    raw_stages = signing.get("stages")
+    stages = dict(raw_stages) if isinstance(raw_stages, dict) else {}
+    root = get_settings().data_dir
+    destination = (
+        root
+        / "approval_signatures"
+        / str(version.id)
+        / f"{uuid.uuid4().hex}{signature_path.suffix}"
+    )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(signature_path, destination)
+    stages[stage] = {
+        "signature_path": destination.relative_to(root).as_posix(),
+        "user_id": user_id,
+        "note": note,
+        "signed_on": datetime.now().strftime("%d/%m/%Y"),
+    }
+    signing["stages"] = stages
+    return signing
+
+
 def render_signed_artifact(
     db: Session,
     *,
@@ -3184,6 +3248,7 @@ def render_signed_artifact(
     output_dir: Path | None = None,
     converter: artifact_service.PdfConverter | None = None,
     signing_snapshot: Mapping[str, Any] | None = None,
+    approval_stage: str | None = None,
 ) -> artifact_service.ArtifactResult:
     """Produce the approved artifact, adding the signer's manager signature only
     when the form has a slot. Forms without one copy the retained original
@@ -3286,7 +3351,15 @@ def render_signed_artifact(
     if _submitter_signs_employee_cell(template_id, submitter_id, embed_signature):
         assert submitter_id is not None  # _submitter_signs_employee_cell requires it
         data["employee_sig_path"] = _submitter_sign_path(db, submitter_id)
-    if template_id in _MANAGER_SIGN_DATE_FORMS:
+    # Administrative Leave's ``today`` is the branch section's date: once the
+    # branch stage is frozen, keep its own signing day (restored by
+    # _build_template_data) rather than the project manager's.
+    branch_date_frozen = (
+        template_id in form_policy.BRANCH_MANAGER_STAGE_FORMS
+        and approval_stage != "branch_manager"
+        and bool(data.get("branch_manager_sig_path"))
+    )
+    if template_id in _MANAGER_SIGN_DATE_FORMS and not branch_date_frozen:
         signed_on = (
             version.signed_at.replace(tzinfo=UTC).astimezone()
             if version.signed_at is not None
@@ -3294,7 +3367,7 @@ def render_signed_artifact(
         )
         data["today"] = signed_on.strftime("%d/%m/%Y")
     # Inject the approver's signature into the manager signature slot.
-    data["sig1_path"] = signer_signature_path
+    data["sig1_path"] = "" if approval_stage == "branch_manager" else signer_signature_path
     if template_id in CLASSIFIED_BOOK_FORMS:
         # No current_user here: the footer keeps the submitter's G-number, as
         # printed on the unsigned paper.

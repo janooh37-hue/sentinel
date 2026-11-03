@@ -40961,6 +40961,18 @@
             "type": "integer",
             "exclusiveMinimum": 0.0,
             "title": "Version Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           }
         },
         "type": "object",
@@ -41025,6 +41037,17 @@
               }
             ],
             "title": "Approver User Id"
+          },
+          "branch_approver_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch Approver User Id"
           },
           "reviewer_user_ids": {
             "items": {
@@ -57991,6 +58014,7 @@
             "type": "string",
             "enum": [
               "manager",
+              "branch_manager",
               "employee",
               "submitter"
             ],

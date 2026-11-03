@@ -120,6 +120,7 @@ def _require_readable(path: Path) -> None:
 
 _ROLE_KEYS = {
     "manager": ("sig1_path", "manager_sig_path"),
+    "branch_manager": ("branch_manager_sig_path",),
     "employee": ("sig2_path", "employee_sig_path"),
     "submitter": ("submitter_sig_path",),
 }
@@ -313,6 +314,12 @@ def _sync_leave_record(
         audit(reason="The paper's monthly administrative-leave count was not stored")
         return
 
+    settings = get_settings()
+    frozen_signing = fields.get(document_service._SIGNING_KEY)
+    frozen_stages = frozen_signing.get("stages", {}) if isinstance(frozen_signing, dict) else {}
+    frozen_project = (
+        frozen_stages.get("project_manager") if isinstance(frozen_stages, dict) else None
+    )
     signer = None
     signature = None
     # Signed means an electronic sign_book artifact. An approved version whose
@@ -325,12 +332,18 @@ def _sync_leave_record(
             audit(reason="A scanned signature cannot be replayed")
             return
         signer = db.get(User, previous.signed_by_user_id) if previous.signed_by_user_id else None
-        signature = user_signature_service.resolve_signature(signer) if signer else None
+        if isinstance(frozen_project, dict):
+            raw_signature = frozen_project.get("signature_path")
+            signature = (
+                _absolute(raw_signature, settings.data_dir)
+                if isinstance(raw_signature, str)
+                else None
+            )
+        else:
+            signature = user_signature_service.resolve_signature(signer) if signer else None
         if signer is None or signature is None or not signature.is_file():
             audit(reason="Previous signer or saved signature cannot be resolved")
             return
-
-    settings = get_settings()
 
     def relative(path: Path | None) -> str | None:
         if path is None:
@@ -377,6 +390,10 @@ def _sync_leave_record(
         render_snapshot = snapshot or _recovered_snapshot(
             db, fields, original_paper.marked, issued=_generation_version(owner).created_at
         )
+        if isinstance(frozen_stages, dict):
+            for stage in frozen_stages.values():
+                if isinstance(stage, dict) and isinstance(stage.get("signature_path"), str):
+                    _require_readable(_absolute(stage["signature_path"], settings.data_dir))
         if signed:
             assert signature is not None
             _require_readable(signature)
