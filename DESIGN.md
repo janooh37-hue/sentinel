@@ -1861,6 +1861,8 @@ copy with direct actions stay inside the same clipped frame.
   The API likewise denies leave-derived filters without `leaves.view` and
   open-violation filters without `violations.view`. The filtered Employees
   section displays the total, paginates and scopes roster search.
+  The Arabic loaned-status chip reads **ملحق**, matching the canonical employee
+  status label; the English label and `Loaned` API/filter value are unchanged.
 - **Leave:** the Dubai operational day drives links. `status=Approved&on=…`
   means date overlap, not a leave starting that day. Returning uses inclusive
   `end_from`/`end_to` covering today through today+7. Both the mobile list and
