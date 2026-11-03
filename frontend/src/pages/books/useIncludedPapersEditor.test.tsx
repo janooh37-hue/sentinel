@@ -39,6 +39,72 @@ function wrapper({ children }: { children: ReactNode }): React.JSX.Element {
 afterEach(() => vi.restoreAllMocks())
 
 describe('useIncludedPapersEditor', () => {
+  it('blocks other staging actions while a record paper is being staged', async () => {
+    // The project's ES2023 lib predates Promise.withResolvers.
+    let finishStaging!: (staged: { token: string; filename: string; size: number }) => void
+    vi.spyOn(api, 'stageAttachmentFromRecord').mockReturnValue(new Promise((resolve) => {
+      finishStaging = resolve
+    }))
+    const uploadSpy = vi.spyOn(api, 'stageAttachment')
+    const { result } = renderHook(() => useIncludedPapersEditor(book), { wrapper })
+    let pending!: Promise<void>
+    act(() => {
+      pending = result.current.addFromRecord({ book_id: 10, source: 'record_document', attachment_index: null })
+    })
+    expect(result.current.busy).toBe(true)
+    await act(() => result.current.addFiles([new File(['pdf'], 'another.pdf')]))
+    expect(uploadSpy).not.toHaveBeenCalled()
+    await act(async () => {
+      finishStaging({ token: 'token', filename: 'record.pdf', size: 123 })
+      await pending
+    })
+    expect(result.current.busy).toBe(false)
+    expect(result.current.state.items).toHaveLength(2)
+  })
+
+  it.each(['record_document', 'record_attachment'] as const)('stages a %s and includes its token in the preview proposal', async (source) => {
+    const paperId = '33333333-3333-4333-8333-333333333333'
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(paperId)
+    const request = { book_id: 10, source, attachment_index: source === 'record_attachment' ? 1 : null }
+    const staged = { token: 'record-token', filename: 'record.pdf', size: 123 }
+    const stageSpy = vi.spyOn(api, 'stageAttachmentFromRecord').mockResolvedValue(staged)
+    const previewSpy = vi.spyOn(api, 'previewIncludedPapers').mockResolvedValue({
+      revision: 3,
+      fixed_page_count: 1,
+      total_page_count: 3,
+      papers: [paper],
+      pdf_base64: 'JVBERi0=',
+    })
+    const { result } = renderHook(() => useIncludedPapersEditor(book), { wrapper })
+
+    await act(() => result.current.addFromRecord(request))
+    expect(stageSpy).toHaveBeenCalledWith(request)
+    expect(result.current.state.items[1]).toMatchObject({
+      id: paperId, staged_token: staged.token, original_name: staged.filename,
+    })
+    expect(result.current.dirty).toBe(true)
+    expect(result.current.canSave).toBe(false)
+    await act(() => result.current.previewPackage())
+    expect(previewSpy).toHaveBeenCalledWith(9, {
+      revision: 3,
+      items: [{ id: paper.id }, { id: paperId, staged_token: staged.token, original_name: staged.filename }],
+    })
+  })
+
+  it('surfaces record staging errors and releases the busy state without adding a paper', async () => {
+    const error = new Error('Record is inaccessible')
+    vi.spyOn(api, 'stageAttachmentFromRecord').mockRejectedValue(error)
+    const { result } = renderHook(() => useIncludedPapersEditor(book), { wrapper })
+    await act(async () => {
+      await expect(result.current.addFromRecord({
+        book_id: 10, source: 'record_document', attachment_index: null,
+      })).rejects.toBe(error)
+    })
+    expect(result.current.error).toBe(error)
+    expect(result.current.busy).toBe(false)
+    expect(result.current.state.items).toHaveLength(1)
+  })
+
   it('stages selected files in order and previews the exact ordered proposal', async () => {
     const paperId = '33333333-3333-4333-8333-333333333333'
     vi.spyOn(crypto, 'randomUUID').mockReturnValue(paperId)

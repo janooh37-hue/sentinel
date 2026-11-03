@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api'
-import type { IncludedPaperRead } from '@/lib/api'
+import type { IncludedPaperRead, StageFromRecordRequest } from '@/lib/api'
 import { purgePdfCaches } from '@/lib/pdfCachePurge'
 
 import {
@@ -30,6 +30,7 @@ export interface IncludedPapersEditor {
   canSave: boolean
   dirty: boolean
   addFiles: (files: File[]) => Promise<void>
+  addFromRecord: (source: StageFromRecordRequest) => Promise<void>
   replacePaper: (id: string, file: File) => Promise<void>
   removePaper: (id: string) => void
   movePaper: (id: string, offset: -1 | 1) => void
@@ -54,6 +55,21 @@ export function useIncludedPapersEditor(book: IncludedPapersBook): IncludedPaper
         const staged = await api.stageAttachment(file)
         setState((current) => addStagedPaper(current, staged, crypto.randomUUID()))
       }
+    } catch (caught) {
+      setError(caught)
+      throw caught
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const addFromRecord = async (source: StageFromRecordRequest): Promise<void> => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const staged = await api.stageAttachmentFromRecord(source)
+      setState((current) => addStagedPaper(current, staged, crypto.randomUUID()))
     } catch (caught) {
       setError(caught)
       throw caught
@@ -124,6 +140,7 @@ export function useIncludedPapersEditor(book: IncludedPapersBook): IncludedPaper
     canSave: !busy && dirty && isPreviewCurrent(state),
     dirty,
     addFiles,
+    addFromRecord,
     replacePaper,
     removePaper: (id) => setState((current) => removeIncludedPaper(current, id)),
     movePaper: (id, offset) => setState((current) => moveIncludedPaper(current, id, offset)),

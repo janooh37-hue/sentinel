@@ -433,7 +433,7 @@ function StandardApplicationPage(): React.JSX.Element {
   )
 
   // Save-book gating: every required slot must be filled before commit.
-  // Preview stays available regardless (it renders the form only).
+  // Preview stays available regardless and includes every attachment supplied.
   const missingSlotKeys = missingRequired(visibleSlots, attachmentsState)
   const firstMissingSlot =
     visibleSlots.find((s) => s.key === missingSlotKeys[0]) ?? null
@@ -514,6 +514,8 @@ function StandardApplicationPage(): React.JSX.Element {
       // (sign=false) from persisting and silently defaulting every later report
       // to unsigned. Mirrors the non-word path (handleJobDone → clearDraft).
       if (selectedTemplate) clearDraft(selectedTemplate)
+      attachmentsDirtyRef.current = false
+      setAttachmentsState(emptyAttachmentsState())
       // NO auto-launch: navigating to ms-word: outside a user gesture raises
       // Chrome's tab-modal protocol prompt that silently swallows every click
       // in the tab while it lingers. The Word page's «Open in Word»
@@ -577,10 +579,9 @@ function StandardApplicationPage(): React.JSX.Element {
       }
     }
 
-    // Attachments ride the committed save only (spec §6: preview stays
-    // attachment-free). An empty list is sent as undefined so a revise with
-    // untouched attachments reuses the book's existing merged set (backend
-    // treats None as "keep").
+    // Preview and Save use the same attachment set. Keep empty lists undefined
+    // so a revise with untouched attachments reuses the book's merged set
+    // (the backend treats None as "keep").
     const attachmentSpecs = toGenerateSpecs(filterStateToSlots(attachmentsState, visibleSlots))
 
     return {
@@ -596,8 +597,7 @@ function StandardApplicationPage(): React.JSX.Element {
       // Per-book notify opt-out — only meaningful on the committed save of a
       // notifying form; the backend ignores it otherwise.
       notify_employee: notifyEmployee,
-      attachments:
-        commit && attachmentSpecs.length > 0 ? attachmentSpecs : undefined,
+      attachments: attachmentSpecs.length > 0 ? attachmentSpecs : undefined,
       // Revise mode: only the committed save regenerates a new version under
       // the existing book's ref (the backend requires commit=True for it).
       revise_of_book_id: commit ? reviseBookId ?? undefined : undefined,
@@ -631,6 +631,11 @@ function StandardApplicationPage(): React.JSX.Element {
           toast.error(t('books.word.subjectRequired'))
           return
         }
+        if (missingSlotKeys.length > 0) {
+          toast.error(t('application.attachments.requiredHint', { slot: firstMissingSlotLabel }))
+          return
+        }
+        const attachmentSpecs = toGenerateSpecs(filterStateToSlots(attachmentsState, visibleSlots))
         const managerField = schema?.fields.find((f) => f.type === 'manager_picker')
         const recipientField = schema?.fields.find((f) => f.type === 'recipient_picker')
         const ccField = schema?.fields.find((f) => f.type === 'recipient_multi_picker')
@@ -647,6 +652,7 @@ function StandardApplicationPage(): React.JSX.Element {
           table_rows,
           sign: true,
           confidentiality,
+          attachments: attachmentSpecs.length > 0 ? attachmentSpecs : undefined,
         })
       }
     }
@@ -654,6 +660,11 @@ function StandardApplicationPage(): React.JSX.Element {
     // Report form: author body in Word — route through the Word handoff, same as General Book word mode.
     if (isReportForm) {
       return form.handleSubmit((values) => {
+        if (missingSlotKeys.length > 0) {
+          toast.error(t('application.attachments.requiredHint', { slot: firstMissingSlotLabel }))
+          return
+        }
+        const attachmentSpecs = toGenerateSpecs(filterStateToSlots(attachmentsState, visibleSlots))
         wordSessionMutation.mutate({
           subject: String(values.subject ?? '').trim(),
           recipient_id: (values.recipient_id as number | null | undefined) ?? null,
@@ -662,6 +673,7 @@ function StandardApplicationPage(): React.JSX.Element {
           date: (values.report_date as string | undefined) ?? null,
           cc: [],
           confidentiality,
+          attachments: attachmentSpecs.length > 0 ? attachmentSpecs : undefined,
         })
       })
     }
@@ -1563,7 +1575,8 @@ function StandardApplicationPage(): React.JSX.Element {
 
                       {/* Attachments — named slots from the form policy plus
                           free-form extras, on EVERY form (spec 2026-06-11 §6).
-                          Required slots gate Save book (not Preview). */}
+                          Preview includes supplied papers; required slots gate
+                          Save book and Create & open in Word, not Preview. */}
                       <AttachmentsBlock
                         slots={visibleSlots}
                         state={attachmentsState}

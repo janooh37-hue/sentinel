@@ -260,11 +260,13 @@ def _physical_signed_scan(version: BookVersion) -> bool:
     return source.replace("\\", "/").startswith("book_attachments/")
 
 
-def _effective_metadata(book: Book, version: BookVersion) -> list[dict[str, Any]]:
+def _effective_metadata(book: Book, version: BookVersion | None = None) -> list[dict[str, Any]]:
     """Return full metadata without mutating legacy JSON."""
     entries: list[dict[str, Any]] = []
-    legacy_embedded = bool(version.signed_pdf_path and version.signed_base_pdf_path is None)
-    explicit_embedded = set(version.signed_embedded_paper_ids or [])
+    legacy_embedded = bool(
+        version is not None and version.signed_pdf_path and version.signed_base_pdf_path is None
+    )
+    explicit_embedded = set(version.signed_embedded_paper_ids or []) if version else set()
     creator_id = original_creator_user_id(book)
     for position, raw in enumerate(book.merged_attachment_paths or []):
         stored_path = str(raw.get("path") or "")
@@ -619,6 +621,12 @@ def _write_bytes_atomic(path: Path, data: bytes) -> None:
     finally:
         with contextlib.suppress(OSError):
             temp.unlink()
+
+
+def build_word_preview(book: Book, letter: Path) -> bytes:
+    """Build the live package without a version or changes to the letter cache."""
+    papers = _resolve_existing(_effective_metadata(book))
+    return _build_result(book.included_papers_revision, letter.read_bytes(), papers).pdf_bytes
 
 
 def publish_generated_package(

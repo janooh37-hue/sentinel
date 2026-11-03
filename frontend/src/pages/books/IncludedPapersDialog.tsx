@@ -1,6 +1,7 @@
 import { lazy, Suspense, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  Archive,
   ChevronDown,
   ChevronUp,
   Eye,
@@ -20,6 +21,8 @@ import { toast } from '@/lib/toast'
 
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { RecordPaperPickerDialog } from '@/components/application/RecordPaperPickerDialog'
+import type { AttachmentValue } from '@/components/application/attachmentsState'
 import {
   DialogContent,
   DialogDescription,
@@ -94,6 +97,7 @@ function IncludedPapersWorkspace({
   const listSeparator = i18n.language.startsWith('ar') ? '، ' : ', '
   const [mobileTab, setMobileTab] = useState<'preview' | 'order'>('preview')
   const [discardOpen, setDiscardOpen] = useState(false)
+  const [recordPickerOpen, setRecordPickerOpen] = useState(false)
   const addInputRef = useRef<HTMLInputElement | null>(null)
   const replaceInputRef = useRef<HTMLInputElement | null>(null)
   const replaceIdRef = useRef<string | null>(null)
@@ -106,6 +110,21 @@ function IncludedPapersWorkspace({
     if (!files?.length) return
     try {
       await editor.addFiles(Array.from(files))
+      setMobileTab('order')
+    } catch (error) {
+      toast.error(apiErrorMessage(error))
+    }
+  }
+
+  const addFromRecord = async (value: AttachmentValue): Promise<void> => {
+    if (value.kind === 'staged' || editor.busy) return
+    setRecordPickerOpen(false)
+    try {
+      await editor.addFromRecord({
+        book_id: value.bookId,
+        source: value.kind,
+        attachment_index: value.kind === 'record_attachment' ? value.index : null,
+      })
       setMobileTab('order')
     } catch (error) {
       toast.error(apiErrorMessage(error))
@@ -304,7 +323,7 @@ function IncludedPapersWorkspace({
           )}
         >
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-3">
               <div>
                 <h3 className="text-sm font-bold text-foreground">
                   {t('books.includedPapers.orderHeading', { defaultValue: 'PDF order' })}
@@ -316,16 +335,30 @@ function IncludedPapersWorkspace({
                   })}
                 </p>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="hover:!bg-surface-tinted"
-                onClick={() => addInputRef.current?.click()}
-              >
-                <Plus className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-                {t('books.includedPapers.add', { defaultValue: 'Add papers' })}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="min-h-11 hover:!bg-surface-tinted sm:min-h-0"
+                  disabled={editor.busy}
+                  onClick={() => addInputRef.current?.click()}
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                  {t('books.includedPapers.add', { defaultValue: 'Add papers' })}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="min-h-11 hover:!bg-surface-tinted sm:min-h-0"
+                  disabled={editor.busy}
+                  onClick={() => setRecordPickerOpen(true)}
+                >
+                  <Archive className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                  {t('application.attachments.fromRecords')}
+                </Button>
+              </div>
             </div>
 
             <input
@@ -333,6 +366,7 @@ function IncludedPapersWorkspace({
               type="file"
               accept="application/pdf,image/png,image/jpeg"
               multiple
+              disabled={editor.busy}
               className="hidden"
               aria-label={t('books.includedPapers.addInput', {
                 defaultValue: 'Add PDF or images',
@@ -612,6 +646,12 @@ function IncludedPapersWorkspace({
         })}
         onConfirm={onCancel}
         destructive
+      />
+      <RecordPaperPickerDialog
+        open={recordPickerOpen}
+        onOpenChange={setRecordPickerOpen}
+        onPick={(value) => void addFromRecord(value)}
+        excludeBookId={book.id}
       />
     </DialogContent>
   )
