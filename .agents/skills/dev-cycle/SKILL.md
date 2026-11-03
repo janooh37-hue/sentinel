@@ -23,6 +23,7 @@ description: "Fix bugs and add features on the laptop dev channel (branch dev, r
 4. **Build:** subagents, absolute paths, own hunks only, one commit per change on `dev`.
 5. **Verify:**
    - Backend: narrowest pytest.
+   - UI flows: agentic e2e on the desktop (Linux; Windows needs WSL) with the `e2e` skill. `pnpm -C frontend run e2e:agentic [e2e/agentic/<flow>.e2e.ts]` boots a throwaway stack (fresh SQLite, migrated backend, Vite) per run, never dev data; `agent.*` steps run on that machine's `codex login`. A new or changed flow gets or updates a `frontend/e2e/agentic/<flow>.e2e.ts`: one goal per `agent.act`, each pinned by `expect` or `agent.assert`. On failure, read `frontend/.e2e/results/<test>/trace.md` (screen at failure, screenshot) before rerunning.
    - Documents: generate → PDF → PNG → inspect the reported defect.
    - Required `AGENTS.md` reviews.
 6. **Publish:** `dev-channel.ps1 publish` (frontend build, migrate, restart, health check). `restart` alone for backend-only changes.
@@ -60,6 +61,6 @@ description: "Fix bugs and add features on the laptop dev channel (branch dev, r
 - Brief: goal, owned files, edits allowed or not, check to run (`~/.venvs/sentinel/bin/python -m pytest <narrowest>`), commit on the branch, and "write your report to `<worktree>/.tmp/handoff-<name>.md` and reply with the path only".
 - Reports are claims: `ssh dtop cat` the handoff, `git fetch desk <branch>`, read the diff before merging into `dev`.
 - Small fixes go back to the same agent; bigger follow-ups go to a fresh agent briefed with the handoff file. After merging: `herdr --machine dtop tab close <tab>` and remove the desktop worktree and branch.
-- Tests: writers run the narrowest pytest; after merging, `git push desk dev` and run the full suite once on the desktop with `-n 6` in a detached worktree of `dev`. Requirements changed → `uv pip install -p ~/.venvs/sentinel/bin/python -r requirements.txt pytest-xdist` there first.
+- Tests: writers run the narrowest pytest and the agentic e2e file for their flow; after merging, `git push desk dev` and run the full pytest suite once on the desktop with `-n 6` in a detached worktree of `dev`, plus `pnpm -C frontend run e2e:agentic` there. Requirements changed → `uv pip install -p ~/.venvs/sentinel/bin/python -r requirements.txt pytest-xdist` there first.
 - Before heavy runs check `ssh dtop free -g`; if a stray heavy process (ComfyUI, old `omp ps` services) leaves under ~8 GB available, ask the user to kill it, then stop it (`omp ps stop <name> --dir <project>` for omp-supervised ones).
 - When done, create a PR on GitHub.
