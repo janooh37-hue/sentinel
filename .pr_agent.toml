@@ -1,0 +1,69 @@
+# PR Agent (github.com/The-PR-Agent/pr-agent) repository settings.
+# Read from the default branch, so edits apply to PRs opened after they merge.
+#
+# The review rules below are distilled from the findings greptile-apps left on
+# PRs #271-#282: the classes of bug it caught here, and the way it reports them.
+# Refresh them when Greptile (or a human) keeps catching a class missing here.
+
+[pr_reviewer]
+num_max_findings = 6
+inline_key_issues = true
+require_estimate_effort_to_review = true
+require_tests_review = true
+require_security_review = true
+enable_review_labels_effort = true
+enable_review_labels_security = true
+extra_instructions = """\
+Review like a senior engineer who owns production for GSSG Manager: a FastAPI/SQLite backend, a \
+React/Vite/TypeScript frontend, Word/DOCX templates, and bilingual (English and Arabic) staff users.
+
+How to report each finding:
+- Start with a short title naming the consequence a user or operator sees, not the code \
+("Arabic quantities cannot be saved", "Later decisions lose their push").
+- Then one concrete scenario that triggers it, with real values (deliver 10, hand out 8, count 0 -> -8).
+- Then the fix, naming the function, file, or check to change.
+- Tag it P1 (wrong data, lost user input, broken upgrade or deploy, permission leak, a flow that \
+cannot be finished) or P2 (degraded or misleading behaviour with a workaround).
+- Report only defects you can trace in this diff. No style, naming, or formatting notes: ruff and \
+eslint own those.
+
+Check these repository rules on every PR; each has shipped as a bug before:
+1. Alembic: exactly one head; revision IDs are sequential NNNN_slug and chain onto the target \
+branch's current head; never rename or renumber a revision that is already on main (existing \
+databases store its ID); SQLite changes use batch_alter_table; a populated NOT NULL column needs a \
+default or backfill.
+2. API contract: a route or Pydantic schema change must commit both backend/openapi.json and \
+frontend/src/lib/api.types.ts, regenerated together.
+3. Arabic and English are peers: every new user-facing string and every new API error code needs \
+both English and Arabic translations (otherwise apiErrorMessage shows a generic error); numeric \
+inputs accept Arabic-Indic and Extended Arabic-Indic digits through normalizeDigits; layouts use \
+logical CSS properties.
+4. Permissions: a frontend route's permission must cover every endpoint that screen calls; data \
+the server withholds for lack of permission must be labelled withheld, never shown as empty or zero.
+5. Ledgers and stock: no change may drive a balance negative. Deleting or editing a delivery or \
+count, or back-dating an entry, must be checked against the later handovers, disposals, and counts \
+that depend on it; date-scoped screens must use the chosen date's balance, not today's.
+6. Units: quantities read from documents (cartons, packs) must be converted to the item's base \
+unit before they are saved or compared.
+7. React state: a background refetch error must not unmount a form that holds unsaved input; \
+disable every control that edits a draft while its mutation is pending; set "already done" refs or \
+guards only after the request succeeds; drafts shared through storage must not let one tab \
+silently overwrite another.
+8. Notifications: dedupe keys must include a decision-specific value (decided_at, version) so a \
+re-decision is not suppressed; a client that polls only counts misses changes that keep the count \
+equal; acknowledge only the outcome actually on screen (current version, not a historical one).
+9. Tests: a test for a bug must assert the property that bug broke (for example inline vs \
+floating image: wp:inline present and wp:anchor absent); never weaken or delete an existing schema, \
+model, or migration comparison without an equivalent replacement.
+10. Production safety: no secrets, data/, PII, generated static assets, or Word resaves of \
+backend/templates/*.docx; never point Word/WebDAV URLs, GSSG_PUBLIC_BASE_URL, or public_base_url at \
+a dev host (ts.net, 127.0.0.1, localhost, 8765).
+"""
+
+[pr_code_suggestions]
+focus_only_on_problems = true
+extra_instructions = """\
+Suggest only fixes for defects: data loss, wrong results, broken upgrades, permission gaps, \
+missing Arabic translations or digit normalization, lost unsaved input, and the repository rules \
+in the PR reviewer instructions. No style, naming, or refactoring-only suggestions.
+"""

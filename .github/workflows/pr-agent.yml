@@ -1,0 +1,38 @@
+name: PR Agent
+
+# AI review of every pull request, tuned by .pr_agent.toml (rules learned from
+# greptile-apps' findings on this repo). Comment `/review`, `/improve`, or
+# `/ask <question>` on a PR to run a tool on demand.
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr_agent_job:
+    # Skip bots (Greptile, Dependabot) and comments on plain issues.
+    if: ${{ github.event.sender.type != 'Bot' && (github.event_name == 'pull_request' || github.event.issue.pull_request) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: PR Agent action step
+        # main as of 2026-11-03; the step holds OPENAI_KEY and a write token, so bump the pin deliberately.
+        uses: the-pr-agent/pr-agent@eef5358f8c8b4a3e481eb7b8920c6771d64504d7
+        env:
+          OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Keep the author's PR description (and Greptile's summary) intact.
+          github_action_config.auto_describe: "false"
+          github_action_config.auto_review: "true"
+          github_action_config.auto_improve: "true"
+          # Re-review on each push; the review comment is updated in place.
+          github_action_config.handle_push_trigger: "true"
+          github_action_config.push_commands: '["/review"]'
