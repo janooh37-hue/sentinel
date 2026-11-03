@@ -1,7 +1,24 @@
 'use strict'
-// Fixed drawings, one per uniform piece, drawn from the reference photo in the same flat
-// language and frame as StoreItemArt (viewBox 20 20 80 90, floor shadow). Not customisable:
-// there is no shape, colour or label picker.
+// Fixed drawings in StoreItemArt's flat language and frame (viewBox 20 20 80 90,
+// floor shadow). Managers choose a drawing kind, not its shape or colours.
+
+window.UNIFORM_ART_KINDS = [
+  { kind: 'suit', en: 'Suit', ar: 'بدلة' },
+  { kind: 'shoes', en: 'Shoes', ar: 'حذاء' },
+  { kind: 'boots', en: 'Boots', ar: 'حذاء ميداني' },
+  { kind: 'polo', en: 'Polo shirt', ar: 'قميص بولو' },
+  { kind: 'cargo', en: 'Trousers', ar: 'بنطال' },
+  { kind: 'belt', en: 'Belt', ar: 'حزام' },
+  { kind: 'cap', en: 'Cap', ar: 'قبعة' },
+  { kind: 'socks', en: 'Socks', ar: 'جوارب' },
+  { kind: 'jacket', en: 'Field jacket', ar: 'سترة ميدانية' },
+  { kind: 'tshirt', en: 'Undershirt', ar: 'قميص داخلي' },
+  { kind: 'beret', en: 'Beret', ar: 'قبعة عسكرية' },
+  { kind: 'gloves', en: 'Work gloves', ar: 'قفازات عمل' },
+  { kind: 'vest', en: 'Security vest', ar: 'سترة أمنية عاكسة' },
+  { kind: 'raincoat', en: 'Raincoat', ar: 'معطف مطر' },
+  { kind: 'generic', en: 'Folded garments', ar: 'ملابس مطوية' },
+]
 
 function shade(hex, amount) {
   const v = Number.parseInt(hex.slice(1), 16)
@@ -101,7 +118,81 @@ const DRAW = {
       <path d="M38 76q2 7 8 9l-2-11z" fill="${shade(fill, -0.2)}"/></g>`
     return sock(12, -6, shade('#c4ac82', -0.12)) + sock(0, 2, '#c4ac82')
   },
+  jacket() {
+    const dark = shade(KHAKI, -0.3), light = shade(KHAKI, 0.12)
+    return `<path d="M40 37l-9 6-7 50 10 2 9-38zM80 37l9 6 7 50-10 2-9-38z" fill="${shade(KHAKI, -0.12)}"/>
+      <path d="M40 37l10-5h20l10 5 3 65H37z" fill="${KHAKI}"/>
+      <path d="M50 32l10 10 10-10-2-5H52z" fill="${dark}"/>
+      <path d="M51 28l-5 13 9 4 5-11 5 11 9-4-5-13-9 6z" fill="${shade(KHAKI, -0.08)}"/>
+      <path d="M60 41v60" stroke="${dark}" stroke-width="2"/>
+      <rect x="61" y="45" width="2.6" height="6" rx=".8" fill="#7d828a"/>
+      <path d="M41 51h14v14H41zM65 51h14v14H65z" fill="${light}"/>
+      <path d="M40 50h16v5l-8 3-8-3zM64 50h16v5l-8 3-8-3z" fill="${shade(KHAKI, -0.15)}"/>
+      <path d="M41 78h13v17H41zM66 78h13v17H66z" fill="${shade(KHAKI, -0.08)}"/>
+      <path d="M41 78h13M66 78h13M25 89l10 2M85 91l10-2M38 98h44" stroke="${dark}" stroke-width="1.4"/>
+      <circle cx="48" cy="54" r="1" fill="${dark}"/><circle cx="72" cy="54" r="1" fill="${dark}"/>`
+  },
+  tshirt() {
+    const cotton = '#f2f0e8', seam = '#b8b6ad'
+    return `<path d="M46 33l-10 4-13 15 10 11 8-7v46h38V56l8 7 10-11-13-15-10-4q-14 8-28 0z" fill="${cotton}" stroke="${seam}" stroke-width="1" stroke-linejoin="round"/>
+      <path d="M46 33q14 20 28 0" fill="none" stroke="${seam}" stroke-width="3"/>
+      <path d="M49 34q11 13 22 0" fill="#d9d6cc"/>
+      <path d="M33 59l-8-9M87 59l8-9M41 98h38" stroke="${seam}" stroke-width="1.2" fill="none"/>
+      <path d="M42 57v37M78 57v37" stroke="#e1ded5" stroke-width="1.3"/>`
+  },
+  beret() {
+    const navy = '#22345a', dark = shade(navy, -0.35)
+    return `<path d="M28 73q-5-14 6-24 12-12 35-11 19 0 24 13 7 19-10 29L38 82z" fill="${navy}"/>
+      <path d="M28 69q21 7 55-2l1 13-46 2q-8-4-10-13z" fill="${shade(navy, -0.16)}"/>
+      <path d="M36 78q24 4 48-2l-1 9q-25 6-46 1z" fill="${dark}"/>
+      <path d="M68 40q14 6 15 19" stroke="${shade(navy, 0.15)}" stroke-width="1.3" fill="none"/>
+      ${badge(47, 68, 6)}`
+  },
+  gloves() {
+    const glove = (dx, dy, angle, fill) => `<g transform="translate(${dx} ${dy}) rotate(${angle} 45 69)">
+      <path d="M31 86l-3-24q-.6-5 3-5 3 0 4 5l2 8V43q0-4 3-4t3 4v19-26q0-4 3-4t3 4v26-24q0-4 3-4t3 4v25-18q0-4 3-4t3 4v32q0 12-7 18z" fill="${fill}"/>
+      <path d="M37 67q8-5 17 0v18H38z" fill="${shade(fill, 0.12)}"/>
+      <path d="M37 48v15M43 43v19M49 42v20M55 48v16M35 74l3 11" stroke="${shade(fill, -0.28)}" stroke-width="1" fill="none" stroke-linecap="round"/>
+      <path d="M31 85l24 1-1 14H33z" fill="${OLIVE}"/>
+      <path d="M33 91h20" stroke="${shade(OLIVE, -0.25)}" stroke-width="1.4"/></g>`
+    return glove(25, -2, 14, shade(KHAKI, -0.13)) + glove(-6, 2, -14, KHAKI)
+  },
+  vest() {
+    const dark = shade(OLIVE, -0.3), reflective = '#d9ddd4'
+    return `<path d="M42 31l10 1 8 16 8-16 10-1q-3 23 10 29v41H32V60q13-6 10-29z" fill="${OLIVE}"/>
+      <path d="M42 31l10 1 8 16 8-16 10-1M32 60q13-6 10-29M88 60q-13-6-10-29" fill="none" stroke="${dark}" stroke-width="1.5"/>
+      <path d="M45 34h6v34h-6zM69 34h6v34h-6zM32 69h56v7H32zM32 88h56v7H32z" fill="${reflective}"/>
+      <path d="M60 48v53" stroke="${dark}" stroke-width="2.4"/>
+      <path d="M37 79h16v6H37zM67 79h16v6H67z" fill="${dark}"/>
+      ${badge(74, 55, 4.3)}`
+  },
+  raincoat() {
+    const navy = '#22345a', dark = shade(navy, -0.3), light = shade(navy, 0.18)
+    return `<path d="M47 43q-5-20 13-20t13 20l-13 8z" fill="${navy}"/>
+      <path d="M49 40q-1-12 11-13 12 1 11 13L60 49z" fill="${dark}"/>
+      <path d="M40 46l-9 6-7 31 10 3 10-23zM80 46l9 6 7 31-10 3-10-23z" fill="${shade(navy, -0.12)}"/>
+      <path d="M40 46l9-5 11 8 11-8 9 5 2 58H38z" fill="${navy}"/>
+      <path d="M40 46l20 9 20-9v14H40z" fill="${light}"/>
+      <path d="M60 49v55" stroke="${dark}" stroke-width="3"/>
+      <path d="M62 55v43" stroke="${light}" stroke-width="1"/>
+      <path d="M40 78l12-4M68 74l12 4" stroke="${dark}" stroke-width="3" stroke-linecap="round"/>
+      <path d="M49 41l2 13M71 41l-2 13" stroke="#a9adb3" stroke-width="1.2"/>
+      <path d="M39 100h42M25 80l10 3M85 83l10-3" stroke="${dark}" stroke-width="1.3"/>
+      <circle cx="58" cy="68" r="1" fill="#a9adb3"/><circle cx="58" cy="84" r="1" fill="#a9adb3"/>`
+  },
+  generic() {
+    const navy = '#22345a'
+    return `<rect x="29" y="82" width="62" height="21" rx="4" fill="${shade(navy, -0.15)}"/>
+      <path d="M34 88h52M34 99h52" stroke="${shade(navy, 0.12)}" stroke-width="1.3"/>
+      <rect x="32" y="65" width="57" height="22" rx="4" fill="${OLIVE}"/>
+      <path d="M37 82h47" stroke="${shade(OLIVE, -0.3)}" stroke-width="1.4"/>
+      <rect x="28" y="45" width="62" height="25" rx="4" fill="${KHAKI}"/>
+      <path d="M32 45l12-9h31l11 9" fill="${shade(KHAKI, 0.12)}"/>
+      <path d="M48 37l11 10 12-10M59 47v21" fill="none" stroke="${shade(KHAKI, -0.25)}" stroke-width="1.5"/>
+      <path d="M32 65h22M64 65h22" stroke="${shade(KHAKI, -0.2)}" stroke-width="1.2"/>
+      <rect x="69" y="51" width="12" height="9" rx="1" fill="${shade(KHAKI, -0.1)}"/>`
+  },
 }
 
 window.uniformArt = (kind, cls = 'art') =>
-  `<svg class="${cls}" viewBox="20 20 80 90" aria-hidden="true" focusable="false"><ellipse cx="60" cy="106" rx="36" ry="4.5" fill="#000" opacity=".12"/>${DRAW[kind]()}</svg>`
+  `<svg class="${cls}" viewBox="20 20 80 90" aria-hidden="true" focusable="false"><ellipse cx="60" cy="106" rx="36" ry="4.5" fill="#000" opacity=".12"/>${Object.hasOwn(DRAW, kind) ? DRAW[kind]() : DRAW.generic()}</svg>`
