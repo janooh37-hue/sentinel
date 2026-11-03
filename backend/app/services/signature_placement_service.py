@@ -54,10 +54,10 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _has_manager_drawing(docx_path: Path) -> bool:
-    """True iff *docx_path* carries at least one marked manager/approver
+def _has_approver_drawing(docx_path: Path) -> bool:
+    """True iff *docx_path* carries at least one marked project/branch-manager
     signature occurrence (the ``signature_layout`` identity scheme). Only
-    actual manager/approver drawings activate the registry — a document with
+    actual approver drawings activate the registry — a document with
     no such drawing (the checkbox was off, or the source predates the
     marking scheme) is never captured. A malformed/duplicate marker is
     treated as "no eligible drawing" here rather than raised: capture is a
@@ -69,7 +69,7 @@ def _has_manager_drawing(docx_path: Path) -> bool:
         drawings = inspect_signature_drawings(docx_path)
     except Exception:
         return False
-    return any(drawing.role == "manager" for drawing in drawings)
+    return any(drawing.role in ("manager", "branch_manager") for drawing in drawings)
 
 
 def _retained_dir(version_id: int, revision: int) -> Path:
@@ -102,10 +102,10 @@ def capture_initial_revision(
 ) -> SignatureArtifactRevision | None:
     """Retain *docx_path* (+ PDF paths, when present) as revision 1 of
     *version*'s signature-placement history, IF it carries a marked
-    manager/approver signature drawing.
+    project/branch-manager signature drawing.
 
     Returns ``None`` (no-op, no row created) when there is no eligible
-    drawing — an unsigned document, or one whose manager checkbox was off,
+    drawing — an unsigned document without either approver's signature
     never activates the registry. Idempotent per version: only fires once,
     from ``signature_revision == 0``; a later correction cycle (after
     unfile/replace resets the counter to 0) starts its own fresh history via
@@ -120,7 +120,7 @@ def capture_initial_revision(
     """
     if version.signature_revision != 0:
         return None
-    if not docx_path.is_file() or not _has_manager_drawing(docx_path):
+    if not docx_path.is_file() or not _has_approver_drawing(docx_path):
         return None
 
     dest_dir = _retained_dir(version.id, 1)

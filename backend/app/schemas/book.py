@@ -120,6 +120,7 @@ class BookSubmitRequest(BaseModel):
     # When None, the server routes to the doc's linked manager
     # (Book.doc_manager_id → Manager.user_id). An explicit id wins.
     approver_user_id: int | None = None
+    branch_approver_user_id: int | None = None
     reviewer_user_ids: list[int] = Field(default_factory=list)
 
 
@@ -141,6 +142,7 @@ class BookDecisionRequest(BaseModel):
 
 class BookSignRequest(BaseModel):
     version_id: int = Field(gt=0)
+    note: str | None = Field(default=None, max_length=1000)
 
 
 class BookStateOverrideRequest(BaseModel):

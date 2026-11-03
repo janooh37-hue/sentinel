@@ -47,6 +47,7 @@ from app.core.form_kind import (
     subject_prefixes,
     word_draft_service,
 )
+from app.core.form_policy import BRANCH_MANAGER_STAGE_FORMS
 from app.core.fts_query import and_prefix_query, has_nul
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import (
@@ -1606,7 +1607,7 @@ def _received_step_kind(book: Book, kind: str | None) -> str:
 
 
 def _approver_steps(version: BookVersion | None) -> list[BookApprovalStep]:
-    """Steps that gate approval_state — the single signing manager (kind=approver).
+    """Steps that gate approval_state — the ordered signing approvers.
     Legacy rows created before migration 0039 default to 'approver'; in-memory
     steps whose kind hasn't been written yet also default to 'approver'."""
     if version is None:
@@ -1794,8 +1795,8 @@ def _current_pending_step(book: Book) -> BookApprovalStep | None:
     if version is None:
         return None
     for step in sorted(_approver_steps(version), key=lambda s: s.step_order):
-        if step.state == "pending":
-            return step
+        if step.state != "approved":
+            return step if step.state == "pending" else None
     return None
 
 
@@ -1917,14 +1918,26 @@ def submit_for_approval(
     approver_user_id: int | None,
     reviewer_user_ids: Sequence[int],
     submitted_by_user_id: int,
+    branch_approver_user_id: int | None = None,
 ) -> Book:
-    """Fresh chain: one approver step (the signing manager) + 0..N advisory
-    reviewer steps. The approver defaults to the doc's linked manager
-    (Book.doc_manager_id → Manager.user_id) when ``approver_user_id`` is None."""
+    """Replace assignments with ordered signing stages and advisory reviewers.
+
+    The project approver defaults to the document's linked manager account.
+    """
     book = _get_book_with_versions(db, book_id)
     version = _current_version(book)
     if version is None:
         raise ValidationFailedError("NO_VERSION", "Book has no version to submit")
+    branch_stage = version.template_id in BRANCH_MANAGER_STAGE_FORMS
+    if branch_stage and not version.fields:
+        raise ValidationFailedError(
+            "BRANCH_STAGE_WORD_REVISION_UNSUPPORTED",
+            "Word-authored revisions of this form cannot be submitted for staged approval.",
+        )
+    if branch_stage and branch_approver_user_id is None:
+        raise ValidationFailedError(
+            "BRANCH_APPROVER_REQUIRED", "Choose a branch manager before submitting this form."
+        )
     caller = db.get(User, submitted_by_user_id)
     report = is_report(book)
     inmate_report = bool(caller is not None and caller.role == INMATE_REPORTER_ROLE and report)
@@ -1987,17 +2000,37 @@ def submit_for_approval(
     # BookApprovalStep.assignee_user_id is a NOT-NULL FK (ondelete=RESTRICT), so a
     # stale/deleted id would otherwise blow up as an opaque 500 at db.commit().
     approver = db.get(User, approver_id)
-    if approver is None or approver.status != "active":
+    if (
+        approver is None
+        or approver.status != "active"
+        or (branch_stage and not perm_service.has_capability(db, approver, "books.approve"))
+    ):
         raise ValidationFailedError(
             "APPROVER_NOT_ELIGIBLE",
             "The chosen signing manager is not an active user account.",
         )
+    if branch_stage:
+        if branch_approver_user_id == approver_id:
+            raise ValidationFailedError(
+                "BRANCH_APPROVER_SAME_AS_PROJECT",
+                "The branch manager and project manager must be different accounts.",
+            )
+        branch_approver = db.get(User, branch_approver_user_id)
+        if (
+            branch_approver is None
+            or branch_approver.status != "active"
+            or not perm_service.has_capability(db, branch_approver, "books.approve")
+        ):
+            raise ValidationFailedError(
+                "APPROVER_NOT_ELIGIBLE",
+                "The chosen branch manager must be an active account allowed to approve.",
+            )
 
     # Reviewers: active accounts, deduped, never the approver.
     seen: set[int] = set()
     reviewers: list[int] = []
     for uid in reviewer_user_ids:
-        if uid == approver_id or uid in seen:
+        if uid in (approver_id, branch_approver_user_id if branch_stage else None) or uid in seen:
             continue
         u = db.get(User, uid)
         if u is None or u.status != "active":
@@ -2010,17 +2043,28 @@ def submit_for_approval(
     for step in version.approval_steps:
         retain_revision_access(db, version, step)
     version.approval_steps.clear()
+    if branch_stage:
+        version.approval_steps.append(
+            BookApprovalStep(
+                book_id=book.id,
+                step_order=0,
+                stage_label="branch_manager",
+                assignee_user_id=branch_approver_user_id,
+                kind="approver",
+                state="pending",
+            )
+        )
     version.approval_steps.append(
         BookApprovalStep(
             book_id=book.id,
-            step_order=0,
-            stage_label="Approve",
+            step_order=1 if branch_stage else 0,
+            stage_label="project_manager" if branch_stage else "Approve",
             assignee_user_id=approver_id,
             kind="approver",
             state="pending",
         )
     )
-    for i, rev_id in enumerate(reviewers, start=1):
+    for i, rev_id in enumerate(reviewers, start=2 if branch_stage else 1):
         version.approval_steps.append(
             BookApprovalStep(
                 book_id=book.id,
@@ -2320,7 +2364,9 @@ def override_state(
     return book
 
 
-def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Book:
+def sign_book(
+    db: Session, book_id: int, *, user_id: int, version_id: int, note: str | None = None
+) -> Book:
     """Approve by signing: verify the caller is the pending signer, embed their
     signature into the current version's document, store the signed PDF, mark
     the book (and current version) approved.
@@ -2345,6 +2391,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     report_version = _current_version(book)
     if report_version is not None and is_report(book):
         current.state = "approved"
+        current.note = note
         current.decided_at = datetime.now(UTC).replace(tzinfo=None)
         retain_revision_access(db, report_version, current)
         _recompute_approval_state(book)
@@ -2367,6 +2414,14 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     version = _current_version(book)
     if version is None:
         raise ValidationFailedError("NO_VERSION", "Book has no version to sign")
+    stage = current.stage_label if version.template_id in BRANCH_MANAGER_STAGE_FORMS else None
+    signing_snapshot = (
+        document_service.freeze_stage_signature(
+            version, stage=stage, signature_path=abs_sig, user_id=user_id, note=note
+        )
+        if stage in {"branch_manager", "project_manager"}
+        else None
+    )
     # Anchor candidates for the word-authored path: a delegated approver may
     # have typed their OWN closing name in Word, not the doc manager's.
     signer_names: list[str] = [n for n in (signer.display_name,) if n]
@@ -2380,6 +2435,8 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
         signer_signature_path=str(abs_sig),
         signer_names=signer_names,
         signer_user_id=user_id,
+        signing_snapshot=signing_snapshot,
+        approval_stage=stage,
     )
     _require_current_revision(db, book, version_id)
     db.refresh(book, attribute_names=["approval_state", "voided_at", "deleted_at"])
@@ -2402,6 +2459,37 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
             "INCLUDED_PAPERS_SIGNED_PDF_REQUIRED",
             "The signed PDF could not be created; the record was not approved",
         )
+    if signing_snapshot is not None:
+        version.fields = {
+            **(version.fields or {}),
+            document_service._SIGNING_KEY: signing_snapshot,
+        }
+    if stage == "branch_manager":
+        document = db.get(Document, version.document_id) if version.document_id else None
+        if document is None:
+            raise ValidationFailedError("SOURCE_DOCX_MISSING", "The generated document is missing.")
+        settings = get_settings()
+        document.docx_path = str(artifact.docx_path.relative_to(settings.data_dir))
+        book.doc_path = document.docx_path
+        if artifact.conversion.pdf_path is not None:
+            included_papers_service.publish_generated_package(
+                db,
+                book,
+                version,
+                document,
+                artifact.conversion.pdf_path,
+                invalidate_revision=True,
+            )
+        else:
+            document.pdf_path = None
+            document.base_pdf_path = None
+        current.state = "approved"
+        current.note = note
+        current.decided_at = datetime.now(UTC).replace(tzinfo=None)
+        retain_revision_access(db, version, current)
+        _recompute_approval_state(book)
+        _commit_approval_state(db, book, user_id=user_id)
+        return book
     published_pdf_abs: Path | None = None
     if signed_primary.suffix.lower() == ".pdf":
         signed_rel = included_papers_service.publish_signed_package(
@@ -2425,6 +2513,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     version.signed_by_user_id = user_id
     version.signed_at = datetime.now(UTC).replace(tzinfo=None)
     current.state = "approved"
+    current.note = note
     current.decided_at = version.signed_at
     retain_revision_access(db, version, current)
     _recompute_approval_state(book)  # mirrors version.status + book.approval_state -> approved
@@ -2650,6 +2739,13 @@ def awaiting_count(db: Session, *, user_id: int, reviewer_only: bool) -> int:
     # Per version: does this user hold a pending approver / reviewer step?
     # Mirrors `(s.kind or "approver") == "approver"` in your_step_kind.
     is_approver = func.coalesce(func.nullif(BookApprovalStep.kind, ""), "approver") == "approver"
+    earlier = aliased(BookApprovalStep)
+    active_approver = ~exists().where(
+        earlier.version_id == BookApprovalStep.version_id,
+        func.coalesce(func.nullif(earlier.kind, ""), "approver") == "approver",
+        earlier.state != "approved",
+        earlier.step_order < BookApprovalStep.step_order,
+    )
     mine = (
         select(
             BookApprovalStep.version_id,
@@ -2659,6 +2755,7 @@ def awaiting_count(db: Session, *, user_id: int, reviewer_only: bool) -> int:
         .where(
             BookApprovalStep.assignee_user_id == user_id,
             BookApprovalStep.state == "pending",
+            or_(~is_approver, active_approver),
         )
         .group_by(BookApprovalStep.version_id)
         .subquery()
@@ -2743,7 +2840,12 @@ def your_step_kind(book: Book, user_id: int) -> str | None:
     version = _current_version(book)
     if version is None:
         return None
-    pending = [s for s in version.approval_steps if s.state == "pending"]
+    active_approver = _current_pending_step(book)
+    pending = [
+        s
+        for s in version.approval_steps
+        if s.state == "pending" and ((s.kind or "approver") != "approver" or s is active_approver)
+    ]
     if any(
         _received_step_kind(book, s.kind) == "approver" and s.assignee_user_id == user_id
         for s in pending
@@ -2791,6 +2893,7 @@ def _current_pending_step_of_kind(
             _received_step_kind(book, step.kind) == kind
             and step.assignee_user_id == user_id
             and step.state == "pending"
+            and ((step.kind or "approver") != "approver" or step is _current_pending_step(book))
         ):
             return step
     return None
@@ -2897,6 +3000,8 @@ def _approval_worklist(db: Session, user: User, *, kind: str, status: str) -> li
         pending_step = _current_pending_step_of_kind(book, user.id, kind)
         if pending_step is not None and kind == "approver" and not can_sign:
             pending_step = None
+        if status == "pending" and pending_step is None:
+            continue
         history_version_no = _history_assignment_version_no(book, user.id, kind)
         if pending_step is None and history_version_no is None:
             continue  # the capability gate above removed the caller's only claim
@@ -3122,6 +3227,7 @@ def _unseen_decisions_query(db: Session, user: User) -> Any:
     # Visibility subqueries use BookVersion themselves; keep this joined version
     # aliased so SQLAlchemy cannot correlate their FROM clause away.
     version = aliased(BookVersion)
+    outcome_step = aliased(BookApprovalStep)
     current_version_no = (
         select(func.max(BookVersion.version_no))
         .where(BookVersion.book_id == Book.id)
@@ -3140,6 +3246,20 @@ def _unseen_decisions_query(db: Session, user: User) -> Any:
             BookApprovalStep.book_id == Book.id,
             BookApprovalStep.kind == "approver",
             BookApprovalStep.state.in_(("approved", "rejected", "returned")),
+            or_(
+                BookApprovalStep.state != "approved",
+                and_(
+                    Book.approval_state == "approved",
+                    BookApprovalStep.step_order
+                    == select(func.max(outcome_step.step_order))
+                    .where(
+                        outcome_step.version_id == version.id,
+                        outcome_step.kind == "approver",
+                    )
+                    .correlate(version)
+                    .scalar_subquery(),
+                ),
+            ),
             BookApprovalStep.decided_at.is_not(None),
             BookApprovalStep.outcome_seen_at.is_(None),
             BookApprovalStep.assignee_user_id != user.id,
@@ -3244,9 +3364,14 @@ def approval_log_sent(
     names_by_id = _worklist_names(db, ordered)
     items = [_build_worklist_item(db, row, names_by_id=names_by_id) for row in ordered]
     for item, row in zip(items, ordered, strict=True):
+        final_order = max((step.step_order for step in _approver_steps(row.version)), default=-1)
         item.outcome_unseen = row.book.voided_at is None and any(
             step.kind == "approver"
             and step.state in ("approved", "rejected", "returned")
+            and (
+                step.state != "approved"
+                or (row.book.approval_state == "approved" and step.step_order == final_order)
+            )
             and step.decided_at is not None
             and step.outcome_seen_at is None
             and step.assignee_user_id != user.id

@@ -26,7 +26,7 @@ interface Params {
 
 interface Actions {
   decideMutation: UseMutationResult<BookRead, unknown, { act: BookDecideAction; note?: string }>
-  signMutation: UseMutationResult<BookRead, unknown, void>
+  signMutation: UseMutationResult<BookRead, unknown, string | undefined>
 }
 
 export function useBookApprovalActions({ bookId, versionId, isReport = false, onDecided, onSigned }: Params): Actions {
@@ -44,6 +44,11 @@ export function useBookApprovalActions({ bookId, versionId, isReport = false, on
    *  say so, leaving the caller's typed text in place. Every other error
    *  falls through to the generic message. */
   function handleMutationError(err: unknown): void {
+    if (err instanceof ApiError && err.code === 'NOT_YOUR_STEP') {
+      invalidateAll()
+      toast.error(t('books.approval.notYourStep'))
+      return
+    }
     if (err instanceof ApiError && err.code === 'REVISION_CHANGED') {
       void qc.invalidateQueries({ queryKey: ['books', 'detail', bookId] })
       toast.error(t('books.approval.revisionChanged'))
@@ -70,7 +75,9 @@ export function useBookApprovalActions({ bookId, versionId, isReport = false, on
   })
 
   const signMutation = useMutation({
-    mutationFn: () => api.signBook(bookId!, versionId!),
+    mutationFn: (note: string | undefined) => note === undefined
+      ? api.signBook(bookId!, versionId!)
+      : api.signBook(bookId!, versionId!, note),
     onSuccess: (book) => {
       invalidateAll()
       toast.success(t(isReport ? 'books.approval.reviewedToast' : 'books.approval.signed'), {

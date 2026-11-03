@@ -1,6 +1,6 @@
 """Signature identity primitives.
 
-Every RENDERED manager/employee/submitter signature occurrence — not every
+Every RENDERED manager/branch-manager/employee/submitter signature occurrence — not every
 signature image FILE — gets a stable identity independent of its embedded
 bytes: ``wp:docPr/@name = "GSSG_SIG_<uuid32>"`` and
 ``wp:docPr/@descr = "gssg-signature:v1:<role>:<uuid32>"``.
@@ -65,10 +65,12 @@ _PROBE_GRID_STEP = 32
 
 # Bump when the measurement algorithm or serialized layout meaning changes.
 SIGNATURE_LAYOUT_SCHEMA_VERSION = 1
-SignatureRole = Literal["manager", "employee", "submitter"]
+SignatureRole = Literal["manager", "branch_manager", "employee", "submitter"]
 
 _MARKER_PREFIX = "GSSG_SIG_"
-_DESCR_RE = re.compile(r"^gssg-signature:v1:(manager|employee|submitter):([0-9a-f]{32})$")
+_DESCR_RE = re.compile(
+    r"^gssg-signature:v1:(manager|branch_manager|employee|submitter):([0-9a-f]{32})$"
+)
 
 # Context keys `app.core.docx_render.render` resolves into inline images,
 # after `docx_engine._adapt_common` (and the other per-form adapters that
@@ -77,6 +79,7 @@ _DESCR_RE = re.compile(r"^gssg-signature:v1:(manager|employee|submitter):([0-9a-
 # unmarked image — see `role_for_sig_key`.
 ROLE_BY_SIG_KEY: dict[str, SignatureRole] = {
     "manager_sig_path": "manager",
+    "branch_manager_sig_path": "branch_manager",
     "employee_sig_path": "employee",
     "submitter_sig_path": "submitter",
     "interviewer_sig_path": "submitter",
@@ -113,7 +116,7 @@ def parse_marker_descr(descr: str | None) -> tuple[SignatureRole, str] | None:
     if not match:
         return None
     role = match.group(1)
-    assert role in ("manager", "employee", "submitter")
+    assert role in ("manager", "branch_manager", "employee", "submitter")
     return role, match.group(2)  # type: ignore[return-value]
 
 

@@ -922,6 +922,7 @@ export interface BookAnnotationRead {
 export interface BookSubmitRequest {
   priority: 'Normal' | 'High'
   approver_user_id?: number | null
+  branch_approver_user_id?: number | null
   reviewer_user_ids?: number[]
 }
 // Approval == signing: the `/approve` endpoint is gone (replaced by `/sign`),
@@ -2350,8 +2351,8 @@ export const api = {
    * signature and marks the book approved. `versionId` must be the record's
    * current revision; a stale target raises REVISION_CHANGED (409). Error
    * codes: NO_SIGNATURE, SIGNATURE_MISSING, NOT_YOUR_STEP. */
-  signBook: (id: number, versionId: number) =>
-    request<BookRead>('POST', `/books/${id}/sign`, { version_id: versionId }),
+  signBook: (id: number, versionId: number, note?: string) =>
+    request<BookRead>('POST', `/books/${id}/sign`, { version_id: versionId, ...(note !== undefined ? { note } : {}) }),
   /** POST /books/{id}/review — submit a reviewer decision (`reviewed` or
    * `changes_requested`) with an optional note. `versionId` must be the
    * assigned revision; a stale target raises REVISION_CHANGED (409). */

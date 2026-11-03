@@ -1476,7 +1476,8 @@ def _action_flags(
         for step in selected.approval_steps
         if step.assignee_user_id == user.id and step.state == "pending"
     ]
-    approver_pending = any((step.kind or "approver") == "approver" for step in pending)
+    active_approver = book_service._current_pending_step(row)
+    approver_pending = any(step is active_approver for step in pending)
     reviewer_pending = any(step.kind == "reviewer" for step in pending)
     can_sign = (
         row.approval_state == "pending"
@@ -2041,6 +2042,7 @@ def submit_for_approval(
         book_id,
         priority=payload.priority,
         approver_user_id=payload.approver_user_id,
+        branch_approver_user_id=payload.branch_approver_user_id,
         reviewer_user_ids=payload.reviewer_user_ids,
         submitted_by_user_id=user.id,
     )
@@ -2061,6 +2063,7 @@ def sign_book(
         book_id,
         user_id=user.id,
         version_id=payload.version_id,
+        note=payload.note,
     )
     return _build_book_response(
         db,

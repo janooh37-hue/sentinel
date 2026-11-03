@@ -907,16 +907,26 @@ def _pp_leave_permit(doc: Any, ctx: dict[str, Any]) -> None:
 
 
 def _pp_admin_leave(doc: Any, ctx: dict[str, Any]) -> None:
-    """Write the branch manager's notes into the blank row under
-    «إجراءات مدير الفرع», centre the manager signer block inside the final
-    notes box, and leave the separate branch-manager التوقيع cell clean for a
-    manual signature."""
+    """Fill the branch-stage notes and centred inline signature, then the
+    separate project-manager signer block in the final notes box."""
     try:
         branch_table = doc.tables[2]
         branch_sig_cell = branch_table.rows[3].cells[1]
         for para in branch_sig_cell.paragraphs:
             if para.text and "x" in para.text.lower():
                 replace_paragraph_text(para, "")
+        branch_sig_path = ctx.get("branch_manager_sig_path")
+        if branch_sig_path:
+            anchor = branch_sig_cell.paragraphs[0]
+            fill_image_behind_text_in_paragraph(
+                anchor,
+                branch_sig_path,
+                width_inches=float(ctx.get("_sig_size_mm", DEFAULT_SIG_SIZE_MM)) / 25.4,
+                dilate_radius_px=int(ctx.get("_sig_boldness", DEFAULT_SIG_BOLDNESS)),
+                signature_role="branch_manager",
+                keep_inline=True,
+            )
+            anchor.alignment = WD_ALIGN_PARAGRAPH.CENTER
         notes = str(ctx.get("branch_manager_notes", "") or "").strip()
         if notes:
             from copy import deepcopy

@@ -9678,6 +9678,8 @@ export interface components {
         BookSignRequest: {
             /** Version Id */
             version_id: number;
+            /** Note */
+            note?: string | null;
         };
         /**
          * BookStateOverrideRequest
@@ -9705,6 +9707,8 @@ export interface components {
             priority: "Normal" | "High";
             /** Approver User Id */
             approver_user_id?: number | null;
+            /** Branch Approver User Id */
+            branch_approver_user_id?: number | null;
             /** Reviewer User Ids */
             reviewer_user_ids?: number[];
         };
@@ -15241,7 +15245,7 @@ export interface components {
              * Role
              * @enum {string}
              */
-            role: "manager" | "employee" | "submitter";
+            role: "manager" | "branch_manager" | "employee" | "submitter";
             /** Page */
             page: number | null;
             /** X */

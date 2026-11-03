@@ -850,13 +850,6 @@
         "required": false
       },
       {
-        "key": "branch_manager_notes",
-        "type": "textarea",
-        "label_en": "Branch Manager Notes",
-        "label_ar": "ملاحظات مدير الفرع",
-        "required": false
-      },
-      {
         "key": "manager_id",
         "type": "manager_picker",
         "label_en": "Project Manager",

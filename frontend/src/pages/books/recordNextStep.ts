@@ -18,7 +18,7 @@ import {
   canSendForApproval,
   type InmateReporterAction,
 } from '@/components/books/book-detail-drawer-utils'
-import { approverStep } from '@/components/books/reviewers'
+import { approvalStageLabel, approverStep } from '@/components/books/reviewers'
 import { parseUtcMs } from '@/lib/time'
 import { pickEmployeeName } from '@/lib/employeeName'
 
@@ -75,6 +75,8 @@ export type StatusKey =
   | 'reportSeen'
   | 'reportReviewMine'
   | 'reportReviewed'
+  | 'pendingStageMine'
+  | 'pendingStageOther'
 
 /** Full i18n key of a disabled-action explanation. */
 export type ReasonKey =
@@ -365,9 +367,11 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
     }
 
     case 'pending': {
+      const approver = approverStep(steps)
+      const stage = approvalStageLabel(approver?.stage_label)
       if (deciding) {
         return step(
-          { key: review ? 'reportReviewMine' : 'pendingMine', vars: {} },
+          { key: review ? 'reportReviewMine' : stage ? 'pendingStageMine' : 'pendingMine', vars: stage ? { stage } : {} },
           {
             primary: 'sign',
             decide: true,
@@ -381,12 +385,11 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
           },
         )
       }
-      const approver = approverStep(steps)
-      const vars = { name: name(approver), ago: relativeAgo(book.submitted_at, ctx.now, ctx.locale) }
+      const vars = { name: name(approver), ...(stage ? { stage } : {}), ago: relativeAgo(book.submitted_at, ctx.now, ctx.locale) }
       return step(
         review && vars.name
           ? { key: approver?.seen_at ? 'reportSeen' : 'reportPending', vars }
-          : { key: 'pendingOther', vars },
+          : { key: stage ? 'pendingStageOther' : 'pendingOther', vars },
         {
           secondary: pick([['reroute', canReroute]]),
           overflow: pick([

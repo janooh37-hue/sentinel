@@ -45,12 +45,27 @@ describe('useBookApprovalActions', () => {
       () => useBookApprovalActions({ bookId: 5, versionId: 11, onDecided: vi.fn(), onSigned }),
       { wrapper: wrapperFor(qc) },
     )
-    result.current.signMutation.mutate()
+    result.current.signMutation.mutate(undefined)
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith('books.approval.noSignatureHint', {
         description: 'books.approval.noSignatureDescription',
       }),
     )
+    expect(onSigned).not.toHaveBeenCalled()
+  })
+
+  it('refreshes stale stage eligibility and explains NOT_YOUR_STEP', async () => {
+    const qc = new QueryClient()
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    vi.spyOn(apiMod.api, 'signBook').mockRejectedValue(new apiMod.ApiError(422, 'NOT_YOUR_STEP', 'not yours'))
+    const onSigned = vi.fn()
+    const { result } = renderHook(
+      () => useBookApprovalActions({ bookId: 5, versionId: 11, onDecided: vi.fn(), onSigned }),
+      { wrapper: wrapperFor(qc) },
+    )
+    result.current.signMutation.mutate('Branch note')
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('books.approval.notYourStep'))
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] })
     expect(onSigned).not.toHaveBeenCalled()
   })
 })

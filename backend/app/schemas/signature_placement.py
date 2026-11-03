@@ -76,7 +76,7 @@ class SignaturePageRead(BaseModel):
 
 class SignatureRead(BaseModel):
     id: str
-    role: Literal["manager", "employee", "submitter"]
+    role: Literal["manager", "branch_manager", "employee", "submitter"]
     page: int | None
     x: float | None
     y: float | None

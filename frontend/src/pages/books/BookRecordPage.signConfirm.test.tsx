@@ -174,6 +174,7 @@ describe('BookRecordPage — unified sign confirmation', () => {
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Sign & approve this record?')).toBeVisible()
     expect(within(dialog).getByText(/GS-0048/)).toBeVisible()
+    expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByText('Sign & approve this record?')).not.toBeInTheDocument())
@@ -211,6 +212,55 @@ describe('BookRecordPage — unified sign confirmation', () => {
 
     await waitFor(() => expect(api.signBook).toHaveBeenCalledTimes(1))
     expect(api.signBook).toHaveBeenCalledWith(48, 5)
+  })
+
+  it('collects optional branch notes with a limit and sends them atomically with signing', async () => {
+    const branch = { id: 1, step_order: 0, stage_label: 'branch_manager', assignee_user_id: 7, state: 'pending', note: null, kind: 'approver' }
+    const project = { id: 2, step_order: 1, stage_label: 'project_manager', assignee_user_id: 8, state: 'pending', note: null, kind: 'approver' }
+    vi.mocked(api.getBook).mockResolvedValue(pendingFixture({
+      versions: [{ id: 5, version_no: 1, status: 'pending', template_id: 'Administrative Leave Form', document_id: 900, created_at: '2026-08-01T09:00:00Z', approval_steps: [branch, project] }],
+    }) as never)
+    vi.mocked(api.signBook).mockResolvedValue(pendingFixture() as never)
+    renderRecord(makeQc())
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign & approve' }))
+    const dialog = await screen.findByRole('dialog')
+    const notes = within(dialog).getByRole('textbox', { name: /Branch Manager notes/ })
+    expect(notes).toHaveAttribute('maxlength', '1000')
+    expect(notes).toHaveAttribute('dir', 'auto')
+    await userEvent.type(notes, 'Approved for travel')
+    expect(within(dialog).getByText('Characters: 19 / 1000')).toBeVisible()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Sign & approve' }))
+    await waitFor(() => expect(api.signBook).toHaveBeenCalledWith(48, 5, 'Approved for travel'))
+  })
+
+  it('shows completed branch notes read-only while the project manager signs without notes', async () => {
+    const branch = { id: 1, step_order: 0, stage_label: 'branch_manager', assignee_user_id: 8, state: 'approved', note: 'Branch approved', kind: 'approver' }
+    const project = { id: 2, step_order: 1, stage_label: 'project_manager', assignee_user_id: 7, state: 'pending', note: null, kind: 'approver' }
+    vi.mocked(api.getBook).mockResolvedValue(pendingFixture({
+      versions: [{ id: 5, version_no: 1, status: 'pending', template_id: 'Administrative Leave Form', document_id: 900, created_at: '2026-08-01T09:00:00Z', approval_steps: [branch, project] }],
+    }) as never)
+    vi.mocked(api.signBook).mockResolvedValue(pendingFixture() as never)
+    renderRecord(makeQc())
+    expect(await screen.findByText('Branch approved')).toBeVisible()
+    expect(screen.getByText('Branch approved')).toHaveAttribute('dir', 'auto')
+    expect(screen.getAllByText('Project Manager').some((element) => element.tagName === 'BDI')).toBe(true)
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign & approve' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Sign & approve' }))
+    await waitFor(() => expect(api.signBook).toHaveBeenCalledWith(48, 5))
+  })
+
+  it.each([null, 'future_stage'])('labels unknown approval stage %s as the signing manager', async (stage_label) => {
+    const branch = { id: 1, step_order: 0, stage_label: 'branch_manager', assignee_user_id: 8, state: 'approved', note: null, kind: 'approver' }
+    const unknown = { id: 2, step_order: 1, stage_label, assignee_user_id: 7, state: 'pending', note: null, kind: 'approver' }
+    vi.mocked(api.getBook).mockResolvedValue(pendingFixture({
+      versions: [{ id: 5, version_no: 1, status: 'pending', template_id: 'Administrative Leave Form', document_id: 900, created_at: '2026-08-01T09:00:00Z', approval_steps: [branch, unknown] }],
+    }) as never)
+    renderRecord(makeQc())
+    const stages = await screen.findByRole('list', { name: 'Approval stages' })
+    expect(within(stages).getByText('Signing manager')).toBeVisible()
+    expect(within(stages).queryByText('Project Manager')).not.toBeInTheDocument()
   })
 
   it('a stale version (someone else advanced the record) cannot be confirmed', async () => {

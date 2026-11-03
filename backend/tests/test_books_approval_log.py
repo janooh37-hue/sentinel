@@ -1054,3 +1054,122 @@ def test_approval_summary_sent_oldest_stays_the_oldest(api_db: Session):
     summary = _client(api_db, submitter).get("/api/v1/books/approval-summary").json()
     assert summary["sent"]["count"] == 3
     assert summary["sent"]["oldest"]["book_id"] == 1
+
+
+def test_admin_leave_api_builds_ordered_chain_and_only_active_stage_is_actionable(api_db):
+    from app.services import book_service, notification_service
+
+    submitter = _user(api_db, "branch-submit@x.ae", "admin")
+    branch = _user(api_db, "branch-manager@x.ae", "manager")
+    project = _user(api_db, "project-manager@x.ae", "manager")
+    book = _submitted_book(api_db, book_id=1, ref="HR-0001", submitter=submitter, approver=project)
+    version = book.versions[0]
+    version.template_id = "Administrative Leave Form"
+    version.fields = {"start_date": "03/11/2026", "end_date": "03/11/2026"}
+    version.approval_steps.clear()
+    version.status = book.approval_state = "none"
+    api_db.commit()
+    client = _client(api_db, submitter)
+    missing = client.post(f"/api/v1/books/{book.id}/submit", json={"approver_user_id": project.id})
+    assert missing.status_code == 422, missing.text
+    assert "BRANCH_APPROVER_REQUIRED" in missing.text
+    same = client.post(
+        f"/api/v1/books/{book.id}/submit",
+        json={"approver_user_id": project.id, "branch_approver_user_id": project.id},
+    )
+    assert same.status_code == 422, same.text
+    assert "BRANCH_APPROVER_SAME_AS_PROJECT" in same.text
+    submitted = client.post(
+        f"/api/v1/books/{book.id}/submit",
+        json={"approver_user_id": project.id, "branch_approver_user_id": branch.id},
+    )
+    assert submitted.status_code == 200, submitted.text
+    steps = sorted(version.approval_steps, key=lambda step: step.step_order)
+    assert [(step.step_order, step.stage_label) for step in steps] == [
+        (0, "branch_manager"),
+        (1, "project_manager"),
+    ]
+    assert '"stage_label":"branch_manager"' in submitted.text
+    assert '"step_order":1' in submitted.text
+
+    def assert_worklist(user, count):
+        assert len(book_service.list_awaiting(api_db, user_id=user.id)) == count
+        assert book_service.awaiting_count(api_db, user_id=user.id, reviewer_only=False) == count
+        assert notification_service.relevant_counts(api_db, user).approvals == count
+        user_client = _client(api_db, user)
+        summary = user_client.get("/api/v1/books/approval-summary")
+        assert summary.status_code == 200, summary.text
+        assert summary.json()["signature"]["count"] == count
+        assert summary.json()["actionable_count"] == count
+        received = user_client.get("/api/v1/books/approval-log")
+        assert received.status_code == 200, received.text
+        assert [row["book_id"] for row in received.json()["items"]] == ([book.id] if count else [])
+        detail = user_client.get(f"/api/v1/books/{book.id}")
+        assert detail.status_code == 200, detail.text
+        assert detail.json()["can_sign"] is bool(count)
+
+    assert_worklist(branch, 1)
+    assert_worklist(project, 0)
+    premature = _client(api_db, project).post(
+        f"/api/v1/books/{book.id}/sign", json={"version_id": version.id}
+    )
+    assert premature.status_code == 422, premature.text
+    assert "NOT_YOUR_STEP" in premature.text
+    steps[0].state = "approved"
+    steps[0].decided_at = datetime.now(UTC).replace(tzinfo=None)
+    api_db.commit()
+    assert_worklist(branch, 0)
+    assert_worklist(project, 1)
+    sent = client.get(
+        "/api/v1/books/approval-log", params={"scope": "sent", "status": "pending"}
+    ).json()
+    assert sent["total"] == 1
+    assert sent["items"][0]["verdict"] is None
+    assert sent["items"][0]["status"] == "pending"
+
+
+@pytest.mark.parametrize("template", ["Leave Permit Form", "general_book"])
+def test_non_admin_submit_stays_single_step_and_ignores_branch_selection(api_db, template):
+    from app.services import book_service
+
+    submitter = _user(api_db, "single-submit@x.ae", "admin")
+    project = _user(api_db, "single-project@x.ae", "manager")
+    book = _submitted_book(api_db, book_id=1, ref="HR-0001", submitter=submitter, approver=project)
+    version = book.versions[0]
+    version.template_id = template
+    version.approval_steps.clear()
+    version.status = book.approval_state = "none"
+    api_db.commit()
+    book_service.submit_for_approval(
+        api_db,
+        book.id,
+        submitted_by_user_id=submitter.id,
+        approver_user_id=project.id,
+        branch_approver_user_id=999999,
+        reviewer_user_ids=[],
+        priority="Normal",
+    )
+    assert len(version.approval_steps) == 1
+    assert version.approval_steps[0].assignee_user_id == project.id
+    assert version.approval_steps[0].step_order == 0
+
+
+def test_sign_api_accepts_note_and_rejects_over_limit_before_signing(api_db, monkeypatch):
+    from unittest.mock import Mock
+
+    from app.services import book_service
+
+    submitter = _user(api_db, "note-submit@x.ae", "admin")
+    signer = _user(api_db, "note-signer@x.ae", "manager")
+    book = _submitted_book(api_db, book_id=1, ref="HR-0001", submitter=submitter, approver=signer)
+    sign = Mock(return_value=book)
+    monkeypatch.setattr(book_service, "sign_book", sign)
+    client = _client(api_db, signer)
+    endpoint = f"/api/v1/books/{book.id}/sign"
+    too_long = client.post(endpoint, json={"version_id": 1, "note": "x" * 1001})
+    assert too_long.status_code == 422, too_long.text
+    sign.assert_not_called()
+    for note in (None, "x" * 1000):
+        result = client.post(endpoint, json={"version_id": 1, "note": note})
+        assert result.status_code == 200, result.text
+        sign.assert_called_with(api_db, book.id, user_id=signer.id, version_id=1, note=note)

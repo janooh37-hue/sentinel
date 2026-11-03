@@ -77,7 +77,10 @@ def env(db_session, tmp_path, monkeypatch):
         status="active",
         display_name="Sync Manager",
     )
-    db_session.add_all([employee, signer, BookCategory(id="HR", prefix="HR")])
+    branch = User(
+        email="branch-sync@example.test", password_hash="x", role="manager", status="active"
+    )
+    db_session.add_all([employee, signer, branch, BookCategory(id="HR", prefix="HR")])
     db_session.flush()
     manager = Manager(name_en="Sync Manager", user_id=signer.id)
     db_session.add(manager)
@@ -88,7 +91,12 @@ def env(db_session, tmp_path, monkeypatch):
         book_service.user_signature_service, "resolve_signature", lambda _: signature
     )
     yield SimpleNamespace(
-        db=db_session, settings=settings, signer=signer, employee=employee, manager=manager
+        db=db_session,
+        settings=settings,
+        signer=signer,
+        branch=branch,
+        employee=employee,
+        manager=manager,
     )
     get_settings.cache_clear()
 
@@ -135,6 +143,9 @@ def submit(env, book):
         book.id,
         submitted_by_user_id=env.signer.id,
         approver_user_id=env.signer.id,
+        branch_approver_user_id=(
+            env.branch.id if book.versions[-1].template_id == "Administrative Leave Form" else None
+        ),
         priority="Normal",
         reviewer_user_ids=[],
     )
@@ -142,6 +153,10 @@ def submit(env, book):
 
 def sign(env, book):
     submit(env, book)
+    if book.versions[-1].template_id == "Administrative Leave Form":
+        book_service.sign_book(
+            env.db, book.id, user_id=env.branch.id, version_id=book.versions[-1].id
+        )
     book_service.sign_book(env.db, book.id, user_id=env.signer.id, version_id=book.versions[-1].id)
 
 
@@ -869,3 +884,72 @@ def test_unreadable_record_paper_skips_sync_and_saves_the_leave(env, monkeypatch
         )
     )
     assert "cannot be read" in json.loads(audit.payload)["reason"]
+
+
+@pytest.mark.parametrize("final", [False, True])
+def test_admin_leave_date_sync_preserves_branch_snapshot_and_stage_decisions(
+    env, final, monkeypatch
+):
+    book, leave = generate(env, template="Administrative Leave Form")
+    submit(env, book)
+    previous = book.versions[-1]
+    note = "Branch staffing checked"
+    book_service.sign_book(
+        env.db, book.id, user_id=env.branch.id, version_id=previous.id, note=note
+    )
+    if final:
+        book_service.sign_book(env.db, book.id, user_id=env.signer.id, version_id=previous.id)
+    frozen = dict(previous.fields["_signing"]["stages"]["branch_manager"])
+    signature = env.settings.data_dir / frozen["signature_path"]
+    frozen_bytes = signature.read_bytes()
+    decisions = [
+        (step.id, step.stage_label, step.assignee_user_id, step.state, step.note, step.decided_at)
+        for step in sorted(previous.approval_steps, key=lambda step: step.step_order)
+    ]
+    resolve = book_service.user_signature_service.resolve_signature
+
+    def project_signature_only(user):
+        assert user.id != env.branch.id, "Branch signature must replay from its frozen snapshot"
+        return resolve(user)
+
+    monkeypatch.setattr(
+        book_service.user_signature_service, "resolve_signature", project_signature_only
+    )
+    old_start, old_end, old_days = leave.start_date, leave.end_date, leave.days
+    leave.start_date, leave.end_date, leave.days = date(2026, 10, 22), date(2026, 10, 25), 4
+    leave_record_sync.sync_leave_record(
+        env.db,
+        leave,
+        old_start=old_start,
+        old_end=old_end,
+        old_days=old_days,
+        actor=env.signer.email,
+    )
+    env.db.commit()
+    current = book.versions[-1]
+    assert current.id != previous.id
+    assert current.fields["_signing"]["stages"]["branch_manager"] == frozen
+    assert signature.read_bytes() == frozen_bytes
+    assert [
+        (step.id, step.stage_label, step.assignee_user_id, step.state, step.note, step.decided_at)
+        for step in sorted(current.approval_steps, key=lambda step: step.step_order)
+    ] == decisions
+    assert current.status == book.approval_state == ("approved" if final else "pending")
+    assert leave.status == ("Approved" if final else "Pending")
+    if final:
+        retained = env.db.scalar(
+            select(SignatureArtifactRevision).where(
+                SignatureArtifactRevision.version_id == current.id,
+                SignatureArtifactRevision.revision == current.signature_revision,
+            )
+        )
+        assert retained is not None
+        rendered = retained.docx_path
+        assert roles(env, rendered) == Counter({"branch_manager": 1, "manager": 1})
+    else:
+        assert current.signed_pdf_path is None
+        assert current.signed_at is None
+        assert current.signed_by_user_id is None
+        rendered = env.db.get_one(Document, current.document_id).docx_path
+        assert roles(env, rendered) == Counter({"branch_manager": 1})
+    assert note in docx_text(env, rendered)
