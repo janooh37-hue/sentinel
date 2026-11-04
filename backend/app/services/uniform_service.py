@@ -39,7 +39,17 @@ from app.db.models import (
 from app.db.repos import uniform_repo
 from app.db.repos._locking import begin_immediate_if_idle
 from app.db.repos.audit_repo import append_audit
-from app.schemas.uniform import UniformIssueRead, UniformReturnRead
+from app.schemas.uniform import (
+    UniformEmployeeRead,
+    UniformHolder,
+    UniformHolding,
+    UniformIssueRead,
+    UniformItemRead,
+    UniformRecipient,
+    UniformReturnRead,
+    UniformSizeRead,
+    UniformSummary,
+)
 
 GROUPS = frozenset({"formal", "guard", "winter"})
 DRAWINGS = frozenset(
@@ -96,6 +106,7 @@ class ReturnLineIn:
 class AdjustmentLineIn:
     size_id: int
     delta: int
+    expected_on_hand: int
 
 
 _ITEM_EDITABLE = frozenset(
@@ -400,6 +411,8 @@ def create_item(
     if not sizes:
         raise ValidationFailedError("uniform_sizes_required", "Add at least one size.")
     labels = _unique_labels(sizes)
+    if len(labels) > 1 and any(label.lower() == ONE_SIZE for label in labels):
+        raise ValidationFailedError("uniform_sizes_fixed", "One size cannot join other sizes.")
     with _write(db):
         if _name_taken(db, clean_en):
             raise ConflictError(
@@ -662,6 +675,14 @@ def update_size(
         if size.archived_at is not None:
             raise ValidationFailedError("uniform_size_archived", "This size is archived.")
         item = _active_item(db, size.item_id)
+        if "label" in data:
+            label = data["label"].lower()
+            if (size.label.lower() == ONE_SIZE and label != ONE_SIZE) or (
+                label == ONE_SIZE and len(_active_sizes(item)) > 1
+            ):
+                raise ValidationFailedError(
+                    "uniform_sizes_fixed", "One size cannot join other sizes.", item_id=item.id
+                )
         if "label" in data and _label_taken(item, data["label"], exclude_id=size.id):
             raise ConflictError(
                 "uniform_size_exists", "This size already exists.", label=data["label"]
@@ -1052,27 +1073,44 @@ def create_adjustments(
     text = _reason(reason)
     on = _not_future(adjusted_on or organization_today(), "adjusted_on")
     _require_lines(lines)
-    merged: dict[int, int] = defaultdict(int)
+    initial: dict[int, int] = {}
     for line in lines:
         if isinstance(line.delta, bool) or not isinstance(line.delta, int) or line.delta == 0:
             raise ValidationFailedError(
                 "uniform_invalid_delta", "Adjustments must change the count.", size_id=line.size_id
             )
-        merged[line.size_id] += line.delta
-    if any(delta == 0 for delta in merged.values()):
-        raise ValidationFailedError("uniform_invalid_delta", "Adjustments must change the count.")
+        if (
+            isinstance(line.expected_on_hand, bool)
+            or not isinstance(line.expected_on_hand, int)
+            or line.expected_on_hand < 0
+        ):
+            raise ValidationFailedError(
+                "uniform_invalid_expected_on_hand", "Expected stock must be 0 or more."
+            )
     with _write(db):
+        # Every line compares with the same pre-write snapshot, including repeated sizes.
+        for line in lines:
+            if line.size_id not in initial:
+                initial[line.size_id] = _active_shelf_size(db, line.size_id).on_hand
+            available = initial[line.size_id]
+            if line.expected_on_hand != available:
+                raise ConflictError(
+                    "uniform_stale_count",
+                    "Stock changed meanwhile; refresh and retry.",
+                    size_id=line.size_id,
+                    expected_on_hand=line.expected_on_hand,
+                    available=available,
+                )
         rows: list[UniformAdjustment] = []
-        for size_id, delta in merged.items():
-            _active_shelf_size(db, size_id)
-            if delta < 0:
-                _take(db, size_id, -delta)
+        for line in lines:
+            if line.delta < 0:
+                _take(db, line.size_id, -line.delta)
             else:
-                _put(db, size_id, delta)
-            _touch_size(db, size_id)
+                _put(db, line.size_id, line.delta)
+            _touch_size(db, line.size_id)
             row = UniformAdjustment(
-                size_id=size_id,
-                delta=delta,
+                size_id=line.size_id,
+                delta=line.delta,
                 reason=text,
                 adjusted_on=on,
                 created_by_id=actor_user_id,
@@ -1126,6 +1164,140 @@ def void_adjustment(
 
 
 # ── Listing (newest first by date then id; voided rows included) ──────────────
+
+
+def _size_read(row: UniformSize, held_qty: int) -> UniformSizeRead:
+    result = UniformSizeRead.model_validate(row)
+    result.held_qty = held_qty
+    result.is_low = row.min_qty is not None and row.on_hand <= row.min_qty
+    return result
+
+
+def size_read(db: Session, row: UniformSize) -> UniformSizeRead:
+    held = sum(h.qty for h in uniform_repo.holdings(db, item_id=row.item_id) if h.size_id == row.id)
+    return _size_read(row, held)
+
+
+def _item_reads(db: Session, rows: Sequence[UniformItem]) -> list[UniformItemRead]:
+    if not rows:
+        return []
+    holdings = uniform_repo.holdings(db, item_id=rows[0].id if len(rows) == 1 else None)
+    by_item: dict[int, list[uniform_repo.Holding]] = defaultdict(list)
+    held_by_size: dict[int, int] = defaultdict(int)
+    holder_items = {row.id for row in rows if row.tracking == "holder"}
+    employee_ids: set[str] = set()
+    for holding in holdings:
+        by_item[holding.item_id].append(holding)
+        if holding.size_id is not None:
+            held_by_size[holding.size_id] += holding.qty
+        if holding.item_id in holder_items:
+            employee_ids.add(holding.employee_id)
+    employees = (
+        {
+            employee.id: employee
+            for employee in db.scalars(select(Employee).where(Employee.id.in_(employee_ids)))
+        }
+        if employee_ids
+        else {}
+    )
+    return [
+        UniformItemRead.model_validate(
+            {
+                **{
+                    key: getattr(row, key)
+                    for key in UniformItemRead.model_fields
+                    if key not in {"version", "sizes", "holders"}
+                },
+                "version": item_etag(row),
+                "sizes": [
+                    _size_read(size, held_by_size[size.id])
+                    for size in row.sizes
+                    if size.archived_at is None
+                ],
+                "holders": [
+                    UniformHolder(
+                        employee_id=h.employee_id,
+                        name_en=employees[h.employee_id].name_en,
+                        name_ar=employees[h.employee_id].name_ar,
+                        qty=h.qty,
+                    )
+                    for h in by_item[row.id]
+                ]
+                if row.tracking == "holder"
+                else [],
+            }
+        )
+        for row in rows
+    ]
+
+
+def item_read(db: Session, row: UniformItem) -> UniformItemRead:
+    return _item_reads(db, [row])[0]
+
+
+def item_reads(db: Session, *, include_archived: bool = False) -> list[UniformItemRead]:
+    return _item_reads(db, uniform_repo.list_items(db, include_archived=include_archived))
+
+
+def recipients(db: Session, *, q: str = "") -> list[UniformRecipient]:
+    held: dict[str, int] = defaultdict(int)
+    for holding in uniform_repo.holdings(db):
+        held[holding.employee_id] += holding.qty
+    totals: dict[str, tuple[int, dt.date]] = {}
+    for row in list_issues(db):
+        if row.voided_at is not None:
+            continue
+        previous, last_on = totals.get(row.employee_id, (0, row.issued_on))
+        totals[row.employee_id] = (
+            previous + sum(line.qty for line in row.lines),
+            max(last_on, row.issued_on),
+        )
+    employees = db.scalars(select(Employee).where(Employee.id.in_(totals)))
+    query = q.casefold()
+    return [
+        UniformRecipient(
+            employee_id=employee.id,
+            name_en=employee.name_en,
+            name_ar=employee.name_ar,
+            held_total=held[employee.id],
+            issued_total=totals[employee.id][0],
+            last_issued_on=totals[employee.id][1],
+        )
+        for employee in employees
+        if query in f"{employee.id} {employee.name_en} {employee.name_ar or ''}".casefold()
+    ]
+
+
+def employee_read(db: Session, employee_id: str) -> UniformEmployeeRead:
+    _require_employee(db, employee_id)
+    return UniformEmployeeRead(
+        holdings=[
+            UniformHolding.model_validate(holding)
+            for holding in uniform_repo.holdings(db, employee_id=employee_id)
+        ],
+        issues=issue_reads(db, list_issues(db, employee_id=employee_id)),
+        returns=return_reads(db, list_returns(db, employee_id=employee_id)),
+    )
+
+
+def summary(db: Session) -> UniformSummary:
+    active = uniform_repo.list_items(db)
+    sizes = [
+        size
+        for item in active
+        if item.tracking == "shelf"
+        for size in item.sizes
+        if size.archived_at is None
+    ]
+    holder_items = {item.id for item in active if item.tracking == "holder"}
+    holdings = [h for h in uniform_repo.holdings(db) if h.item_id in holder_items]
+    return UniformSummary(
+        shelf_total=sum(size.on_hand for size in sizes),
+        holder_count=len({h.employee_id for h in holdings}),
+        suits_issued=sum(h.qty for h in holdings),
+        out_of_stock=sum(size.on_hand == 0 for size in sizes),
+        low_sizes=sum(size.min_qty is not None and size.on_hand <= size.min_qty for size in sizes),
+    )
 
 
 def _actor_names(

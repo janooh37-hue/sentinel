@@ -64937,13 +64937,19 @@
           "delta": {
             "type": "integer",
             "title": "Delta"
+          },
+          "expected_on_hand": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected On Hand"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "size_id",
-          "delta"
+          "delta",
+          "expected_on_hand"
         ],
         "title": "UniformAdjustmentLine"
       },

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import Employee, UniformIssue, UniformReturn, User, UserPermission
+from app.db.models import Employee, UniformIssue, UniformItem, UniformReturn, User, UserPermission
 from app.db.session import get_db
 from app.main import create_app
 from app.services import uniform_service
@@ -174,7 +174,8 @@ def test_adjustment_shortage_atomicity_sizes_and_delete(editor):
     item = create_item(editor)
     a, b = [size["id"] for size in item["sizes"]]
     adjustment = editor.post(
-        ROOT + "/adjustments", json={"reason": "Count", "lines": [{"size_id": a, "delta": 4}]}
+        ROOT + "/adjustments",
+        json={"reason": "Count", "lines": [{"size_id": a, "delta": 4, "expected_on_hand": 0}]},
     )
     assert adjustment.status_code == 201, adjustment.text
     shortage = editor.post(
@@ -393,3 +394,130 @@ def test_actor_names_nullable_without_email_fallback(editor, api_db, actor_state
         assert rows[0][prefix + "_name_ar"] is None
         if actor_state == "missing":
             assert rows[0]["created_by_id"] is None
+
+
+@pytest.mark.parametrize("expected", [None, -1, True, 1.5, "0"])
+def test_adjustments_require_nonnegative_integer_expected_count(editor, expected):
+    size = create_item(editor)["sizes"][0]["id"]
+    line = {"size_id": size, "delta": 1}
+    if expected is not None:
+        line["expected_on_hand"] = expected
+    response = editor.post(ROOT + "/adjustments", json={"reason": "Count", "lines": [line]})
+    assert response.status_code == 422
+    assert editor.get(ROOT + "/adjustments").json() == []
+
+
+def test_stale_adjustments_reject_entire_request_after_stock_changes(editor):
+    item = create_item(editor)
+    a, b = [size["id"] for size in item["sizes"]]
+    receipt = editor.post(
+        ROOT + "/receipts", json={"received_on": str(TODAY), "lines": [{"size_id": b, "qty": 3}]}
+    )
+    assert receipt.status_code == 201, receipt.text
+    response = editor.post(
+        ROOT + "/adjustments",
+        json={
+            "reason": "Count",
+            "lines": [
+                {"size_id": a, "delta": 2, "expected_on_hand": 0},
+                {"size_id": b, "delta": 1, "expected_on_hand": 0},
+            ],
+        },
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "uniform_stale_count"
+    assert editor.get(ROOT + "/adjustments").json() == []
+    assert [size["on_hand"] for size in editor.get(ROOT + "/items").json()[0]["sizes"]] == [0, 3]
+
+
+def test_adjustments_preserve_repeated_size_lines_and_guard_cumulative_stock(editor):
+    size = create_item(editor)["sizes"][0]["id"]
+    response = editor.post(
+        ROOT + "/adjustments",
+        json={
+            "reason": "Count",
+            "lines": [
+                {"size_id": size, "delta": 3, "expected_on_hand": 0},
+                {"size_id": size, "delta": -1, "expected_on_hand": 0},
+            ],
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert [row["delta"] for row in response.json()] == [3, -1]
+    assert len({row["id"] for row in response.json()}) == 2
+    shortage = editor.post(
+        ROOT + "/adjustments",
+        json={
+            "reason": "Count",
+            "lines": [
+                {"size_id": size, "delta": -2, "expected_on_hand": 2},
+                {"size_id": size, "delta": -1, "expected_on_hand": 2},
+            ],
+        },
+    )
+    assert shortage.status_code == 409
+    assert shortage.json()["error"]["code"] == "uniform_insufficient_stock"
+    assert len(editor.get(ROOT + "/adjustments").json()) == 2
+    assert editor.get(ROOT + "/items").json()[0]["sizes"][0]["on_hand"] == 2
+
+
+def test_one_size_rule_applies_to_create_add_and_rename(editor):
+    body = item_body()
+    body["sizes"] = [" ONE ", "M"]
+    invalid = editor.post(ROOT + "/items", json=body)
+    assert invalid.status_code == 422
+    assert invalid.json()["error"]["code"] == "uniform_sizes_fixed"
+    item = create_item(editor)
+    a, b = [size["id"] for size in item["sizes"]]
+    invalid = editor.patch(ROOT + f"/sizes/{a}", json={"label": " ONE "})
+    assert invalid.status_code == 422
+    assert invalid.json()["error"]["code"] == "uniform_sizes_fixed"
+    assert editor.delete(ROOT + f"/sizes/{b}").status_code == 204
+    renamed = editor.patch(ROOT + f"/sizes/{a}", json={"label": "one"})
+    assert renamed.status_code == 200, renamed.text
+    invalid = editor.post(ROOT + f"/items/{item['id']}/sizes", json={"label": "L"})
+    assert invalid.status_code == 422
+    assert invalid.json()["error"]["code"] == "uniform_sizes_fixed"
+    invalid = editor.patch(ROOT + f"/sizes/{a}", json={"label": "M"})
+    assert invalid.status_code == 422
+    assert invalid.json()["error"]["code"] == "uniform_sizes_fixed"
+    valid = editor.patch(ROOT + f"/sizes/{a}", json={"min_qty": 2, "sort_order": 1})
+    assert valid.status_code == 200, valid.text
+
+
+def test_summary_counts_only_holder_tracking_even_when_drawings_change(editor, api_db):
+    holder = UniformItem(
+        name_en="Tailored",
+        name_ar="بدلة",
+        group_key="formal",
+        drawing="cap",
+        tracking="holder",
+        default_qty=2,
+    )
+    api_db.add_all([holder, Employee(id="G2", name_en="Second", name_ar="ثان")])
+    api_db.commit()
+    shelf = create_item(editor, "Shelf suit", "suit")
+    size = shelf["sizes"][0]["id"]
+    response = editor.post(
+        ROOT + "/receipts", json={"received_on": str(TODAY), "lines": [{"size_id": size, "qty": 4}]}
+    )
+    assert response.status_code == 201, response.text
+    response = editor.post(
+        ROOT + "/issues",
+        json={"employee_id": "G2", "lines": [{"item_id": shelf["id"], "size_id": size, "qty": 3}]},
+    )
+    assert response.status_code == 201, response.text
+    summary = editor.get(ROOT + "/summary").json()
+    assert (summary["holder_count"], summary["suits_issued"]) == (0, 0)
+    response = editor.post(
+        ROOT + "/issues",
+        json={"employee_id": "G1", "lines": [{"item_id": holder.id, "qty": 2}]},
+    )
+    assert response.status_code == 201, response.text
+    summary = editor.get(ROOT + "/summary").json()
+    assert (summary["shelf_total"], summary["holder_count"], summary["suits_issued"]) == (1, 1, 2)
+    catalog = editor.get(ROOT + "/items").json()
+    holder_read = next(item for item in catalog if item["id"] == holder.id)
+    assert holder_read["holders"] == [
+        {"employee_id": "G1", "name_en": "Ali", "name_ar": "علي", "qty": 2}
+    ]

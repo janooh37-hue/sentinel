@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sqlalchemy import func, literal, select, union_all, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import (
     UniformAdjustment,
@@ -181,7 +181,11 @@ def held_qty(db: Session, *, employee_id: str, item_id: int, size_id: int | None
 
 
 def list_items(db: Session, *, include_archived: bool = False) -> list[UniformItem]:
-    stmt = select(UniformItem).order_by(UniformItem.sort_order, UniformItem.id)
+    stmt = (
+        select(UniformItem)
+        .options(selectinload(UniformItem.sizes))
+        .order_by(UniformItem.sort_order, UniformItem.id)
+    )
     if not include_archived:
         stmt = stmt.where(UniformItem.archived_at.is_(None))
     return list(db.scalars(stmt))

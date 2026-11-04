@@ -117,6 +117,7 @@ class UniformReturnLine(UniformIssueLine):
 class UniformAdjustmentLine(Input):
     size_id: int
     delta: int = Field(strict=True)
+    expected_on_hand: int = Field(ge=0, strict=True)
 
 
 class UniformReceiptCreate(Input):

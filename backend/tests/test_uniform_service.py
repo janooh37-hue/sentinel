@@ -18,6 +18,7 @@ from app.db.models import (
     AuditLog,
     Base,
     Employee,
+    UniformAdjustment,
     UniformIssue,
     UniformItem,
     UniformReceipt,
@@ -123,7 +124,7 @@ def test_receipt_rejects_future_date_archived_size_and_bad_qty(db: Session) -> N
         svc.create_receipt(db, received_on=TODAY, lines=[ReceiptLineIn(m, 0)])
     assert _code(exc) == "uniform_invalid_qty"
     _stock(db, s, 1)
-    svc.create_adjustments(db, lines=[AdjustmentLineIn(s, -1)], reason="Miscount")
+    svc.create_adjustments(db, lines=[AdjustmentLineIn(s, -1, 1)], reason="Miscount")
     assert svc.remove_size(db, s) == "archived"
     before = _audits(db)
     with pytest.raises(AppError) as exc:
@@ -286,20 +287,85 @@ def test_adjustment_needs_reason_nonzero_delta_and_stock(db: Session) -> None:
     m = _sid(polo, "M")
     _stock(db, m, 2)
     for kwargs, code in [
-        (dict(lines=[AdjustmentLineIn(m, 1)], reason="  "), "uniform_reason_required"),
-        (dict(lines=[AdjustmentLineIn(m, 0)], reason="Count"), "uniform_invalid_delta"),
-        (dict(lines=[AdjustmentLineIn(m, -3)], reason="Count"), "uniform_insufficient_stock"),
+        (dict(lines=[AdjustmentLineIn(m, 1, 2)], reason="  "), "uniform_reason_required"),
+        (dict(lines=[AdjustmentLineIn(m, 0, 2)], reason="Count"), "uniform_invalid_delta"),
+        (dict(lines=[AdjustmentLineIn(m, -3, 2)], reason="Count"), "uniform_insufficient_stock"),
     ]:
         with pytest.raises(AppError) as exc:
             svc.create_adjustments(db, **kwargs)  # type: ignore[arg-type]
         assert _code(exc) == code
     assert _on_hand(db, m) == 2
     rows = svc.create_adjustments(
-        db, lines=[AdjustmentLineIn(m, -2), AdjustmentLineIn(_sid(polo, "L"), 4)], reason="Count"
+        db,
+        lines=[AdjustmentLineIn(m, -2, 2), AdjustmentLineIn(_sid(polo, "L"), 4, 0)],
+        reason="Count",
     )
     assert [r.reason for r in rows] == ["Count", "Count"]
     assert (_on_hand(db, m), _on_hand(db, _sid(polo, "L"))) == (0, 4)
     assert _audits(db, "uniform_adjustment") == 2
+
+
+def test_adjustment_stale_count_rejects_every_line_atomically(db: Session) -> None:
+    polo = _polo(db)
+    m, s = _sid(polo, "M"), _sid(polo, "S")
+    _stock(db, m, 2)
+    before = _audits(db)
+    with pytest.raises(AppError) as exc:
+        svc.create_adjustments(
+            db, lines=[AdjustmentLineIn(s, 5, 0), AdjustmentLineIn(m, 1, 1)], reason="Count"
+        )
+    assert (_status(exc), _code(exc)) == (409, "uniform_stale_count")
+    assert (_on_hand(db, s), _on_hand(db, m)) == (0, 2)
+    assert svc.list_adjustments(db) == []
+    assert _audits(db) == before
+    with pytest.raises(AppError) as exc:
+        svc.create_adjustments(
+            db, lines=[AdjustmentLineIn(m, 1, 2), AdjustmentLineIn(m, 1, 3)], reason="Count"
+        )
+    assert _code(exc) == "uniform_stale_count"
+    assert _on_hand(db, m) == 2
+    assert svc.list_adjustments(db) == []
+    assert _audits(db) == before
+
+
+def test_adjustment_keeps_each_line_and_uses_initial_expected_count(db: Session) -> None:
+    m = _sid(_polo(db), "M")
+    _stock(db, m, 2)
+    before = _audits(db)
+    rows = svc.create_adjustments(
+        db,
+        lines=[AdjustmentLineIn(m, 2, 2), AdjustmentLineIn(m, -1, 2), AdjustmentLineIn(m, -1, 2)],
+        reason="Count",
+    )
+    assert [row.delta for row in rows] == [2, -1, -1]
+    assert len({row.id for row in rows}) == 3
+    assert _on_hand(db, m) == 2
+    assert uniform_repo.ledger_balances(db)[m] == 2
+    assert _audits(db) == before + 3
+
+
+def test_adjustment_duplicate_lines_guard_cumulative_stock(db: Session) -> None:
+    m = _sid(_polo(db), "M")
+    _stock(db, m, 2)
+    before = _audits(db)
+    with pytest.raises(AppError) as exc:
+        svc.create_adjustments(
+            db, lines=[AdjustmentLineIn(m, -2, 2), AdjustmentLineIn(m, -1, 2)], reason="Count"
+        )
+    assert (_status(exc), _code(exc)) == (409, "uniform_insufficient_stock")
+    assert _on_hand(db, m) == 2
+    assert svc.list_adjustments(db) == []
+    assert _audits(db) == before
+
+
+@pytest.mark.parametrize("expected", [-1, True, 1.5])
+def test_adjustment_rejects_invalid_expected_count(db: Session, expected: int) -> None:
+    m = _sid(_polo(db), "M")
+    with pytest.raises(AppError) as exc:
+        svc.create_adjustments(db, lines=[AdjustmentLineIn(m, 1, expected)], reason="Count")
+    assert _code(exc) == "uniform_invalid_expected_on_hand"
+    assert _on_hand(db, m) == 0
+    assert svc.list_adjustments(db) == []
 
 
 # ── Voids ─────────────────────────────────────────────────────────────────────
@@ -359,8 +425,8 @@ def test_void_reusable_return_is_guarded(db: Session) -> None:
 def test_void_adjustment_both_signs(db: Session) -> None:
     polo = _polo(db)
     m = _sid(polo, "M")
-    (plus,) = svc.create_adjustments(db, lines=[AdjustmentLineIn(m, 3)], reason="Found")
-    (minus,) = svc.create_adjustments(db, lines=[AdjustmentLineIn(m, -1)], reason="Lost")
+    (plus,) = svc.create_adjustments(db, lines=[AdjustmentLineIn(m, 3, 0)], reason="Found")
+    (minus,) = svc.create_adjustments(db, lines=[AdjustmentLineIn(m, -1, 3)], reason="Lost")
     svc.void_adjustment(db, minus.id, reason="Was there")
     assert _on_hand(db, m) == 3
     svc.create_issue(db, employee_id="G1001", lines=[IssueLineIn(polo.id, m, 1)])
@@ -520,6 +586,84 @@ def test_size_rules(db: Session) -> None:
     assert svc.add_size(db, polo.id, label="S").id != s
 
 
+@pytest.mark.parametrize("labels", [("one", "M"), ("S", " ONE ")])
+def test_one_size_cannot_be_mixed_on_create(db: Session, labels: tuple[str, ...]) -> None:
+    before = _audits(db)
+    with pytest.raises(AppError) as exc:
+        _polo(db, labels)
+    assert _code(exc) == "uniform_sizes_fixed"
+    assert uniform_repo.list_items(db) == []
+    assert _audits(db) == before
+
+
+def test_one_size_cannot_be_mixed_or_renamed_away_on_update(db: Session) -> None:
+    polo = _polo(db, ("S", "M"))
+    m = _sid(polo, "M")
+    before = _audits(db)
+    with pytest.raises(AppError) as exc:
+        svc.update_size(db, m, {"label": " ONE "})
+    assert _code(exc) == "uniform_sizes_fixed"
+    assert _audits(db) == before
+    assert svc.remove_size(db, _sid(polo, "S")) == "deleted"
+    assert svc.update_size(db, m, {"label": "one"}).label == "one"
+    with pytest.raises(AppError) as exc:
+        svc.update_size(db, m, {"label": "M"})
+    assert _code(exc) == "uniform_sizes_fixed"
+    with pytest.raises(AppError) as exc:
+        svc.add_size(db, polo.id, label="L")
+    assert _code(exc) == "uniform_sizes_fixed"
+    assert svc.update_size(db, m, {"min_qty": 2, "sort_order": 1}).min_qty == 2
+
+
+def test_item_read_models_load_holdings_once_for_all_sizes(
+    db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    polo = _polo(db)
+    suit = _suit(db)
+    _stock(db, _sid(polo, "M"), 4)
+    svc.create_issue(
+        db,
+        employee_id="G1001",
+        lines=[IssueLineIn(polo.id, _sid(polo, "M"), 2), IssueLineIn(suit.id, None, 2)],
+    )
+    original = uniform_repo.holdings
+    calls = 0
+
+    def holdings(
+        session: Session, *, employee_id: str | None = None, item_id: int | None = None
+    ) -> list[uniform_repo.Holding]:
+        nonlocal calls
+        calls += 1
+        return original(session, employee_id=employee_id, item_id=item_id)
+
+    monkeypatch.setattr(uniform_repo, "holdings", holdings)
+    reads = {row.id: row for row in svc.item_reads(db)}
+    assert calls == 1
+    assert {size.label: size.held_qty for size in reads[polo.id].sizes} == {"S": 0, "M": 2, "L": 0}
+    assert reads[polo.id].holders == []
+    assert reads[suit.id].holders[0].employee_id == "G1001"
+    assert reads[suit.id].holders[0].qty == 2
+
+
+def test_summary_uses_holder_tracking_not_drawing_or_shelf_holdings(db: Session) -> None:
+    suit = _suit(db)
+    svc.update_item(db, suit.id, {"drawing": "cap"}, if_match=svc.item_etag(suit))
+    shelf = svc.create_item(
+        db, name_en="Shelf suit", name_ar="بدلة", group_key="formal", drawing="suit", sizes=["M"]
+    )
+    size = _sid(shelf, "M")
+    _stock(db, size, 4)
+    svc.create_issue(db, employee_id="G1002", lines=[IssueLineIn(shelf.id, size, 3)])
+    initial = svc.summary(db)
+    assert initial.holder_count == initial.suits_issued == 0
+    svc.create_issue(db, employee_id="G1001", lines=[IssueLineIn(suit.id, None, 2)])
+    summary = svc.summary(db)
+    assert (summary.shelf_total, summary.holder_count, summary.suits_issued) == (1, 1, 2)
+    svc.create_return(db, employee_id="G1001", lines=[ReturnLineIn(suit.id, None, 2, "damaged")])
+    summary = svc.summary(db)
+    assert (summary.holder_count, summary.suits_issued) == (0, 0)
+
+
 # ── Ledger invariant, audit, concurrency ──────────────────────────────────────
 
 
@@ -549,7 +693,7 @@ def test_ledger_invariant_over_random_postings_and_voids(db: Session) -> None:
             elif op == "adjust":
                 delta = qty * rng.choice([-1, 1])
                 (adj,) = svc.create_adjustments(
-                    db, lines=[AdjustmentLineIn(size, delta)], reason="Count"
+                    db, lines=[AdjustmentLineIn(size, delta, _on_hand(db, size))], reason="Count"
                 )
                 postings.append(("adjustment", adj.id))
             elif postings:
@@ -573,7 +717,7 @@ def test_every_mutation_writes_one_audit_row(db: Session) -> None:
         lambda: svc.create_return(
             db, employee_id="G1001", lines=[ReturnLineIn(polo.id, m, 1, "reusable")]
         ),
-        lambda: svc.create_adjustments(db, lines=[AdjustmentLineIn(m, 1)], reason="Count"),
+        lambda: svc.create_adjustments(db, lines=[AdjustmentLineIn(m, 1, 3)], reason="Count"),
         lambda: svc.add_size(db, polo.id, label="XL"),
         lambda: svc.update_size(db, m, {"min_qty": 1}),
     ]
@@ -581,9 +725,51 @@ def test_every_mutation_writes_one_audit_row(db: Session) -> None:
         before = _audits(db)
         step()
         assert _audits(db) == before + 1
+    void_steps = [
+        (
+            "uniform_adjustment",
+            "adjustment.voided",
+            lambda: svc.void_adjustment(db, svc.list_adjustments(db)[0].id, reason="Correction"),
+        ),
+        (
+            "uniform_return",
+            "return.voided",
+            lambda: svc.void_return(db, svc.list_returns(db)[0].id, reason="Correction"),
+        ),
+        (
+            "uniform_issue",
+            "issue.voided",
+            lambda: svc.void_issue(db, svc.list_issues(db)[0].id, reason="Correction"),
+        ),
+        (
+            "uniform_receipt",
+            "receipt.voided",
+            lambda: svc.void_receipt(db, svc.list_receipts(db)[0].id, reason="Correction"),
+        ),
+        ("uniform_size", "size.archived", lambda: svc.remove_size(db, m)),
+        ("uniform_size", "size.deleted", lambda: svc.remove_size(db, _sid(polo, "S"))),
+        ("uniform_item", "item.archived", lambda: svc.archive_item(db, polo.id)),
+    ]
+    for entity_type, action, step in void_steps:
+        before = _audits(db)
+        step()
+        assert _audits(db) == before + 1
+        audit = db.scalars(select(AuditLog).order_by(AuditLog.id.desc())).first()
+        assert audit is not None
+        assert (audit.entity_type, audit.action) == (entity_type, action)
+    disposable = svc.create_item(
+        db, name_en="Cap", name_ar="قبعة", group_key="guard", drawing="cap", sizes=["one"]
+    )
+    before = _audits(db)
+    svc.delete_item(db, disposable.id)
+    assert _audits(db) == before + 1
+    audit = db.scalars(select(AuditLog).order_by(AuditLog.id.desc())).first()
+    assert audit is not None
+    assert (audit.entity_type, audit.action) == ("uniform_item", "item.deleted")
 
 
-def test_two_sessions_race_for_the_last_piece(tmp_path: Path) -> None:
+@pytest.mark.parametrize("operation", ["issue", "adjustment"])
+def test_two_sessions_race_for_the_last_piece(tmp_path: Path, operation: str) -> None:
     engine = create_engine(
         f"sqlite:///{tmp_path / 'uniform-race.db'}", connect_args={"check_same_thread": False}
     )
@@ -600,23 +786,30 @@ def test_two_sessions_race_for_the_last_piece(tmp_path: Path) -> None:
         _stock(setup, size_id, 1)
     barrier = Barrier(2)
 
-    def hand_out(employee_id: str) -> str:
+    def post(employee_id: str) -> str:
         with factory() as session:
             barrier.wait()
             try:
-                svc.create_issue(
-                    session, employee_id=employee_id, lines=[IssueLineIn(polo.id, size_id, 1)]
-                )
+                if operation == "issue":
+                    svc.create_issue(
+                        session, employee_id=employee_id, lines=[IssueLineIn(polo.id, size_id, 1)]
+                    )
+                else:
+                    svc.create_adjustments(
+                        session, lines=[AdjustmentLineIn(size_id, -1, 1)], reason="Count"
+                    )
             except AppError as exc:
                 return exc.code
             return "ok"
 
     try:
         with ThreadPoolExecutor(max_workers=2) as pool:
-            results = sorted(pool.map(hand_out, ["G1001", "G1002"]))
-        assert results == ["ok", "uniform_insufficient_stock"]
+            results = sorted(pool.map(post, ["G1001", "G1002"]))
+        conflict = "uniform_insufficient_stock" if operation == "issue" else "uniform_stale_count"
+        assert results == ["ok", conflict]
         with factory() as check:
             assert _on_hand(check, size_id) == 0
-            assert check.scalar(select(func.count()).select_from(UniformIssue)) == 1
+            model = UniformIssue if operation == "issue" else UniformAdjustment
+            assert check.scalar(select(func.count()).select_from(model)) == 1
     finally:
         engine.dispose()

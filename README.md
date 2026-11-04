@@ -73,6 +73,15 @@ Manager settings editors also need `employees.edit` to assign/change an
 employee-linked account or replace/delete its signature; standalone manager
 signatures require only `settings.edit`.
 
+Assets includes bilingual Uniform stock, hand-outs, returns, and employee holdings.
+Users with `uniform.edit` can maintain catalogue metadata and size order, remove
+empty sizes, archive items with history, and delete unused items. Physical counts
+send each size's opening balance with the adjustment; concurrent stock changes
+reject the whole request with `409 uniform_stale_count`. Reopen the item to review
+fresh balances before retrying. Each submitted adjustment line retains its own
+ledger and audit row. Receipt voids reverse the entire receipt, and their history
+shows every affected item and size before confirmation.
+
 ## Requirements
 
 - Python 3.12

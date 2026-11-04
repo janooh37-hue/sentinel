@@ -17069,6 +17069,8 @@ export interface components {
             size_id: number;
             /** Delta */
             delta: number;
+            /** Expected On Hand */
+            expected_on_hand: number;
         };
         /** UniformAdjustmentRead */
         UniformAdjustmentRead: {

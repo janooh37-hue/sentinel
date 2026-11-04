@@ -74,11 +74,11 @@ Every mutating function: one write transaction via `begin_immediate_if_idle`, po
 1. **Receipt:** lines on non-archived shelf sizes only, qty > 0, `received_on` not in the future (org-local date). Adds to `on_hand`.
 2. **Hand-out:** employee must exist. Shelf lines need an active size and the guarded decrement; any shortage → 409 `uniform_insufficient_stock` with `{size_id, available}` and nothing is written. Holder lines have no size, qty ≥ 1, no stock check. Duplicate lines for the same item/size merge. Date defaults to today, not future.
 3. **Return:** per line, qty ≤ the employee's current net holding of that item/size (else 422 `uniform_over_return`). `reusable` increments `on_hand`; `damaged` does not. Holder lines have no size and no shelf effect; an employee stops being a holder when net reaches 0.
-4. **Adjustment:** non-zero delta, reason required; a negative delta uses the guarded decrement.
+4. **Adjustment:** non-zero delta, reason required, one immutable adjustment row per input line (including repeated sizes); a negative delta uses the guarded decrement. Every line includes `expected_on_hand` from the count editor's opening snapshot. Validate all expectations against the balances at the start of the write transaction, before applying any line. A mismatch rejects the entire request with 409 `uniform_stale_count`; close and reopen the editor to review a fresh count.
 5. **Void** (receipt, issue, return, adjustment): reason required, row must not already be voided (409). Reverses the effect: voiding a receipt or positive adjustment decrements (guarded, 409 if stock was already used), voiding an issue increments stock and fails 409 if it would make the employee's net holding negative (a later return depends on it; void that first), voiding a reusable return decrements (guarded).
 6. **Items:** create (shelf only, ≥1 size, group required, both names required); update with If-Match version (412 on mismatch, same ETag pattern as `store_service`); tracking immutable; archive allowed only when every size has `on_hand = 0` and no one holds the item; hard delete only when no posting references it.
 7. **Drawings:** a drawing may be used by at most one non-archived item. Create or update with a drawing held by another non-archived item fails 409 `uniform_drawing_in_use` (checked in the service, and the `IntegrityError` from the partial unique index is mapped to the same 409 for races). Updating an item to its own current drawing is always allowed. Archiving or deleting an item frees its drawing.
-8. **Sizes:** add (not for one-size items or holder items; unique case-insensitive), reorder, set `min_qty`, remove only at `on_hand = 0` with no holders (archive if referenced, delete otherwise).
+8. **Sizes:** add (not for one-size items or holder items; unique case-insensitive), reorder, set `min_qty`, remove only at `on_hand = 0` with no holders (archive if referenced, delete otherwise). Creation and size renaming must also reject combining the reserved case-insensitive label `one` with other active sizes.
 9. **Dates:** all posting dates org-local, not future; backdating allowed.
 10. **Listing:** postings newest first by date then id; voided rows are returned with their void info and excluded from all totals.
 
@@ -99,7 +99,7 @@ Schemas in `backend/app/schemas/uniform.py`. Read routes require `uniform.view`,
 | GET/POST | `/receipts` | `UniformReceiptCreate {received_on, reference?, note?, lines[{size_id, qty}]}` |
 | GET/POST | `/issues?employee_id=` | `UniformIssueCreate {employee_id, issued_on?, note?, lines[{item_id, size_id?, qty}]}` |
 | GET/POST | `/returns?employee_id=` | `UniformReturnCreate {employee_id, returned_on?, note?, lines[{item_id, size_id?, qty, condition}]}` |
-| GET/POST | `/adjustments` | `UniformAdjustmentCreate {lines[{size_id, delta}], reason}` (one row per line, same reason) |
+| GET/POST | `/adjustments` | `UniformAdjustmentCreate {lines[{size_id, delta, expected_on_hand}], reason}` (one row per input line, same reason; 409 `uniform_stale_count` if any opening balance changed) |
 | POST | `/{receipts,issues,returns,adjustments}/{id}/void` | `{reason}` |
 | GET | `/recipients?q=` | employees with any non-voided issue: `employee_id`, names, `held_total`, `issued_total`, `last_issued_on` |
 | GET | `/employees/{employee_id}` | `{holdings[], issues[], returns[]}` for the person panel and employee file |
