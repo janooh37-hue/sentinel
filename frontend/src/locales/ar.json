@@ -1896,6 +1896,23 @@
       "uniform": "الملابس"
     },
     "uniform": {
+      "received": {
+        "held": "القطع الموجودة حاليًا",
+        "heldCount_zero": "{{count}} قطعة بحوزته",
+        "heldCount_one": "قطعة واحدة بحوزته",
+        "heldCount_two": "قطعتان بحوزته",
+        "heldCount_few": "{{count}} قطع بحوزته",
+        "heldCount_many": "{{count}} قطعة بحوزته",
+        "heldCount_other": "{{count}} قطعة بحوزته",
+        "issueHistory": "سجل الصرف",
+        "returnHistory": "سجل الإرجاع",
+        "noIssues": "لا توجد سجلات صرف.",
+        "noReturns": "لا توجد سجلات إرجاع.",
+        "unknownActor": "الاسم غير متاح",
+        "personUnavailable": "هذا المستلم غير متاح.",
+        "errorDetail": "تعذّر تحميل سجلات ملابس هذا الموظف.",
+        "noHoldingsReturn": "لا توجد ملابس بحوزته حاليًا لإرجاعها."
+      },
       "returns": {
         "conditionOf": "حالة {{name}}"
       },

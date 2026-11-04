@@ -79,6 +79,7 @@ export function ReturnsTab(): React.JSX.Element {
       <Button type="button" variant="secondary" className="mb-3 min-h-11 min-[1000px]:hidden" onClick={back}>{t('assets.uniform.back')}</Button>
       <h2 id="uniform-return-h" ref={detailHeading} tabIndex={-1} dir="auto" className="text-lg font-semibold outline-none">{person(selected.employee_id)}</h2>
       <p className="text-sm text-muted-foreground"><bdi dir="ltr">{selected.employee_id}</bdi> · {formatDmy(selected.returned_on)}</p>
+      <p className="mt-1 text-sm text-muted-foreground" dir="auto">{t('assets.uniform.receivedBy', { name: `\u2068${pickEmployeeName({ name_en: selected.received_by_name_en || t('assets.uniform.received.unknownActor'), name_ar: selected.received_by_name_ar }, i18n.language)}\u2069` })}</p>
       {selected.voided_at && <p className="mt-2 rounded-md border border-border bg-surface-raised p-2 text-sm"><span className="font-semibold">{t('assets.uniform.voidStatus')}</span>{selected.void_reason && <>{' · '}<span dir="auto">{selected.void_reason}</span></>}</p>}
       <h3 className="mb-1 mt-4 text-sm font-semibold">{t('assets.uniform.returnedPieces')}</h3>
       <ul className="divide-y divide-hairline">{selected.lines.map((line, index) => {

@@ -1760,6 +1760,23 @@
       "uniform": "Uniform"
     },
     "uniform": {
+      "received": {
+        "held": "Currently held",
+        "heldCount_zero": "{{count}} pieces held",
+        "heldCount_one": "{{count}} piece held",
+        "heldCount_two": "{{count}} pieces held",
+        "heldCount_few": "{{count}} pieces held",
+        "heldCount_many": "{{count}} pieces held",
+        "heldCount_other": "{{count}} pieces held",
+        "issueHistory": "Hand-out history",
+        "returnHistory": "Return history",
+        "noIssues": "No hand-outs recorded.",
+        "noReturns": "No returns recorded.",
+        "unknownActor": "unknown user",
+        "personUnavailable": "This recipient is not available.",
+        "errorDetail": "Couldn't load this person's uniform records.",
+        "noHoldingsReturn": "No uniform currently held to return."
+      },
       "returns": {
         "conditionOf": "Condition of {{name}}"
       },

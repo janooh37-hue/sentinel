@@ -19,7 +19,7 @@ from typing import Any, Literal
 from fastapi import status
 from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import AppError, ConflictError, NotFoundError, ValidationFailedError
 from app.core.clock import organization_today, utcnow
@@ -34,10 +34,12 @@ from app.db.models import (
     UniformReturn,
     UniformReturnLine,
     UniformSize,
+    User,
 )
 from app.db.repos import uniform_repo
 from app.db.repos._locking import begin_immediate_if_idle
 from app.db.repos.audit_repo import append_audit
+from app.schemas.uniform import UniformIssueRead, UniformReturnRead
 
 GROUPS = frozenset({"formal", "guard", "winter"})
 DRAWINGS = frozenset(
@@ -309,6 +311,8 @@ def _touch_size(db: Session, size_id: int) -> None:
     size = db.get(UniformSize, size_id)
     if size is not None:
         size.updated_at = utcnow()
+        # Guarded stock SQL bypasses ORM synchronization; invalidate any cached balance.
+        db.expire(size, ["on_hand"])
 
 
 def _void(
@@ -1124,6 +1128,51 @@ def void_adjustment(
 # ── Listing (newest first by date then id; voided rows included) ──────────────
 
 
+def _actor_names(
+    db: Session, rows: Sequence[UniformIssue] | Sequence[UniformReturn]
+) -> dict[int, tuple[str | None, str | None]]:
+    """Resolve linked employee names in bulk, without the Store email fallback."""
+    ids = {row.created_by_id for row in rows if row.created_by_id is not None}
+    if not ids:
+        return {}
+    return {
+        user_id: (name_en or display_name, name_ar)
+        for user_id, name_en, name_ar, display_name in db.execute(
+            select(User.id, Employee.name_en, Employee.name_ar, User.display_name)
+            .outerjoin(Employee, User.employee_id == Employee.id)
+            .where(User.id.in_(ids))
+        )
+    }
+
+
+def issue_reads(db: Session, rows: Sequence[UniformIssue]) -> list[UniformIssueRead]:
+    names = _actor_names(db, rows)
+    result = []
+    for row in rows:
+        read = UniformIssueRead.model_validate(row)
+        read.given_by_name_en, read.given_by_name_ar = (
+            names.get(row.created_by_id, (None, None))
+            if row.created_by_id is not None
+            else (None, None)
+        )
+        result.append(read)
+    return result
+
+
+def return_reads(db: Session, rows: Sequence[UniformReturn]) -> list[UniformReturnRead]:
+    names = _actor_names(db, rows)
+    result = []
+    for row in rows:
+        read = UniformReturnRead.model_validate(row)
+        read.received_by_name_en, read.received_by_name_ar = (
+            names.get(row.created_by_id, (None, None))
+            if row.created_by_id is not None
+            else (None, None)
+        )
+        result.append(read)
+    return result
+
+
 def list_receipts(db: Session) -> list[UniformReceipt]:
     stmt = select(UniformReceipt).order_by(
         UniformReceipt.received_on.desc(), UniformReceipt.id.desc()
@@ -1132,14 +1181,22 @@ def list_receipts(db: Session) -> list[UniformReceipt]:
 
 
 def list_issues(db: Session, *, employee_id: str | None = None) -> list[UniformIssue]:
-    stmt = select(UniformIssue).order_by(UniformIssue.issued_on.desc(), UniformIssue.id.desc())
+    stmt = (
+        select(UniformIssue)
+        .options(selectinload(UniformIssue.lines))
+        .order_by(UniformIssue.issued_on.desc(), UniformIssue.id.desc())
+    )
     if employee_id is not None:
         stmt = stmt.where(UniformIssue.employee_id == employee_id)
     return list(db.scalars(stmt))
 
 
 def list_returns(db: Session, *, employee_id: str | None = None) -> list[UniformReturn]:
-    stmt = select(UniformReturn).order_by(UniformReturn.returned_on.desc(), UniformReturn.id.desc())
+    stmt = (
+        select(UniformReturn)
+        .options(selectinload(UniformReturn.lines))
+        .order_by(UniformReturn.returned_on.desc(), UniformReturn.id.desc())
+    )
     if employee_id is not None:
         stmt = stmt.where(UniformReturn.employee_id == employee_id)
     return list(db.scalars(stmt))

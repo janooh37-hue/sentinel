@@ -10,7 +10,7 @@ Open `http://127.0.0.1:8941/mockups/plan/uniform/index.html`. To serve it yourse
 - `data.js`: stock, employees, hand-outs, returns, derived totals and consistency assertions.
 - `art.js`: fixed SVG drawings, bilingual `UNIFORM_ART_KINDS` catalog and `UNIFORM_ART_GROUPS`.
 
-Production implementation: ticket #289 adds `/holdings/uniform`, the Stock ledger and the shared Hand out dialog. Employee selection uses the narrow identity lookup with `uniform.edit` authority; viewing employee profiles is not required. Received and Returns navigation is exposed only after tickets #291 and #292 integrate their bodies. Catalogue editing and stock receipts belong to #290.
+Production implementation: ticket #289 adds `/holdings/uniform`, the Stock ledger and the shared Hand out dialog. Employee selection uses the narrow identity lookup with `uniform.edit` authority; viewing employee profiles is not required. Tickets #291 and #292 add Returns and Received: recipients lead with net holdings, person details show current holdings before hand-out and return history, and the shared Hand out / Record return dialogs preselect the person. Reasoned hand-out voids retain history; below 1000px Back restores focus to the recipient row. Both histories and return details display the keeper's bilingual name from the canonical API responses. Catalogue editing and stock receipts belong to #290.
 
 | View | Query |
 |---|---|

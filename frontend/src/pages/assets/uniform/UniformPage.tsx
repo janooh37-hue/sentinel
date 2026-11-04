@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { type UniformIssueLine, type UniformReturnRead } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { HandOutDialog } from './HandOutDialog'
+import { ReceivedTab } from './received/ReceivedTab'
 import { ReturnDialog } from './returns/ReturnDialog'
 import { ReturnsTab } from './returns/ReturnsTab'
 import { StockTab } from './stock/StockTab'
@@ -16,7 +17,7 @@ export function UniformPage(): React.JSX.Element {
   const { t } = useTranslation()
   const editable = useCapabilities().has('uniform.edit')
   const [params, setParams] = useSearchParams()
-  const tab = params.get('tab') === 'returns' ? 'returns' : 'stock'
+  const tab = params.get('tab') === 'returns' ? 'returns' : params.get('tab') === 'received' ? 'received' : 'stock'
   const items = useUniformItems()
   const returns = useUniformReturns()
   const [dialog, setDialog] = useState<{ itemId?: number } | null>(null)
@@ -39,8 +40,8 @@ export function UniformPage(): React.JSX.Element {
   }
   const handOutButton = <Button type="button" variant={tab === 'returns' ? 'secondary' : 'default'} className="min-h-11" onClick={event => handOut(event.currentTarget)}>{t('assets.uniform.handOut')}</Button>
   const actions = editable && (tab === 'returns' ? <>{handOutButton}<Button type="button" className="min-h-11" onClick={event => { opener.current = event.currentTarget; setReturning(true) }}>{t('assets.uniform.recordReturn')}</Button></> : handOutButton)
-  return <UniformShell tab={tab} tabs={['stock', 'returns']} description={tab === 'returns' ? returnsDescription : stockDescription} actions={actions}>
-    {tab === 'returns' ? <ReturnsTab /> : <StockTab onHandOut={handOut} changedSizes={stockChange.sizes} changeSequence={stockChange.sequence} />}
+  return <UniformShell tab={tab} tabs={['stock', 'received', 'returns']} description={tab === 'returns' ? returnsDescription : tab === 'stock' ? stockDescription : undefined} actions={actions}>
+    {tab === 'returns' ? <ReturnsTab /> : tab === 'received' ? <ReceivedTab /> : <StockTab onHandOut={handOut} changedSizes={stockChange.sizes} changeSequence={stockChange.sequence} />}
     {editable && dialog && <HandOutDialog open itemId={dialog.itemId} returnFocusRef={opener} onSuccess={issued} onOpenChange={open => { if (!open) setDialog(null) }} />}
     <ReturnDialog open={returning} returnFocusRef={opener} onSuccess={returned} onOpenChange={setReturning} />
   </UniformShell>

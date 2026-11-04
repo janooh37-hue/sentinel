@@ -17169,6 +17169,10 @@ export interface components {
             void_reason: string | null;
             /** Employee Id */
             employee_id: string;
+            /** Given By Name En */
+            given_by_name_en?: string | null;
+            /** Given By Name Ar */
+            given_by_name_ar?: string | null;
             /**
              * Issued On
              * Format: date
@@ -17378,6 +17382,10 @@ export interface components {
             void_reason: string | null;
             /** Employee Id */
             employee_id: string;
+            /** Received By Name En */
+            received_by_name_en?: string | null;
+            /** Received By Name Ar */
+            received_by_name_ar?: string | null;
             /**
              * Returned On
              * Format: date
