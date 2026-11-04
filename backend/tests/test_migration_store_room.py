@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_store_room_is_single_head() -> None:
     script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
-    assert script.get_heads() == ["0114_store_count"]
+    assert script.get_heads() == ["0115_uniform"]
     assert script.get_revision("0113_store_room").down_revision == "0112_store"
 
 
