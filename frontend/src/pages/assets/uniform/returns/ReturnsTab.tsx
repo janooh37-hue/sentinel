@@ -25,6 +25,7 @@ export function ReturnsTab(): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [voiding, setVoiding] = useState(false)
   const detailHeading = useRef<HTMLHeadingElement>(null)
+  const voidOpener = useRef<HTMLElement | null>(null)
   const ar = i18n.language.startsWith('ar')
   const person = (employeeId: string) => {
     const row = people.data?.find(entry => entry.employee_id === employeeId)
@@ -36,8 +37,11 @@ export function ReturnsTab(): React.JSX.Element {
     const label = piece?.tracking === 'shelf' ? piece.sizes.find(entry => entry.id === line.size_id)?.label : undefined
     return !label ? null : label === 'one' ? t('assets.uniform.oneSize') : <bdi dir="ltr">{label}</bdi>
   }
-  const needle = query.trim().toLowerCase()
-  const records = (returns.data ?? []).filter(record => !needle || [record.employee_id, person(record.employee_id)].some(value => value.toLowerCase().includes(needle)))
+  const needle = query.trim().toLocaleLowerCase()
+  const records = (returns.data ?? []).filter(record => {
+    const recipient = people.data?.find(entry => entry.employee_id === record.employee_id)
+    return !needle || [record.employee_id, recipient?.name_en ?? '', recipient?.name_ar ?? ''].some(value => value.toLocaleLowerCase().includes(needle))
+  })
   const requested = params.get('return')
   const selected = records.find(record => String(record.id) === requested) ?? records[0]
   const open = requested !== null && selected !== undefined
@@ -90,8 +94,8 @@ export function ReturnsTab(): React.JSX.Element {
       })}</ul>
       <p className="mt-2 text-sm">{t('assets.uniform.itemsN', { count: selected.lines.reduce((sum, line) => sum + line.qty, 0) })}</p>
       {selected.note && <p className="mt-2 text-sm" dir="auto"><span className="text-muted-foreground">{t('assets.uniform.note')}: </span>{selected.note}</p>}
-      {editable && !selected.voided_at && <Button type="button" variant="ghost" className="mt-4 min-h-11 text-destructive-text" onClick={() => setVoiding(true)}>{t('assets.uniform.voidRecord')}</Button>}
-      <VoidDialog open={voiding} kind="return" recordId={selected.id} returnFocusRef={detailHeading} onOpenChange={setVoiding} />
+      {editable && !selected.voided_at && <Button type="button" variant="ghost" className="mt-4 min-h-11 text-destructive-text" onClick={event => { voidOpener.current = event.currentTarget; setVoiding(true) }}>{t('assets.uniform.voidRecord')}</Button>}
+      <VoidDialog open={voiding} kind="return" recordId={selected.id} returnFocusRef={voidOpener} onVoided={() => { if (!voidOpener.current?.isConnected) voidOpener.current = detailHeading.current }} onOpenChange={setVoiding} />
     </section>}
   </div>
 }

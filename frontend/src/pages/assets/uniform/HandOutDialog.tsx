@@ -18,6 +18,7 @@ import { todayIso } from '@/lib/leaveDateMath'
 import { toast } from '@/lib/toast'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { EmployeeSearch, type UniformEmployee } from './EmployeeSearch'
+import { whole } from './quantity'
 import { uniformErrorMessage, useCreateUniformIssue, useUniformItems } from './uniformQueries'
 
 interface Props {
@@ -32,14 +33,13 @@ interface Props {
 
 const schema = z.object({
   employeeId: z.string().min(1),
-  picks: z.array(z.object({ itemId: z.number(), choice: z.string(), qty: z.string() })),
+  picks: z.record(z.string(), z.object({ choice: z.string(), qty: z.string().optional() })),
 })
 type Values = z.infer<typeof schema>
 const groups = ['formal', 'guard', 'winter'] as const
 
 function quantity(value: string, max: number): number {
-  const number = Number(value)
-  return Math.min(max, Math.max(1, Number.isFinite(number) ? Math.floor(number) : 1))
+  return Math.min(max, Math.max(1, whole(value)))
 }
 function maximum(item: UniformItemRead, choice: string): number {
   return item.tracking === 'holder' ? Infinity : item.sizes.find(size => String(size.id) === choice && !size.archived_at)?.on_hand ?? 0
@@ -84,23 +84,22 @@ function HandOutForm({ items, itemId, initialEmployee, searchRef, mutation, onOp
   }, [initialEmployee, searchRef])
   const { control, setValue, handleSubmit } = useForm<Values>({
     resolver: zodResolver(schema),
-    defaultValues: { employeeId: initialEmployee?.id ?? '', picks: items.map(item => ({ itemId: item.id, choice: item.id === itemId && item.tracking === 'holder' ? 'give' : 'none', qty: String(item.default_qty) })) },
+    defaultValues: { employeeId: initialEmployee?.id ?? '', picks: Object.fromEntries(items.map(item => [item.id, { choice: item.id === itemId && item.tracking === 'holder' ? 'give' : 'none', qty: String(item.default_qty) }])) },
   })
   const picks = useWatch({ control, name: 'picks' })
-  const selected = picks.flatMap(pick => {
-    const item = items.find(item => item.id === pick.itemId)
-    if (!item || pick.choice === 'none' || maximum(item, pick.choice) < 1) return []
-    return [{ item_id: item.id, ...(item.tracking === 'shelf' ? { size_id: Number(pick.choice) } : {}), qty: quantity(pick.qty, maximum(item, pick.choice)) }]
+  const selected = items.flatMap(item => {
+    const pick = picks[item.id]
+    if (!pick || pick.choice === 'none' || maximum(item, pick.choice) < 1) return []
+    return [{ item_id: item.id, ...(item.tracking === 'shelf' ? { size_id: Number(pick.choice) } : {}), qty: quantity(pick.qty ?? String(item.default_qty), maximum(item, pick.choice)) }]
   })
   const count = selected.reduce((sum, line) => sum + line.qty, 0)
   const reason = !employee ? t('assets.uniform.needEmployee') : !count ? t('assets.uniform.needPiece') : ''
   const giver = user ? pickEmployeeName({ name_en: user.name_en || user.email, name_ar: user.name_ar }, i18n.language) : ''
   const name = (item: UniformItemRead) => i18n.language.startsWith('ar') ? item.name_ar : item.name_en
-  const commit = (index: number, raw: string) => {
-    const item = items[index]
-    const max = maximum(item, picks[index].choice)
+  const commit = (item: UniformItemRead, raw: string) => {
+    const max = maximum(item, picks[item.id]?.choice ?? 'none')
     const next = quantity(raw, max)
-    setValue(`picks.${index}.qty`, String(next))
+    setValue(`picks.${item.id}.qty`, String(next))
     if (Number(raw) > max) setNotices(previous => ({ ...previous, [item.id]: max }))
   }
   return <form noValidate aria-busy={mutation.isPending} className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit(() => {
@@ -117,10 +116,10 @@ function HandOutForm({ items, itemId, initialEmployee, searchRef, mutation, onOp
       <FormAlert id={`${id}-error`} message={mutation.error ? uniformErrorMessage(mutation.error) : null} />
       <EmployeeSearch value={employee} inputRef={searchRef} disabled={mutation.isPending} onChange={next => { setEmployee(next); setValue('employeeId', next?.id ?? '') }} />
       {groups.map(group => {
-        const rows = items.map((item, index) => ({ item, index })).filter(({ item }) => item.group_key === group)
+        const rows = items.filter(item => item.group_key === group)
         return rows.length > 0 && <section key={group} aria-labelledby={`${id}-${group}`}><h3 id={`${id}-${group}`} className="mb-2 mt-4 text-sm font-semibold">{t(`assets.uniform.groups.${group}`)}</h3>
-          {rows.map(({ item, index }) => {
-            const pick = picks[index]
+          {rows.map(item => {
+            const pick = { choice: picks[item.id]?.choice ?? 'none', qty: picks[item.id]?.qty ?? String(item.default_qty) }
             const max = maximum(item, pick.choice)
             const selectedQuantity = quantity(pick.qty, max)
             const notice = Number(pick.qty) > max ? max : notices[item.id]
@@ -129,27 +128,28 @@ function HandOutForm({ items, itemId, initialEmployee, searchRef, mutation, onOp
               <UniformArt kind={item.drawing} size={48} className="shrink-0" />
               <div className="min-w-0"><span id={`${id}-piece-${item.id}`} className="text-sm font-semibold" dir="auto">{name(item)}</span><p dir="auto" className="text-xs text-muted-foreground">{i18n.language.startsWith('ar') ? item.description_ar : item.description_en}</p></div>
               <div className="col-span-full min-w-0 space-y-2 sm:col-span-1">
-                <Controller control={control} name={`picks.${index}.choice`} render={({ field }) => <div className="flex flex-wrap gap-1.5">
+                <Controller control={control} name={`picks.${item.id}.choice`} defaultValue="none" render={({ field }) => <div className="flex flex-wrap gap-1.5">
                   {[{ value: 'none', label: t('assets.uniform.none'), stock: null }, ...choices].map(choice => <label key={choice.value} className="relative cursor-pointer">
                     <input type="radio" name={field.name} value={choice.value} aria-label={choice.stock === null ? choice.label : `${choice.label} ${t('assets.uniform.leftN', { count: choice.stock })}`} checked={field.value === choice.value} disabled={mutation.isPending || choice.stock === 0} className="peer sr-only" onChange={() => {
                       field.onChange(choice.value)
                       const limit = maximum(item, choice.value)
                       const raw = pick.qty
-                      if (choice.value !== 'none') setValue(`picks.${index}.qty`, String(quantity(raw, limit)))
+                      if (choice.value !== 'none') setValue(`picks.${item.id}.qty`, String(quantity(raw, limit)))
                       setNotices(previous => ({ ...previous, [item.id]: choice.value !== 'none' && Number(raw) > limit ? limit : -1 }))
                     }} />
                     <span className="flex min-h-11 min-w-11 flex-col items-center justify-center rounded-md border border-border px-2 py-1 text-sm peer-checked:border-primary peer-checked:bg-primary-soft peer-checked:text-primary-text peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-disabled:cursor-not-allowed peer-disabled:border-dashed peer-disabled:text-muted-foreground">
                       {choice.value === 'none' || item.tracking === 'holder' || choice.label === t('assets.uniform.oneSize') ? choice.label : <bdi dir="ltr">{choice.label}</bdi>}
                       {choice.stock !== null && <span className="text-xs">{' '}{t('assets.uniform.leftN', { count: choice.stock })}</span>}
                     </span>
+                    <span aria-hidden="true" className="absolute end-0 top-0 hidden rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground peer-checked:block">✓</span>
                   </label>)}
                 </div>} />
                 {pick.choice !== 'none' && <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs text-muted-foreground">{t('assets.uniform.qty')}</span>
                   <div className="flex items-center rounded-md border border-border">
-                    <Button type="button" variant="ghost" size="icon" className="min-h-11 min-w-11" disabled={mutation.isPending || selectedQuantity <= 1} aria-label={t('assets.uniform.dec', { name: name(item) })} onClick={() => commit(index, String(selectedQuantity - 1))}><Minus aria-hidden className="h-4 w-4" /></Button>
-                    <Controller control={control} name={`picks.${index}.qty`} render={({ field }) => <Input {...field} type="number" min={1} max={Number.isFinite(max) ? max : undefined} step={1} inputMode="numeric" dir="ltr" aria-label={t('assets.uniform.qtyOf', { name: name(item) })} aria-describedby={`${id}-clamp-${item.id}`} className="min-h-11 w-16 border-0 px-1 text-center tabular-nums shadow-none" onBlur={() => { field.onBlur(); commit(index, field.value) }} />} />
-                    <Button type="button" variant="ghost" size="icon" className="min-h-11 min-w-11" disabled={mutation.isPending || selectedQuantity >= max} aria-label={t('assets.uniform.inc', { name: name(item) })} onClick={() => commit(index, String(selectedQuantity + 1))}><Plus aria-hidden className="h-4 w-4" /></Button>
+                    <Button type="button" variant="ghost" size="icon" className="min-h-11 min-w-11" disabled={mutation.isPending || selectedQuantity <= 1} aria-label={t('assets.uniform.dec', { name: name(item) })} onClick={() => commit(item, String(selectedQuantity - 1))}><Minus aria-hidden className="h-4 w-4" /></Button>
+                    <Controller control={control} name={`picks.${item.id}.qty`} defaultValue={String(item.default_qty)} render={({ field }) => <Input {...field} type="number" min={1} max={Number.isFinite(max) ? max : undefined} step={1} inputMode="numeric" dir="ltr" aria-label={t('assets.uniform.qtyOf', { name: name(item) })} aria-describedby={`${id}-clamp-${item.id}`} className="min-h-11 w-16 border-0 px-1 text-center tabular-nums shadow-none" onBlur={() => { field.onBlur(); commit(item, field.value ?? String(item.default_qty)) }} />} />
+                    <Button type="button" variant="ghost" size="icon" className="min-h-11 min-w-11" disabled={mutation.isPending || selectedQuantity >= max} aria-label={t('assets.uniform.inc', { name: name(item) })} onClick={() => commit(item, String(selectedQuantity + 1))}><Plus aria-hidden className="h-4 w-4" /></Button>
                   </div>
                 </div>}
                 <p id={`${id}-clamp-${item.id}`} role="status" className="text-xs text-muted-foreground">{notice !== undefined && notice >= 0 && pick.choice !== 'none' ? t('assets.uniform.onlyLeft', { count: notice }) : ''}</p>

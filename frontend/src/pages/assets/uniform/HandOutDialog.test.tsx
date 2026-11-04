@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router-dom'
@@ -7,8 +7,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, ApiError, type UniformItemRead } from '@/lib/api'
 import i18n from '@/lib/i18n'
+import { todayIso } from '@/lib/leaveDateMath'
 import { HandOutDialog } from './HandOutDialog'
 import { UniformPage } from './UniformPage'
+import { whole } from './quantity'
+import { ReceiveStockDialog } from './stock/ReceiveStockDialog'
+import { uniformKeys } from './uniformQueries'
 
 const state = vi.hoisted(() => ({ editable: true, mobile: false }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => cap !== 'uniform.edit' || state.editable }) }))
@@ -24,11 +28,11 @@ const POLO: UniformItemRead = { ...SUIT, id: 2, name_en: 'Polo shirt', name_ar: 
 ] }
 const EMPLOYEE = { id: 'G3194', name_en: 'Ali Hassan', name_ar: 'علي حسن', department: null, position: null, position_ar: null, duty_unit: null, duty_post: null }
 
-function mount(page = false, itemId?: number) {
+function mount(page: boolean | 'receipt' = false, itemId?: number) {
   const onOpenChange = vi.fn()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><MemoryRouter initialEntries={['/holdings/uniform']}>
-    {page ? <UniformPage /> : <HandOutDialog open onOpenChange={onOpenChange} itemId={itemId} />}
+    {page === 'receipt' ? <ReceiveStockDialog open onOpenChange={onOpenChange} itemId={itemId} /> : page ? <UniformPage /> : <HandOutDialog open onOpenChange={onOpenChange} itemId={itemId} />}
   </MemoryRouter></I18nextProvider></QueryClientProvider>)
   return { onOpenChange, client }
 }
@@ -49,6 +53,7 @@ beforeEach(async () => {
   vi.spyOn(api, 'getUniformSummary').mockResolvedValue({ shelf_total: 9, holder_count: 0, suits_issued: 0, out_of_stock: 1, low_sizes: 1 })
   vi.spyOn(api, 'lookupEmployees').mockResolvedValue({ items: [EMPLOYEE], total: 1, limit: 8, offset: 0 })
   vi.spyOn(api, 'createUniformIssue').mockResolvedValue({ id: 1, created_at: '2026-11-04T08:00:00', created_by_id: 1, voided_at: null, voided_by_id: null, void_reason: null, employee_id: EMPLOYEE.id, issued_on: '2026-11-04', note: null, lines: [] })
+  vi.spyOn(api, 'createUniformReceipt').mockResolvedValue({ id: 2, created_at: '2026-11-04T08:00:00', created_by_id: 1, voided_at: null, voided_by_id: null, void_reason: null, received_on: '2026-11-04', reference: null, note: null, lines: [] })
 })
 
 describe('Hand out uniform', () => {
@@ -88,6 +93,55 @@ describe('Hand out uniform', () => {
     expect(input).toHaveValue(expected)
     await user.click(screen.getByRole('button', { name: 'Hand out' }))
     await waitFor(() => expect(api.createUniformIssue).toHaveBeenCalledWith(expect.objectContaining({ employee_id: EMPLOYEE.id, lines: [{ item_id: 2, size_id: 21, qty: expected }] })))
+  })
+
+  it('keeps picks attached to item IDs when the live catalogue adds and reorders items', async () => {
+    const { client } = mount()
+    const user = await chooseEmployee()
+    await user.click(screen.getByRole('radio', { name: 'Give' }))
+    await user.click(screen.getByRole('radio', { name: 'M 8 left' }))
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt' }), { target: { value: '3' } })
+    const belt: UniformItemRead = { ...POLO, id: 3, name_en: 'Belt', drawing: 'belt', default_qty: 1, sizes: [{ ...POLO.sizes[0], id: 31, item_id: 3, label: 'one' }] }
+    act(() => { client.setQueryData(uniformKeys.items(), [belt, POLO, SUIT]) })
+    const beltGroup = within(await screen.findByRole('group', { name: 'Belt' }))
+    expect(beltGroup.getByRole('radio', { name: 'None' })).toBeChecked()
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Formal suit' })).toHaveValue(2)
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt' })).toHaveValue(3)
+    await user.click(screen.getByRole('button', { name: 'Increase Polo shirt' }))
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt' })).toHaveValue(4)
+    await user.click(screen.getByRole('button', { name: 'Hand out' }))
+    await waitFor(() => expect(api.createUniformIssue).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [{ item_id: 2, size_id: 21, qty: 4 }, { item_id: 1, qty: 2 }],
+    })))
+  })
+
+  it('drops removed items without moving their picks onto remaining catalogue items', async () => {
+    const { client } = mount()
+    const user = await chooseEmployee()
+    await user.click(screen.getByRole('radio', { name: 'Give' }))
+    await user.click(screen.getByRole('radio', { name: 'M 8 left' }))
+    act(() => { client.setQueryData(uniformKeys.items(), [POLO]) })
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Formal suit' })).not.toBeInTheDocument())
+    expect(screen.getByRole('radio', { name: 'M 8 left' })).toBeChecked()
+    const qty = screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt' })
+    fireEvent.change(qty, { target: { value: '3.9' } })
+    fireEvent.blur(qty)
+    expect(qty).toHaveValue(3)
+    await user.click(screen.getByRole('button', { name: 'Hand out' }))
+    await waitFor(() => expect(api.createUniformIssue).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [{ item_id: 2, size_id: 21, qty: 3 }],
+    })))
+  })
+
+  it('marks selected choices with a non-color checkmark', async () => {
+    mount()
+    const radio = await screen.findByRole('radio', { name: 'Give' })
+    const marker = radio.closest('label')?.querySelector('[aria-hidden="true"]')
+    expect(marker).toHaveTextContent('✓')
+    expect(marker).toHaveAttribute('aria-hidden', 'true')
+    expect(marker).toHaveClass('peer-checked:block')
+    await userEvent.click(radio)
+    expect(radio).toBeChecked()
   })
 
   it('preselects only the requested suit and accepts quantities without a shelf cap', async () => {
@@ -184,7 +238,7 @@ describe('Hand out uniform', () => {
     mount()
     const user = userEvent.setup()
     await user.type(await screen.findByRole('searchbox'), 'missing')
-    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('employees.activity.lookupError'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('assets.uniform.lookupError'))
     vi.mocked(api.lookupEmployees).mockResolvedValue({ items: [], total: 0, limit: 8, offset: 0 })
     await user.click(screen.getByRole('button', { name: 'Retry' }))
     expect(await screen.findByText('No employee matches.')).toBeInTheDocument()
@@ -220,5 +274,72 @@ describe('Hand out uniform', () => {
     mount(true)
     expect(await screen.findByText(i18n.t('assets.uniform.noItems'))).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+describe('Receive uniform stock', () => {
+  it('submits floored per-size quantities with the receipt date and trimmed reference and note', async () => {
+    const { onOpenChange } = mount('receipt', POLO.id)
+    const user = userEvent.setup()
+    const qty = await screen.findByRole('spinbutton', { name: 'Quantity of Polo shirt M' })
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    fireEvent.change(qty, { target: { value: '2.9' } })
+    fireEvent.blur(qty)
+    expect(qty).toHaveValue(2)
+    await user.type(screen.getByLabelText('Reference'), ' HQ-42 ')
+    await user.type(screen.getByLabelText('Note'), ' Delivery ')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.createUniformReceipt).toHaveBeenCalledWith({
+      received_on: todayIso(), reference: 'HQ-42', note: 'Delivery', lines: [{ size_id: 21, qty: 2 }],
+    }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+  })
+
+  it('keeps Save disabled for future receipt dates and explains the reason', async () => {
+    mount('receipt')
+    const qty = await screen.findByRole('spinbutton', { name: 'Quantity of Polo shirt M' })
+    fireEvent.change(qty, { target: { value: '1' } })
+    const date = screen.getByLabelText(i18n.t('assets.uniform.receivedOn'))
+    fireEvent.change(date, { target: { value: '2999-01-01' } })
+    const save = screen.getByRole('button', { name: 'Save' })
+    expect(date).toHaveAttribute('aria-invalid', 'true')
+    expect(save).toBeDisabled()
+    expect(save).toHaveAccessibleDescription(i18n.t('assets.uniform.catalog.validReceiptDate'))
+    fireEvent.change(date, { target: { value: todayIso() } })
+    expect(save).toBeEnabled()
+  })
+
+  it('preserves receipt values after a failed request', async () => {
+    vi.mocked(api.createUniformReceipt).mockRejectedValue(new Error('offline'))
+    mount('receipt')
+    const user = userEvent.setup()
+    const qty = await screen.findByRole('spinbutton', { name: 'Quantity of Polo shirt M' })
+    fireEvent.change(qty, { target: { value: '3' } })
+    await user.type(screen.getByLabelText('Reference'), 'HQ-42')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByRole('alert')
+    expect(qty).toHaveValue(3)
+    expect(screen.getByLabelText('Reference')).toHaveValue('HQ-42')
+  })
+
+  it('shows the translated empty state when no active shelf sizes can receive stock', async () => {
+    vi.mocked(api.listUniformItems).mockResolvedValue([SUIT])
+    mount('receipt')
+    expect(await screen.findByText(i18n.t('assets.uniform.catalog.noReceiptSizes'))).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+})
+
+describe('Uniform whole quantities', () => {
+  it.each<[string, number]>([
+    ['2.9', 2],
+    ['-4', 0],
+    ['', 0],
+    ['not a number', 0],
+    ['Infinity', 0],
+    ['-Infinity', 0],
+    ['1e100', Number.MAX_SAFE_INTEGER],
+  ])('normalizes %s to %s', (raw, expected) => {
+    expect(whole(raw)).toBe(expected)
   })
 })

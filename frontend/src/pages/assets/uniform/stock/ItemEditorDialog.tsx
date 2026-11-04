@@ -1,15 +1,19 @@
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useId, useRef, useState } from 'react'
+import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
+import { z } from 'zod'
 
 import { DialogBody, DialogFooter, DialogShell, FormAlert } from '@/components/forms/DialogShell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { type UniformItemRead } from '@/lib/api'
-import { type UniformArtKind } from '@/components/uniformArtCatalog'
+import { type UniformItemRead, type UniformItemUpdate, type UniformSizeUpdate } from '@/lib/api'
+import { UNIFORM_ART_KINDS } from '@/components/uniformArtCatalog'
 import { todayIso } from '@/lib/leaveDateMath'
 import { toast } from '@/lib/toast'
 import { useCapabilities } from '@/lib/useCapabilities'
-import { uniformErrorMessage, useAddUniformSize, useCreateUniformAdjustments, useUniformItems, useUpdateUniformItem, useUpdateUniformSize } from '../uniformQueries'
+import { whole } from '../quantity'
+import { uniformErrorMessage, useAddUniformSize, useArchiveUniformItem, useCreateUniformAdjustments, useDeleteUniformItem, useRemoveUniformSize, useUniformItems, useUpdateUniformItem, useUpdateUniformSize } from '../uniformQueries'
 import { DrawingPicker } from './DrawingPicker'
 
 interface Props {
@@ -19,18 +23,31 @@ interface Props {
   returnFocusRef?: React.RefObject<HTMLElement | null>
   onSuccess?: (sizeIds: number[]) => void
 }
-interface SizeDraft {
-  id: number | null
-  label: string
-  qty: string
-  baseline: number
-  min: string
-  savedMin: number | null
-}
-function whole(value: string): number {
-  const n = Number(value)
-  return Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Number.isFinite(n) ? Math.floor(n) : 0))
-}
+const schema = z.object({
+  name_en: z.string().trim().min(1, 'assets.uniform.required').max(120, 'assets.uniform.catalog.nameTooLong'),
+  name_ar: z.string().trim().min(1, 'assets.uniform.required').max(120, 'assets.uniform.catalog.nameTooLong'),
+  description_en: z.string().trim().max(500, 'assets.uniform.catalog.descriptionTooLong'),
+  description_ar: z.string().trim().max(500, 'assets.uniform.catalog.descriptionTooLong'),
+  group_key: z.enum(['formal', 'guard', 'winter']),
+  default_qty: z.string().refine(value => Number.isSafeInteger(Number(value)) && Number(value) >= 1, 'assets.uniform.qtyRequired'),
+  drawing: z.enum(UNIFORM_ART_KINDS),
+  newSize: z.string(),
+  reason: z.string().trim().max(500, 'assets.uniform.catalog.reasonTooLong'),
+  rows: z.array(z.object({
+    id: z.number().nullable(), label: z.string(), qty: z.string(), baseline: z.number(),
+    min: z.string(), savedMin: z.number().nullable(), savedOrder: z.number(), held: z.number(), removed: z.boolean(),
+  })),
+}).superRefine((values, context) => {
+  if (values.rows.some(row => !row.removed && whole(row.qty) !== row.baseline) && !values.reason) {
+    context.addIssue({ code: 'custom', path: ['reason'], message: 'assets.uniform.catalog.adjustmentReasonRequired' })
+  }
+})
+type Values = z.infer<typeof schema>
+const metadata = (values: Pick<Values, 'name_en' | 'name_ar' | 'description_en' | 'description_ar' | 'group_key' | 'default_qty' | 'drawing'>) => ({
+  name_en: values.name_en.trim(), name_ar: values.name_ar.trim(),
+  description_en: values.description_en.trim() || null, description_ar: values.description_ar.trim() || null,
+  group_key: values.group_key, default_qty: Number(values.default_qty), drawing: values.drawing,
+})
 
 export function ItemEditorDialog(props: Props): React.JSX.Element | null {
   return useCapabilities().has('uniform.edit') && props.open ? <ItemEditorContent {...props} /> : null
@@ -39,22 +56,39 @@ export function ItemEditorDialog(props: Props): React.JSX.Element | null {
 function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const id = useId()
+  const editable = useCapabilities().has('uniform.edit')
   const items = useUniformItems()
   const updateItem = useUpdateUniformItem()
   const addSize = useAddUniformSize()
   const updateSize = useUpdateUniformSize()
+  const removeSize = useRemoveUniformSize()
+  const archiveItem = useArchiveUniformItem()
+  const deleteItem = useDeleteUniformItem()
   const adjust = useCreateUniformAdjustments()
-  const [drawing, setDrawing] = useState<UniformArtKind>(item.drawing)
-  const [savedDrawing, setSavedDrawing] = useState(item.drawing)
+  const { control, register, handleSubmit, setValue, getValues, setError: setFieldError, clearErrors, formState: { errors, isSubmitting } } = useForm<Values>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      name_en: item.name_en, name_ar: item.name_ar, description_en: item.description_en ?? '', description_ar: item.description_ar ?? '',
+      group_key: item.group_key, default_qty: String(item.default_qty), drawing: item.drawing, newSize: '', reason: '',
+      rows: item.tracking === 'holder' ? [] : item.sizes.filter(size => !size.archived_at).map(size => ({
+        id: size.id, label: size.label, qty: String(size.on_hand), baseline: size.on_hand,
+        min: size.min_qty === null ? '' : String(size.min_qty), savedMin: size.min_qty,
+        savedOrder: size.sort_order, held: size.held_qty, removed: false,
+      })),
+    },
+  })
+  const { fields, append, move } = useFieldArray({ control, name: 'rows', keyName: 'formKey' })
+  const rows = useWatch({ control, name: 'rows' })
+  const drawing = useWatch({ control, name: 'drawing' })
+  const reason = useWatch({ control, name: 'reason' })
+  const savedMetadata = useRef(metadata({ ...item, default_qty: String(item.default_qty), description_en: item.description_en ?? '', description_ar: item.description_ar ?? '' }))
   const version = useRef(item.version)
-  const [rows, setRows] = useState<SizeDraft[]>(() => item.tracking === 'holder' ? [] : item.sizes.filter(size => !size.archived_at).map(size => ({ id: size.id, label: size.label, qty: String(size.on_hand), baseline: size.on_hand, min: size.min_qty === null ? '' : String(size.min_qty), savedMin: size.min_qty })))
-  const [newSize, setNewSize] = useState('')
-  const [sizeError, setSizeError] = useState('')
-  const [reason, setReason] = useState('')
   const [error, setError] = useState<unknown>(null)
-  const [saving, setSaving] = useState(false)
+  const [action, setAction] = useState<'archive' | 'delete' | null>(null)
+  const actionLock = useRef(false)
   const changedIds = useRef(new Set<number>())
   const focusedDrawing = useRef(false)
+  const busy = isSubmitting || archiveItem.isPending || deleteItem.isPending
   useEffect(() => {
     if (item.tracking === 'holder' && items.data && !focusedDrawing.current) {
       const checked = document.getElementById(`${id}-form`)?.querySelector<HTMLInputElement>('input[type="radio"]:checked')
@@ -62,53 +96,79 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
     }
   }, [id, item.tracking, items.data])
   const name = i18n.language.startsWith('ar') ? item.name_ar : item.name_en
-  const quantityChanged = rows.some(row => whole(row.qty) !== row.baseline)
+  const quantityChanged = rows.some(row => !row.removed && whole(row.qty) !== row.baseline)
   const unavailable = !items.data || items.isError || items.data.some(other => !other.archived_at && other.id !== item.id && other.drawing === drawing)
-  const disabledReason = unavailable ? t(items.isError ? 'assets.uniform.error' : items.isPending ? 'assets.uniform.loading' : 'assets.uniform.needDrawing') : quantityChanged && !reason.trim() ? t('uniform.catalog.adjustmentReasonRequired') : ''
-  function changeRow(index: number, field: 'qty' | 'min', value: string) {
-    setRows(previous => previous.map((row, k) => k === index ? { ...row, [field]: value } : row))
-  }
+  const disabledReason = unavailable ? t(items.isError ? 'assets.uniform.error' : items.isPending ? 'assets.uniform.loading' : 'assets.uniform.needDrawing') : quantityChanged && !reason.trim() ? t('assets.uniform.catalog.adjustmentReasonRequired') : ''
+  const archiveBlocked = rows.some(row => row.baseline > 0 || row.held > 0) || item.holders.some(holder => holder.qty > 0)
+  const activeIndices = rows.flatMap((row, index) => row.removed ? [] : [index])
+  const sizeLabel = (label: string) => label === 'one' ? t('assets.uniform.oneSize') : label
   function stageSize() {
-    const label = newSize.trim()
-    if (!label) { setSizeError(t('assets.uniform.sizeRequired')); return }
-    if (label.length > 16) { setSizeError(t('assets.uniform.errors.invalidSizeLabel')); return }
-    if (rows.some(row => row.label.toLowerCase() === label.toLowerCase())) { setSizeError(t('assets.uniform.sizeDuplicate')); return }
-    setRows(previous => [...previous, { id: null, label, qty: '0', baseline: 0, min: '', savedMin: null }])
-    setNewSize('')
-    setSizeError('')
+    if (busy || !editable || action) return
+    const label = getValues('newSize').trim()
+    const message = !label ? 'assets.uniform.sizeRequired' : label.length > 16 ? 'assets.uniform.errors.invalidSizeLabel' : rows.some(row => row.label.toLowerCase() === label.toLowerCase()) ? 'assets.uniform.sizeDuplicate' : label.toLowerCase() === 'one' && rows.length > 0 ? 'assets.uniform.errors.sizesFixed' : ''
+    if (message) { setFieldError('newSize', { message }); return }
+    append({ id: null, label, qty: '0', baseline: 0, min: '', savedMin: null, savedOrder: -1, held: 0, removed: false }, { shouldFocus: false })
+    setValue('newSize', '')
+    clearErrors('newSize')
   }
-  async function save() {
-    if (disabledReason || saving || reason.trim().length > 500 || rows.some(row => !Number.isSafeInteger(whole(row.qty)) || (row.min !== '' && !Number.isSafeInteger(whole(row.min))))) return
-    setSaving(true)
+  async function save(values: Values) {
+    if (disabledReason || busy || !editable || action || actionLock.current) return
+    actionLock.current = true
     setError(null)
-    // Each endpoint commits independently. Keep completed steps in the draft so
-    // an error on a later step cannot repeat a size or reuse a stale ETag.
-    const nextRows = rows.map(row => ({ ...row, qty: String(whole(row.qty)), min: row.min === '' ? '' : String(whole(row.min)) }))
-    setRows(nextRows)
+    // Endpoints commit independently. Advance only successfully saved baselines,
+    // identifiers and versions so a later failure can be retried without replay.
+    const nextRows = values.rows.map(row => ({ ...row, qty: String(whole(row.qty)), min: row.min === '' ? '' : String(whole(row.min)) }))
+    const syncRows = () => setValue('rows', nextRows.map(row => ({ ...row })))
+    syncRows()
     try {
-      if (drawing !== savedDrawing) {
-        const updated = await updateItem.mutateAsync({ id: item.id, body: { drawing }, ifMatch: version.current })
-        version.current = updated.version
-        setSavedDrawing(drawing)
+      const nextMetadata = metadata(values)
+      const body: UniformItemUpdate = {}
+      for (const key of ['name_en', 'name_ar', 'description_en', 'description_ar', 'group_key', 'default_qty', 'drawing'] as const) {
+        if (nextMetadata[key] !== savedMetadata.current[key]) Object.assign(body, { [key]: nextMetadata[key] })
       }
+      if (Object.keys(body).length) {
+        const updated = await updateItem.mutateAsync({ id: item.id, body, ifMatch: version.current })
+        version.current = updated.version
+        savedMetadata.current = nextMetadata
+      }
+      let order = 0
       for (const row of nextRows) {
+        if (row.removed) continue
         const min = row.min === '' ? null : whole(row.min)
         if (row.id === null) {
           const created = await addSize.mutateAsync({ itemId: item.id, body: { label: row.label, min_qty: min } })
           row.id = created.id
           row.savedMin = min
+          row.savedOrder = created.sort_order
           changedIds.current.add(created.id)
-          setRows(nextRows.map(value => ({ ...value })))
-        } else if (min !== row.savedMin) {
-          await updateSize.mutateAsync({ id: row.id, body: { min_qty: min } })
-          row.savedMin = min
-          setRows(nextRows.map(value => ({ ...value })))
+          syncRows()
         }
+        const sizeBody: UniformSizeUpdate = {}
+        if (min !== row.savedMin) sizeBody.min_qty = min
+        if (order !== row.savedOrder) sizeBody.sort_order = order
+        if (Object.keys(sizeBody).length) {
+          await updateSize.mutateAsync({ id: row.id, body: sizeBody })
+          row.savedMin = min
+          row.savedOrder = order
+          syncRows()
+        }
+        order += 1
       }
-      const lines = nextRows.flatMap(row => row.id !== null && whole(row.qty) !== row.baseline ? [{ size_id: row.id, delta: whole(row.qty) - row.baseline }] : [])
+      const lines = nextRows.flatMap(row => !row.removed && row.id !== null && whole(row.qty) !== row.baseline ? [{ size_id: row.id, delta: whole(row.qty) - row.baseline, expected_on_hand: row.baseline }] : [])
       if (lines.length) {
-        await adjust.mutateAsync({ lines, reason: reason.trim(), adjusted_on: todayIso() })
-        for (const line of lines) changedIds.current.add(line.size_id)
+        await adjust.mutateAsync({ lines, reason: values.reason, adjusted_on: todayIso() })
+        for (const row of nextRows) {
+          if (!row.removed && row.id !== null && whole(row.qty) !== row.baseline) { changedIds.current.add(row.id); row.baseline = whole(row.qty) }
+        }
+        syncRows()
+      }
+      for (const row of nextRows) {
+        if (row.removed && row.id !== null) {
+          await removeSize.mutateAsync(row.id)
+          changedIds.current.add(row.id)
+          row.id = null
+          syncRows()
+        }
       }
       toast.success(t('assets.uniform.saved'))
       onSuccess?.([...changedIds.current])
@@ -116,35 +176,70 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
     } catch (failure) {
       setError(failure)
     } finally {
-      setSaving(false)
+      actionLock.current = false
     }
   }
-  const sizeLabel = (label: string) => label === 'one' ? t('assets.uniform.oneSize') : label
-  return <DialogShell open={open} onOpenChange={onOpenChange} title={t('assets.uniform.editItem')} description={name} size="lg" busy={saving} returnFocusRef={returnFocusRef}
-    onOpenAutoFocus={event => { const checked = document.getElementById(`${id}-form`)?.querySelector<HTMLInputElement>('input[type="number"], input[type="radio"]:checked'); if (checked) { event.preventDefault(); checked.focus() } }}>
-    <form id={`${id}-form`} noValidate className="flex min-h-0 flex-1 flex-col" aria-busy={saving} onSubmit={event => { event.preventDefault(); void save() }}>
+  async function confirmAction() {
+    if (!action || busy || !editable || actionLock.current || (action === 'archive' && archiveBlocked)) return
+    actionLock.current = true
+    setError(null)
+    try {
+      if (action === 'archive') await archiveItem.mutateAsync(item.id)
+      else await deleteItem.mutateAsync(item.id)
+      toast.success(t(action === 'archive' ? 'assets.uniform.catalog.archived' : 'assets.uniform.catalog.deleted'))
+      onSuccess?.([])
+      onOpenChange(false)
+    } catch (failure) { setError(failure) }
+    finally { actionLock.current = false }
+  }
+  const fieldError = (key: 'name_en' | 'name_ar' | 'description_en' | 'description_ar' | 'default_qty' | 'reason') => errors[key]?.message ? <p id={`${id}-${key}-error`} role="alert" className="text-sm text-destructive-text">{t(errors[key].message)}</p> : null
+  return <DialogShell open={open} onOpenChange={onOpenChange} title={t('assets.uniform.editItem')} description={name} size="lg" busy={busy} returnFocusRef={returnFocusRef}
+    onOpenAutoFocus={event => { const input = document.getElementById(`${id}-form`)?.querySelector<HTMLInputElement>('input[type="number"], input[type="radio"]:checked'); if (input) { event.preventDefault(); input.focus() } }}>
+    <form id={`${id}-form`} noValidate className="flex min-h-0 flex-1 flex-col" aria-busy={busy} onSubmit={handleSubmit(save)}>
       <DialogBody>
         <FormAlert id={`${id}-error`} message={error ? uniformErrorMessage(error) : null} />
-        <fieldset disabled={saving} className="min-w-0 space-y-5">
+        <fieldset disabled={busy || !editable || !!action} className="min-w-0 space-y-5">
+          <div className="grid gap-4 sm:grid-cols-2">{(['name_en', 'name_ar', 'description_en', 'description_ar'] as const).map(key => <div key={key} className="space-y-1">
+            <label htmlFor={`${id}-${key}`} className="text-sm font-medium">{t(`assets.uniform.${{ name_en: 'nameEn', name_ar: 'nameAr', description_en: 'descEn', description_ar: 'descAr' }[key]}`)}</label>
+            <Input id={`${id}-${key}`} {...register(key)} dir={key.endsWith('_ar') ? 'rtl' : 'ltr'} required={key.startsWith('name')} maxLength={key.startsWith('name') ? 120 : 500} className="min-h-11" aria-invalid={!!errors[key]} aria-describedby={errors[key] ? `${id}-${key}-error` : undefined} />{fieldError(key)}
+          </div>)}
+            <label className="grid gap-1 text-sm">{t('assets.uniform.group')}<select {...register('group_key')} className="min-h-11 rounded-md border border-input bg-background px-3">{(['formal', 'guard', 'winter'] as const).map(group => <option key={group} value={group}>{t(`assets.uniform.groups.${group}`)}</option>)}</select></label>
+            <div className="space-y-1"><label htmlFor={`${id}-default_qty`} className="text-sm">{t('assets.uniform.defaultQty')}</label><Input id={`${id}-default_qty`} {...register('default_qty')} type="number" min={1} step={1} inputMode="numeric" dir="ltr" className="min-h-11" aria-invalid={!!errors.default_qty} aria-describedby={errors.default_qty ? `${id}-default_qty-error` : undefined} />{fieldError('default_qty')}</div>
+          </div>
           {item.tracking === 'shelf' && <>
             <fieldset className="space-y-3"><legend className="mb-2 text-sm font-semibold">{t('assets.uniform.bySize')}</legend>
-              {rows.map((row, index) => <div key={row.label} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-end gap-3 border-b border-hairline pb-3 sm:grid-cols-[minmax(60px,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                <span className="col-span-full text-sm sm:col-span-1">{row.label === 'one' ? sizeLabel(row.label) : <bdi dir="ltr">{row.label}</bdi>}</span>
-                <label className="min-w-0 space-y-1 text-sm"><span>{t('assets.uniform.qty')}</span><Input type="number" inputMode="numeric" min={0} step={1} dir="ltr" className="min-h-11" aria-label={t('assets.uniform.qtyOf', { name: sizeLabel(row.label) })} value={row.qty} onChange={event => changeRow(index, 'qty', event.target.value)} onBlur={() => changeRow(index, 'qty', String(whole(row.qty)))} /></label>
-                <label className="min-w-0 space-y-1 text-sm"><span>{t('uniform.catalog.alertAt')}</span><Input type="number" inputMode="numeric" min={0} step={1} dir="ltr" className="min-h-11" aria-label={t('uniform.catalog.alertAtSize', { size: sizeLabel(row.label) })} aria-describedby={`${id}-threshold-hint`} value={row.min} onChange={event => changeRow(index, 'min', event.target.value)} onBlur={() => changeRow(index, 'min', row.min === '' ? '' : String(whole(row.min)))} /></label>
-              </div>)}
+              {fields.map((field, index) => {
+                const row = rows[index]
+                if (!row || row.removed) return null
+                const position = activeIndices.indexOf(index)
+                const removeBlocked = row.baseline > 0 || row.held > 0
+                return <div key={field.formKey} className="grid grid-cols-2 items-end gap-3 border-b border-hairline pb-3 sm:grid-cols-[minmax(60px,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                  <span className="col-span-full text-sm sm:col-span-1">{row.label === 'one' ? sizeLabel(row.label) : <bdi dir="ltr">{row.label}</bdi>}</span>
+                  <label className="min-w-0 space-y-1 text-sm"><span>{t('assets.uniform.qty')}</span><Input {...register(`rows.${index}.qty`)} type="number" inputMode="numeric" min={0} step={1} dir="ltr" className="min-h-11" aria-label={t('assets.uniform.qtyOf', { name: sizeLabel(row.label) })} onBlur={() => setValue(`rows.${index}.qty`, String(whole(getValues(`rows.${index}.qty`))))} /></label>
+                  <label className="min-w-0 space-y-1 text-sm"><span>{t('assets.uniform.catalog.alertAt')}</span><Input {...register(`rows.${index}.min`)} type="number" inputMode="numeric" min={0} step={1} dir="ltr" className="min-h-11" aria-label={t('assets.uniform.catalog.alertAtSize', { size: sizeLabel(row.label) })} aria-describedby={`${id}-threshold-hint`} onBlur={() => { const value = getValues(`rows.${index}.min`); setValue(`rows.${index}.min`, value === '' ? '' : String(whole(value))) }} /></label>
+                  <div className="col-span-full flex flex-wrap gap-2">
+                    <Button type="button" variant="secondary" className="min-h-11" disabled={position === 0} aria-label={t('assets.uniform.catalog.moveSizeUp', { size: sizeLabel(row.label) })} onClick={() => move(index, activeIndices[position - 1])}>{t('assets.uniform.catalog.moveUp')}</Button>
+                    <Button type="button" variant="secondary" className="min-h-11" disabled={position === activeIndices.length - 1} aria-label={t('assets.uniform.catalog.moveSizeDown', { size: sizeLabel(row.label) })} onClick={() => move(index, activeIndices[position + 1])}>{t('assets.uniform.catalog.moveDown')}</Button>
+                    <Button type="button" variant="ghost" className="min-h-11" disabled={removeBlocked} aria-label={t('assets.uniform.removeSize', { size: sizeLabel(row.label) })} aria-describedby={removeBlocked ? `${id}-remove-${field.formKey}` : undefined} onClick={() => setValue(`rows.${index}.removed`, true)}>{t('assets.uniform.catalog.remove')}</Button>
+                  </div>
+                  {removeBlocked && <p id={`${id}-remove-${field.formKey}`} className="col-span-full text-xs text-muted-foreground">{t('assets.uniform.catalog.removeBlocked')}</p>}
+                </div>
+              })}
               <p id={`${id}-threshold-hint`} className="text-xs text-muted-foreground">{t('assets.uniform.minQtyHint')}</p>
             </fieldset>
-            {!rows.some(row => row.label.toLowerCase() === 'one') && <div><div className="flex items-end gap-2"><label className="grid w-full max-w-[200px] gap-1 text-sm">{t('assets.uniform.addSize')}<Input value={newSize} maxLength={16} dir="ltr" className="min-h-11" aria-invalid={!!sizeError} aria-describedby={`${id}-size-error`} onChange={event => setNewSize(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); stageSize() } }} /></label><Button type="button" variant="secondary" className="min-h-11" onClick={stageSize}>{t('assets.uniform.add')}</Button></div>{sizeError && <p id={`${id}-size-error`} role="alert" className="mt-1 text-sm text-destructive-text">{sizeError}</p>}</div>}
-            {quantityChanged && <label className="grid gap-1 text-sm">{t('assets.uniform.adjustmentReason')}<Input value={reason} maxLength={500} dir="auto" className="min-h-11" required aria-describedby={`${id}-reason`} onChange={event => setReason(event.target.value)} /></label>}
+            {!rows.some(row => row.label.toLowerCase() === 'one') && <div><div className="flex items-end gap-2"><label className="grid w-full max-w-[200px] gap-1 text-sm">{t('assets.uniform.addSize')}<Input {...register('newSize')} maxLength={16} dir="ltr" className="min-h-11" aria-invalid={!!errors.newSize} aria-describedby={`${id}-size-error`} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); stageSize() } }} /></label><Button type="button" variant="secondary" className="min-h-11" onClick={stageSize}>{t('assets.uniform.add')}</Button></div>{errors.newSize?.message && <p id={`${id}-size-error`} role="alert" className="mt-1 text-sm text-destructive-text">{t(errors.newSize.message)}</p>}</div>}
+            {quantityChanged && <div><label className="grid gap-1 text-sm">{t('assets.uniform.adjustmentReason')}<Input {...register('reason')} maxLength={500} dir="auto" className="min-h-11" required aria-invalid={!!errors.reason} aria-describedby={errors.reason ? `${id}-reason-error` : `${id}-reason`} /></label>{fieldError('reason')}</div>}
           </>}
-          {items.isError ? <div><p role="alert">{t('assets.uniform.error')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => void items.refetch()}>{t('assets.uniform.retry')}</Button></div> : items.data ? <DrawingPicker items={items.data} currentItemId={item.id} value={drawing} onChange={setDrawing} disabled={saving} /> : <p role="status">{t('assets.uniform.loading')}</p>}
+          {items.isError ? <div><p role="alert">{t('assets.uniform.error')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => void items.refetch()}>{t('assets.uniform.retry')}</Button></div> : items.data ? <DrawingPicker items={items.data} currentItemId={item.id} value={drawing} onChange={value => setValue('drawing', value)} disabled={busy || !!action} /> : <p role="status">{t('assets.uniform.loading')}</p>}
         </fieldset>
+        <section className="mt-6 space-y-3" aria-label={t('assets.uniform.catalog.itemActions')}>
+          {action ? <div className="space-y-3"><p id={`${id}-confirm`} className="text-sm">{t(action === 'archive' ? 'assets.uniform.catalog.archiveConfirm' : 'assets.uniform.catalog.deleteConfirm', { name })}</p><div className="flex flex-wrap gap-2"><Button type="button" variant={action === 'delete' ? 'destructive' : 'default'} className="min-h-11" disabled={busy || !editable} aria-describedby={`${id}-confirm`} onClick={() => void confirmAction()}>{t(action === 'archive' ? 'assets.uniform.catalog.confirmArchive' : 'assets.uniform.catalog.confirmDelete')}</Button><Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={() => setAction(null)}>{t('assets.uniform.catalog.keepEditing')}</Button></div></div> : <><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" className="min-h-11" disabled={busy || !editable || archiveBlocked} aria-describedby={archiveBlocked ? `${id}-archive-blocked` : undefined} onClick={() => { setError(null); setAction('archive') }}>{t('assets.uniform.catalog.archiveItem')}</Button><Button type="button" variant="ghost" className="min-h-11 text-destructive-text" disabled={busy || !editable} onClick={() => { setError(null); setAction('delete') }}>{t('assets.uniform.catalog.deleteItem')}</Button></div>{archiveBlocked && <p id={`${id}-archive-blocked`} className="text-xs text-muted-foreground">{t('assets.uniform.catalog.archiveBlocked')}</p>}</>}
+        </section>
       </DialogBody>
       <DialogFooter>
         <p id={`${id}-reason`} role="status" className="me-auto text-sm text-muted-foreground">{disabledReason}</p>
-        <Button type="button" variant="secondary" className="min-h-11" disabled={saving} onClick={() => onOpenChange(false)}>{t('assets.uniform.cancel')}</Button>
-        <Button type="submit" className="min-h-11" disabled={!!disabledReason || saving} aria-describedby={`${id}-reason`}>{t('assets.uniform.save')}</Button>
+        <Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={() => onOpenChange(false)}>{t('assets.uniform.cancel')}</Button>
+        <Button type="submit" className="min-h-11" disabled={!!disabledReason || busy || !editable || !!action} aria-describedby={`${id}-reason`}>{t('assets.uniform.save')}</Button>
       </DialogFooter>
     </form>
   </DialogShell>

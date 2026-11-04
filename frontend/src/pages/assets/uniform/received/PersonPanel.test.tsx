@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, type UniformEmployeeRead, type UniformIssueRead, type UniformItemRead, type UniformRecipient, type UniformReturnRead } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { ReceivedTab } from './ReceivedTab'
+import { ReturnsTab } from '../returns/ReturnsTab'
 
 const state = vi.hoisted(() => ({ editable: true }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => cap !== 'uniform.edit' || state.editable }) }))
@@ -68,10 +69,10 @@ const OMAR_RECORDS: UniformEmployeeRead = {
 function LocationObserver() {
   return <output data-testid="location">{useLocation().search}</output>
 }
-function mount(entry = '/holdings/uniform?tab=received') {
+function mount(entry = '/holdings/uniform?tab=received', surface: 'received' | 'returns' = 'received') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><MemoryRouter initialEntries={[entry]}>
-    <ReceivedTab /><LocationObserver />
+    {surface === 'returns' ? <ReturnsTab /> : <ReceivedTab />}<LocationObserver />
   </MemoryRouter></I18nextProvider></QueryClientProvider>)
 }
 async function openAli(user = userEvent.setup()) {
@@ -101,6 +102,8 @@ beforeEach(async () => {
   vi.spyOn(api, 'createUniformIssue').mockResolvedValue({ ...ISSUE, id: 70 })
   vi.spyOn(api, 'createUniformReturn').mockResolvedValue({ ...REUSABLE_RETURN, id: 71 })
   vi.spyOn(api, 'voidUniformIssue').mockResolvedValue({ ...ISSUE, voided_at: '2026-11-04T08:00:00', voided_by_id: 11, void_reason: 'Wrong employee' })
+  vi.spyOn(api, 'listUniformReturns').mockResolvedValue([REUSABLE_RETURN, DAMAGED_RETURN, VOID_RETURN, ...OMAR_RECORDS.returns])
+  vi.spyOn(api, 'voidUniformReturn').mockResolvedValue({ ...REUSABLE_RETURN, voided_at: '2026-11-04T08:00:00', voided_by_id: 11, void_reason: 'Duplicate return' })
 })
 
 describe('Received person panel', () => {
@@ -139,6 +142,7 @@ describe('Received person panel', () => {
     expect(voidIssue.getByText('Voided')).toBeInTheDocument()
     expect(voidIssue.queryByRole('button', { name: 'Void record' })).not.toBeInTheDocument()
     expect(historyRow(panel, 'Reusable polo returned').getByText('Reusable')).toBeInTheDocument()
+    expect(historyRow(panel, 'Reusable polo returned').getByRole('button', { name: 'Void record' })).toBeEnabled()
     expect(historyRow(panel, 'Damaged polo returned').getByText('Damaged')).toBeInTheDocument()
     const voidReturn = historyRow(panel, 'Duplicate return entry')
     expect(voidReturn.getByText('Voided')).toBeInTheDocument()
@@ -203,6 +207,29 @@ describe('Received person panel', () => {
     await user.click(dialog.getByRole('button', { name: 'Void record' }))
     await waitFor(() => expect(api.voidUniformIssue).toHaveBeenCalledWith(41, { reason: 'Wrong employee' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it.each(['Initial hand-out', 'Reusable polo returned'])('restores focus to the exact void opener on cancelling %s', async note => {
+    const user = userEvent.setup()
+    mount()
+    const panel = await openAli(user)
+    const opener = historyRow(panel, note).getByRole('button', { name: 'Void record' })
+    await user.click(opener)
+    const dialog = within(await screen.findByRole('dialog'))
+    await user.click(dialog.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(opener).toHaveFocus())
+  })
+
+  it('voids an active return from the person panel using the return endpoint', async () => {
+    const user = userEvent.setup()
+    mount()
+    const panel = await openAli(user)
+    await user.click(historyRow(panel, 'Reusable polo returned').getByRole('button', { name: 'Void record' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await user.type(dialog.getByRole('textbox', { name: /Reason for voiding/ }), '  Duplicate return  ')
+    await user.click(dialog.getByRole('button', { name: 'Void record' }))
+    await waitFor(() => expect(api.voidUniformReturn).toHaveBeenCalledWith(51, { reason: 'Duplicate return' }))
+    expect(api.voidUniformIssue).not.toHaveBeenCalled()
   })
 
   it.each(['Omar Returned', 'G3200'])('keeps zero-held historical recipients searchable by %s without allowing a return', async query => {
@@ -278,5 +305,30 @@ describe('Received person panel', () => {
     expect(within(panel).getByRole('region', { name: 'Currently holds' })).toHaveTextContent('Formal suit')
     expect(within(panel).getByRole('heading', { name: 'Return history' })).toBeInTheDocument()
     expect(within(panel).queryByRole('button', { name: /Hand out|Record return|Void record/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('Uniform returns list', () => {
+  it.each([
+    ['en', 'علي', 'Ali Hassan', 'Search returns'],
+    ['ar', 'Ali Hassan', 'علي حسن', 'البحث في المرتجعات'],
+    ['en', 'G3194', 'Ali Hassan', 'Search returns'],
+  ])('matches both language names and employee ID in %s when searching %s', async (language, query, displayName, searchLabel) => {
+    await i18n.changeLanguage(language)
+    const user = userEvent.setup()
+    mount('/holdings/uniform?tab=returns', 'returns')
+    await screen.findAllByRole('button', { name: new RegExp(displayName) })
+    await user.type(screen.getByRole('searchbox', { name: searchLabel }), query)
+    await waitFor(() => expect(screen.getAllByRole('button', { name: new RegExp(displayName) })).toHaveLength(3))
+    expect(screen.queryByRole('button', { name: /Omar Returned/ })).not.toBeInTheDocument()
+  })
+
+  it('restores focus to the return-detail void opener after cancellation', async () => {
+    const user = userEvent.setup()
+    mount('/holdings/uniform?tab=returns&return=51', 'returns')
+    const opener = await screen.findByRole('button', { name: 'Void record' })
+    await user.click(opener)
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(opener).toHaveFocus())
   })
 })

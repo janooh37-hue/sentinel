@@ -101,7 +101,7 @@ export function UniformTab({ employeeId }: Props): React.JSX.Element {
             void record.refetch()
             void items.refetch()
           }}
-          className="mt-3 min-h-11 rounded-lg border border-border px-4 font-semibold text-foreground hover:bg-muted"
+          className="mt-3 min-h-11 rounded-lg border border-border px-4 font-semibold text-foreground hover:bg-surface-tinted"
         >
           {t('assets.uniform.retry')}
         </button>

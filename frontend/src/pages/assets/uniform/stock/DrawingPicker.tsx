@@ -1,3 +1,4 @@
+import { Check } from 'lucide-react'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UniformArt } from '@/components/UniformArt'
@@ -29,6 +30,7 @@ export function DrawingPicker({ items, currentItemId, value, onChange, disabled 
         return choices.length > 0 && <fieldset key={group.id} disabled={disabled}><legend className="mb-2 text-sm font-semibold">{group[language]}</legend><div className="grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2">{choices.map(art => <label key={art.kind} className="relative cursor-pointer">
           <input className="peer sr-only" type="radio" name={`${id}-drawing`} value={art.kind} checked={value === art.kind} onChange={() => onChange(art.kind)} />
           <span className="flex min-h-11 flex-col items-center gap-1 rounded-md border border-border p-2 text-center text-sm peer-checked:border-primary peer-checked:bg-primary-soft peer-checked:text-primary-text peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-disabled:cursor-not-allowed peer-disabled:opacity-50"><UniformArt kind={art.kind} size={44} /><span>{art[language]}</span></span>
+          {value === art.kind && <Check aria-hidden="true" data-selected-checkmark className="pointer-events-none absolute end-1 top-1 h-4 w-4 text-primary-text" />}
         </label>)}</div></fieldset>
       })}</div>
     </>}

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError, type UniformItemRead } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { UNIFORM_ART_KINDS } from '@/components/uniformArtCatalog'
+import { uniformKeys } from '../uniformQueries'
 import { ItemEditorDialog } from './ItemEditorDialog'
 
 import { ReceiveStockDialog } from './ReceiveStockDialog'
@@ -24,7 +25,7 @@ function mount(item = ITEM) {
   const onSuccess = vi.fn()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><ItemEditorDialog open item={item} onOpenChange={onOpenChange} onSuccess={onSuccess} /></I18nextProvider></QueryClientProvider>)
-  return { onOpenChange, onSuccess }
+  return { onOpenChange, onSuccess, client }
 }
 beforeEach(async () => {
   vi.restoreAllMocks()
@@ -35,6 +36,9 @@ beforeEach(async () => {
   vi.spyOn(api, 'addUniformSize').mockResolvedValue({ ...ITEM.sizes[0], id: 25, label: '4XL', on_hand: 0 })
   vi.spyOn(api, 'updateUniformSize').mockResolvedValue(ITEM.sizes[0])
   vi.spyOn(api, 'createUniformAdjustments').mockResolvedValue([])
+  vi.spyOn(api, 'removeUniformSize').mockResolvedValue(undefined)
+  vi.spyOn(api, 'archiveUniformItem').mockResolvedValue({ ...ITEM, archived_at: '2026-11-04' })
+  vi.spyOn(api, 'deleteUniformItem').mockResolvedValue(undefined)
 })
 describe('Update uniform item', () => {
   it('offers its own drawing plus unused drawings and retains its selection', async () => {
@@ -77,7 +81,7 @@ describe('Update uniform item', () => {
     const user = userEvent.setup()
     await user.type(screen.getByRole('textbox', { name: 'Reason for adjustment' }), 'Physical count')
     await user.click(save)
-    await waitFor(() => expect(api.createUniformAdjustments).toHaveBeenCalledWith(expect.objectContaining({ lines: [{ size_id: 21, delta }], reason: 'Physical count' })))
+    await waitFor(() => expect(api.createUniformAdjustments).toHaveBeenCalledWith(expect.objectContaining({ lines: [{ size_id: 21, delta, expected_on_hand: 8 }], reason: 'Physical count' })))
   })
   it('persists staged sizes at zero and optional per-size alert thresholds on Save', async () => {
     mount()
@@ -116,16 +120,143 @@ describe('Update uniform item', () => {
     expect(api.addUniformSize).toHaveBeenCalledTimes(1)
     expect(api.updateUniformItem).toHaveBeenCalledTimes(1)
   })
-  it('offers only a drawing for a holder item and never adds shelf fields or adjustments', async () => {
+  it('allows holder metadata and drawing edits without shelf fields or adjustments', async () => {
     mount({ ...ITEM, tracking: 'holder', drawing: 'suit', sizes: [] })
     expect(await screen.findByRole('radio', { name: 'Suit' })).toHaveFocus()
-    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
+    expect(screen.getByRole('spinbutton', { name: 'Hand-out default quantity' })).toHaveValue(2)
     expect(screen.queryByRole('textbox', { name: 'Add size' })).not.toBeInTheDocument()
     const user = userEvent.setup()
     await user.click(screen.getByRole('radio', { name: 'Formal shirt' }))
     await user.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(api.updateUniformItem).toHaveBeenCalledWith(2, { drawing: 'dressshirt' }, '1'))
     expect(api.createUniformAdjustments).not.toHaveBeenCalled()
+  })
+  it('uses the saved metadata version for a new edit after a partial failure', async () => {
+    vi.mocked(api.createUniformAdjustments).mockRejectedValueOnce(new ApiError(409, 'uniform_stale_count', 'Conflict')).mockResolvedValueOnce([])
+    mount()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('radio', { name: 'Formal shirt' }))
+    fireEvent.change(screen.getByLabelText('Quantity of M'), { target: { value: '7' } })
+    fireEvent.change(screen.getByLabelText('Reason for adjustment'), { target: { value: 'Count' } })
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByRole('alert')
+    fireEvent.change(screen.getByLabelText('Name in English'), { target: { value: 'New shirt' } })
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.updateUniformItem).toHaveBeenNthCalledWith(2, 2, { name_en: 'New shirt' }, '2'))
+  })
+  it('edits both names and descriptions, group and default quantity with the item version', async () => {
+    mount()
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    const user = userEvent.setup()
+    await user.clear(screen.getByLabelText('Name in English'))
+    await user.type(screen.getByLabelText('Name in English'), '  Winter shirt  ')
+    await user.clear(screen.getByLabelText('Name in Arabic'))
+    await user.type(screen.getByLabelText('Name in Arabic'), '  قميص شتوي  ')
+    await user.type(screen.getByLabelText('Description in English'), '  Warm fabric  ')
+    await user.type(screen.getByLabelText('Description in Arabic'), '  قماش دافئ  ')
+    await user.selectOptions(screen.getByLabelText('Group'), 'winter')
+    fireEvent.change(screen.getByLabelText('Hand-out default quantity'), { target: { value: '3' } })
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.updateUniformItem).toHaveBeenCalledWith(2, {
+      name_en: 'Winter shirt', name_ar: 'قميص شتوي', description_en: 'Warm fabric', description_ar: 'قماش دافئ', group_key: 'winter', default_qty: 3,
+    }, '1'))
+  })
+  it('validates required names and positive whole default quantities without writes', async () => {
+    mount()
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    fireEvent.change(screen.getByLabelText('Name in English'), { target: { value: '   ' } })
+    fireEvent.change(screen.getByLabelText('Hand-out default quantity'), { target: { value: '1.5' } })
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('This name is required.')).toBeInTheDocument()
+    expect(screen.getByText('Enter a whole quantity of at least 1.')).toBeInTheDocument()
+    expect(api.updateUniformItem).not.toHaveBeenCalled()
+  })
+  it('sends the draft baseline even after the catalogue refreshes and preserves a stale-count rejection', async () => {
+    vi.mocked(api.createUniformAdjustments).mockRejectedValue(new ApiError(409, 'uniform_stale_count', 'Conflict'))
+    const { client, onOpenChange } = mount()
+    const input = await screen.findByRole('spinbutton', { name: 'Quantity of M' })
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    fireEvent.change(input, { target: { value: '6' } })
+    fireEvent.change(screen.getByLabelText('Reason for adjustment'), { target: { value: 'Physical count' } })
+    act(() => client.setQueryData(uniformKeys.items(), [{ ...ITEM, sizes: [{ ...ITEM.sizes[0], on_hand: 12 }] }]))
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.createUniformAdjustments).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [{ size_id: 21, delta: -2, expected_on_hand: 8 }],
+    })))
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('assets.uniform.errors.staleCount'))
+    expect(input).toHaveValue(6)
+    expect(onOpenChange).not.toHaveBeenCalled()
+  })
+  it('reorders sizes and stages removal without writes until Save', async () => {
+    const empty = { ...ITEM.sizes[0], on_hand: 0 }
+    const second = { ...empty, id: 22, label: 'L', sort_order: 1 }
+    mount({ ...ITEM, sizes: [empty, second] })
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Move up: size L' }))
+    expect(screen.getAllByRole('spinbutton', { name: /^Quantity of/ })[0]).toHaveAccessibleName('Quantity of L')
+    await user.click(screen.getByRole('button', { name: 'Remove size M' }))
+    expect(screen.queryByRole('spinbutton', { name: 'Quantity of M' })).not.toBeInTheDocument()
+    expect(api.removeUniformSize).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.removeUniformSize).toHaveBeenCalledWith(21))
+    expect(api.updateUniformSize).toHaveBeenCalledWith(22, { sort_order: 0 })
+  })
+  it('blocks removing sizes with stock or holdings and explains the restriction', async () => {
+    mount({ ...ITEM, sizes: [ITEM.sizes[0], { ...ITEM.sizes[0], id: 22, label: 'L', on_hand: 0, held_qty: 1, sort_order: 1 }] })
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    for (const size of ['M', 'L']) {
+      const remove = screen.getByRole('button', { name: `Remove size ${size}` })
+      expect(remove).toBeDisabled()
+      expect(remove).toHaveAccessibleDescription(i18n.t('assets.uniform.catalog.removeBlocked'))
+    }
+    expect(screen.getByRole('button', { name: 'Archive item' })).toBeDisabled()
+    expect(api.removeUniformSize).not.toHaveBeenCalled()
+  })
+  it('retains completed adjustments and metadata when a later removal fails', async () => {
+    vi.mocked(api.removeUniformSize).mockRejectedValueOnce(new ApiError(409, 'uniform_conflict', 'Conflict')).mockResolvedValueOnce(undefined)
+    mount({ ...ITEM, sizes: [...ITEM.sizes, { ...ITEM.sizes[0], id: 22, label: 'L', on_hand: 0, sort_order: 1 }] })
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('radio', { name: 'Formal shirt' }))
+    await user.click(screen.getByRole('button', { name: 'Remove size L' }))
+    fireEvent.change(screen.getByLabelText('Quantity of M'), { target: { value: '7' } })
+    fireEvent.change(screen.getByLabelText('Reason for adjustment'), { target: { value: 'Count' } })
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByRole('alert')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.removeUniformSize).toHaveBeenCalledTimes(2))
+    expect(api.updateUniformItem).toHaveBeenCalledTimes(1)
+    expect(api.createUniformAdjustments).toHaveBeenCalledTimes(1)
+  })
+  it.each(['archive', 'delete'])('confirms %s and preserves a server rejection for retry', async action => {
+    const mutation = action === 'archive' ? vi.mocked(api.archiveUniformItem) : vi.mocked(api.deleteUniformItem)
+    mutation.mockRejectedValueOnce(new ApiError(409, 'uniform_conflict', 'Conflict'))
+    const { onOpenChange } = mount({ ...ITEM, sizes: [{ ...ITEM.sizes[0], on_hand: 0 }] })
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: action === 'archive' ? 'Archive item' : 'Delete item' }))
+    expect(mutation).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: action === 'archive' ? 'Confirm archive' : 'Confirm delete' }))
+    await screen.findByRole('alert')
+    expect(onOpenChange).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: action === 'archive' ? 'Confirm archive' : 'Confirm delete' }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(mutation).toHaveBeenNthCalledWith(1, 2)
+    expect(mutation).toHaveBeenCalledTimes(2)
+  })
+  it('disables metadata, size and destructive controls while a save is pending', async () => {
+    let finish!: (value: UniformItemRead) => void
+    vi.mocked(api.updateUniformItem).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    mount()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('radio', { name: 'Formal shirt' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.updateUniformItem).toHaveBeenCalledTimes(1))
+    expect(screen.getByLabelText('Name in English')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Delete item' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await act(async () => finish({ ...ITEM, version: '2' }))
   })
   it('does not mount the editor without edit capability', () => {
     state.editable = false
@@ -207,6 +338,32 @@ describe('Receive stock and inspect posting history', () => {
     expect(reason).toHaveValue('   Wrong count  ')
     await user.click(confirm)
     await waitFor(() => expect(api.voidUniformAdjustment).toHaveBeenLastCalledWith(6, { reason: 'Wrong count' }))
+  })
+  it('shows every affected receipt item before and during whole-receipt void confirmation', async () => {
+    const boots: UniformItemRead = { ...ITEM, id: 3, name_en: 'Boots', name_ar: 'حذاء', drawing: 'boots', archived_at: '2026-10-01', sizes: [{ ...ITEM.sizes[0], id: 31, item_id: 3, label: '42', on_hand: 0 }] }
+    const receipt = { ...RECEIPT, lines: [{ size_id: 21, qty: 4 }, { size_id: 31, qty: 2 }] }
+    vi.mocked(api.listUniformItems).mockImplementation(async includeArchived => includeArchived ? [ITEM, boots] : [ITEM])
+    vi.mocked(api.listUniformReceipts).mockResolvedValue([receipt])
+    mountStockSurface('history')
+    const reference = await screen.findByText('HQ-20')
+    const entry = reference.closest('li')!
+    expect(api.listUniformItems).toHaveBeenCalledWith(true)
+    const expectAllLines = () => {
+      const poloLine = within(entry).getByText('Polo shirt').closest('li')!
+      expect(within(poloLine).getByText('M')).toBeVisible()
+      expect(within(poloLine).getByText('4')).toBeVisible()
+      const bootsLine = within(entry).getByText('Boots').closest('li')!
+      expect(within(bootsLine).getByText('42')).toBeVisible()
+      expect(within(bootsLine).getByText('2')).toBeVisible()
+    }
+    expectAllLines()
+    const user = userEvent.setup()
+    await user.click(within(entry).getByRole('button', { name: 'Void record' }))
+    expectAllLines()
+    expect(within(entry).getByText(i18n.t('assets.uniform.catalog.voidEntireReceipt'))).toBeVisible()
+    await user.type(within(entry).getByRole('textbox', { name: 'Reason for voiding' }), 'Wrong receipt')
+    await user.click(within(entry).getByRole('button', { name: 'Void record' }))
+    await waitFor(() => expect(api.voidUniformReceipt).toHaveBeenCalledWith(5, { reason: 'Wrong receipt' }))
   })
   it('permits readonly history but hides every Void action', async () => {
     state.editable = false

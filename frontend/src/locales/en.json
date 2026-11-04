@@ -1752,20 +1752,6 @@
       "archivePaidResultsConfirmDesc": "Archived fines keep their receipts and stay in the fines report; restore them from the Archive view at any time."
     }
   },
-  "uniform": {
-    "catalog": {
-      "stockHistory": "Stock history",
-      "alertAt": "Alert at",
-      "alertAtSize": "Alert at {{size}}",
-      "adjustmentReasonRequired": "Enter a reason for the stock adjustment.",
-      "validReceiptDate": "Choose a valid receipt date that is not in the future.",
-      "referenceTooLong": "The reference must not exceed 120 characters.",
-      "noReceiptSizes": "No active shelf sizes are available to receive stock.",
-      "historyEmpty": "No receipts or adjustments for this item yet.",
-      "receipt": "Stock receipt",
-      "adjustment": "Stock adjustment"
-    }
-  },
   "assets": {
     "title": "Assets",
     "sectionTabs": {
@@ -1774,6 +1760,40 @@
       "uniform": "Uniform"
     },
     "uniform": {
+      "catalog": {
+        "stockHistory": "Stock history",
+        "alertAt": "Alert at",
+        "alertAtSize": "Alert at {{size}}",
+        "adjustmentReasonRequired": "Enter a reason for the stock adjustment.",
+        "validReceiptDate": "Choose a valid receipt date that is not in the future.",
+        "referenceTooLong": "The reference must not exceed 120 characters.",
+        "noReceiptSizes": "No active shelf sizes are available to receive stock.",
+        "historyEmpty": "No receipts or adjustments for this item yet.",
+        "receipt": "Stock receipt",
+        "adjustment": "Stock adjustment",
+        "voidEntireReceipt": "Voiding this receipt reverses every line listed above, including other items.",
+        "nameTooLong": "Use no more than 120 characters.",
+        "descriptionTooLong": "Use no more than 500 characters.",
+        "reasonTooLong": "Use no more than 500 characters for the reason.",
+        "moveSizeUp": "Move up: size {{size}}",
+        "moveSizeDown": "Move down: size {{size}}",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "remove": "Remove",
+        "removeBlocked": "A size can be removed only when shelf stock and employee holdings are zero.",
+        "itemActions": "Item actions",
+        "archiveItem": "Archive item",
+        "deleteItem": "Delete item",
+        "confirmArchive": "Confirm archive",
+        "confirmDelete": "Confirm delete",
+        "keepEditing": "Keep editing",
+        "archiveConfirm": "Archive {{name}}? Its history will be kept. Unsaved changes will not be saved.",
+        "deleteConfirm": "Delete {{name}} permanently? Items with history cannot be deleted. Unsaved changes will not be saved.",
+        "archiveBlocked": "Clear all shelf stock and employee holdings before archiving this item.",
+        "archived": "Item archived.",
+        "deleted": "Item deleted."
+      },
+      "lookupError": "Employees could not be searched.",
       "received": {
         "held": "Currently held",
         "heldCount_zero": "{{count}} pieces held",
@@ -2035,6 +2055,8 @@
       "loading": "Loading uniform records…",
       "errors": {
         "insufficientStock": "Not enough stock on the shelf. Refresh and review the quantities.",
+        "staleCount": "Stock changed after you opened this count. Close and reopen the item, then review the quantities.",
+        "invalidExpectedOnHand": "The expected shelf quantity must be a whole number of 0 or more.",
         "writeConflict": "Uniform records changed. Refresh and try again.",
         "versionConflict": "This item was changed by someone else. Refresh before saving.",
         "drawingInUse": "Another active item already uses this drawing. Choose another drawing.",

@@ -1,5 +1,8 @@
-import { useId, useState } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useId } from 'react'
+import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
+import { z } from 'zod'
 
 import { DialogBody, DialogFooter, DialogShell, Field, FormAlert } from '@/components/forms/DialogShell'
 import { Button } from '@/components/ui/button'
@@ -9,7 +12,9 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { uniformErrorMessage, useVoidUniformAdjustment, useVoidUniformIssue, useVoidUniformReceipt, useVoidUniformReturn } from './uniformQueries'
 
 export type UniformVoidKind = 'receipt' | 'issue' | 'return' | 'adjustment'
-const MAX_REASON = 500
+const reasonSchema = z.object({
+  reason: z.string().trim().min(1, 'assets.uniform.errors.reasonRequired').max(500, 'assets.uniform.errors.reasonTooLong'),
+})
 
 interface Props {
   open: boolean
@@ -31,28 +36,23 @@ function VoidContent({ open, onOpenChange, kind, recordId, returnFocusRef, onVoi
   const id = useId()
   const mutations = { receipt: useVoidUniformReceipt(), issue: useVoidUniformIssue(), return: useVoidUniformReturn(), adjustment: useVoidUniformAdjustment() }
   const mutation = mutations[kind]
-  const [reason, setReason] = useState('')
-  const [touched, setTouched] = useState(false)
-  const trimmed = reason.trim()
-  const problem = !trimmed ? t('assets.uniform.errors.reasonRequired') : trimmed.length > MAX_REASON ? t('assets.uniform.errors.reasonTooLong') : ''
+  const form = useForm({ resolver: zodResolver(reasonSchema), defaultValues: { reason: '' }, mode: 'onChange' })
+  const problem = form.formState.errors.reason?.message
   return <DialogShell open={open} onOpenChange={onOpenChange} title={t('assets.uniform.voidConfirmTitle')} description={t('assets.uniform.voidConfirm')} size="md" busy={mutation.isPending} returnFocusRef={returnFocusRef}>
-    <form noValidate aria-busy={mutation.isPending} className="flex min-h-0 flex-1 flex-col" onSubmit={event => {
-      event.preventDefault()
-      setTouched(true)
-      if (problem || mutation.isPending) return
-      mutation.mutate({ id: recordId, body: { reason: trimmed } }, {
+    <form noValidate aria-busy={mutation.isPending} className="flex min-h-0 flex-1 flex-col" onSubmit={form.handleSubmit(({ reason }) => {
+      if (mutation.isPending) return
+      mutation.mutate({ id: recordId, body: { reason } }, {
         onSuccess: () => {
           toast.success(t('assets.uniform.voidSaved'))
           onVoided?.()
           onOpenChange(false)
         },
       })
-    }}>
+    })}>
       <DialogBody>
         <FormAlert id={`${id}-error`} message={mutation.error ? uniformErrorMessage(mutation.error) : null} />
-        <Field id={`${id}-reason`} label={t('assets.uniform.voidReason')} required error={touched && problem ? problem : undefined}>
-          <Textarea id={`${id}-reason`} dir="auto" rows={3} required aria-invalid={touched && !!problem} disabled={mutation.isPending} value={reason}
-            onChange={event => setReason(event.target.value)} onBlur={() => setTouched(true)} />
+        <Field id={`${id}-reason`} label={t('assets.uniform.voidReason')} required error={problem ? t(problem) : undefined}>
+          <Textarea id={`${id}-reason`} dir="auto" rows={3} required aria-invalid={!!problem} disabled={mutation.isPending} {...form.register('reason')} />
         </Field>
       </DialogBody>
       <DialogFooter>

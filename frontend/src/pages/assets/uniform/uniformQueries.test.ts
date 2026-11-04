@@ -69,6 +69,7 @@ describe('uniformErrorMessage', () => {
     for (const [status, code, key] of [
       [409, 'uniform_drawing_in_use', 'drawingInUse'],
       [409, 'uniform_insufficient_stock', 'insufficientStock'],
+      [409, 'uniform_stale_count', 'staleCount'],
       [412, 'uniform_version_conflict', 'versionConflict'],
     ] as const) {
       const message = uniformErrorMessage(new ApiError(status, code, 'Server detail'))
@@ -87,5 +88,15 @@ describe('uniformErrorMessage', () => {
     expect(uniformErrorMessage(new ApiError(403, 'FORBIDDEN', 'Denied'))).toBe(i18n.t('common.forbiddenError'))
     expect(uniformErrorMessage(new TypeError('fetch failed'))).toBe(i18n.t('errors.network'))
     expect(uniformErrorMessage(null)).toBe(i18n.t('errors.generic'))
+  })
+
+  it('keeps catalogue strings in the assets namespace and uses nominative Arabic other-count nouns', async () => {
+    await i18n.changeLanguage('ar')
+    expect(i18n.exists('uniform.catalog.stockHistory')).toBe(false)
+    expect(i18n.t('assets.uniform.catalog.stockHistory')).toBe('سجل المخزون')
+    expect(i18n.t('assets.uniform.finding', { count: 100, pieces: 'القطع' })).toContain('100 مقاس ')
+    expect(i18n.t('assets.uniform.receivedLine', { count: 100, date: '01/11/2026' })).toContain('100 موظف،')
+    expect(i18n.t('assets.uniform.heldBy', { count: 100 })).toBe('يحملها 100 موظف')
+    expect(i18n.t('assets.uniform.people', { count: 100 })).toBe('100 موظف')
   })
 })

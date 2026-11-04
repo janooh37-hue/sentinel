@@ -62,10 +62,10 @@ export function useUpdateUniformItem() {
   return useUniformMutation(({ id, body, ifMatch }: { id: number; body: UniformItemUpdate; ifMatch: string }) => api.updateUniformItem(id, body, ifMatch))
 }
 export function useArchiveUniformItem() {
-  return useUniformMutation(api.archiveUniformItem)
+  return useUniformMutation((id: number) => api.archiveUniformItem(id))
 }
 export function useDeleteUniformItem() {
-  return useUniformMutation(api.deleteUniformItem)
+  return useUniformMutation((id: number) => api.deleteUniformItem(id))
 }
 export function useAddUniformSize() {
   return useUniformMutation(({ itemId, body }: { itemId: number; body: UniformSizeCreate }) => api.addUniformSize(itemId, body))
@@ -74,7 +74,7 @@ export function useUpdateUniformSize() {
   return useUniformMutation(({ id, body }: { id: number; body: UniformSizeUpdate }) => api.updateUniformSize(id, body))
 }
 export function useRemoveUniformSize() {
-  return useUniformMutation(api.removeUniformSize)
+  return useUniformMutation((id: number) => api.removeUniformSize(id))
 }
 export function useCreateUniformReceipt() {
   return useUniformMutation((body: UniformReceiptCreate) => api.createUniformReceipt(body))

@@ -9,6 +9,7 @@ import { api, ApiError, type UniformItemRead, type UniformReturnRead } from '@/l
 import i18n from '@/lib/i18n'
 import { UniformPage } from '../UniformPage'
 import { ReturnDialog } from './ReturnDialog'
+import { uniformKeys } from '../uniformQueries'
 
 const state = vi.hoisted(() => ({ editable: true }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => cap !== 'uniform.edit' || state.editable }) }))
@@ -26,6 +27,7 @@ const RECORD: UniformReturnRead = { id: 7, created_at: '2026-11-01T08:00:00', cr
 function mount(node: React.ReactNode, entry = '/holdings/uniform') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><MemoryRouter initialEntries={[entry]}>{node}</MemoryRouter></I18nextProvider></QueryClientProvider>)
+  return { client }
 }
 async function chooseAli(user = userEvent.setup()) {
   await user.type(await screen.findByRole('searchbox'), 'G31')
@@ -57,6 +59,56 @@ describe('Record return', () => {
     await user.type(await screen.findByRole('searchbox'), 'G3')
     await screen.findByRole('button', { name: /Ali Hassan/ })
     expect(screen.queryByRole('button', { name: /Omar Returned/ })).not.toBeInTheDocument()
+  })
+
+  it('supports result arrows for cached current-holder searches without clearing result refs', async () => {
+    const second = { ...ALI, employee_id: 'G3201', name_en: 'Second holder' }
+    vi.mocked(api.listUniformRecipients).mockResolvedValue([ALI, second])
+    const { client } = mount(<ReturnDialog open onOpenChange={vi.fn()} />)
+    client.setQueryDefaults(uniformKeys.recipients('G3'), { staleTime: Infinity })
+    client.setQueryData(uniformKeys.recipients('G3'), [ALI, second])
+    const user = userEvent.setup()
+    const input = await screen.findByRole('searchbox')
+    await user.type(input, 'G3')
+    const first = await screen.findByRole('button', { name: /Ali Hassan/ })
+    const last = screen.getByRole('button', { name: /Second holder/ })
+    await user.keyboard('{ArrowDown}')
+    expect(first).toHaveFocus()
+    await user.keyboard('{ArrowDown}')
+    expect(last).toHaveFocus()
+    await user.keyboard('{ArrowUp}')
+    expect(first).toHaveFocus()
+    await user.keyboard('{ArrowUp}')
+    expect(input).toHaveFocus()
+    await user.keyboard('{ArrowDown}{Enter}')
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
+    expect(screen.getByText('Ali Hassan')).toBeInTheDocument()
+    expect(api.createUniformReturn).not.toHaveBeenCalled()
+  })
+
+  it('discards the previous employee quantities and conditions when the employee changes', async () => {
+    const second = { ...ALI, employee_id: 'G3201', name_en: 'Second holder' }
+    vi.mocked(api.listUniformRecipients).mockResolvedValue([ALI, second])
+    mount(<ReturnDialog open onOpenChange={vi.fn()} />)
+    const user = userEvent.setup()
+    await user.type(await screen.findByRole('searchbox'), 'G31')
+    await user.click(await screen.findByRole('button', { name: /Ali Hassan/ }))
+    let polo = within(await screen.findByRole('group', { name: 'Polo shirt' }))
+    await user.click(polo.getByRole('button', { name: 'Increase Polo shirt M' }))
+    await user.click(polo.getByRole('radio', { name: 'Damaged' }))
+    await user.click(screen.getByRole('button', { name: 'Change' }))
+    await user.type(await screen.findByRole('searchbox'), 'G32')
+    await user.click(await screen.findByRole('button', { name: /Second holder/ }))
+    polo = within(await screen.findByRole('group', { name: 'Polo shirt' }))
+    expect(polo.getByRole('spinbutton')).toHaveValue(0)
+    expect(polo.getByRole('radio', { name: 'Reusable' })).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await user.click(polo.getByRole('button', { name: 'Increase Polo shirt M' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.createUniformReturn).toHaveBeenCalledWith(expect.objectContaining({
+      employee_id: second.employee_id,
+      lines: [{ item_id: 2, size_id: 21, qty: 1, condition: 'reusable' }],
+    })))
   })
 
   it('explains why Save is disabled until a quantity is chosen', async () => {
@@ -98,6 +150,9 @@ describe('Record return', () => {
     const polo = within(screen.getByRole('group', { name: 'Polo shirt' }))
     expect(suit.queryByText('M')).not.toBeInTheDocument()
     expect(polo.getByRole('radio', { name: 'Reusable' })).toBeChecked()
+    const marker = polo.getByRole('radio', { name: 'Reusable' }).closest('label')?.querySelector('[aria-hidden="true"]')
+    expect(marker).toHaveTextContent('✓')
+    expect(marker).toHaveClass('peer-checked:block')
     await user.click(suit.getByRole('button', { name: 'Increase Formal suit' }))
     await user.click(polo.getByRole('button', { name: 'Increase Polo shirt M' }))
     await user.click(polo.getByRole('button', { name: 'Increase Polo shirt M' }))
@@ -111,6 +166,23 @@ describe('Record return', () => {
       { item_id: 2, size_id: 21, qty: 2, condition: 'damaged' },
     ])
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+  })
+
+  it('commits a typed quantity on Enter without submitting or losing its condition', async () => {
+    mount(<ReturnDialog open onOpenChange={vi.fn()} />)
+    const user = await chooseAli()
+    const polo = within(screen.getByRole('group', { name: 'Polo shirt' }))
+    const input = polo.getByRole('spinbutton')
+    await user.click(polo.getByRole('radio', { name: 'Damaged' }))
+    await user.click(input)
+    fireEvent.change(input, { target: { value: '2.9' } })
+    await user.keyboard('{Enter}')
+    expect(input).toHaveValue(2)
+    expect(api.createUniformReturn).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.createUniformReturn).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [{ item_id: 2, size_id: 21, qty: 2, condition: 'damaged' }],
+    })))
   })
 
   it('keeps the dialog open and shows the over-return error from the server', async () => {
