@@ -251,14 +251,6 @@ dialog.give{width:min(880px,calc(100vw - 32px))}
 .drawinggroup h4{font-size:14px;margin:8px 0;font-weight:600}
 .drawingtile:focus-within{outline:2px solid var(--focus);outline-offset:1px}
 .drawingpreview{position:sticky;inset-block-start:0;z-index:1;margin-block-end:12px;padding-block:8px;background:var(--surface)}
-.colourgrid{display:flex;flex-wrap:wrap;gap:8px;border:0;padding:0;margin:16px 0}
-.colourgrid legend{font-size:14px;font-weight:600;margin-block-end:8px}
-.colourchoice{display:flex;align-items:center;gap:6px;min-block-size:44px;padding:6px 8px;border:1px solid var(--control);border-radius:6px;font-size:13px;cursor:pointer}
-.colourchoice input{accent-color:var(--text)}
-.swatch{inline-size:18px;block-size:18px;flex:none;border:1px solid var(--control);border-radius:50%;background:var(--swatch)}
-.colourchoice:has(input:checked){outline:2px solid var(--text);outline-offset:-2px}
-.customcolour{display:grid;justify-items:start;gap:8px}
-.customcolour input{inline-size:64px;block-size:44px;border:1px solid var(--control);padding:4px;border-radius:6px;background:var(--surface)}
 
 /* Narrow stock table: each piece becomes two lines, its ladder on the second. */
 @container (max-width: 760px){
@@ -386,8 +378,7 @@ const T = {
     defaultQty: 'Hand-out default quantity', drawing: 'Drawing', previewDrawing: 'Selected drawing',
     required: 'This name is required.', sizesRequired: 'Keep at least one size.', qtyRequired: 'Enter a whole quantity of at least 1.',
     removeSize: n => `Remove size ${n}`, itemSaved: 'Item added on this page, with zero stock.',
-    colour: 'Colour', customColour: 'Custom colour', pickColour: 'Pick a custom colour', colourDefault: 'Drawing default', editItem: 'Edit item',
-    colours: { navy: 'Navy', olive: 'Olive', khaki: 'Khaki', tan: 'Tan', black: 'Black', charcoal: 'Charcoal grey', white: 'White', brown: 'Brown', maroon: 'Maroon' },
+    editItem: 'Edit item',
   },
   ar: {
     docTitle: 'الأصول: الملابس (نموذج للاعتماد)',
@@ -438,8 +429,7 @@ const T = {
     defaultQty: 'الكمية الافتراضية للصرف', drawing: 'الرسم', previewDrawing: 'الرسم المختار',
     required: 'الاسم مطلوب.', sizesRequired: 'أبقِ مقاسًا واحدًا على الأقل.', qtyRequired: 'أدخل عددًا صحيحًا لا يقل عن 1.',
     removeSize: n => `إزالة المقاس ${n}`, itemSaved: 'أُضيفت القطعة في هذه الصفحة برصيد صفر.',
-    colour: 'اللون', customColour: 'لون مخصص', pickColour: 'اختر لونًا مخصصًا', colourDefault: 'لون الرسم الأصلي', editItem: 'تعديل القطعة',
-    colours: { navy: 'كحلي', olive: 'زيتي', khaki: 'خاكي', tan: 'بني فاتح', black: 'أسود', charcoal: 'رمادي فحمي', white: 'أبيض', brown: 'بني', maroon: 'عنابي' },
+    editItem: 'تعديل القطعة',
   },
 }
 
@@ -452,7 +442,7 @@ const descOf = item => esc(state.lang === 'ar' ? item.dAr : item.dEn)
 const posOf = e => L(e, 'pos')
 const sizeLabel = s => s === 'one' ? t().oneSize : s
 const canEdit = () => state.view === 'edit'
-const art = (item, cls) => window.uniformArt(item.art, cls, { color: item.artColor })
+const art = (item, cls) => window.uniformArt(item.art, cls)
 const stockItems = () => items.filter(i => i.tracking === 'stock')
 const outOfStock = () => stockItems().map(i => ({ item: i, sizes: i.sizes.filter((_, k) => i.qty[k] === 0) })).filter(o => o.sizes.length)
 const lastRecord = id => U.records.find(r => r.employee === id)
@@ -852,47 +842,36 @@ function openReturn() {
   drawPicker(false); refresh(); dlg.showModal(); dlg.querySelector('input')?.focus()
 }
 
-/* One staged drawing/colour choice, shared by Add item and Update. */
-function drawingPicker(box, initial) {
+/* One staged drawing choice, shared by Add item and Update. */
+function drawingPicker(box, initial = {}) {
   const s = t(), prefix = box.id
   const catalog = window.UNIFORM_ART_KINDS || [
-    { kind: 'generic', en: 'Folded garments', ar: 'ملابس مطوية', defaultColor: '#c9b38e' },
-    { kind: 'suit', en: 'Suit', ar: 'بدلة', defaultColor: '#22345a' },
-    { kind: 'shoes', en: 'Shoes', ar: 'حذاء', defaultColor: '#1d1f24' },
-    { kind: 'boots', en: 'Boots', ar: 'حذاء ميداني', defaultColor: '#c8a57a' },
-    { kind: 'polo', en: 'Polo shirt', ar: 'قميص بولو', defaultColor: '#556642' },
-    { kind: 'cargo', en: 'Cargo trousers', ar: 'بنطال بجيوب جانبية', defaultColor: '#c9b38e' },
-    { kind: 'belt', en: 'Belt', ar: 'حزام', defaultColor: '#7a5233' },
-    { kind: 'cap', en: 'Cap', ar: 'قبعة', defaultColor: '#c9b38e' },
-    { kind: 'socks', en: 'Socks', ar: 'جوارب', defaultColor: '#c4ac82' },
+    { kind: 'suit', en: 'Suit', ar: 'بدلة' },
+    { kind: 'boots', en: 'Boots', ar: 'حذاء ميداني' },
+    { kind: 'polo', en: 'Polo shirt', ar: 'قميص بولو' },
+    { kind: 'cargo', en: 'Cargo trousers', ar: 'بنطال بجيوب جانبية' },
+    { kind: 'belt', en: 'Belt', ar: 'حزام' },
+    { kind: 'cap', en: 'Cap', ar: 'قبعة' },
+    { kind: 'socks', en: 'Socks', ar: 'جوارب' },
+    { kind: 'jacket', en: 'Field jacket', ar: 'سترة ميدانية' },
+    { kind: 'vest', en: 'Security vest', ar: 'سترة أمنية عاكسة' },
+    { kind: 'parka', en: 'Padded winter jacket', ar: 'سترة شتوية مبطنة' },
+    { kind: 'dressshirt', en: 'Formal shirt', ar: 'قميص رسمي' },
+    { kind: 'longsleeve', en: 'Long-sleeve polo', ar: 'قميص بولو بأكمام طويلة' },
   ]
-  const drawingGroups = window.UNIFORM_ART_KINDS && window.UNIFORM_ART_GROUPS || [{ id: 'all', en: T.en.drawing, ar: T.ar.drawing }]
-  const colours = { navy: '#23364e', olive: '#64705c', khaki: '#b7aa82', tan: '#c3a47c', black: '#252525', charcoal: '#55585b', white: '#f4f3ed', brown: '#765b3e', maroon: '#743b46' }
-  let kind = initial.art, color = initial.artColor || ''
-  const selectedKind = () => catalog.find(k => k.kind === kind) || catalog.find(k => k.kind === 'generic') || catalog[0]
-  const defaultColor = () => selectedKind().defaultColor
-  const initialPreset = !color ? 'default' : Object.keys(colours).find(key => colours[key].toLowerCase() === color.toLowerCase()) || 'custom'
+  const drawingGroups = (window.UNIFORM_ART_KINDS && window.UNIFORM_ART_GROUPS || [{ id: 'all', en: T.en.drawing, ar: T.ar.drawing }]).filter(group => catalog.some(k => (k.group || 'all') === group.id))
+  let kind = catalog.some(k => k.kind === initial.art) ? initial.art : catalog[0].kind
+  const selectedKind = () => catalog.find(k => k.kind === kind)
   box.innerHTML = `<section aria-labelledby="${prefix}-h"><h3 class="flabel" id="${prefix}-h">${s.drawing}</h3>
     <div class="drawingpreview" id="${prefix}-preview" aria-live="polite"></div>
     <fieldset class="drawingcatalog"><legend class="sr">${s.drawing}</legend>${drawingGroups.map(group => {
       const kinds = catalog.filter(k => (k.group || 'all') === group.id)
-      return kinds.length ? `<div class="drawinggroup" role="group" aria-labelledby="${prefix}-g-${group.id}"><h4 id="${prefix}-g-${group.id}">${L(group)}</h4><div class="drawinggrid">${kinds.map(k => `<label class="drawingtile">${art({ art: k.kind })}<span>${L(k)}</span><input type="radio" name="${prefix}-drawing" value="${k.kind}"${k.kind === kind ? ' checked' : ''}></label>`).join('')}</div></div>` : ''
-    }).join('')}</fieldset>
-    <fieldset class="colourgrid"><legend>${s.colour}</legend>${[['default', ''], ...Object.entries(colours)].map(([key, value]) => `<label class="colourchoice"><input type="radio" name="${prefix}-colour" value="${key}"${key === initialPreset ? ' checked' : ''}><span class="swatch" ${key === 'default' ? 'data-default-swatch' : ''} style="--swatch:${value || defaultColor()}" aria-hidden="true"></span><span>${key === 'default' ? s.colourDefault : s.colours[key]}</span></label>`).join('')}
-      <label class="colourchoice"><input type="radio" name="${prefix}-colour" value="custom"${initialPreset === 'custom' ? ' checked' : ''}><span>${s.customColour}</span></label></fieldset>
-    <label class="field customcolour" for="${prefix}-custom">${s.pickColour}<input id="${prefix}-custom" type="color" value="${color || defaultColor()}"></label></section>`
-  const custom = box.querySelector('input[type=color]')
-  const preview = () => {
-    const preset = box.querySelector(`[name="${prefix}-colour"]:checked`).value
-    const colourName = preset === 'default' ? s.colourDefault : preset === 'custom' ? s.customColour : s.colours[preset]
-    box.querySelector('.drawingpreview').innerHTML = `${art({ art: kind, artColor: color })}<span>${s.previewDrawing}: ${L(selectedKind())}<span class="desc">${s.colour}: ${colourName}${preset === 'custom' ? ` <bdi dir="ltr">${color}</bdi>` : ''}</span></span>`
-    box.querySelector('[data-default-swatch]').style.setProperty('--swatch', defaultColor())
-  }
-  box.querySelectorAll(`[name="${prefix}-drawing"]`).forEach(input => input.onchange = () => { kind = input.value; if (!color) custom.value = defaultColor(); preview() })
-  box.querySelectorAll(`[name="${prefix}-colour"]`).forEach(input => input.onchange = () => { color = input.value === 'default' ? '' : input.value === 'custom' ? custom.value : colours[input.value]; custom.value = color || defaultColor(); preview() })
-  custom.oninput = () => { color = custom.value; box.querySelector(`[name="${prefix}-colour"][value=custom]`).checked = true; preview() }
+      return `<div class="drawinggroup" role="group" aria-labelledby="${prefix}-g-${group.id}"><h4 id="${prefix}-g-${group.id}">${L(group)}</h4><div class="drawinggrid">${kinds.map(k => `<label class="drawingtile">${art({ art: k.kind })}<span>${L(k)}</span><input type="radio" name="${prefix}-drawing" value="${k.kind}"${k.kind === kind ? ' checked' : ''}></label>`).join('')}</div></div>`
+    }).join('')}</fieldset></section>`
+  const preview = () => { box.querySelector('.drawingpreview').innerHTML = `${art({ art: kind })}<span>${s.previewDrawing}: ${L(selectedKind())}</span>` }
+  box.querySelectorAll(`[name="${prefix}-drawing"]`).forEach(input => input.onchange = () => { kind = input.value; preview() })
   preview()
-  return () => ({ art: kind, artColor: color })
+  return () => ({ art: kind })
 }
 
 function openAddItem() {
@@ -908,7 +887,7 @@ function openAddItem() {
       <div class="addsize"><label class="field" for="item-new-size">${s.addSize}<input id="item-new-size" maxlength="20" aria-describedby="item-size-error"></label><button type="button" class="secondary" id="item-size-add">${s.add}</button></div><span class="field-error" id="item-size-error" role="alert"></span></section>
     <div id="item-art"></div></div>
     <div class="givefoot"><div class="actions" style="margin-inline-start:auto"><button type="button" class="secondary" id="item-cancel">${s.cancel}</button><button class="primary">${s.save}</button></div></div></form>`
-  const drawingChoice = drawingPicker(dlg.querySelector('#item-art'), { art: 'generic', artColor: '' })
+  const drawingChoice = drawingPicker(dlg.querySelector('#item-art'))
   const sizeError = message => { dlg.querySelector('#item-size-error').textContent = message; dlg.querySelector('#item-new-size').setAttribute('aria-invalid', String(Boolean(message))) }
   const drawSizes = () => {
     dlg.querySelector('#item-sizes').innerHTML = sizes.map((sz, k) => `<span class="sizechip">${szText(sz)}<button type="button" data-remove="${k}" aria-label="${s.removeSize(esc(sizeLabel(sz)))}">×</button></span>`).join('')
