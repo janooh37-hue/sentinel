@@ -28,12 +28,12 @@ In scope:
 | 8 | New item tracking | `tracking` is `shelf` or `holder`. Add item creates `shelf` items only (matches the mockup, no tracking choice). Tracking is never editable after creation. |
 | 9 | Winter jacket | Seeded as a catalogue item (drawing `parka`, letter sizes, default 1) with zero stock. No invented quantities or employee history are seeded. |
 | 10 | Corrections | Items: rename, descriptions, group, drawing, default qty, size order editable with audit (If-Match versioned). Items with history are archived, never deleted; items with no rows at all may be deleted. A size can be removed only when `on_hand = 0` and nobody holds it; if it has history it is archived (hidden from forms), else deleted. Receipts, hand-outs, returns and adjustments are never edited or hard-deleted: they are voided with a required reason, which reverses their effect. |
-| 11 | Drawings | The 12 fixed drawings stay, but uniqueness is dropped: drawings may be reused, so there is no 12-item cap. |
+| 11 | Drawings | User instruction, kept from the mockup: each of the 12 fixed drawings belongs to at most one non-archived item. Add item hides drawings used by non-archived items; Update shows the item's own drawing plus unused ones; when all 12 are used, Add item shows the bilingual "every drawing is in use" state and Save is disabled with a reason. Archiving (or deleting) an item frees its drawing. Enforced server-side by a partial unique index and a 409. This caps active items at 12. |
 | 12 | Person panel | Received person detail has **Hand out** and **Record return** actions preselecting that employee. The Received list and detail lead with net currently held quantities; history follows below. |
 | 13 | Concurrency | Writes run in `BEGIN IMMEDIATE` (`begin_immediate_if_idle`), decrements use a guarded `UPDATE uniform_sizes SET on_hand = on_hand - :n WHERE id = :id AND on_hand >= :n` and fail the whole request with 409 if any row count is 0; `CHECK (on_hand >= 0)` backs it up. |
 
 ### Deviations from the mockup
-- Drawing picker shows all 12 drawings (grouped, as in the mockup); drawings used by another item show a small "in use" note but stay selectable. The "every drawing is taken" state is removed.
+- None for drawings: the mockup's unique-drawing rule is kept as is (hidden used drawings, own drawing plus unused on Update, exhausted state with disabled Save). The only addition is that archiving an item frees its drawing.
 - Return form gets a per-line condition control (Reusable / Damaged, `قابل لإعادة الاستخدام` / `تالف`).
 - Stock gets a **Receive stock / استلام مخزون** secondary action (dated receipt dialog: date, reference, per-size quantities).
 - Update quantity edits post an adjustment and require a reason when any quantity changes.
@@ -49,7 +49,7 @@ All tables: `id INTEGER PK`, `created_at`, `updated_at` (server default now) unl
 
 | Table | Columns | Constraints |
 |---|---|---|
-| `uniform_items` | `name_en`, `name_ar` (VARCHAR 120, NOT NULL), `description_en`, `description_ar` (VARCHAR 500 NULL), `group_key` (`formal`/`guard`/`winter`), `drawing` (one of the 12 kinds), `tracking` (`shelf`/`holder`), `default_qty INT`, `sort_order INT`, `archived_at NULL`, `created_by_id FK users`, `version INT DEFAULT 1` | CHECKs on enums, `default_qty >= 1`; unique `lower(name_en)` among non-archived (partial index) |
+| `uniform_items` | `name_en`, `name_ar` (VARCHAR 120, NOT NULL), `description_en`, `description_ar` (VARCHAR 500 NULL), `group_key` (`formal`/`guard`/`winter`), `drawing` (one of the 12 kinds), `tracking` (`shelf`/`holder`), `default_qty INT`, `sort_order INT`, `archived_at NULL`, `created_by_id FK users`, `version INT DEFAULT 1` | CHECKs on enums, `default_qty >= 1`; unique `lower(name_en)` among non-archived (partial index); partial unique index `uq_uniform_items_drawing_active` on `(drawing) WHERE archived_at IS NULL` |
 | `uniform_sizes` | `item_id FK CASCADE`, `label VARCHAR(16)`, `sort_order INT`, `on_hand INT DEFAULT 0`, `min_qty INT NULL`, `archived_at NULL` | `CHECK on_hand >= 0`, `CHECK min_qty IS NULL OR min_qty >= 0`; partial unique `(item_id, lower(label)) WHERE archived_at IS NULL` |
 | `uniform_receipts` | `received_on DATE`, `reference VARCHAR(120) NULL`, `note NULL`, `created_by_id`, void columns | void CHECK |
 | `uniform_receipt_lines` | `receipt_id FK CASCADE`, `size_id FK`, `qty INT` | `qty > 0`, unique `(receipt_id, size_id)` |
@@ -77,9 +77,10 @@ Every mutating function: one write transaction via `begin_immediate_if_idle`, po
 4. **Adjustment:** non-zero delta, reason required; a negative delta uses the guarded decrement.
 5. **Void** (receipt, issue, return, adjustment): reason required, row must not already be voided (409). Reverses the effect: voiding a receipt or positive adjustment decrements (guarded, 409 if stock was already used), voiding an issue increments stock and fails 409 if it would make the employee's net holding negative (a later return depends on it; void that first), voiding a reusable return decrements (guarded).
 6. **Items:** create (shelf only, ≥1 size, group required, both names required); update with If-Match version (412 on mismatch, same ETag pattern as `store_service`); tracking immutable; archive allowed only when every size has `on_hand = 0` and no one holds the item; hard delete only when no posting references it.
-7. **Sizes:** add (not for one-size items or holder items; unique case-insensitive), reorder, set `min_qty`, remove only at `on_hand = 0` with no holders (archive if referenced, delete otherwise).
-8. **Dates:** all posting dates org-local, not future; backdating allowed.
-9. **Listing:** postings newest first by date then id; voided rows are returned with their void info and excluded from all totals.
+7. **Drawings:** a drawing may be used by at most one non-archived item. Create or update with a drawing held by another non-archived item fails 409 `uniform_drawing_in_use` (checked in the service, and the `IntegrityError` from the partial unique index is mapped to the same 409 for races). Updating an item to its own current drawing is always allowed. Archiving or deleting an item frees its drawing.
+8. **Sizes:** add (not for one-size items or holder items; unique case-insensitive), reorder, set `min_qty`, remove only at `on_hand = 0` with no holders (archive if referenced, delete otherwise).
+9. **Dates:** all posting dates org-local, not future; backdating allowed.
+10. **Listing:** postings newest first by date then id; voided rows are returned with their void info and excluded from all totals.
 
 ## 5. API (`backend/app/api/v1/uniform.py`, prefix `/api/v1/uniform`)
 
@@ -88,8 +89,8 @@ Schemas in `backend/app/schemas/uniform.py`. Read routes require `uniform.view`,
 | Method | Path | Body / result |
 |---|---|---|
 | GET | `/items?include_archived=` | `UniformItemRead[]` with sizes (`id, label, on_hand, min_qty, held_qty, is_low`), `holders` for holder items (`employee_id, name_en, name_ar, qty`), `version` |
-| POST | `/items` | `UniformItemCreate` (names, descriptions, group, drawing, default_qty, sizes[]) |
-| PATCH | `/items/{id}` | `UniformItemUpdate`, header `If-Match` |
+| POST | `/items` | `UniformItemCreate` (names, descriptions, group, drawing, default_qty, sizes[]); 409 `uniform_drawing_in_use` |
+| PATCH | `/items/{id}` | `UniformItemUpdate`, header `If-Match`; 409 `uniform_drawing_in_use` |
 | POST | `/items/{id}/archive` | 409 if stock or holders |
 | DELETE | `/items/{id}` | 409 if any posting |
 | POST | `/items/{id}/sizes` | `{label, min_qty?}` |
@@ -135,11 +136,11 @@ All strings in `frontend/src/locales/en.json` and `ar.json` under `assets.sectio
 ## 9. Tests
 
 Backend pytest (`~/.venvs/sentinel/bin/python -m pytest <file> -q`), one test per rule at minimum:
-- `backend/tests/test_migration_uniform.py`: upgrade from `0114_store_count`, seed rows, CHECKs (`on_hand < 0` rejected, void reason required), downgrade round trip, single head. Update `backend/tests/test_migration_store_room.py` head assertion.
-- `backend/tests/test_uniform_service.py`: receipt, hand-out, shortage 409 atomic, holder lines without size, merge duplicates, over-return, damaged does not restock, reusable restocks, holder removal at zero, void of each kind and its guards, adjustment reason, size removal rules, archive rules, future date rejected, ledger invariant after a random sequence, concurrency (two sessions, `ThreadPoolExecutor` + `Barrier`, last piece: exactly one succeeds, `on_hand = 0`), audit row per mutation.
-- `backend/tests/test_uniform_api.py`: permission matrix (none / view / edit / admin), If-Match 412, response shapes, recipients and employee endpoint.
+- `backend/tests/test_migration_uniform.py`: upgrade from `0114_store_count`, seed rows (8 distinct drawings), CHECKs (`on_hand < 0` rejected, void reason required), second active item with the same drawing rejected while an archived duplicate is allowed, downgrade round trip, single head. Update `backend/tests/test_migration_store_room.py` head assertion.
+- `backend/tests/test_uniform_service.py`: receipt, hand-out, shortage 409 atomic, holder lines without size, merge duplicates, over-return, damaged does not restock, reusable restocks, holder removal at zero, void of each kind and its guards, adjustment reason, size removal rules, archive rules, drawing in use 409 on create and update, own drawing kept on update, archive frees drawing for a new item, future date rejected, ledger invariant after a random sequence, concurrency (two sessions, `ThreadPoolExecutor` + `Barrier`, last piece: exactly one succeeds, `on_hand = 0`), audit row per mutation.
+- `backend/tests/test_uniform_api.py`: permission matrix (none / view / edit / admin), If-Match 412, drawing in use 409, response shapes, recipients and employee endpoint.
 
-Frontend vitest (`pnpm -C frontend test <file>`): HandOutDialog (defaults, clamp, disabled reason, suit Give), ReturnDialog (bounds, condition), ItemEditorDialog (staged sizes, flooring, adjustment reason), UniformArt (12 kinds), recipient panel actions, readonly hides mutations.
+Frontend vitest (`pnpm -C frontend test <file>`): HandOutDialog (defaults, clamp, disabled reason, suit Give), ReturnDialog (bounds, condition), ItemEditorDialog (staged sizes, flooring, adjustment reason, own drawing plus unused only), AddItemDialog (used drawings hidden, all-used state with disabled Save and reason), UniformArt (12 kinds), recipient panel actions, readonly hides mutations.
 
 ## 10. Required reviews
 
