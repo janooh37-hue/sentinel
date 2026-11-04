@@ -111,6 +111,43 @@ def test_item_preconditions_and_drawing_lifecycle(editor):
     assert len(editor.get(ROOT + "/items?include_archived=true").json()) == 3
 
 
+def test_archived_size_labels_remain_available_to_history_and_void_is_rejected(editor):
+    item = create_item(editor)
+    size = item["sizes"][0]["id"]
+    receipt = editor.post(
+        ROOT + "/receipts", json={"received_on": str(TODAY), "lines": [{"size_id": size, "qty": 1}]}
+    )
+    assert receipt.status_code == 201
+    adjusted = editor.post(
+        ROOT + "/adjustments",
+        json={
+            "reason": "Count correction",
+            "lines": [{"size_id": size, "delta": -1, "expected_on_hand": 1}],
+        },
+    )
+    assert adjusted.status_code == 201
+    assert editor.delete(ROOT + f"/sizes/{size}").status_code == 204
+    current = editor.get(ROOT + "/items").json()[0]
+    assert size not in {row["id"] for row in current["sizes"]}
+    history = editor.get(ROOT + "/items?include_archived=true").json()[0]
+    archived_size = next(row for row in history["sizes"] if row["id"] == size)
+    assert archived_size["label"] == "M"
+    assert archived_size["archived_at"] is not None
+    void_path = ROOT + f"/adjustments/{adjusted.json()[0]['id']}/void"
+    refused = editor.post(void_path, json={"reason": "Mistake"})
+    assert refused.status_code == 422
+    assert refused.json()["error"]["code"] == "uniform_size_archived"
+    assert editor.get(ROOT + "/summary").json()["shelf_total"] == 0
+    assert editor.post(ROOT + f"/items/{item['id']}/archive").status_code == 200
+    assert editor.get(ROOT + "/items").json() == []
+    history = editor.get(ROOT + "/items?include_archived=true").json()[0]
+    assert history["archived_at"] is not None
+    assert next(row for row in history["sizes"] if row["id"] == size)["label"] == "M"
+    refused = editor.post(void_path, json={"reason": "Mistake"})
+    assert refused.status_code == 422
+    assert refused.json()["error"]["code"] == "uniform_item_archived"
+
+
 def test_receipt_issue_return_void_and_recipient_projections(editor):
     item = create_item(editor)
     size = item["sizes"][0]["id"]

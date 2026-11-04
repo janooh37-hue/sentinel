@@ -267,11 +267,11 @@ describe('Update uniform item', () => {
 
 const RECEIPT = { id: 5, created_at: '2026-11-04T08:00:00', created_by_id: 1, voided_at: null, voided_by_id: null, void_reason: null, received_on: '2026-11-03', reference: 'HQ-20', note: 'Delivery', lines: [{ size_id: 21, qty: 4 }] }
 const ADJUSTMENT = { id: 6, created_at: '2026-11-04T09:00:00', created_by_id: 1, voided_at: null, voided_by_id: null, void_reason: null, adjusted_on: '2026-11-04', size_id: 21, delta: -1, reason: 'Count correction' }
-function mountStockSurface(surface: 'receive' | 'history' | 'stock') {
+function mountStockSurface(surface: 'receive' | 'history' | 'stock', item = ITEM) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   const onOpenChange = vi.fn()
   render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}>
-    {surface === 'receive' ? <ReceiveStockDialog open onOpenChange={onOpenChange} /> : surface === 'history' ? <StockHistory open item={ITEM} onOpenChange={onOpenChange} /> : <StockTab onHandOut={vi.fn()} />}
+    {surface === 'receive' ? <ReceiveStockDialog open onOpenChange={onOpenChange} /> : surface === 'history' ? <StockHistory open item={item} onOpenChange={onOpenChange} /> : <StockTab onHandOut={vi.fn()} />}
   </I18nextProvider></QueryClientProvider>)
   return { onOpenChange }
 }
@@ -364,6 +364,20 @@ describe('Receive stock and inspect posting history', () => {
     await user.type(within(entry).getByRole('textbox', { name: 'Reason for voiding' }), 'Wrong receipt')
     await user.click(within(entry).getByRole('button', { name: 'Void record' }))
     await waitFor(() => expect(api.voidUniformReceipt).toHaveBeenCalledWith(5, { reason: 'Wrong receipt' }))
+  })
+  it.each(['en', 'ar'])('retains receipts and adjustments for the last removed size using the history catalogue in %s', async language => {
+    await i18n.changeLanguage(language)
+    const historyItem = { ...ITEM, sizes: [{ ...ITEM.sizes[0], on_hand: 0, archived_at: '2026-11-04T10:00:00Z' }] }
+    vi.mocked(api.listUniformItems).mockImplementation(async includeArchived => includeArchived ? [historyItem] : [{ ...ITEM, sizes: [] }])
+    mountStockSurface('history', { ...ITEM, sizes: [] })
+    const receipt = (await screen.findByText('HQ-20')).closest('li')!
+    expect(within(receipt).getByText('M')).toBeVisible()
+    expect(within(receipt).getByText('4')).toBeVisible()
+    const adjustment = screen.getByText('Count correction').closest('li')!
+    expect(within(adjustment).getByText('M')).toBeVisible()
+    expect(within(adjustment).getByText('-1')).toBeVisible()
+    expect(screen.queryByText(i18n.t('assets.uniform.catalog.historyEmpty'))).not.toBeInTheDocument()
+    expect(api.listUniformItems).toHaveBeenCalledWith(true)
   })
   it('permits readonly history but hides every Void action', async () => {
     state.editable = false

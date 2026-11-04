@@ -70,6 +70,8 @@ describe('uniformErrorMessage', () => {
       [409, 'uniform_drawing_in_use', 'drawingInUse'],
       [409, 'uniform_insufficient_stock', 'insufficientStock'],
       [409, 'uniform_stale_count', 'staleCount'],
+      [422, 'uniform_item_archived', 'itemArchived'],
+      [422, 'uniform_size_archived', 'sizeArchived'],
       [412, 'uniform_version_conflict', 'versionConflict'],
     ] as const) {
       const message = uniformErrorMessage(new ApiError(status, code, 'Server detail'))

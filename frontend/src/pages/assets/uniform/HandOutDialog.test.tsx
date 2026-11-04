@@ -214,6 +214,30 @@ describe('Hand out uniform', () => {
     expect(await screen.findByRole('radio', { name: 'Give' })).toBeInTheDocument()
   })
 
+  it('keeps the employee, selections and quantity mounted through a background refresh error and retry', async () => {
+    const { client } = mount()
+    const user = await chooseEmployee()
+    await user.click(screen.getByRole('radio', { name: 'M 8 left' }))
+    const input = screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt' })
+    fireEvent.change(input, { target: { value: '5' } })
+    vi.mocked(api.listUniformItems).mockRejectedValueOnce(new Error('offline'))
+    await act(async () => { await client.invalidateQueries({ queryKey: uniformKeys.items() }) })
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('assets.uniform.refreshError'))
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt' })).toBe(input)
+    expect(input).toHaveValue(5)
+    expect(screen.getByText('Ali Hassan')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'M 8 left' })).toBeChecked()
+    vi.mocked(api.listUniformItems).mockResolvedValue([POLO, SUIT])
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt' })).toBe(input)
+    expect(input).toHaveValue(5)
+    await user.click(screen.getByRole('button', { name: 'Hand out' }))
+    await waitFor(() => expect(api.createUniformIssue).toHaveBeenCalledWith(expect.objectContaining({
+      employee_id: EMPLOYEE.id, lines: [{ item_id: 2, size_id: 21, qty: 5 }],
+    })))
+  })
+
   it('supports result arrows and Enter without submitting the form', async () => {
     const second = { ...EMPLOYEE, id: 'G3200', name_en: 'Second employee' }
     vi.mocked(api.lookupEmployees).mockResolvedValue({ items: [EMPLOYEE, second], total: 2, limit: 8, offset: 0 })

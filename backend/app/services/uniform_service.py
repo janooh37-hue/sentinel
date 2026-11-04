@@ -818,6 +818,7 @@ def void_receipt(
             raise NotFoundError("uniform_receipt_not_found", "Receipt not found.", id=receipt_id)
         _require_not_voided(row)
         for line in row.lines:
+            _active_shelf_size(db, line.size_id)
             _take(db, line.size_id, line.qty)
         _void(row, text, actor_user_id)
         append_audit(
@@ -912,6 +913,7 @@ def void_issue(
             raise NotFoundError("uniform_issue_not_found", "Hand-out not found.", id=issue_id)
         _require_not_voided(row)
         for line in row.lines:
+            _resolve_item_line(db, line.item_id, line.size_id)
             held = uniform_repo.held_qty(
                 db, employee_id=row.employee_id, item_id=line.item_id, size_id=line.size_id
             )
@@ -1042,6 +1044,7 @@ def void_return(
             raise NotFoundError("uniform_return_not_found", "Return not found.", id=return_id)
         _require_not_voided(row)
         for line in row.lines:
+            _resolve_item_line(db, line.item_id, line.size_id)
             if line.size_id is not None and line.condition == "reusable":
                 _take(db, line.size_id, line.qty)
                 _touch_size(db, line.size_id)
@@ -1146,6 +1149,7 @@ def void_adjustment(
                 "uniform_adjustment_not_found", "Adjustment not found.", id=adjustment_id
             )
         _require_not_voided(row)
+        _active_shelf_size(db, row.size_id)
         if row.delta > 0:
             _take(db, row.size_id, row.delta)
         else:
@@ -1178,7 +1182,9 @@ def size_read(db: Session, row: UniformSize) -> UniformSizeRead:
     return _size_read(row, held)
 
 
-def _item_reads(db: Session, rows: Sequence[UniformItem]) -> list[UniformItemRead]:
+def _item_reads(
+    db: Session, rows: Sequence[UniformItem], *, include_archived: bool = False
+) -> list[UniformItemRead]:
     if not rows:
         return []
     holdings = uniform_repo.holdings(db, item_id=rows[0].id if len(rows) == 1 else None)
@@ -1212,7 +1218,7 @@ def _item_reads(db: Session, rows: Sequence[UniformItem]) -> list[UniformItemRea
                 "sizes": [
                     _size_read(size, held_by_size[size.id])
                     for size in row.sizes
-                    if size.archived_at is None
+                    if include_archived or size.archived_at is None
                 ],
                 "holders": [
                     UniformHolder(
@@ -1236,7 +1242,11 @@ def item_read(db: Session, row: UniformItem) -> UniformItemRead:
 
 
 def item_reads(db: Session, *, include_archived: bool = False) -> list[UniformItemRead]:
-    return _item_reads(db, uniform_repo.list_items(db, include_archived=include_archived))
+    return _item_reads(
+        db,
+        uniform_repo.list_items(db, include_archived=include_archived),
+        include_archived=include_archived,
+    )
 
 
 def recipients(db: Session, *, q: str = "") -> list[UniformRecipient]:

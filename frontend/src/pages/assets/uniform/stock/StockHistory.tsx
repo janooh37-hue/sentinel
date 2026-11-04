@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useId, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
@@ -40,10 +40,11 @@ function StockHistoryContent({ open, onOpenChange, item, returnFocusRef }: Props
   const voidAdjustment = useVoidUniformAdjustment()
   const [confirmation, setConfirmation] = useState<string | null>(null)
   const form = useForm({ resolver: zodResolver(voidSchema), defaultValues: { reason: '' }, mode: 'onChange' })
-  const reason = form.watch('reason')
+  const reason = useWatch({ control: form.control, name: 'reason' })
   const busy = voidReceipt.isPending || voidAdjustment.isPending
   const invalidReason = !reason.trim() ? t('assets.uniform.errors.reasonRequired') : reason.trim().length > 500 ? t('assets.uniform.errors.reasonTooLong') : ''
-  const sizeIds = new Set(item.sizes.map(size => size.id))
+  const historyItem = catalogue.data?.find(piece => piece.id === item.id) ?? item
+  const sizeIds = new Set(historyItem.sizes.map(size => size.id))
   const entries: Entry[] = [
     ...(receipts.data ?? []).filter(receipt => receipt.lines.some(line => sizeIds.has(line.size_id))).map(record => ({ kind: 'receipt' as const, date: record.received_on, record })),
     ...(adjustments.data ?? []).filter(adjustment => sizeIds.has(adjustment.size_id)).map(record => ({ kind: 'adjustment' as const, date: record.adjusted_on, record })),

@@ -49,13 +49,13 @@ function AddItemContent({ open, onOpenChange, returnFocusRef }: Props): React.JS
   const mutation = useCreateUniformItem()
   const id = useId()
   return <DialogShell open={open} onOpenChange={onOpenChange} title={t('assets.uniform.addItem')} description={t('assets.uniform.tagline')} size="xl" busy={mutation.isPending} returnFocusRef={returnFocusRef}>
-    {items.data && !items.isError ? <AddItemForm items={items.data} mutation={mutation} onOpenChange={onOpenChange} /> : <>
+    {items.data ? <AddItemForm items={items.data} mutation={mutation} refreshFailed={items.isError} onRetry={() => { void items.refetch() }} onOpenChange={onOpenChange} /> : <>
       <DialogBody>{items.isError ? <div><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.error')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => void items.refetch()}>{t('assets.uniform.retry')}</Button></div> : <p role="status">{t('assets.uniform.loading')}</p>}</DialogBody>
       <DialogFooter><p id={`${id}-load`} className="me-auto text-sm text-muted-foreground">{t(items.isError ? 'assets.uniform.error' : 'assets.uniform.loading')}</p><Button type="button" variant="secondary" className="min-h-11" onClick={() => onOpenChange(false)}>{t('assets.uniform.cancel')}</Button><Button disabled className="min-h-11" aria-describedby={`${id}-load`}>{t('assets.uniform.save')}</Button></DialogFooter>
     </>}
   </DialogShell>
 }
-function AddItemForm({ items, mutation, onOpenChange }: { items: UniformItemRead[]; mutation: UseMutationResult<UniformItemRead, Error, UniformItemCreate>; onOpenChange: Props['onOpenChange'] }): React.JSX.Element {
+function AddItemForm({ items, mutation, refreshFailed, onRetry, onOpenChange }: { items: UniformItemRead[]; mutation: UseMutationResult<UniformItemRead, Error, UniformItemCreate>; refreshFailed: boolean; onRetry: () => void; onOpenChange: Props['onOpenChange'] }): React.JSX.Element {
   const { t } = useTranslation()
   const editable = useCapabilities().has('uniform.edit')
   const id = useId()
@@ -84,6 +84,8 @@ function AddItemForm({ items, mutation, onOpenChange }: { items: UniformItemRead
     mutation.mutate({ name_en: values.name_en, name_ar: values.name_ar, description_en: values.description_en || null, description_ar: values.description_ar || null, group_key: values.group_key, drawing: values.drawing, default_qty: Number(values.default_qty), sizes: values.sizes }, { onSuccess: () => { toast.success(t('assets.uniform.itemSaved')); onOpenChange(false) } })
   })}>
     <DialogBody>
+      <FormAlert id={`${id}-refresh-error`} message={refreshFailed ? t('assets.uniform.refreshError') : null} />
+      {refreshFailed && <Button type="button" variant="ghost" className="min-h-11 self-start" disabled={busy} onClick={onRetry}>{t('assets.uniform.retry')}</Button>}
       <FormAlert id={`${id}-server-error`} message={mutation.error ? uniformErrorMessage(mutation.error) : null} />
       <fieldset disabled={busy || !editable} className="min-w-0">
         <div className="grid gap-4 sm:grid-cols-2">{(['name_en', 'name_ar', 'description_en', 'description_ar'] as const).map(key => {

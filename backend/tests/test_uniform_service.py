@@ -371,6 +371,77 @@ def test_adjustment_rejects_invalid_expected_count(db: Session, expected: int) -
 # ── Voids ─────────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.parametrize("kind", ["receipt", "issue", "return", "adjustment"])
+@pytest.mark.parametrize("archive", ["item", "size"])
+def test_void_rejects_archived_destinations_without_changes(
+    db: Session, kind: str, archive: str
+) -> None:
+    polo = _polo(db)
+    m = _sid(polo, "M")
+    receipt = _stock(db, m, 1)
+    if kind in {"issue", "return"}:
+        issue = svc.create_issue(db, employee_id="G1001", lines=[IssueLineIn(polo.id, m, 1)])
+        returned = svc.create_return(
+            db, employee_id="G1001", lines=[ReturnLineIn(polo.id, m, 1, "damaged")]
+        )
+        record = issue if kind == "issue" else returned
+    else:
+        (adjustment,) = svc.create_adjustments(
+            db, lines=[AdjustmentLineIn(m, -1, 1)], reason="Count correction"
+        )
+        record = receipt if kind == "receipt" else adjustment
+    if archive == "item":
+        svc.archive_item(db, polo.id)
+    else:
+        assert svc.remove_size(db, m) == "archived"
+    before = _audits(db)
+    void = {
+        "receipt": svc.void_receipt,
+        "issue": svc.void_issue,
+        "return": svc.void_return,
+        "adjustment": svc.void_adjustment,
+    }[kind]
+    with pytest.raises(AppError) as exc:
+        void(db, record.id, reason="Mistake")
+    assert _code(exc) == f"uniform_{archive}_archived"
+    db.refresh(record)
+    assert record.voided_at is None
+    assert _on_hand(db, m) == 0
+    assert _held(db, "G1001", polo.id, m) == 0
+    assert _audits(db) == before
+
+
+def test_void_holder_return_cannot_restore_holdings_into_archived_item(db: Session) -> None:
+    suit = _suit(db)
+    svc.create_issue(db, employee_id="G1001", lines=[IssueLineIn(suit.id, None, 2)])
+    returned = svc.create_return(
+        db, employee_id="G1001", lines=[ReturnLineIn(suit.id, None, 2, "damaged")]
+    )
+    svc.archive_item(db, suit.id)
+    before = _audits(db)
+    with pytest.raises(AppError) as exc:
+        svc.void_return(db, returned.id, reason="Mistake")
+    assert _code(exc) == "uniform_item_archived"
+    assert _held(db, "G1001", suit.id, None) == 0
+    assert _audits(db) == before
+
+
+def test_void_receipt_with_archived_line_rolls_back_other_lines(db: Session) -> None:
+    polo = _polo(db)
+    s, m = _sid(polo, "S"), _sid(polo, "M")
+    receipt = svc.create_receipt(
+        db, received_on=TODAY, lines=[ReceiptLineIn(s, 1), ReceiptLineIn(m, 1)]
+    )
+    svc.create_adjustments(db, lines=[AdjustmentLineIn(m, -1, 1)], reason="Count correction")
+    assert svc.remove_size(db, m) == "archived"
+    before = _audits(db)
+    with pytest.raises(AppError) as exc:
+        svc.void_receipt(db, receipt.id, reason="Mistake")
+    assert _code(exc) == "uniform_size_archived"
+    assert (_on_hand(db, s), _on_hand(db, m)) == (1, 0)
+    assert _audits(db) == before
+
+
 def test_void_receipt_reverses_and_guards_used_stock(db: Session) -> None:
     polo = _polo(db)
     m = _sid(polo, "M")

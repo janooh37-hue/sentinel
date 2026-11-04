@@ -58,19 +58,21 @@ function HandOutContent({ open, onOpenChange, itemId, employee: initialEmployee,
   const searchRef = useRef<HTMLInputElement>(null)
   return <DialogShell open={open} onOpenChange={onOpenChange} title={t('assets.uniform.giveTitle')} description={t('assets.uniform.tagline')} size="xl" busy={mutation.isPending} returnFocusRef={returnFocusRef}
     onOpenAutoFocus={event => { if (!initialEmployee && searchRef.current) { event.preventDefault(); searchRef.current.focus() } }}>
-    {items.data && !items.isError ? <HandOutForm items={items.data.filter(item => !item.archived_at)} itemId={itemId} initialEmployee={initialEmployee} searchRef={searchRef} mutation={mutation} onOpenChange={onOpenChange} onSuccess={onSuccess} /> : <>
+    {items.data ? <HandOutForm items={items.data.filter(item => !item.archived_at)} itemId={itemId} initialEmployee={initialEmployee} searchRef={searchRef} mutation={mutation} refreshFailed={items.isError} onRetry={() => { void items.refetch() }} onOpenChange={onOpenChange} onSuccess={onSuccess} /> : <>
       <DialogBody>{items.isError ? <div><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.error')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => void items.refetch()}>{t('assets.uniform.retry')}</Button></div> : <p role="status">{t('assets.uniform.loading')}</p>}</DialogBody>
       <DialogFooter><Button type="button" variant="secondary" className="min-h-11" onClick={() => onOpenChange(false)}>{t('assets.uniform.cancel')}</Button><Button disabled aria-describedby="uniform-load-reason" className="min-h-11">{t('assets.uniform.giveSave')}</Button><span id="uniform-load-reason" className="text-sm text-muted-foreground">{t(items.isError ? 'assets.uniform.error' : 'assets.uniform.loading')}</span></DialogFooter>
     </>}
   </DialogShell>
 }
 
-function HandOutForm({ items, itemId, initialEmployee, searchRef, mutation, onOpenChange, onSuccess }: {
+function HandOutForm({ items, itemId, initialEmployee, searchRef, mutation, refreshFailed, onRetry, onOpenChange, onSuccess }: {
   items: UniformItemRead[]
   itemId?: number
   initialEmployee?: UniformEmployee
   searchRef: React.RefObject<HTMLInputElement | null>
   mutation: UseMutationResult<UniformIssueRead, Error, UniformIssueCreate>
+  refreshFailed: boolean
+  onRetry: () => void
   onOpenChange: Props['onOpenChange']
   onSuccess: Props['onSuccess']
 }): React.JSX.Element {
@@ -113,6 +115,8 @@ function HandOutForm({ items, itemId, initialEmployee, searchRef, mutation, onOp
     })
   })}>
     <DialogBody>
+      <FormAlert id={`${id}-refresh-error`} message={refreshFailed ? t('assets.uniform.refreshError') : null} />
+      {refreshFailed && <Button type="button" variant="ghost" className="min-h-11 self-start" disabled={mutation.isPending} onClick={onRetry}>{t('assets.uniform.retry')}</Button>}
       <FormAlert id={`${id}-error`} message={mutation.error ? uniformErrorMessage(mutation.error) : null} />
       <EmployeeSearch value={employee} inputRef={searchRef} disabled={mutation.isPending} onChange={next => { setEmployee(next); setValue('employeeId', next?.id ?? '') }} />
       {groups.map(group => {

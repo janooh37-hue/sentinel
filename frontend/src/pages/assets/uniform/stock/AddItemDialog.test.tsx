@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,13 +9,13 @@ import { UNIFORM_ART_KINDS } from '@/components/uniformArtCatalog'
 import { AddItemDialog } from './AddItemDialog'
 import { DrawingPicker } from './DrawingPicker'
 
+import { uniformKeys } from '../uniformQueries'
 const state = vi.hoisted(() => ({ editable: true }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => state.editable }) }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn() } }))
 const item: UniformItemRead = { id: 1, name_en: 'Suit', name_ar: 'بدلة', description_en: null, description_ar: null, group_key: 'formal', drawing: 'suit', tracking: 'holder', default_qty: 2, sort_order: 0, archived_at: null, version: '1', sizes: [], holders: [] }
-function mount() {
+function mount(client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })) {
   const onOpenChange = vi.fn()
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><AddItemDialog open onOpenChange={onOpenChange} /></I18nextProvider></QueryClientProvider>)
   return onOpenChange
 }
@@ -145,6 +145,38 @@ describe('Add item catalogue', () => {
     await screen.findByRole('alert')
     expect(screen.queryByRole('radio')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+  it('keeps bilingual metadata, drawing and staged sizes mounted through a refresh failure and retry', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+    mount(client)
+    const user = await fill()
+    const name = screen.getByLabelText('Name in English')
+    await user.type(screen.getByLabelText('Description in English'), 'Field use')
+    await user.type(screen.getByLabelText('Description in Arabic'), 'للاستخدام الميداني')
+    fireEvent.change(screen.getByLabelText('Hand-out default quantity'), { target: { value: '3' } })
+    await user.type(screen.getByLabelText('Add size'), 'Tall{Enter}')
+    await user.click(screen.getByRole('radio', { name: 'Boots' }))
+    vi.mocked(api.listUniformItems).mockRejectedValueOnce(new Error('offline'))
+    await act(async () => { await client.invalidateQueries({ queryKey: uniformKeys.items() }) })
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('assets.uniform.refreshError'))
+    expect(screen.getByLabelText('Name in English')).toBe(name)
+    expect(name).toHaveValue('  Field shirt  ')
+    expect(screen.getByLabelText('Name in Arabic')).toHaveValue('  قميص  ')
+    expect(screen.getByLabelText('Description in English')).toHaveValue('Field use')
+    expect(screen.getByLabelText('Description in Arabic')).toHaveValue('للاستخدام الميداني')
+    expect(screen.getByLabelText('Group')).toHaveValue('guard')
+    expect(screen.getByLabelText('Hand-out default quantity')).toHaveValue(3)
+    expect(screen.getByRole('radio', { name: 'Boots' })).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Remove size Tall' })).toBeInTheDocument()
+    vi.mocked(api.listUniformItems).mockResolvedValue([item])
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    expect(screen.getByLabelText('Name in English')).toBe(name)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.createUniformItem).toHaveBeenCalledWith(expect.objectContaining({
+      name_en: 'Field shirt', name_ar: 'قميص', description_en: 'Field use', description_ar: 'للاستخدام الميداني',
+      group_key: 'guard', default_qty: 3, drawing: 'boots', sizes: ['S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'Tall'],
+    })))
   })
   it('does not mount or write without edit capability', () => {
     state.editable = false
