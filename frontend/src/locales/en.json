@@ -1983,6 +1983,7 @@
       "add": "Add",
       "sizeRequired": "Enter a size.",
       "sizeDuplicate": "This size already exists.",
+      "sizeStaged": "Size added. Review it, then select Save again.",
       "sizes": "Sizes",
       "addItem": "Add item",
       "nameEn": "Name in English",

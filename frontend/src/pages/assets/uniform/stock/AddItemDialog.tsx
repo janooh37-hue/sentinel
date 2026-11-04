@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { type UseMutationResult } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -59,6 +59,7 @@ function AddItemForm({ items, mutation, refreshFailed, onRetry, onOpenChange }: 
   const { t } = useTranslation()
   const editable = useCapabilities().has('uniform.edit')
   const id = useId()
+  const [reviewSize, setReviewSize] = useState(false)
   const occupied = new Set(items.filter(item => !item.archived_at).map(item => item.drawing))
   const available = UNIFORM_ART_GROUPS.flatMap(group => UNIFORM_ART_LABELS.filter(art => art.group === group.id && !occupied.has(art.kind)).map(art => art.kind))
   const { control, register, handleSubmit, getValues, setValue, setError, clearErrors, formState: { errors } } = useForm<Values, unknown, z.output<typeof schema>>({
@@ -67,22 +68,33 @@ function AddItemForm({ items, mutation, refreshFailed, onRetry, onOpenChange }: 
   })
   const sizes = useWatch({ control, name: 'sizes' })
   const drawing = useWatch({ control, name: 'drawing' })
+  const pendingSize = !!useWatch({ control, name: 'newSize' }).trim()
   const reason = !available.length || !drawing || !available.includes(drawing) ? t('assets.uniform.saveDisabledReason') : ''
   const busy = mutation.isPending
-  function stage() {
-    if (!editable || busy) return
+  function stage(): boolean {
+    if (!editable || busy) return false
     const value = getValues('newSize').trim()
     const message = !value ? 'assets.uniform.sizeRequired' : value.length > 16 ? 'assets.uniform.errors.invalidSizeLabel' : sizes.some(size => size.toLowerCase() === value.toLowerCase()) ? 'assets.uniform.sizeDuplicate' : value.toLowerCase() === 'one' && sizes.length > 0 ? 'assets.uniform.errors.sizesFixed' : ''
-    if (message) { setError('newSize', { message }); return }
+    if (message) { setError('newSize', { message }); return false }
     setValue('sizes', [...sizes.filter(size => size !== 'one'), value], { shouldValidate: true })
     setValue('newSize', '')
     clearErrors('newSize')
+    return true
   }
   const fieldError = (key: 'name_en' | 'name_ar' | 'description_en' | 'description_ar' | 'group_key' | 'default_qty' | 'sizes') => errors[key]?.message ? <p id={`${id}-${key}-error`} role="alert" className="text-xs text-destructive-text">{t(errors[key].message)}</p> : null
-  return <form noValidate className="flex min-h-0 flex-1 flex-col" aria-busy={busy} onSubmit={handleSubmit(values => {
-    if (!editable || busy || reason || !values.drawing || !values.group_key) return
-    mutation.mutate({ name_en: values.name_en, name_ar: values.name_ar, description_en: values.description_en || null, description_ar: values.description_ar || null, group_key: values.group_key, drawing: values.drawing, default_qty: Number(values.default_qty), sizes: values.sizes }, { onSuccess: () => { toast.success(t('assets.uniform.itemSaved')); onOpenChange(false) } })
-  })}>
+  return <form noValidate className="flex min-h-0 flex-1 flex-col" aria-busy={busy} onSubmit={event => {
+    setReviewSize(false)
+    // Review pending size text before validation or any persisted mutation.
+    if (getValues('newSize').trim()) {
+      event.preventDefault()
+      if (stage()) setReviewSize(true)
+      return
+    }
+    void handleSubmit(values => {
+      if (!editable || busy || reason || !values.drawing || !values.group_key) return
+      mutation.mutate({ name_en: values.name_en, name_ar: values.name_ar, description_en: values.description_en || null, description_ar: values.description_ar || null, group_key: values.group_key, drawing: values.drawing, default_qty: Number(values.default_qty), sizes: values.sizes }, { onSuccess: () => { toast.success(t('assets.uniform.itemSaved')); onOpenChange(false) } })
+    })(event)
+  }}>
     <DialogBody>
       <FormAlert id={`${id}-refresh-error`} message={refreshFailed ? t('assets.uniform.refreshError') : null} />
       {refreshFailed && <Button type="button" variant="ghost" className="min-h-11 self-start" disabled={busy} onClick={onRetry}>{t('assets.uniform.retry')}</Button>}
@@ -98,12 +110,12 @@ function AddItemForm({ items, mutation, refreshFailed, onRetry, onOpenChange }: 
         <section className="mt-5 space-y-3" aria-labelledby={`${id}-sizes-title`}><h3 id={`${id}-sizes-title`} className="text-sm font-semibold">{t('assets.uniform.sizes')}</h3>
           <label className="flex flex-col gap-1.5 text-sm" htmlFor={`${id}-preset`}>{t('assets.uniform.preset')}<select id={`${id}-preset`} {...register('preset', { onChange: (event: React.ChangeEvent<HTMLSelectElement>) => { const key = event.target.value; if (key === 'letters' || key === 'shoe' || key === 'waist' || key === 'one') { setValue('sizes', [...presets[key]], { shouldValidate: true }); clearErrors('newSize') } } })} className="min-h-11 rounded-md border border-input bg-background px-3">{Object.keys(presets).map(key => <option key={key} value={key}>{t(`assets.uniform.presets.${key}`)}</option>)}</select></label>
           <div className="flex flex-wrap gap-2">{sizes.map(size => <Button key={size} type="button" variant="secondary" className="min-h-11 gap-2" disabled={sizes.length <= 1} aria-label={t('assets.uniform.removeSize', { size: size === 'one' ? t('assets.uniform.oneSize') : size })} onClick={() => setValue('sizes', sizes.filter(value => value !== size), { shouldValidate: true })}>{size === 'one' ? t('assets.uniform.oneSize') : <bdi dir="ltr">{size}</bdi>}<span aria-hidden>×</span></Button>)}</div>
-          <div className="flex items-end gap-2"><div className="min-w-0 max-w-[200px] flex-1 space-y-1.5"><label htmlFor={`${id}-size`} className="text-sm font-medium">{t('assets.uniform.addSize')}</label><Input id={`${id}-size`} {...register('newSize')} className="min-h-11" dir="ltr" maxLength={16} aria-invalid={!!errors.newSize} aria-describedby={`${id}-size-error`} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); stage() } }} /></div><Button type="button" variant="secondary" className="min-h-11" onClick={stage}>{t('assets.uniform.add')}</Button></div>
+          <div className="flex items-end gap-2"><div className="min-w-0 max-w-[200px] flex-1 space-y-1.5"><label htmlFor={`${id}-size`} className="text-sm font-medium">{t('assets.uniform.addSize')}</label><Input id={`${id}-size`} {...register('newSize', { onChange: () => setReviewSize(false) })} className="min-h-11" dir="ltr" maxLength={16} aria-invalid={!!errors.newSize} aria-describedby={`${id}-size-error`} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); stage() } }} /></div><Button type="button" variant="secondary" className="min-h-11" onClick={stage}>{t('assets.uniform.add')}</Button></div>
           <p id={`${id}-size-error`} role={errors.newSize ? 'alert' : undefined} className="text-xs text-destructive-text">{errors.newSize?.message ? t(errors.newSize.message) : ''}</p>{fieldError('sizes')}
         </section>
         <div className="mt-5"><DrawingPicker items={items} value={drawing} onChange={value => setValue('drawing', value)} disabled={busy || !editable} /></div>
       </fieldset>
     </DialogBody>
-    <DialogFooter><p id={`${id}-reason`} role="status" className="me-auto text-sm text-muted-foreground">{reason}</p><Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={() => onOpenChange(false)}>{t('assets.uniform.cancel')}</Button><Button type="submit" className="min-h-11" disabled={!!reason || busy || !editable} aria-describedby={`${id}-reason`}>{t('assets.uniform.save')}</Button></DialogFooter>
+    <DialogFooter><p id={`${id}-reason`} role="status" className="me-auto text-sm text-muted-foreground">{reason}{reviewSize && <span className="block">{t('assets.uniform.sizeStaged')}</span>}</p><Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={() => onOpenChange(false)}>{t('assets.uniform.cancel')}</Button><Button type="submit" className="min-h-11" disabled={(!!reason && !pendingSize) || busy || !editable} aria-describedby={`${id}-reason`}>{t('assets.uniform.save')}</Button></DialogFooter>
   </form>
 }

@@ -705,6 +705,41 @@ def test_one_size_cannot_be_mixed_or_renamed_away_on_update(db: Session) -> None
     assert svc.update_size(db, m, {"min_qty": 2, "sort_order": 1}).min_qty == 2
 
 
+@pytest.mark.parametrize(
+    ("original", "replacement"),
+    [(("one",), ("M", "L")), (("S", "M"), ("one",))],
+)
+@pytest.mark.parametrize("has_history", [False, True])
+def test_one_size_replacement_succeeds_after_removing_old_sizes(
+    db: Session, original: tuple[str, ...], replacement: tuple[str, ...], has_history: bool
+) -> None:
+    item = _polo(db, original)
+    old_ids = [_sid(item, label) for label in original]
+    if has_history:
+        for size_id in old_ids:
+            _stock(db, size_id, 1)
+            svc.create_adjustments(
+                db, lines=[AdjustmentLineIn(size_id, -1, 1)], reason="Count correction"
+            )
+    with pytest.raises(AppError) as exc:
+        svc.add_size(db, item.id, label=replacement[0])
+    assert _code(exc) == "uniform_sizes_fixed"
+    for size_id in old_ids:
+        assert svc.remove_size(db, size_id) == ("archived" if has_history else "deleted")
+    for label in replacement:
+        svc.add_size(db, item.id, label=label)
+    current = next(row for row in svc.item_reads(db) if row.id == item.id)
+    assert tuple(size.label for size in current.sizes) == replacement
+    assert all(size.on_hand == 0 for size in current.sizes)
+    if has_history:
+        history = next(
+            row for row in svc.item_reads(db, include_archived=True) if row.id == item.id
+        )
+        archived = {size.id: size for size in history.sizes if size.archived_at is not None}
+        assert set(archived) == set(old_ids)
+        assert {size.label for size in archived.values()} == set(original)
+
+
 def test_item_read_models_load_holdings_once_for_all_sizes(
     db: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:

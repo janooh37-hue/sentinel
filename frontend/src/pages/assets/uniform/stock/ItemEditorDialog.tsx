@@ -81,9 +81,11 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
   const rows = useWatch({ control, name: 'rows' })
   const drawing = useWatch({ control, name: 'drawing' })
   const reason = useWatch({ control, name: 'reason' })
+  const pendingSize = !!useWatch({ control, name: 'newSize' }).trim()
   const savedMetadata = useRef(metadata({ ...item, default_qty: String(item.default_qty), description_en: item.description_en ?? '', description_ar: item.description_ar ?? '' }))
   const version = useRef(item.version)
   const [error, setError] = useState<unknown>(null)
+  const [reviewSize, setReviewSize] = useState(false)
   const [action, setAction] = useState<'archive' | 'delete' | null>(null)
   const actionLock = useRef(false)
   const changedIds = useRef(new Set<number>())
@@ -102,8 +104,8 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
   const archiveBlocked = rows.some(row => row.baseline > 0 || row.held > 0) || item.holders.some(holder => holder.qty > 0)
   const activeIndices = rows.flatMap((row, index) => row.removed ? [] : [index])
   const sizeLabel = (label: string) => label === 'one' ? t('assets.uniform.oneSize') : label
-  function stageSize() {
-    if (busy || !editable || action) return
+  function stageSize(): boolean {
+    if (busy || !editable || action) return false
     const label = getValues('newSize').trim()
     const matching = rows.findIndex(row => row.label.toLowerCase() === label.toLowerCase())
     const active = rows.filter(row => !row.removed)
@@ -111,11 +113,12 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
       ? active.some(row => row.label.toLowerCase() !== 'one')
       : active.some(row => row.label.toLowerCase() === 'one')
     const message = !label ? 'assets.uniform.sizeRequired' : label.length > 16 ? 'assets.uniform.errors.invalidSizeLabel' : matching >= 0 && !rows[matching].removed ? 'assets.uniform.sizeDuplicate' : oneSizeConflict ? 'assets.uniform.errors.sizesFixed' : ''
-    if (message) { setFieldError('newSize', { message }); return }
+    if (message) { setFieldError('newSize', { message }); return false }
     if (matching >= 0) setValue(`rows.${matching}.removed`, false)
     else append({ id: null, label, qty: '0', baseline: 0, min: '', savedMin: null, savedOrder: -1, held: 0, removed: false }, { shouldFocus: false })
     setValue('newSize', '')
     clearErrors('newSize')
+    return true
   }
   async function save(values: Values) {
     if (disabledReason || busy || !editable || action || actionLock.current) return
@@ -125,6 +128,16 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
     // identifiers and versions so a later failure can be retried without replay.
     const nextRows = values.rows.map(row => ({ ...row, qty: String(whole(row.qty)), min: row.min === '' ? '' : String(whole(row.min)) }))
     const syncRows = () => setValue('rows', nextRows.map(row => ({ ...row })))
+    const removeRow = async (row: Values['rows'][number]) => {
+      if (row.id === null) return
+      await removeSize.mutateAsync(row.id)
+      changedIds.current.add(row.id)
+      row.id = null
+      row.baseline = 0
+      row.savedMin = null
+      row.savedOrder = -1
+      syncRows()
+    }
     syncRows()
     try {
       const nextMetadata = metadata(values)
@@ -136,6 +149,14 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
         const updated = await updateItem.mutateAsync({ id: item.id, body, ifMatch: version.current })
         version.current = updated.version
         savedMetadata.current = nextMetadata
+      }
+      // The server forbids mixing active "one" and named sizes. Commit only
+      // conflicting removals early; unrelated removals still follow adjustments.
+      const replacements = nextRows.filter(row => !row.removed && row.id === null)
+      for (const row of nextRows) {
+        if (row.removed && replacements.some(replacement => (replacement.label.toLowerCase() === 'one') !== (row.label.toLowerCase() === 'one'))) {
+          await removeRow(row)
+        }
       }
       let order = 0
       for (const row of nextRows) {
@@ -169,12 +190,7 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
         syncRows()
       }
       for (const row of nextRows) {
-        if (row.removed && row.id !== null) {
-          await removeSize.mutateAsync(row.id)
-          changedIds.current.add(row.id)
-          row.id = null
-          syncRows()
-        }
+        if (row.removed) await removeRow(row)
       }
       toast.success(t('assets.uniform.saved'))
       onSuccess?.([...changedIds.current])
@@ -201,7 +217,16 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
   const fieldError = (key: 'name_en' | 'name_ar' | 'description_en' | 'description_ar' | 'default_qty' | 'reason') => errors[key]?.message ? <p id={`${id}-${key}-error`} role="alert" className="text-sm text-destructive-text">{t(errors[key].message)}</p> : null
   return <DialogShell open={open} onOpenChange={onOpenChange} title={t('assets.uniform.editItem')} description={name} size="lg" busy={busy} returnFocusRef={returnFocusRef}
     onOpenAutoFocus={event => { const input = document.getElementById(`${id}-form`)?.querySelector<HTMLInputElement>('input[type="number"], input[type="radio"]:checked'); if (input) { event.preventDefault(); input.focus() } }}>
-    <form id={`${id}-form`} noValidate className="flex min-h-0 flex-1 flex-col" aria-busy={busy} onSubmit={event => void handleSubmit(save)(event)}>
+    <form id={`${id}-form`} noValidate className="flex min-h-0 flex-1 flex-col" aria-busy={busy} onSubmit={event => {
+      setReviewSize(false)
+      // Staging must precede RHF validation and writes, and always needs review.
+      if (getValues('newSize').trim()) {
+        event.preventDefault()
+        if (stageSize()) setReviewSize(true)
+        return
+      }
+      void handleSubmit(save)(event)
+    }}>
       <DialogBody>
         <FormAlert id={`${id}-error`} message={error ? uniformErrorMessage(error) : null} />
         <FormAlert id={`${id}-refresh-error`} message={items.isError ? t(items.data ? 'assets.uniform.refreshError' : 'assets.uniform.error') : null} />
@@ -235,7 +260,7 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
               })}
               <p id={`${id}-threshold-hint`} className="text-xs text-muted-foreground">{t('assets.uniform.minQtyHint')}</p>
             </fieldset>
-            {!rows.some(row => !row.removed && row.label.toLowerCase() === 'one') && <div><div className="flex items-end gap-2"><label className="grid w-full max-w-[200px] gap-1 text-sm">{t('assets.uniform.addSize')}<Input {...register('newSize')} maxLength={16} dir="ltr" className="min-h-11" aria-invalid={!!errors.newSize} aria-describedby={`${id}-size-error`} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); stageSize() } }} /></label><Button type="button" variant="secondary" className="min-h-11" onClick={stageSize}>{t('assets.uniform.add')}</Button></div>{errors.newSize?.message && <p id={`${id}-size-error`} role="alert" className="mt-1 text-sm text-destructive-text">{t(errors.newSize.message)}</p>}</div>}
+            {!rows.some(row => !row.removed && row.label.toLowerCase() === 'one') && <div><div className="flex items-end gap-2"><label className="grid w-full max-w-[200px] gap-1 text-sm">{t('assets.uniform.addSize')}<Input {...register('newSize', { onChange: () => setReviewSize(false) })} maxLength={16} dir="ltr" className="min-h-11" aria-invalid={!!errors.newSize} aria-describedby={`${id}-size-error`} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); stageSize() } }} /></label><Button type="button" variant="secondary" className="min-h-11" onClick={stageSize}>{t('assets.uniform.add')}</Button></div>{errors.newSize?.message && <p id={`${id}-size-error`} role="alert" className="mt-1 text-sm text-destructive-text">{t(errors.newSize.message)}</p>}</div>}
             {quantityChanged && <div><label className="grid gap-1 text-sm">{t('assets.uniform.adjustmentReason')}<Input {...register('reason')} maxLength={500} dir="auto" className="min-h-11" required aria-invalid={!!errors.reason} aria-describedby={errors.reason ? `${id}-reason-error` : `${id}-reason`} /></label>{fieldError('reason')}</div>}
           </>}
           {items.data ? <DrawingPicker items={items.data} currentItemId={item.id} value={drawing} onChange={value => setValue('drawing', value)} disabled={busy || !!action} /> : !items.isError && <p role="status">{t('assets.uniform.loading')}</p>}
@@ -245,9 +270,9 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
         </section>
       </DialogBody>
       <DialogFooter>
-        <p id={`${id}-reason`} role="status" className="me-auto text-sm text-muted-foreground">{disabledReason}</p>
+        <p id={`${id}-reason`} role="status" className="me-auto text-sm text-muted-foreground">{disabledReason}{reviewSize && <span className="block">{t('assets.uniform.sizeStaged')}</span>}</p>
         <Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={() => onOpenChange(false)}>{t('assets.uniform.cancel')}</Button>
-        <Button type="submit" className="min-h-11" disabled={!!disabledReason || busy || !editable || !!action} aria-describedby={`${id}-reason`}>{t('assets.uniform.save')}</Button>
+        <Button type="submit" className="min-h-11" disabled={(!!disabledReason && !pendingSize) || busy || !editable || !!action} aria-describedby={`${id}-reason`}>{t('assets.uniform.save')}</Button>
       </DialogFooter>
     </form>
   </DialogShell>

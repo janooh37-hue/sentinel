@@ -108,6 +108,267 @@ describe('Update uniform item', () => {
     expect(api.removeUniformSize).not.toHaveBeenCalled()
     expect(api.createUniformAdjustments).not.toHaveBeenCalled()
   })
+  it('stages pending size text before validating metadata and requires a second Save', async () => {
+    const { onOpenChange } = mount()
+    const user = userEvent.setup()
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    fireEvent.change(screen.getByLabelText('Name in English'), { target: { value: '' } })
+    await user.type(screen.getByLabelText('Add size'), '  Tall  ')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Tall' })).toHaveValue(0)
+    expect(screen.getByLabelText('Add size')).toHaveValue('')
+    expect(api.updateUniformItem).not.toHaveBeenCalled()
+    expect(api.addUniformSize).not.toHaveBeenCalled()
+    expect(api.updateUniformSize).not.toHaveBeenCalled()
+    expect(api.removeUniformSize).not.toHaveBeenCalled()
+    expect(api.createUniformAdjustments).not.toHaveBeenCalled()
+    expect(onOpenChange).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('This name is required.')).toBeInTheDocument()
+    expect(api.addUniformSize).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText('Name in English'), { target: { value: ITEM.name_en } })
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(api.addUniformSize).toHaveBeenCalledTimes(1)
+    expect(api.addUniformSize).toHaveBeenCalledWith(2, { label: 'Tall', min_qty: null })
+  })
+  it.each(['en', 'ar'])('announces pending size review without saving in %s', async language => {
+    await i18n.changeLanguage(language)
+    const { onOpenChange } = mount()
+    const user = userEvent.setup()
+    const save = screen.getByRole('button', { name: i18n.t('assets.uniform.save') })
+    await waitFor(() => expect(save).toBeEnabled())
+    const field = screen.getByLabelText(i18n.t('assets.uniform.addSize'))
+    for (const label of ['Tall', 'Wide']) {
+      await user.type(field, label)
+      expect(screen.getByRole('status')).not.toHaveTextContent(i18n.t('assets.uniform.sizeStaged'))
+      await user.click(save)
+      expect(screen.getByRole('status')).toHaveTextContent(i18n.t('assets.uniform.sizeStaged'))
+    }
+    expect(api.addUniformSize).not.toHaveBeenCalled()
+    expect(api.updateUniformItem).not.toHaveBeenCalled()
+    expect(api.createUniformAdjustments).not.toHaveBeenCalled()
+    expect(onOpenChange).not.toHaveBeenCalled()
+  })
+  it.each([
+    [' m ', 'assets.uniform.sizeDuplicate'],
+    ['abcdefghijklmnopq', 'assets.uniform.errors.invalidSizeLabel'],
+    [' ONE ', 'assets.uniform.errors.sizesFixed'],
+  ])('preserves invalid pending %j and blocks all writes until corrected and reviewed', async (pending, key) => {
+    const { onOpenChange } = mount()
+    const user = userEvent.setup()
+    const field = await screen.findByLabelText('Add size')
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    fireEvent.change(screen.getByLabelText('Name in English'), { target: { value: 'Changed shirt' } })
+    fireEvent.change(field, { target: { value: pending } })
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+      expect(screen.getByRole('alert')).toHaveTextContent(i18n.t(key))
+      expect(field).toHaveValue(pending)
+      expect(field).toHaveAttribute('aria-invalid', 'true')
+      expect(api.updateUniformItem).not.toHaveBeenCalled()
+      expect(api.addUniformSize).not.toHaveBeenCalled()
+      expect(api.updateUniformSize).not.toHaveBeenCalled()
+      expect(api.removeUniformSize).not.toHaveBeenCalled()
+      expect(api.createUniformAdjustments).not.toHaveBeenCalled()
+      expect(onOpenChange).not.toHaveBeenCalled()
+    }
+    fireEvent.change(field, { target: { value: ' Tall ' } })
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Tall' })).toHaveValue(0)
+    expect(api.updateUniformItem).not.toHaveBeenCalled()
+    expect(api.addUniformSize).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(api.updateUniformItem).toHaveBeenCalledTimes(1)
+    expect(api.addUniformSize).toHaveBeenCalledTimes(1)
+  })
+  it('reviews a pending restoration before saving its original quantity and threshold', async () => {
+    const { onOpenChange } = mount({ ...ITEM, sizes: [{ ...ITEM.sizes[0], on_hand: 0, min_qty: 2 }] })
+    const user = userEvent.setup()
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    fireEvent.change(screen.getByLabelText('Quantity of M'), { target: { value: '3' } })
+    fireEvent.change(screen.getByLabelText('Reason for adjustment'), { target: { value: 'Found stock' } })
+    await user.click(screen.getByRole('button', { name: 'Remove size M' }))
+    await user.type(screen.getByLabelText('Add size'), ' m ')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(screen.getByLabelText('Quantity of M')).toHaveValue(3)
+    expect(screen.getByLabelText('Alert at M')).toHaveValue(2)
+    expect(screen.getByLabelText('Reason for adjustment')).toHaveValue('Found stock')
+    expect(api.removeUniformSize).not.toHaveBeenCalled()
+    expect(api.addUniformSize).not.toHaveBeenCalled()
+    expect(api.createUniformAdjustments).not.toHaveBeenCalled()
+    expect(onOpenChange).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(api.createUniformAdjustments).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [{ size_id: 21, delta: 3, expected_on_hand: 0 }], reason: 'Found stock',
+    }))
+    expect(api.addUniformSize).not.toHaveBeenCalled()
+    expect(api.removeUniformSize).not.toHaveBeenCalled()
+  })
+  it('reviews pending text even when an unrelated quantity still needs its adjustment reason', async () => {
+    const { onOpenChange } = mount()
+    const user = userEvent.setup()
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    fireEvent.change(screen.getByLabelText('Quantity of M'), { target: { value: '7' } })
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await user.type(screen.getByLabelText('Add size'), 'Tall')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(screen.getByLabelText('Quantity of Tall')).toHaveValue(0)
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(api.addUniformSize).not.toHaveBeenCalled()
+    expect(api.createUniformAdjustments).not.toHaveBeenCalled()
+    expect(onOpenChange).not.toHaveBeenCalled()
+    await user.type(screen.getByLabelText('Reason for adjustment'), 'Count')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(api.addUniformSize).toHaveBeenCalledTimes(1)
+    expect(api.createUniformAdjustments).toHaveBeenCalledTimes(1)
+  })
+  it('ignores whitespace-only pending text without creating a size', async () => {
+    const { onOpenChange } = mount()
+    const user = userEvent.setup()
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    await user.type(screen.getByLabelText('Add size'), '   ')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(api.addUniformSize).not.toHaveBeenCalled()
+  })
+  it.each([
+    { labels: ['one'], replacement: 'M', history: false },
+    { labels: ['one'], replacement: 'M', history: true },
+    { labels: ['M'], replacement: 'one', history: false },
+    { labels: ['M', 'L'], replacement: 'one', history: true },
+  ])('saves $labels → $replacement with history=$history by removing zero-stock conflicts before creation', async ({ labels, replacement, history }) => {
+    const sizes = labels.map((label, index) => ({ ...ITEM.sizes[0], id: 21 + index, label, on_hand: 0, sort_order: index }))
+    let catalogue = sizes.map(size => ({ ...size }))
+    const operations: string[] = []
+    vi.mocked(api.listUniformItems).mockImplementation(async () => [{ ...ITEM, sizes: catalogue }])
+    vi.mocked(api.removeUniformSize).mockImplementation(async sizeId => {
+      const size = catalogue.find(row => row.id === sizeId)!
+      expect(size.on_hand).toBe(0)
+      expect(size.held_qty).toBe(0)
+      operations.push(`remove:${sizeId}`)
+      catalogue = history ? catalogue.map(row => row.id === sizeId ? { ...row, archived_at: '2026-11-04' } : row) : catalogue.filter(row => row.id !== sizeId)
+    })
+    vi.mocked(api.addUniformSize).mockImplementation(async (itemId, body) => {
+      const active = catalogue.filter(size => !size.archived_at)
+      if (active.some(size => size.label === 'one') || (body.label === 'one' && active.length > 0)) {
+        throw new ApiError(422, 'uniform_sizes_fixed', 'Conflicting active sizes')
+      }
+      operations.push(`add:${body.label}`)
+      const created = { ...sizes[0], id: 25, item_id: itemId, label: body.label, min_qty: body.min_qty ?? null, sort_order: Math.max(-1, ...catalogue.map(size => size.sort_order)) + 1 }
+      catalogue = [...catalogue, created]
+      return created
+    })
+    const { onOpenChange, onSuccess } = mount({ ...ITEM, sizes })
+    const user = userEvent.setup()
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    // A staged quantity on a removed row must not become an obsolete adjustment.
+    fireEvent.change(screen.getByLabelText(`Quantity of ${labels[0] === 'one' ? 'One size' : labels[0]}`), { target: { value: '3' } })
+    for (const label of labels) await user.click(screen.getByRole('button', { name: `Remove size ${label === 'one' ? 'One size' : label}` }))
+    await user.type(screen.getByLabelText('Add size'), ` ${replacement} `)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(screen.getByLabelText(`Quantity of ${replacement === 'one' ? 'One size' : replacement}`)).toHaveValue(0)
+    expect(operations).toEqual([])
+    expect(onOpenChange).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(operations).toEqual([...sizes.map(size => `remove:${size.id}`), `add:${replacement}`])
+    expect(catalogue.filter(size => !size.archived_at).map(size => size.label)).toEqual([replacement])
+    expect(catalogue.filter(size => !!size.archived_at)).toHaveLength(history ? sizes.length : 0)
+    expect(api.createUniformAdjustments).not.toHaveBeenCalled()
+    if (history) expect(api.updateUniformSize).toHaveBeenCalledWith(25, { sort_order: 0 })
+    else expect(api.updateUniformSize).not.toHaveBeenCalled()
+    expect(onSuccess).toHaveBeenCalledWith([...sizes.map(size => size.id), 25])
+  })
+  it('retries a replacement after another removal and creation fail without repeating committed writes', async () => {
+    const empty = { ...ITEM.sizes[0], on_hand: 0 }
+    const sizes = [empty, { ...empty, id: 22, label: 'L', sort_order: 1 }]
+    const activeIds = new Set([21, 22])
+    let failedRemoval = false
+    let failedCreation = false
+    vi.mocked(api.removeUniformSize).mockImplementation(async sizeId => {
+      if (sizeId === 22 && !failedRemoval) {
+        failedRemoval = true
+        throw new ApiError(409, 'uniform_write_conflict', 'Conflict')
+      }
+      expect(activeIds.delete(sizeId)).toBe(true)
+    })
+    vi.mocked(api.addUniformSize).mockImplementation(async (itemId, body) => {
+      expect(activeIds.size).toBe(0)
+      if (!failedCreation) {
+        failedCreation = true
+        throw new ApiError(409, 'uniform_write_conflict', 'Conflict')
+      }
+      activeIds.add(25)
+      return { ...empty, id: 25, item_id: itemId, label: body.label, sort_order: 0 }
+    })
+    vi.mocked(api.createUniformAdjustments).mockRejectedValueOnce(new ApiError(409, 'uniform_stale_count', 'Conflict')).mockResolvedValueOnce([])
+    const { onOpenChange } = mount({ ...ITEM, sizes })
+    const user = userEvent.setup()
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    for (const label of ['M', 'L']) await user.click(screen.getByRole('button', { name: `Remove size ${label}` }))
+    await user.type(screen.getByLabelText('Add size'), 'one{Enter}')
+    fireEvent.change(screen.getByLabelText('Quantity of One size'), { target: { value: '2' } })
+    await user.type(screen.getByLabelText('Reason for adjustment'), 'Found stock')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByRole('alert')
+    expect(api.addUniformSize).not.toHaveBeenCalled()
+    expect(onOpenChange).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.addUniformSize).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled())
+    expect(onOpenChange).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.createUniformAdjustments).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled())
+    expect(onOpenChange).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(vi.mocked(api.removeUniformSize).mock.calls.map(([sizeId]) => sizeId)).toEqual([21, 22, 22])
+    expect(api.addUniformSize).toHaveBeenCalledTimes(2)
+    expect(activeIds).toEqual(new Set([25]))
+    expect(api.createUniformAdjustments).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      lines: [{ size_id: 25, delta: 2, expected_on_hand: 0 }],
+    }))
+  })
+  it('retries multiple named replacements without recreating a committed size or deleting one size twice', async () => {
+    const one = { ...ITEM.sizes[0], label: 'one', on_hand: 0 }
+    const active = new Set(['one'])
+    let failLarge = true
+    vi.mocked(api.removeUniformSize).mockImplementation(async sizeId => {
+      expect(sizeId).toBe(21)
+      expect(active.delete('one')).toBe(true)
+    })
+    vi.mocked(api.addUniformSize).mockImplementation(async (itemId, body) => {
+      expect(active.has('one')).toBe(false)
+      expect(active.has(body.label)).toBe(false)
+      if (body.label === 'L' && failLarge) {
+        failLarge = false
+        throw new ApiError(409, 'uniform_write_conflict', 'Conflict')
+      }
+      active.add(body.label)
+      return { ...one, item_id: itemId, id: body.label === 'M' ? 25 : 26, label: body.label, sort_order: body.label === 'M' ? 0 : 1 }
+    })
+    const { onOpenChange, onSuccess } = mount({ ...ITEM, sizes: [one] })
+    const user = userEvent.setup()
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    await user.click(screen.getByRole('button', { name: 'Remove size One size' }))
+    await user.type(screen.getByLabelText('Add size'), 'M{Enter}L{Enter}')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByRole('alert')
+    expect(active).toEqual(new Set(['M']))
+    expect(onOpenChange).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(api.removeUniformSize).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(api.addUniformSize).mock.calls.map(([, body]) => body.label)).toEqual(['M', 'L', 'L'])
+    expect(active).toEqual(new Set(['M', 'L']))
+    expect(api.createUniformAdjustments).not.toHaveBeenCalled()
+    expect(onSuccess).toHaveBeenCalledWith([21, 25, 26])
+  })
   it('restores a size after a partially committed removal without replaying that deletion', async () => {
     const empty = { ...ITEM.sizes[0], on_hand: 0 }
     vi.mocked(api.removeUniformSize).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new ApiError(409, 'uniform_write_conflict', 'Conflict')).mockResolvedValueOnce(undefined)

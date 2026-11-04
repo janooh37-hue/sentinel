@@ -635,7 +635,7 @@ def add_size(
             raise ConflictError("uniform_size_exists", "This size already exists.", label=clean)
         highest = max((s.sort_order for s in item.sizes), default=-1)
         size = UniformSize(item_id=item.id, label=clean, sort_order=highest + 1, min_qty=minimum)
-        db.add(size)
+        item.sizes.append(size)
         db.flush()
         append_audit(
             db,
