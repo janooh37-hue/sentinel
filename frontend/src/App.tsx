@@ -110,6 +110,7 @@ const StoreCountsPage = lazy(loadStoreCountsPage)
 const StoreCountPage = lazy(loadStoreCountPage)
 const StoreDisposalsPage = lazy(loadStoreDisposalsPage)
 const StoreMovementsPage = lazy(loadStoreMovementsPage)
+const UniformPage = lazy(() => import('@/pages/assets/uniform/UniformPage').then(m => ({ default: m.UniformPage })))
 const LedgerPage = lazy(loadLedgerPage)
 const SettingsPage = lazy(loadSettingsPage)
 const DashboardPage = lazy(loadDashboardPage)
@@ -530,6 +531,10 @@ function Shell(): React.JSX.Element {
                 }
               />
               <Route path="/holdings" element={<Navigate to="/holdings/store" replace />} />
+              <Route
+                path="/holdings/uniform"
+                element={<RequireCapability cap="uniform.view"><UniformPage /></RequireCapability>}
+              />
               <Route
                 path="/holdings/store"
                 element={

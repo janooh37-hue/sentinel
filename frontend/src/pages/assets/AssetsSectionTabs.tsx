@@ -1,7 +1,6 @@
 /**
- * AssetsSectionTabs — the Assets section switcher, at the foot of the navy
- * band, styled like `EmployeesSectionTabs`. Store is the only tab today; a
- * site-assets tab slots in as another `NavLink` with its own capability gate.
+ * AssetsSectionTabs: the capability-gated Assets section switcher at the foot
+ * of the navy band. Each section owns its own subnavigation.
  *
  * Active state comes from `NavLink`: the route *is* the active tab.
  */
@@ -32,6 +31,11 @@ export function AssetsSectionTabs(): React.JSX.Element {
       {has('store.view') && (
         <NavLink to="/holdings/store" className={tabClass}>
           {t('assets.sectionTabs.store')}
+        </NavLink>
+      )}
+      {has('uniform.view') && (
+        <NavLink to="/holdings/uniform" className={tabClass}>
+          {t('assets.sectionTabs.uniform')}
         </NavLink>
       )}
     </nav>

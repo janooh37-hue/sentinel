@@ -1760,6 +1760,12 @@
       "uniform": "Uniform"
     },
     "uniform": {
+      "groups": {
+        "formal": "Formal",
+        "guard": "Guard uniform",
+        "winter": "Winter uniform"
+      },
+      "noItems": "No uniform pieces in the catalogue yet.",
       "docTitle": "Assets: Uniform",
       "themeLight": "Light theme",
       "themeDark": "Dark theme",
