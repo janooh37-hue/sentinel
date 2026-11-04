@@ -390,6 +390,31 @@ export type StoreUsage = components['schemas']['StoreUsage']
 export type StoreUsageRow = components['schemas']['StoreUsageRow']
 export type StoreSuggestion = components['schemas']['StoreSuggestion']
 
+export type UniformAdjustmentCreate = components['schemas']['UniformAdjustmentCreate']
+export type UniformAdjustmentLine = components['schemas']['UniformAdjustmentLine']
+export type UniformAdjustmentRead = components['schemas']['UniformAdjustmentRead']
+export type UniformEmployeeRead = components['schemas']['UniformEmployeeRead']
+export type UniformHolder = components['schemas']['UniformHolder']
+export type UniformHolding = components['schemas']['UniformHolding']
+export type UniformIssueCreate = components['schemas']['UniformIssueCreate']
+export type UniformIssueLine = components['schemas']['UniformIssueLine']
+export type UniformIssueRead = components['schemas']['UniformIssueRead']
+export type UniformItemCreate = components['schemas']['UniformItemCreate']
+export type UniformItemRead = components['schemas']['UniformItemRead']
+export type UniformItemUpdate = components['schemas']['UniformItemUpdate']
+export type UniformReceiptCreate = components['schemas']['UniformReceiptCreate']
+export type UniformReceiptLine = components['schemas']['UniformReceiptLine']
+export type UniformReceiptRead = components['schemas']['UniformReceiptRead']
+export type UniformRecipient = components['schemas']['UniformRecipient']
+export type UniformReturnCreate = components['schemas']['UniformReturnCreate']
+export type UniformReturnLine = components['schemas']['UniformReturnLine']
+export type UniformReturnRead = components['schemas']['UniformReturnRead']
+export type UniformSizeCreate = components['schemas']['UniformSizeCreate']
+export type UniformSizeRead = components['schemas']['UniformSizeRead']
+export type UniformSizeUpdate = components['schemas']['UniformSizeUpdate']
+export type UniformSummary = components['schemas']['UniformSummary']
+export type UniformVoid = components['schemas']['UniformVoid']
+
 export interface LeaveReturnBody {
   resumption_date: string // ISO yyyy-mm-dd
   delay_reason?: string
@@ -1885,6 +1910,48 @@ export const api = {
   listStoreMovements: (params: { kind?: StoreMovementKind; q?: string; from?: string; to?: string } = {}) =>
     request<StoreMovementRead[]>('GET', `/store/movements${qs(params)}`),
   getStoreDashboard: () => request<StoreDashboard>('GET', '/store/dashboard'),
+  // --- assets: uniform ---
+  listUniformItems: (includeArchived = false) =>
+    request<UniformItemRead[]>('GET', `/uniform/items${qs({ include_archived: includeArchived })}`),
+  createUniformItem: (body: UniformItemCreate) =>
+    request<UniformItemRead>('POST', '/uniform/items', body),
+  updateUniformItem: (id: number, body: UniformItemUpdate, ifMatch: string) =>
+    requestWithIfMatch<UniformItemRead>('PATCH', `/uniform/items/${id}`, ifMatch, body),
+  archiveUniformItem: (id: number) =>
+    request<UniformItemRead>('POST', `/uniform/items/${id}/archive`),
+  deleteUniformItem: (id: number) => request<void>('DELETE', `/uniform/items/${id}`),
+  addUniformSize: (itemId: number, body: UniformSizeCreate) =>
+    request<UniformSizeRead>('POST', `/uniform/items/${itemId}/sizes`, body),
+  updateUniformSize: (id: number, body: UniformSizeUpdate) =>
+    request<UniformSizeRead>('PATCH', `/uniform/sizes/${id}`, body),
+  removeUniformSize: (id: number) => request<void>('DELETE', `/uniform/sizes/${id}`),
+  listUniformReceipts: () => request<UniformReceiptRead[]>('GET', '/uniform/receipts'),
+  createUniformReceipt: (body: UniformReceiptCreate) =>
+    request<UniformReceiptRead>('POST', '/uniform/receipts', body),
+  listUniformIssues: (employeeId?: string) =>
+    request<UniformIssueRead[]>('GET', `/uniform/issues${qs({ employee_id: employeeId })}`),
+  createUniformIssue: (body: UniformIssueCreate) =>
+    request<UniformIssueRead>('POST', '/uniform/issues', body),
+  listUniformReturns: (employeeId?: string) =>
+    request<UniformReturnRead[]>('GET', `/uniform/returns${qs({ employee_id: employeeId })}`),
+  createUniformReturn: (body: UniformReturnCreate) =>
+    request<UniformReturnRead>('POST', '/uniform/returns', body),
+  listUniformAdjustments: () => request<UniformAdjustmentRead[]>('GET', '/uniform/adjustments'),
+  createUniformAdjustments: (body: UniformAdjustmentCreate) =>
+    request<UniformAdjustmentRead[]>('POST', '/uniform/adjustments', body),
+  voidUniformReceipt: (id: number, body: UniformVoid) =>
+    request<UniformReceiptRead>('POST', `/uniform/receipts/${id}/void`, body),
+  voidUniformIssue: (id: number, body: UniformVoid) =>
+    request<UniformIssueRead>('POST', `/uniform/issues/${id}/void`, body),
+  voidUniformReturn: (id: number, body: UniformVoid) =>
+    request<UniformReturnRead>('POST', `/uniform/returns/${id}/void`, body),
+  voidUniformAdjustment: (id: number, body: UniformVoid) =>
+    request<UniformAdjustmentRead>('POST', `/uniform/adjustments/${id}/void`, body),
+  listUniformRecipients: (q = '') =>
+    request<UniformRecipient[]>('GET', `/uniform/recipients${qs({ q })}`),
+  getUniformEmployee: (employeeId: string) =>
+    request<UniformEmployeeRead>('GET', `/uniform/employees/${encodeURIComponent(employeeId)}`),
+  getUniformSummary: () => request<UniformSummary>('GET', '/uniform/summary'),
   uploadLeaveCertificate: (id: number, file: File) => {
     const form = new FormData()
     form.append('file', file)
