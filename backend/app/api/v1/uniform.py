@@ -137,26 +137,28 @@ def create_receipt(payload: s.UniformReceiptCreate, db: _Db, user: _Edit):
 
 @router.get("/issues", response_model=list[s.UniformIssueRead])
 def issues(db: _Db, user: _View, employee_id: str | None = None):
-    return service.list_issues(db, employee_id=employee_id)
+    return service.issue_reads(db, service.list_issues(db, employee_id=employee_id))
 
 
 @router.post("/issues", response_model=s.UniformIssueRead, status_code=201)
 def create_issue(payload: s.UniformIssueCreate, db: _Db, user: _Edit):
     data = payload.model_dump()
     data["lines"] = [service.IssueLineIn(**line) for line in data["lines"]]
-    return service.create_issue(db, **data, actor=user.email, actor_user_id=user.id)
+    row = service.create_issue(db, **data, actor=user.email, actor_user_id=user.id)
+    return service.issue_reads(db, [row])[0]
 
 
 @router.get("/returns", response_model=list[s.UniformReturnRead])
 def returns(db: _Db, user: _View, employee_id: str | None = None):
-    return service.list_returns(db, employee_id=employee_id)
+    return service.return_reads(db, service.list_returns(db, employee_id=employee_id))
 
 
 @router.post("/returns", response_model=s.UniformReturnRead, status_code=201)
 def create_return(payload: s.UniformReturnCreate, db: _Db, user: _Edit):
     data = payload.model_dump()
     data["lines"] = [service.ReturnLineIn(**line) for line in data["lines"]]
-    return service.create_return(db, **data, actor=user.email, actor_user_id=user.id)
+    row = service.create_return(db, **data, actor=user.email, actor_user_id=user.id)
+    return service.return_reads(db, [row])[0]
 
 
 @router.get("/adjustments", response_model=list[s.UniformAdjustmentRead])
@@ -180,16 +182,18 @@ def void_receipt(record_id: int, payload: s.UniformVoid, db: _Db, user: _Edit):
 
 @router.post("/issues/{record_id}/void", response_model=s.UniformIssueRead)
 def void_issue(record_id: int, payload: s.UniformVoid, db: _Db, user: _Edit):
-    return service.void_issue(
+    row = service.void_issue(
         db, record_id, reason=payload.reason, actor=user.email, actor_user_id=user.id
     )
+    return service.issue_reads(db, [row])[0]
 
 
 @router.post("/returns/{record_id}/void", response_model=s.UniformReturnRead)
 def void_return(record_id: int, payload: s.UniformVoid, db: _Db, user: _Edit):
-    return service.void_return(
+    row = service.void_return(
         db, record_id, reason=payload.reason, actor=user.email, actor_user_id=user.id
     )
+    return service.return_reads(db, [row])[0]
 
 
 @router.post("/adjustments/{record_id}/void", response_model=s.UniformAdjustmentRead)
@@ -230,8 +234,8 @@ def employee(employee_id: str, db: _Db, user: _View):
         raise NotFoundError("uniform_employee_not_found", "Employee not found.")
     return s.UniformEmployeeRead(
         holdings=uniform_repo.holdings(db, employee_id=employee_id),
-        issues=service.list_issues(db, employee_id=employee_id),
-        returns=service.list_returns(db, employee_id=employee_id),
+        issues=service.issue_reads(db, service.list_issues(db, employee_id=employee_id)),
+        returns=service.return_reads(db, service.list_returns(db, employee_id=employee_id)),
     )
 
 

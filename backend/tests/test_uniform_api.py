@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import Employee, User, UserPermission
+from app.db.models import Employee, UniformIssue, UniformReturn, User, UserPermission
 from app.db.session import get_db
 from app.main import create_app
 from app.services import uniform_service
@@ -16,12 +16,14 @@ ROOT = "/api/v1/uniform"
 TODAY = date(2026, 11, 4)
 
 
-def client_for(db, role="operator", grants=()):
+def client_for(db, role="operator", grants=(), *, employee_id=None, display_name=None):
     user = User(
         email=f"{role}-{len(db.query(User).all())}@test.ae",
         password_hash="x",
         role=role,
         status="active",
+        employee_id=employee_id,
+        display_name=display_name,
     )
     db.add(user)
     db.commit()
@@ -254,3 +256,140 @@ def test_viewer_cannot_mutate_existing_stock(editor, api_db):
     current = editor.get(ROOT + "/items").json()[0]
     assert current["name_en"] == "Polo"
     assert current["sizes"][0]["on_hand"] == 0
+
+
+def test_actor_names_follow_signed_in_giver_and_receiver_on_every_response(editor, api_db):
+    api_db.add_all(
+        [
+            Employee(id="G2", name_en="Uniform Giver", name_ar="مسؤول التسليم"),
+            Employee(id="G3", name_en="Uniform Receiver", name_ar="مسؤول الاستلام"),
+        ]
+    )
+    api_db.commit()
+    giver = client_for(
+        api_db,
+        grants=("uniform.view", "uniform.edit"),
+        employee_id="G2",
+        display_name="Not the linked giver",
+    )
+    receiver = client_for(
+        api_db,
+        grants=("uniform.view", "uniform.edit"),
+        employee_id="G3",
+        display_name="Not the linked receiver",
+    )
+    item = create_item(editor)
+    size = item["sizes"][0]["id"]
+    receipt = editor.post(
+        ROOT + "/receipts", json={"received_on": str(TODAY), "lines": [{"size_id": size, "qty": 3}]}
+    )
+    assert receipt.status_code == 201, receipt.text
+    issue = giver.post(
+        ROOT + "/issues",
+        json={"employee_id": "G1", "lines": [{"item_id": item["id"], "size_id": size, "qty": 3}]},
+    )
+    assert issue.status_code == 201, issue.text
+    returned = receiver.post(
+        ROOT + "/returns",
+        json={
+            "employee_id": "G1",
+            "lines": [{"item_id": item["id"], "size_id": size, "qty": 1, "condition": "damaged"}],
+        },
+    )
+    assert returned.status_code == 201, returned.text
+    giver_id = api_db.query(User).filter_by(employee_id="G2").one().id
+    receiver_id = api_db.query(User).filter_by(employee_id="G3").one().id
+
+    def assert_actor_rows(issues, returns):
+        assert len(issues) == len(returns) == 1
+        assert issues[0]["employee_id"] == returns[0]["employee_id"] == "G1"
+        assert issues[0]["created_by_id"] == giver_id
+        assert returns[0]["created_by_id"] == receiver_id
+        assert (issues[0]["given_by_name_en"], issues[0]["given_by_name_ar"]) == (
+            "Uniform Giver",
+            "مسؤول التسليم",
+        )
+        assert (returns[0]["received_by_name_en"], returns[0]["received_by_name_ar"]) == (
+            "Uniform Receiver",
+            "مسؤول الاستلام",
+        )
+
+    def assert_read_responses():
+        for query in ("", "?employee_id=G1"):
+            issues = editor.get(ROOT + "/issues" + query)
+            returns = editor.get(ROOT + "/returns" + query)
+            assert issues.status_code == returns.status_code == 200
+            assert "@" not in issues.text + returns.text
+            assert_actor_rows(issues.json(), returns.json())
+        detail = editor.get(ROOT + "/employees/G1")
+        assert detail.status_code == 200, detail.text
+        assert "@" not in detail.text
+        assert_actor_rows(detail.json()["issues"], detail.json()["returns"])
+
+    assert_actor_rows([issue.json()], [returned.json()])
+    assert_read_responses()
+    # Voiding as a third user must preserve the original giver and receiver.
+    void_return = editor.post(
+        ROOT + f"/returns/{returned.json()['id']}/void", json={"reason": "Correction"}
+    )
+    assert void_return.status_code == 200, void_return.text
+    void_issue = editor.post(
+        ROOT + f"/issues/{issue.json()['id']}/void", json={"reason": "Correction"}
+    )
+    assert void_issue.status_code == 200, void_issue.text
+    assert_actor_rows([void_issue.json()], [void_return.json()])
+    assert void_issue.json()["voided_by_id"] not in (giver_id, receiver_id)
+    assert void_return.json()["voided_by_id"] == void_issue.json()["voided_by_id"]
+    assert_read_responses()
+
+
+@pytest.mark.parametrize(
+    "actor_state,expected_en",
+    [("unlinked", None), ("missing", None), ("display_name", "Uniform Desk")],
+)
+def test_actor_names_nullable_without_email_fallback(editor, api_db, actor_state, expected_en):
+    if actor_state == "display_name":
+        actor = api_db.query(User).one()
+        actor.display_name = expected_en
+        api_db.commit()
+    item = create_item(editor)
+    size = item["sizes"][0]["id"]
+    receipt = editor.post(
+        ROOT + "/receipts", json={"received_on": str(TODAY), "lines": [{"size_id": size, "qty": 2}]}
+    )
+    assert receipt.status_code == 201, receipt.text
+    issue = editor.post(
+        ROOT + "/issues",
+        json={"employee_id": "G1", "lines": [{"item_id": item["id"], "size_id": size, "qty": 2}]},
+    )
+    assert issue.status_code == 201, issue.text
+    returned = editor.post(
+        ROOT + "/returns",
+        json={
+            "employee_id": "G1",
+            "lines": [{"item_id": item["id"], "size_id": size, "qty": 1, "condition": "damaged"}],
+        },
+    )
+    assert returned.status_code == 201, returned.text
+    for response, prefix in ((issue, "given_by"), (returned, "received_by")):
+        assert response.json()[prefix + "_name_en"] == expected_en
+        assert response.json()[prefix + "_name_ar"] is None
+        assert "@" not in response.text
+    if actor_state == "missing":
+        api_db.get(UniformIssue, issue.json()["id"]).created_by_id = None
+        api_db.get(UniformReturn, returned.json()["id"]).created_by_id = None
+        api_db.commit()
+    for path, key, prefix in (
+        ("/issues", None, "given_by"),
+        ("/returns", None, "received_by"),
+        ("/employees/G1", "issues", "given_by"),
+        ("/employees/G1", "returns", "received_by"),
+    ):
+        response = editor.get(ROOT + path)
+        assert response.status_code == 200, response.text
+        assert "@" not in response.text
+        rows = response.json()[key] if key else response.json()
+        assert rows[0][prefix + "_name_en"] == expected_en
+        assert rows[0][prefix + "_name_ar"] is None
+        if actor_state == "missing":
+            assert rows[0]["created_by_id"] is None

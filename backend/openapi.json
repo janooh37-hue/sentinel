@@ -65276,6 +65276,28 @@
             "type": "string",
             "title": "Employee Id"
           },
+          "given_by_name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Given By Name En"
+          },
+          "given_by_name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Given By Name Ar"
+          },
           "issued_on": {
             "type": "string",
             "format": "date",
@@ -66022,6 +66044,28 @@
           "employee_id": {
             "type": "string",
             "title": "Employee Id"
+          },
+          "received_by_name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received By Name En"
+          },
+          "received_by_name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received By Name Ar"
           },
           "returned_on": {
             "type": "string",

@@ -168,6 +168,8 @@ class UniformReceiptRead(UniformPostingRead):
 
 class UniformIssueRead(UniformPostingRead):
     employee_id: str
+    given_by_name_en: str | None = None
+    given_by_name_ar: str | None = None
     issued_on: date
     note: str | None
     lines: list[UniformIssueLine]
@@ -175,6 +177,8 @@ class UniformIssueRead(UniformPostingRead):
 
 class UniformReturnRead(UniformPostingRead):
     employee_id: str
+    received_by_name_en: str | None = None
+    received_by_name_ar: str | None = None
     returned_on: date
     note: str | None
     lines: list[UniformReturnLine]
