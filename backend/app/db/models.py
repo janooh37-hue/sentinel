@@ -2970,6 +2970,8 @@ class _UniformStamped:
     )
 
 
+# Public Uniform identities must not be reused after deletion: drafts, void
+# confirmations and audit records outlive rows. Posting-line IDs stay internal.
 class UniformItem(_UniformStamped, Base):
     """A catalogue garment. ``tracking`` is ``shelf`` (sized stock) or ``holder``."""
 
@@ -3018,6 +3020,7 @@ class UniformItem(_UniformStamped, Base):
             unique=True,
             sqlite_where=text("archived_at IS NULL"),
         ),
+        {"sqlite_autoincrement": True},
     )
 
 
@@ -3048,6 +3051,7 @@ class UniformSize(_UniformStamped, Base):
             unique=True,
             sqlite_where=text("archived_at IS NULL"),
         ),
+        {"sqlite_autoincrement": True},
     )
 
 
@@ -3066,7 +3070,10 @@ class UniformReceipt(_UniformVoidable, _UniformStamped, Base):
         back_populates="receipt", cascade="all, delete-orphan"
     )
 
-    __table_args__ = (CheckConstraint(UNIFORM_VOID_CHECK, name="ck_uniform_receipts_void"),)
+    __table_args__ = (
+        CheckConstraint(UNIFORM_VOID_CHECK, name="ck_uniform_receipts_void"),
+        {"sqlite_autoincrement": True},
+    )
 
 
 class UniformReceiptLine(_UniformStamped, Base):
@@ -3105,6 +3112,7 @@ class UniformIssue(_UniformVoidable, _UniformStamped, Base):
     __table_args__ = (
         CheckConstraint(UNIFORM_VOID_CHECK, name="ck_uniform_issues_void"),
         Index("ix_uniform_issues_employee", "employee_id"),
+        {"sqlite_autoincrement": True},
     )
 
 
@@ -3152,6 +3160,7 @@ class UniformReturn(_UniformVoidable, _UniformStamped, Base):
     __table_args__ = (
         CheckConstraint(UNIFORM_VOID_CHECK, name="ck_uniform_returns_void"),
         Index("ix_uniform_returns_employee", "employee_id"),
+        {"sqlite_autoincrement": True},
     )
 
 
@@ -3196,6 +3205,7 @@ class UniformAdjustment(_UniformVoidable, _UniformStamped, Base):
         CheckConstraint("delta <> 0", name="ck_uniform_adjustments_delta"),
         CheckConstraint("length(trim(reason)) > 0", name="ck_uniform_adjustments_reason"),
         Index("ix_uniform_adjustments_size", "size_id"),
+        {"sqlite_autoincrement": True},
     )
 
 

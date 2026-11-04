@@ -118,6 +118,8 @@ def _void(table: str) -> list[SchemaItem]:
 
 
 def upgrade() -> None:
+    # Public catalogue/posting IDs survive in drafts, void confirmations and audit.
+    # Internal posting-line IDs are not exposed and keep ordinary rowid allocation.
     op.create_table(
         "uniform_items",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
@@ -140,6 +142,7 @@ def upgrade() -> None:
         sa.CheckConstraint(f"drawing IN ({_DRAWING_SQL})", name="ck_uniform_items_drawing"),
         sa.CheckConstraint("tracking IN ('shelf', 'holder')", name="ck_uniform_items_tracking"),
         sa.CheckConstraint("default_qty >= 1", name="ck_uniform_items_default_qty"),
+        sqlite_autoincrement=True,
     )
     op.create_index(
         "uq_uniform_items_name_active",
@@ -172,6 +175,7 @@ def upgrade() -> None:
         *_timestamps(),
         sa.CheckConstraint("on_hand >= 0", name="ck_uniform_sizes_on_hand"),
         sa.CheckConstraint("min_qty IS NULL OR min_qty >= 0", name="ck_uniform_sizes_min_qty"),
+        sqlite_autoincrement=True,
     )
     op.create_index(
         "uq_uniform_sizes_item_label_active",
@@ -189,6 +193,7 @@ def upgrade() -> None:
         _creator(),
         *_void("uniform_receipts"),
         *_timestamps(),
+        sqlite_autoincrement=True,
     )
     op.create_table(
         "uniform_receipt_lines",
@@ -216,6 +221,7 @@ def upgrade() -> None:
         _creator(),
         *_void("uniform_issues"),
         *_timestamps(),
+        sqlite_autoincrement=True,
     )
     op.create_index("ix_uniform_issues_employee", "uniform_issues", ["employee_id"])
     op.create_table(
@@ -253,6 +259,7 @@ def upgrade() -> None:
         _creator(),
         *_void("uniform_returns"),
         *_timestamps(),
+        sqlite_autoincrement=True,
     )
     op.create_index("ix_uniform_returns_employee", "uniform_returns", ["employee_id"])
     op.create_table(
@@ -286,6 +293,7 @@ def upgrade() -> None:
         *_timestamps(),
         sa.CheckConstraint("delta <> 0", name="ck_uniform_adjustments_delta"),
         sa.CheckConstraint("length(trim(reason)) > 0", name="ck_uniform_adjustments_reason"),
+        sqlite_autoincrement=True,
     )
     op.create_index("ix_uniform_adjustments_size", "uniform_adjustments", ["size_id"])
     _seed()

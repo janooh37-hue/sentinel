@@ -1,6 +1,7 @@
 """Migration 0115: uniform schema, seed, constraints, round trip and repo guards."""
 
 from collections.abc import Iterator
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,11 @@ from sqlalchemy import Engine, create_engine, event, inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.api.errors import NotFoundError
+from app.db.models import Base, Employee, UniformItem, UniformSize
 from app.db.repos import uniform_repo
+from app.db.session import attach_sqlite_pragmas
+from app.services import uniform_service as svc
 
 ROOT = Path(__file__).resolve().parents[2]
 HEAD = "0115_uniform"
@@ -25,6 +30,14 @@ TABLES = {
     "uniform_issue_lines",
     "uniform_returns",
     "uniform_return_lines",
+    "uniform_adjustments",
+}
+PUBLIC_ID_TABLES = {
+    "uniform_items",
+    "uniform_sizes",
+    "uniform_receipts",
+    "uniform_issues",
+    "uniform_returns",
     "uniform_adjustments",
 }
 
@@ -52,6 +65,21 @@ def migrated(tmp_path: Path) -> Iterator[tuple[Config, Engine]]:
         engine.dispose()
 
 
+@pytest.fixture(params=["orm", "migrated"])
+def identity_engine(request: pytest.FixtureRequest) -> Iterator[Engine]:
+    if request.param == "migrated":
+        yield request.getfixturevalue("migrated")[1]
+        return
+
+    engine = create_engine("sqlite://")
+    attach_sqlite_pragmas(engine, wal=False)
+    Base.metadata.create_all(engine)
+    try:
+        yield engine
+    finally:
+        engine.dispose()
+
+
 def _size_id(engine: Engine, drawing: str, label: str) -> int:
     with engine.connect() as connection:
         return connection.execute(
@@ -74,6 +102,160 @@ def test_uniform_is_single_head() -> None:
     script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
     assert script.get_heads() == [HEAD]
     assert script.get_revision(HEAD).down_revision == PARENT
+
+
+def test_public_identity_policy_matches_models_and_created_schema(identity_engine: Engine) -> None:
+    with identity_engine.connect() as connection:
+        for table_name in sorted(TABLES):
+            protected = table_name in PUBLIC_ID_TABLES
+            table = Base.metadata.tables[table_name]
+            assert table.dialect_options["sqlite"]["autoincrement"] is protected
+            ddl = connection.execute(
+                text("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = :name"),
+                {"name": table_name},
+            ).scalar_one()
+            assert ("AUTOINCREMENT" in ddl.upper()) is protected
+
+
+def test_deleted_greatest_size_cannot_retarget_stale_receipt(identity_engine: Engine) -> None:
+    with Session(identity_engine) as db:
+        item = svc.create_item(
+            db,
+            name_en="Identity jacket",
+            name_ar="سترة",
+            group_key="guard",
+            drawing="jacket",
+            sizes=["S", "M"],
+        )
+        item_id = item.id
+        original_id = next(size.id for size in item.sizes if size.label == "M")
+        assert original_id == db.scalar(text("SELECT max(id) FROM uniform_sizes"))
+        assert svc.remove_size(db, original_id) == "deleted"
+
+        replacement = svc.add_size(db, item_id, label="L")
+        assert replacement.id > original_id
+        assert replacement.label == "L"
+        assert db.get(UniformSize, original_id) is None
+        with pytest.raises(NotFoundError) as exc:
+            svc.create_receipt(
+                db,
+                received_on=date(2026, 1, 1),
+                lines=[svc.ReceiptLineIn(original_id, 5)],
+            )
+        assert exc.value.code == "uniform_size_not_found"
+        db.refresh(replacement)
+        assert replacement.on_hand == 0
+        assert db.scalar(text("SELECT count(*) FROM uniform_receipts")) == 0
+
+
+def test_deleted_greatest_item_and_cascaded_sizes_keep_distinct_identities(
+    identity_engine: Engine,
+) -> None:
+    with Session(identity_engine) as db:
+        original = svc.create_item(
+            db,
+            name_en="Original jacket",
+            name_ar="سترة",
+            group_key="guard",
+            drawing="jacket",
+            sizes=["M"],
+        )
+        original_id = original.id
+        original_size_id = original.sizes[0].id
+        assert original_id == db.scalar(text("SELECT max(id) FROM uniform_items"))
+        assert original_size_id == db.scalar(text("SELECT max(id) FROM uniform_sizes"))
+        svc.delete_item(db, original_id)
+
+        replacement = svc.create_item(
+            db,
+            name_en="Replacement jacket",
+            name_ar="سترة جديدة",
+            group_key="guard",
+            drawing="jacket",
+            sizes=["L"],
+        )
+        assert replacement.id > original_id
+        assert replacement.sizes[0].id > original_size_id
+        assert db.get(UniformItem, original_id) is None
+        assert db.get(UniformSize, original_size_id) is None
+        with pytest.raises(NotFoundError) as exc:
+            svc.add_size(db, original_id, label="XL")
+        assert exc.value.code == "uniform_item_not_found"
+
+
+@pytest.mark.parametrize(
+    "table_name, date_column, line_table_name, parent_column",
+    [
+        ("uniform_receipts", "received_on", "uniform_receipt_lines", "receipt_id"),
+        ("uniform_issues", "issued_on", "uniform_issue_lines", "issue_id"),
+        ("uniform_returns", "returned_on", "uniform_return_lines", "return_id"),
+        ("uniform_adjustments", "adjusted_on", None, None),
+    ],
+)
+def test_deleted_greatest_posting_id_is_never_reused(
+    identity_engine: Engine,
+    table_name: str,
+    date_column: str,
+    line_table_name: str | None,
+    parent_column: str | None,
+) -> None:
+    # Services retain postings by voiding them. Exercise committed hard deletion
+    # directly as well: public audit/confirmation IDs must never name another row.
+    with Session(identity_engine) as db:
+        db.add(Employee(id="IDENTITY", name_en="Identity guard"))
+        db.commit()
+        item = svc.create_item(
+            db,
+            name_en="Posting jacket",
+            name_ar="سترة",
+            group_key="guard",
+            drawing="jacket",
+            sizes=["M"],
+        )
+        item_id, size_id = item.id, item.sizes[0].id
+
+    table = Base.metadata.tables[table_name]
+    values: dict[str, object] = {date_column: date(2026, 1, 1)}
+    if table_name in {"uniform_issues", "uniform_returns"}:
+        values["employee_id"] = "IDENTITY"
+    if table_name == "uniform_adjustments":
+        values.update(size_id=size_id, delta=1, reason="Original count")
+    else:
+        values["note"] = "Original posting"
+
+    with identity_engine.begin() as connection:
+        connection.execute(table.insert().values(values))
+        original_id = connection.execute(table.insert().values(values)).inserted_primary_key[0]
+        assert original_id == connection.execute(text(f"SELECT max(id) FROM {table_name}")).scalar()
+        if line_table_name is not None:
+            assert parent_column is not None
+            line_values = {parent_column: original_id, "size_id": size_id, "qty": 1}
+            if table_name != "uniform_receipts":
+                line_values["item_id"] = item_id
+            if table_name == "uniform_returns":
+                line_values["condition"] = "reusable"
+            connection.execute(Base.metadata.tables[line_table_name].insert().values(line_values))
+        connection.execute(table.delete().where(table.c.id == original_id))
+        if line_table_name is not None:
+            assert (
+                connection.execute(text(f"SELECT count(*) FROM {line_table_name}")).scalar_one()
+                == 0
+            )
+
+    values["reason" if table_name == "uniform_adjustments" else "note"] = "Different replacement"
+    with identity_engine.begin() as connection:
+        replacement_id = connection.execute(table.insert().values(values)).inserted_primary_key[0]
+        assert replacement_id > original_id
+        assert connection.execute(table.select().where(table.c.id == original_id)).first() is None
+
+    void_record = {
+        "uniform_receipts": svc.void_receipt,
+        "uniform_issues": svc.void_issue,
+        "uniform_returns": svc.void_return,
+        "uniform_adjustments": svc.void_adjustment,
+    }[table_name]
+    with Session(identity_engine) as db, pytest.raises(NotFoundError):
+        void_record(db, original_id, reason="Stale confirmation")
 
 
 def test_seed_is_eight_distinct_drawings_with_zero_stock(migrated) -> None:
