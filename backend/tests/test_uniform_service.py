@@ -462,6 +462,25 @@ def test_void_receipt_reverses_and_guards_used_stock(db: Session) -> None:
     assert _code(exc) == "uniform_reason_required"
 
 
+def test_void_receipt_refreshes_every_cached_size_in_nonexpiring_session(db: Session) -> None:
+    assert not db.expire_on_commit
+    polo = _polo(db)
+    sizes = {size.label: size for size in polo.sizes}
+    receipt = svc.create_receipt(
+        db,
+        received_on=TODAY,
+        lines=[ReceiptLineIn(sizes["S"].id, 3), ReceiptLineIn(sizes["M"].id, 5)],
+    )
+    assert (sizes["S"].on_hand, sizes["M"].on_hand) == (3, 5)
+    assert sum(size.on_hand for size in svc.item_reads(db)[0].sizes) == 8
+    svc.void_receipt(db, receipt.id, reason="Duplicate receipt")
+    assert (sizes["S"].on_hand, sizes["M"].on_hand) == (0, 0)
+    assert all(size.on_hand == 0 for size in svc.item_read(db, polo).sizes)
+    assert all(size.on_hand == 0 for size in svc.item_reads(db)[0].sizes)
+    assert svc.summary(db).shelf_total == 0
+    assert all(qty == 0 for qty in uniform_repo.ledger_balances(db).values())
+
+
 def test_void_issue_restocks_and_is_refused_while_a_return_depends_on_it(db: Session) -> None:
     polo = _polo(db)
     m = _sid(polo, "M")

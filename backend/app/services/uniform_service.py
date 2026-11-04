@@ -820,6 +820,7 @@ def void_receipt(
         for line in row.lines:
             _active_shelf_size(db, line.size_id)
             _take(db, line.size_id, line.qty)
+            _touch_size(db, line.size_id)
         _void(row, text, actor_user_id)
         append_audit(
             db,

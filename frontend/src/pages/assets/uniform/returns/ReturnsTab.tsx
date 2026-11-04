@@ -23,9 +23,10 @@ export function ReturnsTab(): React.JSX.Element {
   const items = useUniformItems(true)
   const people = useUniformRecipients('')
   const [query, setQuery] = useState('')
-  const [voiding, setVoiding] = useState(false)
+  const [voiding, setVoiding] = useState<UniformReturnRead | null>(null)
   const detailHeading = useRef<HTMLHeadingElement>(null)
   const voidOpener = useRef<HTMLElement | null>(null)
+  const searchInput = useRef<HTMLInputElement>(null)
   const ar = i18n.language.startsWith('ar')
   const person = (employeeId: string) => {
     const row = people.data?.find(entry => entry.employee_id === employeeId)
@@ -43,8 +44,11 @@ export function ReturnsTab(): React.JSX.Element {
     return !needle || [record.employee_id, recipient?.name_en ?? '', recipient?.name_ar ?? ''].some(value => value.toLocaleLowerCase().includes(needle))
   })
   const requested = params.get('return')
-  const selected = records.find(record => String(record.id) === requested) ?? records[0]
-  const open = requested !== null && selected !== undefined
+  const candidate = requested !== null
+    ? returns.data?.find(record => String(record.id) === requested)
+    : records[0]
+  const selected = voiding ?? candidate
+  const open = requested !== null
   function select(record: UniformReturnRead) {
     setParams(previous => { const next = new URLSearchParams(previous); next.set('return', String(record.id)); return next })
     requestAnimationFrame(() => detailHeading.current?.focus())
@@ -52,7 +56,7 @@ export function ReturnsTab(): React.JSX.Element {
   function back() {
     const id = selected?.id
     setParams(previous => { const next = new URLSearchParams(previous); next.delete('return'); return next })
-    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-return-card="${id}"]`)?.focus())
+    requestAnimationFrame(() => (document.querySelector<HTMLElement>(`[data-return-card="${id}"]`) ?? searchInput.current)?.focus())
   }
 
   if (returns.isError && returns.data === undefined) return <section className="rounded-xl border border-border bg-surface p-4"><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.errorReturns')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => void returns.refetch()}>{t('assets.uniform.retry')}</Button></section>
@@ -63,11 +67,11 @@ export function ReturnsTab(): React.JSX.Element {
       {people.isError && people.data === undefined && <p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.errorPeople')}</p>}
       <Button type="button" variant="ghost" className="min-h-11" onClick={() => { void Promise.all([returns.refetch(), items.refetch(), people.refetch()]) }}>{t('assets.uniform.retry')}</Button>
     </div>}
-    <section aria-labelledby="uniform-returns-h" className={cn('overflow-hidden rounded-xl border border-border bg-surface', open && 'max-[999px]:hidden')}>
+    <section aria-labelledby="uniform-returns-h" className={cn('overflow-hidden rounded-xl border border-border bg-surface', open && returns.data !== undefined && 'max-[999px]:hidden')}>
       <h2 id="uniform-returns-h" className="sr-only">{t('assets.uniform.tabReturns')}</h2>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-3">
         <label className="min-w-0 flex-1"><span className="sr-only">{t('assets.uniform.returnSearch')}</span>
-          <Input type="search" dir="auto" className="min-h-11" placeholder={t('assets.uniform.searchPh')} value={query} onChange={event => setQuery(event.target.value)} /></label>
+          <Input ref={searchInput} type="search" dir="auto" className="min-h-11" placeholder={t('assets.uniform.searchPh')} value={query} onChange={event => setQuery(event.target.value)} /></label>
         {returns.data !== undefined && <span className="text-sm text-muted-foreground">{t('assets.uniform.returnCount', { count: records.length })}</span>}
       </div>
       {returns.data === undefined ? <div aria-busy="true" className="p-4"><p role="status" className="mb-3 text-sm text-muted-foreground">{t('assets.uniform.loading')}</p>{[0, 1, 2].map(row => <Skeleton key={row} className="mb-3 h-16 w-full" />)}</div>
@@ -100,8 +104,14 @@ export function ReturnsTab(): React.JSX.Element {
       })}</ul>
       <p className="mt-2 text-sm">{t('assets.uniform.itemsN', { count: selected.lines.reduce((sum, line) => sum + line.qty, 0) })}</p>
       {selected.note && <p className="mt-2 text-sm" dir="auto"><span className="text-muted-foreground">{t('assets.uniform.note')}: </span>{selected.note}</p>}
-      {editable && !selected.voided_at && <Button type="button" variant="ghost" className="mt-4 min-h-11 text-destructive-text" onClick={event => { voidOpener.current = event.currentTarget; setVoiding(true) }}>{t('assets.uniform.voidRecord')}</Button>}
-      <VoidDialog open={voiding} kind="return" recordId={selected.id} returnFocusRef={voidOpener} onVoided={() => { if (!voidOpener.current?.isConnected) voidOpener.current = detailHeading.current }} onOpenChange={setVoiding} />
+      {editable && !selected.voided_at && <Button type="button" variant="ghost" className="mt-4 min-h-11 text-destructive-text" onClick={event => { voidOpener.current = event.currentTarget; setVoiding(selected) }}>{t('assets.uniform.voidRecord')}</Button>}
+      {voiding && <VoidDialog open kind="return" recordId={voiding.id}
+        returnFocusRef={candidate?.id === voiding.id && !candidate.voided_at ? voidOpener : candidate || requested !== null ? detailHeading : searchInput}
+        onOpenChange={open => { if (!open) setVoiding(null) }} />}
+    </section>}
+    {returns.data !== undefined && !selected && open && <section aria-labelledby="uniform-return-h" className="rounded-xl border border-border bg-surface p-4">
+      <Button type="button" variant="secondary" className="mb-3 min-h-11" onClick={back}>{t('assets.uniform.back')}</Button>
+      <h2 id="uniform-return-h" ref={detailHeading} tabIndex={-1} className="text-sm outline-none">{t('assets.uniform.returns.unavailable')}</h2>
     </section>}
   </div>
 }

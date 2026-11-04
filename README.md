@@ -87,6 +87,9 @@ Voids cannot change archived items or sizes. History retains archived size label
 Background refresh failures keep cached Uniform lists, employee history, search
 results, and every open dialog mounted, with inline errors and Retry actions.
 Draft entries are retained through failures and successful retries.
+The shared Assets entry accepts Store or Uniform view access and opens a permitted
+section. Return deep links identify the exact ledger entry independently of list
+search, and an open void confirmation stays bound to the entry originally chosen.
 
 ## Requirements
 

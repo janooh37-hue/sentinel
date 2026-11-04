@@ -94,6 +94,42 @@ describe('BottomTabBar', () => {
     }
   })
 
+  it.each([
+    { caps: [], visible: false },
+    { caps: ['uniform.view'], visible: true },
+    { caps: ['store.view'], visible: true },
+    { caps: ['store.view', 'uniform.view'], visible: true },
+  ])('gates persisted Assets slots and the picker consistently: $caps', ({ caps, visible }) => {
+    localStorage.setItem(
+      NAV_SLOTS_STORAGE_KEY,
+      JSON.stringify({ v: 1, ids: ['sec:/', 'sec:/holdings', 'sec:/services', 'sec:/books'] }),
+    )
+    mockUseCapabilities.mockReturnValue({
+      capabilities: new Set(caps),
+      has: (capability) => caps.includes(capability),
+      isLoading: false,
+    })
+    renderDock()
+
+    const navigation = screen.getByRole('navigation', { name: 'Menu' })
+    const link = within(navigation).queryByRole('link', { name: 'Assets' })
+    if (visible) {
+      expect(link).toHaveAttribute('href', '/holdings')
+    } else {
+      expect(link).not.toBeInTheDocument()
+    }
+
+    openTools()
+    const entry = within(screen.getByRole('dialog')).queryByRole('button', { name: 'Assets' })
+    if (visible) {
+      expect(entry).toBeVisible()
+      fireEvent.click(entry!)
+      expect(screen.getByTestId('location')).toHaveTextContent('/holdings')
+    } else {
+      expect(entry).not.toBeInTheDocument()
+    }
+  })
+
   it('omits denied waiting signals from the customization picker', () => {
     mockUseCapabilities.mockReturnValue({
       capabilities: new Set(),

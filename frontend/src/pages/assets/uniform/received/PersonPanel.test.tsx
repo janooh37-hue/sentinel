@@ -413,6 +413,108 @@ describe('Received person panel', () => {
 })
 
 describe('Uniform returns list', () => {
+  it('keeps an explicit deep link selected even when search excludes it', async () => {
+    const user = userEvent.setup()
+    mount('/holdings/uniform?tab=returns&return=51&keep=1', 'returns')
+    const panel = await screen.findByRole('region', { name: 'Ali Hassan' })
+    await user.type(screen.getByRole('searchbox', { name: 'Search returns' }), 'Omar')
+    expect(screen.queryByRole('button', { name: /Ali Hassan/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Omar Returned/ })).toBeInTheDocument()
+    expect(panel).toHaveTextContent('Reusable polo returned')
+    expect(panel).not.toHaveTextContent('All suits returned')
+    expect(within(panel).getByRole('button', { name: 'Void record' })).toBeEnabled()
+    expect(screen.getByTestId('location')).toHaveTextContent('?tab=returns&return=51&keep=1')
+  })
+
+  it.each([
+    ['en', 'This return is not available.'],
+    ['ar', 'سجل الإرجاع هذا غير متاح.'],
+  ])('shows an unavailable deep link without another return or void action in %s', async (language, message) => {
+    await i18n.changeLanguage(language)
+    const user = userEvent.setup()
+    mount('/holdings/uniform?tab=returns&return=999&keep=1', 'returns')
+    const unavailable = await screen.findByRole('heading', { name: message })
+    const panel = unavailable.closest('section')!
+    expect(panel).not.toHaveTextContent('Reusable polo returned')
+    expect(panel).not.toHaveTextContent('All suits returned')
+    expect(screen.queryByRole('button', { name: i18n.t('assets.uniform.voidRecord') })).not.toBeInTheDocument()
+    const list = screen.getByRole('searchbox').closest('section')!
+    expect(list).toHaveClass('max-[999px]:hidden')
+    await user.click(within(panel).getByRole('button', { name: i18n.t('assets.uniform.back') }))
+    expect(screen.getByTestId('location')).toHaveTextContent('?tab=returns&keep=1')
+    expect(screen.queryByRole('heading', { name: message })).not.toBeInTheDocument()
+    expect(list).not.toHaveClass('max-[999px]:hidden')
+    await waitFor(() => expect(screen.getByRole('searchbox')).toHaveFocus())
+  })
+
+  it('defaults to the first filtered return only when no explicit ID was requested', async () => {
+    const user = userEvent.setup()
+    mount('/holdings/uniform?tab=returns', 'returns')
+    expect(await screen.findByRole('region', { name: 'Ali Hassan' })).toHaveTextContent('Reusable polo returned')
+    await user.type(screen.getByRole('searchbox', { name: 'Search returns' }), 'Omar')
+    expect(screen.getByRole('region', { name: 'Omar Returned' })).toHaveTextContent('All suits returned')
+    expect(screen.getByTestId('location')).toHaveTextContent('?tab=returns')
+  })
+
+  it.each(['reorder', 'remove', 'empty', 'search', 'selection'] as const)('pins the default return snapshot and void target through a %s change', async change => {
+    const user = userEvent.setup()
+    const client = mount('/holdings/uniform?tab=returns', 'returns')
+    const panel = await screen.findByRole('region', { name: 'Ali Hassan' })
+    const search = screen.getByRole('searchbox', { name: 'Search returns' })
+    const otherCard = screen.getByRole('button', { name: /Omar Returned/ })
+    await user.click(within(panel).getByRole('button', { name: 'Void record' }))
+    const dialog = await screen.findByRole('dialog')
+    const reason = within(dialog).getByRole('textbox', { name: /Reason for voiding/ })
+    await user.type(reason, '  Original return reason  ')
+    if (change === 'search') {
+      fireEvent.change(search, { target: { value: 'Omar' } })
+    } else if (change === 'selection') {
+      fireEvent.click(otherCard)
+      expect(screen.getByTestId('location')).toHaveTextContent('return=62')
+    } else {
+      vi.mocked(api.listUniformReturns).mockResolvedValue(change === 'empty' ? [] : change === 'remove'
+        ? [DAMAGED_RETURN, ...OMAR_RECORDS.returns]
+        : [DAMAGED_RETURN, { ...REUSABLE_RETURN, note: 'Refreshed return note', lines: [] }, ...OMAR_RECORDS.returns])
+      await act(async () => { await client.invalidateQueries({ queryKey: uniformKeys.returns(), exact: true }) })
+    }
+    expect(panel).toBeInTheDocument()
+    expect(panel).toHaveTextContent('Reusable polo returned')
+    expect(panel).not.toHaveTextContent('Damaged polo returned')
+    expect(panel).not.toHaveTextContent('Refreshed return note')
+    expect(panel).toHaveTextContent('Polo shirt')
+    expect(screen.getByRole('dialog')).toBe(dialog)
+    expect(within(dialog).getByRole('textbox', { name: /Reason for voiding/ })).toBe(reason)
+    expect(reason).toHaveValue('  Original return reason  ')
+    await user.click(within(dialog).getByRole('button', { name: 'Void record' }))
+    await waitFor(() => expect(api.voidUniformReturn).toHaveBeenCalledExactlyOnceWith(51, { reason: 'Original return reason' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(api.voidUniformIssue).not.toHaveBeenCalled()
+  })
+
+  it('releases the pinned snapshot on cancellation and starts the next confirmation with the new target and an empty reason', async () => {
+    const user = userEvent.setup()
+    mount('/holdings/uniform?tab=returns', 'returns')
+    const panel = await screen.findByRole('region', { name: 'Ali Hassan' })
+    const search = screen.getByRole('searchbox', { name: 'Search returns' })
+    await user.click(within(panel).getByRole('button', { name: 'Void record' }))
+    const firstDialog = within(await screen.findByRole('dialog'))
+    await user.type(firstDialog.getByRole('textbox', { name: /Reason for voiding/ }), 'Do not reuse this reason')
+    fireEvent.change(search, { target: { value: 'Omar' } })
+    await user.click(firstDialog.getByRole('button', { name: 'Cancel' }))
+    const nextPanel = screen.getByRole('region', { name: 'Omar Returned' })
+    expect(nextPanel).toHaveTextContent('All suits returned')
+    await waitFor(() => expect(within(nextPanel).getByRole('heading', { name: 'Omar Returned' })).toHaveFocus())
+    expect(api.voidUniformReturn).not.toHaveBeenCalled()
+    await user.click(within(nextPanel).getByRole('button', { name: 'Void record' }))
+    const nextDialog = within(await screen.findByRole('dialog'))
+    const reason = nextDialog.getByRole('textbox', { name: /Reason for voiding/ })
+    expect(reason).toHaveValue('')
+    await user.type(reason, 'Reason for the other return')
+    await user.click(nextDialog.getByRole('button', { name: 'Void record' }))
+    await waitFor(() => expect(api.voidUniformReturn).toHaveBeenCalledExactlyOnceWith(62, { reason: 'Reason for the other return' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
   it.each(['returns', 'items', 'people'] as const)('retains selected return, cached metadata and the exact void input on %s refresh failure and retry', async dependency => {
     const user = userEvent.setup()
     const client = mount('/holdings/uniform?tab=returns', 'returns')

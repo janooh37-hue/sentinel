@@ -1812,7 +1812,8 @@
         "noHoldingsReturn": "No uniform currently held to return."
       },
       "returns": {
-        "conditionOf": "Condition of {{name}}"
+        "conditionOf": "Condition of {{name}}",
+        "unavailable": "This return is not available."
       },
       "groups": {
         "formal": "Formal uniform",

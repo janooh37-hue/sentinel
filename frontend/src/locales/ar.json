@@ -1948,7 +1948,8 @@
         "noHoldingsReturn": "لا توجد ملابس بحوزته حاليًا لإرجاعها."
       },
       "returns": {
-        "conditionOf": "حالة {{name}}"
+        "conditionOf": "حالة {{name}}",
+        "unavailable": "سجل الإرجاع هذا غير متاح."
       },
       "groups": {
         "formal": "الزي الرسمي",
