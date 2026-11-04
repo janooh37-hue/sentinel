@@ -1760,6 +1760,9 @@
       "uniform": "Uniform"
     },
     "uniform": {
+      "returns": {
+        "conditionOf": "Condition of {{name}}"
+      },
       "groups": {
         "formal": "Formal",
         "guard": "Guard uniform",

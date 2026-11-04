@@ -1896,6 +1896,9 @@
       "uniform": "الملابس"
     },
     "uniform": {
+      "returns": {
+        "conditionOf": "حالة {{name}}"
+      },
       "groups": {
         "formal": "رسمي",
         "guard": "زي الحراسة",
