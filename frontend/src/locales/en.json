@@ -1752,6 +1752,20 @@
       "archivePaidResultsConfirmDesc": "Archived fines keep their receipts and stay in the fines report; restore them from the Archive view at any time."
     }
   },
+  "uniform": {
+    "catalog": {
+      "stockHistory": "Stock history",
+      "alertAt": "Alert at",
+      "alertAtSize": "Alert at {{size}}",
+      "adjustmentReasonRequired": "Enter a reason for the stock adjustment.",
+      "validReceiptDate": "Choose a valid receipt date that is not in the future.",
+      "referenceTooLong": "The reference must not exceed 120 characters.",
+      "noReceiptSizes": "No active shelf sizes are available to receive stock.",
+      "historyEmpty": "No receipts or adjustments for this item yet.",
+      "receipt": "Stock receipt",
+      "adjustment": "Stock adjustment"
+    }
+  },
   "assets": {
     "title": "Assets",
     "sectionTabs": {

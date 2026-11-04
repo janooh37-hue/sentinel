@@ -1888,6 +1888,20 @@
       "archivePaidResultsConfirmDesc": "تحتفظ المخالفات المؤرشفة بإيصالاتها وتبقى ضمن تقرير المخالفات؛ يمكن استعادتها من عرض الأرشيف في أي وقت."
     }
   },
+  "uniform": {
+    "catalog": {
+      "stockHistory": "سجل المخزون",
+      "alertAt": "التنبيه عند",
+      "alertAtSize": "التنبيه عند المقاس {{size}}",
+      "adjustmentReasonRequired": "أدخل سبب تسوية المخزون.",
+      "validReceiptDate": "اختر تاريخ استلام صالحًا لا يقع في المستقبل.",
+      "referenceTooLong": "يجب ألا يتجاوز المرجع 120 حرفًا.",
+      "noReceiptSizes": "لا توجد مقاسات نشطة متاحة لاستلام المخزون.",
+      "historyEmpty": "لا توجد استلامات أو تسويات لهذه القطعة بعد.",
+      "receipt": "استلام مخزون",
+      "adjustment": "تسوية مخزون"
+    }
+  },
   "assets": {
     "title": "الأصول",
     "sectionTabs": {
