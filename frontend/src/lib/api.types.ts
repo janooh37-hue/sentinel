@@ -6769,6 +6769,285 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/uniform/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Items */
+        get: operations["items_api_v1_uniform_items_get"];
+        put?: never;
+        /** Create Item */
+        post: operations["create_item_api_v1_uniform_items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uniform/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Item */
+        delete: operations["delete_item_api_v1_uniform_items__item_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Item */
+        patch: operations["update_item_api_v1_uniform_items__item_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/uniform/items/{item_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Item */
+        post: operations["archive_item_api_v1_uniform_items__item_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uniform/items/{item_id}/sizes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Size */
+        post: operations["add_size_api_v1_uniform_items__item_id__sizes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uniform/sizes/{size_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Size */
+        delete: operations["remove_size_api_v1_uniform_sizes__size_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Size */
+        patch: operations["update_size_api_v1_uniform_sizes__size_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/uniform/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Receipts */
+        get: operations["receipts_api_v1_uniform_receipts_get"];
+        put?: never;
+        /** Create Receipt */
+        post: operations["create_receipt_api_v1_uniform_receipts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uniform/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Issues */
+        get: operations["issues_api_v1_uniform_issues_get"];
+        put?: never;
+        /** Create Issue */
+        post: operations["create_issue_api_v1_uniform_issues_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uniform/returns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Returns */
+        get: operations["returns_api_v1_uniform_returns_get"];
+        put?: never;
+        /** Create Return */
+        post: operations["create_return_api_v1_uniform_returns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uniform/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Adjustments */
+        get: operations["adjustments_api_v1_uniform_adjustments_get"];
+        put?: never;
+        /** Create Adjustments */
+        post: operations["create_adjustments_api_v1_uniform_adjustments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uniform/receipts/{record_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void Receipt */
+        post: operations["void_receipt_api_v1_uniform_receipts__record_id__void_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uniform/issues/{record_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void Issue */
+        post: operations["void_issue_api_v1_uniform_issues__record_id__void_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uniform/returns/{record_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void Return */
+        post: operations["void_return_api_v1_uniform_returns__record_id__void_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uniform/adjustments/{record_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void Adjustment */
+        post: operations["void_adjustment_api_v1_uniform_adjustments__record_id__void_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uniform/recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recipients */
+        get: operations["recipients_api_v1_uniform_recipients_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uniform/employees/{employee_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Employee */
+        get: operations["employee_api_v1_uniform_employees__employee_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uniform/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Summary */
+        get: operations["summary_api_v1_uniform_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/debug/logs": {
         parameters: {
             query?: never;
@@ -16772,6 +17051,401 @@ export interface components {
             book_id: number;
             /** Ref Number */
             ref_number: string;
+            /** Reason */
+            reason: string;
+        };
+        /** UniformAdjustmentCreate */
+        UniformAdjustmentCreate: {
+            /** Lines */
+            lines: components["schemas"]["UniformAdjustmentLine"][];
+            /** Reason */
+            reason: string;
+            /** Adjusted On */
+            adjusted_on?: string | null;
+        };
+        /** UniformAdjustmentLine */
+        UniformAdjustmentLine: {
+            /** Size Id */
+            size_id: number;
+            /** Delta */
+            delta: number;
+        };
+        /** UniformAdjustmentRead */
+        UniformAdjustmentRead: {
+            /** Id */
+            id: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Id */
+            created_by_id: number | null;
+            /** Voided At */
+            voided_at: string | null;
+            /** Voided By Id */
+            voided_by_id: number | null;
+            /** Void Reason */
+            void_reason: string | null;
+            /** Size Id */
+            size_id: number;
+            /** Delta */
+            delta: number;
+            /** Reason */
+            reason: string;
+            /**
+             * Adjusted On
+             * Format: date
+             */
+            adjusted_on: string;
+        };
+        /** UniformEmployeeRead */
+        UniformEmployeeRead: {
+            /** Holdings */
+            holdings: components["schemas"]["UniformHolding"][];
+            /** Issues */
+            issues: components["schemas"]["UniformIssueRead"][];
+            /** Returns */
+            returns: components["schemas"]["UniformReturnRead"][];
+        };
+        /** UniformHolder */
+        UniformHolder: {
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Qty */
+            qty: number;
+        };
+        /** UniformHolding */
+        UniformHolding: {
+            /** Employee Id */
+            employee_id: string;
+            /** Item Id */
+            item_id: number;
+            /** Size Id */
+            size_id: number | null;
+            /** Qty */
+            qty: number;
+        };
+        /** UniformIssueCreate */
+        UniformIssueCreate: {
+            /** Employee Id */
+            employee_id: string;
+            /** Issued On */
+            issued_on?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Lines */
+            lines: components["schemas"]["UniformIssueLine"][];
+        };
+        /** UniformIssueLine */
+        UniformIssueLine: {
+            /** Item Id */
+            item_id: number;
+            /** Size Id */
+            size_id?: number | null;
+            /** Qty */
+            qty: number;
+        };
+        /** UniformIssueRead */
+        UniformIssueRead: {
+            /** Id */
+            id: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Id */
+            created_by_id: number | null;
+            /** Voided At */
+            voided_at: string | null;
+            /** Voided By Id */
+            voided_by_id: number | null;
+            /** Void Reason */
+            void_reason: string | null;
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * Issued On
+             * Format: date
+             */
+            issued_on: string;
+            /** Note */
+            note: string | null;
+            /** Lines */
+            lines: components["schemas"]["UniformIssueLine"][];
+        };
+        /** UniformItemCreate */
+        UniformItemCreate: {
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /** Description En */
+            description_en?: string | null;
+            /** Description Ar */
+            description_ar?: string | null;
+            /**
+             * Group Key
+             * @enum {string}
+             */
+            group_key: "formal" | "guard" | "winter";
+            /**
+             * Drawing
+             * @enum {string}
+             */
+            drawing: "suit" | "boots" | "polo" | "cargo" | "belt" | "cap" | "socks" | "jacket" | "vest" | "parka" | "dressshirt" | "longsleeve";
+            /**
+             * Default Qty
+             * @default 1
+             */
+            default_qty: number;
+            /** Sizes */
+            sizes: string[];
+        };
+        /** UniformItemRead */
+        UniformItemRead: {
+            /** Id */
+            id: number;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /** Description En */
+            description_en: string | null;
+            /** Description Ar */
+            description_ar: string | null;
+            /**
+             * Group Key
+             * @enum {string}
+             */
+            group_key: "formal" | "guard" | "winter";
+            /**
+             * Drawing
+             * @enum {string}
+             */
+            drawing: "suit" | "boots" | "polo" | "cargo" | "belt" | "cap" | "socks" | "jacket" | "vest" | "parka" | "dressshirt" | "longsleeve";
+            /**
+             * Tracking
+             * @enum {string}
+             */
+            tracking: "shelf" | "holder";
+            /** Default Qty */
+            default_qty: number;
+            /** Sort Order */
+            sort_order: number;
+            /** Archived At */
+            archived_at: string | null;
+            /** Version */
+            version: string;
+            /** Sizes */
+            sizes: components["schemas"]["UniformSizeRead"][];
+            /** Holders */
+            holders: components["schemas"]["UniformHolder"][];
+        };
+        /** UniformItemUpdate */
+        UniformItemUpdate: {
+            /** Name En */
+            name_en?: string | null;
+            /** Name Ar */
+            name_ar?: string | null;
+            /** Description En */
+            description_en?: string | null;
+            /** Description Ar */
+            description_ar?: string | null;
+            /** Group Key */
+            group_key?: ("formal" | "guard" | "winter") | null;
+            /** Drawing */
+            drawing?: ("suit" | "boots" | "polo" | "cargo" | "belt" | "cap" | "socks" | "jacket" | "vest" | "parka" | "dressshirt" | "longsleeve") | null;
+            /** Default Qty */
+            default_qty?: number | null;
+            /** Sort Order */
+            sort_order?: number | null;
+        };
+        /** UniformReceiptCreate */
+        UniformReceiptCreate: {
+            /**
+             * Received On
+             * Format: date
+             */
+            received_on: string;
+            /** Reference */
+            reference?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Lines */
+            lines: components["schemas"]["UniformReceiptLine"][];
+        };
+        /** UniformReceiptLine */
+        UniformReceiptLine: {
+            /** Size Id */
+            size_id: number;
+            /** Qty */
+            qty: number;
+        };
+        /** UniformReceiptRead */
+        UniformReceiptRead: {
+            /** Id */
+            id: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Id */
+            created_by_id: number | null;
+            /** Voided At */
+            voided_at: string | null;
+            /** Voided By Id */
+            voided_by_id: number | null;
+            /** Void Reason */
+            void_reason: string | null;
+            /**
+             * Received On
+             * Format: date
+             */
+            received_on: string;
+            /** Reference */
+            reference: string | null;
+            /** Note */
+            note: string | null;
+            /** Lines */
+            lines: components["schemas"]["UniformReceiptLine"][];
+        };
+        /** UniformRecipient */
+        UniformRecipient: {
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Held Total */
+            held_total: number;
+            /** Issued Total */
+            issued_total: number;
+            /**
+             * Last Issued On
+             * Format: date
+             */
+            last_issued_on: string;
+        };
+        /** UniformReturnCreate */
+        UniformReturnCreate: {
+            /** Employee Id */
+            employee_id: string;
+            /** Returned On */
+            returned_on?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Lines */
+            lines: components["schemas"]["UniformReturnLine"][];
+        };
+        /** UniformReturnLine */
+        UniformReturnLine: {
+            /** Item Id */
+            item_id: number;
+            /** Size Id */
+            size_id?: number | null;
+            /** Qty */
+            qty: number;
+            /**
+             * Condition
+             * @enum {string}
+             */
+            condition: "reusable" | "damaged";
+        };
+        /** UniformReturnRead */
+        UniformReturnRead: {
+            /** Id */
+            id: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Id */
+            created_by_id: number | null;
+            /** Voided At */
+            voided_at: string | null;
+            /** Voided By Id */
+            voided_by_id: number | null;
+            /** Void Reason */
+            void_reason: string | null;
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * Returned On
+             * Format: date
+             */
+            returned_on: string;
+            /** Note */
+            note: string | null;
+            /** Lines */
+            lines: components["schemas"]["UniformReturnLine"][];
+        };
+        /** UniformSizeCreate */
+        UniformSizeCreate: {
+            /** Label */
+            label: string;
+            /** Min Qty */
+            min_qty?: number | null;
+        };
+        /** UniformSizeRead */
+        UniformSizeRead: {
+            /** Id */
+            id: number;
+            /** Item Id */
+            item_id: number;
+            /** Label */
+            label: string;
+            /** Sort Order */
+            sort_order: number;
+            /** On Hand */
+            on_hand: number;
+            /** Min Qty */
+            min_qty: number | null;
+            /** Archived At */
+            archived_at: string | null;
+            /**
+             * Held Qty
+             * @default 0
+             */
+            held_qty: number;
+            /**
+             * Is Low
+             * @default false
+             */
+            is_low: boolean;
+        };
+        /** UniformSizeUpdate */
+        UniformSizeUpdate: {
+            /** Label */
+            label?: string | null;
+            /** Sort Order */
+            sort_order?: number | null;
+            /** Min Qty */
+            min_qty?: number | null;
+        };
+        /** UniformSummary */
+        UniformSummary: {
+            /** Shelf Total */
+            shelf_total: number;
+            /** Holder Count */
+            holder_count: number;
+            /** Suits Issued */
+            suits_issued: number;
+            /** Out Of Stock */
+            out_of_stock: number;
+            /** Low Sizes */
+            low_sizes: number;
+        };
+        /** UniformVoid */
+        UniformVoid: {
             /** Reason */
             reason: string;
         };
@@ -34524,6 +35198,795 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StoreDashboard"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    items_api_v1_uniform_items_get: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformItemRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_item_api_v1_uniform_items_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniformItemCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformItemRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_item_api_v1_uniform_items__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_item_api_v1_uniform_items__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniformItemUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformItemRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_item_api_v1_uniform_items__item_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformItemRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_size_api_v1_uniform_items__item_id__sizes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniformSizeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformSizeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_size_api_v1_uniform_sizes__size_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                size_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_size_api_v1_uniform_sizes__size_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                size_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniformSizeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformSizeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    receipts_api_v1_uniform_receipts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformReceiptRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_receipt_api_v1_uniform_receipts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniformReceiptCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformReceiptRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    issues_api_v1_uniform_issues_get: {
+        parameters: {
+            query?: {
+                employee_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformIssueRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_issue_api_v1_uniform_issues_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniformIssueCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformIssueRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    returns_api_v1_uniform_returns_get: {
+        parameters: {
+            query?: {
+                employee_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformReturnRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_return_api_v1_uniform_returns_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniformReturnCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformReturnRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adjustments_api_v1_uniform_adjustments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformAdjustmentRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_adjustments_api_v1_uniform_adjustments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniformAdjustmentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformAdjustmentRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    void_receipt_api_v1_uniform_receipts__record_id__void_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniformVoid"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformReceiptRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    void_issue_api_v1_uniform_issues__record_id__void_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniformVoid"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformIssueRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    void_return_api_v1_uniform_returns__record_id__void_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniformVoid"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformReturnRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    void_adjustment_api_v1_uniform_adjustments__record_id__void_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UniformVoid"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformAdjustmentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recipients_api_v1_uniform_recipients_get: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformRecipient"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    employee_api_v1_uniform_employees__employee_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformEmployeeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    summary_api_v1_uniform_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UniformSummary"];
                 };
             };
             /** @description Validation Error */
