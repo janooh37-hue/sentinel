@@ -114,9 +114,18 @@ export function UniformTab({ employeeId }: Props): React.JSX.Element {
     if (!item) return `#${itemId}`
     return (isAr ? item.name_ar : item.name_en) || item.name_en
   }
-  const sizeLabel = (itemId: number, sizeId?: number | null): string => {
-    if (sizeId == null) return t('assets.uniform.oneSize')
-    return itemById.get(itemId)?.sizes.find((s) => s.id === sizeId)?.label ?? `#${sizeId}`
+  // Holder pieces (and size-less lines) show no size; one-size shelf pieces
+  // store the literal label 'one', which must be localized, not isolated LTR.
+  const sizeText = (itemId: number, sizeId: number | null | undefined, className?: string) => {
+    const item = itemById.get(itemId)
+    if (item?.tracking === 'holder' || sizeId == null) return null
+    const label = item?.sizes.find((s) => s.id === sizeId)?.label
+    if (label === 'one') return <span className={className}>{t('assets.uniform.oneSize')}</span>
+    return (
+      <bdi dir="ltr" className={`font-mono ${className ?? ''}`}>
+        {label ?? `#${sizeId}`}
+      </bdi>
+    )
   }
   const formatDate = (iso: string): string => dateFmt.format(new Date(`${iso.slice(0, 10)}T00:00:00`))
 
@@ -125,7 +134,7 @@ export function UniformTab({ employeeId }: Props): React.JSX.Element {
   const lineText = (line: Line) => (
     <>
       <span dir="auto">{itemName(line.item_id)}</span>{' '}
-      <bdi dir="ltr" className="font-mono">{sizeLabel(line.item_id, line.size_id)}</bdi>{' '}
+      {sizeText(line.item_id, line.size_id)}{' '}
       <bdi dir="ltr" className="font-mono">×{line.qty}</bdi>
       {line.condition && (
         <span className="ms-1 text-muted-foreground">
@@ -174,9 +183,7 @@ export function UniformTab({ employeeId }: Props): React.JSX.Element {
                   <span className="block truncate font-medium text-foreground" dir="auto">
                     {itemName(h.item_id)}
                   </span>
-                  <bdi dir="ltr" className="font-mono text-[0.85em] text-muted-foreground">
-                    {sizeLabel(h.item_id, h.size_id ?? null)}
-                  </bdi>
+                  {sizeText(h.item_id, h.size_id, 'text-[0.85em] text-muted-foreground')}
                 </span>
                 <span className="font-mono text-[1.1em] font-semibold text-foreground">{h.qty}</span>
               </li>
@@ -220,7 +227,7 @@ export function UniformTab({ employeeId }: Props): React.JSX.Element {
               <tr className="border-b border-hairline text-muted-foreground">
                 <th className="px-4 py-2 text-start font-medium">{t('assets.uniform.action')}</th>
                 <th className="px-4 py-2 text-start font-medium">{t('assets.uniform.piece')}</th>
-                <th className="px-4 py-2 text-start font-medium">{t('assets.uniform.summary')}</th>
+                <th className="px-4 py-2 text-start font-medium">{t('assets.uniform.status')}</th>
               </tr>
             </thead>
             <tbody>

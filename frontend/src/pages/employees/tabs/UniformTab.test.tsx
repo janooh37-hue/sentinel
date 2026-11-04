@@ -116,6 +116,29 @@ describe('UniformTab', () => {
     expect(await screen.findByText('No uniform currently held.')).toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
+
+  it('localizes one-size pieces and shows no size for holder pieces', async () => {
+    listUniformItems.mockResolvedValue([
+      ...ITEMS,
+      { id: 3, name_en: 'Belt', name_ar: 'حزام', drawing: 'belt', tracking: 'shelf', sizes: [{ id: 31, label: 'one' }] },
+      { id: 4, name_en: 'Suit', name_ar: 'بدلة', drawing: 'suit', tracking: 'holder', sizes: [] },
+    ])
+    getUniformEmployee.mockResolvedValue({
+      holdings: [
+        { employee_id: 'G1001', item_id: 3, size_id: 31, qty: 1 },
+        { employee_id: 'G1001', item_id: 4, size_id: null, qty: 1 },
+      ],
+      issues: [],
+      returns: [],
+    })
+    renderTab()
+    const holdings = await screen.findByRole('region', { name: 'Currently holds' })
+    const [belt, suit] = within(holdings).getAllByRole('listitem')
+    expect(belt).toHaveTextContent('One size')
+    expect(belt).not.toHaveTextContent(/\bone\b/)
+    expect(suit).toHaveTextContent('Suit')
+    expect(suit).not.toHaveTextContent('One size')
+  })
 })
 
 describe('EmployeeTabChips uniform gate', () => {

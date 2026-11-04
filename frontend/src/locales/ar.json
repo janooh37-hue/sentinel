@@ -1931,7 +1931,7 @@
         "conditionOf": "حالة {{name}}"
       },
       "groups": {
-        "formal": "رسمي",
+        "formal": "الزي الرسمي",
         "guard": "زي الحراسة",
         "winter": "الزي الشتوي"
       },
@@ -2154,7 +2154,8 @@
       "adjustmentSaved": "تم حفظ تسوية الرصيد.",
       "voidReason": "سبب الإبطال",
       "voidStatus": "مُبطل",
-      "activeStatus": "ساري",
+      "activeStatus": "سارٍ",
+      "status": "الحالة",
       "voidRecord": "إبطال السجل",
       "voidConfirmTitle": "إبطال هذا السجل؟",
       "voidConfirm": "سيُعكس أثر هذا السجل. أدخل سببًا للمتابعة.",
@@ -6964,6 +6965,7 @@
         "expiry": "انتهاء الصلاحية"
       },
       "domains": {
+        "uniform": "الملابس",
         "app": "التطبيق",
         "employees": "الموظفون",
         "expiry": "انتهاء الصلاحية",
