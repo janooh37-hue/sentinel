@@ -20,7 +20,7 @@ Open `http://127.0.0.1:8941/mockups/plan/uniform/index.html`. To serve it yourse
 | Hand-out form | `?view=edit&give=1` |
 | Record return form | `?tab=returns&view=edit&returnForm=1` |
 | Edit quantities and drawing | `?view=edit&edit=cargo` |
-| Edit suit drawing or add a size (no shelf counts) | `?view=edit&edit=suit` |
+| Edit suit drawing only (tailored, no shelf counts) | `?view=edit&edit=suit` |
 | Add item | `?tab=stock&view=edit&addItem=1` |
 | View only: no mutation actions | `?view=readonly` |
 | Loading / load failed, on any tab | `?view=loading`, `?view=error` |
@@ -32,28 +32,37 @@ Append `&lang=ar` and/or `&theme=dark` to any query. The mockup toolbar also swi
 - Assets has **Uniform / الملابس** beside **Store / المخزن**, with **Stock / الرصيد**, **Received / المستلمون** and **Returns / المرتجعات** sub-tabs. Existing Arabic return terms elsewhere refer to leave or document workflows, not returned goods; المرتجعات is used here.
 - **Belt and cap are one size**, shelf balances 48 and 42. Every historical line uses `size: 'one'`. Their hand-out choices remain **None / بدون** and **One size / مقاس موحد**.
 - Guard pieces: olive logo polo, khaki cargo trousers, brown belt, tan field boots, khaki logo cap and khaki socks (pairs).
-- A formal suit is jacket, trousers and white shirt as one piece. It has sizes but **no shelf quantity**. Holder chips come from current holdings; an employee remains a holder until all their suits are returned.
+- A formal suit is tailored jacket, trousers and white shirt as one piece. **It has no size and no shelf quantity.** Neither its item nor its hand-out/return lines have a size field. Holder chips show the G-number only, with the employee name in the accessible label; an employee remains a holder until all their suits are returned.
 - **Winter uniform / الزي الشتوي** retains only the sample winter jacket, drawing `parka`, letter sizes, default hand-out quantity **1**. Its shelf counts total **40**. Two sample hand-outs record one jacket each for G3105 and G3117; the displayed shelf snapshot already reflects those hand-outs. This is an approval example, not confirmed inventory.
 - Shelf and holder totals, out-of-stock sizes, received counts and return counts are computed from rows.
-- **Hand out uniform / صرف ملابس:** shared employee search by name or G-number; a None option on every piece; defaults belt/cap/winter jacket 1, socks and other pieces 2. Signed-in giver and sample today's date are automatic. Saving subtracts shelf stock and adds a hand-out. Unavailable sizes cannot be chosen, quantities cannot exceed stock, and disabled Save explains why.
-- **Record return / تسجيل إرجاع:** only employees currently holding something are searchable. The form lists every held piece and size, drawing, held quantity, and a 0-to-held stepper starting at 0. Save requires an employee and a positive quantity. Signed-in receiver and sample today's date are automatic. Saving adds a newest-first return and restores stock; suits affect holders, not shelf stock.
+- **Hand out uniform / صرف ملابس:** shared employee search by name or G-number. Stock pieces have None plus size choices; tailored suits have **None / Give** (**بدون / تسليم**), still with quantity default **2**. Belt/cap/winter jacket default to 1; socks and other pieces to 2. Signed-in giver and sample today's date are automatic. Saving subtracts shelf stock for stock pieces only and adds a hand-out. Unavailable stock sizes cannot be chosen, quantities cannot exceed stock, and disabled Save explains why.
+- **Record return / تسجيل إرجاع:** only employees currently holding something are searchable. The form lists each held piece (and size for stock pieces only), drawing, held quantity, and a 0-to-held stepper starting at 0. Save requires an employee and a positive quantity. Signed-in receiver and sample today's date are automatic. Saving adds a newest-first return and restores stock; suits affect holders, not shelf stock. Suit returns and Received details never show a size; the holder description is simply “Holds a formal suit” / “يحمل بدلة رسمية”.
 - For this approval model **all returned stock is reusable and goes straight back onto the shelf**. This remains an approval question below, not a production policy.
 - Received detail shows **Currently holds**, every hand-out and clearly labelled returns. Received and Returns both use list plus sticky detail on desktop and one region at a time below 1000px, with Back and focus restoration.
-- **Add size:** stock Update accepts a new size at quantity 0. Empty and case-insensitive duplicate values show inline errors. Save applies staged edits; Cancel discards them. One-size items cannot add sizes. Suits use the same Update action for sizes and artwork but never show quantity fields.
+- **Add size:** stock Update accepts a new size at quantity 0. Empty and case-insensitive duplicate values show inline errors. Save applies staged edits; Cancel discards them. One-size items cannot add sizes. The tailored suit editor is drawing-only: no size list, Add size or shelf quantity fields.
 - **Add item:** manager-only secondary action on Stock. English and Arabic names are required, descriptions optional in both languages. Group is Formal, Guard uniform or Winter uniform; default quantity is a positive whole number. Letter, shoe, waist and one-size presets can be edited by adding/removing sizes; at least one size is required. Validation is inline.
 - **Fixed drawing choices:** exactly **12** kinds: `suit`, `boots`, `polo`, `cargo`, `belt`, `cap`, `socks`, `jacket`, `vest`, `parka`, `dressshirt`, `longsleeve`. Artwork is fixed; choosing a drawing is the only artwork option. The polo uses its original default illustration.
-- The shared Add item/Update picker reads the bilingual catalog/group headings, skips empty groups, uses native labelled radios and an **88px live preview**. New items default to the **first catalog kind**, currently `suit`, not a separate placeholder drawing. The compact grid scrolls inside the dialog; groups have accessible names. A matching 12-kind fallback preserves the current drawing when catalog metadata is unavailable.
-- Existing items, including suits, can choose a different drawing through Update. Save applies drawing, size and quantity edits together; Cancel discards them. Stock, summary, hand-out, Received, holdings, returns and dialogs all use `uniformArt(kind, cls)`. History shows the item's current drawing, not an immutable artwork snapshot.
+- **Available drawings only:** Add item hides every drawing already used by any item; tiles are not merely disabled. Update shows the current item's own drawing plus unused drawings. Saving a different drawing releases the old one for later items. Availability is recalculated whenever a dialog opens, so adding an item removes its drawing from the next Add item.
+- The shared picker reads the bilingual catalog/group headings, drops groups whose drawings are all hidden, uses native labelled radios and an **88px live preview**. Add item preselects the first **available catalog** drawing, currently `jacket`; Update keeps the item's own drawing selected. The grid scrolls inside the dialog. A matching 12-kind fallback preserves current artwork when catalog metadata is unavailable.
+- If every drawing is taken, Add item shows a single explanatory sentence in the picker instead of tiles/groups. Save is disabled, with a concise availability reason beside it and linked via `aria-describedby`; submitting is also guarded. Editing an existing item still permits its current drawing.
+- Existing items, including suits, can choose a different drawing through Update. Stock items save drawing, size and quantity edits together; the suit saves drawing only. Cancel discards staged edits. All views use `uniformArt(kind, cls)` and history shows the item's current drawing, not an immutable artwork snapshot.
 - New items start with zero stock for every size: dashed zero cells, inclusion in Out of stock, Update and hand-out choices. Update can supply stock before hand-out. Drawing choice never changes tracking; new items are shelf-counted even with the suit drawing.
 - Managers alone see mutation actions. Hand out is the sole primary on Stock/Received; Record return is primary on Returns, with Hand out secondary. Dialog Save is primary while the page behind it is inert.
 
 ## Sample arithmetic and browser evidence
 
-The initial shelf snapshot is **347** before sample returns. Four returns restore **5** shelf pieces and two suits, giving **352 shelf pieces**, **4 suit holders**, **11 recipients**, **14 hand-out records**, **4 return records**, and **3 out-of-stock sizes across 2 pieces**. Winter contributes **40** of the 352. Assertions validate references, sizes, integer quantities, newest-first order, no over-return at any point, shelf reconciliation, holder removal, the winter total and the two one-jacket hand-outs.
+The initial shelf snapshot is **347** before sample returns. Four returns restore **5** shelf pieces and two suits, giving **352 shelf pieces**, **4 suit holders**, **11 recipients**, **14 hand-out records**, **4 return records**, and **3 out-of-stock sizes across 2 pieces**. Winter contributes **40** of the 352. Assertions validate references, stock sizes, integer quantities, newest-first order, no over-return at any point, shelf reconciliation, holder removal, the winter total and its two hand-outs. They explicitly require no size field for suit lines and no size list on the suit item.
 
-Real Chromium verification of the reduced catalog:
+Real Chromium verification:
 
-- **12 choices in 6 non-empty groups**. The default checked drawing is the first catalog entry, `suit`. All **12** choices were visited with native radio arrow keys in Arabic RTL. The metadata fallback also contains 12 choices and preserves `parka` in the winter jacket editor.
+- Drawing availability starts at **12 catalog kinds - 8 used = 4 available**: jacket, vest, dressshirt and longsleeve, under just **2** non-empty group headings. `jacket` is preselected. Adding `vest` leaves **3** available, with **0 vest radio nodes** in the next Add item. Editing polo then shows **4** choices (its own polo plus 3 unused), with polo selected. Replacing polo with jacket releases polo for the next Add item.
+- After adding the remaining free drawings, **12** kinds are used, Add item shows **0 radios / 0 group headings**, and Save is disabled with its reason. Enter cannot create a thirteenth item. At exhaustion, editing the vest still offers its **1** current drawing and enabled Save. The exhausted state was also checked at **390px Arabic RTL dark**, with a **390px** document width and no errors.
+- The tailored suit editor has **0 size/Add size/quantity fields** and retains the no-size data shape after Save. Hand-out choices are **None / Give**, quantity default **2**. Giving two suits to G3194 creates exactly `{ item: 'suit', qty: 2 }`, increases holders **4 → 5**, and produces chip text **G3194**, accessible name “Ali Hassan Al Blooshi · G3194”. Shelf remains **352**.
+- Returning one suit leaves **1** held and **5** holders; returning the second leaves **0** held and **4** holders. Both return lines omit size; shelf remains **352**. Received says “Holds a formal suit” and shows quantity without a size.
+- At **390px Arabic RTL dark**, the choices are **بدون / تسليم**, distinct from submit **صرف**. Handing out **2** and returning **2** gives holders **4 → 5 → 4**, with shelf **352** unchanged, no size on either line, no page overflow and a G-number-only holder chip. Received detail and the no-size summary were visually inspected.
+- Sized stock still reconciles: handed out **1** L polo, shelf **352 → 351**, polo L **22 → 21**; returned it, shelf **351 → 352**, polo L **21 → 22**. Both lines retain `size: 'L'`. `tab.errors()` stayed empty.
+
+Earlier fixed-drawing lifecycle checks (same stock baseline):
 - The stock polo SVG matches the original default `uniformArt('polo')` after DOM parsing. Items have no artwork-override field; both Add item and Update have no extra artwork controls.
 - Added Safety vest / سترة سلامة with drawing `vest`, one size and default quantity **1**. It started at **0**, then Update supplied **5**: shelf **352 → 357**. Hand-out **1** to G3194: item **5 → 4**, shelf **357 → 356**, holdings **1**. Return **1**: item **4 → 5**, shelf **356 → 357**, holdings **0**, return records **4 → 5**.
 - Separate **390px Arabic RTL dark** run added a vest, stocked **3**, handed out **1** and returned **1**: shelf **352 → 355 → 354 → 355**, item **0 → 3 → 2 → 3**, holdings **0 → 1 → 0**. Received showed the employee's vest and hid the list while detail was open.
@@ -63,13 +72,13 @@ Earlier return/editor verification also exercised required names, quantity/size 
 
 ## Bilingual review
 
-A read-only reviewer followed `.codex/agents/i18n-rtl-reviewer.toml` against inline `T.en`/`T.ar`, data and catalog labels. Remaining drawing/edit/save strings match in both languages; removed controls leave no stale visible or accessible strings. Groups and tiles are labelled, IDs remain dialog-prefixed, CSS stays logical, and winter descriptions/records remain bilingual. The reviewer found that the fallback lacked five retained drawings; these were added with exact catalog labels. Follow-up review is clean.
+A read-only reviewer followed `.codex/agents/i18n-rtl-reviewer.toml` against inline `T.en`/`T.ar`, data and catalog labels. The new availability sentences are correct peers with no interpolation; the picker, groups and disabled Save reason remain accessible and logical in RTL. The suit review confirmed no-size records, holdings, labels, returns and editor paths. Two findings were fixed: Arabic Give is **تسليم** rather than duplicating submit **صرف**, and the now-unused size-label helper was removed from both languages. The tailored suit description is grammatical in both languages. Follow-up review is clean.
 
 ## Design and final gates
 
 Tasteskill v2 app-screen style **achromatic-ledger**, seed **2089055445**, with GSSG palette/type retained. No redraw. Stock asks which sizes are on the shelf, Received asks who received and still holds what, and Returns asks who returned what. The size ladder and fixed drawings are the product-specific signature. Navy remains on size data; actions/chrome are ink and grey. The original Assets hero band and dark tokens stay. Zeros print 0; missing/not-applicable values are grey `-`. G-numbers and sizes are isolated and upright in RTL.
 
-Gates ran after ArtCatalog confirmed the final 12 drawings:
+Final gates include both the live drawing-availability rule and tailored suits:
 
 | Gate | English light | Arabic dark |
 |---|---|---|
@@ -78,7 +87,7 @@ Gates ran after ArtCatalog confirmed the final 12 drawings:
 | Returns inspector, 1440 / 768 / 390 | 0 FAIL, 3 WARN | 0 FAIL, 1 WARN |
 | `lint.mjs --app mockups/plan/uniform/` | 0 FAIL, 6 WARN | Same source gate |
 
-All **36** final inspector screenshots were opened as six labelled contact sheets. Reports/screenshots are under `/tmp/taste-uniform-fixed-{stock,received,returns}-{en,ar}/`, not committed.
+All **36** final inspector screenshots were opened as six labelled contact sheets. Reports/screenshots are under `/tmp/taste-uniform-tailored-{stock,received,returns}-{en,ar}/`, not committed.
 
 | Retained warning | Reason |
 |---|---|
@@ -95,7 +104,6 @@ Visual critique: the largest regions answer the ledger questions, edges align, t
 
 | Piece | Initial sizes |
 |---|---|
-| Formal suit | S, M, L, XL, XXL, XXXL; manager can add sizes |
 | Polo shirt | S, M, L, XL, XXL, XXXL |
 | Cargo trousers | Waist 28-44, even sizes |
 | Belt | One size |

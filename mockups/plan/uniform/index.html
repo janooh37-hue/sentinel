@@ -110,11 +110,10 @@ tbody.group tr:first-child + tr.piece td{border-block-start:0}
 .ladder li.zero .q{color:var(--muted);font-weight:400}
 .ladder li.skel{background:var(--active)}
 
-/* Suit holders: one chip per G number, the suit size beside it. */
+/* Suit holders: one chip per G number. Suits are tailored, with no sizes. */
 .holders{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
 .holder{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 10px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);text-decoration:none;font-size:13px}
 .holder:hover{background:var(--raised)}
-.holder b{font-weight:600}
 
 .ghost{height:32px;padding:0 12px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap}
 .ghost:hover{background:var(--raised)}
@@ -344,7 +343,7 @@ const T = {
     receivedLine: (p, d) => `<b>${plural(p, 'person', 'people')}</b> received uniform. The latest hand-out was on ${d}.`,
     receivedNone: 'No uniform has been handed out yet.',
     piece: 'Piece', inStock: 'In stock', bySize: 'Quantity by size', action: 'Action', update: 'Update',
-    oneSize: 'One size', sizeIs: s => `Size ${s}`,
+    oneSize: 'One size',
     summary: 'Summary', shelf: 'Pieces on the shelf', shelfSub: 'Suits are not counted here', holdersK: 'Suit holders', holdersSub: 'Employees holding a formal suit',
     out: 'Out of stock', outNone: 'Nothing is out of stock.',
     heldBy: n => `Held by ${plural(n, 'employee', 'employees')}`, noHolders: 'No one holds a suit yet.', holdersList: 'Suit holders by G-number',
@@ -355,14 +354,14 @@ const T = {
     people: n => plural(n, 'person', 'people'), noMatch: 'No one matches this search.',
     colEmployee: 'Employee', colReceived: 'Pieces received', colLast: 'Last hand-out',
     handouts: n => plural(n, 'hand-out', 'hand-outs'),
-    back: 'Back to the list', holdsSuit: s => `Holds a formal suit, size ${s}.`,
+    back: 'Back to the list', holdsSuit: 'Holds a formal suit.',
     handedOutBy: n => `Handed out by ${n}`, itemsN: n => plural(n, 'item', 'items'),
     giveTitle: 'Hand out uniform', takenBy: 'Taken by', pickerPh: 'Search by name or G-number', choose: 'Choose', change: 'Change',
     pickerEmpty: 'No employee matches.', lastReceived: d => `Last received uniform on ${d}`, neverReceived: 'Has not received uniform before',
     none: 'None', noneLeft: 'none left', qty: 'Quantity', dec: n => `Decrease ${n}`, inc: n => `Increase ${n}`, qtyOf: n => `Quantity of ${n}`,
     giver: n => `Handed out by ${n} (you)`, today: d => `Today, ${d}`,
     giveCount: n => plural(n, 'item', 'items'),
-    needEmployee: 'Choose the employee taking the uniform.', needPiece: 'Choose a size for at least one piece.',
+    needEmployee: 'Choose the employee taking the uniform.', needPiece: 'Choose at least one piece.',
     giveSave: 'Hand out', given: (n, who) => `Recorded: ${plural(n, 'item', 'items')} handed to ${who}.`,
     tabReturns: 'Returns', returnLabel: 'Return', recordReturn: 'Record return', returnTitle: 'Record return', returnedBy: 'Returned by',
     receivedBy: n => `Received by ${n}`, receiver: n => `Received by ${n} (you)`,
@@ -379,6 +378,8 @@ const T = {
     required: 'This name is required.', sizesRequired: 'Keep at least one size.', qtyRequired: 'Enter a whole quantity of at least 1.',
     removeSize: n => `Remove size ${n}`, itemSaved: 'Item added on this page, with zero stock.',
     editItem: 'Edit item',
+    giveChoice: 'Give',
+    noDrawing: 'Every drawing is already used by an item.', needDrawing: 'No unused drawing is available.',
   },
   ar: {
     docTitle: 'الأصول: الملابس (نموذج للاعتماد)',
@@ -394,7 +395,7 @@ const T = {
     receivedLine: (p, d) => `استلم الملابس <b>${arCount(p, ['موظف واحد', 'موظفان', 'موظفين', 'موظفًا'])}</b>، وكان آخر صرف في ${d}.`,
     receivedNone: 'لم تُصرف ملابس بعد.',
     piece: 'القطعة', inStock: 'الرصيد', bySize: 'الكمية حسب المقاس', action: 'الإجراء', update: 'تحديث',
-    oneSize: 'مقاس موحد', sizeIs: s => `المقاس ${s}`,
+    oneSize: 'مقاس موحد',
     summary: 'الملخص', shelf: 'القطع في المخزن', shelfSub: 'لا تُحتسب البدلات هنا', holdersK: 'حاملو البدلات', holdersSub: 'موظفون يحملون بدلة رسمية',
     out: 'نفد من المخزن', outNone: 'لا يوجد مقاس نافد.',
     heldBy: n => `يحملها ${arCount(n, ['موظف واحد', 'موظفان', 'موظفين', 'موظفًا'])}`, noHolders: 'لا يحمل أحد بدلة بعد.', holdersList: 'حاملو البدلات حسب الرقم الوظيفي',
@@ -405,14 +406,14 @@ const T = {
     people: n => arCount(n, ['شخص واحد', 'شخصان', 'أشخاص', 'شخصًا']), noMatch: 'لا يوجد موظف مطابق للبحث.',
     colEmployee: 'الموظف', colReceived: 'القطع المستلمة', colLast: 'آخر صرف',
     handouts: n => arCount(n, ['مرة واحدة', 'مرتان', 'مرات', 'مرة']),
-    back: 'العودة إلى القائمة', holdsSuit: s => `يحمل بدلة رسمية مقاس ${s}.`,
+    back: 'العودة إلى القائمة', holdsSuit: 'يحمل بدلة رسمية.',
     handedOutBy: n => `المسلِّم: ${n}`, itemsN: n => arCount(n, AR_PIECES),
     giveTitle: 'صرف ملابس', takenBy: 'المستلم', pickerPh: 'ابحث بالاسم أو الرقم الوظيفي', choose: 'اختيار', change: 'تغيير',
     pickerEmpty: 'لا يوجد موظف مطابق.', lastReceived: d => `آخر استلام للملابس في ${d}`, neverReceived: 'لم يستلم ملابس من قبل',
     none: 'بدون', noneLeft: 'نفد', qty: 'الكمية', dec: n => `إنقاص ${n}`, inc: n => `زيادة ${n}`, qtyOf: n => `كمية ${n}`,
     giver: n => `المسلِّم: ${n} (أنت)`, today: d => `اليوم، ${d}`,
     giveCount: n => arCount(n, AR_PIECES),
-    needEmployee: 'اختر الموظف المستلم.', needPiece: 'اختر مقاسًا لقطعة واحدة على الأقل.',
+    needEmployee: 'اختر الموظف المستلم.', needPiece: 'اختر قطعة واحدة على الأقل.',
     giveSave: 'صرف', given: (n, who) => `تم التسجيل: صرف ${arCount(n, ['قطعة واحدة', 'قطعتين', 'قطع', 'قطعة'])} إلى ${who}.`,
     tabReturns: 'المرتجعات', returnLabel: 'إرجاع', recordReturn: 'تسجيل إرجاع', returnTitle: 'تسجيل إرجاع', returnedBy: 'الموظف المُرجِع',
     receivedBy: n => `استلمه: ${n}`, receiver: n => `استلمه: ${n} (أنت)`,
@@ -430,6 +431,8 @@ const T = {
     required: 'الاسم مطلوب.', sizesRequired: 'أبقِ مقاسًا واحدًا على الأقل.', qtyRequired: 'أدخل عددًا صحيحًا لا يقل عن 1.',
     removeSize: n => `إزالة المقاس ${n}`, itemSaved: 'أُضيفت القطعة في هذه الصفحة برصيد صفر.',
     editItem: 'تعديل القطعة',
+    giveChoice: 'تسليم',
+    noDrawing: 'جميع الرسومات مستخدمة لقطع موجودة بالفعل.', needDrawing: 'لا يوجد رسم غير مستخدم.',
   },
 }
 
@@ -449,6 +452,7 @@ const lastRecord = id => U.records.find(r => r.employee === id)
 const searchIcon = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.3-3.3"/></svg>'
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 const szText = size => `<bdi dir="ltr">${esc(sizeLabel(size))}</bdi>`
+const lineFor = (item, qty, size) => ({ item: item.id, ...(item.tracking === 'stock' ? { size } : {}), qty })
 
 /* ---------- Stock tab ---------- */
 
@@ -470,7 +474,7 @@ function holderChips() {
   if (!hs.length) return `<p class="empty">${s.noHolders}</p>`
   return `<ul class="holders" aria-label="${s.holdersList}">${hs.map(h => {
     const e = U.employee(h.employee)
-    return `<li><a class="holder" href="?tab=received&person=${h.employee}" data-person="${h.employee}" title="${nameOf(e)}" aria-label="${nameOf(e)} · ${h.employee} · ${s.sizeIs(h.sizes.map(sz => esc(sizeLabel(sz))).join(state.lang === 'ar' ? '، ' : ', '))}"><span class="gid">${h.employee}</span><b>${h.sizes.map(szText).join(state.lang === 'ar' ? '، ' : ', ')}</b></a></li>`
+    return `<li><a class="holder" href="?tab=received&person=${h.employee}" data-person="${h.employee}" title="${nameOf(e)}" aria-label="${nameOf(e)} · ${h.employee}"><span class="gid">${h.employee}</span></a></li>`
   }).join('')}</ul>`
 }
 
@@ -526,7 +530,7 @@ function personDetail(p) {
   return `<section class="panel detail" aria-labelledby="pd-h">
     <div class="dhead"><button type="button" class="secondary back" data-back>${s.back}</button>
       <h2 id="pd-h">${nameOf(e)}</h2><span class="desc"><span class="gid">${e.id}</span> · ${posOf(e)}</span>
-      ${holder ? `<p class="holds">${s.holdsSuit(holder.sizes.map(szText).join(state.lang === 'ar' ? '، ' : ', '))}</p>` : ''}
+      ${holder ? `<p class="holds">${s.holdsSuit}</p>` : ''}
       <div class="holdlist"><h3>${s.currentlyHolds}</h3>${U.holdings(e.id).length ? recordLines(U.holdings(e.id)) : `<p class="empty">${s.holdsNone}</p>`}</div></div>
     <ol class="recs">${[...p.records.map(r => ({ ...r, returned: false })), ...U.returns.filter(r => r.employee === e.id).map(r => ({ ...r, returned: true }))].sort((a, b) => b.date.localeCompare(a.date)).map(r => `<li class="rec">
       <div class="rechead"><span class="recdate">${r.returned ? s.returnLabel + ' · ' : ''}${fmtDate(r.date)}</span><span class="desc">${r.returned ? s.receivedBy(nameOf(U.employee(r.receivedBy))) : s.handedOutBy(nameOf(U.employee(r.givenBy)))}</span></div>
@@ -566,7 +570,7 @@ function receivedView() {
 }
 
 function recordLines(lines) {
-  return `<ul class="lines">${lines.map(l => { const it = U.item(l.item); return `<li>${art(it)}<span><span class="name">${nameOf(it)}</span><span class="desc">${szText(l.size)}</span></span><span class="lqty">× ${fmt(l.qty)}</span></li>` }).join('')}</ul>`
+  return `<ul class="lines">${lines.map(l => { const it = U.item(l.item); return `<li>${art(it)}<span><span class="name">${nameOf(it)}</span>${it.tracking === 'stock' ? `<span class="desc">${szText(l.size)}</span>` : ''}</span><span class="lqty">× ${fmt(l.qty)}</span></li>` }).join('')}</ul>`
 }
 
 function returnsView() {
@@ -656,16 +660,16 @@ function openEditor(id) {
   const item = U.item(id)
   if (!item) return
   const s = t(), dlg = document.getElementById('editor')
-  const sizes = [...item.sizes], qty = item.qty ? [...item.qty] : []
+  const sizes = item.sizes ? [...item.sizes] : [], qty = item.qty ? [...item.qty] : []
   const holders = item.tracking === 'holders'
   dlg.innerHTML = `<form class="giveform" novalidate><div class="givehead dlghead">${art(item)}<div><h2 id="dlg-title">${s.editItem}: ${nameOf(item)}</h2><span class="desc">${descOf(item)}</span></div></div><div class="givebody" style="display:grid;gap:20px;padding-block:20px">
-    <fieldset class="sizes-form"><legend>${holders ? s.sizes : s.bySize}</legend><div id="size-rows" style="display:contents"></div></fieldset>
-    ${!sizes.includes('one') ? `<div><div class="addsize"><label class="field" for="new-size">${s.addSize}<input id="new-size" aria-describedby="size-error" maxlength="20"></label><button type="button" class="secondary" id="size-add">${s.add}</button></div><span class="field-error" id="size-error" role="alert"></span></div>` : ''}
+    ${!holders ? `<fieldset class="sizes-form"><legend>${s.bySize}</legend><div id="size-rows" style="display:contents"></div></fieldset>` : ''}
+    ${!holders && !sizes.includes('one') ? `<div><div class="addsize"><label class="field" for="new-size">${s.addSize}<input id="new-size" aria-describedby="size-error" maxlength="20"></label><button type="button" class="secondary" id="size-add">${s.add}</button></div><span class="field-error" id="size-error" role="alert"></span></div>` : ''}
     <div id="editor-art"></div></div><div class="givefoot"><span id="dlg-sum"></span><span class="actions"><button type="button" class="secondary" id="dlg-cancel">${s.cancel}</button><button class="primary">${s.save}</button></span></div></form>`
   const drawingChoice = drawingPicker(dlg.querySelector('#editor-art'), item)
   const refreshTotal = () => { document.getElementById('dlg-sum').textContent = holders ? '' : s.sum(fmt(qty.reduce((n, q) => n + q, 0))) }
   const drawRows = () => {
-    document.getElementById('size-rows').innerHTML = sizes.map((sz, k) => holders ? `<span class="sizechip">${szText(sz)}</span>` : `<label>${szText(sz)}<input inputmode="numeric" type="number" min="0" step="1" name="q${k}" value="${qty[k]}" data-quantity="${k}"></label>`).join('')
+    document.getElementById('size-rows').innerHTML = sizes.map((sz, k) => `<label>${szText(sz)}<input inputmode="numeric" type="number" min="0" step="1" name="q${k}" value="${qty[k]}" data-quantity="${k}"></label>`).join('')
     dlg.querySelectorAll('[data-quantity]').forEach(input => input.oninput = () => { qty[Number(input.dataset.quantity)] = Math.max(0, Math.floor(Number(input.value) || 0)); refreshTotal() })
     refreshTotal()
   }
@@ -675,28 +679,28 @@ function openEditor(id) {
     document.getElementById('size-error').textContent = error
     input.setAttribute('aria-invalid', String(Boolean(error)))
     if (error) { input.focus(); return }
-    sizes.push(value); if (!holders) qty.push(0)
+    sizes.push(value); qty.push(0)
     drawRows(); input.value = ''; input.focus()
   })
   document.getElementById('dlg-cancel').onclick = () => dlg.close()
   dlg.querySelector('form').onsubmit = e => {
     e.preventDefault()
-    item.sizes = sizes
-    if (!holders) item.qty = qty
+    if (!holders) { item.sizes = sizes; item.qty = qty }
     Object.assign(item, drawingChoice())
     dlg.close(); render(); toast(s.saved)
   }
   dlg.onclose = () => document.querySelector(`[data-item="${id}"]`)?.focus()
-  drawRows(); dlg.showModal()
+  if (!holders) drawRows()
+  dlg.showModal()
 }
 
 /* ---------- Hand-out form ---------- */
 
 function openGive() {
   const s = t()
-  const g = { employee: null, picks: Object.fromEntries(items.map(i => [i.id, { size: 'none', qty: i.defaultQty }])) }
+  const g = { employee: null, picks: Object.fromEntries(items.map(i => [i.id, { choice: 'none', qty: i.defaultQty }])) }
   const dlg = document.getElementById('give')
-  const maxFor = (item, size) => item.tracking === 'stock' ? item.qty[item.sizes.indexOf(size)] : 5
+  const maxFor = (item, choice) => item.tracking === 'stock' ? item.qty[item.sizes.indexOf(choice)] : 5
   const me = U.employee(U.currentUser)
 
   const pieceField = item => `<div class="pf" data-piece="${item.id}">
@@ -704,9 +708,9 @@ function openGive() {
     <div><span class="name" id="pn-${item.id}">${nameOf(item)}</span><span class="desc">${descOf(item)}</span>
       <div class="stepper" hidden><button type="button" data-step="-1" aria-label="${s.dec(nameOf(item))}">−</button><input inputmode="numeric" pattern="[0-9]*" value="${item.defaultQty}" aria-label="${s.qtyOf(nameOf(item))}"><button type="button" data-step="1" aria-label="${s.inc(nameOf(item))}">+</button></div></div>
     <div class="opts" role="radiogroup" aria-labelledby="pn-${item.id}">
-      ${['none', ...item.sizes].map(sz => {
-        const out = sz !== 'none' && item.tracking === 'stock' && maxFor(item, sz) === 0
-        return `<label class="opt${sz === 'none' ? ' none' : ''}"><input type="radio" name="sz-${item.id}" value="${esc(sz)}"${sz === 'none' ? ' checked' : ''}${out ? ' disabled' : ''}><span>${sz === 'none' ? s.none : szText(sz)}${out ? `<span class="sr">, ${s.noneLeft}</span>` : ''}</span></label>`
+      ${(item.tracking === 'holders' ? ['none', 'give'] : ['none', ...item.sizes]).map(choice => {
+        const out = choice !== 'none' && item.tracking === 'stock' && maxFor(item, choice) === 0
+        return `<label class="opt${choice === 'none' ? ' none' : ''}"><input type="radio" name="choice-${item.id}" value="${esc(choice)}"${choice === 'none' ? ' checked' : ''}${out ? ' disabled' : ''}><span>${choice === 'none' ? s.none : item.tracking === 'holders' ? s.giveChoice : szText(choice)}${out ? `<span class="sr">, ${s.noneLeft}</span>` : ''}</span></label>`
       }).join('')}
     </div></div>`
 
@@ -722,7 +726,7 @@ function openGive() {
       <div class="actions"><button type="button" class="secondary" id="give-cancel">${s.cancel}</button><button class="primary" id="give-save" value="give" aria-describedby="give-reason">${s.giveSave}</button></div>
     </div></form>`
 
-  const chosen = () => items.filter(i => g.picks[i.id].size !== 'none')
+  const chosen = () => items.filter(i => g.picks[i.id].choice !== 'none')
   const count = () => chosen().reduce((a, i) => a + g.picks[i.id].qty, 0)
   function refreshFoot() {
     const n = count()
@@ -740,7 +744,7 @@ function openGive() {
     const [dec, inc] = stepper.querySelectorAll('button')
     const setQty = v => {
       const pick = g.picks[item.id]
-      const max = maxFor(item, pick.size)
+      const max = maxFor(item, pick.choice)
       pick.qty = Math.min(Math.max(1, v || 1), max)
       qInput.value = pick.qty
       dec.disabled = pick.qty <= 1
@@ -748,7 +752,7 @@ function openGive() {
       refreshFoot()
     }
     pf.querySelectorAll('input[type=radio]').forEach(r => r.addEventListener('change', () => {
-      g.picks[item.id].size = r.value
+      g.picks[item.id].choice = r.value
       stepper.hidden = r.value === 'none'
       if (r.value !== 'none') setQty(g.picks[item.id].qty); else refreshFoot()
     }))
@@ -761,7 +765,7 @@ function openGive() {
     const ok = dlg.returnValue === 'give'
     dlg.returnValue = ''
     if (ok && g.employee && count()) {
-      const lines = chosen().map(i => ({ item: i.id, size: g.picks[i.id].size, qty: g.picks[i.id].qty }))
+      const lines = chosen().map(i => lineFor(i, g.picks[i.id].qty, g.picks[i.id].choice))
       for (const l of lines) { const it = U.item(l.item); if (it.tracking === 'stock') it.qty[it.sizes.indexOf(l.size)] -= l.qty }
       U.records.unshift({ id: `R-new-${U.records.length + 1}`, date: U.today, employee: g.employee, givenBy: U.currentUser, lines })
       state.person = g.employee
@@ -819,8 +823,9 @@ function openReturn() {
   }, focus)
   const drawRows = () => {
     dlg.querySelector('#return-rows').innerHTML = rows.length ? rows.map((l, k) => {
-      const item = U.item(l.item), accessibleName = `${nameOf(item)} · ${esc(sizeLabel(l.size))}`
-      return `<div class="returnrow" data-return-row="${k}">${art(item)}<div><span class="name">${nameOf(item)}</span><span class="desc">${szText(l.size)} · ${s.holdsN(l.qty)}</span></div><div class="stepper"><button type="button" data-step="-1" aria-label="${s.dec(accessibleName)}">−</button><input type="number" min="0" max="${l.qty}" step="1" value="0" aria-label="${s.qtyOf(accessibleName)}"><button type="button" data-step="1" aria-label="${s.inc(accessibleName)}">+</button></div></div>`
+      const item = U.item(l.item), sized = item.tracking === 'stock'
+      const accessibleName = nameOf(item) + (sized ? ` · ${esc(sizeLabel(l.size))}` : '')
+      return `<div class="returnrow" data-return-row="${k}">${art(item)}<div><span class="name">${nameOf(item)}</span><span class="desc">${sized ? `${szText(l.size)} · ` : ''}${s.holdsN(l.qty)}</span></div><div class="stepper"><button type="button" data-step="-1" aria-label="${s.dec(accessibleName)}">−</button><input type="number" min="0" max="${l.qty}" step="1" value="0" aria-label="${s.qtyOf(accessibleName)}"><button type="button" data-step="1" aria-label="${s.inc(accessibleName)}">+</button></div></div>`
     }).join('') : `<p class="empty">${employee ? s.holdsNone : s.needReturnEmployee}</p>`
     dlg.querySelectorAll('[data-return-row]').forEach(row => {
       const l = rows[Number(row.dataset.returnRow)], input = row.querySelector('input'), [dec, inc] = row.querySelectorAll('button')
@@ -832,7 +837,7 @@ function openReturn() {
   dlg.querySelector('form').onsubmit = e => {
     e.preventDefault()
     if (!employee || !total()) return
-    const lines = rows.filter(l => l.returnQty > 0).map(l => ({ item: l.item, size: l.size, qty: l.returnQty }))
+    const lines = rows.filter(l => l.returnQty > 0).map(l => lineFor(U.item(l.item), l.returnQty, l.size))
     for (const l of lines) { const item = U.item(l.item); if (item.tracking === 'stock') item.qty[item.sizes.indexOf(l.size)] += l.qty }
     const record = { id: `T-new-${U.returns.length + 1}`, date: U.today, employee, receivedBy: U.currentUser, lines }
     U.returns.unshift(record); state.returnId = record.id; state.open = true
@@ -859,13 +864,19 @@ function drawingPicker(box, initial = {}) {
     { kind: 'dressshirt', en: 'Formal shirt', ar: 'قميص رسمي' },
     { kind: 'longsleeve', en: 'Long-sleeve polo', ar: 'قميص بولو بأكمام طويلة' },
   ]
-  const drawingGroups = (window.UNIFORM_ART_KINDS && window.UNIFORM_ART_GROUPS || [{ id: 'all', en: T.en.drawing, ar: T.ar.drawing }]).filter(group => catalog.some(k => (k.group || 'all') === group.id))
-  let kind = catalog.some(k => k.kind === initial.art) ? initial.art : catalog[0].kind
-  const selectedKind = () => catalog.find(k => k.kind === kind)
+  const used = new Set(items.map(item => item.art))
+  const available = catalog.filter(k => k.kind === initial.art || !used.has(k.kind))
+  if (!available.length) {
+    box.innerHTML = `<section aria-labelledby="${prefix}-h"><h3 class="flabel" id="${prefix}-h">${s.drawing}</h3><p class="empty">${s.noDrawing}</p></section>`
+    return () => null
+  }
+  const drawingGroups = (window.UNIFORM_ART_KINDS && window.UNIFORM_ART_GROUPS || [{ id: 'all', en: T.en.drawing, ar: T.ar.drawing }]).filter(group => available.some(k => (k.group || 'all') === group.id))
+  let kind = available.some(k => k.kind === initial.art) ? initial.art : available[0].kind
+  const selectedKind = () => available.find(k => k.kind === kind)
   box.innerHTML = `<section aria-labelledby="${prefix}-h"><h3 class="flabel" id="${prefix}-h">${s.drawing}</h3>
     <div class="drawingpreview" id="${prefix}-preview" aria-live="polite"></div>
     <fieldset class="drawingcatalog"><legend class="sr">${s.drawing}</legend>${drawingGroups.map(group => {
-      const kinds = catalog.filter(k => (k.group || 'all') === group.id)
+      const kinds = available.filter(k => (k.group || 'all') === group.id)
       return `<div class="drawinggroup" role="group" aria-labelledby="${prefix}-g-${group.id}"><h4 id="${prefix}-g-${group.id}">${L(group)}</h4><div class="drawinggrid">${kinds.map(k => `<label class="drawingtile">${art({ art: k.kind })}<span>${L(k)}</span><input type="radio" name="${prefix}-drawing" value="${k.kind}"${k.kind === kind ? ' checked' : ''}></label>`).join('')}</div></div>`
     }).join('')}</fieldset></section>`
   const preview = () => { box.querySelector('.drawingpreview').innerHTML = `${art({ art: kind })}<span>${s.previewDrawing}: ${L(selectedKind())}</span>` }
@@ -886,8 +897,11 @@ function openAddItem() {
     <section aria-labelledby="item-sizes-h"><h3 class="flabel" id="item-sizes-h">${s.sizes}</h3><label class="field">${s.preset}<select id="item-preset">${Object.entries(s.presets).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label><div class="sizechips" id="item-sizes"></div>
       <div class="addsize"><label class="field" for="item-new-size">${s.addSize}<input id="item-new-size" maxlength="20" aria-describedby="item-size-error"></label><button type="button" class="secondary" id="item-size-add">${s.add}</button></div><span class="field-error" id="item-size-error" role="alert"></span></section>
     <div id="item-art"></div></div>
-    <div class="givefoot"><div class="actions" style="margin-inline-start:auto"><button type="button" class="secondary" id="item-cancel">${s.cancel}</button><button class="primary">${s.save}</button></div></div></form>`
+    <div class="givefoot"><span class="reason" id="item-save-reason"></span><div class="actions" style="margin-inline-start:auto"><button type="button" class="secondary" id="item-cancel">${s.cancel}</button><button class="primary" id="item-save" aria-describedby="item-save-reason">${s.save}</button></div></div></form>`
   const drawingChoice = drawingPicker(dlg.querySelector('#item-art'))
+  const noDrawing = !drawingChoice()
+  dlg.querySelector('#item-save').disabled = noDrawing
+  dlg.querySelector('#item-save-reason').textContent = noDrawing ? s.needDrawing : ''
   const sizeError = message => { dlg.querySelector('#item-size-error').textContent = message; dlg.querySelector('#item-new-size').setAttribute('aria-invalid', String(Boolean(message))) }
   const drawSizes = () => {
     dlg.querySelector('#item-sizes').innerHTML = sizes.map((sz, k) => `<span class="sizechip">${szText(sz)}<button type="button" data-remove="${k}" aria-label="${s.removeSize(esc(sizeLabel(sz)))}">×</button></span>`).join('')
@@ -904,6 +918,8 @@ function openAddItem() {
   dlg.querySelector('#item-cancel').onclick = () => dlg.close()
   dlg.querySelector('form').onsubmit = e => {
     e.preventDefault()
+    const drawing = drawingChoice()
+    if (!drawing) return
     const values = Object.fromEntries(['en', 'ar', 'dEn', 'dAr'].map(key => [key, dlg.querySelector(`#item-${key}`).value.trim()]))
     let first = null
     for (const key of ['en', 'ar']) {
@@ -918,7 +934,7 @@ function openAddItem() {
     sizeError(sizes.length ? '' : s.sizesRequired)
     if (!sizes.length && !first) first = dlg.querySelector('#item-new-size')
     if (first) { first.focus(); return }
-    items.push({ id: `custom-${items.length + 1}`, group: dlg.querySelector('#item-group').value, ...drawingChoice(), tracking: 'stock', defaultQty, ...values, sizes: [...sizes], qty: sizes.map(() => 0) })
+    items.push({ id: `custom-${items.length + 1}`, group: dlg.querySelector('#item-group').value, ...drawing, tracking: 'stock', defaultQty, ...values, sizes: [...sizes], qty: sizes.map(() => 0) })
     dlg.close(); render(); toast(s.itemSaved)
   }
   dlg.onclose = () => document.getElementById('add-item')?.focus()
