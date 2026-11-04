@@ -273,7 +273,7 @@ function mountStockSurface(surface: 'receive' | 'history' | 'stock', item = ITEM
   render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}>
     {surface === 'receive' ? <ReceiveStockDialog open onOpenChange={onOpenChange} /> : surface === 'history' ? <StockHistory open item={item} onOpenChange={onOpenChange} /> : <StockTab onHandOut={vi.fn()} />}
   </I18nextProvider></QueryClientProvider>)
-  return { onOpenChange }
+  return { onOpenChange, client }
 }
 
 describe('Receive stock and inspect posting history', () => {
@@ -284,6 +284,117 @@ describe('Receive stock and inspect posting history', () => {
     vi.spyOn(api, 'getUniformSummary').mockResolvedValue({ shelf_total: 8, holder_count: 0, suits_issued: 0, out_of_stock: 0, low_sizes: 0 })
     vi.spyOn(api, 'voidUniformReceipt').mockResolvedValue({ ...RECEIPT, void_reason: 'Wrong delivery', voided_at: '2026-11-04T12:00:00' })
     vi.spyOn(api, 'voidUniformAdjustment').mockResolvedValue({ ...ADJUSTMENT, void_reason: 'Wrong count', voided_at: '2026-11-04T12:00:00' })
+  })
+  it('retains cached suit totals when the stock summary refresh fails', async () => {
+    vi.mocked(api.getUniformSummary).mockResolvedValue({ shelf_total: 8, holder_count: 1, suits_issued: 3, out_of_stock: 0, low_sizes: 0 })
+    const { client } = mountStockSurface('stock')
+    const total = await screen.findByText('3 suits issued')
+    vi.mocked(api.getUniformSummary).mockRejectedValueOnce(new Error('offline'))
+    await act(async () => { await client.invalidateQueries({ queryKey: uniformKeys.summary }) })
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('assets.uniform.refreshRecordsError'))
+    expect(screen.getByText('3 suits issued')).toBe(total)
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    expect(screen.getByText('3 suits issued')).toBe(total)
+  })
+  it.each(['add', 'edit', 'receive', 'history'] as const)('keeps the %s dialog and its draft mounted through StockTab catalogue refresh failure and retry', async kind => {
+    const { client } = mountStockSurface('stock')
+    const user = userEvent.setup()
+    const updates = await screen.findAllByRole('button', { name: 'Update' })
+    if (kind === 'add') await user.click(screen.getByRole('button', { name: 'Add item' }))
+    else if (kind === 'edit') await user.click(updates[0])
+    else if (kind === 'receive') await user.click(screen.getByRole('button', { name: 'Receive stock' }))
+    else await user.click(screen.getAllByRole('button', { name: 'Stock history' })[0])
+    const dialog = await screen.findByRole('dialog')
+    const content = within(dialog)
+    let input: HTMLElement
+    let assertDraft: () => void
+    if (kind === 'add' || kind === 'edit') {
+      input = await content.findByLabelText('Name in English')
+      await user.clear(input)
+      await user.type(input, 'Field shirt')
+      const arabic = content.getByLabelText('Name in Arabic')
+      await user.clear(arabic)
+      await user.type(arabic, 'قميص ميداني')
+      await user.selectOptions(content.getByLabelText('Group'), 'guard')
+      await user.type(content.getByLabelText('Add size'), 'Tall{Enter}')
+      if (kind === 'edit') {
+        fireEvent.change(content.getByRole('spinbutton', { name: 'Quantity of M' }), { target: { value: '6' } })
+        await user.type(content.getByLabelText('Reason for adjustment'), 'Physical count')
+      }
+      const drawing = content.getByRole('radio', { name: 'Formal shirt' })
+      await user.click(drawing)
+      assertDraft = () => {
+        expect(content.getByLabelText('Name in English')).toBe(input)
+        expect(input).toHaveValue('Field shirt')
+        expect(content.getByLabelText('Name in Arabic')).toBe(arabic)
+        expect(arabic).toHaveValue('قميص ميداني')
+        expect(content.getByRole('button', { name: 'Remove size Tall' })).toBeInTheDocument()
+        expect(content.getByRole('radio', { name: 'Formal shirt' })).toBe(drawing)
+        expect(drawing).toBeChecked()
+        if (kind === 'edit') {
+          expect(content.getByRole('spinbutton', { name: 'Quantity of M' })).toHaveValue(6)
+          expect(content.getByLabelText('Reason for adjustment')).toHaveValue('Physical count')
+        }
+        expect(content.getByRole('button', { name: 'Save' })).toBeEnabled()
+      }
+    } else if (kind === 'receive') {
+      input = await content.findByRole('spinbutton', { name: 'Quantity of Polo shirt M' })
+      fireEvent.change(input, { target: { value: '5' } })
+      await user.type(content.getByLabelText('Reference'), 'HQ-42')
+      await user.type(content.getByLabelText('Note'), 'Delivery draft')
+      fireEvent.change(content.getByLabelText('Receipt date'), { target: { value: '2026-01-02' } })
+      assertDraft = () => {
+        expect(content.getByRole('spinbutton', { name: 'Quantity of Polo shirt M' })).toBe(input)
+        expect(input).toHaveValue(5)
+        expect(content.getByLabelText('Reference')).toHaveValue('HQ-42')
+        expect(content.getByLabelText('Note')).toHaveValue('Delivery draft')
+        expect(content.getByLabelText('Receipt date')).toHaveValue('2026-01-02')
+        expect(content.getByRole('button', { name: 'Save' })).toBeEnabled()
+      }
+    } else {
+      await content.findByText('Count correction')
+      await user.click(content.getAllByRole('button', { name: 'Void record' })[0])
+      input = content.getByRole('textbox', { name: 'Reason for voiding' })
+      await user.type(input, 'Correction draft')
+      assertDraft = () => {
+        expect(content.getByRole('textbox', { name: 'Reason for voiding' })).toBe(input)
+        expect(input).toHaveValue('Correction draft')
+        expect(content.getByText('HQ-20')).toBeVisible()
+        expect(content.getByText('Count correction')).toBeVisible()
+      }
+    }
+    vi.mocked(api.listUniformItems).mockRejectedValue(new Error('offline'))
+    await act(async () => { await client.invalidateQueries({ queryKey: uniformKeys.all }) })
+    expect(await screen.findByRole('dialog')).toBe(dialog)
+    expect(content.getAllByRole('alert').length).toBeGreaterThan(0)
+    assertDraft()
+    vi.mocked(api.listUniformItems).mockResolvedValue([ITEM, { ...ITEM, id: 3, drawing: 'boots', sizes: [] }])
+    await user.click(content.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(content.queryByRole('alert')).not.toBeInTheDocument())
+    expect(screen.getByRole('dialog')).toBe(dialog)
+    assertDraft()
+  })
+
+  it.each(['receipts', 'adjustments'] as const)('keeps an inline void draft while cached %s fail to refresh', async resource => {
+    const { client } = mountStockSurface('history')
+    await screen.findByText('Count correction')
+    const user = userEvent.setup()
+    await user.click(screen.getAllByRole('button', { name: 'Void record' })[0])
+    const input = screen.getByRole('textbox', { name: 'Reason for voiding' })
+    await user.type(input, 'Correction draft')
+    if (resource === 'receipts') vi.mocked(api.listUniformReceipts).mockRejectedValueOnce(new Error('offline'))
+    else vi.mocked(api.listUniformAdjustments).mockRejectedValueOnce(new Error('offline'))
+    const queryKey = resource === 'receipts' ? uniformKeys.receipts : uniformKeys.adjustments
+    await act(async () => { await client.invalidateQueries({ queryKey }) })
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('assets.uniform.refreshRecordsError'))
+    expect(screen.getByRole('textbox', { name: 'Reason for voiding' })).toBe(input)
+    expect(input).toHaveValue('Correction draft')
+    expect(screen.getByText('HQ-20')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    expect(screen.getByRole('textbox', { name: 'Reason for voiding' })).toBe(input)
+    expect(input).toHaveValue('Correction draft')
   })
   it('requires positive received quantities, normalizes them and posts a dated receipt', async () => {
     const { onOpenChange } = mountStockSurface('receive')

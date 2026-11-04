@@ -33,7 +33,9 @@ export function PersonPanel({ person, headingRef, onBack, className }: Props): R
   const employee = { id: person.employee_id, name_en: person.name_en, name_ar: person.name_ar }
   const holdings = records.data?.holdings.filter(line => line.qty > 0) ?? []
   const total = holdings.reduce((sum, line) => sum + line.qty, 0)
-  const ready = records.isSuccess && items.isSuccess
+  const ready = records.data !== undefined && items.data !== undefined
+  const initialError = (records.isError && records.data === undefined) || (items.isError && items.data === undefined)
+  const refreshError = (records.isError && records.data !== undefined) || (items.isError && items.data !== undefined)
   const actor = (en: string | null | undefined, ar: string | null | undefined) => `\u2068${pickEmployeeName({ name_en: en || t('assets.uniform.received.unknownActor'), name_ar: ar }, i18n.language)}\u2069`
   const lines = (rows: UniformIssueLine[] | UniformReturnRead['lines']) => <ul className="divide-y divide-hairline">{rows.map((line, index) => {
     const piece = items.data?.find(item => item.id === line.item_id)
@@ -60,7 +62,8 @@ export function PersonPanel({ person, headingRef, onBack, className }: Props): R
         {ready && total === 0 && <p id={`${id}-return-reason`} className="w-full text-xs text-muted-foreground">{t('assets.uniform.received.noHoldingsReturn')}</p>}
       </div>}
     </div>
-    {records.isError || items.isError ? <div className="p-4"><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.received.errorDetail')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => { void Promise.all([records.refetch(), items.refetch()]).then(() => headingRef.current?.focus()) }}>{t('assets.uniform.retry')}</Button></div>
+    {refreshError && <div className="border-b border-border p-4"><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.refreshRecordsError')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => { void Promise.all([records.refetch(), items.refetch()]) }}>{t('assets.uniform.retry')}</Button></div>}
+    {initialError ? <div className="p-4"><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.received.errorDetail')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => { void Promise.all([records.refetch(), items.refetch()]).then(() => headingRef.current?.focus()) }}>{t('assets.uniform.retry')}</Button></div>
       : !ready ? <p role="status" className="p-4 text-sm text-muted-foreground">{t('assets.uniform.loading')}</p>
       : <>
         <section aria-label={t('assets.uniform.currentlyHolds')} className="border-b border-border p-4">

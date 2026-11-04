@@ -55,16 +55,22 @@ export function ReturnsTab(): React.JSX.Element {
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-return-card="${id}"]`)?.focus())
   }
 
-  if (returns.isError) return <section className="rounded-xl border border-border bg-surface p-4"><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.errorReturns')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => void returns.refetch()}>{t('assets.uniform.retry')}</Button></section>
+  if (returns.isError && returns.data === undefined) return <section className="rounded-xl border border-border bg-surface p-4"><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.errorReturns')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => void returns.refetch()}>{t('assets.uniform.retry')}</Button></section>
   return <div className="grid items-start gap-4 min-[1000px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    {(returns.isError || items.isError || people.isError) && <div className="col-span-full rounded-xl border border-border bg-surface p-4">
+      {(returns.isError || (items.isError && items.data !== undefined) || (people.isError && people.data !== undefined)) && <p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.refreshRecordsError')}</p>}
+      {items.isError && items.data === undefined && <p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.error')}</p>}
+      {people.isError && people.data === undefined && <p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.errorPeople')}</p>}
+      <Button type="button" variant="ghost" className="min-h-11" onClick={() => { void Promise.all([returns.refetch(), items.refetch(), people.refetch()]) }}>{t('assets.uniform.retry')}</Button>
+    </div>}
     <section aria-labelledby="uniform-returns-h" className={cn('overflow-hidden rounded-xl border border-border bg-surface', open && 'max-[999px]:hidden')}>
       <h2 id="uniform-returns-h" className="sr-only">{t('assets.uniform.tabReturns')}</h2>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-3">
         <label className="min-w-0 flex-1"><span className="sr-only">{t('assets.uniform.returnSearch')}</span>
           <Input type="search" dir="auto" className="min-h-11" placeholder={t('assets.uniform.searchPh')} value={query} onChange={event => setQuery(event.target.value)} /></label>
-        {returns.isSuccess && <span className="text-sm text-muted-foreground">{t('assets.uniform.returnCount', { count: records.length })}</span>}
+        {returns.data !== undefined && <span className="text-sm text-muted-foreground">{t('assets.uniform.returnCount', { count: records.length })}</span>}
       </div>
-      {returns.isPending ? <div aria-busy="true" className="p-4"><p role="status" className="mb-3 text-sm text-muted-foreground">{t('assets.uniform.loading')}</p>{[0, 1, 2].map(row => <Skeleton key={row} className="mb-3 h-16 w-full" />)}</div>
+      {returns.data === undefined ? <div aria-busy="true" className="p-4"><p role="status" className="mb-3 text-sm text-muted-foreground">{t('assets.uniform.loading')}</p>{[0, 1, 2].map(row => <Skeleton key={row} className="mb-3 h-16 w-full" />)}</div>
         : records.length === 0 ? <p className="p-5 text-sm text-muted-foreground">{returns.data.length ? t('assets.uniform.noMatch') : t('assets.uniform.returnsNone')}</p>
         : <ol className="divide-y divide-hairline">{records.map(record => <li key={record.id}>
           <button type="button" data-return-card={record.id} aria-current={selected?.id === record.id ? 'true' : undefined} onClick={() => select(record)}
@@ -79,7 +85,7 @@ export function ReturnsTab(): React.JSX.Element {
           </button>
         </li>)}</ol>}
     </section>
-    {returns.isSuccess && selected && <section aria-labelledby="uniform-return-h" className={cn('rounded-xl border border-border bg-surface p-4 min-[1000px]:sticky min-[1000px]:top-4', !open && 'max-[999px]:hidden')}>
+    {returns.data !== undefined && selected && <section aria-labelledby="uniform-return-h" className={cn('rounded-xl border border-border bg-surface p-4 min-[1000px]:sticky min-[1000px]:top-4', !open && 'max-[999px]:hidden')}>
       <Button type="button" variant="secondary" className="mb-3 min-h-11 min-[1000px]:hidden" onClick={back}>{t('assets.uniform.back')}</Button>
       <h2 id="uniform-return-h" ref={detailHeading} tabIndex={-1} dir="auto" className="text-lg font-semibold outline-none">{person(selected.employee_id)}</h2>
       <p className="text-sm text-muted-foreground"><bdi dir="ltr">{selected.employee_id}</bdi> · {formatDmy(selected.returned_on)}</p>

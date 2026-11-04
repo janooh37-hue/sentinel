@@ -84,17 +84,14 @@ export function UniformTab({ employeeId }: Props): React.JSX.Element {
     return entries.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
   }, [record.data])
 
-  if (record.isLoading || items.isLoading) {
-    return (
-      <div className="rounded-2xl bg-surface p-12 text-center text-muted-foreground" role="status">
-        {t('assets.uniform.loading')}
-      </div>
-    )
-  }
-  if (record.isError || items.isError) {
+  const ready = record.data !== undefined && items.data !== undefined
+  const initialError = (record.isError && record.data === undefined) || (items.isError && items.data === undefined)
+  const refreshError = (record.isError && record.data !== undefined) || (items.isError && items.data !== undefined)
+
+  if (initialError) {
     return (
       <div className="rounded-2xl bg-surface p-12 text-center text-muted-foreground" role="alert">
-        <p>{uniformErrorMessage(record.error ?? items.error)}</p>
+        <p>{uniformErrorMessage(record.isError && record.data === undefined ? record.error : items.error)}</p>
         <button
           type="button"
           onClick={() => {
@@ -105,6 +102,13 @@ export function UniformTab({ employeeId }: Props): React.JSX.Element {
         >
           {t('assets.uniform.retry')}
         </button>
+      </div>
+    )
+  }
+  if (!ready) {
+    return (
+      <div className="rounded-2xl bg-surface p-12 text-center text-muted-foreground" role="status">
+        {t('assets.uniform.loading')}
       </div>
     )
   }
@@ -162,6 +166,19 @@ export function UniformTab({ employeeId }: Props): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-4">
+      {refreshError && <div className="rounded-2xl border border-border bg-surface p-4">
+        <p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.refreshRecordsError')}</p>
+        <button
+          type="button"
+          onClick={() => {
+            void record.refetch()
+            void items.refetch()
+          }}
+          className="mt-3 min-h-11 rounded-lg border border-border px-4 font-semibold text-foreground hover:bg-surface-tinted"
+        >
+          {t('assets.uniform.retry')}
+        </button>
+      </div>}
       <section
         aria-labelledby="uniform-holdings-heading"
         className="rounded-2xl border border-hairline bg-surface p-4"

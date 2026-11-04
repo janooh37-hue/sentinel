@@ -83,9 +83,10 @@ ledger and audit row. Receipt voids reverse the entire receipt, and their histor
 shows every affected item and size before confirmation.
 Uniform posting and archive timestamps are serialized with an explicit UTC offset,
 so the browser does not interpret stored UTC values as local wall-clock time.
-Voids cannot change archived items or sizes. History retains archived size labels,
-and catalogue refresh failures preserve open hand-out and Add item drafts with an
-inline Retry action.
+Voids cannot change archived items or sizes. History retains archived size labels.
+Background refresh failures keep cached Uniform lists, employee history, search
+results, and every open dialog mounted, with inline errors and Retry actions.
+Draft entries are retained through failures and successful retries.
 
 ## Requirements
 

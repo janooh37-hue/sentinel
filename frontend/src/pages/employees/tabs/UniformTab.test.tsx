@@ -9,7 +9,8 @@
  *   5. The tab is read-only: no mutation controls.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getUniformEmployee, listUniformItems, mobile } = vi.hoisted(() => ({
@@ -26,6 +27,7 @@ vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => mobile.value }))
 
 import { EmployeeTabChips } from '../EmployeeTabChips'
 import { UniformTab } from './UniformTab'
+import { uniformKeys } from '@/pages/assets/uniform/uniformQueries'
 
 const ITEMS = [
   {
@@ -55,11 +57,12 @@ const RECORD = {
 
 function renderTab() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <UniformTab employeeId="G1001" />
     </QueryClientProvider>,
   )
+  return { ...view, client }
 }
 
 beforeEach(() => {
@@ -70,6 +73,54 @@ beforeEach(() => {
 })
 
 describe('UniformTab', () => {
+  it.each([
+    ['records', false],
+    ['items', false],
+    ['records', true],
+    ['items', true],
+  ] as const)('keeps cached holdings and history mounted after %s refresh failure on mobile=%s and retries inline', async (dependency, isMobile) => {
+    mobile.value = isMobile
+    const { client } = renderTab()
+    const holdings = await screen.findByRole('region', { name: 'Currently holds' })
+    const history = screen.getByRole('region', { name: 'History' })
+    const held = within(holdings).getByText('Polo shirt')
+    const voidReason = within(history).getByText('Wrong person')
+    const key = dependency === 'records' ? uniformKeys.employee('G1001') : uniformKeys.items(true)
+    if (dependency === 'records') getUniformEmployee.mockRejectedValue(new Error('Refresh offline'))
+    else listUniformItems.mockRejectedValue(new Error('Refresh offline'))
+    await act(async () => { await client.invalidateQueries({ queryKey: key, exact: true }) })
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not refresh uniform records. Showing the last loaded data.')
+    expect(screen.getByRole('region', { name: 'Currently holds' })).toBe(holdings)
+    expect(screen.getByRole('region', { name: 'History' })).toBe(history)
+    expect(within(holdings).getByText('Polo shirt')).toBe(held)
+    expect(holdings).toHaveTextContent('XL')
+    expect(within(history).getByText('Wrong person')).toBe(voidReason)
+    expect(history).toHaveTextContent('Damaged')
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: /Hand out|Record return|Void record/ })).not.toBeInTheDocument()
+    getUniformEmployee.mockResolvedValue(RECORD)
+    listUniformItems.mockResolvedValue(ITEMS)
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    expect(client.getQueryState(key)?.status).toBe('success')
+    expect(screen.getByRole('region', { name: 'Currently holds' })).toBe(holdings)
+    expect(screen.getByRole('region', { name: 'History' })).toBe(history)
+    expect(within(holdings).getByText('Polo shirt')).toBe(held)
+    expect(within(history).getByText('Wrong person')).toBe(voidReason)
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it.each(['records', 'items'] as const)('shows an initial error instead of empty holdings when %s has no cache', async dependency => {
+    if (dependency === 'records') getUniformEmployee.mockRejectedValue(new Error('Initial offline'))
+    else listUniformItems.mockRejectedValue(new Error('Initial offline'))
+    renderTab()
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Currently holds' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'History' })).not.toBeInTheDocument()
+    expect(screen.queryByText('No uniform currently held.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
+  })
+
   it('lists net holdings before history and drops zero holdings', async () => {
     renderTab()
     const holdings = await screen.findByRole('region', { name: 'Currently holds' })

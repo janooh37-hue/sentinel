@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router-dom'
@@ -84,6 +84,42 @@ describe('Record return', () => {
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
     expect(screen.getByText('Ali Hassan')).toBeInTheDocument()
     expect(api.createUniformReturn).not.toHaveBeenCalled()
+  })
+
+  it('retains cached holder search results through refresh failure and retry', async () => {
+    const { client } = mount(<ReturnDialog open onOpenChange={vi.fn()} />)
+    const user = userEvent.setup()
+    const input = await screen.findByRole('searchbox')
+    await user.type(input, 'G31')
+    const employee = await screen.findByRole('button', { name: /Ali Hassan/ })
+    vi.mocked(api.listUniformRecipients).mockRejectedValueOnce(new Error('offline'))
+    await act(async () => { await client.invalidateQueries({ queryKey: uniformKeys.recipients('G31') }) })
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('assets.uniform.lookupError'))
+    expect(screen.getByRole('searchbox')).toBe(input)
+    expect(input).toHaveValue('G31')
+    expect(screen.getByRole('button', { name: /Ali Hassan/ })).toBe(employee)
+    expect(employee).toBeEnabled()
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /Ali Hassan/ })).toBe(employee)
+    await user.click(input)
+    await user.keyboard('{Enter}')
+    expect(await screen.findByRole('group', { name: 'Polo shirt' })).toBeInTheDocument()
+  })
+
+  it('retains the cached no-holder notice when the unfiltered recipient refresh fails', async () => {
+    vi.mocked(api.listUniformRecipients).mockResolvedValue([OMAR])
+    const { client } = mount(<ReturnDialog open onOpenChange={vi.fn()} />)
+    const notice = await screen.findByText(i18n.t('assets.uniform.returnEmpty'))
+    const input = screen.getByRole('searchbox')
+    vi.mocked(api.listUniformRecipients).mockRejectedValueOnce(new Error('offline'))
+    await act(async () => { await client.invalidateQueries({ queryKey: uniformKeys.recipients('') }) })
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('assets.uniform.lookupError'))
+    expect(screen.getByText(i18n.t('assets.uniform.returnEmpty'))).toBe(notice)
+    expect(screen.getByRole('searchbox')).toBe(input)
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    expect(screen.getByText(i18n.t('assets.uniform.returnEmpty'))).toBe(notice)
   })
 
   it('discards the previous employee quantities and conditions when the employee changes', async () => {
@@ -194,6 +230,67 @@ describe('Record return', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('The return exceeds the quantity held by the employee.')
     expect(onOpenChange).not.toHaveBeenCalledWith(false)
+  })
+
+  it.each(['items', 'employee'] as const)('keeps return controls mounted when the cached %s query fails and retries successfully', async dependency => {
+    const { client } = mount(<ReturnDialog open onOpenChange={vi.fn()} />)
+    const user = await chooseAli()
+    const suit = screen.getByRole('group', { name: 'Formal suit' })
+    const polo = screen.getByRole('group', { name: 'Polo shirt' })
+    const suitQty = within(suit).getByRole('spinbutton')
+    const poloQty = within(polo).getByRole('spinbutton')
+    const damaged = within(polo).getByRole('radio', { name: 'Damaged' })
+    const employee = screen.getByText('Ali Hassan')
+    fireEvent.change(suitQty, { target: { value: '1' } })
+    fireEvent.change(poloQty, { target: { value: '2' } })
+    await user.click(damaged)
+    const queryKey = dependency === 'items' ? uniformKeys.items(true) : uniformKeys.employee(ALI.employee_id)
+    if (dependency === 'items') vi.mocked(api.listUniformItems).mockRejectedValueOnce(new Error('offline'))
+    else vi.mocked(api.getUniformEmployee).mockRejectedValueOnce(new Error('offline'))
+    await act(async () => { await client.invalidateQueries({ queryKey }) })
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t(dependency === 'items' ? 'assets.uniform.refreshError' : 'assets.uniform.refreshRecordsError'))
+    expect(client.getQueryState(queryKey)?.status).toBe('error')
+    expect(client.getQueryData(queryKey)).toBeDefined()
+    const expectDraft = (quantity: number) => {
+      expect(screen.getByText('Ali Hassan')).toBe(employee)
+      expect(screen.getByRole('group', { name: 'Formal suit' })).toBe(suit)
+      expect(screen.getByRole('group', { name: 'Polo shirt' })).toBe(polo)
+      expect(within(suit).getByRole('spinbutton')).toBe(suitQty)
+      expect(within(polo).getByRole('spinbutton')).toBe(poloQty)
+      expect(within(polo).getByRole('radio', { name: 'Damaged' })).toBe(damaged)
+      expect(suitQty).toHaveValue(1)
+      expect(poloQty).toHaveValue(quantity)
+      expect(damaged).toBeChecked()
+      expect(suitQty).toBeEnabled()
+      expect(poloQty).toBeEnabled()
+      expect(damaged).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+    }
+    expectDraft(2)
+    await user.click(within(polo).getByRole('button', { name: 'Increase Polo shirt M' }))
+    expectDraft(3)
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    expect(client.getQueryState(queryKey)?.status).toBe('success')
+    expectDraft(3)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.createUniformReturn).toHaveBeenCalledWith(expect.objectContaining({
+      employee_id: ALI.employee_id,
+      lines: [{ item_id: 1, qty: 1, condition: 'reusable' }, { item_id: 2, size_id: 21, qty: 3, condition: 'damaged' }],
+    })))
+  })
+
+  it.each(['items', 'employee'] as const)('blocks the initial %s failure until required data loads on Retry', async dependency => {
+    if (dependency === 'items') vi.mocked(api.listUniformItems).mockRejectedValueOnce(new Error('offline'))
+    else vi.mocked(api.getUniformEmployee).mockRejectedValueOnce(new Error('offline'))
+    mount(<ReturnDialog open onOpenChange={vi.fn()} employee={{ id: ALI.employee_id, name_en: ALI.name_en, name_ar: ALI.name_ar }} />)
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('assets.uniform.error'))
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByRole('group', { name: 'Polo shirt' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveAccessibleDescription(i18n.t('assets.uniform.needReturnQty'))
   })
 
   it('renders nothing for read-only users', async () => {

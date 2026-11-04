@@ -66,8 +66,11 @@ function ReturnContent({ open, onOpenChange, employee: initialEmployee, returnFo
     return !label ? null : label === 'one' ? t('assets.uniform.oneSize') : <bdi dir="ltr">{label}</bdi>
   }
   const total = rows.reduce((sum, row) => sum + row.qty, 0)
-  const loading = !!employee && (holdings.isPending || items.isPending)
-  const reason = !employee ? t('assets.uniform.needReturnEmployee') : holdings.isError || items.isError ? t('assets.uniform.error') : loading ? t('assets.uniform.loading') : !total ? t('assets.uniform.needReturnQty') : ''
+  const initialError = (holdings.data === undefined && holdings.isError) || (items.data === undefined && items.isError)
+  const loading = !!employee && (holdings.data === undefined || items.data === undefined)
+  const itemsRefreshFailed = items.data !== undefined && items.isError
+  const holdingsRefreshFailed = !!employee && holdings.data !== undefined && holdings.isError
+  const reason = !employee ? t('assets.uniform.needReturnEmployee') : initialError ? t('assets.uniform.error') : loading ? t('assets.uniform.loading') : !total ? t('assets.uniform.needReturnQty') : ''
   const receiver = user ? pickEmployeeName({ name_en: user.name_en || user.email, name_ar: user.name_ar }, i18n.language) : ''
   function choose(next: UniformEmployee | null) {
     setEmployee(next)
@@ -87,12 +90,16 @@ function ReturnContent({ open, onOpenChange, employee: initialEmployee, returnFo
       })
     })}>
       <DialogBody>
+        <FormAlert id={`${id}-items-refresh-error`} message={itemsRefreshFailed ? t('assets.uniform.refreshError') : null} />
+        {itemsRefreshFailed && <Button type="button" variant="ghost" className="min-h-11 self-start" disabled={mutation.isPending} onClick={() => void items.refetch()}>{t('assets.uniform.retry')}</Button>}
+        <FormAlert id={`${id}-holdings-refresh-error`} message={holdingsRefreshFailed ? t('assets.uniform.refreshRecordsError') : null} />
+        {holdingsRefreshFailed && <Button type="button" variant="ghost" className="min-h-11 self-start" disabled={mutation.isPending} onClick={() => void holdings.refetch()}>{t('assets.uniform.retry')}</Button>}
         <FormAlert id={`${id}-error`} message={mutation.error ? uniformErrorMessage(mutation.error) : null} />
         <EmployeeSearch recipientsOnly value={employee} inputRef={searchRef} disabled={mutation.isPending} onChange={choose} />
         <section aria-labelledby={`${id}-held`}>
           <h3 id={`${id}-held`} className="mb-2 mt-2 text-sm font-semibold">{t('assets.uniform.currentlyHolds')}</h3>
           {!employee ? <p className="text-sm text-muted-foreground">{t('assets.uniform.needReturnEmployee')}</p>
-            : holdings.isError || items.isError ? <div><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.error')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => { void holdings.refetch(); void items.refetch() }}>{t('assets.uniform.retry')}</Button></div>
+            : initialError ? <div><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.error')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => { void holdings.refetch(); void items.refetch() }}>{t('assets.uniform.retry')}</Button></div>
             : loading ? <p role="status" className="text-sm text-muted-foreground">{t('assets.uniform.loading')}</p>
             : rows.length === 0 ? <p className="text-sm text-muted-foreground">{t('assets.uniform.holdsNone')}</p>
             : rows.map(row => {

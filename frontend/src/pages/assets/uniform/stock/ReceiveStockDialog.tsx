@@ -57,7 +57,8 @@ function ReceiveStockContent({ open, onOpenChange, itemId, returnFocusRef, onSuc
     const qty = whole(quantities[size.id] ?? '0')
     return qty > 0 ? [{ size_id: size.id, qty }] : []
   }))
-  const reason = items.isError ? t('assets.uniform.error') : !items.data ? t('assets.uniform.loading') : !validation.success ? t(validation.error.issues[0].message) : !lines.length ? t('assets.uniform.errors.linesRequired') : ''
+  const refreshFailed = items.data !== undefined && items.isError
+  const reason = items.data === undefined ? t(items.isError ? 'assets.uniform.error' : 'assets.uniform.loading') : !validation.success ? t(validation.error.issues[0].message) : !lines.length ? t('assets.uniform.errors.linesRequired') : ''
   return <DialogShell open={open} onOpenChange={onOpenChange} title={t('assets.uniform.receiveStock')} description={t('assets.uniform.tagline')} size="lg" busy={mutation.isPending} returnFocusRef={returnFocusRef}>
     <form noValidate className="flex min-h-0 flex-1 flex-col" aria-busy={mutation.isPending} onSubmit={handleSubmit(values => {
       if (reason || mutation.isPending) return
@@ -68,13 +69,15 @@ function ReceiveStockContent({ open, onOpenChange, itemId, returnFocusRef, onSuc
       } })
     })}>
       <DialogBody>
+        <FormAlert id={`${id}-refresh-error`} message={refreshFailed ? t('assets.uniform.refreshError') : null} />
+        {refreshFailed && <Button type="button" variant="ghost" className="min-h-11 self-start" disabled={mutation.isPending} onClick={() => void items.refetch()}>{t('assets.uniform.retry')}</Button>}
         <FormAlert id={`${id}-error`} message={mutation.error ? uniformErrorMessage(mutation.error) : null} />
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1 text-sm" htmlFor={`${id}-date`}>{t('assets.uniform.receivedOn')}<Input {...register('date')} id={`${id}-date`} type="date" required max={today} dir="ltr" disabled={mutation.isPending} className="min-h-11" aria-invalid={!validDate} aria-describedby={!validDate ? `${id}-reason` : undefined} /></label>
           <label className="space-y-1 text-sm" htmlFor={`${id}-reference`}>{t('assets.uniform.reference')}<Input {...register('reference')} id={`${id}-reference`} maxLength={120} dir="auto" disabled={mutation.isPending} className="min-h-11" /></label>
         </div>
         <label className="space-y-1 text-sm" htmlFor={`${id}-note`}>{t('assets.uniform.note')}<textarea {...register('note')} id={`${id}-note`} maxLength={500} dir="auto" disabled={mutation.isPending} className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2" /></label>
-        {items.isError ? <div><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.error')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => void items.refetch()}>{t('assets.uniform.retry')}</Button></div> : !items.data ? <p role="status">{t('assets.uniform.loading')}</p> : eligible.length === 0 ? <p>{t('assets.uniform.catalog.noReceiptSizes')}</p> : eligible.map(item => <fieldset key={item.id} disabled={mutation.isPending} className="min-w-0 border-t border-hairline py-3">
+        {items.data === undefined && items.isError ? <div><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.error')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => void items.refetch()}>{t('assets.uniform.retry')}</Button></div> : items.data === undefined ? <p role="status">{t('assets.uniform.loading')}</p> : eligible.length === 0 ? <p>{t('assets.uniform.catalog.noReceiptSizes')}</p> : eligible.map(item => <fieldset key={item.id} disabled={mutation.isPending} className="min-w-0 border-t border-hairline py-3">
           <legend className="flex items-center gap-3 text-sm font-semibold"><UniformArt kind={item.drawing} size={48} /><span dir="auto">{i18n.language.startsWith('ar') ? item.name_ar : item.name_en}</span></legend>
           <div className="flex flex-wrap gap-3">{item.sizes.filter(size => !size.archived_at).map(size => <label key={size.id} htmlFor={`${id}-size-${size.id}`} className="flex flex-col gap-1 text-sm"><bdi dir="ltr">{size.label === 'one' ? t('assets.uniform.oneSize') : size.label}</bdi><Controller control={control} name={`quantities.${size.id}`} defaultValue="0" render={({ field }) => <Input {...field} id={`${id}-size-${size.id}`} type="number" min={0} step={1} inputMode="numeric" dir="ltr" className="min-h-11 w-24 tabular-nums" aria-label={t('assets.uniform.qtyOf', { name: `${i18n.language.startsWith('ar') ? item.name_ar : item.name_en} ${size.label === 'one' ? t('assets.uniform.oneSize') : size.label}` })} onBlur={() => { field.onBlur(); field.onChange(String(whole(field.value))) }} />} /></label>)}</div>
         </fieldset>)}

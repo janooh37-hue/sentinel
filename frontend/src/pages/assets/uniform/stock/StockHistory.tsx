@@ -61,7 +61,8 @@ function StockHistoryContent({ open, onOpenChange, item, returnFocusRef }: Props
   }
   return <DialogShell open={open} onOpenChange={onOpenChange} title={t('assets.uniform.catalog.stockHistory')} description={name} size="lg" busy={busy} returnFocusRef={returnFocusRef}>
     <DialogBody>
-      {failed ? <div><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.error')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => { void receipts.refetch(); void adjustments.refetch(); void catalogue.refetch() }}>{t('assets.uniform.retry')}</Button></div> : !loaded ? <p role="status">{t('assets.uniform.loading')}</p> : entries.length === 0 ? <p>{t('assets.uniform.catalog.historyEmpty')}</p> : <ol className="space-y-3">{entries.map(entry => {
+      {failed && <div><p role="alert" className="text-sm text-destructive-text">{t(loaded ? 'assets.uniform.refreshRecordsError' : 'assets.uniform.error')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => { void receipts.refetch(); void adjustments.refetch(); void catalogue.refetch() }}>{t('assets.uniform.retry')}</Button></div>}
+      {!loaded ? !failed && <p role="status">{t('assets.uniform.loading')}</p> : entries.length === 0 ? <p>{t('assets.uniform.catalog.historyEmpty')}</p> : <ol className="space-y-3">{entries.map(entry => {
         const key = `${entry.kind}-${entry.record.id}`
         const confirming = confirmation === key
         const lines = entry.kind === 'receipt' ? entry.record.lines.map(line => ({ sizeId: line.size_id, qty: line.qty })) : [{ sizeId: entry.record.size_id, qty: entry.record.delta }]

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter, useLocation } from 'react-router-dom'
@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, type UniformEmployeeRead, type UniformIssueRead, type UniformItemRead, type UniformRecipient, type UniformReturnRead } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { ReceivedTab } from './ReceivedTab'
+import { uniformKeys } from '../uniformQueries'
 import { ReturnsTab } from '../returns/ReturnsTab'
 
 const state = vi.hoisted(() => ({ editable: true }))
@@ -74,6 +75,7 @@ function mount(entry = '/holdings/uniform?tab=received', surface: 'received' | '
   render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><MemoryRouter initialEntries={[entry]}>
     {surface === 'returns' ? <ReturnsTab /> : <ReceivedTab />}<LocationObserver />
   </MemoryRouter></I18nextProvider></QueryClientProvider>)
+  return client
 }
 async function openAli(user = userEvent.setup()) {
   const card = await screen.findByRole('button', { name: /Ali Hassan/ })
@@ -147,6 +149,108 @@ describe('Received person panel', () => {
     const voidReturn = historyRow(panel, 'Duplicate return entry')
     expect(voidReturn.getByText('Voided')).toBeInTheDocument()
     expect(voidReturn.queryByRole('button', { name: 'Void record' })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['people', 'give'],
+    ['records', 'give'],
+    ['items', 'give'],
+    ['people', 'return'],
+    ['records', 'return'],
+    ['items', 'return'],
+  ] as const)('keeps the %s cache, person panel and %s draft mounted through failed invalidation and retry', async (dependency, form) => {
+    const user = userEvent.setup()
+    const client = mount()
+    const panel = await openAli(user)
+    const holdings = within(panel).getByRole('region', { name: 'Currently holds' })
+    const history = within(panel).getByRole('heading', { name: 'Hand-out history' })
+    const returnButton = within(panel).getByRole('button', { name: 'Record return' })
+    await user.click(within(panel).getByRole('button', { name: form === 'give' ? 'Hand out uniform' : 'Record return' }))
+    const dialog = await screen.findByRole('dialog')
+    const piece = await within(dialog).findByRole('group', { name: 'Polo shirt' })
+    if (form === 'give') await user.click(within(piece).getByRole('radio', { name: 'M 8 left' }))
+    const quantity = within(piece).getByRole('spinbutton')
+    const draftQuantity = form === 'give' ? 3 : 1
+    await user.clear(quantity)
+    await user.type(quantity, String(draftQuantity))
+    if (form === 'return') await user.click(within(piece).getByRole('radio', { name: 'Damaged' }))
+    const key = dependency === 'people' ? uniformKeys.recipients() : dependency === 'records' ? uniformKeys.employee('G3194') : uniformKeys.items(true)
+    if (dependency === 'people') vi.mocked(api.listUniformRecipients).mockRejectedValue(new Error('Refresh offline'))
+    else if (dependency === 'records') vi.mocked(api.getUniformEmployee).mockRejectedValue(new Error('Refresh offline'))
+    else vi.mocked(api.listUniformItems).mockRejectedValue(new Error('Refresh offline'))
+    await act(async () => { await client.invalidateQueries({ queryKey: key, exact: true }) })
+    const notice = await screen.findAllByText(i18n.t('assets.uniform.refreshRecordsError'))
+    expect(panel).toBeInTheDocument()
+    expect(holdings).toHaveTextContent('Formal suit')
+    expect(history).toBeInTheDocument()
+    expect(returnButton).toBeEnabled()
+    expect(screen.getByRole('dialog')).toBe(dialog)
+    expect(within(dialog).getByRole('spinbutton', { name: form === 'give' ? 'Quantity of Polo shirt' : 'Quantity of Polo shirt M' })).toBe(quantity)
+    expect(quantity).toHaveValue(draftQuantity)
+    expect(quantity).toBeEnabled()
+    if (form === 'return') expect(within(within(dialog).getByRole('group', { name: 'Polo shirt' })).getByRole('radio', { name: 'Damaged' })).toBeChecked()
+    if (dependency === 'people') vi.mocked(api.listUniformRecipients).mockResolvedValue([ALI, OMAR])
+    else if (dependency === 'records') vi.mocked(api.getUniformEmployee).mockResolvedValue(ALI_RECORDS)
+    else vi.mocked(api.listUniformItems).mockResolvedValue([SUIT, POLO])
+    // Exercise the parent/detail retry without closing the modal draft.
+    const retry = within(notice[0].parentElement!).getByRole('button', { name: 'Retry', hidden: true })
+    fireEvent.click(retry)
+    await waitFor(() => expect(client.getQueryState(key)?.status).toBe('success'))
+    await waitFor(() => expect(screen.queryByText(i18n.t('assets.uniform.refreshRecordsError'))).not.toBeInTheDocument())
+    expect(screen.getByRole('dialog')).toBe(dialog)
+    expect(within(dialog).getByRole('spinbutton', { name: form === 'give' ? 'Quantity of Polo shirt' : 'Quantity of Polo shirt M' })).toBe(quantity)
+    expect(quantity).toHaveValue(draftQuantity)
+    if (form === 'return') expect(within(within(dialog).getByRole('group', { name: 'Polo shirt' })).getByRole('radio', { name: 'Damaged' })).toBeChecked()
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('region', { name: 'Ali Hassan' })).toBe(panel)
+    expect(within(panel).getByRole('region', { name: 'Currently holds' })).toBe(holdings)
+    expect(within(panel).getByRole('heading', { name: 'Hand-out history' })).toBe(history)
+  })
+
+  it.each(['people', 'records', 'items'] as const)('keeps the person-panel void reason through a cached %s failure and retry', async dependency => {
+    const user = userEvent.setup()
+    const client = mount()
+    const panel = await openAli(user)
+    await user.click(historyRow(panel, 'Initial hand-out').getByRole('button', { name: 'Void record' }))
+    const dialog = await screen.findByRole('dialog')
+    const reason = within(dialog).getByRole('textbox', { name: /Reason for voiding/ })
+    await user.type(reason, 'Wrong employee draft')
+    const key = dependency === 'people' ? uniformKeys.recipients() : dependency === 'records' ? uniformKeys.employee('G3194') : uniformKeys.items(true)
+    if (dependency === 'people') vi.mocked(api.listUniformRecipients).mockRejectedValue(new Error('Refresh offline'))
+    else if (dependency === 'records') vi.mocked(api.getUniformEmployee).mockRejectedValue(new Error('Refresh offline'))
+    else vi.mocked(api.listUniformItems).mockRejectedValue(new Error('Refresh offline'))
+    await act(async () => { await client.invalidateQueries({ queryKey: key, exact: true }) })
+    const notice = await screen.findByText(i18n.t('assets.uniform.refreshRecordsError'))
+    expect(within(dialog).getByRole('textbox', { name: /Reason for voiding/ })).toBe(reason)
+    expect(reason).toHaveValue('Wrong employee draft')
+    expect(reason).toBeEnabled()
+    if (dependency === 'people') vi.mocked(api.listUniformRecipients).mockResolvedValue([ALI, OMAR])
+    else if (dependency === 'records') vi.mocked(api.getUniformEmployee).mockResolvedValue(ALI_RECORDS)
+    else vi.mocked(api.listUniformItems).mockResolvedValue([SUIT, POLO])
+    fireEvent.click(within(notice.parentElement!).getByRole('button', { name: 'Retry', hidden: true }))
+    await waitFor(() => expect(client.getQueryState(key)?.status).toBe('success'))
+    await waitFor(() => expect(screen.queryByText(i18n.t('assets.uniform.refreshRecordsError'))).not.toBeInTheDocument())
+    expect(screen.getByRole('dialog')).toBe(dialog)
+    expect(within(dialog).getByRole('textbox', { name: /Reason for voiding/ })).toBe(reason)
+    expect(reason).toHaveValue('Wrong employee draft')
+  })
+
+  it('shows a full initial recipient error only when no people have been cached', async () => {
+    vi.mocked(api.listUniformRecipients).mockRejectedValue(new Error('Initial offline'))
+    mount()
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load the hand-out records.")
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
+    expect(screen.queryByText(i18n.t('assets.uniform.refreshRecordsError'))).not.toBeInTheDocument()
+  })
+
+  it.each(['records', 'items'] as const)('shows the initial detail error for uncached %s while preserving the person header', async dependency => {
+    if (dependency === 'records') vi.mocked(api.getUniformEmployee).mockRejectedValue(new Error('Initial offline'))
+    else vi.mocked(api.listUniformItems).mockRejectedValue(new Error('Initial offline'))
+    mount('/holdings/uniform?tab=received&person=G3194')
+    const panel = await screen.findByRole('region', { name: 'Ali Hassan' })
+    expect(await within(panel).findByRole('alert')).toHaveTextContent("Couldn't load this person's uniform records.")
+    expect(within(panel).getByRole('button', { name: 'Record return' })).toBeDisabled()
+    expect(within(panel).queryByRole('region', { name: 'Currently holds' })).not.toBeInTheDocument()
   })
 
   it('opens the real Hand out dialog with this person selected and submits their employee ID', async () => {
@@ -309,6 +413,61 @@ describe('Received person panel', () => {
 })
 
 describe('Uniform returns list', () => {
+  it.each(['returns', 'items', 'people'] as const)('retains selected return, cached metadata and the exact void input on %s refresh failure and retry', async dependency => {
+    const user = userEvent.setup()
+    const client = mount('/holdings/uniform?tab=returns', 'returns')
+    const card = (await screen.findAllByRole('button', { name: /Ali Hassan/ }))[0]
+    await user.click(card)
+    const panel = await screen.findByRole('region', { name: 'Ali Hassan' })
+    const label = within(panel).getByText('Polo shirt')
+    await user.click(within(panel).getByRole('button', { name: 'Void record' }))
+    const dialog = await screen.findByRole('dialog')
+    const reason = within(dialog).getByRole('textbox', { name: /Reason for voiding/ })
+    await user.type(reason, 'Keep selected return draft')
+    const key = dependency === 'returns' ? uniformKeys.returns() : dependency === 'items' ? uniformKeys.items(true) : uniformKeys.recipients()
+    if (dependency === 'returns') vi.mocked(api.listUniformReturns).mockRejectedValue(new Error('Refresh offline'))
+    else if (dependency === 'items') vi.mocked(api.listUniformItems).mockRejectedValue(new Error('Refresh offline'))
+    else vi.mocked(api.listUniformRecipients).mockRejectedValue(new Error('Refresh offline'))
+    await act(async () => { await client.invalidateQueries({ queryKey: key, exact: true }) })
+    const notice = await screen.findByText(i18n.t('assets.uniform.refreshRecordsError'))
+    expect(panel).toBeInTheDocument()
+    expect(panel).toHaveTextContent('Ali Hassan')
+    expect(label).toHaveTextContent('Polo shirt')
+    expect(panel).toHaveTextContent('M')
+    expect(screen.getByRole('dialog')).toBe(dialog)
+    expect(within(dialog).getByRole('textbox', { name: /Reason for voiding/ })).toBe(reason)
+    expect(reason).toHaveValue('Keep selected return draft')
+    expect(reason).toBeEnabled()
+    if (dependency === 'returns') vi.mocked(api.listUniformReturns).mockResolvedValue([REUSABLE_RETURN, DAMAGED_RETURN, VOID_RETURN, ...OMAR_RECORDS.returns])
+    else if (dependency === 'items') vi.mocked(api.listUniformItems).mockResolvedValue([SUIT, POLO])
+    else vi.mocked(api.listUniformRecipients).mockResolvedValue([ALI, OMAR])
+    fireEvent.click(within(notice.parentElement!).getByRole('button', { name: 'Retry', hidden: true }))
+    await waitFor(() => expect(client.getQueryState(key)?.status).toBe('success'))
+    await waitFor(() => expect(screen.queryByText(i18n.t('assets.uniform.refreshRecordsError'))).not.toBeInTheDocument())
+    expect(screen.getByRole('dialog')).toBe(dialog)
+    expect(within(dialog).getByRole('textbox', { name: /Reason for voiding/ })).toBe(reason)
+    expect(reason).toHaveValue('Keep selected return draft')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('region', { name: 'Ali Hassan' })).toBe(panel)
+    expect(within(panel).getByText('Polo shirt')).toBe(label)
+  })
+
+  it('shows a full initial returns error without cached records', async () => {
+    vi.mocked(api.listUniformReturns).mockRejectedValue(new Error('Initial offline'))
+    mount('/holdings/uniform?tab=returns', 'returns')
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load returns.")
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
+  })
+
+  it.each(['items', 'people'] as const)('shows uncached %s metadata errors inline without hiding return records', async dependency => {
+    if (dependency === 'items') vi.mocked(api.listUniformItems).mockRejectedValue(new Error('Initial offline'))
+    else vi.mocked(api.listUniformRecipients).mockRejectedValue(new Error('Initial offline'))
+    mount('/holdings/uniform?tab=returns&return=51', 'returns')
+    expect(await screen.findByRole('alert')).toHaveTextContent(dependency === 'items' ? "Couldn't load uniform stock." : "Couldn't load the hand-out records.")
+    expect(await screen.findByRole('region', { name: dependency === 'items' ? 'Ali Hassan' : 'G3194' })).toHaveTextContent('Reusable polo returned')
+    expect(screen.getByRole('button', { name: 'Void record' })).toBeEnabled()
+  })
+
   it.each([
     ['en', 'علي', 'Ali Hassan', 'Search returns'],
     ['ar', 'Ali Hassan', 'علي حسن', 'البحث في المرتجعات'],

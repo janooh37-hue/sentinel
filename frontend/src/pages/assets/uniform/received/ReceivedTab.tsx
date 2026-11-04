@@ -42,15 +42,16 @@ export function ReceivedTab(): React.JSX.Element {
     setParams(previous => { const next = new URLSearchParams(previous); next.delete('person'); return next })
   }
 
-  if (people.isError) return <section className="rounded-xl border border-border bg-surface p-4"><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.errorPeople')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => { void people.refetch().then(() => listHeading.current?.focus()) }}>{t('assets.uniform.retry')}</Button></section>
+  if (people.isError && people.data === undefined) return <section className="rounded-xl border border-border bg-surface p-4"><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.errorPeople')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => { void people.refetch().then(() => listHeading.current?.focus()) }}>{t('assets.uniform.retry')}</Button></section>
   return <div className="grid min-w-0 items-start gap-6 min-[1000px]:grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
-    <section aria-labelledby="uniform-received-h" className={cn('min-w-0 overflow-hidden rounded-xl border border-border bg-surface', open && people.isSuccess && 'max-[999px]:hidden')}>
+    {people.isError && <div className="col-span-full rounded-xl border border-border bg-surface p-4"><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.refreshRecordsError')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => void people.refetch()}>{t('assets.uniform.retry')}</Button></div>}
+    <section aria-labelledby="uniform-received-h" className={cn('min-w-0 overflow-hidden rounded-xl border border-border bg-surface', open && people.data !== undefined && 'max-[999px]:hidden')}>
       <h2 id="uniform-received-h" ref={listHeading} tabIndex={-1} className="sr-only">{t('assets.uniform.tabReceived')}</h2>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-3">
         <label className="min-w-0 flex-1"><span className="sr-only">{t('assets.uniform.searchLabel')}</span><Input ref={search} type="search" dir="auto" className="min-h-11" placeholder={t('assets.uniform.searchPh')} value={query} onChange={event => setQuery(event.target.value)} /></label>
-        {people.isSuccess && <span className="text-sm text-muted-foreground">{t('assets.uniform.people', { count: records.length })}</span>}
+        {people.data !== undefined && <span className="text-sm text-muted-foreground">{t('assets.uniform.people', { count: records.length })}</span>}
       </div>
-      {people.isPending ? <div aria-busy="true" className="p-4"><p role="status" className="mb-3 text-sm text-muted-foreground">{t('assets.uniform.loading')}</p>{[0, 1, 2].map(row => <Skeleton key={row} className="mb-3 h-16 w-full" />)}</div>
+      {people.data === undefined ? <div aria-busy="true" className="p-4"><p role="status" className="mb-3 text-sm text-muted-foreground">{t('assets.uniform.loading')}</p>{[0, 1, 2].map(row => <Skeleton key={row} className="mb-3 h-16 w-full" />)}</div>
         : records.length === 0 ? <p className="p-5 text-sm text-muted-foreground">{t(people.data.length ? 'assets.uniform.noMatch' : 'assets.uniform.receivedNone')}</p>
         : <>
           <div aria-hidden className="hidden grid-cols-[minmax(0,1fr)_auto_auto] gap-5 px-4 pb-2 pt-3 text-xs text-muted-foreground min-[1200px]:grid"><span>{t('assets.uniform.colEmployee')}</span><span>{t('assets.uniform.received.held')}</span><span>{t('assets.uniform.colLast')}</span></div>
@@ -65,7 +66,7 @@ export function ReceivedTab(): React.JSX.Element {
           </li>)}</ol>
         </>}
     </section>
-    {people.isSuccess && (selected ? <PersonPanel key={selected.employee_id} person={selected} headingRef={heading} onBack={back} className={cn('min-[1000px]:sticky min-[1000px]:top-4 min-[1000px]:max-h-[calc(100dvh-32px)] min-[1000px]:overflow-y-auto', !open && 'max-[999px]:hidden')} />
+    {people.data !== undefined && (selected ? <PersonPanel key={selected.employee_id} person={selected} headingRef={heading} onBack={back} className={cn('min-[1000px]:sticky min-[1000px]:top-4 min-[1000px]:max-h-[calc(100dvh-32px)] min-[1000px]:overflow-y-auto', !open && 'max-[999px]:hidden')} />
       : open && <section className="rounded-xl border border-border bg-surface p-4"><Button type="button" variant="secondary" className="mb-3 min-h-11" onClick={back}>{t('assets.uniform.back')}</Button><h2 ref={heading} tabIndex={-1} className="text-sm outline-none">{t('assets.uniform.received.personUnavailable')}</h2></section>)}
   </div>
 }

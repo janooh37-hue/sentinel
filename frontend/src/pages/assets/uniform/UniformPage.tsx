@@ -25,9 +25,9 @@ export function UniformPage(): React.JSX.Element {
   const [stockChange, setStockChange] = useState<{ sizes: number[]; sequence: number }>({ sizes: [], sequence: 0 })
   const opener = useRef<HTMLElement | null>(null)
   const out = items.data?.filter(item => !item.archived_at).flatMap(item => item.sizes.filter(size => !size.archived_at && size.on_hand === 0).map(size => ({ itemId: item.id, size }))) ?? []
-  const stockDescription = items.isSuccess ? out.length ? t('assets.uniform.finding', { count: out.length, pieces: t('assets.uniform.findingPieces', { count: new Set(out.map(row => row.itemId)).size }) }) : t('assets.uniform.findingNone') : undefined
+  const stockDescription = items.data ? out.length ? t('assets.uniform.finding', { count: out.length, pieces: t('assets.uniform.findingPieces', { count: new Set(out.map(row => row.itemId)).size }) }) : t('assets.uniform.findingNone') : undefined
   const activeReturns = returns.data?.filter(record => !record.voided_at).length ?? 0
-  const returnsDescription = returns.isSuccess ? activeReturns ? t('assets.uniform.returnFinding', { count: activeReturns }) : t('assets.uniform.returnsNone') : undefined
+  const returnsDescription = returns.data ? activeReturns ? t('assets.uniform.returnFinding', { count: activeReturns }) : t('assets.uniform.returnsNone') : undefined
   function handOut(trigger: HTMLButtonElement, itemId?: number) {
     opener.current = trigger
     setDialog({ itemId })
