@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas._base import ORMBase
+
 Group = Literal["formal", "guard", "winter"]
 Drawing = Literal[
     "suit",
@@ -59,11 +61,7 @@ class UniformSizeUpdate(Input):
     min_qty: int | None = Field(default=None, ge=0, strict=True)
 
 
-class Read(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-
-class UniformSizeRead(Read):
+class UniformSizeRead(ORMBase):
     id: int
     item_id: int
     label: str
@@ -75,14 +73,14 @@ class UniformSizeRead(Read):
     is_low: bool = False
 
 
-class UniformHolder(Read):
+class UniformHolder(ORMBase):
     employee_id: str
     name_en: str
     name_ar: str | None
     qty: int
 
 
-class UniformItemRead(Read):
+class UniformItemRead(ORMBase):
     id: int
     name_en: str
     name_ar: str
@@ -151,7 +149,7 @@ class UniformVoid(Input):
     reason: str = Field(min_length=1, max_length=500)
 
 
-class UniformPostingRead(Read):
+class UniformPostingRead(ORMBase):
     id: int
     created_at: datetime
     created_by_id: int | None
@@ -192,20 +190,20 @@ class UniformAdjustmentRead(UniformPostingRead):
     adjusted_on: date
 
 
-class UniformHolding(Read):
+class UniformHolding(ORMBase):
     employee_id: str
     item_id: int
     size_id: int | None
     qty: int
 
 
-class UniformEmployeeRead(Read):
+class UniformEmployeeRead(ORMBase):
     holdings: list[UniformHolding]
     issues: list[UniformIssueRead]
     returns: list[UniformReturnRead]
 
 
-class UniformRecipient(Read):
+class UniformRecipient(ORMBase):
     employee_id: str
     name_en: str
     name_ar: str | None
@@ -214,7 +212,7 @@ class UniformRecipient(Read):
     last_issued_on: date
 
 
-class UniformSummary(Read):
+class UniformSummary(ORMBase):
     shelf_total: int
     holder_count: int
     suits_issued: int

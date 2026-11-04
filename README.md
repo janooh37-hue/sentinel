@@ -81,6 +81,8 @@ reject the whole request with `409 uniform_stale_count`. Reopen the item to revi
 fresh balances before retrying. Each submitted adjustment line retains its own
 ledger and audit row. Receipt voids reverse the entire receipt, and their history
 shows every affected item and size before confirmation.
+Uniform posting and archive timestamps are serialized with an explicit UTC offset,
+so the browser does not interpret stored UTC values as local wall-clock time.
 
 ## Requirements
 

@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from app.schemas.book import BookRead, BookVersionRead
 from app.schemas.inmate_statistics import WorkflowActorOut
 from app.schemas.notify import NotifyMessageRead
+from app.schemas.uniform import UniformPostingRead, UniformSizeRead
 
 NAIVE = datetime(2026, 8, 4, 5, 51, 31)
 
@@ -66,6 +67,29 @@ def test_naive_utc_timestamp_serializes_with_a_utc_offset() -> None:
 
 def test_none_timestamp_survives() -> None:
     assert '"delivery_checked_at":null' in _notify().model_dump_json()
+
+
+def test_uniform_posting_and_size_timestamps_are_tagged_utc() -> None:
+    posting = UniformPostingRead(
+        id=1,
+        created_at=NAIVE,
+        created_by_id=1,
+        voided_at=NAIVE,
+        voided_by_id=1,
+        void_reason="Duplicate",
+    ).model_dump(mode="json")
+    size = UniformSizeRead(
+        id=1,
+        item_id=1,
+        label="M",
+        sort_order=0,
+        on_hand=0,
+        min_qty=None,
+        archived_at=NAIVE,
+    ).model_dump(mode="json")
+    assert posting["created_at"] == "2026-08-04T05:51:31Z"
+    assert posting["voided_at"] == "2026-08-04T05:51:31Z"
+    assert size["archived_at"] == "2026-08-04T05:51:31Z"
 
 
 def test_workflow_actor_timestamp_is_utc_date_time_string() -> None:

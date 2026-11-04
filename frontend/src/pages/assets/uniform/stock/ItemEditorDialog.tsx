@@ -195,7 +195,7 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
   const fieldError = (key: 'name_en' | 'name_ar' | 'description_en' | 'description_ar' | 'default_qty' | 'reason') => errors[key]?.message ? <p id={`${id}-${key}-error`} role="alert" className="text-sm text-destructive-text">{t(errors[key].message)}</p> : null
   return <DialogShell open={open} onOpenChange={onOpenChange} title={t('assets.uniform.editItem')} description={name} size="lg" busy={busy} returnFocusRef={returnFocusRef}
     onOpenAutoFocus={event => { const input = document.getElementById(`${id}-form`)?.querySelector<HTMLInputElement>('input[type="number"], input[type="radio"]:checked'); if (input) { event.preventDefault(); input.focus() } }}>
-    <form id={`${id}-form`} noValidate className="flex min-h-0 flex-1 flex-col" aria-busy={busy} onSubmit={handleSubmit(save)}>
+    <form id={`${id}-form`} noValidate className="flex min-h-0 flex-1 flex-col" aria-busy={busy} onSubmit={event => void handleSubmit(save)(event)}>
       <DialogBody>
         <FormAlert id={`${id}-error`} message={error ? uniformErrorMessage(error) : null} />
         <fieldset disabled={busy || !editable || !!action} className="min-w-0 space-y-5">
