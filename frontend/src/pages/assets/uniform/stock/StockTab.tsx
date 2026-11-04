@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { UniformArt } from '@/components/UniformArt'
@@ -30,6 +30,19 @@ export function StockTab({ onHandOut, changedSizes = [], changeSequence = 0 }: P
   const [dialog, setDialog] = useState<{ kind: 'add' | 'edit' | 'receive' | 'history'; item?: UniformItemRead } | null>(null)
   const opener = useRef<HTMLElement | null>(null)
   const [catalogueChange, setCatalogueChange] = useState<{ sizes: number[]; sequence: number }>({ sizes: [], sequence: 0 })
+  const previousDraft = useRef(false)
+
+  if (!editable && dialog !== null && dialog.kind !== 'history') setDialog(null)
+
+  useEffect(() => {
+    const revokedDraft = previousDraft.current && !editable
+    previousDraft.current = dialog !== null && dialog.kind !== 'history'
+    if (!revokedDraft) return
+    opener.current = document.getElementById('uniform-title')
+    const frame = requestAnimationFrame(() => opener.current?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [dialog, editable])
+
   function openDialog(kind: 'add' | 'edit' | 'receive' | 'history', trigger: HTMLButtonElement, item?: UniformItemRead) {
     opener.current = trigger
     setDialog({ kind, item })

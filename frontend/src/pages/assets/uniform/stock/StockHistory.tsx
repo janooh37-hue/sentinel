@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
@@ -33,6 +33,9 @@ function StockHistoryContent({ open, onOpenChange, item, returnFocusRef }: Props
   const { t, i18n } = useTranslation()
   const id = useId()
   const editable = useCapabilities().has('uniform.edit')
+  const previousEditable = useRef(editable)
+  const previousDraft = useRef(false)
+  const closeButton = useRef<HTMLButtonElement>(null)
   const receipts = useUniformReceipts()
   const adjustments = useUniformAdjustments()
   const catalogue = useUniformItems(true)
@@ -41,6 +44,26 @@ function StockHistoryContent({ open, onOpenChange, item, returnFocusRef }: Props
   const [confirmation, setConfirmation] = useState<Entry | null>(null)
   const form = useForm({ resolver: zodResolver(voidSchema), defaultValues: { reason: '' }, mode: 'onChange' })
   const reason = useWatch({ control: form.control, name: 'reason' })
+  const resetForm = form.reset
+  const resetReceipt = voidReceipt.reset
+  const resetAdjustment = voidAdjustment.reset
+
+  if (!editable && confirmation !== null) setConfirmation(null)
+
+  useEffect(() => {
+    const revoked = previousEditable.current && !editable
+    const revokedDraft = revoked && previousDraft.current
+    previousDraft.current = confirmation !== null
+    previousEditable.current = editable
+    if (!revoked) return
+    resetForm()
+    resetReceipt()
+    resetAdjustment()
+    if (!revokedDraft) return
+    const frame = requestAnimationFrame(() => closeButton.current?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [confirmation, editable, resetForm, resetAdjustment, resetReceipt])
+
   const busy = voidReceipt.isPending || voidAdjustment.isPending
   const invalidReason = !reason.trim() ? t('assets.uniform.errors.reasonRequired') : reason.trim().length > 500 ? t('assets.uniform.errors.reasonTooLong') : ''
   const historyItem = catalogue.data?.find(piece => piece.id === item.id) ?? item
@@ -109,6 +132,6 @@ function StockHistoryContent({ open, onOpenChange, item, returnFocusRef }: Props
         </li>
       })}</ol>}
     </DialogBody>
-    <DialogFooter><Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={() => onOpenChange(false)}>{t('common.close')}</Button></DialogFooter>
+    <DialogFooter><Button ref={closeButton} type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={() => onOpenChange(false)}>{t('common.close')}</Button></DialogFooter>
   </DialogShell>
 }

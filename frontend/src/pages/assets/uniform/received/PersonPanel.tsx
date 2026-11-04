@@ -71,6 +71,11 @@ export function PersonPanel({ person, headingRef, onBack, onDraftOpenChange, cla
     if (!opener.current?.isConnected || opener.current.matches(':disabled')) opener.current = headingRef.current
   }
 
+  if (!editable && (dialog !== null || voiding !== null)) {
+    setDialog(null)
+    setVoiding(null)
+  }
+
   return <section aria-labelledby="uniform-person-h" className={cn('min-w-0 rounded-xl border border-border bg-surface', className)}>
     <div className="border-b border-border p-4">
       <Button type="button" variant="secondary" className="mb-3 min-h-11 min-[1000px]:hidden" onClick={onBack}>{t('assets.uniform.back')}</Button>

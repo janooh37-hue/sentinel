@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 
@@ -27,6 +27,7 @@ export function ReturnsTab(): React.JSX.Element {
   const detailHeading = useRef<HTMLHeadingElement>(null)
   const voidOpener = useRef<HTMLElement | null>(null)
   const searchInput = useRef<HTMLInputElement>(null)
+  const previousDraft = useRef(false)
   const ar = i18n.language.startsWith('ar')
   const person = (employeeId: string) => {
     const row = people.data?.find(entry => entry.employee_id === employeeId)
@@ -49,6 +50,18 @@ export function ReturnsTab(): React.JSX.Element {
     : records[0]
   const selected = voiding ?? candidate
   const open = requested !== null
+
+  if (!editable && voiding !== null) setVoiding(null)
+
+  useEffect(() => {
+    const revokedDraft = previousDraft.current && !editable
+    previousDraft.current = voiding !== null
+    if (!revokedDraft) return
+    voidOpener.current = candidate || requested !== null ? detailHeading.current : searchInput.current
+    const frame = requestAnimationFrame(() => voidOpener.current?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [candidate, editable, requested, voiding])
+
   function select(record: UniformReturnRead) {
     setParams(previous => { const next = new URLSearchParams(previous); next.set('return', String(record.id)); return next })
     requestAnimationFrame(() => detailHeading.current?.focus())

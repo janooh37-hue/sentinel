@@ -86,7 +86,9 @@ so the browser does not interpret stored UTC values as local wall-clock time.
 Voids cannot change archived items or sizes. History retains archived size labels.
 Background refresh failures keep cached Uniform lists, employee history, search
 results, and every open dialog mounted, with inline errors and Retry actions.
-Draft entries are retained through failures and successful retries.
+Draft entries are retained through failures and successful retries. Losing
+`uniform.edit` closes edit drafts and releases pinned recipients and records;
+restoring access does not reopen those discarded drafts.
 The shared Assets entry accepts Store or Uniform view access and opens a permitted
 section. Return deep links identify the exact ledger entry independently of list
 search, and an open void confirmation stays bound to the entry originally chosen.
@@ -95,7 +97,10 @@ when a successful refresh removes or reorders the recipient. Posting forms retai
 requested quantities and unavailable selected lines across successful refreshes;
 changed availability blocks submission until the user explicitly revises or clears
 those selections. Removing and re-adding an editor size restores its existing
-draft values and saved identity.
+draft values and saved identity. Replacing a one-size item with named sizes, or
+named sizes with one size, removes the old empty sizes before creating replacements.
+Saving with a typed, unstaged size validates and stages it without posting changes;
+the keeper reviews the resulting sizes before saving again.
 
 ## Requirements
 

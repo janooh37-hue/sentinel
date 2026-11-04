@@ -70,12 +70,16 @@ const OMAR_RECORDS: UniformEmployeeRead = {
 function LocationObserver() {
   return <output data-testid="location">{useLocation().search}</output>
 }
-function mount(entry = '/holdings/uniform?tab=received', surface: 'received' | 'returns' = 'received') {
+function mountView(entry = '/holdings/uniform?tab=received', surface: 'received' | 'returns' = 'received') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><MemoryRouter initialEntries={[entry]}>
+  const content = () => <QueryClientProvider client={client}><I18nextProvider i18n={i18n}><MemoryRouter initialEntries={[entry]}>
     {surface === 'returns' ? <ReturnsTab /> : <ReceivedTab />}<LocationObserver />
-  </MemoryRouter></I18nextProvider></QueryClientProvider>)
-  return client
+  </MemoryRouter></I18nextProvider></QueryClientProvider>
+  const view = render(content())
+  return { client, rerender: () => view.rerender(content()) }
+}
+function mount(entry = '/holdings/uniform?tab=received', surface: 'received' | 'returns' = 'received') {
+  return mountView(entry, surface).client
 }
 async function openAli(user = userEvent.setup()) {
   const card = await screen.findByRole('button', { name: /Ali Hassan/ })
@@ -233,6 +237,98 @@ describe('Received person panel', () => {
     expect(screen.getByRole('dialog')).toBe(dialog)
     expect(within(dialog).getByRole('textbox', { name: /Reason for voiding/ })).toBe(reason)
     expect(reason).toHaveValue('Wrong employee draft')
+  })
+
+  describe.each(['default', 'explicit'] as const)('%s recipient permission lifecycle', selection => {
+    it.each(['give', 'return', 'issue-void', 'return-void'] as const)('discards the %s draft on revocation, releases the pin and never reopens it on regrant', async kind => {
+      const user = userEvent.setup()
+      vi.mocked(api.getUniformEmployee).mockImplementation(async employeeId => employeeId === 'G3200'
+        ? { ...OMAR_RECORDS, holdings: ALI_RECORDS.holdings.map(line => ({ ...line, employee_id: 'G3200' })) }
+        : ALI_RECORDS)
+      const view = mountView(`/holdings/uniform?tab=received${selection === 'explicit' ? '&person=G3194' : ''}`)
+      const panel = await screen.findByRole('region', { name: 'Ali Hassan' })
+      await within(panel).findByRole('region', { name: 'Currently holds' })
+      const opener = kind === 'give' || kind === 'return'
+        ? within(panel).getByRole('button', { name: kind === 'give' ? 'Hand out uniform' : 'Record return' })
+        : historyRow(panel, kind === 'issue-void' ? 'Initial hand-out' : 'Reusable polo returned').getByRole('button', { name: 'Void record' })
+      await user.click(opener)
+      const dialog = await screen.findByRole('dialog')
+      if (kind === 'give') await user.click(within(dialog).getByRole('radio', { name: 'Give' }))
+      else if (kind === 'return') {
+        const piece = await within(dialog).findByRole('group', { name: 'Polo shirt' })
+        await user.click(within(piece).getByRole('button', { name: 'Increase Polo shirt M' }))
+        await user.click(within(piece).getByRole('radio', { name: 'Damaged' }))
+      } else await user.type(within(dialog).getByRole('textbox', { name: /Reason for voiding/ }), 'Discard the revoked reason')
+
+      state.editable = false
+      view.rerender()
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(opener).not.toBeInTheDocument()
+      await waitFor(() => expect(within(panel).getByRole('heading', { name: 'Ali Hassan' })).toHaveFocus())
+      expect(within(panel).queryByRole('button', { name: /Hand out|Record return|Void record/ })).not.toBeInTheDocument()
+      state.editable = true
+      view.rerender()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+      state.editable = false
+      view.rerender()
+      await user.click(screen.getByRole('button', { name: /Omar Returned/ }))
+      const nextPanel = await screen.findByRole('region', { name: 'Omar Returned' })
+      await within(nextPanel).findByRole('region', { name: 'Currently holds' })
+      expect(panel).not.toBeInTheDocument()
+      state.editable = true
+      view.rerender()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      const nextOpener = kind === 'give' || kind === 'return'
+        ? within(nextPanel).getByRole('button', { name: kind === 'give' ? 'Hand out uniform' : 'Record return' })
+        : historyRow(nextPanel, kind === 'issue-void' ? 'Historical suit hand-out' : 'All suits returned').getByRole('button', { name: 'Void record' })
+      await user.click(nextOpener)
+      const nextDialog = await screen.findByRole('dialog')
+      expect(nextDialog).not.toBe(dialog)
+      if (kind === 'give' || kind === 'return') {
+        expect(within(nextDialog).getByText('G3200')).toBeInTheDocument()
+        expect(within(nextDialog).queryByText('G3194')).not.toBeInTheDocument()
+        if (kind === 'give') {
+          expect(within(nextDialog).queryByRole('spinbutton')).not.toBeInTheDocument()
+          await user.click(within(nextDialog).getByRole('radio', { name: 'Give' }))
+        } else {
+          const piece = await within(nextDialog).findByRole('group', { name: 'Polo shirt' })
+          expect(within(piece).getByRole('spinbutton')).toHaveValue(0)
+          expect(within(piece).getByRole('radio', { name: 'Reusable' })).toBeChecked()
+          await user.click(within(piece).getByRole('button', { name: 'Increase Polo shirt M' }))
+        }
+        await user.click(within(nextDialog).getByRole('button', { name: kind === 'give' ? 'Hand out' : 'Save' }))
+        await waitFor(() => expect(kind === 'give' ? api.createUniformIssue : api.createUniformReturn).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ employee_id: 'G3200' })))
+      } else {
+        const reason = within(nextDialog).getByRole('textbox', { name: /Reason for voiding/ })
+        expect(reason).toHaveValue('')
+        await user.type(reason, 'New recipient reason')
+        await user.click(within(nextDialog).getByRole('button', { name: 'Void record' }))
+        await waitFor(() => expect(kind === 'issue-void' ? api.voidUniformIssue : api.voidUniformReturn).toHaveBeenCalledExactlyOnceWith(kind === 'issue-void' ? 61 : 62, { reason: 'New recipient reason' }))
+      }
+    })
+
+    it('focuses a surviving read-only target when revocation releases a recipient removed during the draft', async () => {
+      const user = userEvent.setup()
+      const view = mountView(`/holdings/uniform?tab=received${selection === 'explicit' ? '&person=G3194' : ''}`)
+      const panel = await screen.findByRole('region', { name: 'Ali Hassan' })
+      await user.click(within(panel).getByRole('button', { name: 'Hand out uniform' }))
+      const dialog = await screen.findByRole('dialog')
+      vi.mocked(api.listUniformRecipients).mockResolvedValue([])
+      await act(async () => { await view.client.invalidateQueries({ queryKey: uniformKeys.recipients(), exact: true }) })
+      expect(screen.getByRole('dialog')).toBe(dialog)
+      state.editable = false
+      view.rerender()
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(panel).not.toBeInTheDocument()
+      const target = selection === 'explicit'
+        ? screen.getByRole('heading', { name: i18n.t('assets.uniform.received.personUnavailable') })
+        : screen.getByRole('searchbox', { name: 'Search received' })
+      await waitFor(() => expect(target).toHaveFocus())
+      state.editable = true
+      view.rerender()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
   })
 
   describe.each(['default', 'explicit'] as const)('%s recipient selection', selection => {
@@ -747,6 +843,63 @@ describe('Uniform returns list', () => {
     await user.click(nextDialog.getByRole('button', { name: 'Void record' }))
     await waitFor(() => expect(api.voidUniformReturn).toHaveBeenCalledExactlyOnceWith(62, { reason: 'Reason for the other return' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it.each(['default', 'explicit'] as const)('discards the %s return void snapshot and reason on permission loss without reopening on regrant', async selection => {
+    const user = userEvent.setup()
+    const view = mountView(`/holdings/uniform?tab=returns${selection === 'explicit' ? '&return=51' : ''}`, 'returns')
+    const panel = await screen.findByRole('region', { name: 'Ali Hassan' })
+    const opener = within(panel).getByRole('button', { name: 'Void record' })
+    await user.click(opener)
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByRole('textbox', { name: /Reason for voiding/ }), 'Revoked return reason')
+    state.editable = false
+    view.rerender()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(opener).not.toBeInTheDocument()
+    await waitFor(() => expect(within(panel).getByRole('heading', { name: 'Ali Hassan' })).toHaveFocus())
+    state.editable = true
+    view.rerender()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    state.editable = false
+    view.rerender()
+    await user.click(screen.getByRole('button', { name: /Omar Returned/ }))
+    const nextPanel = await screen.findByRole('region', { name: 'Omar Returned' })
+    expect(nextPanel).toHaveTextContent('All suits returned')
+    expect(nextPanel).not.toHaveTextContent('Reusable polo returned')
+    state.editable = true
+    view.rerender()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await user.click(within(nextPanel).getByRole('button', { name: 'Void record' }))
+    const nextDialog = await screen.findByRole('dialog')
+    expect(nextDialog).not.toBe(dialog)
+    const reason = within(nextDialog).getByRole('textbox', { name: /Reason for voiding/ })
+    expect(reason).toHaveValue('')
+    await user.type(reason, 'New return reason')
+    await user.click(within(nextDialog).getByRole('button', { name: 'Void record' }))
+    await waitFor(() => expect(api.voidUniformReturn).toHaveBeenCalledExactlyOnceWith(62, { reason: 'New return reason' }))
+  })
+
+  it.each(['default', 'explicit'] as const)('focuses the %s return fallback when revocation releases a removed posting', async selection => {
+    const user = userEvent.setup()
+    const view = mountView(`/holdings/uniform?tab=returns${selection === 'explicit' ? '&return=51' : ''}`, 'returns')
+    const panel = await screen.findByRole('region', { name: 'Ali Hassan' })
+    await user.click(within(panel).getByRole('button', { name: 'Void record' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByRole('textbox', { name: /Reason for voiding/ }), 'Removed posting reason')
+    vi.mocked(api.listUniformReturns).mockResolvedValue([])
+    await act(async () => { await view.client.invalidateQueries({ queryKey: uniformKeys.returns(), exact: true }) })
+    expect(screen.getByRole('dialog')).toBe(dialog)
+    state.editable = false
+    view.rerender()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    const target = selection === 'explicit'
+      ? screen.getByRole('heading', { name: i18n.t('assets.uniform.returns.unavailable') })
+      : screen.getByRole('searchbox', { name: 'Search returns' })
+    await waitFor(() => expect(target).toHaveFocus())
+    state.editable = true
+    view.rerender()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it.each(['returns', 'items', 'people'] as const)('retains selected return, cached metadata and the exact void input on %s refresh failure and retry', async dependency => {

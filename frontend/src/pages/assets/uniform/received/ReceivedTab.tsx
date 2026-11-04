@@ -9,12 +9,14 @@ import { type UniformRecipient } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { formatDmy } from '@/lib/formatDmy'
 import { cn } from '@/lib/utils'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { useUniformRecipients } from '../uniformQueries'
 import { PersonPanel } from './PersonPanel'
 
 /** The canonical recipient balance leads; zero-held people remain in the history. */
 export function ReceivedTab(): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const editable = useCapabilities().has('uniform.edit')
   const [params, setParams] = useSearchParams()
   const people = useUniformRecipients('')
   const [query, setQuery] = useState('')
@@ -25,6 +27,7 @@ export function ReceivedTab(): React.JSX.Element {
   const cards = useRef(new Map<string, HTMLButtonElement>())
   const previousPerson = useRef<string | null>(null)
   const previousSelection = useRef<string | undefined>(undefined)
+  const previousDraft = useRef(false)
   const requested = params.get('person')
   const needle = query.trim().toLocaleLowerCase()
   const records = (people.data ?? []).filter(person => !needle || [person.employee_id, person.name_en, person.name_ar ?? ''].some(value => value.toLocaleLowerCase().includes(needle)))
@@ -32,19 +35,25 @@ export function ReceivedTab(): React.JSX.Element {
   const selected = draftPerson ?? candidate
   const open = requested !== null
 
+  // Permission loss discards the pin; ordinary catalogue refreshes do not.
+  if (!editable && draftPerson !== null) setDraftPerson(null)
+
   useEffect(() => {
+    const revokedDraft = previousDraft.current && !editable
+    previousDraft.current = draftPerson !== null
     if (draftPerson !== null) return
     const preceding = previousPerson.current
     const selectionChanged = previousSelection.current !== selected?.employee_id
     previousSelection.current = selected?.employee_id
     previousPerson.current = requested
-    if (preceding === requested && !selectionChanged) return
+    if (!revokedDraft && preceding === requested && !selectionChanged) return
     const frame = requestAnimationFrame(() => {
-      if (requested !== null) heading.current?.focus()
+      if (revokedDraft) (candidate || requested !== null ? heading.current : search.current)?.focus()
+      else if (requested !== null) heading.current?.focus()
       else if (preceding !== null) (cards.current.get(preceding) ?? search.current)?.focus()
     })
     return () => cancelAnimationFrame(frame)
-  }, [draftPerson, requested, selected?.employee_id])
+  }, [candidate, draftPerson, editable, requested, selected?.employee_id])
 
   function back() {
     setParams(previous => { const next = new URLSearchParams(previous); next.delete('person'); return next })
