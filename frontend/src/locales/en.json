@@ -1795,7 +1795,7 @@
         "conditionOf": "Condition of {{name}}"
       },
       "groups": {
-        "formal": "Formal",
+        "formal": "Formal uniform",
         "guard": "Guard uniform",
         "winter": "Winter uniform"
       },
@@ -2019,6 +2019,7 @@
       "voidReason": "Reason for voiding",
       "voidStatus": "Voided",
       "activeStatus": "Active",
+      "status": "Status",
       "voidRecord": "Void record",
       "voidConfirmTitle": "Void this record?",
       "voidConfirm": "This reverses the effect of this record. Enter a reason to continue.",
@@ -6390,6 +6391,7 @@
         "expiry": "Expiry"
       },
       "domains": {
+        "uniform": "Uniform",
         "app": "Application",
         "employees": "Employees",
         "expiry": "Expiry",

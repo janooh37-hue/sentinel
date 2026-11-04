@@ -92,6 +92,6 @@ function StockHistoryContent({ open, onOpenChange, item, returnFocusRef }: Props
         </li>
       })}</ol>}
     </DialogBody>
-    <DialogFooter><Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={() => onOpenChange(false)}>{t('assets.uniform.back')}</Button></DialogFooter>
+    <DialogFooter><Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={() => onOpenChange(false)}>{t('common.close')}</Button></DialogFooter>
   </DialogShell>
 }
