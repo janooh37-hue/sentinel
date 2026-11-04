@@ -26,6 +26,7 @@ vi.mock('@/lib/api', async (orig) => {
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => mobile.value }))
 
 import { EmployeeTabChips } from '../EmployeeTabChips'
+import i18n from '@/lib/i18n'
 import { UniformTab } from './UniformTab'
 import { uniformKeys } from '@/pages/assets/uniform/uniformQueries'
 
@@ -65,9 +66,10 @@ function renderTab() {
   return { ...view, client }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks()
   mobile.value = false
+  await i18n.changeLanguage('en')
   getUniformEmployee.mockResolvedValue(RECORD)
   listUniformItems.mockResolvedValue(ITEMS)
 })
@@ -159,6 +161,33 @@ describe('UniformTab', () => {
     expect(cards).toHaveLength(3)
     expect(cards[0]).toHaveAttribute('data-voided', 'true')
     expect(cards[0]).toHaveTextContent('Wrong person')
+  })
+
+  it.each([
+    ['en', false],
+    ['ar', false],
+    ['en', true],
+    ['ar', true],
+  ] as const)('keeps voided text legible in %s on mobile=%s', async (language, isMobile) => {
+    await i18n.changeLanguage(language)
+    mobile.value = isMobile
+    renderTab()
+    const history = await screen.findByRole('region', { name: i18n.t('assets.uniform.history') })
+    const badge = within(history).getByText(i18n.t('assets.uniform.voidStatus'))
+    const entry = badge.closest('[data-voided]')
+    expect(entry).toHaveAttribute('data-voided', 'true')
+    expect(entry?.tagName).toBe(isMobile ? 'LI' : 'TR')
+    expect(entry).toHaveTextContent('Wrong person')
+    expect(badge).toHaveClass('text-destructive-text', 'bg-destructive/10')
+    expect(badge).not.toHaveClass('text-destructive')
+    // Opacity on any ancestor also fades the badge and the reason, even with the correct token.
+    for (let element: HTMLElement | null = badge; element; element = element.parentElement) {
+      expect(element.className).not.toMatch(/(?:^|\s)(?:[^\s]+:)?opacity-(?!100(?:\s|$))\S+/)
+      expect(element.style.opacity === '' || element.style.opacity === '1').toBe(true)
+    }
+    expect(entry?.querySelector('.line-through')).not.toBeNull()
+    expect(within(history).queryByRole('table') !== null).toBe(!isMobile)
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('shows the empty holdings state and offers no mutation controls', async () => {

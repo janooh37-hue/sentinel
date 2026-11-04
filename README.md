@@ -101,6 +101,10 @@ draft values and saved identity. Replacing a one-size item with named sizes, or
 named sizes with one size, removes the old empty sizes before creating replacements.
 Saving with a typed, unstaged size validates and stages it without posting changes;
 the keeper reviews the resulting sizes before saving again.
+Uniform catalogue and posting IDs are never reused in SQLite, so open drafts and
+void confirmations cannot silently target a replacement record after deletion.
+Voided employee-history badges retain full opacity and theme-safe text contrast
+on both desktop and phone layouts.
 
 ## Requirements
 

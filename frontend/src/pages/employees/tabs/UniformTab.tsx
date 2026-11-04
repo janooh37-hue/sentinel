@@ -151,7 +151,7 @@ export function UniformTab({ employeeId }: Props): React.JSX.Element {
   const status = (entry: HistoryEntry) =>
     entry.voided ? (
       <span className="inline-flex flex-col gap-0.5">
-        <span className="w-fit rounded-full bg-destructive/10 px-2 py-0.5 text-[0.85em] font-semibold text-destructive">
+        <span className="w-fit rounded-full bg-destructive/10 px-2 py-0.5 text-[0.85em] font-semibold text-destructive-text">
           {t('assets.uniform.voidStatus')}
         </span>
         {entry.voidReason && (
@@ -221,7 +221,7 @@ export function UniformTab({ employeeId }: Props): React.JSX.Element {
               <li
                 key={entry.key}
                 data-voided={entry.voided || undefined}
-                className={`rounded-xl border border-hairline p-3 ${entry.voided ? 'opacity-70' : ''}`}
+                className="rounded-xl border border-hairline p-3"
               >
                 <div className="flex items-start justify-between gap-2">
                   <span className="font-medium text-foreground">
@@ -252,7 +252,7 @@ export function UniformTab({ employeeId }: Props): React.JSX.Element {
                 <tr
                   key={entry.key}
                   data-voided={entry.voided || undefined}
-                  className={`border-b border-hairline align-top last:border-b-0 ${entry.voided ? 'opacity-70' : ''}`}
+                  className="border-b border-hairline align-top last:border-b-0"
                 >
                   <td className="px-4 py-2.5 text-foreground">
                     <span className="block">
