@@ -433,6 +433,22 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "إضافة أصناف المخزن وأرشفتها وتسجيل الاستلامات والجرد الشهري والإتلاف.",
     ),
     Capability(
+        "uniform.view",
+        "uniform",
+        "View uniforms",
+        "عرض الملابس",
+        "View uniform stock, holdings, and history.",
+        "عرض رصيد الملابس والعهد والسجل.",
+    ),
+    Capability(
+        "uniform.edit",
+        "uniform",
+        "Manage uniforms",
+        "إدارة الملابس",
+        "Manage uniform items and stock transactions.",
+        "إدارة أصناف الملابس وحركات المخزون.",
+    ),
+    Capability(
         "ledger.view",
         "ledger",
         "View ledger",
@@ -684,6 +700,7 @@ _MANAGER_EXTRA: Final[frozenset[str]] = frozenset(
         "editor_templates.manage",
         "timesheet.edit",
         "store.view",
+        "uniform.view",
     }
 )
 
