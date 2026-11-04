@@ -1,6 +1,6 @@
 # Assets → Uniform (الملابس): approval mockup
 
-**Do not build or deploy this yet.** Static HTML for approval only: no backend, API client, persistent storage or frontend build. All employees, G-numbers, quantities and dates in `data.js` are invented sample data. Changes last only until reload.
+Static approval reference: no backend, API client or persistent storage runs in this mockup. All employees, G-numbers, quantities and dates in `data.js` are invented sample data. Changes here last only until reload. The production build follows the approved `SPEC.md`, not the sample balances.
 
 ## Open and preview
 
@@ -9,6 +9,8 @@ Open `http://127.0.0.1:8941/mockups/plan/uniform/index.html`. To serve it yourse
 - `index.html`: screen, bilingual strings, dialogs and in-memory interactions.
 - `data.js`: stock, employees, hand-outs, returns, derived totals and consistency assertions.
 - `art.js`: fixed SVG drawings, bilingual `UNIFORM_ART_KINDS` catalog and `UNIFORM_ART_GROUPS`.
+
+Production implementation: ticket #289 adds `/holdings/uniform`, the Stock ledger and the shared Hand out dialog. Employee selection uses the narrow identity lookup with `uniform.edit` authority; viewing employee profiles is not required. Received and Returns navigation is exposed only after tickets #291 and #292 integrate their bodies. Catalogue editing and stock receipts belong to #290.
 
 | View | Query |
 |---|---|
