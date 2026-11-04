@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -8,6 +8,7 @@ import { DialogBody, DialogFooter, DialogShell, FormAlert } from '@/components/f
 import { UniformArt } from '@/components/UniformArt'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { type UniformItemRead, type UniformSizeRead } from '@/lib/api'
 import { todayIso } from '@/lib/leaveDateMath'
 import { toast } from '@/lib/toast'
 import { useCapabilities } from '@/lib/useCapabilities'
@@ -44,6 +45,7 @@ function ReceiveStockContent({ open, onOpenChange, itemId, returnFocusRef, onSuc
   const id = useId()
   const items = useUniformItems()
   const mutation = useCreateUniformReceipt()
+  const [snapshots, setSnapshots] = useState<Record<number, { item: UniformItemRead; size: UniformSizeRead }>>({})
   const { control, register, handleSubmit } = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: { date: todayIso(), reference: '', note: '', quantities: {} },
@@ -53,12 +55,22 @@ function ReceiveStockContent({ open, onOpenChange, itemId, returnFocusRef, onSuc
   const validDate = validReceiptDate(date)
   const validation = schema.safeParse({ date, reference, note, quantities })
   const eligible = (items.data ?? []).filter(item => !item.archived_at && item.tracking === 'shelf' && item.sizes.some(size => !size.archived_at) && (itemId === undefined || item.id === itemId))
-  const lines = eligible.flatMap(item => item.sizes.filter(size => !size.archived_at).flatMap(size => {
-    const qty = whole(quantities[size.id] ?? '0')
-    return qty > 0 ? [{ size_id: size.id, qty }] : []
+  const groups = new Map(eligible.map(item => [item.id, { item, sizes: item.sizes.filter(size => !size.archived_at).map(size => ({ size, unavailable: false })) }]))
+  for (const snapshot of Object.values(snapshots)) {
+    const group = groups.get(snapshot.item.id)
+    if (group?.sizes.some(row => row.size.id === snapshot.size.id)) continue
+    const row = { size: snapshot.size, unavailable: true }
+    if (group) group.sizes.push(row)
+    else groups.set(snapshot.item.id, { item: items.data?.find(item => item.id === snapshot.item.id) ?? snapshot.item, sizes: [row] })
+  }
+  const rows = [...groups.values()]
+  const selected = rows.flatMap(group => group.sizes.flatMap(row => {
+    const qty = whole(quantities[row.size.id] ?? '0')
+    return qty > 0 ? [{ size_id: row.size.id, qty, unavailable: row.unavailable }] : []
   }))
+  const lines = selected.map(({ size_id, qty }) => ({ size_id, qty }))
   const refreshFailed = items.data !== undefined && items.isError
-  const reason = items.data === undefined ? t(items.isError ? 'assets.uniform.error' : 'assets.uniform.loading') : !validation.success ? t(validation.error.issues[0].message) : !lines.length ? t('assets.uniform.errors.linesRequired') : ''
+  const reason = items.data === undefined ? t(items.isError ? 'assets.uniform.error' : 'assets.uniform.loading') : !validation.success ? t(validation.error.issues[0].message) : selected.some(row => row.unavailable) ? t('assets.uniform.selectionChanged') : !lines.length ? t('assets.uniform.errors.linesRequired') : ''
   return <DialogShell open={open} onOpenChange={onOpenChange} title={t('assets.uniform.receiveStock')} description={t('assets.uniform.tagline')} size="lg" busy={mutation.isPending} returnFocusRef={returnFocusRef}>
     <form noValidate className="flex min-h-0 flex-1 flex-col" aria-busy={mutation.isPending} onSubmit={handleSubmit(values => {
       if (reason || mutation.isPending) return
@@ -77,9 +89,24 @@ function ReceiveStockContent({ open, onOpenChange, itemId, returnFocusRef, onSuc
           <label className="space-y-1 text-sm" htmlFor={`${id}-reference`}>{t('assets.uniform.reference')}<Input {...register('reference')} id={`${id}-reference`} maxLength={120} dir="auto" disabled={mutation.isPending} className="min-h-11" /></label>
         </div>
         <label className="space-y-1 text-sm" htmlFor={`${id}-note`}>{t('assets.uniform.note')}<textarea {...register('note')} id={`${id}-note`} maxLength={500} dir="auto" disabled={mutation.isPending} className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2" /></label>
-        {items.data === undefined && items.isError ? <div><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.error')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => void items.refetch()}>{t('assets.uniform.retry')}</Button></div> : items.data === undefined ? <p role="status">{t('assets.uniform.loading')}</p> : eligible.length === 0 ? <p>{t('assets.uniform.catalog.noReceiptSizes')}</p> : eligible.map(item => <fieldset key={item.id} disabled={mutation.isPending} className="min-w-0 border-t border-hairline py-3">
+        {items.data === undefined && items.isError ? <div><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.error')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => void items.refetch()}>{t('assets.uniform.retry')}</Button></div> : items.data === undefined ? <p role="status">{t('assets.uniform.loading')}</p> : rows.length === 0 ? <p>{t('assets.uniform.catalog.noReceiptSizes')}</p> : rows.map(({ item, sizes }) => <fieldset key={item.id} disabled={mutation.isPending} className="min-w-0 border-t border-hairline py-3">
           <legend className="flex items-center gap-3 text-sm font-semibold"><UniformArt kind={item.drawing} size={48} /><span dir="auto">{i18n.language.startsWith('ar') ? item.name_ar : item.name_en}</span></legend>
-          <div className="flex flex-wrap gap-3">{item.sizes.filter(size => !size.archived_at).map(size => <label key={size.id} htmlFor={`${id}-size-${size.id}`} className="flex flex-col gap-1 text-sm"><bdi dir="ltr">{size.label === 'one' ? t('assets.uniform.oneSize') : size.label}</bdi><Controller control={control} name={`quantities.${size.id}`} defaultValue="0" render={({ field }) => <Input {...field} id={`${id}-size-${size.id}`} type="number" min={0} step={1} inputMode="numeric" dir="ltr" className="min-h-11 w-24 tabular-nums" aria-label={t('assets.uniform.qtyOf', { name: `${i18n.language.startsWith('ar') ? item.name_ar : item.name_en} ${size.label === 'one' ? t('assets.uniform.oneSize') : size.label}` })} onBlur={() => { field.onBlur(); field.onChange(String(whole(field.value))) }} />} /></label>)}</div>
+          <div className="flex flex-wrap gap-3">{sizes.map(({ size, unavailable }) => {
+            const conflict = unavailable && whole(quantities[size.id] ?? '0') > 0
+            return <label key={size.id} htmlFor={`${id}-size-${size.id}`} className="flex flex-col gap-1 text-sm">
+              <bdi dir="ltr">{size.label === 'one' ? t('assets.uniform.oneSize') : size.label}</bdi>
+              <Controller control={control} name={`quantities.${size.id}`} defaultValue="0" render={({ field }) => <Input {...field} id={`${id}-size-${size.id}`} type="number" min={0} step={1} inputMode="numeric" dir="ltr" className="min-h-11 w-24 tabular-nums" aria-label={t('assets.uniform.qtyOf', { name: `${i18n.language.startsWith('ar') ? item.name_ar : item.name_en} ${size.label === 'one' ? t('assets.uniform.oneSize') : size.label}` })} aria-invalid={conflict} aria-describedby={conflict ? `${id}-unavailable-${size.id}` : undefined}
+                onChange={event => {
+                  setSnapshots(previous => ({ ...previous, [size.id]: { item, size } }))
+                  field.onChange(event)
+                }}
+                onBlur={() => {
+                  field.onBlur()
+                  field.onChange(String(whole(field.value)))
+                }} />} />
+              {conflict && <span id={`${id}-unavailable-${size.id}`} className="text-xs text-destructive-text">{t('assets.uniform.lineUnavailable')}</span>}
+            </label>
+          })}</div>
         </fieldset>)}
       </DialogBody>
       <DialogFooter>

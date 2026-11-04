@@ -67,6 +67,66 @@ describe('Update uniform item', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(api.addUniformSize).not.toHaveBeenCalled()
   })
+  it('restores a removed staged size case-insensitively with its quantity, threshold and reason', async () => {
+    vi.mocked(api.addUniformSize).mockResolvedValue({ ...ITEM.sizes[0], id: 25, label: 'Tall', on_hand: 0, min_qty: 2, sort_order: 1 })
+    mount()
+    const user = userEvent.setup()
+    const field = await screen.findByLabelText('Add size')
+    await user.type(field, 'Tall{Enter}')
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Quantity of Tall' }), { target: { value: '3' } })
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Alert at Tall' }), { target: { value: '2' } })
+    await user.type(screen.getByLabelText('Reason for adjustment'), 'Found stock')
+    await user.click(screen.getByRole('button', { name: 'Remove size Tall' }))
+    expect(screen.queryByRole('spinbutton', { name: 'Quantity of Tall' })).not.toBeInTheDocument()
+    await user.type(field, ' tall {Enter}')
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Tall' })).toHaveValue(3)
+    expect(screen.getByRole('spinbutton', { name: 'Alert at Tall' })).toHaveValue(2)
+    expect(screen.getByLabelText('Reason for adjustment')).toHaveValue('Found stock')
+    await user.type(field, 'TALL{Enter}')
+    expect(screen.getByRole('alert')).toHaveTextContent(i18n.t('assets.uniform.sizeDuplicate'))
+    expect(api.addUniformSize).not.toHaveBeenCalled()
+    await user.clear(field)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.addUniformSize).toHaveBeenCalledTimes(1))
+    expect(api.addUniformSize).toHaveBeenCalledWith(2, { label: 'Tall', min_qty: 2 })
+    expect(api.createUniformAdjustments).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [{ size_id: 25, delta: 3, expected_on_hand: 0 }],
+    }))
+    expect(api.removeUniformSize).not.toHaveBeenCalled()
+  })
+  it.each(['M', 'one'])('restores an existing removed %s size without deleting or recreating its identity', async label => {
+    mount({ ...ITEM, sizes: [{ ...ITEM.sizes[0], label, on_hand: 0 }] })
+    const user = userEvent.setup()
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    const display = label === 'one' ? 'One size' : label
+    await user.click(screen.getByRole('button', { name: `Remove size ${display}` }))
+    await user.type(screen.getByLabelText('Add size'), `${label.toUpperCase()}{Enter}`)
+    expect(screen.getByRole('spinbutton', { name: `Quantity of ${display}` })).toHaveValue(0)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled())
+    expect(api.addUniformSize).not.toHaveBeenCalled()
+    expect(api.removeUniformSize).not.toHaveBeenCalled()
+    expect(api.createUniformAdjustments).not.toHaveBeenCalled()
+  })
+  it('restores a size after a partially committed removal without replaying that deletion', async () => {
+    const empty = { ...ITEM.sizes[0], on_hand: 0 }
+    vi.mocked(api.removeUniformSize).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new ApiError(409, 'uniform_write_conflict', 'Conflict')).mockResolvedValueOnce(undefined)
+    vi.mocked(api.addUniformSize).mockResolvedValue({ ...empty, id: 25, sort_order: 0 })
+    mount({ ...ITEM, sizes: [empty, { ...empty, id: 22, label: 'L', sort_order: 1 }] })
+    const user = userEvent.setup()
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    await user.click(screen.getByRole('button', { name: 'Remove size M' }))
+    await user.click(screen.getByRole('button', { name: 'Remove size L' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByRole('alert')
+    await user.type(screen.getByLabelText('Add size'), 'm{Enter}')
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of M' })).toHaveValue(0)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.removeUniformSize).toHaveBeenCalledTimes(3))
+    expect(vi.mocked(api.removeUniformSize).mock.calls.map(([id]) => id)).toEqual([21, 22, 22])
+    expect(api.addUniformSize).toHaveBeenCalledTimes(1)
+    expect(api.addUniformSize).toHaveBeenCalledWith(2, { label: 'M', min_qty: null })
+  })
   it.each([['-5', 0, -8], ['2.7', 2, -6]])('floors and clamps %s on commit and posts the difference only with a reason', async (raw, expected, delta) => {
     mount()
     const input = await screen.findByRole('spinbutton', { name: 'Quantity of M' })
@@ -395,6 +455,46 @@ describe('Receive stock and inspect posting history', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
     expect(screen.getByRole('textbox', { name: 'Reason for voiding' })).toBe(input)
     expect(input).toHaveValue('Correction draft')
+  })
+  it.each([
+    ['receipt', 'voided'], ['receipt', 'removed'], ['receipt', 'reordered'],
+    ['adjustment', 'voided'], ['adjustment', 'removed'], ['adjustment', 'reordered'],
+  ] as const)('preserves the inline %s void reason when its row is %s by a successful refresh', async (kind, change) => {
+    const { client } = mountStockSurface('history')
+    const row = (await screen.findByText(kind === 'receipt' ? 'HQ-20' : 'Count correction')).closest('li')!
+    const user = userEvent.setup()
+    await user.click(within(row).getByRole('button', { name: 'Void record' }))
+    const input = within(row).getByRole('textbox', { name: 'Reason for voiding' })
+    await user.type(input, 'Original target draft')
+    if (kind === 'receipt') {
+      const records = change === 'removed' ? [] : change === 'voided'
+        ? [{ ...RECEIPT, voided_at: '2026-11-04T12:00:00Z', void_reason: 'Another keeper' }]
+        : [{ ...RECEIPT, id: 99, received_on: '2026-11-04', reference: 'New receipt' }, RECEIPT]
+      vi.mocked(api.listUniformReceipts).mockResolvedValue(records)
+    } else {
+      const records = change === 'removed' ? [] : change === 'voided'
+        ? [{ ...ADJUSTMENT, voided_at: '2026-11-04T12:00:00Z', void_reason: 'Another keeper' }]
+        : [{ ...ADJUSTMENT, id: 99, reason: 'New adjustment' }, ADJUSTMENT]
+      vi.mocked(api.listUniformAdjustments).mockResolvedValue(records)
+    }
+    await act(async () => { await client.refetchQueries({ queryKey: kind === 'receipt' ? uniformKeys.receipts : uniformKeys.adjustments, exact: true }) })
+    if (change === 'reordered') await screen.findByText(kind === 'receipt' ? 'New receipt' : 'New adjustment')
+    else await waitFor(() => expect(within(row).getByRole('button', { name: 'Void record' })).toBeDisabled())
+    expect(within(row).getByRole('textbox', { name: 'Reason for voiding' })).toBe(input)
+    expect(input).toHaveValue('Original target draft')
+    const confirm = within(row).getByRole('button', { name: 'Void record' })
+    if (change === 'reordered') {
+      expect(confirm).toBeEnabled()
+      await user.click(confirm)
+      await waitFor(() => expect(kind === 'receipt' ? api.voidUniformReceipt : api.voidUniformAdjustment).toHaveBeenCalledWith(kind === 'receipt' ? 5 : 6, { reason: 'Original target draft' }))
+    } else {
+      expect(confirm).toBeDisabled()
+      fireEvent.submit(input.closest('form')!)
+      expect(api.voidUniformReceipt).not.toHaveBeenCalled()
+      expect(api.voidUniformAdjustment).not.toHaveBeenCalled()
+      await user.click(within(row).getByRole('button', { name: 'Cancel' }))
+      expect(screen.queryByRole('textbox', { name: 'Reason for voiding' })).not.toBeInTheDocument()
+    }
   })
   it('requires positive received quantities, normalizes them and posts a dated receipt', async () => {
     const { onOpenChange } = mountStockSurface('receive')

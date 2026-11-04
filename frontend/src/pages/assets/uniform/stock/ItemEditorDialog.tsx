@@ -105,9 +105,15 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
   function stageSize() {
     if (busy || !editable || action) return
     const label = getValues('newSize').trim()
-    const message = !label ? 'assets.uniform.sizeRequired' : label.length > 16 ? 'assets.uniform.errors.invalidSizeLabel' : rows.some(row => row.label.toLowerCase() === label.toLowerCase()) ? 'assets.uniform.sizeDuplicate' : label.toLowerCase() === 'one' && rows.length > 0 ? 'assets.uniform.errors.sizesFixed' : ''
+    const matching = rows.findIndex(row => row.label.toLowerCase() === label.toLowerCase())
+    const active = rows.filter(row => !row.removed)
+    const oneSizeConflict = label.toLowerCase() === 'one'
+      ? active.some(row => row.label.toLowerCase() !== 'one')
+      : active.some(row => row.label.toLowerCase() === 'one')
+    const message = !label ? 'assets.uniform.sizeRequired' : label.length > 16 ? 'assets.uniform.errors.invalidSizeLabel' : matching >= 0 && !rows[matching].removed ? 'assets.uniform.sizeDuplicate' : oneSizeConflict ? 'assets.uniform.errors.sizesFixed' : ''
     if (message) { setFieldError('newSize', { message }); return }
-    append({ id: null, label, qty: '0', baseline: 0, min: '', savedMin: null, savedOrder: -1, held: 0, removed: false }, { shouldFocus: false })
+    if (matching >= 0) setValue(`rows.${matching}.removed`, false)
+    else append({ id: null, label, qty: '0', baseline: 0, min: '', savedMin: null, savedOrder: -1, held: 0, removed: false }, { shouldFocus: false })
     setValue('newSize', '')
     clearErrors('newSize')
   }
@@ -229,7 +235,7 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
               })}
               <p id={`${id}-threshold-hint`} className="text-xs text-muted-foreground">{t('assets.uniform.minQtyHint')}</p>
             </fieldset>
-            {!rows.some(row => row.label.toLowerCase() === 'one') && <div><div className="flex items-end gap-2"><label className="grid w-full max-w-[200px] gap-1 text-sm">{t('assets.uniform.addSize')}<Input {...register('newSize')} maxLength={16} dir="ltr" className="min-h-11" aria-invalid={!!errors.newSize} aria-describedby={`${id}-size-error`} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); stageSize() } }} /></label><Button type="button" variant="secondary" className="min-h-11" onClick={stageSize}>{t('assets.uniform.add')}</Button></div>{errors.newSize?.message && <p id={`${id}-size-error`} role="alert" className="mt-1 text-sm text-destructive-text">{t(errors.newSize.message)}</p>}</div>}
+            {!rows.some(row => !row.removed && row.label.toLowerCase() === 'one') && <div><div className="flex items-end gap-2"><label className="grid w-full max-w-[200px] gap-1 text-sm">{t('assets.uniform.addSize')}<Input {...register('newSize')} maxLength={16} dir="ltr" className="min-h-11" aria-invalid={!!errors.newSize} aria-describedby={`${id}-size-error`} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); stageSize() } }} /></label><Button type="button" variant="secondary" className="min-h-11" onClick={stageSize}>{t('assets.uniform.add')}</Button></div>{errors.newSize?.message && <p id={`${id}-size-error`} role="alert" className="mt-1 text-sm text-destructive-text">{t(errors.newSize.message)}</p>}</div>}
             {quantityChanged && <div><label className="grid gap-1 text-sm">{t('assets.uniform.adjustmentReason')}<Input {...register('reason')} maxLength={500} dir="auto" className="min-h-11" required aria-invalid={!!errors.reason} aria-describedby={errors.reason ? `${id}-reason-error` : `${id}-reason`} /></label>{fieldError('reason')}</div>}
           </>}
           {items.data ? <DrawingPicker items={items.data} currentItemId={item.id} value={drawing} onChange={value => setValue('drawing', value)} disabled={busy || !!action} /> : !items.isError && <p role="status">{t('assets.uniform.loading')}</p>}

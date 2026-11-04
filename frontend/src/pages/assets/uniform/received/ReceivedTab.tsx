@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { type UniformRecipient } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { formatDmy } from '@/lib/formatDmy'
 import { cn } from '@/lib/utils'
@@ -17,29 +18,53 @@ export function ReceivedTab(): React.JSX.Element {
   const [params, setParams] = useSearchParams()
   const people = useUniformRecipients('')
   const [query, setQuery] = useState('')
+  const [draftPerson, setDraftPerson] = useState<UniformRecipient | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const listHeading = useRef<HTMLHeadingElement>(null)
   const search = useRef<HTMLInputElement>(null)
   const cards = useRef(new Map<string, HTMLButtonElement>())
   const previousPerson = useRef<string | null>(null)
+  const previousSelection = useRef<string | undefined>(undefined)
   const requested = params.get('person')
   const needle = query.trim().toLocaleLowerCase()
   const records = (people.data ?? []).filter(person => !needle || [person.employee_id, person.name_en, person.name_ar ?? ''].some(value => value.toLocaleLowerCase().includes(needle)))
-  const selected = requested !== null ? people.data?.find(person => person.employee_id === requested) : records[0]
+  const candidate = requested !== null ? people.data?.find(person => person.employee_id === requested) : records[0]
+  const selected = draftPerson ?? candidate
   const open = requested !== null
 
   useEffect(() => {
+    if (draftPerson !== null) return
     const preceding = previousPerson.current
+    const selectionChanged = previousSelection.current !== selected?.employee_id
+    previousSelection.current = selected?.employee_id
     previousPerson.current = requested
+    if (preceding === requested && !selectionChanged) return
     const frame = requestAnimationFrame(() => {
       if (requested !== null) heading.current?.focus()
       else if (preceding !== null) (cards.current.get(preceding) ?? search.current)?.focus()
     })
     return () => cancelAnimationFrame(frame)
-  }, [requested, selected?.employee_id])
+  }, [draftPerson, requested, selected?.employee_id])
 
   function back() {
     setParams(previous => { const next = new URLSearchParams(previous); next.delete('person'); return next })
+  }
+
+  function draftOpenChange(isOpen: boolean, opener: HTMLElement | null) {
+    if (isOpen) {
+      // Capture before opening: an effect notification can lose a refetch race.
+      if (selected) setDraftPerson(selected)
+      return
+    }
+    // Closing owns focus; do not replay navigation that happened behind the dialog.
+    previousPerson.current = requested
+    previousSelection.current = candidate?.employee_id
+    setDraftPerson(null)
+    requestAnimationFrame(() => {
+      if (!opener?.isConnected || opener.matches(':disabled')) {
+        (candidate || requested !== null ? heading.current : search.current)?.focus()
+      }
+    })
   }
 
   if (people.isError && people.data === undefined) return <section className="rounded-xl border border-border bg-surface p-4"><p role="alert" className="text-sm text-destructive-text">{t('assets.uniform.errorPeople')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => { void people.refetch().then(() => listHeading.current?.focus()) }}>{t('assets.uniform.retry')}</Button></section>
@@ -66,7 +91,7 @@ export function ReceivedTab(): React.JSX.Element {
           </li>)}</ol>
         </>}
     </section>
-    {people.data !== undefined && (selected ? <PersonPanel key={selected.employee_id} person={selected} headingRef={heading} onBack={back} className={cn('min-[1000px]:sticky min-[1000px]:top-4 min-[1000px]:max-h-[calc(100dvh-32px)] min-[1000px]:overflow-y-auto', !open && 'max-[999px]:hidden')} />
+    {people.data !== undefined && (selected ? <PersonPanel key={selected.employee_id} person={selected} headingRef={heading} onBack={back} onDraftOpenChange={draftOpenChange} className={cn('min-[1000px]:sticky min-[1000px]:top-4 min-[1000px]:max-h-[calc(100dvh-32px)] min-[1000px]:overflow-y-auto', !open && 'max-[999px]:hidden')} />
       : open && <section className="rounded-xl border border-border bg-surface p-4"><Button type="button" variant="secondary" className="mb-3 min-h-11" onClick={back}>{t('assets.uniform.back')}</Button><h2 ref={heading} tabIndex={-1} className="text-sm outline-none">{t('assets.uniform.received.personUnavailable')}</h2></section>)}
   </div>
 }

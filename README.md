@@ -90,6 +90,12 @@ Draft entries are retained through failures and successful retries.
 The shared Assets entry accepts Store or Uniform view access and opens a permitted
 section. Return deep links identify the exact ledger entry independently of list
 search, and an open void confirmation stays bound to the entry originally chosen.
+Recipient panels stay pinned while a hand-out, return or void draft is open, even
+when a successful refresh removes or reorders the recipient. Posting forms retain
+requested quantities and unavailable selected lines across successful refreshes;
+changed availability blocks submission until the user explicitly revises or clears
+those selections. Removing and re-adding an editor size restores its existing
+draft values and saved identity.
 
 ## Requirements
 

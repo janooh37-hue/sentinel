@@ -17,11 +17,12 @@ interface Props {
   person: UniformRecipient
   headingRef: React.RefObject<HTMLHeadingElement | null>
   onBack: () => void
+  onDraftOpenChange: (open: boolean, opener: HTMLElement | null) => void
   className?: string
 }
 
 /** Balances come from the same canonical ledger used by the shared return form. */
-export function PersonPanel({ person, headingRef, onBack, className }: Props): React.JSX.Element {
+export function PersonPanel({ person, headingRef, onBack, onDraftOpenChange, className }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const editable = useCapabilities().has('uniform.edit')
   const records = useUniformEmployee(person.employee_id)
@@ -50,6 +51,26 @@ export function PersonPanel({ person, headingRef, onBack, className }: Props): R
     </li>
   })}</ul>
 
+  function openDialog(kind: 'give' | 'return', target: HTMLElement) {
+    opener.current = target
+    onDraftOpenChange(true, target)
+    setDialog(kind)
+  }
+
+  function openVoid(kind: 'issue' | 'return', recordId: number, target: HTMLElement) {
+    opener.current = target
+    onDraftOpenChange(true, target)
+    setVoiding({ kind, id: recordId })
+  }
+
+  function closeDraft(isOpen: boolean) {
+    if (isOpen) return
+    setDialog(null)
+    setVoiding(null)
+    onDraftOpenChange(false, opener.current)
+    if (!opener.current?.isConnected || opener.current.matches(':disabled')) opener.current = headingRef.current
+  }
+
   return <section aria-labelledby="uniform-person-h" className={cn('min-w-0 rounded-xl border border-border bg-surface', className)}>
     <div className="border-b border-border p-4">
       <Button type="button" variant="secondary" className="mb-3 min-h-11 min-[1000px]:hidden" onClick={onBack}>{t('assets.uniform.back')}</Button>
@@ -57,8 +78,8 @@ export function PersonPanel({ person, headingRef, onBack, className }: Props): R
       <bdi dir="ltr" className="text-sm text-muted-foreground">{person.employee_id}</bdi>
       {ready && <p className="mt-1 text-sm font-semibold">{t('assets.uniform.holdsN', { count: total })}</p>}
       {editable && <div className="mt-3 flex flex-wrap gap-2">
-        <Button type="button" className="min-h-11 whitespace-normal" onClick={event => { opener.current = event.currentTarget; setDialog('give') }}>{t('assets.uniform.handOut')}</Button>
-        <Button type="button" variant="secondary" className="min-h-11 whitespace-normal" disabled={!ready || total === 0} aria-describedby={ready && total === 0 ? `${id}-return-reason` : undefined} onClick={event => { opener.current = event.currentTarget; setDialog('return') }}>{t('assets.uniform.recordReturn')}</Button>
+        <Button type="button" className="min-h-11 whitespace-normal" onClick={event => openDialog('give', event.currentTarget)}>{t('assets.uniform.handOut')}</Button>
+        <Button type="button" variant="secondary" className="min-h-11 whitespace-normal" disabled={!ready || total === 0} aria-describedby={ready && total === 0 ? `${id}-return-reason` : undefined} onClick={event => openDialog('return', event.currentTarget)}>{t('assets.uniform.recordReturn')}</Button>
         {ready && total === 0 && <p id={`${id}-return-reason`} className="w-full text-xs text-muted-foreground">{t('assets.uniform.received.noHoldingsReturn')}</p>}
       </div>}
     </div>
@@ -77,7 +98,7 @@ export function PersonPanel({ person, headingRef, onBack, className }: Props): R
             {record.voided_at && <p className="mt-2 text-sm text-muted-foreground"><span className="font-semibold">{t('assets.uniform.voidStatus')}</span>{record.void_reason && <>{' · '}<bdi dir="auto">{record.void_reason}</bdi></>}</p>}
             {lines(record.lines)}
             {record.note && <p dir="auto" className="mt-1 break-words text-sm">{record.note}</p>}
-            {editable && !record.voided_at && <Button type="button" variant="ghost" className="mt-1 min-h-11 text-destructive-text" onClick={event => { opener.current = event.currentTarget; setVoiding({ kind: 'issue', id: record.id }) }}>{t('assets.uniform.voidRecord')}</Button>}
+            {editable && !record.voided_at && <Button type="button" variant="ghost" className="mt-1 min-h-11 text-destructive-text" onClick={event => openVoid('issue', record.id, event.currentTarget)}>{t('assets.uniform.voidRecord')}</Button>}
           </li>)}</ol>}
         </section>
         <section aria-labelledby={`${id}-returns`} className="border-t border-border p-4">
@@ -87,12 +108,12 @@ export function PersonPanel({ person, headingRef, onBack, className }: Props): R
             {record.voided_at && <p className="mt-2 text-sm text-muted-foreground"><span className="font-semibold">{t('assets.uniform.voidStatus')}</span>{record.void_reason && <>{' · '}<bdi dir="auto">{record.void_reason}</bdi></>}</p>}
             {lines(record.lines)}
             {record.note && <p dir="auto" className="mt-1 break-words text-sm">{record.note}</p>}
-            {editable && !record.voided_at && <Button type="button" variant="ghost" className="mt-1 min-h-11 text-destructive-text" onClick={event => { opener.current = event.currentTarget; setVoiding({ kind: 'return', id: record.id }) }}>{t('assets.uniform.voidRecord')}</Button>}
+            {editable && !record.voided_at && <Button type="button" variant="ghost" className="mt-1 min-h-11 text-destructive-text" onClick={event => openVoid('return', record.id, event.currentTarget)}>{t('assets.uniform.voidRecord')}</Button>}
           </li>)}</ol>}
         </section>
       </>}
-    <HandOutDialog open={dialog === 'give'} employee={employee} returnFocusRef={opener} onOpenChange={open => { if (!open) setDialog(null) }} />
-    <ReturnDialog open={dialog === 'return'} employee={employee} returnFocusRef={opener} onOpenChange={open => { if (!open) setDialog(null) }} />
-    {voiding !== null && <VoidDialog open kind={voiding.kind} recordId={voiding.id} returnFocusRef={opener} onVoided={() => { if (!opener.current?.isConnected) opener.current = headingRef.current }} onOpenChange={open => { if (!open) setVoiding(null) }} />}
+    <HandOutDialog open={dialog === 'give'} employee={employee} returnFocusRef={opener} onOpenChange={closeDraft} />
+    <ReturnDialog open={dialog === 'return'} employee={employee} returnFocusRef={opener} onOpenChange={closeDraft} />
+    {voiding !== null && <VoidDialog open kind={voiding.kind} recordId={voiding.id} returnFocusRef={opener} onVoided={() => { if (!opener.current?.isConnected) opener.current = headingRef.current }} onOpenChange={closeDraft} />}
   </section>
 }

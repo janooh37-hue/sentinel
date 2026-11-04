@@ -115,19 +115,30 @@ describe('Hand out uniform', () => {
     })))
   })
 
-  it('drops removed items without moving their picks onto remaining catalogue items', async () => {
+  it('preserves a removed selected item and requires explicitly clearing it before saving the remaining picks', async () => {
     const { client } = mount()
     const user = await chooseEmployee()
     await user.click(screen.getByRole('radio', { name: 'Give' }))
     await user.click(screen.getByRole('radio', { name: 'M 8 left' }))
+    const suit = screen.getByRole('group', { name: 'Formal suit' })
+    const suitQty = within(suit).getByRole('spinbutton')
     act(() => { client.setQueryData(uniformKeys.items(), [POLO]) })
-    await waitFor(() => expect(screen.queryByRole('group', { name: 'Formal suit' })).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Hand out' })).toBeDisabled())
+    expect(screen.getByRole('group', { name: 'Formal suit' })).toBe(suit)
+    expect(within(suit).getByRole('spinbutton')).toBe(suitQty)
+    expect(suitQty).toHaveValue(2)
     expect(screen.getByRole('radio', { name: 'M 8 left' })).toBeChecked()
     const qty = screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt' })
     fireEvent.change(qty, { target: { value: '3.9' } })
     fireEvent.blur(qty)
     expect(qty).toHaveValue(3)
-    await user.click(screen.getByRole('button', { name: 'Hand out' }))
+    const save = screen.getByRole('button', { name: 'Hand out' })
+    expect(save).toBeDisabled()
+    fireEvent.submit(save.closest('form')!)
+    expect(api.createUniformIssue).not.toHaveBeenCalled()
+    await user.click(within(suit).getByRole('radio', { name: 'None' }))
+    expect(save).toBeEnabled()
+    await user.click(save)
     await waitFor(() => expect(api.createUniformIssue).toHaveBeenCalledWith(expect.objectContaining({
       lines: [{ item_id: 2, size_id: 21, qty: 3 }],
     })))
@@ -412,6 +423,69 @@ describe('Receive uniform stock', () => {
     await waitFor(() => expect(api.createUniformReceipt).toHaveBeenCalledWith({
       received_on: '2020-01-02', reference: 'HQ-42', note: 'Delivery checked', lines: [{ size_id: 21, qty: 4 }, { size_id: 22, qty: 2 }],
     }))
+  })
+
+  it('keeps receipt quantities keyed to stable inputs while live items and sizes reorder and new choices arrive', async () => {
+    const { client } = mount('receipt')
+    const user = userEvent.setup()
+    const medium = await screen.findByRole('spinbutton', { name: 'Quantity of Polo shirt M' })
+    const large = screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt L' })
+    fireEvent.change(medium, { target: { value: '3' } })
+    fireEvent.change(large, { target: { value: '2' } })
+    const belt: UniformItemRead = { ...POLO, id: 3, name_en: 'Belt', drawing: 'belt', sizes: [{ ...POLO.sizes[0], id: 31, item_id: 3, label: 'one' }] }
+    vi.mocked(api.listUniformItems).mockResolvedValue([belt, { ...POLO, sizes: [POLO.sizes[1], POLO.sizes[0], POLO.sizes[2], { ...POLO.sizes[0], id: 24, label: 'XXL' }] }, SUIT])
+    await act(async () => { await client.invalidateQueries({ queryKey: uniformKeys.items() }) })
+    await screen.findByRole('spinbutton', { name: 'Quantity of Belt One size' })
+    expect(client.getQueryState(uniformKeys.items())?.status).toBe('success')
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt M' })).toBe(medium)
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt L' })).toBe(large)
+    expect(medium).toHaveValue(3)
+    expect(large).toHaveValue(2)
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Belt One size' })).toHaveValue(0)
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt XXL' })).toHaveValue(0)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.createUniformReceipt).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [{ size_id: 22, qty: 2 }, { size_id: 21, qty: 3 }],
+    })))
+  })
+
+  it.each(['item removed', 'item archived', 'size removed', 'size archived'] as const)('preserves a receipt line when its catalogue %s and blocks saving a valid subset until it is cleared', async change => {
+    const belt: UniformItemRead = { ...POLO, id: 3, name_en: 'Belt', drawing: 'belt', sizes: [{ ...POLO.sizes[0], id: 31, item_id: 3, label: 'one' }] }
+    vi.mocked(api.listUniformItems).mockResolvedValue([POLO, belt])
+    const { client } = mount('receipt')
+    const user = userEvent.setup()
+    const qty = await screen.findByRole('spinbutton', { name: 'Quantity of Polo shirt M' })
+    const validQty = screen.getByRole('spinbutton', { name: 'Quantity of Belt One size' })
+    fireEvent.change(qty, { target: { value: '3' } })
+    fireEvent.blur(qty)
+    fireEvent.change(validQty, { target: { value: '2' } })
+    await user.click(qty)
+    const refreshedPolo = change === 'item archived' ? { ...POLO, archived_at: '2026-11-04T09:00:00' }
+      : { ...POLO, sizes: change === 'size removed' ? POLO.sizes.filter(size => size.id !== 21) : POLO.sizes.map(size => size.id === 21 ? { ...size, archived_at: '2026-11-04T09:00:00' } : size) }
+    vi.mocked(api.listUniformItems).mockResolvedValue(change === 'item removed' ? [belt] : [belt, refreshedPolo])
+    await act(async () => { await client.invalidateQueries({ queryKey: uniformKeys.items() }) })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toHaveAccessibleDescription(i18n.t('assets.uniform.selectionChanged')))
+    expect(client.getQueryState(uniformKeys.items())?.status).toBe('success')
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt M' })).toBe(qty)
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Belt One size' })).toBe(validQty)
+    expect(qty).toHaveValue(3)
+    expect(validQty).toHaveValue(2)
+    expect(qty).toHaveAccessibleDescription(i18n.t('assets.uniform.lineUnavailable'))
+    const save = screen.getByRole('button', { name: 'Save' })
+    expect(save).toBeDisabled()
+    expect(save).toHaveAccessibleDescription(i18n.t('assets.uniform.selectionChanged'))
+    await user.click(save)
+    fireEvent.blur(qty)
+    fireEvent.submit(save.closest('form')!)
+    expect(qty).toHaveValue(3)
+    expect(api.createUniformReceipt).not.toHaveBeenCalled()
+    fireEvent.change(qty, { target: { value: '0' } })
+    fireEvent.blur(qty)
+    expect(save).toBeEnabled()
+    await user.click(save)
+    await waitFor(() => expect(api.createUniformReceipt).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [{ size_id: 31, qty: 2 }],
+    })))
   })
 
   it('blocks an initial receipt catalogue failure until Retry loads the sizes', async () => {

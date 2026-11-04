@@ -280,6 +280,134 @@ describe('Record return', () => {
     })))
   })
 
+  it('keeps keyed return quantities and conditions while successful refreshes reorder and add live holdings', async () => {
+    const { client } = mount(<ReturnDialog open onOpenChange={vi.fn()} />)
+    const user = await chooseAli()
+    const suitQty = screen.getByRole('spinbutton', { name: 'Quantity of Formal suit' })
+    const poloQty = screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt M' })
+    const damaged = within(screen.getByRole('group', { name: 'Polo shirt' })).getByRole('radio', { name: 'Damaged' })
+    fireEvent.change(suitQty, { target: { value: '1' } })
+    fireEvent.change(poloQty, { target: { value: '2' } })
+    await user.click(damaged)
+    const belt: UniformItemRead = { ...POLO, id: 3, name_en: 'Belt', drawing: 'belt', sizes: [{ ...POLO.sizes[0], id: 31, item_id: 3, label: 'one' }] }
+    vi.mocked(api.listUniformItems).mockResolvedValue([belt, POLO, SUIT])
+    vi.mocked(api.getUniformEmployee).mockResolvedValue({ holdings: [
+      { employee_id: ALI.employee_id, item_id: 3, size_id: 31, qty: 1 },
+      { employee_id: ALI.employee_id, item_id: 2, size_id: 21, qty: 3 },
+      { employee_id: ALI.employee_id, item_id: 1, size_id: null, qty: 2 },
+    ], issues: [], returns: [] })
+    await act(async () => { await client.invalidateQueries({ queryKey: ['uniform'] }) })
+    await screen.findByRole('spinbutton', { name: 'Quantity of Belt One size' })
+    expect(client.getQueryState(uniformKeys.employee(ALI.employee_id))?.status).toBe('success')
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Belt One size' })).toHaveValue(0)
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Formal suit' })).toBe(suitQty)
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt M' })).toBe(poloQty)
+    expect(suitQty).toHaveValue(1)
+    expect(poloQty).toHaveValue(2)
+    expect(within(screen.getByRole('group', { name: 'Polo shirt' })).getByRole('radio', { name: 'Damaged' })).toBe(damaged)
+    expect(damaged).toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.createUniformReturn).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [{ item_id: 2, size_id: 21, qty: 2, condition: 'damaged' }, { item_id: 1, qty: 1, condition: 'reusable' }],
+    })))
+  })
+
+  it.each(['decreased', 'removed'] as const)('preserves a requested return after holdings are %s until the user revises it', async change => {
+    const { client } = mount(<ReturnDialog open onOpenChange={vi.fn()} />)
+    const user = await chooseAli()
+    const suitQty = screen.getByRole('spinbutton', { name: 'Quantity of Formal suit' })
+    const poloQty = screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt M' })
+    const damaged = within(screen.getByRole('group', { name: 'Polo shirt' })).getByRole('radio', { name: 'Damaged' })
+    fireEvent.change(suitQty, { target: { value: '1' } })
+    fireEvent.change(poloQty, { target: { value: '3' } })
+    fireEvent.blur(poloQty)
+    await user.click(damaged)
+    await user.click(poloQty)
+    vi.mocked(api.getUniformEmployee).mockResolvedValue({ holdings: [
+      { employee_id: ALI.employee_id, item_id: 1, size_id: null, qty: 2 },
+      ...(change === 'decreased' ? [{ employee_id: ALI.employee_id, item_id: 2, size_id: 21, qty: 1 }] : []),
+    ], issues: [], returns: [] })
+    await act(async () => { await client.invalidateQueries({ queryKey: uniformKeys.employee(ALI.employee_id) }) })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toHaveAccessibleDescription(i18n.t('assets.uniform.selectionChanged')))
+    expect(client.getQueryState(uniformKeys.employee(ALI.employee_id))?.status).toBe('success')
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt M' })).toBe(poloQty)
+    expect(poloQty).toHaveFocus()
+    expect(poloQty).toHaveValue(3)
+    expect(damaged).toBeChecked()
+    expect(poloQty).toHaveAccessibleDescription(i18n.t('assets.uniform.heldAvailable', { count: change === 'decreased' ? 1 : 0 }))
+    const save = screen.getByRole('button', { name: 'Save' })
+    expect(save).toBeDisabled()
+    expect(save).toHaveAccessibleDescription(i18n.t('assets.uniform.selectionChanged'))
+    await user.click(save)
+    fireEvent.blur(poloQty)
+    fireEvent.submit(save.closest('form')!)
+    expect(poloQty).toHaveValue(3)
+    expect(api.createUniformReturn).not.toHaveBeenCalled()
+    fireEvent.change(poloQty, { target: { value: change === 'decreased' ? '1' : '0' } })
+    fireEvent.blur(poloQty)
+    expect(save).toBeEnabled()
+    await user.click(save)
+    await waitFor(() => expect(api.createUniformReturn).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [
+        { item_id: 1, qty: 1, condition: 'reusable' },
+        ...(change === 'decreased' ? [{ item_id: 2, size_id: 21, qty: 1, condition: 'damaged' }] : []),
+      ],
+    })))
+  })
+
+  it('does not apply a refreshed held limit when committing a quantity edited before the refresh', async () => {
+    const { client } = mount(<ReturnDialog open onOpenChange={vi.fn()} />)
+    const user = await chooseAli()
+    const qty = screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt M' })
+    await user.click(qty)
+    fireEvent.change(qty, { target: { value: '3' } })
+    vi.mocked(api.getUniformEmployee).mockResolvedValue({ holdings: [
+      { employee_id: ALI.employee_id, item_id: 2, size_id: 21, qty: 1 },
+    ], issues: [], returns: [] })
+    await act(async () => { await client.invalidateQueries({ queryKey: uniformKeys.employee(ALI.employee_id) }) })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toHaveAccessibleDescription(i18n.t('assets.uniform.selectionChanged')))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.blur(qty)
+    expect(qty).toHaveValue(3)
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(api.createUniformReturn).not.toHaveBeenCalled()
+  })
+
+  it.each(['item removed', 'item archived', 'size removed', 'size archived'] as const)('retains an unavailable return line when its catalogue %s and never saves only the valid subset', async change => {
+    const { client } = mount(<ReturnDialog open onOpenChange={vi.fn()} />)
+    const user = await chooseAli()
+    const suitQty = screen.getByRole('spinbutton', { name: 'Quantity of Formal suit' })
+    const poloQty = screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt M' })
+    const damaged = within(screen.getByRole('group', { name: 'Polo shirt' })).getByRole('radio', { name: 'Damaged' })
+    fireEvent.change(suitQty, { target: { value: '1' } })
+    fireEvent.change(poloQty, { target: { value: '2' } })
+    fireEvent.blur(poloQty)
+    await user.click(damaged)
+    const refreshedPolo = change === 'item archived' ? { ...POLO, archived_at: '2026-11-04T09:00:00' }
+      : change === 'size removed' ? { ...POLO, sizes: [] }
+      : { ...POLO, sizes: POLO.sizes.map(size => ({ ...size, archived_at: '2026-11-04T09:00:00' })) }
+    vi.mocked(api.listUniformItems).mockResolvedValue(change === 'item removed' ? [SUIT] : [SUIT, refreshedPolo])
+    await act(async () => { await client.invalidateQueries({ queryKey: uniformKeys.items(true) }) })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toHaveAccessibleDescription(i18n.t('assets.uniform.selectionChanged')))
+    expect(client.getQueryState(uniformKeys.items(true))?.status).toBe('success')
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Polo shirt M' })).toBe(poloQty)
+    expect(poloQty).toHaveValue(2)
+    expect(poloQty).toHaveAccessibleDescription(i18n.t('assets.uniform.lineUnavailable'))
+    expect(damaged).toBeChecked()
+    expect(suitQty).toHaveValue(1)
+    const save = screen.getByRole('button', { name: 'Save' })
+    expect(save).toBeDisabled()
+    fireEvent.submit(save.closest('form')!)
+    expect(api.createUniformReturn).not.toHaveBeenCalled()
+    fireEvent.change(poloQty, { target: { value: '0' } })
+    fireEvent.blur(poloQty)
+    expect(save).toBeEnabled()
+    await user.click(save)
+    await waitFor(() => expect(api.createUniformReturn).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [{ item_id: 1, qty: 1, condition: 'reusable' }],
+    })))
+  })
+
   it.each(['items', 'employee'] as const)('blocks the initial %s failure until required data loads on Retry', async dependency => {
     if (dependency === 'items') vi.mocked(api.listUniformItems).mockRejectedValueOnce(new Error('offline'))
     else vi.mocked(api.getUniformEmployee).mockRejectedValueOnce(new Error('offline'))

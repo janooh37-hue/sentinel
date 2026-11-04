@@ -38,17 +38,22 @@ function StockHistoryContent({ open, onOpenChange, item, returnFocusRef }: Props
   const catalogue = useUniformItems(true)
   const voidReceipt = useVoidUniformReceipt()
   const voidAdjustment = useVoidUniformAdjustment()
-  const [confirmation, setConfirmation] = useState<string | null>(null)
+  const [confirmation, setConfirmation] = useState<Entry | null>(null)
   const form = useForm({ resolver: zodResolver(voidSchema), defaultValues: { reason: '' }, mode: 'onChange' })
   const reason = useWatch({ control: form.control, name: 'reason' })
   const busy = voidReceipt.isPending || voidAdjustment.isPending
   const invalidReason = !reason.trim() ? t('assets.uniform.errors.reasonRequired') : reason.trim().length > 500 ? t('assets.uniform.errors.reasonTooLong') : ''
   const historyItem = catalogue.data?.find(piece => piece.id === item.id) ?? item
   const sizeIds = new Set(historyItem.sizes.map(size => size.id))
-  const entries: Entry[] = [
+  const currentEntries: Entry[] = [
     ...(receipts.data ?? []).filter(receipt => receipt.lines.some(line => sizeIds.has(line.size_id))).map(record => ({ kind: 'receipt' as const, date: record.received_on, record })),
     ...(adjustments.data ?? []).filter(adjustment => sizeIds.has(adjustment.size_id)).map(record => ({ kind: 'adjustment' as const, date: record.adjusted_on, record })),
   ].sort((a, b) => b.date.localeCompare(a.date) || b.record.id - a.record.id)
+  const currentConfirmation = confirmation && currentEntries.find(entry => entry.kind === confirmation.kind && entry.record.id === confirmation.record.id)
+  const confirmationProblem = confirmation ? !currentConfirmation ? t('assets.uniform.catalog.postingUnavailable') : currentConfirmation.record.voided_at ? t('assets.uniform.errors.alreadyVoided') : '' : ''
+  const entries = confirmation && !currentConfirmation
+    ? [...currentEntries, confirmation].sort((a, b) => b.date.localeCompare(a.date) || b.record.id - a.record.id)
+    : currentEntries
   const failed = receipts.isError || adjustments.isError || catalogue.isError
   const loaded = receipts.data && adjustments.data && catalogue.data
   const name = i18n.language.startsWith('ar') ? item.name_ar : item.name_en
@@ -64,7 +69,7 @@ function StockHistoryContent({ open, onOpenChange, item, returnFocusRef }: Props
       {failed && <div><p role="alert" className="text-sm text-destructive-text">{t(loaded ? 'assets.uniform.refreshRecordsError' : 'assets.uniform.error')}</p><Button type="button" variant="ghost" className="min-h-11" onClick={() => { void receipts.refetch(); void adjustments.refetch(); void catalogue.refetch() }}>{t('assets.uniform.retry')}</Button></div>}
       {!loaded ? !failed && <p role="status">{t('assets.uniform.loading')}</p> : entries.length === 0 ? <p>{t('assets.uniform.catalog.historyEmpty')}</p> : <ol className="space-y-3">{entries.map(entry => {
         const key = `${entry.kind}-${entry.record.id}`
-        const confirming = confirmation === key
+        const confirming = confirmation?.kind === entry.kind && confirmation.record.id === entry.record.id
         const lines = entry.kind === 'receipt' ? entry.record.lines.map(line => ({ sizeId: line.size_id, qty: line.qty })) : [{ sizeId: entry.record.size_id, qty: entry.record.delta }]
         return <li key={key} className="rounded-lg border border-border p-3">
           <div className="flex flex-wrap items-start gap-3">
@@ -82,10 +87,10 @@ function StockHistoryContent({ open, onOpenChange, item, returnFocusRef }: Props
               })}</ul>
               {entry.record.void_reason && <p className="whitespace-pre-wrap break-words text-sm">{t('assets.uniform.voidReason')}: <bdi dir="auto">{entry.record.void_reason}</bdi></p>}
             </div>
-            {editable && !entry.record.voided_at && !confirming && <Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={() => { clearConfirmation(); setConfirmation(key) }}>{t('assets.uniform.voidRecord')}</Button>}
+            {editable && !entry.record.voided_at && !confirming && <Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={() => { clearConfirmation(); setConfirmation(entry) }}>{t('assets.uniform.voidRecord')}</Button>}
           </div>
-          {editable && confirming && !entry.record.voided_at && <form className="mt-3 space-y-2 border-t border-hairline pt-3" noValidate aria-busy={busy} onSubmit={form.handleSubmit(({ reason: trimmedReason }) => {
-            if (busy || !editable) return
+          {editable && confirming && <form className="mt-3 space-y-2 border-t border-hairline pt-3" noValidate aria-busy={busy} onSubmit={form.handleSubmit(({ reason: trimmedReason }) => {
+            if (busy || !editable || confirmationProblem) return
             const options = { onSuccess: () => { toast.success(t('assets.uniform.voidSaved')); clearConfirmation() } }
             const variables = { id: entry.record.id, body: { reason: trimmedReason } }
             if (entry.kind === 'receipt') voidReceipt.mutate(variables, options)
@@ -98,7 +103,8 @@ function StockHistoryContent({ open, onOpenChange, item, returnFocusRef }: Props
             <textarea id={`${id}-void-${key}`} disabled={busy} required maxLength={500} dir="auto" aria-invalid={!!invalidReason} aria-describedby={`${id}-reason-${key}`} className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2" {...form.register('reason')} />
             <p id={`${id}-reason-${key}`} role="status" className="text-sm text-destructive-text">{invalidReason}</p>
             <FormAlert id={`${id}-error-${key}`} message={mutationError ? uniformErrorMessage(mutationError) : null} />
-            <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={clearConfirmation}>{t('assets.uniform.cancel')}</Button><Button type="submit" variant="destructive" className="min-h-11" disabled={busy || !!invalidReason} aria-describedby={`${id}-reason-${key}`}>{t('assets.uniform.voidRecord')}</Button></div>
+            <FormAlert id={`${id}-selection-${key}`} message={confirmationProblem || null} />
+            <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={clearConfirmation}>{t('assets.uniform.cancel')}</Button><Button type="submit" variant="destructive" className="min-h-11" disabled={busy || !!invalidReason || !!confirmationProblem} aria-describedby={`${id}-reason-${key} ${id}-selection-${key}`}>{t('assets.uniform.voidRecord')}</Button></div>
           </form>}
         </li>
       })}</ol>}
