@@ -256,14 +256,14 @@ def test_lookup_hides_passport_fields_without_passport_release_service(api_db: S
     assert selected.json()["nationality"] is None
 
 
-def test_employee_lookup_forbids_user_without_either_capability(api_db: Session):
+def test_employee_lookup_forbids_user_without_picker_capabilities(api_db: Session):
     user = User(email="no-picker@x.ae", password_hash="x", role="operator", status="active")
     api_db.add(user)
     api_db.flush()
     api_db.add_all(
         [
             UserPermission(user_id=user.id, capability=cap, effect="deny")
-            for cap in ("employees.view", "documents.generate")
+            for cap in ("employees.view", "documents.generate", "uniform.edit")
         ]
     )
     api_db.commit()
@@ -281,6 +281,27 @@ def test_employee_view_alone_allows_lookup(api_db: Session):
     client = _client(api_db, user)
     assert client.get("/api/v1/employees/lookup").status_code == 200
     assert client.get("/api/v1/employees/lookup/G100").status_code == 200
+
+
+def test_uniform_editor_can_lookup_without_employee_profile_access(api_db: Session):
+    user = User(email="uniform-picker@x.ae", password_hash="x", role="operator", status="active")
+    api_db.add(user)
+    api_db.flush()
+    api_db.add_all(
+        [
+            UserPermission(user_id=user.id, capability=cap, effect="deny")
+            for cap in ("employees.view", "documents.generate")
+        ]
+        + [UserPermission(user_id=user.id, capability="uniform.edit", effect="grant")]
+    )
+    api_db.commit()
+    client = _client(api_db, user)
+    response = client.get("/api/v1/employees/lookup", params={"q": "G100"})
+    assert response.status_code == 200
+    assert response.json()["items"][0]["id"] == "G100"
+    assert "passport_no" not in response.json()["items"][0]
+    assert client.get("/api/v1/employees/lookup/G100").status_code == 200
+    assert client.get("/api/v1/employees/G100").status_code == 403
 
 
 def _seed_linked_documents(

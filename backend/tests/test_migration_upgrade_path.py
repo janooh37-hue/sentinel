@@ -12,7 +12,7 @@ PARENT = "0109_book_folder_shares"
 OUTCOME = "0110_step_outcome_seen"
 PRINTS = "0110_employee_statement_prints"
 RECONCILED = "0111_step_outcome_seen"
-HEAD = "0114_store_count"
+HEAD = "0115_uniform"
 
 
 def _config(database: Path) -> Config:

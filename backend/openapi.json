@@ -8026,6 +8026,66 @@
         }
       }
     },
+    "/api/v1/documents/attachments/stage-from-record": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Stage Attachment From Record",
+        "description": "Copy a readable record's generated PDF or scan into upload staging.",
+        "operationId": "stage_attachment_from_record_api_v1_documents_attachments_stage_from_record_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StageFromRecordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StagedAttachmentRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/documents/inmate-violations/approved-imports/inspect": {
       "post": {
         "tags": [
@@ -30112,6 +30172,1420 @@
         }
       }
     },
+    "/api/v1/uniform/items": {
+      "get": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Items",
+        "operationId": "items_api_v1_uniform_items_get",
+        "parameters": [
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Archived"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UniformItemRead"
+                  },
+                  "title": "Response Items Api V1 Uniform Items Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Create Item",
+        "operationId": "create_item_api_v1_uniform_items_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UniformItemCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniformItemRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/items/{item_id}": {
+      "patch": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Update Item",
+        "operationId": "update_item_api_v1_uniform_items__item_id__patch",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UniformItemUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniformItemRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Delete Item",
+        "operationId": "delete_item_api_v1_uniform_items__item_id__delete",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/items/{item_id}/archive": {
+      "post": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Archive Item",
+        "operationId": "archive_item_api_v1_uniform_items__item_id__archive_post",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniformItemRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/items/{item_id}/sizes": {
+      "post": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Add Size",
+        "operationId": "add_size_api_v1_uniform_items__item_id__sizes_post",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UniformSizeCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniformSizeRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/sizes/{size_id}": {
+      "patch": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Update Size",
+        "operationId": "update_size_api_v1_uniform_sizes__size_id__patch",
+        "parameters": [
+          {
+            "name": "size_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Size Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UniformSizeUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniformSizeRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Remove Size",
+        "operationId": "remove_size_api_v1_uniform_sizes__size_id__delete",
+        "parameters": [
+          {
+            "name": "size_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Size Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/receipts": {
+      "get": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Receipts",
+        "operationId": "receipts_api_v1_uniform_receipts_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UniformReceiptRead"
+                  },
+                  "title": "Response Receipts Api V1 Uniform Receipts Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Create Receipt",
+        "operationId": "create_receipt_api_v1_uniform_receipts_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UniformReceiptCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniformReceiptRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/issues": {
+      "get": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Issues",
+        "operationId": "issues_api_v1_uniform_issues_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UniformIssueRead"
+                  },
+                  "title": "Response Issues Api V1 Uniform Issues Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Create Issue",
+        "operationId": "create_issue_api_v1_uniform_issues_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UniformIssueCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniformIssueRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/returns": {
+      "get": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Returns",
+        "operationId": "returns_api_v1_uniform_returns_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UniformReturnRead"
+                  },
+                  "title": "Response Returns Api V1 Uniform Returns Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Create Return",
+        "operationId": "create_return_api_v1_uniform_returns_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UniformReturnCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniformReturnRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/adjustments": {
+      "get": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Adjustments",
+        "operationId": "adjustments_api_v1_uniform_adjustments_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UniformAdjustmentRead"
+                  },
+                  "title": "Response Adjustments Api V1 Uniform Adjustments Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Create Adjustments",
+        "operationId": "create_adjustments_api_v1_uniform_adjustments_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UniformAdjustmentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UniformAdjustmentRead"
+                  },
+                  "title": "Response Create Adjustments Api V1 Uniform Adjustments Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/receipts/{record_id}/void": {
+      "post": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Void Receipt",
+        "operationId": "void_receipt_api_v1_uniform_receipts__record_id__void_post",
+        "parameters": [
+          {
+            "name": "record_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Record Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UniformVoid"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniformReceiptRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/issues/{record_id}/void": {
+      "post": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Void Issue",
+        "operationId": "void_issue_api_v1_uniform_issues__record_id__void_post",
+        "parameters": [
+          {
+            "name": "record_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Record Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UniformVoid"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniformIssueRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/returns/{record_id}/void": {
+      "post": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Void Return",
+        "operationId": "void_return_api_v1_uniform_returns__record_id__void_post",
+        "parameters": [
+          {
+            "name": "record_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Record Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UniformVoid"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniformReturnRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/adjustments/{record_id}/void": {
+      "post": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Void Adjustment",
+        "operationId": "void_adjustment_api_v1_uniform_adjustments__record_id__void_post",
+        "parameters": [
+          {
+            "name": "record_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Record Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UniformVoid"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniformAdjustmentRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/recipients": {
+      "get": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Recipients",
+        "operationId": "recipients_api_v1_uniform_recipients_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UniformRecipient"
+                  },
+                  "title": "Response Recipients Api V1 Uniform Recipients Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/employees/{employee_id}": {
+      "get": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Employee",
+        "operationId": "employee_api_v1_uniform_employees__employee_id__get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniformEmployeeRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uniform/summary": {
+      "get": {
+        "tags": [
+          "uniform"
+        ],
+        "summary": "Summary",
+        "operationId": "summary_api_v1_uniform_summary_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniformSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/debug/logs": {
       "get": {
         "tags": [
@@ -48843,7 +50317,7 @@
           "source"
         ],
         "title": "GenerateAttachmentSpec",
-        "description": "One attachment to merge into the generated PDF (spec 2026-06-11 §6).\n\n``source`` discriminates which locator fields apply: ``staged`` reads\n``staged_token`` (from ``POST /documents/attachments/stage``);\n``record_document`` reads ``book_id`` (that book's current generated PDF);\n``record_attachment`` reads ``book_id`` + ``attachment_index`` (one of the\nbook's film-strip scans). ``slot_key=None`` means a free-form extra."
+        "description": "A staged upload, generated record PDF, or record scan to include."
       },
       "GroupOut": {
         "properties": {
@@ -58403,6 +59877,39 @@
         ],
         "title": "StaffingRequirementWrite"
       },
+      "StageFromRecordRequest": {
+        "properties": {
+          "book_id": {
+            "type": "integer",
+            "title": "Book Id"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "record_document",
+              "record_attachment"
+            ],
+            "title": "Source"
+          },
+          "attachment_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachment Index"
+          }
+        },
+        "type": "object",
+        "required": [
+          "book_id",
+          "source"
+        ],
+        "title": "StageFromRecordRequest"
+      },
       "StagedAttachmentRead": {
         "properties": {
           "token": {
@@ -63384,6 +64891,1425 @@
         "title": "UncountedRecordOut",
         "description": "A filed Record that belongs to no Violation month."
       },
+      "UniformAdjustmentCreate": {
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/UniformAdjustmentLine"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Lines"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "adjusted_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjusted On"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lines",
+          "reason"
+        ],
+        "title": "UniformAdjustmentCreate"
+      },
+      "UniformAdjustmentLine": {
+        "properties": {
+          "size_id": {
+            "type": "integer",
+            "title": "Size Id"
+          },
+          "delta": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Delta"
+          },
+          "expected_on_hand": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Expected On Hand"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "size_id",
+          "delta",
+          "expected_on_hand"
+        ],
+        "title": "UniformAdjustmentLine"
+      },
+      "UniformAdjustmentRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "created_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Id"
+          },
+          "voided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voided At"
+          },
+          "voided_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voided By Id"
+          },
+          "void_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Void Reason"
+          },
+          "size_id": {
+            "type": "integer",
+            "title": "Size Id"
+          },
+          "delta": {
+            "type": "integer",
+            "title": "Delta"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "adjusted_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Adjusted On"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "created_at",
+          "created_by_id",
+          "voided_at",
+          "voided_by_id",
+          "void_reason",
+          "size_id",
+          "delta",
+          "reason",
+          "adjusted_on"
+        ],
+        "title": "UniformAdjustmentRead"
+      },
+      "UniformEmployeeRead": {
+        "properties": {
+          "holdings": {
+            "items": {
+              "$ref": "#/components/schemas/UniformHolding"
+            },
+            "type": "array",
+            "title": "Holdings"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/UniformIssueRead"
+            },
+            "type": "array",
+            "title": "Issues"
+          },
+          "returns": {
+            "items": {
+              "$ref": "#/components/schemas/UniformReturnRead"
+            },
+            "type": "array",
+            "title": "Returns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "holdings",
+          "issues",
+          "returns"
+        ],
+        "title": "UniformEmployeeRead"
+      },
+      "UniformHolder": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "name_en",
+          "name_ar",
+          "qty"
+        ],
+        "title": "UniformHolder"
+      },
+      "UniformHolding": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "item_id": {
+            "type": "integer",
+            "title": "Item Id"
+          },
+          "size_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Id"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "item_id",
+          "size_id",
+          "qty"
+        ],
+        "title": "UniformHolding"
+      },
+      "UniformIssueCreate": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "issued_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issued On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/UniformIssueLine"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Lines"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "employee_id",
+          "lines"
+        ],
+        "title": "UniformIssueCreate"
+      },
+      "UniformIssueLine": {
+        "properties": {
+          "item_id": {
+            "type": "integer",
+            "title": "Item Id"
+          },
+          "size_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Id"
+          },
+          "qty": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Qty"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "item_id",
+          "qty"
+        ],
+        "title": "UniformIssueLine"
+      },
+      "UniformIssueRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "created_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Id"
+          },
+          "voided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voided At"
+          },
+          "voided_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voided By Id"
+          },
+          "void_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Void Reason"
+          },
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "given_by_name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Given By Name En"
+          },
+          "given_by_name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Given By Name Ar"
+          },
+          "issued_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Issued On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/UniformIssueLine"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "created_at",
+          "created_by_id",
+          "voided_at",
+          "voided_by_id",
+          "void_reason",
+          "employee_id",
+          "issued_on",
+          "note",
+          "lines"
+        ],
+        "title": "UniformIssueRead"
+      },
+      "UniformItemCreate": {
+        "properties": {
+          "name_en": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name En"
+          },
+          "name_ar": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name Ar"
+          },
+          "description_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description En"
+          },
+          "description_ar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description Ar"
+          },
+          "group_key": {
+            "type": "string",
+            "enum": [
+              "formal",
+              "guard",
+              "winter"
+            ],
+            "title": "Group Key"
+          },
+          "drawing": {
+            "type": "string",
+            "enum": [
+              "suit",
+              "boots",
+              "polo",
+              "cargo",
+              "belt",
+              "cap",
+              "socks",
+              "jacket",
+              "vest",
+              "parka",
+              "dressshirt",
+              "longsleeve"
+            ],
+            "title": "Drawing"
+          },
+          "default_qty": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Default Qty",
+            "default": 1
+          },
+          "sizes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Sizes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name_en",
+          "name_ar",
+          "group_key",
+          "drawing",
+          "sizes"
+        ],
+        "title": "UniformItemCreate"
+      },
+      "UniformItemRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "name_ar": {
+            "type": "string",
+            "title": "Name Ar"
+          },
+          "description_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description En"
+          },
+          "description_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description Ar"
+          },
+          "group_key": {
+            "type": "string",
+            "enum": [
+              "formal",
+              "guard",
+              "winter"
+            ],
+            "title": "Group Key"
+          },
+          "drawing": {
+            "type": "string",
+            "enum": [
+              "suit",
+              "boots",
+              "polo",
+              "cargo",
+              "belt",
+              "cap",
+              "socks",
+              "jacket",
+              "vest",
+              "parka",
+              "dressshirt",
+              "longsleeve"
+            ],
+            "title": "Drawing"
+          },
+          "tracking": {
+            "type": "string",
+            "enum": [
+              "shelf",
+              "holder"
+            ],
+            "title": "Tracking"
+          },
+          "default_qty": {
+            "type": "integer",
+            "title": "Default Qty"
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "sizes": {
+            "items": {
+              "$ref": "#/components/schemas/UniformSizeRead"
+            },
+            "type": "array",
+            "title": "Sizes"
+          },
+          "holders": {
+            "items": {
+              "$ref": "#/components/schemas/UniformHolder"
+            },
+            "type": "array",
+            "title": "Holders"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name_en",
+          "name_ar",
+          "description_en",
+          "description_ar",
+          "group_key",
+          "drawing",
+          "tracking",
+          "default_qty",
+          "sort_order",
+          "archived_at",
+          "version",
+          "sizes",
+          "holders"
+        ],
+        "title": "UniformItemRead"
+      },
+      "UniformItemUpdate": {
+        "properties": {
+          "name_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
+          },
+          "description_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description En"
+          },
+          "description_ar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description Ar"
+          },
+          "group_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "formal",
+                  "guard",
+                  "winter"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Key"
+          },
+          "drawing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "suit",
+                  "boots",
+                  "polo",
+                  "cargo",
+                  "belt",
+                  "cap",
+                  "socks",
+                  "jacket",
+                  "vest",
+                  "parka",
+                  "dressshirt",
+                  "longsleeve"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drawing"
+          },
+          "default_qty": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 9.223372036854776e+18,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Qty"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "UniformItemUpdate"
+      },
+      "UniformReceiptCreate": {
+        "properties": {
+          "received_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Received On"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/UniformReceiptLine"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Lines"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "received_on",
+          "lines"
+        ],
+        "title": "UniformReceiptCreate"
+      },
+      "UniformReceiptLine": {
+        "properties": {
+          "size_id": {
+            "type": "integer",
+            "title": "Size Id"
+          },
+          "qty": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Qty"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "size_id",
+          "qty"
+        ],
+        "title": "UniformReceiptLine"
+      },
+      "UniformReceiptRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "created_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Id"
+          },
+          "voided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voided At"
+          },
+          "voided_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voided By Id"
+          },
+          "void_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Void Reason"
+          },
+          "received_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Received On"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/UniformReceiptLine"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "created_at",
+          "created_by_id",
+          "voided_at",
+          "voided_by_id",
+          "void_reason",
+          "received_on",
+          "reference",
+          "note",
+          "lines"
+        ],
+        "title": "UniformReceiptRead"
+      },
+      "UniformRecipient": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
+          },
+          "held_total": {
+            "type": "integer",
+            "title": "Held Total"
+          },
+          "issued_total": {
+            "type": "integer",
+            "title": "Issued Total"
+          },
+          "last_issued_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Last Issued On"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "name_en",
+          "name_ar",
+          "held_total",
+          "issued_total",
+          "last_issued_on"
+        ],
+        "title": "UniformRecipient"
+      },
+      "UniformReturnCreate": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "returned_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Returned On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/UniformReturnLine"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Lines"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "employee_id",
+          "lines"
+        ],
+        "title": "UniformReturnCreate"
+      },
+      "UniformReturnLine": {
+        "properties": {
+          "item_id": {
+            "type": "integer",
+            "title": "Item Id"
+          },
+          "size_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Id"
+          },
+          "qty": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Qty"
+          },
+          "condition": {
+            "type": "string",
+            "enum": [
+              "reusable",
+              "damaged"
+            ],
+            "title": "Condition"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "item_id",
+          "qty",
+          "condition"
+        ],
+        "title": "UniformReturnLine"
+      },
+      "UniformReturnRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "created_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Id"
+          },
+          "voided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voided At"
+          },
+          "voided_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voided By Id"
+          },
+          "void_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Void Reason"
+          },
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "received_by_name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received By Name En"
+          },
+          "received_by_name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received By Name Ar"
+          },
+          "returned_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Returned On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/UniformReturnLine"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "created_at",
+          "created_by_id",
+          "voided_at",
+          "voided_by_id",
+          "void_reason",
+          "employee_id",
+          "returned_on",
+          "note",
+          "lines"
+        ],
+        "title": "UniformReturnRead"
+      },
+      "UniformSizeCreate": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "min_qty": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 9.223372036854776e+18,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Qty"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "title": "UniformSizeCreate"
+      },
+      "UniformSizeRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "item_id": {
+            "type": "integer",
+            "title": "Item Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order"
+          },
+          "on_hand": {
+            "type": "integer",
+            "title": "On Hand"
+          },
+          "min_qty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Qty"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "held_qty": {
+            "type": "integer",
+            "title": "Held Qty",
+            "default": 0
+          },
+          "is_low": {
+            "type": "boolean",
+            "title": "Is Low",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "item_id",
+          "label",
+          "sort_order",
+          "on_hand",
+          "min_qty",
+          "archived_at"
+        ],
+        "title": "UniformSizeRead"
+      },
+      "UniformSizeUpdate": {
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "min_qty": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 9.223372036854776e+18,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Qty"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "UniformSizeUpdate"
+      },
+      "UniformSummary": {
+        "properties": {
+          "shelf_total": {
+            "type": "integer",
+            "title": "Shelf Total"
+          },
+          "holder_count": {
+            "type": "integer",
+            "title": "Holder Count"
+          },
+          "suits_issued": {
+            "type": "integer",
+            "title": "Suits Issued"
+          },
+          "out_of_stock": {
+            "type": "integer",
+            "title": "Out Of Stock"
+          },
+          "low_sizes": {
+            "type": "integer",
+            "title": "Low Sizes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "shelf_total",
+          "holder_count",
+          "suits_issued",
+          "out_of_stock",
+          "low_sizes"
+        ],
+        "title": "UniformSummary"
+      },
+      "UniformVoid": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "UniformVoid"
+      },
       "UnreadCountResponse": {
         "properties": {
           "count": {
@@ -68002,6 +70928,20 @@
             ],
             "title": "Confidentiality",
             "default": "general"
+          },
+          "attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/GenerateAttachmentSpec"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachments"
           },
           "signer_employee_id": {
             "anyOf": [

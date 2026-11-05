@@ -146,7 +146,7 @@ UNKNOWN_NAMES = ("Other tea", "green tea", "Lipton Yellow Label tea 400 g extra"
 
 def test_store_count_is_only_head_after_retained_recovery_history() -> None:
     script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
-    assert script.get_heads() == [HEAD]
+    assert script.get_heads() == ["0115_uniform"]
     assert script.get_revision(HEAD).down_revision == PARENT
     assert script.get_revision(PARENT).down_revision == "0112_store"
     assert script.get_revision("0112_store").down_revision == "0111_step_outcome_seen"
