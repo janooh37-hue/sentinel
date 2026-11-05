@@ -22,6 +22,7 @@ import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 import { AuthProvider } from '@/lib/AuthProvider'
 import { useAuth } from '@/lib/authContext'
 import { AppLockContext } from '@/lib/appLockContext'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { DEFAULT_IDLE_LOCK_SECONDS, useLockState } from '@/lib/useLockState'
 import { type Page, PAGE_PATHS, buildPagePath } from '@/lib/pageNav'
@@ -110,6 +111,7 @@ const StoreCountsPage = lazy(loadStoreCountsPage)
 const StoreCountPage = lazy(loadStoreCountPage)
 const StoreDisposalsPage = lazy(loadStoreDisposalsPage)
 const StoreMovementsPage = lazy(loadStoreMovementsPage)
+const UniformPage = lazy(() => import('@/pages/assets/uniform/UniformPage').then(m => ({ default: m.UniformPage })))
 const LedgerPage = lazy(loadLedgerPage)
 const SettingsPage = lazy(loadSettingsPage)
 const DashboardPage = lazy(loadDashboardPage)
@@ -181,6 +183,18 @@ function DashboardRoute(): React.JSX.Element {
 function LedgerRoute(): React.JSX.Element {
   const navigatePage = useNavigatePage()
   return <LedgerPage onNavigate={navigatePage} />
+}
+
+function AssetsRedirect(): React.JSX.Element {
+  const { has, isLoading } = useCapabilities()
+  if (isLoading) return <PageSuspenseFallback />
+
+  // Store stays the default, including its existing denial/request flow when
+  // neither section is viewable. Each child route enforces its own capability.
+  const destination = !has('store.view') && has('uniform.view')
+    ? '/holdings/uniform'
+    : '/holdings/store'
+  return <Navigate to={destination} replace />
 }
 
 /** `/application?form=x&…` links already went out by SMS/push/bookmark. */
@@ -529,7 +543,11 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
-              <Route path="/holdings" element={<Navigate to="/holdings/store" replace />} />
+              <Route path="/holdings" element={<AssetsRedirect />} />
+              <Route
+                path="/holdings/uniform"
+                element={<RequireCapability cap="uniform.view"><UniformPage /></RequireCapability>}
+              />
               <Route
                 path="/holdings/store"
                 element={

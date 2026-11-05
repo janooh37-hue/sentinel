@@ -12,7 +12,7 @@ const expectedPrimaryCaps: Record<string, string | undefined> = {
   '/': undefined,
   '/employees': 'employees.view',
   '/vehicles': 'vehicles.view',
-  '/holdings': 'store.view',
+  '/holdings': undefined,
   '/ledger': undefined,
   '/leaves': 'leaves.view',
   '/services': 'documents.generate',
@@ -46,6 +46,19 @@ describe('permission-aware navigation', () => {
     expect(isNavEntryAllowed(entry, (cap) => caps.includes(cap))).toBe(allowed)
     const dockEntry = SECTION_ENTRIES.find((item) => item.to === '/ledger')!
     expect(isNavEntryAllowed(dockEntry, (cap) => caps.includes(cap))).toBe(allowed)
+  })
+
+  it.each([
+    { caps: [], allowed: false },
+    { caps: ['uniform.view'], allowed: true },
+    { caps: ['store.view'], allowed: true },
+    { caps: ['store.view', 'uniform.view'], allowed: true },
+  ])('allows Assets with either section capability: $caps', ({ caps, allowed }) => {
+    for (const entries of [NAV_ITEMS, SECTION_ENTRIES]) {
+      const entry = entries.find((item) => item.to === '/holdings')!
+      expect(entry.anyCaps).toEqual(['store.view', 'uniform.view'])
+      expect(isNavEntryAllowed(entry, (cap) => caps.includes(cap))).toBe(allowed)
+    }
   })
 
   it('gates settings and waiting signals with every destination capability', () => {

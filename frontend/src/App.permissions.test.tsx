@@ -1,13 +1,13 @@
 import React from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
+const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>(), isLoading: false }))
 
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
     capabilities: capabilityState.allowed,
-    isLoading: false,
+    isLoading: capabilityState.isLoading,
     has: (capability: string) => capabilityState.allowed.has(capability),
   }),
 }))
@@ -25,8 +25,20 @@ vi.mock('@/lib/api', () => ({
         requestable: false,
         default_roles: ['admin'],
       },
+      ...['store.view', 'uniform.view'].map((id) => ({
+        id,
+        domain: id.split('.')[0],
+        label_en: id,
+        label_ar: null,
+        description_en: '',
+        description_ar: null,
+        sensitive: false,
+        requestable: true,
+        default_roles: ['admin'],
+      })),
     ]),
     postCrashReport: vi.fn().mockResolvedValue(undefined),
+    requestPermission: vi.fn().mockResolvedValue({}),
   },
 }))
 vi.mock('@/lib/AuthProvider', () => ({ AuthProvider: ({ children }: { children: React.ReactNode }) => children }))
@@ -56,6 +68,9 @@ vi.mock('@/lib/keyboardShortcuts', () => ({ KeyboardShortcutsProvider: ({ childr
 
 vi.mock('@/pages/books/WordSessionPage', () => ({ WordSessionPage: () => <div>word-session-page</div> }))
 vi.mock('@/pages/books/WordTemplateSessionPage', () => ({ WordTemplateSessionPage: () => <div>word-template-session-page</div> }))
+vi.mock('@/pages/assets/uniform/UniformPage', () => ({
+  UniformPage: () => <div>uniform-page</div>,
+}))
 vi.mock('@/lib/routeLoaders', () => ({
   loadAccessRequestsPage: () => Promise.resolve({ default: () => <div>access-page</div> }),
   loadApplicationPage: () => Promise.resolve({ default: () => <div>application-page</div> }),
@@ -104,6 +119,7 @@ vi.mock('@/lib/routeLoaders', () => ({
 }))
 
 import App from './App'
+import { api } from '@/lib/api'
 
 const routes = [
   ['/employees', ['employees.view'], 'employees-page'],
@@ -133,6 +149,7 @@ const routes = [
   ['/vehicles/import', ['vehicles.view', 'vehicles.edit'], 'vehicle-import-page'],
   ['/holdings', ['store.view'], 'store-dashboard-page'],
   ['/holdings/store', ['store.view'], 'store-dashboard-page'],
+  ['/holdings/uniform', ['uniform.view'], 'uniform-page'],
   ['/holdings/store/movements', ['store.view'], 'store-movements-page'],
   ['/holdings/store/items', ['store.view'], 'store-items-page'],
   ['/holdings/store/deliveries', ['store.view'], 'store-deliveries-page'],
@@ -145,6 +162,8 @@ const routes = [
 
 beforeEach(() => {
   capabilityState.allowed = new Set()
+  capabilityState.isLoading = false
+  vi.mocked(api.requestPermission).mockClear()
 })
 
 afterEach(() => {
@@ -273,6 +292,68 @@ describe('App route capability gates', () => {
 
     expect(await screen.findByText("You don't have access to this page")).toBeVisible()
     expect(screen.queryByText('books-page')).not.toBeInTheDocument()
+  })
+})
+
+describe('App Assets landing route', () => {
+  it.each([
+    { caps: ['uniform.view'], pathname: '/holdings/uniform', page: 'uniform-page' },
+    { caps: ['store.view'], pathname: '/holdings/store', page: 'store-dashboard-page' },
+    { caps: ['store.view', 'uniform.view'], pathname: '/holdings/store', page: 'store-dashboard-page' },
+    { caps: [], pathname: '/holdings/store', page: "You don't have access to this page" },
+  ])('chooses the viewable default section for $caps', async ({ caps, pathname, page }) => {
+    capabilityState.allowed = new Set(caps)
+    window.history.pushState({}, '', '/holdings')
+    render(<App />)
+
+    expect(await screen.findByText(page)).toBeVisible()
+    expect(window.location.pathname).toBe(pathname)
+    if (caps.length === 0) {
+      expect(screen.queryByText('store-dashboard-page')).not.toBeInTheDocument()
+      expect(screen.queryByText('uniform-page')).not.toBeInTheDocument()
+    } else {
+      expect(screen.queryByRole('button', { name: 'Request access' })).not.toBeInTheDocument()
+    }
+  })
+
+  it('waits for capabilities before choosing the Uniform-only destination', async () => {
+    capabilityState.isLoading = true
+    window.history.pushState({}, '', '/holdings')
+    const view = render(<App />)
+
+    expect(window.location.pathname).toBe('/holdings')
+    capabilityState.allowed = new Set(['uniform.view'])
+    capabilityState.isLoading = false
+    view.rerender(<App />)
+
+    expect(await screen.findByText('uniform-page')).toBeVisible()
+    expect(window.location.pathname).toBe('/holdings/uniform')
+  })
+
+  it.each([
+    { caps: ['uniform.view'], pathname: '/holdings/store', page: 'store-dashboard-page' },
+    { caps: ['store.view'], pathname: '/holdings/uniform', page: 'uniform-page' },
+  ])('keeps the other child protected for $caps', async ({ caps, pathname, page }) => {
+    capabilityState.allowed = new Set(caps)
+    window.history.pushState({}, '', pathname)
+    render(<App />)
+
+    expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+    expect(screen.queryByText(page)).not.toBeInTheDocument()
+    expect(window.location.pathname).toBe(pathname)
+  })
+
+  it('preserves the default Store access request when neither section is viewable', async () => {
+    window.history.pushState({}, '', '/holdings')
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Request access' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Request' }))
+
+    await waitFor(() => expect(api.requestPermission).toHaveBeenCalledExactlyOnceWith('store.view'))
+    expect(window.location.pathname).toBe('/holdings/store')
+    expect(screen.queryByText('store-dashboard-page')).not.toBeInTheDocument()
+    expect(screen.queryByText('uniform-page')).not.toBeInTheDocument()
   })
 })
 
