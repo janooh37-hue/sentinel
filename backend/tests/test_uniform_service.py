@@ -103,6 +103,35 @@ def _status(exc: pytest.ExceptionInfo[AppError]) -> int:
 # ── Receipts ──────────────────────────────────────────────────────────────────
 
 
+def test_lifetime_postings_above_sqlite_limit_keep_exact_holdings_and_ledger(db: Session) -> None:
+    item = _polo(db)
+    size_id = _sid(item, "M")
+    limit = uniform_repo.MAX_QUANTITY
+    _stock(db, size_id, limit)
+    svc.create_issue(db, employee_id="G1001", lines=[IssueLineIn(item.id, size_id, limit)])
+    svc.create_return(
+        db, employee_id="G1001", lines=[ReturnLineIn(item.id, size_id, limit, "reusable")]
+    )
+    issue = svc.create_issue(db, employee_id="G1001", lines=[IssueLineIn(item.id, size_id, 1)])
+    assert _held(db, "G1001", item.id, size_id) == 1
+    assert uniform_repo.holdings(db, employee_id="G1001")[0].qty == 1
+    assert svc.employee_read(db, "G1001").holdings[0].qty == 1
+    assert uniform_repo.ledger_balances(db)[size_id] == limit - 1
+    svc.create_return(
+        db, employee_id="G1001", lines=[ReturnLineIn(item.id, size_id, 1, "reusable")]
+    )
+    assert uniform_repo.holdings(db, employee_id="G1001") == []
+    assert uniform_repo.ledger_balances(db)[size_id] == limit
+    # Another receipt makes lifetime positive ledger postings overflow too,
+    # while a preceding issue keeps the final shelf balance valid.
+    svc.create_issue(db, employee_id="G1002", lines=[IssueLineIn(item.id, size_id, 1)])
+    _stock(db, size_id, 1)
+    assert uniform_repo.ledger_balances(db)[size_id] == limit
+    with pytest.raises(AppError) as exc:
+        svc.void_issue(db, issue.id, reason="Cannot void returned issue")
+    assert _code(exc) == "uniform_void_breaks_holdings"
+
+
 @pytest.mark.parametrize("operation", ["receipt", "adjustment"])
 def test_stock_overflow_rolls_back_postings_and_audit(db: Session, operation: str) -> None:
     item = _polo(db)
