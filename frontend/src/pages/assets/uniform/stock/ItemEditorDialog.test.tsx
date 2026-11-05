@@ -41,6 +41,31 @@ beforeEach(async () => {
   vi.spyOn(api, 'deleteUniformItem').mockResolvedValue(undefined)
 })
 describe('Update uniform item', () => {
+  it.each(['remove', 'recreate'] as const)('recovers a concurrently removed size by explicit %s without losing metadata', async choice => {
+    const user = userEvent.setup()
+    const empty = { ...ITEM, sizes: [{ ...ITEM.sizes[0], on_hand: 0 }] }
+    vi.mocked(api.updateUniformItem).mockRejectedValueOnce(new ApiError(412, 'precondition_failed', 'Conflict'))
+    const { onOpenChange } = mount(empty)
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    fireEvent.change(screen.getByLabelText('Name in English'), { target: { value: 'My polo' } })
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Alert at M' }), { target: { value: '2' } })
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByRole('button', { name: 'Review latest version' })
+    vi.mocked(api.listUniformItems).mockResolvedValue([{ ...ITEM, version: '2', sizes: [] }])
+    await user.click(screen.getByRole('button', { name: 'Review latest version' }))
+    await user.click(await screen.findByRole('button', { name: 'Keep my changes and continue editing' }))
+    expect(screen.getByLabelText('Name in English')).toHaveValue('My polo')
+    expect(screen.getByRole('spinbutton', { name: 'Alert at M' })).toHaveValue(2)
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: choice === 'remove' ? 'Remove size M' : 'Recreate size M' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(api.updateUniformItem).toHaveBeenLastCalledWith(2, { name_en: 'My polo' }, '2')
+    expect(api.removeUniformSize).not.toHaveBeenCalled()
+    expect(api.updateUniformSize).not.toHaveBeenCalled()
+    if (choice === 'recreate') expect(api.addUniformSize).toHaveBeenCalledWith(2, { label: 'M', min_qty: 2 })
+    else expect(api.addUniformSize).not.toHaveBeenCalled()
+  })
   it('reconciles stale stock counts without recreating a committed size or losing the count draft', async () => {
     const user = userEvent.setup()
     const added = { ...ITEM.sizes[0], id: 25, label: 'Tall', on_hand: 0, sort_order: 1 }

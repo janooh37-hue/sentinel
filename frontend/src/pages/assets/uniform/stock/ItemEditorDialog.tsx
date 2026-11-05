@@ -35,7 +35,7 @@ const schema = z.object({
   reason: z.string().trim().max(500, 'assets.uniform.catalog.reasonTooLong'),
   rows: z.array(z.object({
     id: z.number().nullable(), label: z.string(), qty: z.string(), baseline: z.number(),
-    min: z.string(), savedMin: z.number().nullable(), savedOrder: z.number(), held: z.number(), removed: z.boolean(),
+    min: z.string(), savedMin: z.number().nullable(), savedOrder: z.number(), held: z.number(), removed: z.boolean(), unavailable: z.boolean(),
   })),
 }).superRefine((values, context) => {
   if (values.rows.some(row => !row.removed && whole(row.qty) !== row.baseline) && !values.reason) {
@@ -73,7 +73,7 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
       rows: item.tracking === 'holder' ? [] : item.sizes.filter(size => !size.archived_at).map(size => ({
         id: size.id, label: size.label, qty: String(size.on_hand), baseline: size.on_hand,
         min: size.min_qty === null ? '' : String(size.min_qty), savedMin: size.min_qty,
-        savedOrder: size.sort_order, held: size.held_qty, removed: false,
+        savedOrder: size.sort_order, held: size.held_qty, removed: false, unavailable: false,
       })),
     },
   })
@@ -103,7 +103,7 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
   const name = i18n.language.startsWith('ar') ? item.name_ar : item.name_en
   const quantityChanged = rows.some(row => !row.removed && whole(row.qty) !== row.baseline)
   const unavailable = !items.data || items.data.some(other => !other.archived_at && other.id !== item.id && other.drawing === drawing)
-  const disabledReason = unavailable ? t(!items.data && items.isError ? 'assets.uniform.error' : !items.data ? 'assets.uniform.loading' : 'assets.uniform.needDrawing') : quantityChanged && !reason.trim() ? t('assets.uniform.catalog.adjustmentReasonRequired') : ''
+  const disabledReason = unavailable ? t(!items.data && items.isError ? 'assets.uniform.error' : !items.data ? 'assets.uniform.loading' : 'assets.uniform.needDrawing') : rows.some(row => row.unavailable && !row.removed) ? t('assets.uniform.catalog.sizeUnavailable') : quantityChanged && !reason.trim() ? t('assets.uniform.catalog.adjustmentReasonRequired') : ''
   const archiveBlocked = rows.some(row => row.baseline > 0 || row.held > 0) || item.holders.some(holder => holder.qty > 0)
   const activeIndices = rows.flatMap((row, index) => row.removed ? [] : [index])
   const sizeLabel = (label: string) => label === 'one' ? t('assets.uniform.oneSize') : label
@@ -118,7 +118,7 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
     const message = !label ? 'assets.uniform.sizeRequired' : label.length > 16 ? 'assets.uniform.errors.invalidSizeLabel' : matching >= 0 && !rows[matching].removed ? 'assets.uniform.sizeDuplicate' : oneSizeConflict ? 'assets.uniform.errors.sizesFixed' : ''
     if (message) { setFieldError('newSize', { message }); return false }
     if (matching >= 0) setValue(`rows.${matching}.removed`, false)
-    else append({ id: null, label, qty: '0', baseline: 0, min: '', savedMin: null, savedOrder: -1, held: 0, removed: false }, { shouldFocus: false })
+    else append({ id: null, label, qty: '0', baseline: 0, min: '', savedMin: null, savedOrder: -1, held: 0, removed: false, unavailable: false }, { shouldFocus: false })
     setValue('newSize', '')
     clearErrors('newSize')
     return true
@@ -153,7 +153,11 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
     version.current = latestItem.version
     setValue('rows', getValues('rows').map(row => {
       const currentSize = latestItem.sizes.find(size => size.id === row.id)
-      if (!currentSize) return row
+      if (row.id === null) return row
+      if (!currentSize || currentSize.archived_at) {
+        // Keep the draft, but never write to or delete a no-longer-active ID.
+        return { ...row, id: null, baseline: 0, savedMin: null, savedOrder: -1, held: 0, unavailable: true }
+      }
       return {
         ...row,
         qty: whole(row.qty) === row.baseline ? String(currentSize.on_hand) : row.qty,
@@ -323,7 +327,9 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
                     <Button type="button" variant="secondary" className="min-h-11" disabled={position === 0} aria-label={t('assets.uniform.catalog.moveSizeUp', { size: sizeLabel(row.label) })} onClick={() => move(index, activeIndices[position - 1])}>{t('assets.uniform.catalog.moveUp')}</Button>
                     <Button type="button" variant="secondary" className="min-h-11" disabled={position === activeIndices.length - 1} aria-label={t('assets.uniform.catalog.moveSizeDown', { size: sizeLabel(row.label) })} onClick={() => move(index, activeIndices[position + 1])}>{t('assets.uniform.catalog.moveDown')}</Button>
                     <Button type="button" variant="ghost" className="min-h-11" disabled={removeBlocked} aria-label={t('assets.uniform.removeSize', { size: sizeLabel(row.label) })} aria-describedby={removeBlocked ? `${id}-remove-${field.formKey}` : undefined} onClick={() => setValue(`rows.${index}.removed`, true)}>{t('assets.uniform.catalog.remove')}</Button>
+                    {row.unavailable && <Button type="button" variant="secondary" className="min-h-11" onClick={() => setValue(`rows.${index}.unavailable`, false)}>{t('assets.uniform.catalog.recreateSize', { size: sizeLabel(row.label) })}</Button>}
                   </div>
+                  {row.unavailable && <p className="col-span-full text-sm text-muted-foreground">{t('assets.uniform.catalog.sizeUnavailable')}</p>}
                   {removeBlocked && <p id={`${id}-remove-${field.formKey}`} className="col-span-full text-xs text-muted-foreground">{t('assets.uniform.catalog.removeBlocked')}</p>}
                 </div>
               })}
