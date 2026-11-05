@@ -41,6 +41,28 @@ beforeEach(async () => {
   vi.spyOn(api, 'deleteUniformItem').mockResolvedValue(undefined)
 })
 describe('Update uniform item', () => {
+  it.each(['uniform_size_not_found', 'uniform_size_archived'])('reconciles %s without a metadata write and preserves staged sizes', async code => {
+    const user = userEvent.setup()
+    vi.mocked(api.updateUniformSize).mockRejectedValueOnce(new ApiError(404, code, 'Size unavailable'))
+    const { onOpenChange } = mount({ ...ITEM, sizes: [{ ...ITEM.sizes[0], on_hand: 0 }] })
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Alert at M' }), { target: { value: '2' } })
+    await user.type(screen.getByLabelText('Add size'), 'Tall{Enter}')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByRole('button', { name: 'Review latest version' })
+    vi.mocked(api.listUniformItems).mockResolvedValue([{ ...ITEM, sizes: [] }])
+    await user.click(screen.getByRole('button', { name: 'Review latest version' }))
+    await user.click(await screen.findByRole('button', { name: 'Keep my changes and continue editing' }))
+    expect(screen.getByRole('spinbutton', { name: 'Alert at M' })).toHaveValue(2)
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Tall' })).toHaveValue(0)
+    await user.click(screen.getByRole('button', { name: 'Remove size M' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(api.updateUniformItem).not.toHaveBeenCalled()
+    expect(api.removeUniformSize).not.toHaveBeenCalled()
+    expect(api.updateUniformSize).toHaveBeenCalledTimes(1)
+    expect(api.addUniformSize).toHaveBeenCalledWith(2, { label: 'Tall', min_qty: null })
+  })
   it.each(['remove', 'recreate'] as const)('recovers a concurrently removed size by explicit %s without losing metadata', async choice => {
     const user = userEvent.setup()
     const empty = { ...ITEM, sizes: [{ ...ITEM.sizes[0], on_hand: 0 }] }

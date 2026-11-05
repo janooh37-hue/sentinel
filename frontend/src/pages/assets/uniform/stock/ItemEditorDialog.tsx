@@ -250,7 +250,7 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
       onOpenChange(false)
     } catch (failure) {
       setError(failure)
-      if (failure instanceof ApiError && (failure.status === 412 || failure.code === 'uniform_stale_count')) {
+      if (failure instanceof ApiError && (failure.status === 412 || ['uniform_stale_count', 'uniform_size_not_found', 'uniform_size_archived'].includes(failure.code))) {
         setDraftConflict(true)
         setLatestItem(null)
       }
@@ -327,7 +327,7 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
                     <Button type="button" variant="secondary" className="min-h-11" disabled={position === 0} aria-label={t('assets.uniform.catalog.moveSizeUp', { size: sizeLabel(row.label) })} onClick={() => move(index, activeIndices[position - 1])}>{t('assets.uniform.catalog.moveUp')}</Button>
                     <Button type="button" variant="secondary" className="min-h-11" disabled={position === activeIndices.length - 1} aria-label={t('assets.uniform.catalog.moveSizeDown', { size: sizeLabel(row.label) })} onClick={() => move(index, activeIndices[position + 1])}>{t('assets.uniform.catalog.moveDown')}</Button>
                     <Button type="button" variant="ghost" className="min-h-11" disabled={removeBlocked} aria-label={t('assets.uniform.removeSize', { size: sizeLabel(row.label) })} aria-describedby={removeBlocked ? `${id}-remove-${field.formKey}` : undefined} onClick={() => setValue(`rows.${index}.removed`, true)}>{t('assets.uniform.catalog.remove')}</Button>
-                    {row.unavailable && <Button type="button" variant="secondary" className="min-h-11" onClick={() => setValue(`rows.${index}.unavailable`, false)}>{t('assets.uniform.catalog.recreateSize', { size: sizeLabel(row.label) })}</Button>}
+                    {row.unavailable && <Button type="button" variant="secondary" className="min-h-11" onClick={() => setValue(`rows.${index}.unavailable`, false)}>{t('assets.uniform.catalog.recreateSize', { size: i18n.language.startsWith('ar') && row.label !== 'one' ? `\u2066${row.label}\u2069` : sizeLabel(row.label) })}</Button>}
                   </div>
                   {row.unavailable && <p className="col-span-full text-sm text-muted-foreground">{t('assets.uniform.catalog.sizeUnavailable')}</p>}
                   {removeBlocked && <p id={`${id}-remove-${field.formKey}`} className="col-span-full text-xs text-muted-foreground">{t('assets.uniform.catalog.removeBlocked')}</p>}
