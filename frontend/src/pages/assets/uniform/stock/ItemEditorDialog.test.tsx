@@ -41,6 +41,34 @@ beforeEach(async () => {
   vi.spyOn(api, 'deleteUniformItem').mockResolvedValue(undefined)
 })
 describe('Update uniform item', () => {
+  it('reconciles stale stock counts without recreating a committed size or losing the count draft', async () => {
+    const user = userEvent.setup()
+    const added = { ...ITEM.sizes[0], id: 25, label: 'Tall', on_hand: 0, sort_order: 1 }
+    vi.mocked(api.addUniformSize).mockResolvedValue(added)
+    vi.mocked(api.createUniformAdjustments).mockRejectedValueOnce(new ApiError(409, 'uniform_stale_count', 'Count changed'))
+    const { onOpenChange } = mount()
+    await screen.findByRole('radio', { name: 'Polo shirt' })
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Quantity of M' }), { target: { value: '6' } })
+    await user.type(screen.getByLabelText('Reason for adjustment'), 'Physical count')
+    await user.type(screen.getByLabelText('Add size'), 'Tall{Enter}')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.createUniformAdjustments).toHaveBeenCalledTimes(1))
+    expect(api.addUniformSize).toHaveBeenCalledTimes(1)
+    vi.mocked(api.listUniformItems).mockResolvedValue([{ ...ITEM, version: '3', sizes: [{ ...ITEM.sizes[0], on_hand: 12 }, added] }])
+    await user.click(screen.getByRole('button', { name: 'Review latest version' }))
+    await screen.findByText('12')
+    await user.click(screen.getByRole('button', { name: 'Keep my changes and continue editing' }))
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of M' })).toHaveValue(6)
+    expect(screen.getByLabelText('Reason for adjustment')).toHaveValue('Physical count')
+    expect(screen.getByRole('spinbutton', { name: 'Quantity of Tall' })).toHaveValue(0)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(api.addUniformSize).toHaveBeenCalledTimes(1)
+    expect(api.createUniformAdjustments).toHaveBeenLastCalledWith(expect.objectContaining({
+      lines: [{ size_id: 21, delta: -6, expected_on_hand: 12 }],
+      reason: 'Physical count',
+    }))
+  })
   it('recovers from a metadata conflict while preserving drafts and concurrent untouched fields', async () => {
     const user = userEvent.setup()
     const latest = { ...ITEM, description_en: 'Concurrent description', version: '2' }
@@ -356,6 +384,9 @@ describe('Update uniform item', () => {
     expect(onOpenChange).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(api.createUniformAdjustments).toHaveBeenCalledTimes(1))
+    vi.mocked(api.listUniformItems).mockResolvedValue([{ ...ITEM, sizes: [{ ...empty, id: 25, label: 'one' }] }])
+    await user.click(await screen.findByRole('button', { name: 'Review latest version' }))
+    await user.click(await screen.findByRole('button', { name: 'Keep my changes and continue editing' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled())
     expect(onOpenChange).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'Save' }))
@@ -494,6 +525,9 @@ describe('Update uniform item', () => {
     fireEvent.change(screen.getByLabelText('Reason for adjustment'), { target: { value: 'Count' } })
     await user.click(screen.getByRole('button', { name: 'Save' }))
     await screen.findByRole('alert')
+    vi.mocked(api.listUniformItems).mockResolvedValue([{ ...ITEM, drawing: 'dressshirt', version: '2' }])
+    await user.click(await screen.findByRole('button', { name: 'Review latest version' }))
+    await user.click(await screen.findByRole('button', { name: 'Keep my changes and continue editing' }))
     fireEvent.change(screen.getByLabelText('Name in English'), { target: { value: 'New shirt' } })
     await user.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(api.updateUniformItem).toHaveBeenNthCalledWith(2, 2, { name_en: 'New shirt' }, '2'))
