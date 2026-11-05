@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.uniform_limits import MAX_QUANTITY
 from app.schemas._base import ORMBase
 
 Group = Literal["formal", "guard", "winter"]
@@ -35,7 +36,7 @@ class UniformItemCreate(Input):
     description_ar: str | None = Field(default=None, max_length=500)
     group_key: Group
     drawing: Drawing
-    default_qty: int = Field(default=1, ge=1, strict=True)
+    default_qty: int = Field(default=1, ge=1, le=MAX_QUANTITY, strict=True)
     sizes: list[str] = Field(min_length=1)
 
 
@@ -46,19 +47,19 @@ class UniformItemUpdate(Input):
     description_ar: str | None = Field(default=None, max_length=500)
     group_key: Group | None = None
     drawing: Drawing | None = None
-    default_qty: int | None = Field(default=None, ge=1, strict=True)
+    default_qty: int | None = Field(default=None, ge=1, le=MAX_QUANTITY, strict=True)
     sort_order: int | None = Field(default=None, strict=True)
 
 
 class UniformSizeCreate(Input):
     label: str = Field(min_length=1, max_length=16)
-    min_qty: int | None = Field(default=None, ge=0, strict=True)
+    min_qty: int | None = Field(default=None, ge=0, le=MAX_QUANTITY, strict=True)
 
 
 class UniformSizeUpdate(Input):
     label: str | None = Field(default=None, min_length=1, max_length=16)
     sort_order: int | None = Field(default=None, strict=True)
-    min_qty: int | None = Field(default=None, ge=0, strict=True)
+    min_qty: int | None = Field(default=None, ge=0, le=MAX_QUANTITY, strict=True)
 
 
 class UniformSizeRead(ORMBase):
@@ -99,13 +100,13 @@ class UniformItemRead(ORMBase):
 
 class UniformReceiptLine(Input):
     size_id: int
-    qty: int = Field(ge=1, strict=True)
+    qty: int = Field(ge=1, le=MAX_QUANTITY, strict=True)
 
 
 class UniformIssueLine(Input):
     item_id: int
     size_id: int | None = None
-    qty: int = Field(ge=1, strict=True)
+    qty: int = Field(ge=1, le=MAX_QUANTITY, strict=True)
 
 
 class UniformReturnLine(UniformIssueLine):
@@ -114,8 +115,8 @@ class UniformReturnLine(UniformIssueLine):
 
 class UniformAdjustmentLine(Input):
     size_id: int
-    delta: int = Field(strict=True)
-    expected_on_hand: int = Field(ge=0, strict=True)
+    delta: int = Field(ge=-MAX_QUANTITY, le=MAX_QUANTITY, strict=True)
+    expected_on_hand: int = Field(ge=0, le=MAX_QUANTITY, strict=True)
 
 
 class UniformReceiptCreate(Input):

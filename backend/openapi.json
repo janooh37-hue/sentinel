@@ -64936,10 +64936,13 @@
           },
           "delta": {
             "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
             "title": "Delta"
           },
           "expected_on_hand": {
             "type": "integer",
+            "maximum": 9.223372036854776e+18,
             "minimum": 0.0,
             "title": "Expected On Hand"
           }
@@ -65210,6 +65213,7 @@
           },
           "qty": {
             "type": "integer",
+            "maximum": 9.223372036854776e+18,
             "minimum": 1.0,
             "title": "Qty"
           }
@@ -65410,6 +65414,7 @@
           },
           "default_qty": {
             "type": "integer",
+            "maximum": 9.223372036854776e+18,
             "minimum": 1.0,
             "title": "Default Qty",
             "default": 1
@@ -65660,6 +65665,7 @@
             "anyOf": [
               {
                 "type": "integer",
+                "maximum": 9.223372036854776e+18,
                 "minimum": 1.0
               },
               {
@@ -65740,6 +65746,7 @@
           },
           "qty": {
             "type": "integer",
+            "maximum": 9.223372036854776e+18,
             "minimum": 1.0,
             "title": "Qty"
           }
@@ -65970,6 +65977,7 @@
           },
           "qty": {
             "type": "integer",
+            "maximum": 9.223372036854776e+18,
             "minimum": 1.0,
             "title": "Qty"
           },
@@ -66124,6 +66132,7 @@
             "anyOf": [
               {
                 "type": "integer",
+                "maximum": 9.223372036854776e+18,
                 "minimum": 0.0
               },
               {
@@ -66238,6 +66247,7 @@
             "anyOf": [
               {
                 "type": "integer",
+                "maximum": 9.223372036854776e+18,
                 "minimum": 0.0
               },
               {
