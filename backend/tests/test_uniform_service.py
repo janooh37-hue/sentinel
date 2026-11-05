@@ -103,6 +103,68 @@ def _status(exc: pytest.ExceptionInfo[AppError]) -> int:
 # ── Receipts ──────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.parametrize("operation", ["receipt", "adjustment"])
+def test_stock_overflow_rolls_back_postings_and_audit(db: Session, operation: str) -> None:
+    item = _polo(db)
+    first, full = _sid(item, "S"), _sid(item, "M")
+    limit = uniform_repo.MAX_QUANTITY
+    _stock(db, full, limit)
+    before = (
+        db.scalar(select(func.count()).select_from(UniformReceipt)),
+        db.scalar(select(func.count()).select_from(UniformAdjustment)),
+        _audits(db),
+    )
+    with pytest.raises(AppError) as exc:
+        if operation == "receipt":
+            svc.create_receipt(
+                db, received_on=TODAY, lines=[ReceiptLineIn(first, 1), ReceiptLineIn(full, 1)]
+            )
+        else:
+            svc.create_adjustments(
+                db,
+                lines=[AdjustmentLineIn(first, 1, 0), AdjustmentLineIn(full, 1, limit)],
+                reason="Count correction",
+            )
+    assert _code(exc) == "uniform_invalid_qty"
+    assert _on_hand(db, first) == 0
+    assert _on_hand(db, full) == limit
+    assert before == (
+        db.scalar(select(func.count()).select_from(UniformReceipt)),
+        db.scalar(select(func.count()).select_from(UniformAdjustment)),
+        _audits(db),
+    )
+
+
+@pytest.mark.parametrize("duplicate", [False, True])
+def test_receipt_rejects_out_of_range_quantity_before_binding(db: Session, duplicate: bool) -> None:
+    size_id = _sid(_polo(db), "M")
+    limit = uniform_repo.MAX_QUANTITY
+    lines = (
+        [ReceiptLineIn(size_id, limit), ReceiptLineIn(size_id, 1)]
+        if duplicate
+        else [ReceiptLineIn(size_id, limit + 1)]
+    )
+    before = _audits(db)
+    with pytest.raises(AppError) as exc:
+        svc.create_receipt(db, received_on=TODAY, lines=lines)
+    assert _code(exc) == "uniform_invalid_qty"
+    assert _on_hand(db, size_id) == 0
+    assert db.scalar(select(func.count()).select_from(UniformReceipt)) == 0
+    assert _audits(db) == before
+
+
+@pytest.mark.parametrize("delta", [-(1 << 63), 1 << 63])
+def test_adjustment_rejects_out_of_range_delta(db: Session, delta: int) -> None:
+    size_id = _sid(_polo(db), "M")
+    before = _audits(db)
+    with pytest.raises(AppError) as exc:
+        svc.create_adjustments(db, lines=[AdjustmentLineIn(size_id, delta, 0)], reason="Count")
+    assert _code(exc) == "uniform_invalid_delta"
+    assert _on_hand(db, size_id) == 0
+    assert db.scalar(select(func.count()).select_from(UniformAdjustment)) == 0
+    assert _audits(db) == before
+
+
 def test_receipt_adds_stock_and_merges_duplicate_lines(db: Session) -> None:
     polo = _polo(db)
     m = _sid(polo, "M")

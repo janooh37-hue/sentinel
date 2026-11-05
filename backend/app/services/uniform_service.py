@@ -5,6 +5,8 @@ before the first read, then the posting rows, the cached ``on_hand`` change and
 one audit row commit together. Any failure rolls the whole request back, so a
 rejected request writes nothing. Shelf decrements go through the guarded
 ``uniform_repo.decrement_on_hand``; ``CHECK (on_hand >= 0)`` backs it up.
+Shelf increments also guard the signed 64-bit SQLite integer ceiling before
+adding, so overflowing requests cannot promote balances to floating point.
 """
 
 from __future__ import annotations
@@ -183,7 +185,11 @@ def _reason(value: str | None) -> str:
 
 
 def _qty(value: int, field: str = "qty") -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not 1 <= value <= uniform_repo.MAX_QUANTITY
+    ):
         raise ValidationFailedError(
             "uniform_invalid_qty", "Quantities must be whole numbers of at least 1.", field=field
         )
@@ -239,7 +245,11 @@ def _check_drawing(value: str | None) -> str:
 
 
 def _check_default_qty(value: int) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not 1 <= value <= uniform_repo.MAX_QUANTITY
+    ):
         raise ValidationFailedError(
             "uniform_invalid_default_qty", "The default quantity must be at least 1."
         )
@@ -315,7 +325,12 @@ def _take(db: Session, size_id: int, qty: int) -> None:
 
 
 def _put(db: Session, size_id: int, qty: int) -> None:
-    uniform_repo.increment_on_hand(db, size_id, qty)
+    if uniform_repo.increment_on_hand(db, size_id, qty) == 0:
+        raise ConflictError(
+            "uniform_invalid_qty",
+            "The resulting stock exceeds the supported quantity.",
+            size_id=size_id,
+        )
 
 
 def _touch_size(db: Session, size_id: int) -> None:
@@ -605,7 +620,11 @@ def _label_taken(item: UniformItem, label: str, *, exclude_id: int | None = None
 def _check_min_qty(value: int | None) -> int | None:
     if value is None:
         return None
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not 0 <= value <= uniform_repo.MAX_QUANTITY
+    ):
         raise ValidationFailedError("uniform_invalid_min_qty", "Alert level must be 0 or more.")
     return value
 
@@ -776,7 +795,7 @@ def create_receipt(
     _require_lines(lines)
     merged: dict[int, int] = defaultdict(int)
     for line in lines:
-        merged[line.size_id] += _qty(line.qty)
+        merged[line.size_id] = _qty(merged[line.size_id] + _qty(line.qty))
     with _write(db):
         for size_id in merged:
             _active_shelf_size(db, size_id)
@@ -865,7 +884,8 @@ def create_issue(
     _require_lines(lines)
     merged: dict[tuple[int, int | None], int] = defaultdict(int)
     for line in lines:
-        merged[(line.item_id, line.size_id)] += _qty(line.qty)
+        key = (line.item_id, line.size_id)
+        merged[key] = _qty(merged[key] + _qty(line.qty))
     with _write(db):
         _require_employee(db, employee_id)
         for item_id, size_id in merged:
@@ -964,7 +984,8 @@ def create_return(
             raise ValidationFailedError(
                 "uniform_invalid_condition", "Choose reusable or damaged.", value=line.condition
             )
-        merged[(line.item_id, line.size_id, line.condition)] += _qty(line.qty)
+        key = (line.item_id, line.size_id, line.condition)
+        merged[key] = _qty(merged[key] + _qty(line.qty))
     wanted: dict[tuple[int, int | None], int] = defaultdict(int)
     for (item_id, size_id, _), qty in merged.items():
         wanted[(item_id, size_id)] += qty
@@ -1079,14 +1100,18 @@ def create_adjustments(
     _require_lines(lines)
     initial: dict[int, int] = {}
     for line in lines:
-        if isinstance(line.delta, bool) or not isinstance(line.delta, int) or line.delta == 0:
+        if (
+            isinstance(line.delta, bool)
+            or not isinstance(line.delta, int)
+            or not 0 < abs(line.delta) <= uniform_repo.MAX_QUANTITY
+        ):
             raise ValidationFailedError(
                 "uniform_invalid_delta", "Adjustments must change the count.", size_id=line.size_id
             )
         if (
             isinstance(line.expected_on_hand, bool)
             or not isinstance(line.expected_on_hand, int)
-            or line.expected_on_hand < 0
+            or not 0 <= line.expected_on_hand <= uniform_repo.MAX_QUANTITY
         ):
             raise ValidationFailedError(
                 "uniform_invalid_expected_on_hand", "Expected stock must be 0 or more."

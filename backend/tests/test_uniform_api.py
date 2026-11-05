@@ -60,6 +60,35 @@ def create_item(client, name="Polo", drawing="polo"):
 
 
 @pytest.mark.parametrize(
+    "path,body",
+    [
+        ("/receipts", {"received_on": str(TODAY), "lines": [{"size_id": 1, "qty": 1 << 63}]}),
+        (
+            "/issues",
+            {
+                "employee_id": "G1",
+                "issued_on": str(TODAY),
+                "lines": [{"item_id": 1, "qty": 1 << 63}],
+            },
+        ),
+        (
+            "/adjustments",
+            {"reason": "Count", "lines": [{"size_id": 1, "delta": 1 << 63, "expected_on_hand": 0}]},
+        ),
+        (
+            "/adjustments",
+            {
+                "reason": "Count",
+                "lines": [{"size_id": 1, "delta": -(1 << 63), "expected_on_hand": 0}],
+            },
+        ),
+    ],
+)
+def test_rejects_quantities_outside_sqlite_integer_range(editor, path, body):
+    assert editor.post(ROOT + path, json=body).status_code == 422
+
+
+@pytest.mark.parametrize(
     "role,grants,read,write",
     [
         ("operator", (), 403, 403),
