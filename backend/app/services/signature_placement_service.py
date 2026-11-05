@@ -412,9 +412,9 @@ def discover_legacy_candidates(
     if document.pdf_path:
         pdf_abs = settings.data_dir / document.pdf_path
         if pdf_abs.is_file():
-            import fitz
+            import pymupdf
 
-            with fitz.open(str(pdf_abs)) as pdf:
+            with pymupdf.open(str(pdf_abs)) as pdf:
                 if pdf.page_count > 0:
                     expected_text = _normalize_text(pdf[0].get_text())
 

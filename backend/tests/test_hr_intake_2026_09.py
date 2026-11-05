@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from sqlalchemy.orm import Session
 
@@ -18,7 +18,7 @@ from app.services import document_service, perm_service
 
 
 def _pdf_texts(path: Path) -> list[str]:
-    with fitz.open(path) as doc:
+    with pymupdf.open(path) as doc:
         return [page.get_text().strip() for page in doc]
 
 
@@ -53,7 +53,7 @@ def generation_env(
 
 def _write_pdf(docx_path: Path) -> Path:
     out = docx_path.with_suffix(".pdf")
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text((72, 72), "RENDERED")
     doc.save(out)
@@ -114,6 +114,7 @@ def test_generate_new_grid_opt_in_form_end_to_end(
     assert document is not None
     assert document.base_pdf_path is not None
     assert _pdf_texts(settings.data_dir / document.base_pdf_path) == ["RENDERED"]
+
 
 def test_expense_claim_rejects_rows_that_cannot_print(
     generation_env: tuple[Session, Settings, User],

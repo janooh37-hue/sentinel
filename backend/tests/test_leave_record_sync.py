@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import docx
-import fitz
+import pymupdf
 import pytest
 from PIL import Image
 from sqlalchemy import select
@@ -57,11 +57,11 @@ def env(db_session, tmp_path, monkeypatch):
         document = docx.Document(path)
         text = "\n".join(p.text for p in document.paragraphs)
         text += "\n" + "\n".join(c.text for t in document.tables for r in t.rows for c in r.cells)
-        pdf = fitz.open()
+        pdf = pymupdf.open()
         page = pdf.new_page()
         # Keep the real filled DOCX content observable through a valid fake PDF.
         page.insert_textbox(
-            fitz.Rect(20, 20, 575, 820), text.encode("ascii", "replace").decode(), fontsize=6
+            pymupdf.Rect(20, 20, 575, 820), text.encode("ascii", "replace").decode(), fontsize=6
         )
         target = path.with_suffix(".pdf")
         pdf.save(target)
@@ -170,7 +170,7 @@ def edit(env, leave):
 
 
 def text(env, path):
-    with fitz.open(env.settings.data_dir / path) as pdf:
+    with pymupdf.open(env.settings.data_dir / path) as pdf:
         return "\n".join(page.get_text() for page in pdf)
 
 
@@ -593,7 +593,7 @@ def test_pending_sign_gated_request_edit_still_settles_leave_when_current_revisi
 
 @pytest.mark.parametrize("signed", [False, True])
 def test_record_sync_preserves_included_papers_in_new_package(env, signed):
-    with fitz.open() as pdf:
+    with pymupdf.open() as pdf:
         page = pdf.new_page()
         page.insert_text((40, 80), "INCLUDED-PAPER")
         staged = staging_service.stage(pdf.tobytes(), "included.pdf")

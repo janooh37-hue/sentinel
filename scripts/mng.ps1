@@ -604,7 +604,9 @@ function Invoke-SmokeCheck {
         $prevEAP = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         try {
-            & $venvPy -c "from app.main import create_app; create_app()" 2>&1 | ForEach-Object { Write-Host "    $_" }
+            # Importing app.main runs its module-level `app = create_app()`; a
+            # second explicit call would just build (and log) the app twice.
+            & $venvPy -c "import app.main" 2>&1 | ForEach-Object { Write-Host "    $_" }
         } finally {
             $ErrorActionPreference = $prevEAP
         }

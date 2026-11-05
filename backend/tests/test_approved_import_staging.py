@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
-import fitz
+import pymupdf
 import pytest
 
 from app.config import get_settings
@@ -15,7 +15,7 @@ from app.services import approved_import_service
 
 
 def _pdf_bytes() -> bytes:
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text((72, 100), "Approved report source text")
     data = doc.tobytes()
@@ -24,7 +24,7 @@ def _pdf_bytes() -> bytes:
 
 
 def _blank_pdf(*, width: float, height: float, pages: int = 1) -> bytes:
-    doc = fitz.open()
+    doc = pymupdf.open()
     for _ in range(pages):
         doc.new_page(width=width, height=height)
     data = doc.tobytes()
@@ -238,7 +238,7 @@ def test_huge_pdf_page_is_rejected_before_rasterization(
     def fail_render(*_args: object, **_kwargs: object) -> object:
         raise AssertionError("oversized page reached the rasterizer")
 
-    monkeypatch.setattr(fitz.Page, "get_pixmap", fail_render)
+    monkeypatch.setattr(pymupdf.Page, "get_pixmap", fail_render)
 
     with pytest.raises(approved_import_service.StagedApprovedImportError) as exc:
         approved_import_service.inspect_upload(
@@ -256,7 +256,7 @@ def test_multipage_pdf_is_rejected_when_cumulative_raster_budget_is_exceeded(
 ) -> None:
     _data_dir(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        fitz.Page,
+        pymupdf.Page,
         "get_pixmap",
         lambda *_args, **_kwargs: SimpleNamespace(
             width=1,

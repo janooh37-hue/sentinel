@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from sqlalchemy.orm import Session
 
@@ -33,7 +33,7 @@ from app.services import signature_placement_service as sps
 
 def _pdf(path: Path, labels: list[str]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    doc = fitz.open()
+    doc = pymupdf.open()
     try:
         for label in labels:
             page = doc.new_page(width=300, height=400)

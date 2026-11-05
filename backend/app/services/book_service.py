@@ -3946,10 +3946,10 @@ def _image_to_pdf_bytes(data: bytes, ext: str) -> bytes:
     download as a corrupt renamed ``.pdf`` and fail pdf.js. Raises 422 when
     the bytes are not a readable image.
     """
-    import fitz  # PyMuPDF — heavyweight; only the scan-back flip pays for it
+    import pymupdf  # PyMuPDF — heavyweight; only the scan-back flip pays for it
 
     try:
-        with fitz.open(stream=data, filetype=ext.lstrip(".")) as img:
+        with pymupdf.open(stream=data, filetype=ext.lstrip(".")) as img:
             pdf_bytes: bytes = img.convert_to_pdf()
     except Exception as exc:
         raise ValidationFailedError(

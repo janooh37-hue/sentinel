@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal, Protocol, cast
 
-import fitz
+import pymupdf
 
 from app.config import get_settings
 from app.core.constants import STAMP_STYLE_HEADER
@@ -185,10 +185,10 @@ def _convert(target: Path, converter: PdfConverter | None) -> ConversionOutcome:
     if not resolved.is_file() or resolved.stat().st_size == 0:
         return ConversionOutcome(status="unavailable")
     try:
-        with fitz.open(resolved) as pdf:
+        with pymupdf.open(resolved) as pdf:
             if pdf.page_count < 1:
                 return ConversionOutcome(status="unavailable")
-    except (fitz.FileDataError, RuntimeError, ValueError, OSError):
+    except (pymupdf.FileDataError, RuntimeError, ValueError, OSError):
         return ConversionOutcome(status="unavailable")
     return ConversionOutcome(status="success", pdf_path=resolved)
 

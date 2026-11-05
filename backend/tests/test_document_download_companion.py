@@ -8,7 +8,7 @@ merges companion PDF pages onto the end of the primary's served PDF.
 
 from __future__ import annotations
 
-import fitz
+import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -64,7 +64,7 @@ def _client(db: Session, user: User) -> TestClient:
 
 
 def _pdf(path, n_pages: int) -> None:
-    doc = fitz.open()
+    doc = pymupdf.open()
     for _ in range(n_pages):
         doc.new_page()
     doc.save(str(path))
@@ -112,7 +112,7 @@ def test_original_pdf_merges_companion_pages(api_db, tmp_path) -> None:
     resp = c.get(f"/api/v1/documents/{primary.id}/download?format=pdf&original=true")
 
     assert resp.status_code == 200
-    merged = fitz.open("pdf", resp.content)
+    merged = pymupdf.open("pdf", resp.content)
     assert merged.page_count == 3  # 2 primary + 1 companion
 
 
@@ -130,7 +130,7 @@ def test_managed_original_pdf_does_not_append_companion_twice(api_db, tmp_path) 
     resp = c.get(f"/api/v1/documents/{primary.id}/download?format=pdf&original=true")
 
     assert resp.status_code == 200
-    assert fitz.open("pdf", resp.content).page_count == 3
+    assert pymupdf.open("pdf", resp.content).page_count == 3
 
 
 def test_companion_download_is_not_recursive(api_db, tmp_path) -> None:
@@ -141,4 +141,4 @@ def test_companion_download_is_not_recursive(api_db, tmp_path) -> None:
     resp = c.get(f"/api/v1/documents/{companion.id}/download?format=pdf&original=true")
 
     assert resp.status_code == 200
-    assert fitz.open("pdf", resp.content).page_count == 1
+    assert pymupdf.open("pdf", resp.content).page_count == 1

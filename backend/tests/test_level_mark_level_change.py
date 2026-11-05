@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from zipfile import ZipFile
 
-import fitz
+import pymupdf
 import pytest
 from lxml import etree
 from sqlalchemy.orm import Session
@@ -35,7 +35,7 @@ def _marks(path: Path) -> list[str]:
 
 
 def _pdf(path: Path, text: str) -> Path:
-    with fitz.open() as pdf:
+    with pymupdf.open() as pdf:
         pdf.new_page().insert_text((72, 72), text)
         pdf.save(path)
     return path
@@ -109,11 +109,11 @@ def test_level_change_restamps_docx_and_republishes_package(
         assert source.read_bytes() == original
         assert book.included_papers_revision == revision
         resolved = document_service.resolve_document_artifact(db_session, document.id, format="pdf")
-        with fitz.open(resolved.path) as pdf:
+        with pymupdf.open(resolved.path) as pdf:
             assert pdf.page_count == 2
             assert ("secret" if level == "secret" else "general") in pdf[0].get_text()
             assert "included paper" in pdf[1].get_text()
-        with fitz.open(tmp_path / document.base_pdf_path) as pdf:
+        with pymupdf.open(tmp_path / document.base_pdf_path) as pdf:
             assert pdf.page_count == 1
             assert ("secret" if level == "secret" else "general") in pdf[0].get_text()
 
@@ -357,14 +357,14 @@ def test_level_change_restamps_companions_before_publishing_package(
         assert set(_marks(Path(companion.docx_path))) == expected
         assert not Path(companion.pdf_path).is_absolute()
         pdf_level = "secret" if level == "secret" else "general"
-        with fitz.open(tmp_path / companion.pdf_path) as pdf:
+        with pymupdf.open(tmp_path / companion.pdf_path) as pdf:
             assert pdf.page_count == 1
             assert pdf_level in pdf[0].get_text()
-        with fitz.open(tmp_path / document.base_pdf_path) as pdf:
+        with pymupdf.open(tmp_path / document.base_pdf_path) as pdf:
             assert pdf.page_count == 2
             assert all(pdf_level in page.get_text() for page in pdf)
         resolved = document_service.resolve_document_artifact(db_session, document.id, format="pdf")
-        with fitz.open(resolved.path) as pdf:
+        with pymupdf.open(resolved.path) as pdf:
             assert pdf.page_count == 3
             assert pdf_level in pdf[0].get_text()
             assert pdf_level in pdf[1].get_text()

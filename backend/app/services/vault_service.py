@@ -19,7 +19,7 @@ sanitized — no traversal"). Three hard rules:
    traversal or path-confusing edge cases (CVE-ish) get caught here even
    if step (1) regresses.
 
-PDF thumbs go through PyMuPDF (``fitz``); we render page 1 at 144 DPI to a
+PDF thumbs go through PyMuPDF (``pymupdf``); we render page 1 at 144 DPI to a
 PNG and cache the result under ``<data_dir>/cache/thumbs/<sha1>.png``. The
 cache key is the source file's stat (size + mtime), so editing the PDF in
 place invalidates the cache automatically.
@@ -34,7 +34,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Final, get_args
 
-import fitz  # PyMuPDF
+import pymupdf  # PyMuPDF
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
@@ -247,14 +247,14 @@ def render_pdf_thumbnail(pdf_path: Path) -> Path:
     if cache_path.exists():
         return cache_path
 
-    with fitz.open(pdf_path) as doc:
+    with pymupdf.open(pdf_path) as doc:
         if doc.page_count == 0:
             raise ValidationFailedError(
                 "VAULT_EMPTY_PDF", "PDF has no pages", filename=pdf_path.name
             )
         page = doc.load_page(0)
         zoom = PDF_THUMB_DPI / 72.0
-        matrix = fitz.Matrix(zoom, zoom)
+        matrix = pymupdf.Matrix(zoom, zoom)
         pix = page.get_pixmap(matrix=matrix, alpha=False)
         pix.save(cache_path)
     return cache_path

@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
-import fitz
+import pymupdf
 from fastapi import status
 from sqlalchemy import select, update
 from sqlalchemy.engine import CursorResult
@@ -218,10 +218,10 @@ def inspect_paper(path: Path, *, display_name: str | None = None) -> tuple[str, 
         )
     try:
         if ext in _IMAGE_EXTS:
-            with fitz.open(path) as image:
+            with pymupdf.open(path) as image:
                 image.convert_to_pdf()
             return _MIME_TYPES[ext], 1
-        with fitz.open(path) as pdf:
+        with pymupdf.open(path) as pdf:
             if pdf.page_count < 1:
                 raise ValueError("PDF has no pages")
             return _MIME_TYPES[ext], pdf.page_count
@@ -590,7 +590,7 @@ def describe_package(db: Session, book: Book) -> PackageState:
     if published is None:
         raise NotFoundError("INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available")
     try:
-        with fitz.open(published) as pdf:
+        with pymupdf.open(published) as pdf:
             total_pages = pdf.page_count
     except Exception as exc:
         raise ValidationFailedError(
@@ -708,7 +708,7 @@ def publish_signed_package(
             "The signed form is not a readable PDF",
         )
     try:
-        with fitz.open(signed_primary) as pdf:
+        with pymupdf.open(signed_primary) as pdf:
             if pdf.page_count < 1:
                 raise ValueError("PDF has no pages")
     except Exception as exc:

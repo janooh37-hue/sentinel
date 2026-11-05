@@ -31,7 +31,7 @@ import io
 import warnings
 from typing import Final, Literal
 
-import fitz
+import pymupdf
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.core.vehicle_photos import MAX_DIMENSION, MAX_PIXELS
@@ -207,12 +207,12 @@ def _optimize_image(data: bytes, media_type: str, profile: Profile) -> bytes:
 # ── PDFs ─────────────────────────────────────────────────────────────────
 
 
-def _key_present(doc: fitz.Document, xref: int, key: str) -> bool:
+def _key_present(doc: pymupdf.Document, xref: int, key: str) -> bool:
     kind, _value = doc.xref_get_key(xref, key)
     return bool(kind != "null")
 
 
-def _is_signed(doc: fitz.Document) -> bool:
+def _is_signed(doc: pymupdf.Document) -> bool:
     """True when the PDF carries any signature-related structure.
 
     This is a preservation signal, not a claim that a signature was
@@ -237,16 +237,16 @@ def _is_signed(doc: fitz.Document) -> bool:
     return False
 
 
-def _is_encrypted(doc: fitz.Document) -> bool:
+def _is_encrypted(doc: pymupdf.Document) -> bool:
     # `needs_pass` alone misses an owner-password PDF PyMuPDF auto-opened
     # with an empty user password: `is_encrypted` and a present trailer
     # `/Encrypt` key both catch that case.
     return bool(doc.needs_pass) or bool(doc.is_encrypted) or _key_present(doc, -1, "Encrypt")
 
 
-def _has_oversized_image(doc: fitz.Document) -> bool:
+def _has_oversized_image(doc: pymupdf.Document) -> bool:
     """Cheap header-only scan — never decodes pixel data."""
-    for page in doc:
+    for page in doc.pages():
         for image in page.get_images(full=True):
             width, height = image[2], image[3]
             if width > MAX_DIMENSION or height > MAX_DIMENSION or width * height > MAX_PIXELS:
@@ -263,8 +263,8 @@ def _reopen_matches(original_data: bytes, candidate: bytes) -> bool:
     """
     try:
         with (
-            fitz.open(stream=original_data, filetype="pdf") as original,
-            fitz.open(stream=candidate, filetype="pdf") as reopened,
+            pymupdf.open(stream=original_data, filetype="pdf") as original,
+            pymupdf.open(stream=candidate, filetype="pdf") as reopened,
         ):
             if reopened.page_count != original.page_count:
                 return False
@@ -284,7 +284,7 @@ def _reopen_matches(original_data: bytes, candidate: bytes) -> bool:
 
 def _optimize_pdf(data: bytes, profile: Profile) -> bytes:
     try:
-        doc = fitz.open(stream=data, filetype="pdf")
+        doc = pymupdf.open(stream=data, filetype="pdf")
     except Exception as exc:
         raise ValueError("VEHICLE_CERTIFICATE_INVALID") from exc
 

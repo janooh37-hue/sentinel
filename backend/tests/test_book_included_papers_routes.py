@@ -4,7 +4,7 @@ import base64
 import uuid
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -54,7 +54,7 @@ def api_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Session:
 
 
 def _pdf(path: Path, labels: list[str]) -> Path:
-    doc = fitz.open()
+    doc = pymupdf.open()
     try:
         for label in labels:
             page = doc.new_page(width=300, height=400)
@@ -66,7 +66,7 @@ def _pdf(path: Path, labels: list[str]) -> Path:
 
 
 def _texts(data: bytes) -> list[str]:
-    with fitz.open("pdf", data) as doc:
+    with pymupdf.open("pdf", data) as doc:
         return [page.get_text().strip() for page in doc]
 
 

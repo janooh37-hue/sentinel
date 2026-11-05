@@ -1,6 +1,6 @@
 """Ref codes — encode (Aztec, aztec_code_generator) + decode (zxing-cpp).
 
-Pure module: PIL image in, refs out; no FastAPI / SQLAlchemy / fitz. The
+Pure module: PIL image in, refs out; no FastAPI / SQLAlchemy / pymupdf. The
 upload-bytes orchestration (PDF rasterise vs image load) lives in
 ``extraction.ocr.qr_refs_from_bytes`` so this module stays dependency-light.
 
@@ -37,9 +37,7 @@ except Exception:  # pragma: no cover - import-time host guard
 
 _PREFIX = "GSSG:"
 _BARCODE_RE = re.compile(r"^([A-Z0-9/-]+)\+(\d{8})$")
-_GSSG_BARCODE_RE = re.compile(
-    r"^\*?GSSG\+(\d{2}/\d{2}/\d{4})\+([A-Z0-9/-]+)\*?$"
-)
+_GSSG_BARCODE_RE = re.compile(r"^\*?GSSG\+(\d{2}/\d{2}/\d{4})\+([A-Z0-9/-]+)\*?$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,9 +56,7 @@ def parse_barcode(text: str) -> tuple[str, date] | None:
     if match is not None:
         try:
             date_text = match.group(1)
-            paper_date = date.fromisoformat(
-                f"{date_text[6:10]}-{date_text[3:5]}-{date_text[:2]}"
-            )
+            paper_date = date.fromisoformat(f"{date_text[6:10]}-{date_text[3:5]}-{date_text[:2]}")
         except ValueError:
             return None
         return match.group(2), paper_date
@@ -70,9 +66,7 @@ def parse_barcode(text: str) -> tuple[str, date] | None:
         return None
     try:
         date_text = match.group(2)
-        paper_date = date.fromisoformat(
-            f"{date_text[:4]}-{date_text[4:6]}-{date_text[6:]}"
-        )
+        paper_date = date.fromisoformat(f"{date_text[:4]}-{date_text[4:6]}-{date_text[6:]}")
     except ValueError:
         return None
     return match.group(1), paper_date
@@ -145,10 +139,10 @@ def decode_qr_refs(image: Image) -> list[str]:
     refs: list[str] = []
     seen: set[str] = set()
     for r in results:
-        text = (getattr(r, "text", "") or "")
+        text = getattr(r, "text", "") or ""
         if not text.startswith(_PREFIX):
             continue
-        ref = text[len(_PREFIX):].strip().upper()
+        ref = text[len(_PREFIX) :].strip().upper()
         if ref and ref not in seen:
             seen.add(ref)
             refs.append(ref)
