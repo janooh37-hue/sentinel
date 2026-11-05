@@ -1791,6 +1791,8 @@
         "reviewLatest": "Review latest version",
         "conflictDraftKept": "Your draft is kept. Review the latest saved details and stock below, then keep your changes to reconcile them in the form before saving again. Fields and counts you did not edit will use the latest saved values.",
         "keepDraft": "Keep my changes and continue editing",
+        "sizeUnavailable": "A size was removed or archived by another operator. Recreate it from your draft or remove it from your draft before saving.",
+        "recreateSize": "Recreate size {{size}}",
         "archiveConfirm": "Archive {{name}}? Its history will be kept. Unsaved changes will not be saved.",
         "deleteConfirm": "Delete {{name}} permanently? Items with history cannot be deleted. Unsaved changes will not be saved.",
         "archiveBlocked": "Clear all shelf stock and employee holdings before archiving this item.",
