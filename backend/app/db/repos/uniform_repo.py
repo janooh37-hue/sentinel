@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, literal, select, union_all, update
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.uniform_limits import MAX_QUANTITY
 from app.db.models import (
     UniformAdjustment,
     UniformIssue,
@@ -38,8 +39,8 @@ def decrement_on_hand(db: Session, size_id: int, qty: int) -> int:
     Returns the affected row count: 0 means not enough stock (or no such size),
     and the caller must fail the whole request.
     """
-    if qty <= 0:
-        raise ValueError("qty must be positive")
+    if not 0 < qty <= MAX_QUANTITY:
+        raise ValueError("qty must be a positive SQLite integer")
     result = db.execute(
         update(UniformSize)
         .where(UniformSize.id == size_id, UniformSize.on_hand >= qty)
@@ -50,12 +51,12 @@ def decrement_on_hand(db: Session, size_id: int, qty: int) -> int:
 
 
 def increment_on_hand(db: Session, size_id: int, qty: int) -> int:
-    """Put ``qty`` back on a shelf size. Returns the affected row count."""
-    if qty <= 0:
-        raise ValueError("qty must be positive")
+    """Put ``qty`` back only if the resulting balance stays a SQLite integer."""
+    if not 0 < qty <= MAX_QUANTITY:
+        raise ValueError("qty must be a positive SQLite integer")
     result = db.execute(
         update(UniformSize)
-        .where(UniformSize.id == size_id)
+        .where(UniformSize.id == size_id, UniformSize.on_hand <= MAX_QUANTITY - qty)
         .values(on_hand=UniformSize.on_hand + qty)
         .execution_options(synchronize_session=False)
     )
