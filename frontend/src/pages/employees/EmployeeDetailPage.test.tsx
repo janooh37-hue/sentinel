@@ -14,7 +14,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, vi, test, expect } from 'vitest'
 
-const { mockHasCapability } = vi.hoisted(() => ({ mockHasCapability: vi.fn(() => true) }))
+const { mockHasCapability } = vi.hoisted(() => ({
+  mockHasCapability: vi.fn<(cap: string) => boolean>(() => true),
+}))
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ has: mockHasCapability }),
 }))
@@ -116,6 +118,7 @@ vi.mock('./tabs/ViolationsTab', () => ({
   ),
 }))
 vi.mock('./tabs/ActivityTab', () => ({ ActivityTab: () => null }))
+vi.mock('./tabs/UniformTab', () => ({ UniformTab: () => <div data-testid="uniform-tab" /> }))
 vi.mock('@/components/ui/document-viewer-dialog', () => ({
   DocumentViewerDialog: ({
     items,
@@ -269,6 +272,20 @@ test('violation deep link activates the tab and forwards the exact row id', asyn
   renderPage('/employees/G100?tab=violations&open=42')
   expect(await screen.findByTestId('tab-chips')).toHaveAttribute('data-active', 'violations')
   expect(screen.getByTestId('violations-tab')).toHaveAttribute('data-open-id', '42')
+})
+
+test('uniform deep link without uniform.view falls back to the profile tab', async () => {
+  mockHasCapability.mockImplementation((cap: string) => cap !== 'uniform.view')
+  vi.mocked(api.getEmployeeDetail).mockResolvedValue(detail as never)
+  renderPage('/employees/G100?tab=uniform')
+  expect(await screen.findByTestId('tab-chips')).toHaveAttribute('data-active', 'profile')
+  expect(screen.queryByTestId('uniform-tab')).not.toBeInTheDocument()
+})
+
+test('uniform deep link with uniform.view opens the Uniform tab', async () => {
+  vi.mocked(api.getEmployeeDetail).mockResolvedValue(detail as never)
+  renderPage('/employees/G100?tab=uniform')
+  expect(await screen.findByTestId('uniform-tab')).toBeInTheDocument()
 })
 
 test('document tab callback opens and closes the shared generated-PDF viewer', async () => {

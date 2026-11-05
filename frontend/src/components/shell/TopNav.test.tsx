@@ -97,4 +97,23 @@ describe('TopNav', () => {
 
     expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument()
   })
+
+  it.each([
+    { caps: [], visible: false },
+    { caps: ['uniform.view'], visible: true },
+    { caps: ['store.view'], visible: true },
+    { caps: ['store.view', 'uniform.view'], visible: true },
+  ])('shows Assets only with a viewable section: $caps', ({ caps, visible }) => {
+    for (const capability of ['store.view', 'uniform.view']) {
+      if (!caps.includes(capability)) capabilityState.denied.add(capability)
+    }
+    renderNav()
+
+    const link = screen.queryByRole('link', { name: 'Assets' })
+    if (visible) {
+      expect(link).toHaveAttribute('href', '/holdings')
+    } else {
+      expect(link).not.toBeInTheDocument()
+    }
+  })
 })
