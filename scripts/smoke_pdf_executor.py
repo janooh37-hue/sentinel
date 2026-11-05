@@ -9,7 +9,7 @@ import os
 import shutil
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 
 def _sha256(path: Path) -> str:
@@ -52,7 +52,7 @@ def main() -> int:
     if output is None:
         raise RuntimeError("Production process-pool adapter returned no PDF")
     output = output.resolve(strict=True)
-    with fitz.open(output) as pdf:
+    with pymupdf.open(output) as pdf:
         if pdf.page_count < 1:
             raise RuntimeError("Production process-pool adapter produced an empty PDF")
         page_count = pdf.page_count

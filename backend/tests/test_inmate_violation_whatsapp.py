@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-import fitz
+import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -47,7 +47,7 @@ GROUP = ("120363@g.us", "غرفة العمليات")
 
 def _write_pdf(docx_path: Path) -> Path:
     out = docx_path.with_suffix(".pdf")
-    doc = fitz.open()
+    doc = pymupdf.open()
     doc.new_page().insert_text((72, 72), "SIGNED")
     doc.save(out)
     doc.close()

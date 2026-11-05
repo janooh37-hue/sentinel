@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from docx import Document
 from fastapi.testclient import TestClient
@@ -203,7 +203,7 @@ def test_template_preview_reuses_converter_and_requires_capability(authoring, mo
 
     def convert(source):
         output = source.with_suffix(".pdf")
-        with fitz.open() as pdf:
+        with pymupdf.open() as pdf:
             pdf.new_page()
             pdf.save(output)
         return output

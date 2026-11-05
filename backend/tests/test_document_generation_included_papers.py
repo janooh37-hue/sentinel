@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from sqlalchemy.orm import Session
 
@@ -24,7 +24,7 @@ from app.services import document_service, staging_service, word_book_service
 
 def _pdf(path: Path, labels: list[str]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    doc = fitz.open()
+    doc = pymupdf.open()
     try:
         for label in labels:
             page = doc.new_page(width=300, height=400)
@@ -36,7 +36,7 @@ def _pdf(path: Path, labels: list[str]) -> Path:
 
 
 def _texts(path: Path) -> list[str]:
-    with fitz.open(path) as doc:
+    with pymupdf.open(path) as doc:
         return [page.get_text().strip() for page in doc]
 
 
@@ -291,7 +291,7 @@ def test_word_create_preview_and_finish_include_staged_and_record_papers(
 
     preview = word_book_service.render_session_preview(db, book_id=book.id, converter=convert)
     assert isinstance(preview, bytes)
-    with fitz.open("pdf", preview) as pdf:
+    with pymupdf.open("pdf", preview) as pdf:
         assert [page.get_text().strip() for page in pdf] == ["LETTER", "PAPER-1", "PAPER-2", "FORM"]
     letter = Path(session.working_path).parent / "preview-src.pdf"
     original_letter = letter.read_bytes()

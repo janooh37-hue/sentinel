@@ -3,7 +3,7 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from sqlalchemy.orm import Session
 
@@ -26,7 +26,7 @@ def _service():
 
 def _pdf(path: Path, labels: list[str]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    doc = fitz.open()
+    doc = pymupdf.open()
     try:
         for label in labels:
             page = doc.new_page(width=300, height=400)
@@ -38,7 +38,7 @@ def _pdf(path: Path, labels: list[str]) -> Path:
 
 
 def _texts(path: Path) -> list[str]:
-    with fitz.open(path) as doc:
+    with pymupdf.open(path) as doc:
         return [page.get_text().strip() for page in doc]
 
 

@@ -11,7 +11,7 @@ import sys
 import zipfile
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from docx import Document as DocxFile
 from docx.enum.text import WD_BREAK
@@ -173,17 +173,17 @@ def _manifest(path: Path) -> dict[str, object]:
 
 
 def _pdf_text(path: Path) -> str:
-    with fitz.open(path) as pdf:
+    with pymupdf.open(path) as pdf:
         assert pdf.page_count > 0
         return "\n".join(page.get_text() for page in pdf)
 
 
 def _copy_pdf_pages(pdf_path: Path, pages_dir: Path, prefix: str) -> None:
     pages_dir.mkdir(parents=True, exist_ok=True)
-    with fitz.open(pdf_path) as pdf:
+    with pymupdf.open(pdf_path) as pdf:
         assert pdf.page_count > 0
         for index, page in enumerate(pdf):
-            page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False).save(
+            page.get_pixmap(matrix=pymupdf.Matrix(1.5, 1.5), alpha=False).save(
                 pages_dir / f"{prefix}-{index + 1}.png"
             )
 
@@ -566,7 +566,7 @@ def test_signature_placement_word_smoke(monkeypatch: pytest.MonkeyPatch) -> None
         assert after_geo.height_pt == pytest.approx(before.height_pt, abs=0.5)
         # Page count unchanged after the move (validate_move already asserted
         # this internally — reconfirm from the raw PDFs as an outer check).
-        with fitz.open(pdf_path) as before_pdf_doc, fitz.open(after_pdf) as after_pdf_doc:
+        with pymupdf.open(pdf_path) as before_pdf_doc, pymupdf.open(after_pdf) as after_pdf_doc:
             assert before_pdf_doc.page_count == after_pdf_doc.page_count
         # Source untouched.
         assert docx_path.is_file()
@@ -704,7 +704,7 @@ def test_initial_approval_signature_word_smoke(
         reference_pdf = _real_dispatch_ex_converter(reference_src)
         assert reference_pdf is not None
 
-        with fitz.open(actual_pdf) as ap, fitz.open(reference_pdf) as rp:
+        with pymupdf.open(actual_pdf) as ap, pymupdf.open(reference_pdf) as rp:
             assert ap.page_count == rp.page_count  # no new page pushed by insertion
 
         actual_drawings = [
@@ -733,7 +733,7 @@ def test_initial_approval_signature_word_smoke(
 
         # Surrounding body text lands at the same physical position too —
         # proof the insertion caused no reflow (the inline-image regression).
-        with fitz.open(actual_pdf) as ap, fitz.open(reference_pdf) as rp:
+        with pymupdf.open(actual_pdf) as ap, pymupdf.open(reference_pdf) as rp:
             a_page = ap[actual_geo.page - 1]
             r_page = rp[reference_geo.page - 1]
             for needle in (DEFAULT_MANAGER_NAME, DEFAULT_MANAGER_TITLE):

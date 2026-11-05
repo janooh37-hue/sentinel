@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from docx import Document as DocxFile
 from sqlalchemy.orm import Session
@@ -14,7 +14,7 @@ from app.services import word_book_service
 
 
 def _pdf(path: Path) -> Path:
-    with fitz.open() as document:
+    with pymupdf.open() as document:
         document.new_page()
         document.save(path)
     return path
@@ -84,7 +84,7 @@ def test_preview_accepts_public_pdf_converter(
     )
 
     assert preview.name == "preview-src.pdf"
-    with fitz.open(preview) as document:
+    with pymupdf.open(preview) as document:
         assert document.page_count == 1
 
 
@@ -206,9 +206,9 @@ def test_preview_route_supports_base64(
         assert res.status_code == 200
         assert res.headers["content-type"].startswith("text/plain")
         preview_bytes = base64.b64decode(res.text)
-        with fitz.open("pdf", preview_bytes) as preview:
+        with pymupdf.open("pdf", preview_bytes) as preview:
             assert preview.page_count == 2
-        with fitz.open(working.parent / "preview-src.pdf") as letter:
+        with pymupdf.open(working.parent / "preview-src.pdf") as letter:
             assert letter.page_count == 1
     finally:
         db.close()

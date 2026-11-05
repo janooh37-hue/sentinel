@@ -124,7 +124,7 @@ def extract_text(image: Image.Image) -> OcrResult:
 
 def pdf_to_images(pdf_bytes: bytes, *, dpi: int = 200) -> Generator[Image.Image, None, None]:
     """Yield bounded PDF page rasters via PyMuPDF without retaining prior pages."""
-    import fitz
+    import pymupdf
 
     if dpi <= 0:
         raise InvalidImageError("PDF raster DPI must be positive.")
@@ -132,7 +132,7 @@ def pdf_to_images(pdf_bytes: bytes, *, dpi: int = 200) -> Generator[Image.Image,
     total_pixels = 0
     scale = dpi / 72.0
     try:
-        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+        with pymupdf.open(stream=pdf_bytes, filetype="pdf") as doc:
             for page in doc:
                 width = math.ceil(page.rect.width * scale)
                 height = math.ceil(page.rect.height * scale)
@@ -151,7 +151,7 @@ def pdf_to_images(pdf_bytes: bytes, *, dpi: int = 200) -> Generator[Image.Image,
                 yield Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
     except InvalidImageError:
         raise
-    except (fitz.FileDataError, fitz.EmptyFileError, RuntimeError) as exc:
+    except (pymupdf.FileDataError, pymupdf.EmptyFileError, RuntimeError) as exc:
         raise InvalidImageError("The uploaded PDF is not readable.") from exc
 
 
@@ -169,12 +169,12 @@ def pdf_text_layer(pdf_bytes: bytes) -> str:
     Unlike :func:`pdf_to_images`, a corrupt PDF yields ``""`` here rather than
     raising — callers fall back to OCR, which surfaces the proper 422.
     """
-    import fitz
+    import pymupdf
 
     try:
-        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+        with pymupdf.open(stream=pdf_bytes, filetype="pdf") as doc:
             return "\n".join(page.get_text() for page in doc)
-    except (fitz.FileDataError, fitz.EmptyFileError, RuntimeError):
+    except (pymupdf.FileDataError, pymupdf.EmptyFileError, RuntimeError):
         return ""
 
 
@@ -318,10 +318,10 @@ def word_boxes_from_bytes(raw: bytes, *, lang: str = "eng", timeout: float = 0) 
 
 def pdf_page_count(raw: bytes) -> int:
     """Number of pages in a PDF upload; :class:`InvalidImageError` if unreadable."""
-    import fitz
+    import pymupdf
 
     try:
-        with fitz.open(stream=raw, filetype="pdf") as doc:
+        with pymupdf.open(stream=raw, filetype="pdf") as doc:
             return int(doc.page_count)
     except Exception as exc:  # PyMuPDF raises several unrelated types on bad input
         raise InvalidImageError("The uploaded PDF could not be read.") from exc

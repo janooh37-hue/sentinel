@@ -4,7 +4,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -29,7 +29,7 @@ from app.services import approved_import_service, book_service
 
 
 def _pdf_bytes() -> bytes:
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page(width=595, height=842)
     page.insert_text((72, 100), "Approved report source")
     data = doc.tobytes()
@@ -127,7 +127,7 @@ def test_commit_creates_one_approved_searchable_record_without_violation_row(
     }
 
     stamped = (tmp_path / document.pdf_path).read_bytes()
-    with fitz.open(stream=stamped, filetype="pdf") as pdf:
+    with pymupdf.open(stream=stamped, filetype="pdf") as pdf:
         assert "Ref: INV-0001" in pdf[0].get_text()
     assert qr_refs_from_bytes(stamped) == ["INV-0001"]
     with pytest.raises(ValidationFailedError) as unfile:

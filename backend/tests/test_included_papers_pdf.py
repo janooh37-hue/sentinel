@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 
 from app.core import pdf_merge
 
 
 def _pdf(path: Path, labels: list[str]) -> Path:
-    doc = fitz.open()
+    doc = pymupdf.open()
     try:
         for label in labels:
             page = doc.new_page(width=300, height=400)
@@ -21,7 +21,7 @@ def _pdf(path: Path, labels: list[str]) -> Path:
 
 
 def _png(path: Path) -> Path:
-    pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 40, 30), 0)
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 40, 30), 0)
     try:
         pix.clear_with(0x4A90E2)
         pix.save(path)
@@ -31,7 +31,7 @@ def _png(path: Path) -> Path:
 
 
 def _page_texts(data: bytes) -> list[str]:
-    with fitz.open("pdf", data) as doc:
+    with pymupdf.open("pdf", data) as doc:
         return [page.get_text().strip() for page in doc]
 
 

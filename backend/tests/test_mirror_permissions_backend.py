@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
-import fitz
+import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -1898,7 +1898,7 @@ def test_pending_assignees_can_read_linked_documents_until_their_decision(
     _category(mirror_api.db, "REVIEW", name_en="Assigned reviews")
 
     def _real_pdf(path: Path, label: str) -> Path:
-        doc = fitz.open()
+        doc = pymupdf.open()
         try:
             page = doc.new_page(width=300, height=400)
             page.insert_text((40, 80), label)
@@ -2011,15 +2011,15 @@ def test_pending_assignees_can_read_linked_documents_until_their_decision(
     assert unsigned_metadata.status_code == 200, unsigned_metadata.text
     assert unsigned_metadata.json()["id"] == unsigned_document.id
     assert unsigned_download.status_code == 200, unsigned_download.text
-    with fitz.open(stream=unsigned_download.content, filetype="pdf") as merged_unsigned:
+    with pymupdf.open(stream=unsigned_download.content, filetype="pdf") as merged_unsigned:
         assert [page.get_text().strip() for page in merged_unsigned] == ["UNSIGNED", "COMPANION"]
     assert locked_download.status_code == 200, locked_download.text
-    with fitz.open(stream=locked_download.content, filetype="pdf") as merged_locked:
+    with pymupdf.open(stream=locked_download.content, filetype="pdf") as merged_locked:
         assert [page.get_text().strip() for page in merged_locked] == ["LOCKED"]
     assert companion_metadata.status_code == 200, companion_metadata.text
     assert companion_metadata.json()["id"] == companion_document.id
     assert companion_download.status_code == 200, companion_download.text
-    with fitz.open(stream=companion_download.content, filetype="pdf") as companion_only:
+    with pymupdf.open(stream=companion_download.content, filetype="pdf") as companion_only:
         assert [page.get_text().strip() for page in companion_only] == ["COMPANION"]
 
     for step in mirror_api.db.scalars(
@@ -2140,7 +2140,7 @@ def test_generation_attachment_sources_require_full_source_book_access(
     primary_path = tmp_path / "source-primary.pdf"
     attachment_path = tmp_path / "source-scan.pdf"
     for path in (primary_path, attachment_path):
-        pdf = fitz.open()
+        pdf = pymupdf.open()
         pdf.new_page()
         pdf.save(path)
         pdf.close()

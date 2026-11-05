@@ -15,7 +15,7 @@ import zipfile
 from io import BytesIO
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from docx import Document as DocxDocument
 from docx.oxml.ns import qn
@@ -171,10 +171,10 @@ def test_approval_preserves_employee_signature_choice(
 
     # Word COM is an external boundary; retain image bytes in a valid test PDF.
     def convert(path):
-        with fitz.open() as pdf:
+        with pymupdf.open() as pdf:
             page = pdf.new_page()
             for blob in _body_image_blobs(path):
-                page.insert_image(fitz.Rect(30, 30, 167, 81), stream=blob)
+                page.insert_image(pymupdf.Rect(30, 30, 167, 81), stream=blob)
             target = path.with_suffix(".pdf")
             pdf.save(target)
         return target
@@ -206,7 +206,7 @@ def test_approval_preserves_employee_signature_choice(
     manager_png = BytesIO()
     Image.new("RGBA", (181, 63), (0, 0, 0, 255)).save(manager_png, format="PNG")
     user_signature_service.save_signature(db_session, signer, "manager.png", manager_png.getvalue())
-    with fitz.open() as paper:
+    with pymupdf.open() as paper:
         paper.new_page().insert_text((30, 30), "Synthetic IBAN evidence")
         attachment = staging_service.stage(paper.tobytes(), "iban.pdf")
     try:

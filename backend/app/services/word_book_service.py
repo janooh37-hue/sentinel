@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import fitz
+import pymupdf
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -1137,9 +1137,9 @@ _preview_lock = threading.Lock()
 
 def _is_complete_preview(path: Path) -> bool:
     try:
-        with fitz.open(path) as document:
+        with pymupdf.open(path) as document:
             return document.page_count > 0 and not document.needs_pass
-    except (fitz.EmptyFileError, fitz.FileDataError, RuntimeError, OSError):
+    except (pymupdf.EmptyFileError, pymupdf.FileDataError, RuntimeError, OSError):
         return False
 
 
