@@ -86,7 +86,7 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
   const version = useRef(item.version)
   const [error, setError] = useState<unknown>(null)
   const [reviewSize, setReviewSize] = useState(false)
-  const [metadataConflict, setMetadataConflict] = useState(false)
+  const [draftConflict, setDraftConflict] = useState(false)
   const [latestItem, setLatestItem] = useState<UniformItemRead | null>(null)
   const [loadingLatest, setLoadingLatest] = useState(false)
   const [action, setAction] = useState<'archive' | 'delete' | null>(null)
@@ -151,12 +151,22 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
     }
     savedMetadata.current = latest
     version.current = latestItem.version
+    setValue('rows', getValues('rows').map(row => {
+      const currentSize = latestItem.sizes.find(size => size.id === row.id)
+      if (!currentSize) return row
+      return {
+        ...row,
+        qty: whole(row.qty) === row.baseline ? String(currentSize.on_hand) : row.qty,
+        baseline: currentSize.on_hand,
+        held: currentSize.held_qty,
+      }
+    }))
     setLatestItem(null)
-    setMetadataConflict(false)
+    setDraftConflict(false)
     setError(null)
   }
   async function save(values: Values) {
-    if (disabledReason || busy || !editable || action || actionLock.current || metadataConflict) return
+    if (disabledReason || busy || !editable || action || actionLock.current || draftConflict) return
     actionLock.current = true
     setError(null)
     // Endpoints commit independently. Advance only successfully saved baselines,
@@ -232,8 +242,8 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
       onOpenChange(false)
     } catch (failure) {
       setError(failure)
-      if (failure instanceof ApiError && failure.status === 412) {
-        setMetadataConflict(true)
+      if (failure instanceof ApiError && (failure.status === 412 || failure.code === 'uniform_stale_count')) {
+        setDraftConflict(true)
         setLatestItem(null)
       }
     } finally {
@@ -270,7 +280,7 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
         <FormAlert id={`${id}-error`} message={error ? uniformErrorMessage(error) : null} />
         <FormAlert id={`${id}-refresh-error`} message={items.isError ? t(items.data ? 'assets.uniform.refreshError' : 'assets.uniform.error') : null} />
         {items.isError && <Button type="button" variant="ghost" className="min-h-11 self-start" disabled={busy} onClick={() => void items.refetch()}>{t('assets.uniform.retry')}</Button>}
-        {metadataConflict && <section className="space-y-3 rounded-md border border-border p-3" aria-label={t('assets.uniform.catalog.reviewLatest')}>
+        {draftConflict && <section className="space-y-3 rounded-md border border-border p-3" aria-label={t('assets.uniform.catalog.reviewLatest')}>
           <p className="text-sm">{t('assets.uniform.catalog.conflictDraftKept')}</p>
           <Button type="button" variant="secondary" className="min-h-11" disabled={busy || !editable} onClick={() => void reviewLatest()}>{t('assets.uniform.catalog.reviewLatest')}</Button>
           {latestItem && <>
@@ -279,6 +289,9 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
               <div><dt className="font-medium">{t('assets.uniform.group')}</dt><dd>{t(`assets.uniform.groups.${latestItem.group_key}`)}</dd></div>
               <div><dt className="font-medium">{t('assets.uniform.defaultQty')}</dt><dd><bdi>{latestItem.default_qty}</bdi></dd></div>
               <div><dt className="font-medium">{t('assets.uniform.drawing')}</dt><dd>{UNIFORM_ART_LABELS.find(art => art.kind === latestItem.drawing)?.[i18n.language.startsWith('ar') ? 'ar' : 'en']}</dd></div>
+            </dl>
+            <dl className="space-y-1 text-sm">
+              {latestItem.sizes.filter(size => !size.archived_at).map(size => <div key={size.id} className="flex flex-wrap justify-between gap-2"><dt>{t('assets.uniform.qtyOf', { name: sizeLabel(size.label) })}</dt><dd><bdi>{size.on_hand}</bdi></dd></div>)}
             </dl>
             <Button type="button" variant="secondary" className="min-h-11" disabled={busy || !editable} onClick={keepDraft}>{t('assets.uniform.catalog.keepDraft')}</Button>
           </>}
@@ -324,7 +337,7 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
       <DialogFooter>
         <p id={`${id}-reason`} role="status" className="me-auto text-sm text-muted-foreground">{disabledReason}{reviewSize && <span className="block">{t('assets.uniform.sizeStaged')}</span>}</p>
         <Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={() => onOpenChange(false)}>{t('assets.uniform.cancel')}</Button>
-        <Button type="submit" className="min-h-11" disabled={(!!disabledReason && !pendingSize) || busy || !editable || !!action || metadataConflict} aria-describedby={`${id}-reason`}>{t('assets.uniform.save')}</Button>
+        <Button type="submit" className="min-h-11" disabled={(!!disabledReason && !pendingSize) || busy || !editable || !!action || draftConflict} aria-describedby={`${id}-reason`}>{t('assets.uniform.save')}</Button>
       </DialogFooter>
     </form>
   </DialogShell>
