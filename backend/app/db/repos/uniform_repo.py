@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, literal, select, union_all, update
+from sqlalchemy import literal, select, union_all, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.uniform_limits import MAX_QUANTITY
@@ -100,8 +100,10 @@ def ledger_balances(db: Session) -> dict[int, int]:
         UniformAdjustment.voided_at.is_(None)
     )
     moves = union_all(receipts, issues, returns, adjustments).subquery()
-    stmt = select(moves.c.size_id, func.sum(moves.c.qty)).group_by(moves.c.size_id)
-    return {int(row[0]): int(row[1]) for row in db.execute(stmt).tuples()}
+    totals: dict[int, int] = {}
+    for size_id, qty in db.execute(select(moves.c.size_id, moves.c.qty)).tuples():
+        totals[size_id] = totals.get(size_id, 0) + qty
+    return totals
 
 
 def holdings(
@@ -129,21 +131,18 @@ def holdings(
         .where(UniformReturn.voided_at.is_(None))
     )
     moves = union_all(issued, returned).subquery()
-    total = func.sum(moves.c.qty)
-    stmt = (
-        select(moves.c.employee_id, moves.c.item_id, moves.c.size_id, total)
-        .group_by(moves.c.employee_id, moves.c.item_id, moves.c.size_id)
-        .having(total > 0)
-        .order_by(moves.c.employee_id, moves.c.item_id, moves.c.size_id)
-    )
+    # SQLite SUM can overflow on lifetime postings even when their net is small.
+    # Stream exact quantities and accumulate with arbitrary-precision integers.
+    stmt = select(moves).order_by(moves.c.employee_id, moves.c.item_id, moves.c.size_id)
     if employee_id is not None:
         stmt = stmt.where(moves.c.employee_id == employee_id)
     if item_id is not None:
         stmt = stmt.where(moves.c.item_id == item_id)
-    return [
-        Holding(str(e), int(i), None if s is None else int(s), int(q))
-        for e, i, s, q in db.execute(stmt).tuples()
-    ]
+    totals: dict[tuple[str, int, int | None], int] = {}
+    for employee, item, size, qty in db.execute(stmt).tuples():
+        key = (employee, item, size)
+        totals[key] = totals.get(key, 0) + qty
+    return [Holding(*key, qty) for key, qty in totals.items() if qty > 0]
 
 
 def held_qty(db: Session, *, employee_id: str, item_id: int, size_id: int | None) -> int:
@@ -158,8 +157,8 @@ def held_qty(db: Session, *, employee_id: str, item_id: int, size_id: int | None
         if size_id is None
         else UniformReturnLine.size_id == size_id
     )
-    issued = db.scalar(
-        select(func.coalesce(func.sum(UniformIssueLine.qty), 0))
+    issued = db.scalars(
+        select(UniformIssueLine.qty)
         .join(UniformIssue, UniformIssue.id == UniformIssueLine.issue_id)
         .where(
             UniformIssue.voided_at.is_(None),
@@ -168,8 +167,8 @@ def held_qty(db: Session, *, employee_id: str, item_id: int, size_id: int | None
             size_match,
         )
     )
-    returned = db.scalar(
-        select(func.coalesce(func.sum(UniformReturnLine.qty), 0))
+    returned = db.scalars(
+        select(UniformReturnLine.qty)
         .join(UniformReturn, UniformReturn.id == UniformReturnLine.return_id)
         .where(
             UniformReturn.voided_at.is_(None),
@@ -178,7 +177,7 @@ def held_qty(db: Session, *, employee_id: str, item_id: int, size_id: int | None
             return_size_match,
         )
     )
-    return int(issued or 0) - int(returned or 0)
+    return sum(issued) - sum(returned)
 
 
 def list_items(db: Session, *, include_archived: bool = False) -> list[UniformItem]:
