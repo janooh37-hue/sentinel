@@ -69,15 +69,16 @@ describe('Update uniform item', () => {
       reason: 'Physical count',
     }))
   })
-  it('recovers from a metadata conflict while preserving drafts and concurrent untouched fields', async () => {
+  it.each([false, true])('recovers metadata and threshold conflicts while preserving drafts (edited threshold: %s)', async editedThreshold => {
     const user = userEvent.setup()
-    const latest = { ...ITEM, description_en: 'Concurrent description', version: '2' }
+    const latest = { ...ITEM, description_en: 'Concurrent description', version: '2', sizes: [{ ...ITEM.sizes[0], min_qty: 2 }] }
     vi.mocked(api.updateUniformItem).mockRejectedValueOnce(new ApiError(412, 'precondition_failed', 'Conflict'))
     const { onOpenChange } = mount()
     await screen.findByRole('radio', { name: 'Polo shirt' })
     await user.clear(screen.getByLabelText('Name in English'))
     await user.type(screen.getByLabelText('Name in English'), 'My polo')
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Quantity of M' }), { target: { value: '9' } })
+    if (editedThreshold) fireEvent.change(screen.getByRole('spinbutton', { name: 'Alert at M' }), { target: { value: '3' } })
     await user.type(screen.getByLabelText('Reason for adjustment'), 'Found one')
     await user.type(screen.getByLabelText('Add size'), 'Tall{Enter}')
     await user.click(screen.getByRole('button', { name: 'Save' }))
@@ -92,11 +93,14 @@ describe('Update uniform item', () => {
     expect(screen.getByRole('spinbutton', { name: 'Quantity of M' })).toHaveValue(9)
     expect(screen.getByLabelText('Reason for adjustment')).toHaveValue('Found one')
     expect(screen.getByRole('spinbutton', { name: 'Quantity of Tall' })).toHaveValue(0)
+    expect(screen.getByRole('spinbutton', { name: 'Alert at M' })).toHaveValue(editedThreshold ? 3 : 2)
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Alert at M' }), { target: { value: '' } })
     vi.mocked(api.updateUniformItem).mockResolvedValue({ ...latest, name_en: 'My polo', version: '3' })
     await user.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
     expect(api.updateUniformItem).toHaveBeenLastCalledWith(2, { name_en: 'My polo' }, '2')
     expect(api.addUniformSize).toHaveBeenCalledWith(2, { label: 'Tall', min_qty: null })
+    expect(api.updateUniformSize).toHaveBeenCalledWith(21, { min_qty: null })
     expect(api.createUniformAdjustments).toHaveBeenCalledWith(expect.objectContaining({
       lines: [{ size_id: 21, delta: 1, expected_on_hand: 8 }],
       reason: 'Found one',

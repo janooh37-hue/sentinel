@@ -158,6 +158,10 @@ function ItemEditorContent({ item, open, onOpenChange, returnFocusRef, onSuccess
         ...row,
         qty: whole(row.qty) === row.baseline ? String(currentSize.on_hand) : row.qty,
         baseline: currentSize.on_hand,
+        min: (row.min === '' ? null : whole(row.min)) === row.savedMin
+          ? currentSize.min_qty === null ? '' : String(currentSize.min_qty)
+          : row.min,
+        savedMin: currentSize.min_qty,
         held: currentSize.held_qty,
       }
     }))
