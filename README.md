@@ -73,6 +73,39 @@ Manager settings editors also need `employees.edit` to assign/change an
 employee-linked account or replace/delete its signature; standalone manager
 signatures require only `settings.edit`.
 
+Assets includes bilingual Uniform stock, hand-outs, returns, and employee holdings.
+Users with `uniform.edit` can maintain catalogue metadata and size order, remove
+empty sizes, archive items with history, and delete unused items. Physical counts
+send each size's opening balance with the adjustment; concurrent stock changes
+reject the whole request with `409 uniform_stale_count`. Reopen the item to review
+fresh balances before retrying. Each submitted adjustment line retains its own
+ledger and audit row. Receipt voids reverse the entire receipt, and their history
+shows every affected item and size before confirmation.
+Uniform posting and archive timestamps are serialized with an explicit UTC offset,
+so the browser does not interpret stored UTC values as local wall-clock time.
+Voids cannot change archived items or sizes. History retains archived size labels.
+Background refresh failures keep cached Uniform lists, employee history, search
+results, and every open dialog mounted, with inline errors and Retry actions.
+Draft entries are retained through failures and successful retries. Losing
+`uniform.edit` closes edit drafts and releases pinned recipients and records;
+restoring access does not reopen those discarded drafts.
+The shared Assets entry accepts Store or Uniform view access and opens a permitted
+section. Return deep links identify the exact ledger entry independently of list
+search, and an open void confirmation stays bound to the entry originally chosen.
+Recipient panels stay pinned while a hand-out, return or void draft is open, even
+when a successful refresh removes or reorders the recipient. Posting forms retain
+requested quantities and unavailable selected lines across successful refreshes;
+changed availability blocks submission until the user explicitly revises or clears
+those selections. Removing and re-adding an editor size restores its existing
+draft values and saved identity. Replacing a one-size item with named sizes, or
+named sizes with one size, removes the old empty sizes before creating replacements.
+Saving with a typed, unstaged size validates and stages it without posting changes;
+the keeper reviews the resulting sizes before saving again.
+Uniform catalogue and posting IDs are never reused in SQLite, so open drafts and
+void confirmations cannot silently target a replacement record after deletion.
+Voided employee-history badges retain full opacity and theme-safe text contrast
+on both desktop and phone layouts.
+
 ## Requirements
 
 - Python 3.12

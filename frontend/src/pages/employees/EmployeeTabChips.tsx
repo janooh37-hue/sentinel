@@ -17,6 +17,7 @@ export type Tab =
   | 'activity'
   | 'messages'
   | 'attendance'
+  | 'uniform'
 
 interface Counts {
   documents: number
@@ -35,6 +36,8 @@ interface Props {
   active: Tab
   counts: Counts
   onChange: (next: Tab) => void
+  /** The Uniform chip is a peer tab only for users holding `uniform.view`. */
+  showUniform?: boolean
 }
 
 const ORDER: Tab[] = [
@@ -46,9 +49,15 @@ const ORDER: Tab[] = [
   'activity',
   'attendance',
   'violations',
+  'uniform',
 ]
 
-export function EmployeeTabChips({ active, counts, onChange }: Props): React.JSX.Element {
+export function EmployeeTabChips({
+  active,
+  counts,
+  onChange,
+  showUniform = false,
+}: Props): React.JSX.Element {
   const { t } = useTranslation()
 
   return (
@@ -56,7 +65,7 @@ export function EmployeeTabChips({ active, counts, onChange }: Props): React.JSX
       className="mb-4 flex flex-wrap gap-2 overflow-x-auto [-webkit-overflow-scrolling:touch]"
       role="tablist"
     >
-      {ORDER.map((tab) => {
+      {ORDER.filter((tab) => tab !== 'uniform' || showUniform).map((tab) => {
         const isActive = active === tab
 
         let badge: string | number | null = null
@@ -82,7 +91,8 @@ export function EmployeeTabChips({ active, counts, onChange }: Props): React.JSX
                 : 'border border-border bg-surface text-muted-foreground hover:border-primary/40 hover:text-foreground'
             }`}
           >
-            {t(`employee.tab.${tab}`)}
+            {/* The Uniform label lives with the module copy, not the employee namespace. */}
+            {t(tab === 'uniform' ? 'assets.uniform.uniform' : `employee.tab.${tab}`)}
             {badge !== null && (
               <span
                 className={
