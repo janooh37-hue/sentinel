@@ -29,3 +29,24 @@ jobs:
         run: |
           files=$(git diff --name-only --diff-filter=ACMR "origin/${{ github.base_ref }}...HEAD" -- '*.py')
           if [ -n "$files" ]; then ruff format --check $files; fi
+
+  # The deploy runs `tsc -b && vite build`; type-check here so a broken
+  # frontend fails the PR instead of aborting `mng deploy`.
+  frontend-static:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: tsc
+        run: pnpm exec tsc -b --noEmit
