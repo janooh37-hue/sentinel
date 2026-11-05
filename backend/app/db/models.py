@@ -2940,6 +2940,275 @@ class StoreItemAlias(Base):
     __table_args__ = (UniqueConstraint("alias_norm", name="uq_store_item_aliases_alias_norm"),)
 
 
+# --- Uniform (migration 0115) ----------------------------------------------
+
+UNIFORM_VOID_CHECK: Final = (
+    "(voided_at IS NULL AND void_reason IS NULL)"
+    " OR (voided_at IS NOT NULL AND void_reason IS NOT NULL"
+    " AND length(trim(void_reason)) > 0)"
+)
+
+
+class _UniformVoidable:
+    """Void columns shared by every Uniform posting header."""
+
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    voided_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    void_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
+class _UniformStamped:
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
+        server_default=func.current_timestamp(),
+    )
+
+
+# Public Uniform identities must not be reused after deletion: drafts, void
+# confirmations and audit records outlive rows. Posting-line IDs stay internal.
+class UniformItem(_UniformStamped, Base):
+    """A catalogue garment. ``tracking`` is ``shelf`` (sized stock) or ``holder``."""
+
+    __tablename__ = "uniform_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name_en: Mapped[str] = mapped_column(String(120), nullable=False)
+    name_ar: Mapped[str] = mapped_column(String(120), nullable=False)
+    description_en: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    description_ar: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    group_key: Mapped[str] = mapped_column(String(16), nullable=False)
+    drawing: Mapped[str] = mapped_column(String(16), nullable=False)
+    tracking: Mapped[str] = mapped_column(String(8), nullable=False)
+    default_qty: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+
+    sizes: Mapped[list[UniformSize]] = relationship(
+        back_populates="item",
+        cascade="all, delete-orphan",
+        order_by="UniformSize.sort_order",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "group_key IN ('formal', 'guard', 'winter')", name="ck_uniform_items_group"
+        ),
+        CheckConstraint(
+            "drawing IN ('suit', 'boots', 'polo', 'cargo', 'belt', 'cap', 'socks', 'jacket',"
+            " 'vest', 'parka', 'dressshirt', 'longsleeve')",
+            name="ck_uniform_items_drawing",
+        ),
+        CheckConstraint("tracking IN ('shelf', 'holder')", name="ck_uniform_items_tracking"),
+        CheckConstraint("default_qty >= 1", name="ck_uniform_items_default_qty"),
+        Index(
+            "uq_uniform_items_name_active",
+            func.lower(text("name_en")),
+            unique=True,
+            sqlite_where=text("archived_at IS NULL"),
+        ),
+        Index(
+            "uq_uniform_items_drawing_active",
+            "drawing",
+            unique=True,
+            sqlite_where=text("archived_at IS NULL"),
+        ),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class UniformSize(_UniformStamped, Base):
+    """One size of a shelf item; ``on_hand`` is the cached shelf balance."""
+
+    __tablename__ = "uniform_sizes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    item_id: Mapped[int] = mapped_column(
+        ForeignKey("uniform_items.id", ondelete="CASCADE"), nullable=False
+    )
+    label: Mapped[str] = mapped_column(String(16), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    on_hand: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    min_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    item: Mapped[UniformItem] = relationship(back_populates="sizes")
+
+    __table_args__ = (
+        CheckConstraint("on_hand >= 0", name="ck_uniform_sizes_on_hand"),
+        CheckConstraint("min_qty IS NULL OR min_qty >= 0", name="ck_uniform_sizes_min_qty"),
+        Index(
+            "uq_uniform_sizes_item_label_active",
+            "item_id",
+            func.lower(text("label")),
+            unique=True,
+            sqlite_where=text("archived_at IS NULL"),
+        ),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class UniformReceipt(_UniformVoidable, _UniformStamped, Base):
+    """Dated stock receipt from HQ."""
+
+    __tablename__ = "uniform_receipts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    received_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    lines: Mapped[list[UniformReceiptLine]] = relationship(
+        back_populates="receipt", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        CheckConstraint(UNIFORM_VOID_CHECK, name="ck_uniform_receipts_void"),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class UniformReceiptLine(_UniformStamped, Base):
+    __tablename__ = "uniform_receipt_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    receipt_id: Mapped[int] = mapped_column(
+        ForeignKey("uniform_receipts.id", ondelete="CASCADE"), nullable=False
+    )
+    size_id: Mapped[int] = mapped_column(ForeignKey("uniform_sizes.id"), nullable=False)
+    qty: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    receipt: Mapped[UniformReceipt] = relationship(back_populates="lines")
+
+    __table_args__ = (
+        CheckConstraint("qty > 0", name="ck_uniform_receipt_lines_qty"),
+        UniqueConstraint("receipt_id", "size_id", name="uq_uniform_receipt_lines_size"),
+    )
+
+
+class UniformIssue(_UniformVoidable, _UniformStamped, Base):
+    """Hand-out of uniform to one employee."""
+
+    __tablename__ = "uniform_issues"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[str] = mapped_column(ForeignKey("employees.id"), nullable=False)
+    issued_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    lines: Mapped[list[UniformIssueLine]] = relationship(
+        back_populates="issue", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        CheckConstraint(UNIFORM_VOID_CHECK, name="ck_uniform_issues_void"),
+        Index("ix_uniform_issues_employee", "employee_id"),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class UniformIssueLine(_UniformStamped, Base):
+    """``size_id`` is NULL exactly for holder-tracked items (service-enforced)."""
+
+    __tablename__ = "uniform_issue_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    issue_id: Mapped[int] = mapped_column(
+        ForeignKey("uniform_issues.id", ondelete="CASCADE"), nullable=False
+    )
+    item_id: Mapped[int] = mapped_column(ForeignKey("uniform_items.id"), nullable=False)
+    size_id: Mapped[int | None] = mapped_column(ForeignKey("uniform_sizes.id"), nullable=True)
+    qty: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    issue: Mapped[UniformIssue] = relationship(back_populates="lines")
+
+    __table_args__ = (
+        CheckConstraint("qty > 0", name="ck_uniform_issue_lines_qty"),
+        UniqueConstraint("issue_id", "item_id", "size_id", name="uq_uniform_issue_lines_line"),
+        Index(
+            "uq_uniform_issue_lines_holder",
+            "issue_id",
+            "item_id",
+            unique=True,
+            sqlite_where=text("size_id IS NULL"),
+        ),
+    )
+
+
+class UniformReturn(_UniformVoidable, _UniformStamped, Base):
+    __tablename__ = "uniform_returns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[str] = mapped_column(ForeignKey("employees.id"), nullable=False)
+    returned_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    lines: Mapped[list[UniformReturnLine]] = relationship(
+        back_populates="return_", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        CheckConstraint(UNIFORM_VOID_CHECK, name="ck_uniform_returns_void"),
+        Index("ix_uniform_returns_employee", "employee_id"),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class UniformReturnLine(_UniformStamped, Base):
+    """Only ``reusable`` lines restock the shelf; both reduce holdings."""
+
+    __tablename__ = "uniform_return_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    return_id: Mapped[int] = mapped_column(
+        ForeignKey("uniform_returns.id", ondelete="CASCADE"), nullable=False
+    )
+    item_id: Mapped[int] = mapped_column(ForeignKey("uniform_items.id"), nullable=False)
+    size_id: Mapped[int | None] = mapped_column(ForeignKey("uniform_sizes.id"), nullable=True)
+    qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    condition: Mapped[str] = mapped_column(String(8), nullable=False)
+
+    return_: Mapped[UniformReturn] = relationship(back_populates="lines")
+
+    __table_args__ = (
+        CheckConstraint("qty > 0", name="ck_uniform_return_lines_qty"),
+        CheckConstraint(
+            "condition IN ('reusable', 'damaged')", name="ck_uniform_return_lines_condition"
+        ),
+    )
+
+
+class UniformAdjustment(_UniformVoidable, _UniformStamped, Base):
+    """Reasoned shelf count correction for one size."""
+
+    __tablename__ = "uniform_adjustments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    size_id: Mapped[int] = mapped_column(ForeignKey("uniform_sizes.id"), nullable=False)
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    adjusted_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(UNIFORM_VOID_CHECK, name="ck_uniform_adjustments_void"),
+        CheckConstraint("delta <> 0", name="ck_uniform_adjustments_delta"),
+        CheckConstraint("length(trim(reason)) > 0", name="ck_uniform_adjustments_reason"),
+        Index("ix_uniform_adjustments_size", "size_id"),
+        {"sqlite_autoincrement": True},
+    )
+
+
 # Imported last on purpose: workforce models reference tables defined above, so
 # a top-of-module import would close a circular import at class-definition time.
 from app.db.workforce_models import (  # noqa: E402
