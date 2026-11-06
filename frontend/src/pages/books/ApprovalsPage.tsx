@@ -27,6 +27,7 @@ import { ChevronLeft, ChevronRight, FileText, Inbox } from 'lucide-react'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SkeletonRow } from '@/components/ui/skeleton'
+import { deskBookUrl } from '@/components/books/ledgerBookKeys'
 import { api } from '@/lib/api'
 import type { ApprovalLogItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
@@ -343,7 +344,9 @@ export function ApprovalsPage(): React.JSX.Element {
       queue: rows.map((row) => row.book_id),
       scrollY,
     }
-    navigate(approvalRecordUrl(item.book_id, item.version_id ?? null, context), { state: nav })
+    navigate(item.template === 'ledger'
+      ? deskBookUrl(item.book_id)
+      : approvalRecordUrl(item.book_id, item.version_id ?? null, context), { state: nav })
   }
 
   if (summaryQuery.isPending) {
@@ -578,6 +581,10 @@ export function ApprovalsPage(): React.JSX.Element {
                 dfLocale={dfLocale}
                 onOpen={() => openRow(item)}
                 onPreview={(trigger) => {
+                  if (item.template === 'ledger') {
+                    openRow(item)
+                    return
+                  }
                   previewTriggerRef.current = trigger
                   setPreview(item)
                 }}

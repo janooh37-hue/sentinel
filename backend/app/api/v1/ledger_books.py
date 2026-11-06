@@ -1,4 +1,4 @@
-"""Ledger Book endpoints, Phase 2a (ADR 0007 Drafts + Save & Send, ADR 0008).
+"""Ledger Book drafts, Revisions, single-manager signing and Outlook handoff.
 
 Mounted in ``main.py`` BEFORE ``ledger.router``: its ``/ledger/{entry_id}``
 catch-all would otherwise swallow ``/ledger/drafts`` and ``/ledger/books``.
@@ -18,6 +18,12 @@ catch-all would otherwise swallow ``/ledger/drafts`` and ``/ledger/books``.
   POST   /ledger/books/{id}/corrections          new Revision from a signed one
   GET    /ledger/books/{id}/images/{name}        readers of the book
   GET    /ledger/books/{id}/paper?revision=      a Revision as hardened HTML paper
+  POST   /ledger/books/{id}/sign                 assignee signs and delivers
+  POST   /ledger/books/{id}/return               assignee returns with a note
+  POST   /ledger/books/{id}/resubmit             writer submits return/correction
+  PUT    /ledger/books/{id}/signer               writer reassigns before signing
+  GET    /ledger/books/{id}/signature?revision=  readers; immutable signature image
+  POST   /ledger/books/{id}/outlook-draft         writer; signed external PDF draft
 """
 
 from __future__ import annotations
@@ -40,7 +46,10 @@ from app.schemas.ledger_book import (
     LedgerDraftImageRead,
     LedgerDraftRead,
     LedgerDraftUpdate,
+    LedgerOutlookDraftRead,
+    LedgerReturnIn,
     LedgerSaveRead,
+    LedgerSignerIn,
 )
 from app.services import ledger_book_service as service
 
@@ -178,3 +187,43 @@ def start_correction(book_id: int, db: DbDep, user: UserDep) -> LedgerBookRead:
 @router.get("/books/{book_id}/images/{name}")
 def get_book_image(book_id: int, name: str, db: DbDep, user: UserDep) -> FileResponse:
     return _image_response(service.book_image_path(db, user, book_id, name))
+
+
+@router.post("/books/{book_id}/sign", response_model=LedgerBookRead)
+def sign_ledger_book(book_id: int, db: DbDep, user: UserDep) -> LedgerBookRead:
+    return service.sign(db, user, book_id)
+
+
+@router.post("/books/{book_id}/return", response_model=LedgerBookRead)
+def return_ledger_book(
+    book_id: int, payload: LedgerReturnIn, db: DbDep, user: UserDep
+) -> LedgerBookRead:
+    return service.return_book(db, user, book_id, payload.note)
+
+
+@router.post("/books/{book_id}/resubmit", response_model=LedgerBookRead)
+def resubmit_ledger_book(book_id: int, db: DbDep, user: UserDep) -> LedgerBookRead:
+    return service.resubmit(db, user, book_id)
+
+
+@router.put("/books/{book_id}/signer", response_model=LedgerBookRead)
+def change_ledger_signer(
+    book_id: int, payload: LedgerSignerIn, db: DbDep, user: UserDep
+) -> LedgerBookRead:
+    return service.change_signer(db, user, book_id, payload.manager_id)
+
+
+@router.post("/books/{book_id}/outlook-draft", response_model=LedgerOutlookDraftRead)
+def create_ledger_outlook_draft(book_id: int, db: DbDep, user: UserDep) -> LedgerOutlookDraftRead:
+    return service.create_outlook_draft(db, user, book_id)
+
+
+@router.get("/books/{book_id}/signature")
+def get_ledger_signature(
+    book_id: int, db: DbDep, user: UserDep, revision: int | None = None
+) -> FileResponse:
+    return FileResponse(
+        service.signature_path(db, user, book_id, revision),
+        media_type="image/png",
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )

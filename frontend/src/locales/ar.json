@@ -3060,6 +3060,25 @@
     }
   },
   "ledgerBook": {
+    "actions": {
+      "sign": "توقيع",
+      "signConfirmTitle": "توقيع كتاب السجل؟",
+      "signConfirmDescription": "سيُضاف توقيعك المحفوظ ويُقفل هذا الإصدار.",
+      "signed": "تم توقيع الكتاب.",
+      "return": "إرجاع",
+      "returnTitle": "إرجاع إلى الكاتب",
+      "returnNote": "ملاحظة الإرجاع",
+      "returnNoteRequired": "أدخل ملاحظة الإرجاع.",
+      "returned": "تم إرجاع الكتاب إلى الكاتب.",
+      "changeSigner": "تغيير الموقّع",
+      "changeSignerTitle": "تغيير المدير الموقّع",
+      "signerRequired": "اختر المدير الموقّع.",
+      "signerChanged": "تم تغيير المدير الموقّع.",
+      "resubmit": "إعادة الإرسال للتوقيع",
+      "resubmitted": "أُعيد إرسال الكتاب للتوقيع.",
+      "createOutlookDraft": "إنشاء مسودة Outlook",
+      "outlookDraftCreated": "تم إنشاء المسودة. افتح مسودات Outlook لمراجعتها وإرسالها."
+    },
     "composer": {
       "newButton": "كتاب سجل جديد",
       "creating": "جارٍ الإنشاء…",
@@ -3070,10 +3089,26 @@
       "loadFailed": "تعذّر التحميل.",
       "retry": "إعادة المحاولة",
       "fields": {
+        "kind": "الوجهة",
+        "internal": "داخلي",
+        "external": "خارجي",
+        "to": "إلى",
+        "cc": "نسخة إلى",
+        "signer": "المدير الموقّع",
+        "signerPlaceholder": "اختر مديرًا مرتبطًا بحساب",
+        "addRecipient": "إضافة مستلم",
+        "selected": "مستلمو {{role}}",
+        "removeRecipient": "إزالة {{name}} من {{role}}",
         "tab": "التبويب",
         "tabPlaceholder": "اختر التبويب",
         "tabOption": "{{tab}} — {{name}}",
         "gradeBanner": "{{label}}: {{grade}}"
+      },
+      "errors": {
+        "toRequired": "اختر مستلمًا واحدًا على الأقل في حقل «إلى».",
+        "signerRequired": "اختر المدير الموقّع.",
+        "addresseeInvalid": "أحد المستلمين غير متاح أو لا يملك تصريح هذه الدرجة. أعد اختيار المستلمين.",
+        "signerInvalid": "اختر مديرًا نشطًا مرتبطًا بحساب مستخدم."
       },
       "subjects": {
         "legend": "أسطر الموضوع",
@@ -3102,8 +3137,8 @@
       "send": {
         "button": "حفظ وإرسال",
         "confirmTitle": "حفظ وإرسال كتاب السجل؟",
-        "confirmBody": "يُخصَّص الرقم المرجعي الآن، وبعد ذلك لا يتغيّر الكتاب إلا بتصحيح.",
-        "sent": "صدر كتاب السجل {{ref}}. استخدم «إرسال» في المكتب لتسليمه."
+        "confirmBody": "يُخصَّص الرقم المرجعي الآن. يوقّع المدير أولاً، ثم يُسلَّم الكتاب إلى المستلمين ونسخة إلى.",
+        "sent": "أُرسل كتاب السجل {{ref}} إلى المدير للتوقيع."
       },
       "delete": {
         "button": "حذف المسودة",

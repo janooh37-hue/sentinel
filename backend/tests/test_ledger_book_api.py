@@ -19,11 +19,13 @@ from app.db.models import (
     BookRevisionAccess,
     BookVersion,
     LedgerBookSave,
+    Manager,
+    User,
     UserPermission,
 )
 from app.db.session import get_db
 from app.main import create_app
-from app.services import book_service, ledger_book_service, push_service
+from app.services import book_service, ledger_book_service, push_service, user_signature_service
 from tests.conftest import make_user
 
 DRAFTS = "/api/v1/ledger/drafts"
@@ -40,6 +42,8 @@ def ledger(api_db, tmp_path, monkeypatch):
     owner = make_user(api_db, role="manager", email="writer@example.ae")
     owner.display_name = "Ledger Writer"
     other = make_user(api_db, role="manager", email="reader@example.ae")
+    signing_user = make_user(api_db, role="manager", email="signer@example.ae")
+    api_db.add(Manager(name_en="Default signing manager", user_id=signing_user.id))
     api_db.commit()
     actor = [owner]
     app = create_app()
@@ -55,8 +59,18 @@ def error(response, status, code):
     assert response.json()["error"]["code"] == code
 
 
+def addressees_payload(client):
+    manager = client.get("/api/v1/managers").json()[0]
+    return {
+        "signer_manager_id": manager["id"],
+        "addressees": [{"role": "to", "user_id": manager["user_id"]}],
+    }
+
+
 def send(client, **changes):
-    draft_response = client.post(DRAFTS, json={"tab": 5, **CONTENT, **changes})
+    draft_response = client.post(
+        DRAFTS, json={"tab": 5, **CONTENT, **addressees_payload(client), **changes}
+    )
     assert draft_response.status_code == 201, draft_response.text
     draft = draft_response.json()
     response = client.post(f"{DRAFTS}/{draft['id']}/save-and-send")
@@ -97,7 +111,7 @@ def test_save_and_send_materializes_numbered_book_and_provenance(ledger):
     assert book.source_draft_id == draft["id"]
     assert book.subject == CONTENT["subjects"][0]
     assert all(subject.lower() in book.search_text.lower() for subject in CONTENT["subjects"])
-    assert (book.grade, book.importance, book.approval_state) == ("top_secret", "high", "none")
+    assert (book.grade, book.importance, book.approval_state) == ("top_secret", "high", "pending")
     assert book.urgency == "Normal"
     assert book.created_by_user_id == book.submitted_by_user_id == owner.id
     version = db.get(BookVersion, result["selected_version_id"])
@@ -148,7 +162,7 @@ def test_operator_cannot_save_and_send(ledger):
 
 def test_send_relocates_images_and_enforces_book_reader_access(ledger):
     client, db, actor, _, other, root = ledger
-    draft = client.post(DRAFTS, json={"tab": 5, **CONTENT}).json()
+    draft = client.post(DRAFTS, json={"tab": 5, **CONTENT, **addressees_payload(client)}).json()
     image = client.post(
         f"{DRAFTS}/{draft['id']}/images", files={"file": ("x.png", PNG, "image/png")}
     ).json()
@@ -324,7 +338,7 @@ def test_papers_follow_read_access_and_are_hardened(ledger):
     assert paper.headers["content-security-policy"].startswith("sandbox allow-same-origin")
     assert paper.headers["cache-control"] == "no-store"
     assert detail["ref_number"] in paper.text and "Second subject" in paper.text
-    assert (owner.display_name or owner.email) in paper.text  # Secret viewer watermark
+    assert (owner.display_name or owner.email) not in paper.text
 
     actor[0] = other
     error(client.get(f"{DRAFTS}/{draft['id']}/paper"), 404, "DRAFT_NOT_FOUND")
@@ -450,9 +464,21 @@ def test_correction_revision_keeps_importance(ledger):
 
 def test_desk_rows_carry_importance_and_ledger_template(ledger, monkeypatch):
     """T-B7: the BooksRoutingDesk rows (inbox scopes) and the record detail."""
-    client, db, actor, owner, other, _ = ledger
+    client, db, actor, owner, other, root = ledger
     monkeypatch.setattr(push_service, "send_to_user", lambda *args, **kwargs: None)
-    _, ledger_book = send(client, importance="high")
+    _, ledger_book = send(
+        client, importance="high", addressees=[{"role": "to", "user_id": other.id}]
+    )
+    signer = db.get(User, ledger_book["signer"]["user_id"])
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "test-signature.png").write_bytes(PNG)
+    signer.signature_path = "test-signature.png"
+    db.commit()
+    monkeypatch.setattr(user_signature_service, "get_settings", lambda: Settings(data_dir=root))
+    actor[0] = signer
+    signed = client.post(f"{BOOKS}/{ledger_book['id']}/sign")
+    assert signed.status_code == 200, signed.text
+    actor[0] = owner
     db.add(BookCategory(id="HR", prefix="HR", requires_approval=False))
     word = Book(
         category_id="HR",
@@ -476,7 +502,7 @@ def test_desk_rows_carry_importance_and_ledger_template(ledger, monkeypatch):
         )
     )
     db.commit()
-    for book_id in (ledger_book["id"], word.id):
+    for book_id in (word.id,):
         response = client.post(
             f"/api/v1/books/{book_id}/send", json={"user_ids": [other.id], "purpose": "info"}
         )

@@ -4045,6 +4045,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ledger/books/{book_id}/sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign Ledger Book */
+        post: operations["sign_ledger_book_api_v1_ledger_books__book_id__sign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Return Ledger Book */
+        post: operations["return_ledger_book_api_v1_ledger_books__book_id__return_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/resubmit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resubmit Ledger Book */
+        post: operations["resubmit_ledger_book_api_v1_ledger_books__book_id__resubmit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/signer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change Ledger Signer */
+        put: operations["change_ledger_signer_api_v1_ledger_books__book_id__signer_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/outlook-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Ledger Outlook Draft */
+        post: operations["create_ledger_outlook_draft_api_v1_ledger_books__book_id__outlook_draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/signature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ledger Signature */
+        get: operations["get_ledger_signature_api_v1_ledger_books__book_id__signature_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ledger": {
         parameters: {
             query?: never;
@@ -7854,6 +7956,8 @@ export interface components {
              * @enum {string}
              */
             access_scope: "full" | "assigned_revision";
+            /** Template */
+            template?: string | null;
         };
         /** ApprovalLogNeighborsResponse */
         ApprovalLogNeighborsResponse: {
@@ -12553,6 +12657,41 @@ export interface components {
             address: string;
         };
         /**
+         * LedgerAddresseeIn
+         * @description Exactly one id; service validation uses the ADDRESSEE_INVALID field error.
+         */
+        LedgerAddresseeIn: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "to" | "cc";
+            /** User Id */
+            user_id?: number | null;
+            /** Contact Id */
+            contact_id?: number | null;
+        };
+        /** LedgerAddresseeRead */
+        LedgerAddresseeRead: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "to" | "cc";
+            /** User Id */
+            user_id: number | null;
+            /** Contact Id */
+            contact_id: number | null;
+            /** Name */
+            name: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Email */
+            email: string | null;
+            /** G Number */
+            g_number: string | null;
+        };
+        /**
          * LedgerAttachmentMeta
          * @description Per-attachment metadata for the detail view.
          *
@@ -12606,6 +12745,23 @@ export interface components {
             body_html: string;
             /** Content Sha256 */
             content_sha256: string;
+            /** External */
+            external: boolean;
+            /** Addressees */
+            addressees: components["schemas"]["LedgerAddresseeRead"][];
+            signer: components["schemas"]["LedgerSignerRead"] | null;
+            /** Can Sign */
+            can_sign: boolean;
+            /** Can Return */
+            can_return: boolean;
+            /** Can Change Signer */
+            can_change_signer: boolean;
+            /** Can Resubmit */
+            can_resubmit: boolean;
+            /** Can Create Outlook Draft */
+            can_create_outlook_draft: boolean;
+            /** Return Note */
+            return_note: string | null;
         };
         /** LedgerContentUpdate */
         LedgerContentUpdate: {
@@ -12633,6 +12789,15 @@ export interface components {
              * @default
              */
             body_html: string;
+            /**
+             * External
+             * @default false
+             */
+            external: boolean;
+            /** Signer Manager Id */
+            signer_manager_id?: number | null;
+            /** Addressees */
+            addressees?: components["schemas"]["LedgerAddresseeIn"][];
         };
         /** LedgerDraftImageRead */
         LedgerDraftImageRead: {
@@ -12660,6 +12825,12 @@ export interface components {
             subjects: string[];
             /** Body Html */
             body_html: string;
+            /** External */
+            external: boolean;
+            /** Signer Manager Id */
+            signer_manager_id: number | null;
+            /** Addressees */
+            addressees: components["schemas"]["LedgerAddresseeIn"][];
             /**
              * Created At
              * Format: date-time
@@ -12686,6 +12857,12 @@ export interface components {
             subjects?: string[] | null;
             /** Body Html */
             body_html?: string | null;
+            /** External */
+            external?: boolean | null;
+            /** Signer Manager Id */
+            signer_manager_id?: number | null;
+            /** Addressees */
+            addressees?: components["schemas"]["LedgerAddresseeIn"][] | null;
         };
         /**
          * LedgerEntryCreate
@@ -12895,6 +13072,16 @@ export interface components {
             /** Offset */
             offset: number;
         };
+        /** LedgerOutlookDraftRead */
+        LedgerOutlookDraftRead: {
+            /** Id */
+            id: number;
+        };
+        /** LedgerReturnIn */
+        LedgerReturnIn: {
+            /** Note */
+            note: string;
+        };
         /** LedgerRevisionRead */
         LedgerRevisionRead: {
             /** Version Id */
@@ -12930,6 +13117,24 @@ export interface components {
             saved_at: string;
             /** Content Sha256 */
             content_sha256: string;
+        };
+        /** LedgerSignerIn */
+        LedgerSignerIn: {
+            /** Manager Id */
+            manager_id: number;
+        };
+        /** LedgerSignerRead */
+        LedgerSignerRead: {
+            /** Manager Id */
+            manager_id: number;
+            /** User Id */
+            user_id: number;
+            /** Name */
+            name: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Title */
+            title: string | null;
         };
         /** LegacyCandidateRead */
         LegacyCandidateRead: {
@@ -26438,6 +26643,214 @@ export interface operations {
             path: {
                 book_id: number;
                 name: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_ledger_book_api_v1_ledger_books__book_id__sign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    return_ledger_book_api_v1_ledger_books__book_id__return_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerReturnIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resubmit_ledger_book_api_v1_ledger_books__book_id__resubmit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_ledger_signer_api_v1_ledger_books__book_id__signer_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerSignerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_ledger_outlook_draft_api_v1_ledger_books__book_id__outlook_draft_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerOutlookDraftRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ledger_signature_api_v1_ledger_books__book_id__signature_get: {
+        parameters: {
+            query?: {
+                revision?: number | null;
+            };
+            header?: never;
+            path: {
+                book_id: number;
             };
             cookie?: {
                 gssg_session?: string | null;

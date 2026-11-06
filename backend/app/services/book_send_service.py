@@ -447,6 +447,7 @@ def send(
         raise AppError("FORBIDDEN", "Inmate reporters cannot send records.", http_status=403)
     book_service.require_full_book_access(db, user, book)
     book_service.require_ledger_revision_unlocked(db, book)
+    book_service.require_not_ledger_book(book)
     if book.grade in grades.RESTRICTED_GRADES and not _is_writer(user, book):
         raise AppError(
             "WRITER_ONLY_SEND",
@@ -454,6 +455,32 @@ def send(
             http_status=403,
         )
 
+    rows, skipped = prepare_delivery(db, user, book, user_ids=user_ids, purpose=purpose, note=note)
+    wanted = list(dict.fromkeys(user_ids))
+    db.commit()
+    _push_new(db, book, rows, user)
+    references = (
+        _send_references(db, user, book, wanted, purpose=purpose, note=note)
+        if include_references
+        else []
+    )
+    return _recipient_reads(db, user, rows), skipped, references
+
+
+def prepare_delivery(
+    db: Session,
+    user: User,
+    book: Book,
+    *,
+    user_ids: list[int],
+    purpose: SendPurpose,
+    note: str | None,
+) -> tuple[list[BookRecipient], list[BookSendSkipped]]:
+    """Stage normal inbox delivery and audit; caller commits before pushing.
+
+    Ledger signing uses this inside its signature transaction. Public sends
+    perform their own access and revision-lock checks before entering here.
+    """
     wanted = list(dict.fromkeys(user_ids))
     skipped = [BookSendSkipped(user_id=uid, reason="self") for uid in wanted if uid == user.id]
     targets = [uid for uid in wanted if uid != user.id]
@@ -515,14 +542,8 @@ def send(
     db.add_all(rows)
     if rows:
         _audit(db, user, "book_sent", book, {"user_ids": new_ids, "purpose": purpose})
-    db.commit()
-    _push_new(db, book, rows, user)
-    references = (
-        _send_references(db, user, book, wanted, purpose=purpose, note=note)
-        if include_references
-        else []
-    )
-    return _recipient_reads(db, user, rows), skipped, references
+    db.flush()
+    return rows, skipped
 
 
 def _send_references(

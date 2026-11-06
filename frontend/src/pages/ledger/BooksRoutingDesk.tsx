@@ -614,8 +614,8 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const userId = useAuth().user?.id
-  const canSend = book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (userId !== undefined && book.created_by_user_id === userId))
   const isLedgerBook = book.current_template_id === 'Ledger Book'
+  const canSend = !isLedgerBook && book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (userId !== undefined && book.created_by_user_id === userId))
   // The shown Revision (`version_id`) stays in the URL; empty = the newest I may read.
   const [rawRev, setRev] = useSearchParam('rev')
   const revision = isLedgerBook && /^\d+$/.test(rawRev) ? Number(rawRev) : undefined

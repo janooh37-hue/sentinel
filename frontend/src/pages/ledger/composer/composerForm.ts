@@ -11,6 +11,9 @@ export const composerSchema = z.object({
   importance: z.enum(['medium', 'high']).nullable(),
   subjects: z.array(z.string()).min(1).max(MAX_SUBJECT_LINES),
   body_html: z.string(),
+  external: z.boolean(),
+  signer_manager_id: z.number().int().nullable(),
+  addressees: z.array(z.object({ role: z.enum(['to', 'cc']), user_id: z.number().int().optional().nullable(), contact_id: z.number().int().optional().nullable() })).max(50),
 })
 
 export type ComposerValues = z.infer<typeof composerSchema>
@@ -23,6 +26,9 @@ export function valuesFromDraft(draft: LedgerDraftRead): ComposerValues {
     importance: draft.importance,
     subjects: draft.subjects.length > 0 ? draft.subjects : [''],
     body_html: draft.body_html,
+    external: draft.external,
+    signer_manager_id: draft.signer_manager_id,
+    addressees: draft.addressees,
   }
 }
 
@@ -36,5 +42,8 @@ export function changedFields(saved: ComposerValues, next: ComposerValues): Ledg
     patch.subjects = next.subjects
   }
   if (next.body_html !== saved.body_html) patch.body_html = next.body_html
+  if (next.external !== saved.external) patch.external = next.external
+  if (next.signer_manager_id !== saved.signer_manager_id) patch.signer_manager_id = next.signer_manager_id
+  if (JSON.stringify(next.addressees) !== JSON.stringify(saved.addressees)) patch.addressees = next.addressees
   return patch
 }

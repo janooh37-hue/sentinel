@@ -1667,7 +1667,7 @@ def _build_book_response(
         item.can_sign = can_sign
         item.can_review = can_review
         item.your_step_kind = your_step_kind
-        item.can_send = user.role != INMATE_REPORTER_ROLE
+        item.can_send = user.role != INMATE_REPORTER_ROLE and not book_service.is_ledger_book(row)
         try:
             book_service.require_full_book_access(db, user, row, write=True)
         except AppError:

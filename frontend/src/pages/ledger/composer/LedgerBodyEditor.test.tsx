@@ -67,10 +67,13 @@ it('initializes once after new-draft navigation and preserves the editor through
   const draft: LedgerDraftRead = {
     id: 12, draft_number: '000012', tab: null, grade: 'unclassified', importance: null,
     subjects: ['Subject'], body_html: '', created_at: '2026-10-28T08:00:00Z', updated_at: '2026-10-28T08:00:00Z',
+    external: false, signer_manager_id: null, addressees: [],
   }
   const create = vi.spyOn(api, 'createLedgerDraft').mockResolvedValue(draft)
   vi.spyOn(api, 'getLedgerDraft').mockResolvedValue(draft)
   vi.spyOn(api, 'listBookClassifications').mockResolvedValue({ items: [] })
+  vi.spyOn(api, 'listManagers').mockResolvedValue([])
+  vi.spyOn(api, 'listRecipientCandidates').mockResolvedValue([])
   const update = vi.spyOn(api, 'updateLedgerDraft').mockResolvedValue(draft)
   const view = render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>

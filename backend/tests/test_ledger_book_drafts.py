@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user
 from app.config import Settings
-from app.db.models import BookDraft, UserPermission
+from app.db.models import BookDraft, Manager, UserPermission
 from app.db.session import get_db
 from app.main import create_app
 from app.services import ledger_book_service
@@ -165,11 +165,20 @@ def test_invalid_oversized_and_unknown_image_names(drafts):
 
 @pytest.mark.parametrize("finish", ["delete", "save-and-send"])
 def test_draft_ids_are_never_reused(drafts, finish):
-    client, db, _, owner, _, _ = drafts
+    client, db, _, owner, other, _ = drafts
     owner.role = "manager"
+    manager = Manager(name_en="Signing manager", user_id=other.id)
+    db.add(manager)
     db.commit()
     first = client.post(
-        BASE, json={"tab": 2, "subjects": ["One"], "body_html": "<p>Body</p>"}
+        BASE,
+        json={
+            "tab": 2,
+            "subjects": ["One"],
+            "body_html": "<p>Body</p>",
+            "signer_manager_id": manager.id,
+            "addressees": [{"role": "to", "user_id": other.id}],
+        },
     ).json()["id"]
     if finish == "delete":
         assert client.delete(f"{BASE}/{first}").status_code == 204

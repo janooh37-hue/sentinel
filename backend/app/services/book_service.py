@@ -3175,6 +3175,9 @@ def _build_worklist_item(
         assignment_version_no=row.assignment_version_no,
         assigned_signer_user_id=signer_step.assignee_user_id if signer_step else None,
         access_scope=row.access_scope,
+        template="ledger"
+        if version.template_id == LEDGER_BOOK_TEMPLATE_ID
+        else version.template_id,
     )
 
 

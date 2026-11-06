@@ -20,7 +20,7 @@ export interface DraftAutosave {
   flush: (values: ComposerValues) => Promise<boolean>
 }
 
-export function useDraftAutosave(draftId: number, values: ComposerValues, initial: ComposerValues, ms: number): DraftAutosave {
+export function useDraftAutosave(draftId: number, values: ComposerValues, initial: ComposerValues, ms: number, onError?: (err: unknown) => boolean): DraftAutosave {
   const qc = useQueryClient()
   const saved = useRef(initial)
   const [state, setState] = useState<SaveState>('idle')
@@ -32,7 +32,8 @@ export function useDraftAutosave(draftId: number, values: ComposerValues, initia
     setState('saving')
     try {
       await api.updateLedgerDraft(draftId, patch)
-    } catch {
+    } catch (err) {
+      onError?.(err)
       setState('failed')
       return false
     }
@@ -41,7 +42,7 @@ export function useDraftAutosave(draftId: number, values: ComposerValues, initia
     setSavedCount((n) => n + 1)
     void qc.invalidateQueries({ queryKey: LEDGER_DRAFTS_KEY, exact: true })
     return true
-  }, [draftId, qc])
+  }, [draftId, qc, onError])
 
   useEffect(() => {
     const timer = setTimeout(() => void flush(values), ms)

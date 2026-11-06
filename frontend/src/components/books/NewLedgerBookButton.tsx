@@ -21,7 +21,7 @@ export function NewLedgerBookButton({ className, variant = 'default', size }: {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const create = useMutation({
-    mutationFn: () => api.createLedgerDraft({ grade: 'unclassified', body_html: '' }),
+    mutationFn: () => api.createLedgerDraft({ grade: 'unclassified', body_html: '', external: false }),
     onSuccess: (draft) => {
       void qc.invalidateQueries({ queryKey: LEDGER_DRAFTS_KEY })
       navigate(`/ledger/compose/${draft.id}`)

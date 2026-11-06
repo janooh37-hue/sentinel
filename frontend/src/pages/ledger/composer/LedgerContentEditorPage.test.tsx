@@ -25,6 +25,7 @@ const BOOK: LedgerBookRead = {
   paper_date: '28-10-2026', approval_state: 'none', created_by_user_id: 1, voided: false,
   revisions: [rev(1, true), rev(2, false)], selected_version_id: 72,
   subjects: ['Leave plan'], body_html: '<p>Hello</p>', content_sha256: 'abc',
+  external: false, addressees: [], signer: null, can_sign: false, can_return: false, can_change_signer: false, can_resubmit: false, can_create_outlook_draft: false, return_note: null,
 }
 
 function Where(): React.JSX.Element {

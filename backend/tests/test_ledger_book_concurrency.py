@@ -20,10 +20,11 @@ from app.db.models import (
     BookVersion,
     ClassifiedRefSequence,
     LedgerBookSave,
+    Manager,
     User,
 )
 from app.db.session import attach_sqlite_pragmas
-from app.schemas.ledger_book import LedgerDraftCreate, LedgerDraftUpdate
+from app.schemas.ledger_book import LedgerAddresseeIn, LedgerDraftCreate, LedgerDraftUpdate
 from app.services import ledger_book_service, perm_service
 from tests.conftest import make_user
 
@@ -49,6 +50,17 @@ def ledger_sessions(monkeypatch, tmp_path):
         engine.dispose()
 
 
+def signer_fields(db):
+    user = make_user(db, role="manager", email="signing-manager@test.ae")
+    manager = Manager(name_en="Signing manager", user_id=user.id)
+    db.add(manager)
+    db.commit()
+    return {
+        "signer_manager_id": manager.id,
+        "addressees": [LedgerAddresseeIn(role="to", user_id=user.id)],
+    }
+
+
 def test_concurrent_save_and_send_allocates_contiguous_unique_serials(ledger_sessions):
     sessions, _settings = ledger_sessions
     count = 8
@@ -56,12 +68,14 @@ def test_concurrent_save_and_send_allocates_contiguous_unique_serials(ledger_ses
     with sessions() as db:
         writer = make_user(db, role="manager", email="concurrent-writer@test.ae")
         writer_id = writer.id
+        signing = signer_fields(db)
         draft_ids = [
             ledger_book_service.create_draft(
                 db,
                 writer,
                 LedgerDraftCreate(
                     tab=tab,
+                    **signing,
                     subjects=[f"Concurrent subject {index}"],
                     body_html=f"<p>Concurrent body {index}</p>",
                 ),
@@ -117,7 +131,12 @@ def test_failed_save_and_send_rolls_back_serial_rows_and_copied_images(
         draft = ledger_book_service.create_draft(
             db,
             writer,
-            LedgerDraftCreate(tab=tab, subjects=["Keep this draft"], body_html="<p>Keep body</p>"),
+            LedgerDraftCreate(
+                tab=tab,
+                subjects=["Keep this draft"],
+                body_html="<p>Keep body</p>",
+                **signer_fields(db),
+            ),
         )
         draft_id = draft.id
         image = ledger_book_service.add_draft_image(db, writer, draft_id, image_bytes)
@@ -191,7 +210,11 @@ def test_copy_failing_mid_file_leaves_no_book_images(ledger_sessions, monkeypatc
     with sessions() as db:
         writer = make_user(db, role="manager", email="partial-copy@test.ae")
         draft = ledger_book_service.create_draft(
-            db, writer, LedgerDraftCreate(tab=4, subjects=["Copy"], body_html="<p>Body</p>")
+            db,
+            writer,
+            LedgerDraftCreate(
+                tab=4, subjects=["Copy"], body_html="<p>Body</p>", **signer_fields(db)
+            ),
         )
         for _ in range(2):
             ledger_book_service.add_draft_image(db, writer, draft.id, image_bytes)

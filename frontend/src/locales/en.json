@@ -2809,6 +2809,25 @@
     }
   },
   "ledgerBook": {
+    "actions": {
+      "sign": "Sign",
+      "signConfirmTitle": "Sign this Ledger Book?",
+      "signConfirmDescription": "Your saved signature will be applied and this revision will be locked.",
+      "signed": "Book signed.",
+      "return": "Return",
+      "returnTitle": "Return to writer",
+      "returnNote": "Return note",
+      "returnNoteRequired": "Enter a return note.",
+      "returned": "Book returned to the writer.",
+      "changeSigner": "Change signer",
+      "changeSignerTitle": "Change signing manager",
+      "signerRequired": "Choose a signing manager.",
+      "signerChanged": "Signing manager changed.",
+      "resubmit": "Resubmit for signature",
+      "resubmitted": "Book resubmitted for signature.",
+      "createOutlookDraft": "Create Outlook draft",
+      "outlookDraftCreated": "Draft created. Open Outlook Drafts to review and send it."
+    },
     "composer": {
       "newButton": "New Ledger Book",
       "creating": "Creating…",
@@ -2819,10 +2838,26 @@
       "loadFailed": "This could not be loaded.",
       "retry": "Retry",
       "fields": {
+        "kind": "Destination",
+        "internal": "Internal",
+        "external": "External",
+        "to": "To",
+        "cc": "CC",
+        "signer": "Signing manager",
+        "signerPlaceholder": "Choose a linked manager",
+        "addRecipient": "Add recipient",
+        "selected": "{{role}} recipients",
+        "removeRecipient": "Remove {{name}} from {{role}}",
         "tab": "Tab",
         "tabPlaceholder": "Choose a tab",
         "tabOption": "{{tab}} — {{name}}",
         "gradeBanner": "{{label}}: {{grade}}"
+      },
+      "errors": {
+        "toRequired": "Choose at least one To recipient.",
+        "signerRequired": "Choose a signing manager.",
+        "addresseeInvalid": "One or more recipients are unavailable or not cleared for this grade. Choose the recipients again.",
+        "signerInvalid": "Choose an active manager linked to a user account."
       },
       "subjects": {
         "legend": "Subject lines",
@@ -2851,8 +2886,8 @@
       "send": {
         "button": "Save & Send",
         "confirmTitle": "Save & Send this Ledger Book?",
-        "confirmBody": "A reference number is allocated now. After that, the book can only change through a correction.",
-        "sent": "Ledger Book {{ref}} issued. Use Send on the desk to deliver it."
+        "confirmBody": "A reference number is allocated now. The manager signs first, then To and CC receive the book.",
+        "sent": "Ledger Book {{ref}} sent to the manager for signature."
       },
       "delete": {
         "button": "Delete draft",

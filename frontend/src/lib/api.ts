@@ -862,6 +862,7 @@ export type LedgerDraftCreate = components['schemas']['LedgerDraftCreate']
 export type LedgerDraftUpdate = components['schemas']['LedgerDraftUpdate']
 export type LedgerDraftImageRead = components['schemas']['LedgerDraftImageRead']
 export type LedgerBookRead = components['schemas']['LedgerBookRead']
+export type LedgerAddresseeIn = components['schemas']['LedgerAddresseeIn']
 export type LedgerRevisionRead = components['schemas']['LedgerRevisionRead']
 export type LedgerContentUpdate = components['schemas']['LedgerContentUpdate']
 export type BookDeriveRequest = components['schemas']['BookDeriveRequest']
@@ -1087,6 +1088,11 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   DRAFT_TAB_REQUIRED: 'errors.ledger.draftTabRequired',
   DRAFT_SUBJECT_REQUIRED: 'errors.ledger.draftSubjectRequired',
   DRAFT_BODY_REQUIRED: 'errors.ledger.draftBodyRequired',
+  ADDRESSEE_INVALID: 'ledgerBook.composer.errors.addresseeInvalid',
+  SIGNER_INVALID: 'ledgerBook.composer.errors.signerInvalid',
+  DRAFT_TO_REQUIRED: 'ledgerBook.composer.errors.toRequired',
+  DRAFT_SIGNER_REQUIRED: 'ledgerBook.composer.errors.signerRequired',
+  NO_SIGNATURE: 'books.approval.noSignatureDescription',
   IMAGE_EMPTY: 'errors.ledger.imageEmpty',
   IMAGE_TOO_LARGE: 'errors.ledger.imageTooLarge',
   IMAGE_TYPE_UNSUPPORTED: 'errors.ledger.imageTypeUnsupported',
@@ -2170,6 +2176,11 @@ export const api = {
   /** Opens a new correction Revision under the same reference (latest must be signed). */
   startLedgerCorrection: (id: number) =>
     request<LedgerBookRead>('POST', `/ledger/books/${id}/corrections`),
+  signLedgerBook: (id: number) => request<LedgerBookRead>('POST', `/ledger/books/${id}/sign`),
+  returnLedgerBook: (id: number, note: string) => request<LedgerBookRead>('POST', `/ledger/books/${id}/return`, { note }),
+  resubmitLedgerBook: (id: number) => request<LedgerBookRead>('POST', `/ledger/books/${id}/resubmit`),
+  changeLedgerSigner: (id: number, managerId: number) => request<LedgerBookRead>('PUT', `/ledger/books/${id}/signer`, { manager_id: managerId }),
+  createLedgerOutlookDraft: (id: number) => request<components['schemas']['LedgerOutlookDraftRead']>('POST', `/ledger/books/${id}/outlook-draft`),
   /** POST /books/word-sessions — create a draft book + open-in-Word session.
    *  Returns WordSessionRead with a word_url for WebDAV/Word Direct Access. */
   createWordBook: (body: components['schemas']['WordBookCreate']) =>

@@ -1,6 +1,6 @@
 /**
  * ImportanceMark — how much a record matters (high / medium), as a bare glyph.
- * High is red with a slow pulse (steady under reduced motion); medium is a
+ * High blinks red once per second (steady under reduced motion); medium is a
  * static caution glyph of a different shape, so shape alone tells them apart.
  *
  * Inside a row `<button>` it must not be interactive (nested interactive

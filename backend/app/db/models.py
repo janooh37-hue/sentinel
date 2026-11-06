@@ -286,6 +286,9 @@ class Book(Base):
     # routed approvals, 2026-06-23). Submit-for-approval follows its `user_id`
     # link to auto-route. FK omitted (SQLite batch ALTER) — integrity app-side.
     doc_manager_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    external: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     attachment_paths: Mapped[list[str]] = mapped_column(
         JSON, nullable=False, default=list, server_default="[]"
     )
@@ -463,6 +466,13 @@ class BookDraft(Base):
         String(16), nullable=False, default="unclassified", server_default="unclassified"
     )
     importance: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    external: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    signer_manager_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    addressees: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
     subjects: Mapped[list[str]] = mapped_column(
         JSON, nullable=False, default=list, server_default="[]"
     )
@@ -477,6 +487,27 @@ class BookDraft(Base):
         CheckConstraint(grades.IMPORTANCE_CHECK, name="ck_book_drafts_importance"),
         # Never reuse a deleted draft's id: draft numbers and image URLs carry it.
         {"sqlite_autoincrement": True},
+    )
+
+
+class BookAddressee(Base):
+    """Ordered issue-time names and destinations, not access grants."""
+
+    __tablename__ = "book_addressees"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(2), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    contact_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    name_ar: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    name_en: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("role IN ('to', 'cc')", name="ck_book_addressees_role"),
+        Index("ix_book_addressees_book_id", "book_id"),
     )
 
 

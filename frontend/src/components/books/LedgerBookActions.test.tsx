@@ -1,12 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
 
-import { api, type LedgerBookRead, type LedgerRevisionRead } from '@/lib/api'
+import { api, ApiError, type LedgerBookRead, type LedgerRevisionRead } from '@/lib/api'
+import { toast } from '@/lib/toast'
+import i18n from '@/lib/i18n'
 
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'employee' } }) }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { LedgerBookActions } from './LedgerBookActions'
 
@@ -18,7 +21,9 @@ const rev = (n: number, locked: boolean): LedgerRevisionRead => ({
 const book = (revisions: LedgerRevisionRead[], over: Partial<LedgerBookRead> = {}): LedgerBookRead => ({
   id: 40, ref_number: '1/2/7', grade: 'unclassified', importance: null, tab: 2, classification_code: '2/1',
   paper_date: '28-10-2026', approval_state: 'none', created_by_user_id: 1, voided: false, revisions,
-  selected_version_id: revisions.at(-1)!.version_id, subjects: ['Leave plan'], body_html: '<p>x</p>', content_sha256: 'abc', ...over,
+  selected_version_id: revisions.at(-1)!.version_id, subjects: ['Leave plan'], body_html: '<p>x</p>', content_sha256: 'abc',
+  external: false, addressees: [], signer: null, can_sign: false, can_return: false, can_change_signer: false,
+  can_resubmit: false, can_create_outlook_draft: false, return_note: null, ...over,
 })
 
 function Where(): React.JSX.Element {
@@ -35,7 +40,7 @@ function mount(onRevisionChange = vi.fn()): void {
   )
 }
 
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+afterEach(async () => { cleanup(); vi.restoreAllMocks(); vi.clearAllMocks(); await i18n.changeLanguage('en') })
 
 it('T-C8 Start correction on a signed Revision opens the content editor', async () => {
   vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, true)]))
@@ -66,4 +71,135 @@ it('T-C8 only the writer gets edit and correction actions', async () => {
   expect(await screen.findByRole('button', { name: 'Print' })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Start correction' })).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: 'Edit content' })).not.toBeInTheDocument()
+})
+
+it('T-F3 manager confirms Sign on the Ledger API, never the generic book API', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, true)]))
+    .mockResolvedValueOnce(book([rev(1, false)], { created_by_user_id: 9, can_sign: true }))
+  const genericSign = vi.spyOn(api, 'signBook')
+  mount()
+  await userEvent.click(await screen.findByRole('button', { name: 'Sign' }))
+  const sign = vi.spyOn(api, 'signLedgerBook').mockResolvedValue(book([rev(1, true)]))
+  expect(sign).not.toHaveBeenCalled()
+  const confirm = screen.getByRole('dialog', { name: 'Sign this Ledger Book?' })
+  await userEvent.click(within(confirm).getByRole('button', { name: 'Sign' }))
+  await waitFor(() => expect(sign).toHaveBeenCalledWith(40))
+  expect(genericSign).not.toHaveBeenCalled()
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Sign' })).not.toBeInTheDocument())
+})
+
+it('T-F3 manager Return requires a nonblank note and sends it to the Ledger API', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, false)], { can_return: true, created_by_user_id: 9 }))
+  const sendBack = vi.spyOn(api, 'returnLedgerBook').mockResolvedValue(book([rev(1, false)], { return_note: 'Fix the addressees.' }))
+  mount()
+  await userEvent.click(await screen.findByRole('button', { name: 'Return' }))
+  const dialog = screen.getByRole('dialog', { name: 'Return to writer' })
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Return' }))
+  expect(within(dialog).getByRole('alert')).toHaveTextContent('Enter a return note.')
+  expect(sendBack).not.toHaveBeenCalled()
+  await userEvent.type(within(dialog).getByRole('textbox', { name: 'Return note' }), '   ')
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Return' }))
+  expect(sendBack).not.toHaveBeenCalled()
+  await userEvent.clear(within(dialog).getByRole('textbox', { name: 'Return note' }))
+  await userEvent.type(within(dialog).getByRole('textbox', { name: 'Return note' }), 'Fix the addressees.')
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Return' }))
+  await waitFor(() => expect(sendBack).toHaveBeenCalledWith(40, 'Fix the addressees.'))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+})
+
+it('T-F3 writer changes the signer using linked active managers before signing', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, false)], { can_change_signer: true }))
+  vi.spyOn(api, 'listManagers').mockResolvedValue([
+    { id: 3, name_en: 'New manager', name_ar: 'المدير الجديد', user_id: 10, active: true, title: 'Director', has_signature: true },
+    { id: 4, name_en: 'Unlinked', name_ar: '', user_id: null, active: true, title: '', has_signature: false },
+    { id: 5, name_en: 'Inactive', name_ar: '', user_id: 11, active: false, title: '', has_signature: false },
+  ])
+  const change = vi.spyOn(api, 'changeLedgerSigner').mockResolvedValue(book([rev(1, false)]))
+  mount()
+  await userEvent.click(await screen.findByRole('button', { name: 'Change signer' }))
+  const dialog = screen.getByRole('dialog', { name: 'Change signing manager' })
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+  expect(within(dialog).getByRole('alert')).toHaveTextContent('Choose a signing manager.')
+  expect(change).not.toHaveBeenCalled()
+  const picker = within(dialog).getByRole('combobox', { name: 'Signing manager' })
+  await screen.findByRole('option', { name: 'New manager · Director' })
+  expect(within(dialog).queryByRole('option', { name: 'Unlinked' })).not.toBeInTheDocument()
+  expect(within(dialog).queryByRole('option', { name: 'Inactive' })).not.toBeInTheDocument()
+  await userEvent.selectOptions(picker, '3')
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(change).toHaveBeenCalledWith(40, 3))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+})
+
+it('T-F3 writer sees the return note and resubmits the same book for signature', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, false)], {
+    approval_state: 'returned', return_note: 'Correct the subject.', can_resubmit: true,
+  }))
+  const resubmit = vi.spyOn(api, 'resubmitLedgerBook').mockResolvedValue(book([rev(1, false)], { approval_state: 'pending' }))
+  mount()
+  expect(await screen.findByText('Correct the subject.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Edit content' })).toHaveAttribute('href', '/ledger/books/40/edit')
+  await userEvent.click(screen.getByRole('button', { name: 'Resubmit for signature' }))
+  await waitFor(() => expect(resubmit).toHaveBeenCalledWith(40))
+})
+
+it('T-F3 writer creates an Outlook draft from signed external paper and is directed to Outlook Drafts', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, true)], {
+    external: true, can_create_outlook_draft: true,
+  }))
+  const draft = vi.spyOn(api, 'createLedgerOutlookDraft').mockResolvedValue({ id: 40 })
+  mount()
+  await userEvent.click(await screen.findByRole('button', { name: 'Create Outlook draft' }))
+  await waitFor(() => expect(draft).toHaveBeenCalledWith(40))
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Draft created. Open Outlook Drafts to review and send it.'))
+})
+
+it.each([
+  { locked: false, external: false, approval_state: 'pending' },
+  { locked: false, external: true, approval_state: 'returned' },
+  { locked: true, external: true, approval_state: 'approved' },
+])('T-F3 denied flags hide all signing/delivery actions despite record state $approval_state', async ({ locked, ...state }) => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, locked)], state))
+  mount()
+  expect(await screen.findByRole('button', { name: 'Print' })).toBeInTheDocument()
+  for (const name of ['Sign', 'Return', 'Change signer', 'Resubmit for signature', 'Create Outlook draft']) {
+    expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+  }
+})
+
+it.each([
+  ['en', 'Sign', 'Add your profile signature in Settings or on your employee profile before approving.'],
+  ['ar', 'توقيع', 'أضف توقيع ملفك الشخصي في الإعدادات أو في ملف الموظف قبل الموافقة.'],
+])('T-F3 sign errors use the bilingual API error message (%s)', async (language, signLabel, message) => {
+  await i18n.changeLanguage(language)
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, false)], { can_sign: true }))
+  vi.spyOn(api, 'signLedgerBook').mockRejectedValue(new ApiError(422, 'NO_SIGNATURE', 'No signature'))
+  mount()
+  await userEvent.click(await screen.findByRole('button', { name: signLabel }))
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: signLabel }))
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith(message))
+  expect(toast.success).not.toHaveBeenCalled()
+})
+
+it('T-F3 cancelling Sign never calls either signing API', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, false)], { can_sign: true }))
+  const sign = vi.spyOn(api, 'signLedgerBook')
+  const genericSign = vi.spyOn(api, 'signBook')
+  mount()
+  await userEvent.click(await screen.findByRole('button', { name: 'Sign' }))
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
+  expect(sign).not.toHaveBeenCalled()
+  expect(genericSign).not.toHaveBeenCalled()
+})
+
+it('preserves Print of the selected revision and opens the native print dialog on load', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, false), rev(2, false)], { selected_version_id: 71 }))
+  const print = vi.fn()
+  const printWindow = new EventTarget()
+  const open = vi.spyOn(window, 'open').mockReturnValue(Object.assign(printWindow, { print }) as unknown as Window)
+  mount()
+  await userEvent.click(await screen.findByRole('button', { name: 'Print' }))
+  expect(open).toHaveBeenCalledWith('/api/v1/ledger/books/40/paper?revision=71', 'ledger-book-40')
+  printWindow.dispatchEvent(new Event('load'))
+  expect(print).toHaveBeenCalledTimes(1)
 })

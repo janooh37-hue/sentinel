@@ -85,8 +85,16 @@ def _kill_tree(proc: subprocess.Popen[bytes]) -> None:
 
 
 def print_sheet(sheet_html: str, *, lang: str) -> bytes:
-    """The sheet printed to PDF bytes. 503 when no browser is installed or the
-    print fails."""
+    """Sanitize and print an on-screen sheet."""
+    return print_document(document(sheet_html, lang=lang))
+
+
+def print_document(html: str) -> bytes:
+    """Print a server-built standalone document, using an isolated browser.
+
+    Callers supply safe HTML and asset URLs/CSP. Untrusted posted sheets must
+    go through ``print_sheet`` instead.
+    """
     browser = find_browser()
     if browser is None:
         raise AppError(
@@ -97,7 +105,7 @@ def print_sheet(sheet_html: str, *, lang: str) -> bytes:
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         work = Path(tmp)
         page = work / "sheet.html"
-        page.write_text(document(sheet_html, lang=lang), encoding="utf-8")
+        page.write_text(html, encoding="utf-8")
         out = work / "sheet.pdf"
         proc = subprocess.Popen(
             [

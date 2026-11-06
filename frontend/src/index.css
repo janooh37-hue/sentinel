@@ -1797,14 +1797,14 @@ body {
   .modal-centered[data-state] { animation: none !important; }
 }
 
-/* High importance (ImportanceMark): a slow opacity pulse, 2s per cycle, so it
-   draws the eye without flashing. Reduced motion stops it at steady full red. */
+/* High importance: one clear on/off blink per second (below three flashes/s).
+   Reduced motion keeps the mark steady at full red. */
 @keyframes gssg-importance-pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
+  50% { opacity: 0; }
 }
 .gssg-importance-pulse {
-  animation: gssg-importance-pulse 2s ease-in-out infinite;
+  animation: gssg-importance-pulse 1s steps(1, end) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

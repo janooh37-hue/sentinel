@@ -4,9 +4,11 @@
 script-free HTML document. The letterhead mirrors the General Book template
 (``backend/templates/GSSG-GS_300-003_General_Book.docx``): the first-page
 header (``word/header3.xml``) carries the logo, the reference / date / office
-block and the decorative Code 39 barcode; every page repeats the red rule of
-the continuation header (``word/header2.xml``) and the contact footer with the
-submitter G-number (``word/footer1.xml``).
+block and the decorative Code 39 barcode (bars only); every page repeats the
+red rule of the continuation header (``word/header2.xml``), the mirrored red
+rule and contact footer with the submitter G-number (``word/footer1.xml``).
+The body follows ``word/document.xml``: one «السيد \\ … المحترم» line per To,
+the subject on the left, the signing manager's block, then «نسخة إلى:».
 
 Repetition on every printed page uses ``position: fixed`` (the rule, footer,
 Grade mark and watermarks) and a spacer ``<thead>``/``<tfoot>`` that browsers
@@ -48,8 +50,15 @@ class PaperContext:
     paper_date: date | None  # None for a Draft
     draft_number: str | None  # "000123" for a Draft, else None
     submitter_g_number: str | None
-    viewer_name: str | None  # used for the Secret-and-above watermark
+    viewer_g_number: str | None  # tiled across the sheet for Secret and above
     asset_base: str  # URL prefix where the asset router is mounted
+    # Printed addressees, in order: "السيد \ {name} المحترم" per To, "نسخة إلى:" CC.
+    to_names: tuple[str, ...] = ()
+    cc_names: tuple[str, ...] = ()
+    # The signing manager; their signature image only once the Revision is signed.
+    signer_name: str | None = None
+    signer_title: str | None = None
+    signature_src: str | None = None  # same-origin URL, or a data: URI for PDF
 
 
 def _e(text: str) -> str:
@@ -76,12 +85,12 @@ body {
 @media screen {
   body { inline-size: 210mm; margin-inline: auto; box-shadow: 0 0 4mm rgb(0 0 0 / 0.2); }
   /* On screen, pin the per-page furniture to the sheet, not the window. */
-  .paper > .rule, .paper > .mark, .paper > .footer, .paper > .watermark { position: absolute; }
+  .paper > .rule, .paper > .foot-rule, .paper > .mark, .paper > .footer, .paper > .watermark { position: absolute; }
 }
 .paper { position: relative; inline-size: 210mm; min-block-size: 297mm; }
 .frame td { padding-block: 0; padding-inline: 13.2mm 14.3mm; vertical-align: top; }
 .head-space { block-size: 43mm; }
-.foot-space { block-size: 24mm; }
+.foot-space { block-size: 36mm; }
 .first-head {
   position: absolute; inset-block-start: 0; inset-inline: 0;
   block-size: 41mm; direction: ltr;
@@ -99,10 +108,6 @@ body {
   margin-block-start: 1mm; direction: ltr; text-align: right;
   font-family: "GSSG Barcode 39"; font-size: 8pt; line-height: 1; white-space: nowrap;
 }
-.barcode-text {
-  direction: ltr; text-align: right; font-family: monospace; font-size: 6pt;
-  line-height: 1.2; white-space: nowrap;
-}
 .rule {
   position: fixed; top: 35mm; left: 25.1mm; width: 184.5mm; height: 5.5mm;
 }
@@ -112,12 +117,22 @@ body {
 .rule .block {
   position: absolute; left: 65%; right: 0; top: 0; bottom: 0; background: #b92027;
 }
+/* footer1.xml: the same red, mirrored, above the contacts on every page. */
+.foot-rule {
+  position: fixed; bottom: 27.5mm; left: 0; width: 183.6mm; height: 5.5mm;
+}
+.foot-rule .block {
+  position: absolute; left: 0; width: 34.6%; top: 0; bottom: 0; background: #b92027;
+}
+.foot-rule .line {
+  position: absolute; left: 34.6%; right: 0; top: 48.3%; height: 0.15mm; background: #b92027;
+}
 .mark {
   position: fixed; top: 3.5mm; left: 0; right: 0; text-align: center;
   font-size: 9pt; text-decoration: underline; z-index: 3;
 }
 .footer {
-  position: fixed; bottom: 1.5mm; left: 13.2mm; right: 14.3mm;
+  position: fixed; bottom: 14mm; left: 13.2mm; right: 14.3mm;
   direction: ltr; color: #a09f9f; font-family: "Gill Sans MT", "Gill Sans", sans-serif;
   font-size: 8pt; line-height: 1.3;
 }
@@ -125,7 +140,7 @@ body {
 .contact { display: flex; align-items: center; gap: 2mm; }
 .contact img { width: 7mm; height: 7mm; }
 .contact span { display: block; white-space: nowrap; }
-.submitter { margin-block-start: 1mm; text-align: right; font-family: Helvetica, Arial, sans-serif; }
+.submitter { margin-block-end: 1mm; text-align: right; font-family: Helvetica, Arial, sans-serif; }
 .watermark {
   position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-35deg);
   text-align: center; white-space: nowrap; pointer-events: none; z-index: 2;
@@ -133,9 +148,31 @@ body {
 }
 .watermark .draft { font-size: 64pt; font-weight: bold; font-family: "GSSG Naskh", sans-serif; }
 .watermark .draft-number { font-size: 28pt; direction: ltr; unicode-bidi: isolate; }
-.watermark .viewer { font-size: 34pt; }
-.subjects { margin: 0 0 4mm; padding: 0; list-style: none; font-weight: bold; }
-.subjects li { margin: 0; }
+.tiles { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 2; }
+.tiles-grid {
+  position: absolute; inset: -30%; transform: rotate(-35deg);
+  display: grid; grid-template-columns: repeat(5, 1fr); align-content: space-evenly;
+  justify-items: center; row-gap: 14mm;
+  color: rgb(0 0 0 / 0.10); font-family: Helvetica, Arial, sans-serif; font-size: 16pt;
+  direction: ltr; white-space: nowrap;
+}
+/* General Book: subject on the inline end (left), bold, underlined, 16pt. */
+.addressees { margin: 0 0 3mm; font-weight: bold; font-size: 14pt; }
+.addressees p { margin: 0; }
+.subjects {
+  display: flex; justify-content: flex-end; gap: 1.5mm; margin: 0 0 4mm;
+  font-weight: bold; font-size: 16pt; text-decoration: underline;
+}
+.subjects .lines { display: flex; flex-direction: column; }
+/* Signature block and copies sit on the inline end (left), like the General Book. */
+.signoff {
+  inline-size: 70mm; margin-block-start: 8mm; margin-inline-start: auto;
+  text-align: center; font-weight: bold; font-size: 14pt; break-inside: avoid;
+}
+.signoff p { margin: 0; }
+.signoff .signature { display: block; margin-inline: auto; max-inline-size: 45mm; max-block-size: 22mm; }
+.copies { display: flex; justify-content: flex-end; gap: 1.5mm; margin-block-start: 4mm; font-size: 10pt; }
+.copies .lines { display: flex; flex-direction: column; }
 .body { overflow-wrap: anywhere; }
 .body img { max-inline-size: 100%; }
 .body table { border-collapse: collapse; }
@@ -169,21 +206,33 @@ def _office_block(ctx: PaperContext) -> str:
         assert ctx.ref is not None and ctx.paper_date is not None
         payload = _e(barcode_payload(ctx.ref, ctx.paper_date))
         lines.append(f'<div class="barcode" aria-hidden="true">{payload}</div>')
-        lines.append(f'<div class="barcode-text">{payload}</div>')
     return '<div class="office">' + "".join(lines) + "</div>"
 
 
 def _watermark(ctx: PaperContext) -> str:
-    parts: list[str] = []
-    if ctx.ref is None or ctx.paper_date is None:
-        parts.append('<div class="draft">DRAFT / مسودة</div>')
-        if ctx.draft_number:
-            parts.append(f'<div class="draft-number">{_e(ctx.draft_number)}</div>')
-    if GRADE_RANK[ctx.grade] >= GRADE_RANK[SECRET] and ctx.viewer_name:
-        parts.append(f'<div class="viewer">{_e(ctx.viewer_name)}</div>')
-    if not parts:
+    """The DRAFT mark, centred once; only Drafts carry it."""
+    if ctx.ref is not None and ctx.paper_date is not None:
         return ""
+    parts = ['<div class="draft">DRAFT / مسودة</div>']
+    if ctx.draft_number:
+        parts.append(f'<div class="draft-number">{_e(ctx.draft_number)}</div>')
     return '<div class="watermark" aria-hidden="true">' + "".join(parts) + "</div>"
+
+
+_TILE_ROWS: Final = 12
+_TILE_COLUMNS: Final = 5
+
+
+def _viewer_tiles(ctx: PaperContext) -> str:
+    """Secret and above: the viewer's G-number repeated across every page."""
+    if GRADE_RANK[ctx.grade] < GRADE_RANK[SECRET] or not ctx.viewer_g_number:
+        return ""
+    tile = f"<span>{_e(ctx.viewer_g_number)}</span>"
+    return (
+        '<div class="tiles" aria-hidden="true"><div class="tiles-grid">'
+        + tile * (_TILE_ROWS * _TILE_COLUMNS)
+        + "</div></div>"
+    )
 
 
 def _footer(ctx: PaperContext) -> str:
@@ -194,13 +243,57 @@ def _footer(ctx: PaperContext) -> str:
         )
 
     return (
-        '<footer class="footer"><div class="contacts">'
+        '<div class="foot-rule" aria-hidden="true"><div class="block"></div><div class="line"></div></div>'
+        '<footer class="footer">'
+        f'<div class="submitter">{_e(ctx.submitter_g_number or "")}</div>'
+        '<div class="contacts">'
         + contact("icon-location.png", "Abu Dhabi, United Arab Emirates")
         + contact("icon-email.png", "info@gss-group.net", "www.gss-group.net")
         + contact("icon-phone.png", "Phone: +9712 6666898", "Fax: +971 2 666 8980")
-        + "</div>"
-        + f'<div class="submitter">{_e(ctx.submitter_g_number or "")}</div>'
-        + "</footer>"
+        + "</div></footer>"
+    )
+
+
+def _addressees(ctx: PaperContext) -> str:
+    """General Book opening: one line per To, then the greeting once."""
+    if not ctx.to_names:
+        return ""
+    lines = "".join(f'<p class="to">السيد \\ {_e(name)} المحترم</p>' for name in ctx.to_names)
+    return f'<div class="addressees">{lines}<p class="greeting">تحية طيبة وبعد،</p></div>'
+
+
+def _subjects(ctx: PaperContext) -> str:
+    """General Book subject: on the left, bold, underlined; the label once."""
+    if not ctx.subjects:
+        return ""
+    lines = "".join(f"<span>{_e(subject)}</span>" for subject in ctx.subjects)
+    return (
+        '<div class="subjects"><span class="label">الموضوع:</span>'
+        f'<span class="lines">{lines}</span></div>'
+    )
+
+
+def _signoff(ctx: PaperContext) -> str:
+    """Signing manager: signature (once signed), name, title."""
+    if not ctx.signer_name:
+        return ""
+    parts: list[str] = []
+    if ctx.signature_src:
+        parts.append(f'<img class="signature" src="{_e(ctx.signature_src)}" alt="">')
+    parts.append(f"<p>{_e(ctx.signer_name)}</p>")
+    if ctx.signer_title:
+        parts.append(f"<p>{_e(ctx.signer_title)}</p>")
+    return '<div class="signoff">' + "".join(parts) + "</div>"
+
+
+def _copies(ctx: PaperContext) -> str:
+    """ "نسخة إلى:" once, then one CC per line."""
+    if not ctx.cc_names:
+        return ""
+    lines = "".join(f"<span>{_e(name)}</span>" for name in ctx.cc_names)
+    return (
+        '<div class="copies"><span class="label">نسخة إلى:</span>'
+        f'<span class="lines">{lines}</span></div>'
     )
 
 
@@ -208,8 +301,7 @@ def render_paper(ctx: PaperContext) -> str:
     """The complete A4 HTML paper for a Ledger Book Revision or Draft."""
     mark = paper_mark(ctx.grade)
     mark_html = f'<div class="mark">{_e(mark)}</div>' if mark else ""
-    subjects = "".join(f"<li>الموضوع: {_e(subject)}</li>" for subject in ctx.subjects)
-    subjects_html = f'<ul class="subjects">{subjects}</ul>' if subjects else ""
+    subjects_html = _subjects(ctx)
     title = ctx.ref or (f"مسودة {ctx.draft_number}" if ctx.draft_number else "مسودة")
     return (
         '<!DOCTYPE html>\n<html lang="ar" dir="rtl"><head><meta charset="utf-8">'
@@ -220,12 +312,12 @@ def render_paper(ctx: PaperContext) -> str:
         f'<img class="logo" src="{_asset(ctx, "letterhead-logo.png")}" alt="GSSG">'
         f"{_office_block(ctx)}</header>"
         '<div class="rule" aria-hidden="true"><div class="line"></div><div class="block"></div></div>'
-        f"{mark_html}{_watermark(ctx)}{_footer(ctx)}"
+        f"{mark_html}{_watermark(ctx)}{_viewer_tiles(ctx)}{_footer(ctx)}"
         '<table class="frame" role="presentation">'
         '<thead><tr><td><div class="head-space"></div></td></tr></thead>'
         '<tfoot><tr><td><div class="foot-space"></div></td></tr></tfoot>'
-        f"<tbody><tr><td><main>{subjects_html}"
-        f'<div class="body">{ctx.body_html}</div></main>'
+        f"<tbody><tr><td><main>{_addressees(ctx)}{subjects_html}"
+        f'<div class="body">{ctx.body_html}</div>{_signoff(ctx)}{_copies(ctx)}</main>'
         "</td></tr></tbody></table></div></body></html>"
     )
 

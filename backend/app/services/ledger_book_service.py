@@ -1,4 +1,4 @@
-"""Ledger Books, Phase 2a (ADR 0007 + ADR 0008, org-independent half).
+"""Ledger drafts, tracked Revisions, manager signing and post-signature delivery.
 
 A writer drafts privately in ``book_drafts``; Save & Send numbers the draft from
 the classified register and turns it into an ordinary ``books`` row (named
@@ -7,7 +7,9 @@ distribution, category ``GS``) whose ``book_versions`` rows are its Revisions
 append-only ``ledger_book_saves`` rows; the newest one is current. A signed
 Revision is locked; a correction Revision is the only way forward.
 
-The approval chain, signing, addressees and delivery are Phase 2b.
+Save & Send snapshots To/CC and opens the linked manager's approval step.
+Internal delivery shares the desk's inbox/push machinery but commits atomically
+with signing. External books are handed off by the writer as signed PDF drafts.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ import logging
 import re
 import secrets
 import shutil
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import select
@@ -33,18 +35,42 @@ from app.core.constants import LEDGER_BOOK_TEMPLATE_ID
 from app.core.ledger_html import sanitize_body
 from app.core.ledger_paper import PaperContext, render_paper
 from app.core.roles import INMATE_REPORTER_ROLE
-from app.db.models import AuditLog, Book, BookCategory, BookDraft, BookVersion, LedgerBookSave, User
+from app.db.models import (
+    AddressBookContact,
+    AuditLog,
+    Book,
+    BookAddressee,
+    BookApprovalStep,
+    BookCategory,
+    BookDraft,
+    BookRecipient,
+    BookVersion,
+    LedgerBookSave,
+    Manager,
+    User,
+)
 from app.db.repos import classified_refs_repo
+from app.db.repos._locking import begin_immediate_if_idle
+from app.schemas.book import SendPurpose
 from app.schemas.ledger_book import (
+    LedgerAddresseeRead,
     LedgerBookRead,
     LedgerDraftCreate,
     LedgerDraftImageRead,
     LedgerDraftRead,
     LedgerDraftUpdate,
+    LedgerOutlookDraftRead,
     LedgerRevisionRead,
     LedgerSaveRead,
+    LedgerSignerRead,
 )
-from app.services import book_service
+from app.services import (
+    book_send_service,
+    book_service,
+    email_service,
+    sheet_pdf_service,
+    user_signature_service,
+)
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +80,7 @@ PAPER_ASSET_BASE = "/api/v1/ledger/paper-assets"
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 _IMAGE_NAME = re.compile(r"[0-9a-f]{32}\.(?:png|jpg|gif|webp)")
 _CLASSIFICATION_BY_TAB = {c.tab: c for c in CLASSIFICATIONS}
+_DELIVERY_PURPOSES: tuple[tuple[str, SendPurpose], ...] = (("to", "action"), ("cc", "info"))
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +181,9 @@ def draft_read(draft: BookDraft) -> LedgerDraftRead:
         importance=draft.importance,
         subjects=list(draft.subjects or []),
         body_html=draft.body_html,
+        external=draft.external,
+        signer_manager_id=draft.signer_manager_id,
+        addressees=draft.addressees,
         created_at=draft.created_at,
         updated_at=draft.updated_at,
     )
@@ -175,14 +205,77 @@ def _set_grade(db: Session, user: User, draft: BookDraft, grade: str) -> None:
     draft.grade = grade
 
 
+def _validate_signer(db: Session, manager_id: int | None) -> Manager | None:
+    if manager_id is None:
+        return None
+    manager = db.get(Manager, manager_id)
+    linked = db.get(User, manager.user_id) if manager is not None and manager.user_id else None
+    if (
+        manager is None
+        or not manager.active
+        or linked is None
+        or linked.status != "active"
+        or linked.role == INMATE_REPORTER_ROLE
+    ):
+        raise ValidationFailedError("SIGNER_INVALID", "Choose an active manager linked to a user.")
+    return manager
+
+
+def _resolve_addressees(
+    db: Session,
+    user: User,
+    *,
+    external: bool,
+    grade: str,
+    addressees: list[dict[str, object]],
+) -> list[BookAddressee]:
+    entries = {e.user.id: e for e in book_send_service.recipient_candidates(db, user, grade)}
+    resolved = []
+    for position, item in enumerate(addressees):
+        user_id, contact_id = item.get("user_id"), item.get("contact_id")
+        if (user_id is None) == (contact_id is None) or external != (contact_id is not None):
+            raise ValidationFailedError(
+                "ADDRESSEE_INVALID", "Choose a valid addressee for this book."
+            )
+        row = BookAddressee(role=item["role"], position=position)
+        if external:
+            contact = db.get(AddressBookContact, contact_id)
+            if contact is None or contact.owner_user_id != user.id:
+                raise ValidationFailedError(
+                    "ADDRESSEE_INVALID", "Choose one of your saved contacts."
+                )
+            row.contact_id = contact.id
+            row.name_en = contact.display_name
+            row.email = contact.address
+        else:
+            entry = entries.get(user_id) if isinstance(user_id, int) else None
+            if entry is None:
+                raise ValidationFailedError("ADDRESSEE_INVALID", "Choose an active, cleared user.")
+            row.user_id = entry.user.id
+            row.name_en, row.name_ar, row.email = entry.name, entry.name_ar, entry.user.email
+        resolved.append(row)
+    return resolved
+
+
 def create_draft(db: Session, user: User, payload: LedgerDraftCreate) -> BookDraft:
     _require_writer(user)
     book_service.require_grade_clearance(db, user, payload.grade)
+    _validate_signer(db, payload.signer_manager_id)
+    _resolve_addressees(
+        db,
+        user,
+        external=payload.external,
+        grade=payload.grade,
+        addressees=[a.model_dump(exclude_none=True) for a in payload.addressees],
+    )
     draft = BookDraft(
         owner_user_id=user.id,
         tab=payload.tab,
         grade=payload.grade,
         importance=payload.importance,
+        external=payload.external,
+        signer_manager_id=payload.signer_manager_id,
+        addressees=[a.model_dump(exclude_none=True) for a in payload.addressees],
         subjects=[subject.strip() for subject in payload.subjects],
         body_html="",
     )
@@ -209,6 +302,25 @@ def update_draft(db: Session, user: User, draft_id: int, payload: LedgerDraftUpd
     draft = get_own_draft(db, user, draft_id)
     _require_writer(user)
     data = payload.model_dump(exclude_unset=True)
+    _validate_signer(db, data.get("signer_manager_id", draft.signer_manager_id))
+    _resolve_addressees(
+        db,
+        user,
+        external=payload.external if payload.external is not None else draft.external,
+        grade=payload.grade or draft.grade,
+        addressees=[a.model_dump(exclude_none=True) for a in payload.addressees]
+        if payload.addressees is not None
+        else draft.addressees,
+    )
+    if data.get("external") is not None:
+        draft.external = data["external"]
+    if "signer_manager_id" in data:
+        draft.signer_manager_id = data["signer_manager_id"]
+    if data.get("addressees") is not None:
+        draft.addressees = [
+            {key: value for key, value in a.items() if value is not None}
+            for a in data["addressees"]
+        ]
     if "tab" in data:
         draft.tab = data["tab"]
     if data.get("grade") is not None:
@@ -309,6 +421,14 @@ def _number_draft(
     body_html = sanitize_body(draft.body_html, image_src_prefixes=(draft_image_prefix(draft.id),))
     if not _has_body(body_html):
         raise ValidationFailedError("DRAFT_BODY_REQUIRED", "Write the letter body first.")
+    if not any(a.get("role") == "to" for a in draft.addressees):
+        raise ValidationFailedError("DRAFT_TO_REQUIRED", "Choose at least one To addressee.")
+    if draft.signer_manager_id is None:
+        raise ValidationFailedError("DRAFT_SIGNER_REQUIRED", "Choose the signing manager.")
+    _validate_signer(db, draft.signer_manager_id)
+    addressees = _resolve_addressees(
+        db, user, external=draft.external, grade=draft.grade, addressees=draft.addressees
+    )
     # Clearance may have been withdrawn since the grade was chosen.
     book_service.require_grade_clearance(db, user, draft.grade)
 
@@ -322,6 +442,8 @@ def _number_draft(
         grade=draft.grade,
         distribution=grades.NAMED,
         importance=draft.importance,
+        external=draft.external,
+        doc_manager_id=draft.signer_manager_id,
         classification_code=classification.code,
         approval_state="none",
         submitted_by_user_id=user.id,
@@ -344,6 +466,10 @@ def _number_draft(
     )
     db.add(version)
     db.flush()
+    for addressee in addressees:
+        addressee.book_id = book.id
+    db.add_all(addressees)
+    _open_sign_step(db, user, book, version)
     db.add(
         LedgerBookSave(
             version_id=version.id,
@@ -417,6 +543,72 @@ def _current_save(db: Session, version_id: int) -> LedgerBookSave | None:
     )
 
 
+def _open_sign_step(db: Session, writer: User, book: Book, version: BookVersion) -> None:
+    manager = _validate_signer(db, book.doc_manager_id)
+    if manager is None or manager.user_id is None:
+        raise ValidationFailedError("DRAFT_SIGNER_REQUIRED", "Choose the signing manager.")
+    for previous in version.approval_steps:
+        book_service.retain_revision_access(db, version, previous)
+    version.approval_steps.clear()
+    version.approval_steps.append(
+        BookApprovalStep(
+            book_id=book.id,
+            step_order=0,
+            stage_label="Approve",
+            assignee_user_id=manager.user_id,
+            kind="approver",
+            state="pending",
+        )
+    )
+    book_service.capture_approval_context(
+        db,
+        book,
+        version,
+        submitted_by_user_id=writer.id,
+        submitted_at=datetime.now(UTC),
+    )
+    book_service._recompute_approval_state(book)
+
+
+def _signer_read(db: Session, manager_id: int | None) -> LedgerSignerRead | None:
+    manager = db.get(Manager, manager_id) if manager_id is not None else None
+    if manager is None or manager.user_id is None:
+        return None
+    return LedgerSignerRead(
+        manager_id=manager.id,
+        user_id=manager.user_id,
+        name=manager.name_en or manager.name_ar or "",
+        name_ar=manager.name_ar,
+        title=manager.title,
+    )
+
+
+def _addressees_read(db: Session, book: Book) -> list[LedgerAddresseeRead]:
+    rows = list(
+        db.scalars(
+            select(BookAddressee)
+            .where(BookAddressee.book_id == book.id)
+            .order_by(BookAddressee.position)
+        )
+    )
+    users = {
+        u.id: u
+        for u in db.scalars(select(User).where(User.id.in_([r.user_id for r in rows if r.user_id])))
+    }
+    return [
+        LedgerAddresseeRead(
+            role=r.role,
+            user_id=r.user_id,
+            contact_id=r.contact_id,
+            name=r.name_en or r.name_ar or "",
+            name_ar=r.name_ar,
+            email=r.email,
+            g_number=users[r.user_id].employee_id if r.user_id in users else None,
+        )
+        for r in rows
+    ]
+
+
 def ledger_book_read(
     db: Session, user: User, book_id: int, *, version_id: int | None = None
 ) -> LedgerBookRead:
@@ -430,6 +622,17 @@ def ledger_book_read(
     fields = latest.fields or {}
     tab = fields.get("tab")
     paper_date = (selected.fields or {}).get("date")
+    pending = next(
+        (s for s in latest.approval_steps if s.state == "pending" and s.kind == "approver"), None
+    )
+    actionable = (
+        selected.id == latest.id
+        and latest.signed_at is None
+        and book.voided_at is None
+        and book.deleted_at is None
+    )
+    writer = user.id == book.created_by_user_id
+    assigned = actionable and pending is not None and pending.assignee_user_id == user.id
     return LedgerBookRead(
         id=book.id,
         ref_number=book.ref_number,
@@ -457,17 +660,34 @@ def ledger_book_read(
         subjects=list(save.subjects) if save is not None else [],
         body_html=save.body_html if save is not None else "",
         content_sha256=save.content_sha256 if save is not None else "",
+        external=book.external,
+        addressees=_addressees_read(db, book),
+        signer=(
+            LedgerSignerRead.model_validate((selected.fields or {})["_ledger_signer"])
+            if (selected.fields or {}).get("_ledger_signer") is not None
+            else _signer_read(db, book.doc_manager_id)
+        ),
+        can_sign=assigned,
+        can_return=assigned,
+        can_change_signer=actionable and writer,
+        can_resubmit=actionable and writer and pending is None,
+        can_create_outlook_draft=writer
+        and book.external
+        and selected.signed_at is not None
+        and selected.id == latest.id
+        and book.voided_at is None
+        and book.deleted_at is None,
+        return_note=next((s.note for s in selected.approval_steps if s.state == "returned"), None),
     )
-
-
-def _viewer_label(user: User) -> str:
-    """Who is looking: printed as the Secret-and-above watermark."""
-    return " · ".join(part for part in (user.display_name or user.email, user.employee_id) if part)
 
 
 def draft_paper(db: Session, user: User, draft_id: int) -> str:
     """The owner's Draft as paper: DRAFT watermark, no reference, date or barcode."""
     draft = get_own_draft(db, user, draft_id)
+    rows = _resolve_addressees(
+        db, user, external=draft.external, grade=draft.grade, addressees=draft.addressees
+    )
+    signer = _signer_read(db, draft.signer_manager_id)
     return render_paper(
         PaperContext(
             body_html=draft.body_html,
@@ -477,8 +697,12 @@ def draft_paper(db: Session, user: User, draft_id: int) -> str:
             paper_date=None,
             draft_number=f"{draft.id:06d}",
             submitter_g_number=user.employee_id,
-            viewer_name=_viewer_label(user),
+            viewer_g_number=user.employee_id,
             asset_base=PAPER_ASSET_BASE,
+            to_names=tuple(r.name_ar or r.name_en or "" for r in rows if r.role == "to"),
+            cc_names=tuple(r.name_ar or r.name_en or "" for r in rows if r.role == "cc"),
+            signer_name=(signer.name_ar or signer.name) if signer else None,
+            signer_title=signer.title if signer else None,
         )
     )
 
@@ -499,8 +723,18 @@ def book_paper(db: Session, user: User, book_id: int, *, version_id: int | None 
             paper_date=paper_date,
             draft_number=None,
             submitter_g_number=book_service.submitter_g_number(db, book),
-            viewer_name=_viewer_label(user),
+            viewer_g_number=user.employee_id,
             asset_base=PAPER_ASSET_BASE,
+            to_names=tuple(a.name_ar or a.name for a in read.addressees if a.role == "to"),
+            cc_names=tuple(a.name_ar or a.name for a in read.addressees if a.role == "cc"),
+            signer_name=(read.signer.name_ar or read.signer.name) if read.signer else None,
+            signer_title=read.signer.title if read.signer else None,
+            signature_src=(
+                f"/api/v1/ledger/books/{book.id}/signature?revision={read.selected_version_id}"
+                if next(v for v in book.versions if v.id == read.selected_version_id).signed_at
+                is not None
+                else None
+            ),
         )
     )
 
@@ -634,3 +868,244 @@ def book_image_path(db: Session, user: User, book_id: int, name: str) -> Path:
     if path is None:
         raise NotFoundError("IMAGE_NOT_FOUND", "Image not found")
     return path
+
+
+def _pending_assignee(
+    db: Session,
+    user: User,
+    book_id: int,
+) -> tuple[Book, BookVersion, BookApprovalStep]:
+    begin_immediate_if_idle(db)
+    book = get_ledger_book(db, book_id)
+    db.refresh(book)
+    book_service.resolve_book_read_access(db, user, book)
+    if book.deleted_at is not None or book.voided_at is not None:
+        raise AppError("BOOK_VOIDED", "This record is no longer actionable.", http_status=409)
+    version = _versions(book)[-1]
+    book_service.require_ledger_revision_unlocked(db, book)
+    step = next(
+        (s for s in version.approval_steps if s.kind == "approver" and s.state == "pending"), None
+    )
+    if step is None or step.assignee_user_id != user.id:
+        raise AppError("FORBIDDEN", "Only the assigned signing manager may act.", http_status=403)
+    return book, version, step
+
+
+def _revision_signature_file(book_id: int, version_id: int) -> Path:
+    return (
+        get_settings().data_dir
+        / "book_attachments"
+        / str(book_id)
+        / "signatures"
+        / f"{version_id}.png"
+    )
+
+
+def signature_path(db: Session, user: User, book_id: int, revision: int | None) -> Path:
+    book = get_ledger_book(db, book_id)
+    access = book_service.resolve_book_read_access(db, user, book, version_id=revision)
+    version = next((v for v in book.versions if v.id == access.selected_version_id), None)
+    if version is None or version.signed_at is None or version.signed_by_user_id is None:
+        raise NotFoundError("SIGNATURE_NOT_FOUND", "This Revision has not been signed.")
+    path = _revision_signature_file(book.id, version.id)
+    if not path.is_file():
+        raise NotFoundError("SIGNATURE_NOT_FOUND", "Signature image not found.")
+    return path
+
+
+def sign(db: Session, user: User, book_id: int) -> LedgerBookRead:
+    """Lock the Revision and stage internal deliveries in one transaction."""
+    target: Path | None = None
+    try:
+        book, version, step = _pending_assignee(db, user, book_id)
+        source = user_signature_service.resolve_signature(user)
+        if source is None:
+            raise ValidationFailedError("NO_SIGNATURE", "Save your own signature before signing.")
+        target = _revision_signature_file(book.id, version.id)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        writer = db.get(User, book.created_by_user_id)
+        if writer is None:
+            raise NotFoundError("USER_NOT_FOUND", "Writer not found.")
+        deliveries: list[BookRecipient] = []
+        if not book.external:
+            for role, purpose in _DELIVERY_PURPOSES:
+                ids = [
+                    a.user_id
+                    for a in _addressees_read(db, book)
+                    if a.role == role and a.user_id is not None
+                ]
+                # A correction does not redeliver an already-addressed record,
+                # including sends that were subsequently recalled.
+                existing = set(
+                    db.scalars(
+                        select(BookRecipient.user_id).where(BookRecipient.book_id == book.id)
+                    )
+                )
+                rows, _ = book_send_service.prepare_delivery(
+                    db,
+                    writer,
+                    book,
+                    user_ids=[uid for uid in ids if uid not in existing],
+                    purpose=purpose,
+                    note=None,
+                )
+                deliveries.extend(rows)
+        version.signed_at = datetime.now(UTC).replace(tzinfo=None)
+        version.signed_by_user_id = user.id
+        signer = _signer_read(db, book.doc_manager_id)
+        version.fields = {
+            **(version.fields or {}),
+            "_ledger_signer": signer.model_dump() if signer else None,
+        }
+        step.state = "approved"
+        step.decided_at = version.signed_at
+        book_service.retain_revision_access(db, version, step)
+        book_service._recompute_approval_state(book)
+        _audit(db, user, "ledger_book_signed", book, {"version_id": version.id})
+        db.commit()
+    except BaseException:
+        db.rollback()
+        if target is not None:
+            target.unlink(missing_ok=True)
+        raise
+    book_send_service._push_new(db, book, deliveries, writer)
+    return ledger_book_read(db, user, book.id)
+
+
+def return_book(db: Session, user: User, book_id: int, note: str) -> LedgerBookRead:
+    try:
+        book, version, step = _pending_assignee(db, user, book_id)
+        if not note.strip():
+            raise ValidationFailedError(
+                "REASON_REQUIRED", "A nonblank reason is required to return."
+            )
+        step.state = "returned"
+        step.note = note.strip()
+        step.decided_at = datetime.now(UTC).replace(tzinfo=None)
+        book_service.retain_revision_access(db, version, step)
+        book_service._recompute_approval_state(book)
+        _audit(
+            db, user, "ledger_book_returned", book, {"version_id": version.id, "note": step.note}
+        )
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
+    return ledger_book_read(db, user, book.id)
+
+
+def resubmit(db: Session, user: User, book_id: int) -> LedgerBookRead:
+    """Submit a returned Revision or a fresh, edited correction; same reference."""
+    try:
+        begin_immediate_if_idle(db)
+        book = get_ledger_book(db, book_id)
+        db.refresh(book)
+        _require_creator_write(db, user, book)
+        book_service.require_ledger_revision_unlocked(db, book)
+        version = _versions(book)[-1]
+        if any(s.state == "pending" for s in version.approval_steps):
+            raise AppError(
+                "NO_PENDING_STEP", "This Revision is already awaiting signature.", http_status=409
+            )
+        _open_sign_step(db, user, book, version)
+        _audit(db, user, "ledger_book_resubmitted", book, {"version_id": version.id})
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
+    return ledger_book_read(db, user, book.id)
+
+
+def change_signer(db: Session, user: User, book_id: int, manager_id: int) -> LedgerBookRead:
+    try:
+        begin_immediate_if_idle(db)
+        book = get_ledger_book(db, book_id)
+        db.refresh(book)
+        _require_creator_write(db, user, book)
+        book_service.require_ledger_revision_unlocked(db, book)
+        manager = _validate_signer(db, manager_id)
+        assert manager is not None and manager.user_id is not None
+        previous_id = book.doc_manager_id
+        book.doc_manager_id = manager.id
+        version = _versions(book)[-1]
+        for step in version.approval_steps:
+            if step.kind == "approver" and step.state == "pending":
+                step.assignee_user_id = manager.user_id
+                step.seen_at = None
+        context = dict(version.approval_context or {})
+        context.update(
+            doc_manager_user_id=manager.user_id,
+            doc_manager_name=manager.name_en,
+            doc_manager_name_ar=manager.name_ar,
+        )
+        version.approval_context = context
+        _audit(
+            db,
+            user,
+            "ledger_book_signer_changed",
+            book,
+            {"previous_manager_id": previous_id, "manager_id": manager.id},
+        )
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
+    return ledger_book_read(db, user, book.id)
+
+
+def _pdf_paper(db: Session, user: User, book: Book, version_id: int) -> str:
+    """Resolve every paper asset locally; headless Edge has no login session."""
+    paper = book_paper(db, user, book.id, version_id=version_id)
+    assets = Path(__file__).resolve().parents[1] / "core" / "ledger_paper_assets"
+    paper = paper.replace(PAPER_ASSET_BASE, assets.as_uri())
+    signature_url = f"/api/v1/ledger/books/{book.id}/signature?revision={version_id}"
+    paper = paper.replace(
+        signature_url, signature_path(db, user, book.id, version_id).resolve().as_uri()
+    )
+    image_pattern = re.compile(
+        re.escape(book_image_prefix(book.id)) + r"([0-9a-f]{32}\.(?:png|jpg|gif|webp))"
+    )
+    paper = image_pattern.sub(
+        lambda match: book_image_path(db, user, book.id, match.group(1)).resolve().as_uri(),
+        paper,
+    )
+    csp = "default-src 'none'; img-src file: data:; font-src file: data:; style-src 'unsafe-inline'"
+    return paper.replace(
+        "<head>", f'<head><meta http-equiv="Content-Security-Policy" content="{csp}">', 1
+    )
+
+
+def create_outlook_draft(db: Session, user: User, book_id: int) -> LedgerOutlookDraftRead:
+    book = get_ledger_book(db, book_id)
+    _require_creator_write(db, user, book)
+    version = _versions(book)[-1]
+    if not book.external or version.signed_at is None:
+        raise AppError(
+            "REVISION_NOT_SIGNED",
+            "Only signed external books can create Outlook drafts.",
+            http_status=409,
+        )
+    read = ledger_book_read(db, user, book.id)
+    pdf = sheet_pdf_service.print_document(_pdf_paper(db, user, book, version.id))
+    try:
+        entry = email_service.draft_outgoing(
+            db,
+            owner_user_id=user.id,
+            to=[a.email for a in read.addressees if a.role == "to" and a.email],
+            cc=[a.email for a in read.addressees if a.role == "cc" and a.email],
+            subject=f"{book.ref_number} — {read.subjects[0]}",
+            html="",
+            mode="draft",
+            related_book_id=book.id,
+            related_employee_id=None,
+            in_reply_to=None,
+            references=None,
+            use_signature=False,
+            attachments=[(book.ref_number.replace("/", "_") + ".pdf", "application/pdf", pdf)],
+        )
+    except email_service.HandoffValidationError as exc:
+        raise AppError("HTTP_400", str(exc), http_status=400) from exc
+    except email_service.HandoffDeliveryError as exc:
+        raise AppError("HTTP_502", str(exc), http_status=502) from exc
+    return LedgerOutlookDraftRead(id=entry.id)

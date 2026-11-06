@@ -817,6 +817,7 @@ class ApprovalLogItem(ORMBase):
     assignment_version_no: int | None = None
     assigned_signer_user_id: int | None = None
     access_scope: Literal["full", "assigned_revision"] = "full"
+    template: str | None = None
 
 
 class ApprovalLogResponse(BaseModel):

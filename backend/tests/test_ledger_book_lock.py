@@ -24,6 +24,7 @@ from app.db.models import (
     BookRecipient,
     BookVersion,
     LedgerBookSave,
+    Manager,
     User,
 )
 from app.db.session import get_db
@@ -71,6 +72,9 @@ def ledger_api(api_db, monkeypatch, tmp_path):
     creator = make_user(api_db, role="manager", email="ledger-writer@test.ae")
     admin = make_user(api_db, role="admin", email="ledger-admin@test.ae")
     reviewer = make_user(api_db, email="ledger-reviewer@test.ae")
+    manager = Manager(name_en="Signing manager", user_id=admin.id)
+    api_db.add(manager)
+    api_db.commit()
     actor = [creator]
     app = create_app()
     app.dependency_overrides[get_db] = lambda: api_db
@@ -78,7 +82,13 @@ def ledger_api(api_db, monkeypatch, tmp_path):
     with TestClient(app) as client:
         draft = client.post(
             "/api/v1/ledger/drafts",
-            json={"tab": 3, "subjects": ["Original subject"], "body_html": "<p>Original body</p>"},
+            json={
+                "tab": 3,
+                "subjects": ["Original subject"],
+                "body_html": "<p>Original body</p>",
+                "signer_manager_id": manager.id,
+                "addressees": [{"role": "to", "user_id": reviewer.id}],
+            },
         )
         assert draft.status_code == 201, draft.text
         sent = client.post(f"/api/v1/ledger/drafts/{draft.json()['id']}/save-and-send")
@@ -203,7 +213,13 @@ def _prepare_mutation(api: LedgerBookAPI, method: str, route: str) -> None:
         api.actor[0] = api.creator
         draft = api.client.post(
             "/api/v1/ledger/drafts",
-            json={"tab": 3, "subjects": ["Reference target"], "body_html": "<p>Reference body</p>"},
+            json={
+                "tab": 3,
+                "subjects": ["Reference target"],
+                "body_html": "<p>Reference body</p>",
+                "signer_manager_id": api.db.scalar(select(Manager.id)),
+                "addressees": [{"role": "to", "user_id": api.reviewer_id}],
+            },
         )
         assert draft.status_code == 201, draft.text
         sent = api.client.post(f"/api/v1/ledger/drafts/{draft.json()['id']}/save-and-send")

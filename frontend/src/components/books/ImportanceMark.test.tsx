@@ -19,12 +19,14 @@ afterEach(async () => {
 
 describe('ImportanceMark', () => {
   // T-F1
-  it('marks high importance red with its own glyph and a slow pulse that reduced motion stops', async () => {
+  it('T-F6 marks high importance with a clear once-per-second blink that reduced motion stops', async () => {
     render(<ImportanceMark importance="high" />)
     const mark = screen.getByRole('img', { name: 'Importance: High' })
     expect(mark).toHaveAttribute('data-importance', 'high')
     expect(mark).toHaveClass('text-destructive', 'gssg-importance-pulse')
     expect(mark.querySelector('svg')).not.toBeNull()
+    expect(css).toMatch(/animation: gssg-importance-pulse 1s steps\(1, end\) infinite/)
+    expect(css).toMatch(/50%\s*\{\s*opacity: 0;\s*\}/)
     const reduced = [...css.matchAll(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/g)].map((m) => m[1]).join('\n')
     expect(reduced).toMatch(/\.gssg-importance-pulse\s*\{[^}]*animation: none/)
     cleanup()
