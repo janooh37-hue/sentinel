@@ -497,7 +497,8 @@ def auto_send_for_book(
     (``book_event``), and the book has an employee. An approval-chain form must
     first reach approved: generating or returning one sends nothing. ``choice`` is
     the record's notify switch (None: event default); a suppressed send logs a
-    skipped row.
+    skipped row. A record already sent or skipped (a re-save that reuses it) is
+    final; only a failed attempt is retried.
     """
     if not _autosend_enabled(db):
         return None
@@ -511,6 +512,9 @@ def auto_send_for_book(
         return None
     target = book_event(db, book)
     if target is None:
+        return None
+    prior = last_status(db, target[0], target[1])
+    if prior is not None and prior.status != "failed":
         return None
     return _auto_send_event(db, target[0], target[1], choice=choice, sent_by=sent_by)
 

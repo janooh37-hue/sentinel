@@ -177,6 +177,41 @@ def test_on_save_form_choice_reaches_the_generated_book(db_session, dispatch_env
     assert user_off.sent_by == 7 and user_off.employee_id == "ND1"
 
 
+def test_resave_reusing_a_record_keeps_the_earlier_result_final(
+    db_session, dispatch_env, monkeypatch
+):
+    """A second save that maps to the same record (e.g. a re-saved Leave
+    Application reusing its leave) neither re-skips nor sends after a skip;
+    only a failed attempt is retried."""
+    send, _ = dispatch_env
+    db_session.add(BookCategory(id="HR", prefix="HR"))
+    books = []
+    for ref in ("HR-9101", "HR-9102", "HR-9103"):
+        book = Book(category_id="HR", ref_number=ref, employee_id="ND1")
+        book.versions.append(
+            BookVersion(version_no=1, template_id="Salary Deduction Form", fields={})
+        )
+        db_session.add(book)
+        books.append(book)
+    db_session.commit()
+    record_id = books[0].id
+    monkeypatch.setattr(
+        notify_dispatch, "book_event", lambda _db, _book: ("salary_deduction", record_id)
+    )
+    _default_off(db_session, "salary_deduction")
+    notify_dispatch.auto_send_for_book(db_session, books[0].id, choice=None)
+    message_template_service.save_default(db_session, "salary_deduction", True, actor="test")
+    notify_dispatch.auto_send_for_book(db_session, books[1].id, choice=None)
+    assert send.call_count == 0
+    [skip] = _rows(db_session)
+    _assert_skip(skip, event="salary_deduction", record_id=record_id, reason="default_off")
+
+    skip.status, skip.skip_reason = "failed", None
+    db_session.commit()
+    notify_dispatch.auto_send_for_book(db_session, books[2].id, choice=None)
+    assert [c.args[1:3] for c in send.call_args_list] == [("salary_deduction", record_id)]
+
+
 # ── Auto-only events: plain default on/off; explicit PATCH choice honoured ───
 
 
