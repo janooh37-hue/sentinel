@@ -2,7 +2,9 @@
 
 Branch `feat/ledger-html-books` (PR #268), on top of `9d1ca9ec` (the Phase 2b
 work: To/CC addressees, signing manager, return, Outlook draft). Status:
-**awaiting approval of the decisions marked ⚑**.
+**approved 2026-11-06**: General book = the Word General Book layout (so it
+is the Normal preset), Report as described, copy-to-folder prints and files,
+preview shows real PDF pages.
 
 ## What already exists (do not rebuild)
 
@@ -17,16 +19,17 @@ work: To/CC addressees, signing manager, return, Outlook draft). Status:
 
 ## Presets
 
-A Draft picks one preset; the issued Revision stores it. Normal is the default.
+A Draft picks one preset; the issued Revision stores it. **Normal** is the
+default and is the Word General Book layout. `paper_preset` ∈ `normal`, `report`.
 
-| Block | Normal book (default) | General book (تعميم) ⚑ | Report (تقرير) ⚑ |
-|---|---|---|---|
-| Letterhead, ref, date, barcode | yes | yes | yes |
-| Opening | «السيد \ name المحترم» per To, «تحية طيبة وبعد،» | «إلى: …» audience line (free text, e.g. «جميع الموظفين»), no greeting | none |
-| Subject | inline end (left), bold, underlined, 16pt | centred, bold, underlined, 18pt | centred title, bold, 20pt, «تقرير» above it |
-| Body | as written | as written | heading presets numbered (1, 1.1) |
-| Sign-off | signing manager block | signing manager block | two blocks side by side: «إعداد» (writer) and «اعتماد» (signing manager) |
-| Bottom block | yes | yes | yes |
+| Block | Normal (default, = Word General Book) | Report (تقرير) |
+|---|---|---|
+| Letterhead, ref, date, barcode | yes | yes |
+| Opening | «السيد \ name المحترم» per To, «تحية طيبة وبعد،» | none |
+| Subject | inline end (left), bold, underlined, 16pt | «تقرير» line, then the subject as a centred bold 20pt title |
+| Body | as written | as written; heading presets numbered (1, 1.1) |
+| Sign-off | signing manager block | two blocks side by side: «إعداد» (writer name, G-number) and «اعتماد» (signing manager, signature once signed) |
+| Bottom block | yes | yes |
 
 ## Bottom block
 
@@ -34,7 +37,7 @@ Printed after the sign-off, in this order, each label once and one entry per lin
 
 1. **«نسخة إلى:»**: CC names (app users and contacts). App users receive the book at signing, as above.
 2. **«إشارة إلى:»**: each referenced book as «كتاب رقم {ref} بتاريخ {DD/MM/YYYY}». In the app the ref links to the book; a viewer who cannot open it sees the text without a link and gets no 404 leak. Stored as `book_links` `kind='reference'` at Save & Send; a Secret target raises the floor (`require_grade_floor`), checked on the draft before Save & Send.
-3. **«نسخة إلى الملف:»**: chosen folder names. ⚑ Recommended: picking a folder also **files** the issued book there at Save & Send (the writer's own folders, plus team folders shared with them, in the **outgoing** box). Alternative: print only.
+3. **«نسخة إلى الملف:»**: chosen folder names. At Save & Send the issued book is also **filed** into each chosen folder (the writer's own folders, plus team folders shared with them, in the **outgoing** box), through the existing folder service and its box rule.
 
 Grade rules: Addressee Only has no CC (picker hides CC). Secret CC users must hold `books.secret`; the picker greys them out with the reason.
 
@@ -60,7 +63,7 @@ Grade rules: Addressee Only has no CC (picker hides CC). Secret CC users must ho
 None of the three is served as a web font. Office PCs and the server have them
 installed; the server-rendered PDF embeds them (both fsType values allow
 embedding in documents). **Phones show Noto Naskh** in the HTML view; the PDF
-is exact. ⚑ Univers Next Arabic must be installed on GSSGIT for PDFs to carry
+is exact. Univers Next Arabic must be installed on GSSGIT for PDFs to carry
 it (user-only step at promotion).
 
 ## Tables
@@ -70,13 +73,13 @@ cells `overflow-wrap: anywhere`; `thead` repeats per page; `tr { break-inside: a
 HugeRTE `table_default_styles` match, so a new table is centred and never wider than the text.
 Pasted Word tables with fixed pixel widths are clamped by `max-inline-size: 100%`.
 
-## Preview ⚑
+## Preview
 
-Today the preview scales one A4 page and clips the rest. Recommended: show the
-**real pages** from the server PDF (headless Edge, already used for the
-Outlook draft) with pdf.js, the same viewer as `WordHandoffDialog`. Scrollable
+Today the preview scales one A4 page and clips the rest. The composer shows
+the **real pages** of the server PDF (headless Edge, already used for the
+Outlook draft) with pdf.js, the same viewer as `WordHandoffDialog`: scrollable
 pages, page count, fit-width and zoom, refreshed after each autosave while the
-preview is open. Alternative: a scrollable HTML iframe (faster, but no page breaks).
+preview is open.
 
 ## Issued books do not change
 
