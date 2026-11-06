@@ -261,14 +261,18 @@ def preview(db: Session, payload: NotifyPreviewRequest) -> dict[str, Any]:
     )
     if event is None:
         return result
-    if revise_book is not None and not notify_dispatch.approval_notification_eligible(
-        db,
-        revise_book,
-        template_id=payload.template_id,
-        target=(event, record_id),
-        gated=gated,
-        # Saving/submitting an enrolled gated revision resets its leave to Pending.
-        status_changed=gated,
+    # A revision keeps the original's choice: an explicit "off" sends nothing.
+    if revise_book is not None and (
+        document_service.inherited_notify_employee(revise_book) is False
+        or not notify_dispatch.approval_notification_eligible(
+            db,
+            revise_book,
+            template_id=payload.template_id,
+            target=(event, record_id),
+            gated=gated,
+            # Saving/submitting an enrolled gated revision resets its leave to Pending.
+            status_changed=gated,
+        )
     ):
         return result
     text = {

@@ -1722,11 +1722,11 @@ def _commit_approval_state(
     the leave (``leave_owner``). A voided or deleted record cancels its leave.
 
     An enrolled chain form's employee message is held from save to the first
-    approval, and sent then if the operator kept the "notify employee" switch
-    on. Rejection and return send nothing.
+    approval, then sent, or logged as skipped when the operator's switch or the
+    event default is off. Rejection and return send nothing.
     """
     from app.core import form_policy
-    from app.services import leave_service, notify_dispatch
+    from app.services import document_service, leave_service, notify_dispatch
 
     version = _current_version(book)
     template_id = version.template_id if version is not None else None
@@ -1782,7 +1782,12 @@ def _commit_approval_state(
     ):
         return
     try:
-        notify_dispatch.auto_send_for_book(db, book.id, sent_by=user_id)
+        notify_dispatch.auto_send_for_book(
+            db,
+            book.id,
+            sent_by=user_id,
+            choice=document_service.inherited_notify_employee(book),
+        )
     except Exception:
         db.rollback()
         log.exception("auto notification failed for approved book %s", book.id)

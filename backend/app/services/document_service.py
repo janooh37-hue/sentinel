@@ -83,6 +83,7 @@ from app.services import (
     artifact_service,
     inmate_violation_whatsapp,
     manager_service,
+    notify_format,
 )
 from app.services._pdf_executor import convert_docx_to_pdf as convert_docx_to_pdf
 from app.services.employee_status_history import (
@@ -411,19 +412,20 @@ _MANAGER_SIGN_DATE_FORMS: frozenset[str] = frozenset(
 )
 
 
-def inherited_notify_employee(book: Book) -> bool:
-    """Revision saves and previews inherit the newest generated snapshot's choice.
+def inherited_notify_employee(book: Book) -> notify_format.NotifyChoice:
+    """Revision saves, previews and approvals use the newest generated snapshot's choice.
 
-    Missing flags default on; records without any snapshot never notified revisions.
+    The snapshot stores True/False (operator's explicit switch), None (event
+    default, resolved at send time) or "silent" (system suppression). Snapshots
+    from before the flag count as an explicit True; records without any snapshot
+    never notified revisions ("silent").
     """
-    return next(
-        (
-            snapshot.get("notify_employee") is not False
-            for version in reversed(book.versions)
-            if isinstance(snapshot := (version.fields or {}).get(_SIGNING_KEY), dict)
-        ),
-        False,
-    )
+    for version in reversed(book.versions):
+        snapshot = (version.fields or {}).get(_SIGNING_KEY)
+        if isinstance(snapshot, dict):
+            choice = snapshot.get("notify_employee", True)
+            return choice if choice in (True, False, None, "silent") else True
+    return "silent"
 
 
 def _submitter_signs_employee_cell(
@@ -1996,7 +1998,7 @@ def generate_document(
     confidentiality: BookConfidentiality = "general",
     converter: artifact_service.PdfConverter | None = None,
     defer_commit: bool = False,
-    notify_employee: bool = True,
+    notify_employee: notify_format.NotifyChoice = None,
 ) -> GenerationResult:
     """Orchestrate the v4 doc generation pipeline.
 
@@ -2334,8 +2336,11 @@ def generate_document(
     ):
         if revise_book is not None:
             # The revise screen hides the notify switch, so the request flag carries
-            # no choice: keep the newest snapshot's (none: revisions never notified).
+            # no choice: keep the newest snapshot's ("silent" when none: revisions
+            # never notified).
             notify_employee = inherited_notify_employee(revise_book)
+        # True/False: the operator's explicit switch; None: the event default,
+        # resolved by notify_dispatch when the approval sends (or skips) the message.
         fields[_SIGNING_KEY] = {
             "issued": datetime.now().strftime("%d/%m/%Y"),
             "employee": bool(embed_signature.get("employee")),

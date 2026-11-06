@@ -1,5 +1,5 @@
-"""The per-approval notify opt-out: LeaveUpdate.notify_employee gates the
-best-effort leave-status notification. Default True keeps notifying."""
+"""The per-approval notify switch: LeaveUpdate.notify_employee reaches the
+leave-status dispatcher as the operator's choice (None = event default)."""
 
 from datetime import date
 
@@ -25,23 +25,27 @@ def _pending_leave(db, lid: int) -> None:
     db.commit()
 
 
-def test_approve_with_notify_off_does_not_notify(db_session, monkeypatch):
-    calls: list[int] = []
+def test_approve_with_notify_off_passes_user_choice(db_session, monkeypatch):
+    calls: list[tuple[int, object]] = []
     monkeypatch.setattr(
-        notify_dispatch, "auto_send_leave_status", lambda db, lid, **k: calls.append(lid)
+        notify_dispatch,
+        "auto_send_leave_status",
+        lambda db, lid, **k: calls.append((lid, k["choice"])),
     )
     _pending_leave(db_session, 71)
     leave_service.update_leave(
         db_session, 71, LeaveUpdate(status="Approved", notify_employee=False)
     )
-    assert calls == []
+    assert calls == [(71, False)]
 
 
-def test_approve_notifies_by_default(db_session, monkeypatch):
-    calls: list[int] = []
+def test_approve_without_choice_follows_default(db_session, monkeypatch):
+    calls: list[tuple[int, object]] = []
     monkeypatch.setattr(
-        notify_dispatch, "auto_send_leave_status", lambda db, lid, **k: calls.append(lid)
+        notify_dispatch,
+        "auto_send_leave_status",
+        lambda db, lid, **k: calls.append((lid, k["choice"])),
     )
     _pending_leave(db_session, 72)
     leave_service.update_leave(db_session, 72, LeaveUpdate(status="Approved"))
-    assert calls == [72]
+    assert calls == [(72, None)]
