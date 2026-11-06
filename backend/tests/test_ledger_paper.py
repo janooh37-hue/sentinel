@@ -389,3 +389,6 @@ def test_body_tables_fit_the_text_column() -> None:
     assert "display: table-header-group" in _css_rule(html, ".body thead")
     assert "break-inside: avoid" in _css_rule(html, ".body tr")
     assert "max-inline-size: 100%" in _css_rule(html, ".body img")
+    # The outer page frame must not grow with a wide (Word-pasted) table.
+    frame = _css_rule(html, ".frame")
+    assert "table-layout: fixed" in frame and "inline-size: 100%" in frame

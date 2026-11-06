@@ -102,6 +102,8 @@ body {
   .paper > .rule, .paper > .foot-rule, .paper > .mark, .paper > .footer, .paper > .watermark { position: absolute; }
 }
 .paper { position: relative; inline-size: 210mm; min-block-size: 297mm; }
+/* Fixed layout: a wide body table must never widen the text column off the sheet. */
+.frame { inline-size: 100%; table-layout: fixed; border-collapse: collapse; }
 .frame td { padding-block: 0; padding-inline: 13.2mm 14.3mm; vertical-align: top; }
 .head-space { block-size: 43mm; }
 .foot-space { block-size: 36mm; }
