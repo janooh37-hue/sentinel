@@ -12,6 +12,9 @@ vi.mock('./LedgerBodyEditor', () => ({
     <textarea aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />
   ),
 }))
+vi.mock('@/components/books/LedgerPaperPdf', () => ({
+  LedgerPaperPdf: ({ url }: { url: string | null }) => <div title="Ledger Book paper" data-url={url} />,
+}))
 
 import { LedgerContentEditorPage } from './LedgerContentEditorPage'
 
@@ -70,7 +73,7 @@ it('T-C8 a locked Revision shows read-only', async () => {
   expect(await screen.findByText('This Revision is signed and locked. Start a correction to change it.')).toBeInTheDocument()
   expect(screen.queryByLabelText('Subject line 1')).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
-  expect(screen.getByTitle('Ledger Book paper')).toHaveAttribute('src', '/api/v1/ledger/books/40/paper?revision=71')
+  expect(screen.getByTitle('Ledger Book paper')).toHaveAttribute('data-url', '/api/v1/ledger/books/40/paper.pdf?revision=71')
   expect(screen.getByRole('button', { name: 'Start correction' })).toBeInTheDocument()
   expect(put).not.toHaveBeenCalled()
 })
