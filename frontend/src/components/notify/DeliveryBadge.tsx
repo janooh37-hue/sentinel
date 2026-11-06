@@ -9,7 +9,7 @@ const TONES = {
   failed: { cls: 'bg-destructive/10 text-destructive', Icon: AlertTriangle },
   pending: { cls: 'bg-warning/10 text-warning', Icon: Clock },
   // Not attempted by choice: neutral, never styled as an error.
-  skipped: { cls: 'bg-muted text-muted-foreground', Icon: MinusCircle },
+  skipped: { cls: 'border border-hairline text-muted-foreground', Icon: MinusCircle },
 } as const
 
 /** Delivery status pill for a persisted employee message (book record rail, employee Messages tab). */
