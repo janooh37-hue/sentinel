@@ -57,6 +57,7 @@ vi.mock('@/lib/messageTemplates', async (importOriginal) => {
         timing: 'on_approval',
         text: { en: 'Employee message before approval', ar: 'رسالة الموظف قبل الاعتماد' },
         segments: { en: 1, ar: 1 },
+        default_enabled: true,
       }),
     },
   }
@@ -195,6 +196,7 @@ beforeEach(async () => {
     timing: 'on_approval',
     text: { en: 'Employee message before approval', ar: 'رسالة الموظف قبل الاعتماد' },
     segments: { en: 1, ar: 1 },
+    default_enabled: true,
   })
   mockedApi.getTemplateFields.mockResolvedValue({
     meta: {},
@@ -345,6 +347,7 @@ describe('ApplicationPage generated handoff reset', () => {
       timing: 'on_approval',
       text: hasMessage ? { en: 'Revision approval message', ar: 'رسالة اعتماد التعديل' } : null,
       segments: hasMessage ? { en: 1, ar: 1 } : null,
+      default_enabled: true,
     })
     const user = userEvent.setup()
     try {

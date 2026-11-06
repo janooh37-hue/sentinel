@@ -149,6 +149,7 @@ describe('ApplicationPage service URLs', () => {
     vi.mocked(messageTemplatesApi.list).mockResolvedValue([{
       event: 'demo', label: { en: 'Demo', ar: 'نموذج' }, group: 'forms', services: ['Demo'],
       timing: 'on_save', default: { en: 'Hello', ar: 'مرحباً' }, override: null, variables: [],
+      default_enabled: true, default_mode: 'prefill',
     }])
     const user = userEvent.setup()
     renderServices('/services/demo?tab=notification')
