@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
+import i18n from 'i18next'
+import ar from '@/locales/ar.json'
 
 import { api, type LedgerDraftRead } from '@/lib/api'
 import { LedgerComposerPage } from './LedgerComposerPage'
@@ -61,6 +63,23 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+})
+
+it('runs the editor UI in the app language and remounts with Arabic labels on a switch', async () => {
+  const engine = installEngine()
+  i18n.addResourceBundle('ar', 'translation', ar, true, true)
+  render(<LedgerBodyEditor value="" onChange={() => {}} label="Body" />)
+  expect(engine.init.mock.calls[0][0]).toMatchObject({ language: 'en', directionality: 'ltr' })
+  try {
+    await act(async () => { await i18n.changeLanguage('ar') })
+    await waitFor(() => expect(engine.init).toHaveBeenCalledTimes(2))
+    const options = engine.init.mock.calls[1][0] as unknown as { style_formats: { title: string }[] }
+    expect(options).toMatchObject({ language: 'ar', directionality: 'rtl' })
+    expect(options.style_formats[0].title).toBe(ar.ledgerBook.editor.styles.mainTitle)
+    expect(engine.remove).toHaveBeenCalledTimes(1)
+  } finally {
+    await i18n.changeLanguage('en')
+  }
 })
 
 it('initializes once after new-draft navigation and preserves the editor through autosave and Preview', async () => {

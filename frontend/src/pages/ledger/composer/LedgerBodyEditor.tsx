@@ -69,6 +69,8 @@ export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invali
     pagebreak_separator: LEDGER_PAGEBREAK_SEPARATOR,
     content_style: LEDGER_CONTENT_STYLE,
     paste_postprocess: ledgerPastePostprocess,
+    // HugeRTE's own menus and dialogs; `ar` loads /hugerte/langs/ar.js.
+    language: isAr ? 'ar' : 'en',
     directionality: (isAr ? 'rtl' : 'ltr') as 'rtl' | 'ltr',
     browser_spellcheck: true,
     paste_data_images: Boolean(onUploadImage),
@@ -105,7 +107,9 @@ export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invali
   }
   return (
     <div aria-invalid={invalid || undefined} aria-describedby={describedBy} className={invalid ? 'rounded-md ring-2 ring-destructive' : undefined}>
+      {/* HugeRTE reads init once: remount so a language switch relabels its UI and style presets. */}
       <Editor
+        key={isAr ? 'ar' : 'en'}
         hugerteScriptSrc="/hugerte/hugerte.min.js"
         value={value}
         onEditorChange={(html) => onChange(html)}
