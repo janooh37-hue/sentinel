@@ -91,6 +91,145 @@ def test_hugerte_rtl_lists_and_tables_preserve_editor_formatting() -> None:
     assert clean(html) == html
 
 
+@pytest.mark.parametrize(
+    ("family", "serialized"),
+    [
+        ("Calibri", "Calibri"),
+        ("'Sakkal Majalla'", "&quot;Sakkal Majalla&quot;"),
+        ("'Univers Next Arabic'", "&quot;Univers Next Arabic&quot;"),
+        ("'Noto Naskh Arabic'", "&quot;Noto Naskh Arabic&quot;"),
+        ("serif", "serif"),
+        ("sans-serif", "sans-serif"),
+        ("Calibri, 'Sakkal Majalla', serif", "Calibri , &quot;Sakkal Majalla&quot; , serif"),
+        ("'sAkKaL mAjAlLa'", "&quot;sAkKaL mAjAlLa&quot;"),
+        (
+            "  Calibri  ,  'Sakkal Majalla'  ,  serif  ",
+            "Calibri , &quot;Sakkal Majalla&quot; , serif",
+        ),
+    ],
+)
+@pytest.mark.parametrize("tag", ["span", "p"])
+def test_hugerte_allowed_font_families_survive(family: str, serialized: str, tag: str) -> None:
+    # nh3 removes declaration whitespace and emits double-quoted family names.
+    # Its normalized HTML, including escaped quotes, must round-trip unchanged.
+    expected = f'<{tag} style="font-family:{serialized}">x</{tag}>'
+    assert clean(f'<{tag} style="font-family: {family};">x</{tag}>') == expected
+    assert clean(expected) == expected
+
+
+@pytest.mark.parametrize(
+    ("tag", "style", "serialized"),
+    [
+        ("span", "font-size: 18pt;", "font-size:18pt"),
+        (
+            "h2",
+            "text-align: center; font-size: 18pt; font-weight: bold;",
+            "text-align:center;font-size:18pt;font-weight:bold",
+        ),
+        ("h3", "font-size: 16pt; font-weight: bold;", "font-size:16pt;font-weight:bold"),
+        (
+            "h4",
+            "font-size: 14pt; font-weight: bold; text-decoration: underline;",
+            "font-size:14pt;font-weight:bold;text-decoration:underline",
+        ),
+        ("p", "font-size: 16pt;", "font-size:16pt"),
+        ("p", "font-size: 12pt;", "font-size:12pt"),
+    ],
+)
+def test_hugerte_heading_and_font_size_presets_survive(
+    tag: str, style: str, serialized: str
+) -> None:
+    expected = f'<{tag} style="{serialized}">x</{tag}>'
+    assert clean(f'<{tag} style="{style}">x</{tag}>') == expected
+    assert clean(expected) == expected
+
+
+def test_hugerte_fixed_table_layout_and_cell_borders_survive() -> None:
+    html = (
+        '<table style="border-collapse: collapse; width: 100%; table-layout: fixed; '
+        'margin-left: auto; margin-right: auto;" border="1"><tbody><tr>'
+        '<td style="border: 0.2mm solid #000; padding: 1mm 2mm;">x</td>'
+        "</tr></tbody></table>"
+    )
+    expected = (
+        '<table style="border-collapse:collapse;width:100%;table-layout:fixed;'
+        'margin-left:auto;margin-right:auto"><tbody><tr>'
+        '<td style="border:0.2mm solid #000;padding:1mm 2mm">x</td>'
+        "</tr></tbody></table>"
+    )
+    assert clean(html) == expected
+    assert clean(expected) == expected
+
+
+@pytest.mark.parametrize(
+    ("tag", "style"),
+    [
+        ("p", "page-break-before:always"),
+        ("p", "page-break-after:always"),
+        ("p", "page-break-inside:avoid"),
+        ("div", "break-before:page"),
+        ("div", "break-after:page"),
+        ("div", "break-inside:avoid"),
+        ("div", "max-width:100%"),
+        ("div", "max-inline-size:100%"),
+        ("div", "min-width:10mm"),
+    ],
+)
+def test_hugerte_page_breaks_and_size_constraints_survive(tag: str, style: str) -> None:
+    html = f'<{tag} style="{style}">x</{tag}>'
+    assert clean(html) == html
+
+
+def test_hugerte_pagebreak_comments_remain_stripped() -> None:
+    assert clean("<p>before</p><!-- pagebreak --><p>after</p>") == "<p>before</p><p>after</p>"
+
+
+@pytest.mark.parametrize(
+    "family",
+    [
+        "'Comic Sans MS'",
+        "Calibri, 'Comic Sans MS'",
+        "'Comic Sans MS', serif",
+        "'Calibri, Comic Sans MS'",
+        "'Sakkal Majalla Extra'",
+        "inherit",
+        "var(--editor-font)",
+        "Calibri,",
+    ],
+)
+def test_disallowed_font_families_are_removed_without_erasing_other_styles(family: str) -> None:
+    assert (
+        clean(f'<span style="font-size: 18pt; font-family: {family}; color: red;">x</span>')
+        == '<span style="font-size:18pt;color:red">x</span>'
+    )
+
+
+def test_disallowed_font_family_without_other_styles_is_removed() -> None:
+    assert clean("<span style=\"font-family: 'Comic Sans MS';\">x</span>") == "<span>x</span>"
+
+
+def test_allowed_fonts_do_not_allow_positioning() -> None:
+    assert (
+        clean('<span style="font-family: Calibri; position: fixed; font-size: 18pt;">x</span>')
+        == '<span style="font-family:Calibri;font-size:18pt">x</span>'
+    )
+
+
+@pytest.mark.parametrize(
+    "style",
+    [
+        "font-family: Calibri; color: url(https://evil.test/x.png)",
+        "font-family: Calibri; width: expression(alert(1))",
+        r"font-family: C\61libri; color: red",
+        "font-family: Calibri/**/; color: red",
+        "font-family: Calibri; @import 'https://evil.test/x.css'",
+        "font-family: Calibri; color: javascript:alert(1)",
+    ],
+)
+def test_font_families_do_not_bypass_forbidden_style_patterns(style: str) -> None:
+    assert clean(f'<span style="{style}">x</span>') == "<span>x</span>"
+
+
 @pytest.mark.parametrize("prefix", ["images/", "https://evil.test/images/", "//evil.test/images/"])
 def test_image_prefix_must_be_same_origin(prefix: str) -> None:
     with pytest.raises(ValueError, match="same-origin"):
