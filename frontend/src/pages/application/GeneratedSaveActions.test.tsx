@@ -30,6 +30,7 @@ beforeEach(async () => {
     timing: 'on_approval',
     text: { ar: 'تفاصيل رسالة التصريح', en: 'Permit message details' },
     segments: { ar: 1, en: 1 },
+    default_enabled: true,
   })
 })
 

@@ -27,6 +27,7 @@ const response: NotifyPreviewResponse = {
   timing: 'on_approval',
   text: { en: 'Your permit lasts 3 hours.', ar: 'مدة التصريح ٣ ساعات.' },
   segments: { en: 1, ar: 2 },
+  default_enabled: true,
 }
 const preview = vi.mocked(messageTemplatesApi.preview)
 
@@ -68,6 +69,7 @@ describe('NotifyMessagePreview', () => {
         event, label: { en: 'Permit', ar: 'تصريح' }, group: 'forms',
         services: [body.template_id], timing: 'on_approval',
         default: response.text!, override: text, variables: [],
+        default_enabled: true, default_mode: 'prefill',
       }
     })
     const save = renderHook(() => useSaveMessageTemplate(), { wrapper })

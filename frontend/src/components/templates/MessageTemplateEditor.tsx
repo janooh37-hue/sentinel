@@ -8,14 +8,17 @@ import { Textarea } from '@/components/ui/textarea'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import {
-  messageTemplatesApi, TEMPLATES_CAP, useResetMessageTemplate, useSaveMessageTemplate,
+  messageTemplatesApi, TEMPLATES_CAP, useResetMessageTemplate, useSaveMessageTemplate, useSetMessageTemplateDefault,
 } from '@/lib/messageTemplates'
 import type { MessageTemplateRead, MsgLang } from '@/lib/messageTemplates'
 import { normalizeDigits } from '@/lib/utils'
+import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
+import { DefaultOffBadge } from './DefaultOffBadge'
 import { TemplateTokens } from './TemplateTokens'
 import { templateErrorMessage, useTokenInsertion } from './templateEditing'
 
 export function MessageTemplateEditor({ template }: { template: MessageTemplateRead }) {
+  // `default_enabled` is deliberately not in the key: toggling it must keep unsaved text edits.
   return <MessageEditor key={JSON.stringify([template.event, template.default, template.override])} template={template} />
 }
 
@@ -31,6 +34,8 @@ function MessageEditor({ template }: { template: MessageTemplateRead }) {
   const insertion = useTokenInsertion<MsgLang>(values, setValues, 'ar')
   const save = useSaveMessageTemplate()
   const reset = useResetMessageTemplate()
+  const setDefault = useSetMessageTemplateDefault()
+  const defaultCopy = `msgTemplates.editor.defaultSend.${template.default_mode}`
   const pending = save.isPending || reset.isPending
   const dirty = values.ar !== baseline.ar || values.en !== baseline.en
   const debounced = useDebouncedValue(values, 400)
@@ -54,10 +59,24 @@ function MessageEditor({ template }: { template: MessageTemplateRead }) {
         <div className="flex flex-wrap items-center gap-2">
           <h3 id={`${id}-title`} className="font-semibold text-foreground">{template.label[uiLang]}</h3>
           {current.override !== null && <span className="rounded-full bg-primary-soft px-2 py-1 text-xs text-primary">{t('msgTemplates.editor.modified')}</span>}
+          <DefaultOffBadge template={template} />
           {dirty && canEdit && <span className="text-xs text-muted-foreground">{t('msgTemplates.editor.dirty')}</span>}
         </div>
         <p className="text-sm text-muted-foreground">{t(`msgTemplates.editor.timing.${template.timing}`)}</p>
       </header>
+      <div className="space-y-2">
+        <NotifyEmployeeToggle
+          checked={template.default_enabled}
+          disabled={!canEdit || setDefault.isPending}
+          label={t(`${defaultCopy}.label`)}
+          hint={t(`${defaultCopy}.${template.default_enabled ? 'hintOn' : 'hintOff'}`)}
+          onChange={(enabled) => setDefault.mutate(
+            { event: template.event, enabled },
+            { onSuccess: () => toast.success(t('msgTemplates.editor.defaultSend.saved')) },
+          )}
+        />
+        {setDefault.error && <p role="alert" className="text-sm text-danger">{templateErrorMessage(setDefault.error, t)}</p>}
+      </div>
       <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         {(['ar', 'en'] as const).map((lang: MsgLang) => (
           <div key={lang} className="min-w-0 space-y-2">

@@ -49,7 +49,8 @@ export function NotifyEmployeeToggle({
         onClick={() => onChange(!checked)}
         className={cn(
           'relative ms-auto inline-flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-          checked ? 'bg-primary' : 'bg-muted',
+          // The off track needs its own contrast: `bg-muted` vanished on the row's tint.
+          checked ? 'bg-primary' : 'bg-muted-foreground/45',
         )}
       >
         <span

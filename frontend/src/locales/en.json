@@ -5039,7 +5039,8 @@
       "label": "Notify employee",
       "hintOn": "The employee will get a message when this form is saved.",
       "hintOnAtApproval": "The employee will get a message once the manager approves this form.",
-      "hintOff": "Saved without notifying the employee."
+      "hintOff": "Saved without notifying the employee.",
+      "hintOffByDefault": "Off by default for this message. Saved without notifying the employee."
     },
     "selectedRecipients": "Selected recipients",
     "removeRecipient": "Remove {{name}}",
@@ -6474,6 +6475,11 @@
     "sendTitle": "Send notification (WhatsApp, SMS fallback)",
     "confirmResend": "Send this notification again?",
     "failed": "Send failed",
+    "skipped": {
+      "defaultOff": "Not sent: off by default",
+      "userOff": "Not sent: switched off for this record",
+      "generic": "Not sent"
+    },
     "channel": {
       "whatsapp": "WhatsApp",
       "sms": "SMS"
@@ -7770,6 +7776,21 @@
       "counts": "{{chars}} characters · {{segments}} SMS segments",
       "variablesHint": "Select a field, then insert a variable at the cursor.",
       "defaultNote": "Default text is used when this field is empty.",
+      "defaultSend": {
+        "saved": "Default updated",
+        "prefill": {
+          "label": "On by default",
+          "hintOn": "The Notify employee switch starts on when a record is saved.",
+          "hintOff": "The Notify employee switch starts off. The message is sent only if someone switches it on for a record.",
+          "badge": "Off by default"
+        },
+        "auto": {
+          "label": "Send automatically",
+          "hintOn": "Sent automatically. There is no choice per record.",
+          "hintOff": "Not sent. There is no choice per record.",
+          "badge": "Not sent"
+        }
+      },
       "languages": { "ar": "Arabic message", "en": "English message" },
       "fields": { "subject": "Subject", "intro": "Introduction", "closing": "Closing" },
       "timing": {

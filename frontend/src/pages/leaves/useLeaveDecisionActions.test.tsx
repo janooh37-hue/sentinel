@@ -56,7 +56,7 @@ describe('useLeaveDecisionActions', () => {
     expect(onMutated).not.toHaveBeenCalled()
   })
 
-  it('sends notify_employee=false on an approve opt-out, and defaults it true otherwise', async () => {
+  it('sends an explicit approve choice, and omits notify_employee otherwise', async () => {
     const qc = new QueryClient()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const spy = vi.spyOn(apiMod.api, 'updateLeave').mockResolvedValue({} as any)
@@ -72,13 +72,13 @@ describe('useLeaveDecisionActions', () => {
       notes: 'ok',
       notify_employee: false,
     })
-    // A decision with no `notify` (e.g. reject) keeps notifying.
+    // A decision with no `notify` (e.g. reject) leaves it to the event default.
     result.current.updateMutation.mutate({ status: 'Rejected', n: '' })
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(2))
     expect(spy).toHaveBeenLastCalledWith(7, {
       status: 'Rejected',
       notes: undefined,
-      notify_employee: true,
+      notify_employee: undefined,
     })
   })
 

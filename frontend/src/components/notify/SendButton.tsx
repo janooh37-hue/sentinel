@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { sendNotify, getNotifyStatus, type NotifyStatus } from '../../lib/api'
+import { skippedLabelKey } from '../../lib/smsDelivery'
 import { useCapabilities } from '../../lib/useCapabilities'
 import { Button } from '@/components/ui/button'
 
@@ -44,6 +45,8 @@ export function SendButton({ eventType, recordId }: Props) {
     last?.delivery_state === 'Failed' || last?.delivery_state === 'failed'
   const delivered = accepted && !terminalFail
   const channelLabel = last?.channel ? t(`notify.channel.${last.channel}`) : ''
+  // A skipped message was never attempted: say why, quietly, and keep "Send" (not "Resend").
+  const skipped = last?.status === 'skipped'
 
   async function onClick() {
     if (accepted && !window.confirm(t('notify.confirmResend'))) return
@@ -83,6 +86,9 @@ export function SendButton({ eventType, recordId }: Props) {
       </Button>
       {delivered && !error && (
         <span aria-label={channelLabel}>&#10003; {channelLabel}</span>
+      )}
+      {skipped && !error && (
+        <span className="text-muted-foreground">{t(skippedLabelKey(last.skip_reason))}</span>
       )}
       {error && (
         <span role="alert" title={error}>

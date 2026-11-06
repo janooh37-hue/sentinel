@@ -6,12 +6,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, ChevronDown, AlertTriangle, Clock, PanelRightClose, PanelRightOpen, X } from 'lucide-react'
+import { ChevronDown, PanelRightClose, PanelRightOpen, X } from 'lucide-react'
 import { TONE, type StationTone } from './recordTones'
 import { reviewerSteps } from '@/components/books/reviewers'
 import { ReviewerList } from '@/components/books/ReviewerList'
 import type { BookApprovalStepRead, NotifyMessageRead } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
+import { DeliveryBadge } from '@/components/notify/DeliveryBadge'
 import { smsDeliveryTone } from '@/lib/smsDelivery'
 import { cn } from '@/lib/utils'
 import type { BookRead } from '@/lib/api'
@@ -148,30 +149,10 @@ function NotificationBlock({ messages }: { messages: NotifyMessageRead[] }): Rea
       <div className="flex flex-col gap-2">
         {messages.map((m) => {
           const tone = smsDeliveryTone(m)
-          const badge = {
-            delivered: {
-              cls: 'bg-success-soft text-success',
-              icon: <Check className="h-3 w-3" />,
-              label: t('employee.messages.delivered'),
-            },
-            failed: {
-              cls: 'bg-destructive/10 text-destructive',
-              icon: <AlertTriangle className="h-3 w-3" />,
-              label: t('employee.messages.failed'),
-            },
-            pending: {
-              cls: 'bg-warning/10 text-warning',
-              icon: <Clock className="h-3 w-3" />,
-              label: t('employee.messages.pending'),
-            },
-          }[tone]
           return (
             <div key={m.id} className="rounded-lg border border-hairline bg-surface p-2.5 text-[0.78em]">
               <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold ${badge.cls}`}>
-                  {badge.icon}
-                  {badge.label}
-                </span>
+                <DeliveryBadge message={m} className="px-1.5" />
                 <span className="ms-auto font-mono text-muted-foreground">
                   {fmt.format(new Date(m.created_at))}
                 </span>
