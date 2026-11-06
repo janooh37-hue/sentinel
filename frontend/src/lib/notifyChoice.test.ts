@@ -14,4 +14,14 @@ describe('notifyChoice', () => {
     expect(notifyEmployeeField(defaultEnabled, defaultEnabled)).toBeUndefined()
     expect(notifyEmployeeField(!defaultEnabled, defaultEnabled)).toBe(!defaultEnabled)
   })
+
+  it('sends exactly what the switch shows while the default is unknown', () => {
+    // Template/preview request slow or failed: the switch reads on, and the
+    // backend must not silently apply a default the operator never saw.
+    expect(effectiveNotify(null, undefined)).toBe(true)
+    expect(notifyEmployeeField(null, undefined)).toBe(true)
+    expect(notifyEmployeeField(false, undefined)).toBe(false)
+    // Off and back on still forces a send.
+    expect(notifyEmployeeField(true, undefined)).toBe(true)
+  })
 })

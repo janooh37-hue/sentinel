@@ -16,11 +16,11 @@ export function leaveApprovalEvent(leaveType: string): 'sick_leave_registered' |
 
 /** Approve-only "Notify employee" switch, seeded from the approval event's
  *  default until touched. `field` is the `notify_employee` to send (undefined =
- *  let the backend apply the default). Before templates load the default reads on. */
+ *  let the backend apply the default; explicit while the default is unknown). */
 export function useApprovalNotify(leaveType: string) {
   const templates = useMessageTemplates()
   const event = leaveApprovalEvent(leaveType)
-  const defaultEnabled = templates.data?.find((template) => template.event === event)?.default_enabled ?? true
+  const defaultEnabled = templates.data?.find((template) => template.event === event)?.default_enabled
   const [choice, setChoice] = useState<boolean | null>(null)
   return {
     checked: effectiveNotify(choice, defaultEnabled),

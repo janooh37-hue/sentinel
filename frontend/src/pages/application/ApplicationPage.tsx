@@ -267,7 +267,7 @@ function StandardApplicationPage(): React.JSX.Element {
   // event's default-send setting reported by the message preview. Resets per
   // form. Only surfaced for notifying forms when global autosend is on (see notifyToggle.ts).
   const [notifyChoice, setNotifyChoice] = useState<boolean | null>(null)
-  const [notifyDefault, setNotifyDefault] = useState(true)
+  const [notifyDefault, setNotifyDefault] = useState<boolean | undefined>(undefined)
   const notifyEmployee = effectiveNotify(notifyChoice, notifyDefault)
   // Draft/Save split: tracks which mode the in-flight job is in. The toast +
   // localStorage-clear in JobStatus.onDone branch on this. Stored in a ref
@@ -598,9 +598,10 @@ function StandardApplicationPage(): React.JSX.Element {
       embed_signature:
         Object.keys(embedSignature).length > 0 ? embedSignature : undefined,
       commit,
-      // Per-book notify choice — only sent when it departs from the event
-      // default; omitted, the backend applies the default.
-      notify_employee: notifyEmployeeField(notifyChoice, notifyDefault),
+      // Per-book notify choice — only when the switch is shown, and then only when
+      // it departs from the event default (or the default is unknown); omitted,
+      // the backend applies the default.
+      notify_employee: showNotifyEmployee ? notifyEmployeeField(notifyChoice, notifyDefault) : undefined,
       attachments: attachmentSpecs.length > 0 ? attachmentSpecs : undefined,
       // Revise mode: only the committed save regenerates a new version under
       // the existing book's ref (the backend requires commit=True for it).
@@ -811,7 +812,7 @@ function StandardApplicationPage(): React.JSX.Element {
     pendingNotificationRef.current = undefined
     // Per-book notify switch is not remembered — each newly-picked form starts at its default.
     setNotifyChoice(null)
-    setNotifyDefault(true)
+    setNotifyDefault(undefined)
     setSubmitError(null)
     setClassificationCode(null)
     setConfidentiality('general')
@@ -983,7 +984,7 @@ function StandardApplicationPage(): React.JSX.Element {
     pendingNotificationRef.current = undefined
     // Per-book notify switch is not remembered — each newly-picked form starts at its default.
     setNotifyChoice(null)
-    setNotifyDefault(true)
+    setNotifyDefault(undefined)
     setSubmitError(null)
     setClassificationCode(null)
     setConfidentiality('general')
@@ -1685,7 +1686,7 @@ function StandardApplicationPage(): React.JSX.Element {
                       signingPath={schemaQuery.data?.signing_path}
                       showNotify={showNotifyEmployee}
                       notifyEmployee={notifyEmployee}
-                      notifyOffByDefault={notifyChoice === null && !notifyDefault}
+                      notifyOffByDefault={notifyChoice === null && notifyDefault === false}
                       onNotifyDefault={setNotifyDefault}
                       previewBody={notifyPayload ? {
                         template_id: notifyPayload.template_id,
