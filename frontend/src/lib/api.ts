@@ -3271,7 +3271,8 @@ export interface NotifyStatus {
   event_ref: string
   language: string
   channel: 'whatsapp' | 'sms' | null
-  status: 'queued' | 'sent' | 'failed'
+  status: 'queued' | 'sent' | 'failed' | 'skipped'
+  skip_reason?: 'default_off' | 'user_off' | null
   delivery_state: string | null
   fell_back: boolean
   fallback_reason: string | null
