@@ -3060,6 +3060,18 @@
     }
   },
   "ledgerBook": {
+    "paper": {
+      "title": "ورقة كتاب السجل",
+      "loading": "جارٍ تحميل الورقة…",
+      "pageCount": "صفحة {{page}} من {{total}}",
+      "pagesLabel": "صفحات {{title}}",
+      "fitWidth": "ملاءمة العرض",
+      "zoomIn": "تكبير",
+      "zoomOut": "تصغير",
+      "references": "إشارة إلى",
+      "folders": "نسخة إلى الملف",
+      "referenceEntry": "كتاب رقم <ref>{{ref}}</ref> بتاريخ <date>{{date}}</date>"
+    },
     "editor": {
       "fonts": {
         "sakkalMajalla": "Sakkal Majalla",

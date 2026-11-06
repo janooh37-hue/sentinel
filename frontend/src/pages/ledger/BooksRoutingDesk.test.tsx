@@ -16,6 +16,9 @@ vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: vi.fn(() => false) }))
 vi.mock('@/pages/books/RecordPaperViewer', () => ({
   default: ({ papers }: { papers: { url: string }[] }) => <div role="document" data-url={papers[0]?.url} />,
 }))
+vi.mock('@/components/books/LedgerPaperPdf', () => ({
+  LedgerPaperPdf: ({ url }: { url: string | null }) => <div role="document" data-url={url} />,
+}))
 vi.mock('@/lib/api', async (original) => {
   const actual = await original<typeof ApiModule>()
   return { ...actual, api: { ...actual.api, markBookInboxDone: vi.fn(), undoBookInboxDone: vi.fn() } }
@@ -62,12 +65,13 @@ beforeEach(() => {
   vi.spyOn(api, 'getBookThread').mockResolvedValue([])
   vi.spyOn(api, 'listLedgerDrafts').mockResolvedValue([])
 })
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('Books routing desk: Ledger Books', () => {
   const DRAFT = {
     id: 12, draft_number: '000012', grade: 'unclassified', importance: null, tab: null, subjects: ['Leave plan'], body_html: '',
     created_at: '2026-10-28T08:00:00Z', updated_at: '2026-10-28T08:00:00Z',
+    paper_preset: 'normal', reference_book_ids: [], folder_ids: [],
   } as unknown as LedgerDraftRead
   const LEDGER_BOOK = {
     id: 7, ref_number: '1/2/7', grade: 'unclassified', importance: null, tab: 2, classification_code: '2/1',
@@ -77,6 +81,7 @@ describe('Books routing desk: Ledger Books', () => {
       { version_id: 72, version_no: 2, trigger: 'correction', created_at: '2026-10-28T09:00:00Z', signed_at: null, superseded: false, locked: false },
     ],
     selected_version_id: 72, subjects: ['Leave plan'], body_html: '<p>x</p>', content_sha256: 'abc',
+    paper_preset: 'normal', references: [], folders: [],
   } as unknown as LedgerBookRead
 
   // W2
@@ -100,16 +105,16 @@ describe('Books routing desk: Ledger Books', () => {
   })
 
   // W3
-  it.each([false, true])('shows a Ledger Book in the sandboxed paper frame at ?rev with its actions (mobile=%s)', async (mobile) => {
+  it.each([false, true])('shows a Ledger Book PDF at ?rev with its actions (mobile=%s)', async (mobile) => {
     vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.stubGlobal('innerWidth', mobile ? 390 : 1280)
     vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book', can_send: true })
     vi.spyOn(api, 'getLedgerBook').mockResolvedValue(LEDGER_BOOK)
     mount('/ledger?tab=books&book=7&rev=71')
-    const frame = await screen.findByTitle('Ledger Book paper')
-    expect(frame.tagName).toBe('IFRAME')
-    expect(frame).toHaveAttribute('src', '/api/v1/ledger/books/7/paper?revision=71')
-    expect(frame.getAttribute('sandbox')).not.toContain('allow-scripts')
-    expect(screen.queryByRole('document')).toBeNull()
+    const paper = await screen.findByRole('document')
+    expect(paper).toHaveAttribute('data-url', '/api/v1/ledger/books/7/paper.pdf?revision=71')
+    if (mobile) expect(paper.parentElement).toHaveClass('h-[65dvh]', 'min-w-0')
+    expect(document.querySelector('iframe')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument()
     expect(await screen.findByRole('button', { name: 'Print' })).toBeInTheDocument()
     await waitFor(() => expect(api.getLedgerBook).toHaveBeenCalledWith(7, 71))
@@ -117,7 +122,35 @@ describe('Books routing desk: Ledger Books', () => {
     expect(picker).toHaveValue('71')
     await userEvent.selectOptions(picker, '72')
     expect(screen.getByLabelText('URL')).toHaveTextContent('rev=72')
-    expect(await screen.findByTitle('Ledger Book paper')).toHaveAttribute('src', '/api/v1/ledger/books/7/paper?revision=72')
+    expect(await screen.findByRole('document')).toHaveAttribute('data-url', '/api/v1/ledger/books/7/paper.pdf?revision=72')
+  })
+
+  it.each([
+    ['en', false], ['en', true], ['ar', false], ['ar', true],
+  ] as const)('shows accessible references and snapshot folder names in %s (mobile=%s)', async (lng, mobile) => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage(lng)
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.stubGlobal('innerWidth', mobile ? 390 : 1280)
+    vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book' })
+    vi.spyOn(api, 'getLedgerBook').mockResolvedValue({
+      ...LEDGER_BOOK,
+      references: [
+        { book_id: 22, ref: 'GS-22', date: '2026-11-01', can_open: true },
+        { book_id: 23, ref: 'GS-23', date: '2026-11-02', can_open: false },
+      ],
+      folders: [{ id: 4, name: 'ملف الموظفين / Personnel' }],
+    })
+    mount('/ledger?tab=books&book=7&rev=71')
+    const references = await screen.findByRole('region', { name: lng === 'ar' ? 'إشارة إلى' : 'References' })
+    const link = within(references).getByRole('link', { name: /GS-22/ })
+    expect(link).toHaveAttribute('href', '/ledger?tab=books&book=22')
+    expect(within(references).getByText('GS-22')).toHaveAttribute('dir', 'ltr')
+    expect(within(references).getByText('01/11/2026')).toHaveAttribute('dir', 'ltr')
+    expect(within(references).getByText('GS-23')).toBeInTheDocument()
+    expect(within(references).queryByRole('link', { name: /GS-23/ })).toBeNull()
+    expect(screen.getByRole('region', { name: lng === 'ar' ? 'نسخة إلى الملف' : 'Copy to folder' })).toHaveTextContent('ملف الموظفين / Personnel')
+    await i18n.changeLanguage('en')
   })
 
   it.each([false, true])('T-F3 mounts manager Sign and Return on the shared desk toolbar (mobile=%s)', async (mobile) => {

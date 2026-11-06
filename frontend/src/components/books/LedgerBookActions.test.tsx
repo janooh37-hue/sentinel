@@ -23,6 +23,7 @@ const book = (revisions: LedgerRevisionRead[], over: Partial<LedgerBookRead> = {
   paper_date: '28-10-2026', approval_state: 'none', created_by_user_id: 1, voided: false, revisions,
   selected_version_id: revisions.at(-1)!.version_id, subjects: ['Leave plan'], body_html: '<p>x</p>', content_sha256: 'abc',
   external: false, addressees: [], signer: null, can_sign: false, can_return: false, can_change_signer: false,
+  paper_preset: 'normal', references: [], folders: [],
   can_resubmit: false, can_create_outlook_draft: false, return_note: null, ...over,
 })
 
@@ -192,13 +193,14 @@ it('T-F3 cancelling Sign never calls either signing API', async () => {
   expect(genericSign).not.toHaveBeenCalled()
 })
 
-it('preserves Print of the selected revision and opens the native print dialog on load', async () => {
+it.each([['en', 'Print'], ['ar', 'طباعة']])('preserves Print of the selected revision and opens the native print dialog on load (%s)', async (lng, label) => {
+  await i18n.changeLanguage(lng)
   vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, false), rev(2, false)], { selected_version_id: 71 }))
   const print = vi.fn()
   const printWindow = new EventTarget()
   const open = vi.spyOn(window, 'open').mockReturnValue(Object.assign(printWindow, { print }) as unknown as Window)
   mount()
-  await userEvent.click(await screen.findByRole('button', { name: 'Print' }))
+  await userEvent.click(await screen.findByRole('button', { name: label }))
   expect(open).toHaveBeenCalledWith('/api/v1/ledger/books/40/paper?revision=71', 'ledger-book-40')
   printWindow.dispatchEvent(new Event('load'))
   expect(print).toHaveBeenCalledTimes(1)

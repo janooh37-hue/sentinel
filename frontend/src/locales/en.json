@@ -2809,6 +2809,18 @@
     }
   },
   "ledgerBook": {
+    "paper": {
+      "title": "Ledger Book paper",
+      "loading": "Loading paper…",
+      "pageCount": "Page {{page}} of {{total}}",
+      "pagesLabel": "{{title}} pages",
+      "fitWidth": "Fit width",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "references": "References",
+      "folders": "Copy to folder",
+      "referenceEntry": "Book no. <ref>{{ref}}</ref> dated <date>{{date}}</date>"
+    },
     "editor": {
       "fonts": {
         "sakkalMajalla": "Sakkal Majalla",
