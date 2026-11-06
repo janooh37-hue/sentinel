@@ -1,5 +1,6 @@
 /**
- * LedgerBodyEditor — the Ledger Book body in HugeRTE. With `onUploadImage`,
+ * LedgerBodyEditor — the Ledger Book body in HugeRTE, configured to look like
+ * the printed paper (see `ledgerEditorConfig.ts`). With `onUploadImage`,
  * inserted and pasted images go to the server and the body keeps only their
  * server URL; without it the image tools are off. Falls back to a plain
  * textarea when the self-hosted HugeRTE bundle fails to load.
@@ -14,11 +15,23 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { apiErrorMessage } from '@/lib/api'
-import { MINIMAL_PLUGINS, MINIMAL_TOOLBAR } from '@/components/ui/rich-editor-config'
+import {
+  LEDGER_CONTENT_STYLE,
+  LEDGER_EDITOR_MIN_HEIGHT,
+  LEDGER_FONT_SIZE_FORMATS,
+  LEDGER_MENUBAR,
+  LEDGER_TABLE_DEFAULT_ATTRIBUTES,
+  LEDGER_TABLE_DEFAULT_STYLES,
+  ledgerFontFamilyFormats,
+  ledgerPastePostprocess,
+  ledgerPlugins,
+  ledgerStyleFormats,
+  ledgerToolbar,
+} from './ledgerEditorConfig'
 
 interface BlobInfo { blob: () => Blob; filename: () => string }
 
-export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invalid, describedBy, height = 420 }: {
+export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invalid, describedBy, height = LEDGER_EDITOR_MIN_HEIGHT }: {
   value: string
   onChange: (html: string) => void
   label: string
@@ -26,6 +39,7 @@ export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invali
   onUploadImage?: (file: Blob, filename: string) => Promise<string>
   invalid?: boolean
   describedBy?: string
+  /** Editor height in px; never below the 600px minimum. */
   height?: number
 }): React.JSX.Element {
   const { i18n, t } = useTranslation()
@@ -34,15 +48,25 @@ export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invali
   const init = useMemo(() => ({
     base_url: '/hugerte',
     suffix: '.min',
-    menubar: false as const,
-    plugins: onUploadImage ? MINIMAL_PLUGINS : MINIMAL_PLUGINS.replace(' image', ''),
-    toolbar: onUploadImage ? MINIMAL_TOOLBAR.replace('link table', 'link image table') : MINIMAL_TOOLBAR,
+    menubar: LEDGER_MENUBAR,
+    plugins: ledgerPlugins(Boolean(onUploadImage)),
+    toolbar: ledgerToolbar(Boolean(onUploadImage)),
     toolbar_mode: 'wrap' as const,
-    statusbar: false,
+    statusbar: true,
+    elementpath: false,
     branding: false,
     promotion: false,
-    resize: false,
-    height,
+    resize: true,
+    height: Math.max(height, LEDGER_EDITOR_MIN_HEIGHT),
+    min_height: LEDGER_EDITOR_MIN_HEIGHT,
+    font_family_formats: ledgerFontFamilyFormats(t),
+    font_size_formats: LEDGER_FONT_SIZE_FORMATS,
+    style_formats: ledgerStyleFormats(t),
+    table_default_styles: LEDGER_TABLE_DEFAULT_STYLES,
+    table_default_attributes: LEDGER_TABLE_DEFAULT_ATTRIBUTES,
+    table_sizing_mode: 'relative' as const,
+    content_style: LEDGER_CONTENT_STYLE,
+    paste_postprocess: ledgerPastePostprocess,
     directionality: (isAr ? 'rtl' : 'ltr') as 'rtl' | 'ltr',
     browser_spellcheck: true,
     paste_data_images: Boolean(onUploadImage),
@@ -59,7 +83,7 @@ export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invali
       : undefined,
     iframe_aria_text: label,
     skin: 'oxide',
-  }), [height, isAr, label, onUploadImage])
+  }), [height, isAr, label, onUploadImage, t])
 
   if (scriptFailed) {
     return (

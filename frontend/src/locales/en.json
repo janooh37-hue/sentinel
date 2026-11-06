@@ -2809,6 +2809,21 @@
     }
   },
   "ledgerBook": {
+    "editor": {
+      "fonts": {
+        "sakkalMajalla": "Sakkal Majalla",
+        "calibri": "Calibri",
+        "universNextArabic": "Univers Next Arabic",
+        "notoNaskhArabic": "Noto Naskh Arabic"
+      },
+      "styles": {
+        "mainTitle": "Main title",
+        "subtitle": "Subtitle",
+        "sectionHeading": "Section heading",
+        "paragraph": "Paragraph",
+        "note": "Note"
+      }
+    },
     "actions": {
       "sign": "Sign",
       "signConfirmTitle": "Sign this Ledger Book?",

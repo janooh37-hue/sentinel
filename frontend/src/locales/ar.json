@@ -3060,6 +3060,21 @@
     }
   },
   "ledgerBook": {
+    "editor": {
+      "fonts": {
+        "sakkalMajalla": "Sakkal Majalla",
+        "calibri": "Calibri",
+        "universNextArabic": "Univers Next Arabic",
+        "notoNaskhArabic": "Noto Naskh Arabic"
+      },
+      "styles": {
+        "mainTitle": "عنوان رئيسي",
+        "subtitle": "عنوان فرعي",
+        "sectionHeading": "عنوان قسم",
+        "paragraph": "فقرة",
+        "note": "ملاحظة"
+      }
+    },
     "actions": {
       "sign": "توقيع",
       "signConfirmTitle": "توقيع كتاب السجل؟",
