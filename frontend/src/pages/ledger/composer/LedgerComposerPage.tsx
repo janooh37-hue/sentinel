@@ -15,24 +15,28 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { GradeSelect } from '@/components/books/GradeSelect'
 import { GRADE_META } from '@/components/books/grades'
 import { deskBookUrl, LEDGER_DRAFTS_KEY, ledgerDraftKey } from '@/components/books/ledgerBookKeys'
-import { LedgerPaperFrame } from '@/components/books/LedgerPaperFrame'
+import { LedgerPaperPdf } from '@/components/books/LedgerPaperPdf'
 import { SigningManagerPicker } from '@/components/books/SigningManagerPicker'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { api, ApiError, apiErrorMessage, type LedgerDraftRead } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/lib/useIsMobile'
 import { composerSchema, valuesFromDraft, type ComposerValues } from './composerForm'
 import { ImportancePicker } from './ImportancePicker'
 import { LedgerAddresseesPicker } from './LedgerAddresseesPicker'
 import { LedgerBodyEditor } from './LedgerBodyEditor'
+import { LedgerReferencesPicker } from './LedgerReferencesPicker'
+import { LedgerFoldersPicker } from './LedgerFoldersPicker'
 import { SubjectLines } from './SubjectLines'
 import { useDraftAutosave, type SaveState } from './useDraftAutosave'
 
 const AUTOSAVE_MS = 800
 
-type Field = 'tab' | 'subjects' | 'body' | 'to' | 'signer'
+type Field = 'tab' | 'subjects' | 'body' | 'to' | 'signer' | 'references' | 'folders'
 type FieldErrors = Partial<Record<Field, string>>
 
 /** Save & Send refusals that belong next to a field. */
@@ -44,6 +48,9 @@ const FIELD_OF_CODE: Readonly<Record<string, Field>> = {
   ADDRESSEE_INVALID: 'to',
   DRAFT_SIGNER_REQUIRED: 'signer',
   SIGNER_INVALID: 'signer',
+  REFERENCE_INVALID: 'references',
+  FOLDER_INVALID: 'folders',
+  GRADE_BELOW_FLOOR: 'references',
 }
 
 class DraftNotSaved extends Error {}
@@ -105,6 +112,8 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
   const bodyErrorId = useId()
   const toId = useId()
   const signerId = useId()
+  const referencesId = useId()
+  const foldersId = useId()
   const [initial] = useState(() => valuesFromDraft(draft))
   const form = useForm<ComposerValues>({ resolver: zodResolver(composerSchema), defaultValues: initial })
   const values = useWatch({ control: form.control }) as ComposerValues
@@ -118,11 +127,21 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
   const autosave = useDraftAutosave(draft.id, values, initial, autosaveMs, handleFieldError)
   const [confirm, setConfirm] = useState<'send' | 'delete' | null>(null)
   const [preview, setPreview] = useState(false)
+  const isMobile = useIsMobile()
+  const previewTrigger = useRef<HTMLButtonElement>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!preview || autosave.pending || autosave.state === 'saving' || autosave.state === 'failed') return
+    const timer = window.setTimeout(() => {
+      setPreviewUrl(api.ledgerDraftPaperPdfUrl(draft.id, autosave.savedAt == null ? draft.updated_at : String(autosave.savedAt)))
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [preview, values, autosave.pending, autosave.state, autosave.savedAt, draft.id, draft.updated_at])
   const previewId = useId()
   useEffect(() => {
-    const field = errors.to ? toId : errors.signer ? signerId : errors.tab ? tabId : undefined
+    const field = errors.to ? toId : errors.signer ? signerId : errors.tab ? tabId : errors.references ? referencesId : errors.folders ? foldersId : undefined
     if (field && !confirm) document.getElementById(field)?.focus()
-  }, [errors, confirm, toId, signerId, tabId])
+  }, [errors, confirm, toId, signerId, tabId, referencesId, foldersId])
   const classifications = useQuery({
     queryKey: ['books', 'classifications'],
     queryFn: () => api.listBookClassifications(),
@@ -189,6 +208,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <Button
             type="button"
+            ref={previewTrigger}
             variant="outline"
             aria-expanded={preview}
             aria-controls={previewId}
@@ -204,7 +224,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
             <Trash2 aria-hidden="true" className="size-4" />
             {t('ledgerBook.composer.delete.button')}
           </Button>
-          <Button type="button" className="flex-1 sm:flex-none" disabled={send.isPending || remove.isPending} onClick={() => {
+          <Button type="button" className="flex-1 sm:flex-none" disabled={send.isPending || remove.isPending || (values.grade === 'addressee_only' && values.addressees.some((a) => a.role === 'cc'))} onClick={() => {
             if (!values.addressees.some((a) => a.role === 'to')) setErrors({ to: t('ledgerBook.composer.errors.toRequired') })
             else if (values.signer_manager_id == null) setErrors({ signer: t('ledgerBook.composer.errors.signerRequired') })
             else setConfirm('send')
@@ -223,7 +243,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
         {t('ledgerBook.composer.fields.gradeBanner', { label: t('books.grade.label'), grade: t(grade.label) })}
       </div>
 
-      <div className={cn('grid gap-6', preview && 'lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]')}>
+      <div className={cn('grid gap-6', preview && !isMobile && 'lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]')}>
         <div className="flex min-w-0 flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-1">
@@ -257,7 +277,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
             <Controller
               control={form.control}
               name="grade"
-              render={({ field }) => <GradeSelect value={field.value} onChange={field.onChange} />}
+              render={({ field }) => <GradeSelect value={field.value} onChange={(v) => { clearError('references'); field.onChange(v) }} />}
             />
             <Controller
               control={form.control}
@@ -265,6 +285,16 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
               render={({ field }) => <ImportancePicker value={field.value} onChange={field.onChange} />}
             />
           </div>
+
+          <fieldset>
+            <legend className="mb-1 text-[0.78em] font-semibold text-muted-foreground">{t('ledgerBook.composer.preset.label')}</legend>
+            <div className="inline-flex rounded-lg border border-border bg-surface-tinted p-1">
+              {(['normal', 'report'] as const).map((preset) => <label key={preset} className={cn('relative inline-flex min-h-10 cursor-pointer items-center rounded-md px-5 text-sm font-medium has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring', values.paper_preset === preset && 'bg-surface text-primary shadow-sm')}>
+                <input className="sr-only" type="radio" name="paper-preset" value={preset} checked={values.paper_preset === preset} onChange={() => form.setValue('paper_preset', preset)} />
+                {t(`ledgerBook.composer.preset.${preset}`)}
+              </label>)}
+            </div>
+          </fieldset>
 
           <fieldset className="flex flex-wrap gap-4">
             <legend className="mb-1 text-[0.78em] font-semibold text-muted-foreground">{t('ledgerBook.composer.fields.kind')}</legend>
@@ -277,7 +307,10 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
             </label>)}
           </fieldset>
           <Controller control={form.control} name="addressees" render={({ field }) => <LedgerAddresseesPicker external={values.external} grade={values.grade} value={field.value} onChange={(v) => { clearError('to'); field.onChange(v) }} toId={toId} error={errors.to} />} />
+          {values.paper_preset === 'normal' && <p className="text-[0.78em] text-muted-foreground">{t('ledgerBook.composer.preset.openingHint')}</p>}
           <Controller control={form.control} name="signer_manager_id" render={({ field }) => <SigningManagerPicker id={signerId} value={field.value} onChange={(v) => { clearError('signer'); field.onChange(v) }} error={errors.signer} />} />
+          <Controller control={form.control} name="reference_book_ids" render={({ field }) => <LedgerReferencesPicker id={referencesId} value={field.value} onChange={(v) => { clearError('references'); field.onChange(v) }} error={errors.references} />} />
+          <Controller control={form.control} name="folder_ids" render={({ field }) => <LedgerFoldersPicker id={foldersId} value={field.value} onChange={(v) => { clearError('folders'); field.onChange(v) }} error={errors.folders} />} />
           <Controller
             control={form.control}
             name="subjects"
@@ -293,7 +326,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
             )}
           />
 
-          <div className="flex flex-col gap-1">
+          <div className="flex min-h-[600px] flex-1 flex-col gap-1 [&>div]:flex-1">
             <span className="text-[0.78em] font-semibold text-muted-foreground">{t('ledgerBook.composer.body.label')}</span>
             <Controller
               control={form.control}
@@ -308,6 +341,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
                   label={t('ledgerBook.composer.body.label')}
                   onUploadImage={uploadImage}
                   invalid={Boolean(errors.body)}
+                  height={Math.max(600, Math.round(window.innerHeight * 0.85))}
                   describedBy={errors.body ? bodyErrorId : undefined}
                 />
               )}
@@ -315,12 +349,21 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
             {errors.body && <p id={bodyErrorId} role="alert" className="text-[0.78em] text-destructive">{errors.body}</p>}
           </div>
         </div>
-        {preview && (
+        {preview && !isMobile && (
           <section id={previewId} aria-label={t('ledgerBook.composer.paper.title')} className="min-w-0 lg:sticky lg:top-4 lg:self-start">
-            <LedgerPaperFrame source={{ draftId: draft.id }} reloadKey={autosave.savedCount} className="h-[calc(100dvh-8rem)]" />
+            <LedgerPaperPdf url={previewUrl} title={t('ledgerBook.composer.paper.title')} className="h-[calc(100dvh-8rem)]" />
           </section>
         )}
       </div>
+      <Sheet open={preview && isMobile} onOpenChange={setPreview}>
+        <SheetContent id={isMobile ? previewId : undefined} aria-describedby={undefined} className="end-0 h-dvh w-full" onCloseAutoFocus={(event) => { event.preventDefault(); previewTrigger.current?.focus() }}>
+          <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
+            <SheetTitle className="text-sm font-semibold">{t('ledgerBook.composer.paper.title')}</SheetTitle>
+            <SheetClose asChild><Button type="button" variant="outline" className="min-h-11">{t('ledgerBook.composer.preview.hide')}</Button></SheetClose>
+          </header>
+          <LedgerPaperPdf url={previewUrl} title={t('ledgerBook.composer.paper.title')} className="min-h-0 flex-1" />
+        </SheetContent>
+      </Sheet>
 
       <ConfirmDialog
         open={confirm === 'send'}

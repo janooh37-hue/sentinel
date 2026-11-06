@@ -52,6 +52,7 @@ function mountAll(): HTMLElement {
 
 beforeEach(() => {
   vi.spyOn(api, 'getLedgerDraft').mockResolvedValue(DRAFT)
+  vi.spyOn(api, 'listBookFolders').mockResolvedValue([])
   vi.spyOn(api, 'listLedgerDrafts').mockResolvedValue([DRAFT])
   vi.spyOn(api, 'listBookClassifications').mockResolvedValue({ items: [{ code: '1/1', tab: 1, name_ar: 'الغيابات', name_en: 'Absences', unit_ar: '' }] })
   vi.spyOn(api, 'listManagers').mockResolvedValue([])

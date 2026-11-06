@@ -116,7 +116,7 @@ export function LedgerBookActions({ bookId, revision, onRevisionChange, classNam
   }
 
   return (
-    <div className={cn('flex flex-wrap items-center gap-2', className)}>
+    <div className={cn('flex min-w-0 max-w-full flex-wrap items-center gap-2', className)}>
       <Button type="button" variant="outline" size="sm" onClick={print}>
         <Printer aria-hidden="true" className="size-4" />
         {t('ledgerBook.composer.book.print')}
@@ -224,13 +224,13 @@ export function LedgerBookActions({ bookId, revision, onRevisionChange, classNam
         </Button>
       )}
       {onRevisionChange && (
-        <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
           <label htmlFor={pickerId} className="text-[0.78em] font-semibold text-muted-foreground">{t('ledgerBook.composer.book.revisions')}</label>
           <select
             id={pickerId}
             value={shown}
             onChange={(e) => onRevisionChange(Number(e.target.value))}
-            className="min-h-9 rounded-md border border-hairline bg-background px-2 text-[0.84em] focus:outline-none focus:ring-2 focus:ring-ring"
+            className="min-h-11 min-w-0 max-w-full rounded-md border border-hairline bg-background px-2 text-[0.84em] focus:outline-none focus:ring-2 focus:ring-ring"
           >
             {book.revisions.map((r) => (
               <option key={r.version_id} value={r.version_id}>

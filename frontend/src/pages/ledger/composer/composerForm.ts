@@ -12,6 +12,9 @@ export const composerSchema = z.object({
   subjects: z.array(z.string()).min(1).max(MAX_SUBJECT_LINES),
   body_html: z.string(),
   external: z.boolean(),
+  paper_preset: z.enum(['normal', 'report']),
+  reference_book_ids: z.array(z.number().int()).max(20),
+  folder_ids: z.array(z.number().int()).max(10),
   signer_manager_id: z.number().int().nullable(),
   addressees: z.array(z.object({ role: z.enum(['to', 'cc']), user_id: z.number().int().optional().nullable(), contact_id: z.number().int().optional().nullable() })).max(50),
 })
@@ -27,6 +30,9 @@ export function valuesFromDraft(draft: LedgerDraftRead): ComposerValues {
     subjects: draft.subjects.length > 0 ? draft.subjects : [''],
     body_html: draft.body_html,
     external: draft.external,
+    paper_preset: draft.paper_preset,
+    reference_book_ids: draft.reference_book_ids,
+    folder_ids: draft.folder_ids,
     signer_manager_id: draft.signer_manager_id,
     addressees: draft.addressees,
   }
@@ -43,6 +49,9 @@ export function changedFields(saved: ComposerValues, next: ComposerValues): Ledg
   }
   if (next.body_html !== saved.body_html) patch.body_html = next.body_html
   if (next.external !== saved.external) patch.external = next.external
+  if (next.paper_preset !== saved.paper_preset) patch.paper_preset = next.paper_preset
+  if (JSON.stringify(next.reference_book_ids) !== JSON.stringify(saved.reference_book_ids)) patch.reference_book_ids = next.reference_book_ids
+  if (JSON.stringify(next.folder_ids) !== JSON.stringify(saved.folder_ids)) patch.folder_ids = next.folder_ids
   if (next.signer_manager_id !== saved.signer_manager_id) patch.signer_manager_id = next.signer_manager_id
   if (JSON.stringify(next.addressees) !== JSON.stringify(saved.addressees)) patch.addressees = next.addressees
   return patch

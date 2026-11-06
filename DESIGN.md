@@ -2503,7 +2503,7 @@ will trip over them.
   `/ledger/compose/:draftId`; `/ledger/books/:bookId/edit` is the content editor
   for an issued book. Code: `pages/ledger/composer/`; desk-facing pieces in
   `components/books/` (`NewLedgerBookButton`, `LedgerDraftsList`,
-  `LedgerPaperFrame`, `LedgerBookActions`).
+  `LedgerPaperPdf`, `LedgerBookActions`).
 - Header: Back to Ledger (ghost link, arrow mirrored in RTL), `h1` "Ledger Book
   · DRAFT / مسودة {n}" (`<bdi>`), the save state (`role="status"`: Saving… /
   Saved / Not saved in `text-destructive`), then Preview, Delete draft and
@@ -2516,20 +2516,30 @@ will trip over them.
   carry the `ImportanceMark` glyphs, never colour alone), ordered Subject lines
   (numbered; move up/down and remove are 40 px icon buttons; Add line stops at
   20; one line always stays; the first line is the subject and is bold), Body in
-  HugeRTE (minimal toolbar plus image upload to the draft).
+  HugeRTE (fills the column, minimum 600 px). Paper: a Book / Report segmented
+  control (`paper_preset`, default Book; Report hides the To opening hint but
+  keeps To for delivery), References («إشارة إلى», debounced book search by ref
+  or subject, LTR-isolated ref + date chips, max 20), Copy to folder («نسخة إلى
+  الملف», outgoing-box folders the writer may file into, max 10). Addressee Only
+  hides CC and blocks Save & Send until existing CC rows are removed; Secret
+  shows uncleared users disabled with the reason.
 - Autosave: 800 ms after the last change, PATCH only the changed fields. A
   failed save keeps them pending and the next change sends them again.
-- Preview opens the server paper beside the form on `lg` (sticky) and below it
-  on smaller screens, in `LedgerPaperFrame`: `sandbox="allow-same-origin
-  allow-modals"`, no scripts. It reloads after every accepted save.
+- Preview shows the real server PDF pages in `LedgerPaperPdf` (lazy
+  `DocPdfCanvas`: scrollable pages, "Page n of m", fit-width, zoom, loading and
+  error states) beside the form on `lg` and in a full-viewport Sheet on phones.
+  The draft `paper.pdf` URL is busted by the last accepted autosave, debounced
+  so it never reloads while the writer is typing.
 - Save & Send and Delete draft confirm with `ConfirmDialog`. Save & Send
   refusals (`DRAFT_TAB_REQUIRED`, `DRAFT_SUBJECT_REQUIRED`,
   `DRAFT_BODY_REQUIRED`) show their translated message under the field
   (`role="alert"`, `aria-invalid`, `aria-describedby`); other errors toast.
-- Issued books: `LedgerBookActions` holds Print (opens the paper in the
-  `ledger-book-<id>` window and prints it), the Revision picker ("Revision n",
-  "(signed)" when locked) and, for the writer only, Edit content (latest
-  Revision unsigned) or Start correction (latest Revision signed). The content
-  editor shows a locked Revision read-only with a `Lock` note.
+- Issued books: the desk shows the Revision's `paper.pdf?revision=` in
+  `LedgerPaperPdf`, then References (linked only when `can_open`, plain text
+  otherwise) and Folders. `LedgerBookActions` holds Print (opens the HTML
+  paper in the `ledger-book-<id>` window and prints it), the Revision picker
+  ("Revision n", "(signed)" when locked) and, for the writer only, Edit content
+  (latest Revision unsigned) or Start correction (latest Revision signed). The
+  content editor shows a locked Revision read-only as its PDF with a `Lock` note.
 - Logical properties only (`ms/me/ps/pe`, `start/end`); the composer test
   rejects physical direction utilities.

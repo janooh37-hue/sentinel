@@ -66,6 +66,27 @@ describe('apiErrorMessage', () => {
     expect(apiErrorMessage(refusal)).toBe(ar)
   })
 
+  it.each([
+    ['REFERENCE_INVALID', 'One or more references are unavailable. Choose the references again.', 'إحدى الإشارات غير متاحة. أعد اختيار الإشارات.'],
+    ['FOLDER_INVALID', 'One or more folders are unavailable in the outgoing box. Choose the folders again.', 'أحد الملفات غير متاح في صندوق الصادر. أعد اختيار الملفات.'],
+  ])('localizes the %s paper selection error', async (code, en, ar) => {
+    const error = new ApiError(422, code, 'Server detail')
+    expect(apiErrorMessage(error)).toBe(en)
+    await i18n.changeLanguage('ar')
+    expect(apiErrorMessage(error)).toBe(ar)
+  })
+
+  it.each([
+    ['secret', 'Secret', 'سري'],
+    ['top_secret', 'Top Secret', 'سري للغاية'],
+    ['addressee_only', 'Addressee Only', 'لعنايته فقط'],
+  ])('names the required %s grade from the backend minimum', async (min, en, ar) => {
+    const error = new ApiError(422, 'GRADE_BELOW_FLOOR', 'Server detail', { min })
+    expect(apiErrorMessage(error)).toBe(`The references require a grade of at least ${en}. Raise the grade before Save & Send.`)
+    await i18n.changeLanguage('ar')
+    expect(apiErrorMessage(error)).toBe(`تتطلب الإشارات درجة ${ar} على الأقل. ارفع الدرجة قبل الحفظ والإرسال.`)
+  })
+
   it('keeps server detail in English', () => {
     expect(apiErrorMessage(new ApiError(401, 'UNAUTHENTICATED', 'Sign in again.'))).toBe('Sign in again.')
     expect(apiErrorMessage(new ApiError(409, 'LEAVE_STATE_FORBIDDEN', 'Leave is already approved.'))).toBe(

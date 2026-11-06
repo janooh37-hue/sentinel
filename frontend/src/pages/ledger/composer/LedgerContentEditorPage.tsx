@@ -15,7 +15,7 @@ import { z } from 'zod'
 
 import { LedgerBookActions } from '@/components/books/LedgerBookActions'
 import { deskBookUrl, ledgerBookKey } from '@/components/books/ledgerBookKeys'
-import { LedgerPaperFrame } from '@/components/books/LedgerPaperFrame'
+import { LedgerPaperPdf } from '@/components/books/LedgerPaperPdf'
 import { Button } from '@/components/ui/button'
 import { api, apiErrorMessage, type LedgerBookRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
@@ -76,7 +76,7 @@ export function LedgerContentEditorPage(): React.JSX.Element {
               {t('ledgerBook.composer.content.locked')}
             </p>
             <LedgerBookActions bookId={book.id} />
-            <LedgerPaperFrame source={{ bookId: book.id, revision: latest?.version_id }} />
+            <LedgerPaperPdf url={api.ledgerBookPaperPdfUrl(book.id, latest?.version_id)} title={t('ledgerBook.composer.paper.title')} className="h-[calc(100dvh-12rem)] min-h-96" />
           </>
         )}
     </div>

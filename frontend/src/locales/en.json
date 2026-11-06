@@ -2809,6 +2809,18 @@
     }
   },
   "ledgerBook": {
+    "paper": {
+      "title": "Ledger Book paper",
+      "loading": "Loading paper…",
+      "pageCount": "Page {{page}} of {{total}}",
+      "pagesLabel": "{{title}} pages",
+      "fitWidth": "Fit width",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "references": "References",
+      "folders": "Copy to folder",
+      "referenceEntry": "Book no. <ref>{{ref}}</ref> dated <date>{{date}}</date>"
+    },
     "editor": {
       "fonts": {
         "sakkalMajalla": "Sakkal Majalla",
@@ -2852,6 +2864,31 @@
       "loading": "Loading…",
       "loadFailed": "This could not be loaded.",
       "retry": "Retry",
+      "preset": {
+        "label": "Paper format",
+        "normal": "Book",
+        "report": "Report",
+        "openingHint": "To recipients appear in the paper opening."
+      },
+      "ccRules": {
+        "secretReason": "Requires Secret clearance.",
+        "removeBeforeSend": "Remove CC recipients before Save & Send.",
+        "removeAll": "Remove all CC recipients"
+      },
+      "references": {
+        "label": "References",
+        "search": "Search by book reference or subject",
+        "selected": "Selected references",
+        "remove": "Remove reference {{ref}}",
+        "limit": "{{count}} of {{max}} references",
+        "empty": "No matching books."
+      },
+      "folders": {
+        "label": "Copy to folder",
+        "limit": "{{count}} of {{max}} outgoing folders",
+        "empty": "No outgoing folders are available.",
+        "unavailable": "Folder #{{id}} is unavailable. Uncheck to remove."
+      },
       "fields": {
         "kind": "Destination",
         "internal": "Internal",
@@ -2872,6 +2909,9 @@
         "toRequired": "Choose at least one To recipient.",
         "signerRequired": "Choose a signing manager.",
         "addresseeInvalid": "One or more recipients are unavailable or not cleared for this grade. Choose the recipients again.",
+        "referenceInvalid": "One or more references are unavailable. Choose the references again.",
+        "folderInvalid": "One or more folders are unavailable in the outgoing box. Choose the folders again.",
+        "gradeBelowFloor": "The references require a grade of at least {{min}}. Raise the grade before Save & Send.",
         "signerInvalid": "Choose an active manager linked to a user account."
       },
       "subjects": {

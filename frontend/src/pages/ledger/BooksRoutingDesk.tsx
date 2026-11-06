@@ -7,13 +7,14 @@ import {
 } from 'lucide-react'
 import { CheckboxItem, ItemIndicator } from '@radix-ui/react-dropdown-menu'
 import { toast } from '@/lib/toast'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 
 import { GradeMark } from '@/components/books/GradeChip'
 import { LedgerBookActions } from '@/components/books/LedgerBookActions'
 import { LedgerDraftsList } from '@/components/books/LedgerDraftsList'
-import { LedgerPaperFrame } from '@/components/books/LedgerPaperFrame'
+import { LedgerPaperPdf } from '@/components/books/LedgerPaperPdf'
+import { deskBookUrl, ledgerBookKey } from '@/components/books/ledgerBookKeys'
 import { DocumentState } from '@/components/books/DocumentState'
 import { ImportanceMark, importanceOf } from '@/components/books/ImportanceMark'
 import { PurposeMark } from '@/components/books/PurposeMark'
@@ -619,6 +620,11 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
   // The shown Revision (`version_id`) stays in the URL; empty = the newest I may read.
   const [rawRev, setRev] = useSearchParam('rev')
   const revision = isLedgerBook && /^\d+$/.test(rawRev) ? Number(rawRev) : undefined
+  const ledgerBook = useQuery({
+    queryKey: ledgerBookKey(book.id, revision),
+    queryFn: () => api.getLedgerBook(book.id, revision),
+    enabled: isLedgerBook && !loading,
+  })
   const [sendOpen, setSendOpen] = useState(false)
   const [pickedPaper, setPickedPaper] = useState<PaperKey | null>(null)
   const papers = useMemo(() => papersOf(book, { inmateReporter: false }), [book])
@@ -657,7 +663,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
         <span aria-hidden className="mx-1 hidden h-5 w-px shrink-0 bg-border sm:block" />
         {inboxActions.map((action) => <Button key={action.key} className="shrink-0" variant={action.key === 'done' ? 'default' : 'outline'} size="sm" disabled={action.pending} aria-busy={action.pending} onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
         {canSend && <Button className="shrink-0" variant="outline" size="sm" disabled={loading} onClick={() => setSendOpen(true)}><Send className="h-4 w-4 rtl:-scale-x-100" aria-hidden />{t('ledger.booksDesk.forward')}</Button>}
-        {isLedgerBook && !loading && <LedgerBookActions className="shrink-0" bookId={book.id} revision={revision} onRevisionChange={(versionId) => setRev(String(versionId))} />}
+        {isLedgerBook && !loading && <LedgerBookActions className="min-w-0 max-w-full" bookId={book.id} revision={revision} onRevisionChange={(versionId) => setRev(String(versionId))} />}
         {reply.actions.map((action) => <Button key={action.key} className="shrink-0" variant="outline" size="sm" onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
         <BookFolderMenu bookId={book.id} boxes={boxes} disabled={loading} />
         <div className="ms-auto flex shrink-0 items-center gap-1 ps-2">
@@ -677,7 +683,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
       <div className={cn('flex min-w-0', isMobile ? 'shrink-0 flex-col' : 'min-h-0 flex-1')}>
         <div className={cn('flex min-w-0 flex-col', isMobile ? 'h-[65dvh] min-h-[24rem] shrink-0' : 'min-h-0 flex-1')}>
           {loading ? <DeskLoading /> : isLedgerBook ? (
-            <LedgerPaperFrame source={{ bookId: book.id, revision }} className="min-h-0 flex-1 rounded-none border-0" />
+            <LedgerPaperPdf url={api.ledgerBookPaperPdfUrl(book.id, revision)} className="min-h-0 flex-1 rounded-none border-0" />
           ) : papers.length === 0 ? (
             <DocumentState kind="empty" title={t('ledger.booksDesk.noDocument')} body={t('ledger.booksDesk.noDocumentHint')} />
           ) : <Suspense fallback={<DeskLoading />}><RecordPaperViewer papers={papers} selectedKey={selectedPaper} onSelectKey={setPickedPaper} mode="pane" initialFit="width" compact /></Suspense>}
@@ -693,6 +699,25 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3 text-sm">
               {facts.map(({ label, value }) => <div key={label} className="contents"><dt className="text-muted-foreground">{label}</dt><dd className="min-w-0 break-words font-medium">{value}</dd></div>)}
             </dl>
+            {!!ledgerBook.data?.references.length && (
+              <section aria-label={t('ledgerBook.paper.references')} className="mt-6 min-w-0">
+                <h3 className="text-xs font-medium text-muted-foreground">{t('ledgerBook.paper.references')}</h3>
+                <ul className="mt-2 space-y-2 text-sm [overflow-wrap:anywhere]">
+                  {ledgerBook.data.references.map((reference) => {
+                    const entry = <Trans i18nKey="ledgerBook.paper.referenceEntry" values={{ ref: reference.ref, date: formatDmy(reference.date) }} components={{ ref: <bdi dir="ltr" className="font-mono tabular-nums" />, date: <bdi dir="ltr" className="font-mono tabular-nums" /> }} />
+                    return <li key={reference.book_id}>{reference.can_open ? <Link to={deskBookUrl(reference.book_id)} className="rounded-sm text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{entry}</Link> : <span>{entry}</span>}</li>
+                  })}
+                </ul>
+              </section>
+            )}
+            {!!ledgerBook.data?.folders.length && (
+              <section aria-label={t('ledgerBook.paper.folders')} className="mt-6 min-w-0">
+                <h3 className="text-xs font-medium text-muted-foreground">{t('ledgerBook.paper.folders')}</h3>
+                <ul className="mt-2 space-y-2 text-sm [overflow-wrap:anywhere]">
+                  {ledgerBook.data.folders.map((folder) => <li key={folder.id}><bdi>{folder.name}</bdi></li>)}
+                </ul>
+              </section>
+            )}
             {!loading && <div className="mt-6 space-y-6"><RecordRecipientsPanel bookId={book.id} bookRef={book.ref_number} /><RecordThreadSection book={book} /></div>}
           </aside>
         )}

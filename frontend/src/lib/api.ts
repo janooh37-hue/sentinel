@@ -1092,6 +1092,8 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   DRAFT_SUBJECT_REQUIRED: 'errors.ledger.draftSubjectRequired',
   DRAFT_BODY_REQUIRED: 'errors.ledger.draftBodyRequired',
   ADDRESSEE_INVALID: 'ledgerBook.composer.errors.addresseeInvalid',
+  REFERENCE_INVALID: 'ledgerBook.composer.errors.referenceInvalid',
+  FOLDER_INVALID: 'ledgerBook.composer.errors.folderInvalid',
   SIGNER_INVALID: 'ledgerBook.composer.errors.signerInvalid',
   DRAFT_TO_REQUIRED: 'ledgerBook.composer.errors.toRequired',
   DRAFT_SIGNER_REQUIRED: 'ledgerBook.composer.errors.signerRequired',
@@ -1109,6 +1111,10 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
 export function apiErrorMessage(err: unknown): string {
   if (!(err instanceof ApiError)) {
     return i18n.t(err instanceof TypeError ? 'errors.network' : 'errors.generic')
+  }
+  const minimum = err.details.min
+  if (err.code === 'GRADE_BELOW_FLOOR' && (minimum === 'unclassified' || minimum === 'secret' || minimum === 'top_secret' || minimum === 'addressee_only')) {
+    return i18n.t('ledgerBook.composer.errors.gradeBelowFloor', { min: i18n.t(`books.grade.levels.${minimum}`) })
   }
   if (Object.hasOwn(CODE_MESSAGE_KEYS, err.code)) return i18n.t(CODE_MESSAGE_KEYS[err.code])
   if (err.status === 403) return i18n.t('common.forbiddenError')
