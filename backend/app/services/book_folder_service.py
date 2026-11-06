@@ -225,12 +225,17 @@ def file_book(
             )
         )
     else:
-        db.execute(
-            insert(BookFolderItem)
-            .values(folder_id=folder.id, book_id=book.id, added_by_user_id=user.id)
-            .on_conflict_do_nothing(index_elements=["folder_id", "book_id"])
-        )
+        stage_filing(db, user, book, folder)
     db.commit()
+
+
+def stage_filing(db: Session, user: User, book: Book, folder: BookFolder) -> None:
+    """File ``book`` into ``folder`` (idempotent); the caller checks and commits."""
+    db.execute(
+        insert(BookFolderItem)
+        .values(folder_id=folder.id, book_id=book.id, added_by_user_id=user.id)
+        .on_conflict_do_nothing(index_elements=["folder_id", "book_id"])
+    )
 
 
 def _require_team_manager(user: User) -> None:

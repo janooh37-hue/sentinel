@@ -865,6 +865,9 @@ export type LedgerBookRead = components['schemas']['LedgerBookRead']
 export type LedgerAddresseeIn = components['schemas']['LedgerAddresseeIn']
 export type LedgerRevisionRead = components['schemas']['LedgerRevisionRead']
 export type LedgerContentUpdate = components['schemas']['LedgerContentUpdate']
+export type LedgerPaperPreset = LedgerDraftRead['paper_preset']
+export type LedgerReferenceRead = components['schemas']['LedgerReferenceRead']
+export type LedgerFolderRead = components['schemas']['LedgerFolderRead']
 export type BookDeriveRequest = components['schemas']['BookDeriveRequest']
 export type BookThreadItem = components['schemas']['BookThreadItem']
 export type BookLinkCreate = components['schemas']['BookLinkCreate']
@@ -2181,6 +2184,13 @@ export const api = {
   resubmitLedgerBook: (id: number) => request<LedgerBookRead>('POST', `/ledger/books/${id}/resubmit`),
   changeLedgerSigner: (id: number, managerId: number) => request<LedgerBookRead>('PUT', `/ledger/books/${id}/signer`, { manager_id: managerId }),
   createLedgerOutlookDraft: (id: number) => request<components['schemas']['LedgerOutlookDraftRead']>('POST', `/ledger/books/${id}/outlook-draft`),
+  /** Draft paper as real PDF pages (owner only). `ts` (the draft's updated_at)
+   *  busts the cache after autosave; DocPdfCanvas appends encoding=base64 itself. */
+  ledgerDraftPaperPdfUrl: (id: number, ts: string) =>
+    `${BASE}/ledger/drafts/${id}/paper.pdf?ts=${encodeURIComponent(ts)}`,
+  /** A Revision's paper as PDF; `revision` omitted = the newest the caller may read. */
+  ledgerBookPaperPdfUrl: (id: number, revision?: number) =>
+    `${BASE}/ledger/books/${id}/paper.pdf${qs({ revision })}`,
   /** POST /books/word-sessions — create a draft book + open-in-Word session.
    *  Returns WordSessionRead with a word_url for WebDAV/Word Direct Access. */
   createWordBook: (body: components['schemas']['WordBookCreate']) =>

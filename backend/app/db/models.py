@@ -425,6 +425,10 @@ class BookVersion(Base):
     signature_revision: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # Ledger Revisions only: the paper preset and the renderer layout pinned
+    # at issue, so a later layout change never alters an issued book.
+    paper_preset: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    paper_layout: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     book: Mapped[Book] = relationship(back_populates="versions")
     approval_steps: Mapped[list[BookApprovalStep]] = relationship(
@@ -477,6 +481,16 @@ class BookDraft(Base):
         JSON, nullable=False, default=list, server_default="[]"
     )
     body_html: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    paper_preset: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="normal", server_default="normal"
+    )
+    # Bottom block selections, applied at Save & Send.
+    reference_book_ids: Mapped[list[int]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    folder_ids: Mapped[list[int]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
@@ -485,6 +499,7 @@ class BookDraft(Base):
         CheckConstraint("tab IS NULL OR (tab BETWEEN 1 AND 15)", name="ck_book_drafts_tab"),
         CheckConstraint(grades.GRADE_CHECK, name="ck_book_drafts_grade"),
         CheckConstraint(grades.IMPORTANCE_CHECK, name="ck_book_drafts_importance"),
+        CheckConstraint("paper_preset IN ('normal', 'report')", name="ck_book_drafts_paper_preset"),
         # Never reuse a deleted draft's id: draft numbers and image URLs carry it.
         {"sqlite_autoincrement": True},
     )

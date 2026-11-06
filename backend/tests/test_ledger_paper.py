@@ -229,3 +229,166 @@ def test_asset_router_404s_unknown_and_traversal(client: TestClient, path: str) 
     response = client.get(f"/api/v1/ledger/paper-assets/{path}")
 
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Presets, bottom block, fonts, tables and the layout pin
+# ---------------------------------------------------------------------------
+
+FULL = replace(
+    ISSUED,
+    to_names=("مدير المشتريات",),
+    cc_names=("قسم المالية", "Contact <x>"),
+    signer_name="أحمد علي",
+    signer_title="مدير الفرع",
+    writer_name="سالم كاتب",
+    writer_g_number="G4321",
+    references=(("1/5/40", date(2026, 3, 4)), ("5/1/41", date(2025, 12, 31))),
+    folder_names=("ملف العقود", "Team <Projects>"),
+)
+
+
+def _css_rule(html: str, selector: str) -> str:
+    start = html.index(selector + " {")
+    return html[start : html.index("}", start)]
+
+
+def _font_faces(html: str, family: str) -> list[str]:
+    return [
+        rule.split("}")[0]
+        for rule in html.split("@font-face")[1:]
+        if f"font-family: '{family}'" in rule.split("}")[0]
+    ]
+
+
+def test_bottom_block_prints_after_signoff_in_order_with_each_label_once() -> None:
+    html = render_paper(FULL)
+
+    signoff = html.index("مدير الفرع")
+    copies, refs, files = (
+        html.index(label) for label in ("نسخة إلى:", "إشارة إلى:", "نسخة إلى الملف:")
+    )
+    assert signoff < copies < html.index("قسم المالية") < html.index("Contact &lt;x&gt;") < refs
+    assert refs < html.index("1/5/40") < html.index("5/1/41") < files
+    assert files < html.index("ملف العقود") < html.index("Team &lt;Projects&gt;")
+    for label in ("نسخة إلى:", "إشارة إلى:", "نسخة إلى الملف:"):
+        assert html.count(label) == 1
+
+
+def test_reference_line_has_western_date_and_an_isolated_ltr_ref() -> None:
+    html = render_paper(FULL)
+
+    assert 'كتاب رقم <span class="ref">1/5/40</span> بتاريخ 04/03/2026' in html
+    assert 'كتاب رقم <span class="ref">5/1/41</span> بتاريخ 31/12/2025' in html
+    assert "unicode-bidi: isolate; direction: ltr" in _css_rule(html, ".bottom .ref")
+
+
+def test_empty_bottom_block_sections_are_omitted() -> None:
+    html = render_paper(replace(FULL, cc_names=(), references=()))
+
+    assert "نسخة إلى:" not in html and "إشارة إلى:" not in html
+    assert html.index("مدير الفرع") < html.index("نسخة إلى الملف:")
+
+
+def test_bottom_block_escapes_every_entry() -> None:
+    hostile = '<script>alert("x")</script>'
+    html = render_paper(
+        replace(FULL, references=((hostile, date(2026, 1, 2)),), folder_names=(hostile,))
+    )
+
+    assert "<script" not in html.lower()
+    assert html.count("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;") == 2
+
+
+def test_normal_preset_keeps_opening_subject_and_single_signoff() -> None:
+    html = render_paper(FULL)
+
+    assert html.index("السيد \\ مدير المشتريات المحترم") < html.index("تحية طيبة وبعد،")
+    assert html.index("تحية طيبة وبعد،") < html.index("الموضوع:") < html.index("نص الكتاب")
+    assert "تقرير" not in html and "إعداد" not in html and "اعتماد" not in html
+    assert "counter-increment" not in html
+
+
+def test_report_preset_has_title_two_signoffs_and_no_opening() -> None:
+    html = render_paper(
+        replace(FULL, preset="report", signature_src="/api/v1/ledger/books/7/signature?revision=3")
+    )
+
+    assert "السيد \\" not in html and "تحية طيبة وبعد،" not in html
+    assert "الموضوع:" not in html
+    report, title, body = html.index(">تقرير<"), html.index(">طلب صيانة<"), html.index("نص الكتاب")
+    assert report < title < body
+    title_css = _css_rule(html, ".report-title")
+    assert "text-align: center" in title_css and "font-weight: bold" in title_css
+    assert "font-size: 20pt" in title_css
+    prepared, approved = html.index("إعداد"), html.index("اعتماد")
+    assert body < prepared < html.index("سالم كاتب") < html.index("G4321") < approved
+    signature = html.index('src="/api/v1/ledger/books/7/signature?revision=3"')
+    assert approved < signature < html.index("أحمد علي")
+    assert "display: flex" in _css_rule(html, ".signoffs")
+    assert html.index("أحمد علي") < html.index("نسخة إلى:") < html.index("نسخة إلى الملف:")
+
+
+def test_report_preset_numbers_body_headings_only() -> None:
+    report = render_paper(replace(FULL, preset="report"))
+
+    assert "counter-increment: h2" in _css_rule(report, ".body h2")
+    assert "counter-increment: h3" in _css_rule(report, ".body h3")
+    assert 'content: counter(h2) "." counter(h3)' in _css_rule(report, ".body h3::before")
+
+
+def test_report_without_signature_prints_no_image() -> None:
+    html = render_paper(replace(FULL, preset="report"))
+
+    assert '<img class="signature"' not in html
+
+
+def test_unknown_layout_or_preset_refuses_to_render() -> None:
+    with pytest.raises(ValueError, match="layout"):
+        render_paper(replace(FULL, layout=2))
+    with pytest.raises(ValueError, match="preset"):
+        render_paper(replace(FULL, preset="poster"))
+
+
+def test_body_font_and_size_and_licensed_fonts_are_local_only() -> None:
+    html = render_paper(FULL)
+
+    body = _css_rule(html, "\nbody")
+    assert 'font-family: Calibri, "Sakkal Majalla", "GSSG Naskh", serif' in body
+    assert "font-size: 16pt" in body
+    for family in ("Calibri", "Sakkal Majalla", "Univers Next Arabic"):
+        faces = _font_faces(html, family)
+        assert faces, family
+        assert all("local(" in face and "url(" not in face for face in faces)
+    univers = _font_faces(html, "Univers Next Arabic")
+    assert any(
+        'local("Univers Next Arabic"), local("Univers Next Arabic Regular")' in f for f in univers
+    )
+    assert any(
+        "font-weight: 700" in f
+        and 'local("Univers Next Arabic Bold"), local("UniversNextArabic-Bold")' in f
+        for f in univers
+    )
+    noto = " ".join(_font_faces(html, "Noto Naskh Arabic"))
+    assert "/NotoNaskhArabic-Regular.ttf" in noto and "/NotoNaskhArabic-Bold.ttf" in noto
+
+
+def test_body_tables_fit_the_text_column() -> None:
+    html = render_paper(FULL)
+
+    table = _css_rule(html, ".body table")
+    for rule in (
+        "inline-size: 100%",
+        "max-inline-size: 100%",
+        "table-layout: fixed",
+        "margin-inline: auto",
+        "border-collapse: collapse",
+    ):
+        assert rule in table
+    assert "overflow-wrap: anywhere" in _css_rule(html, ".body td, .body th")
+    assert "display: table-header-group" in _css_rule(html, ".body thead")
+    assert "break-inside: avoid" in _css_rule(html, ".body tr")
+    assert "max-inline-size: 100%" in _css_rule(html, ".body img")
+    # The outer page frame must not grow with a wide (Word-pasted) table.
+    frame = _css_rule(html, ".frame")
+    assert "table-layout: fixed" in frame and "inline-size: 100%" in frame

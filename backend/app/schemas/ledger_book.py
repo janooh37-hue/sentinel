@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date as date_type
 from datetime import datetime
 from typing import Literal
 
@@ -51,6 +52,25 @@ class LedgerOutlookDraftRead(BaseModel):
     id: int
 
 
+LedgerPaperPreset = Literal["normal", "report"]
+MAX_REFERENCES = 20
+MAX_FOLDERS = 10
+
+
+class LedgerReferenceRead(BaseModel):
+    """A «إشارة إلى:» entry; ``can_open`` false prints the ref without a link."""
+
+    book_id: int
+    ref: str
+    date: date_type
+    can_open: bool
+
+
+class LedgerFolderRead(BaseModel):
+    id: int
+    name: str
+
+
 class LedgerDraftCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -62,6 +82,11 @@ class LedgerDraftCreate(BaseModel):
     external: bool = False
     signer_manager_id: int | None = None
     addressees: list[LedgerAddresseeIn] = Field(default_factory=list, max_length=50)
+    # default_factory keeps it optional in the generated TS create type.
+    paper_preset: LedgerPaperPreset = Field(default_factory=lambda: "normal")
+    # Books the writer can read; folders in their outgoing box. Service-validated.
+    reference_book_ids: list[int] = Field(default_factory=list, max_length=MAX_REFERENCES)
+    folder_ids: list[int] = Field(default_factory=list, max_length=MAX_FOLDERS)
 
 
 class LedgerDraftUpdate(BaseModel):
@@ -78,6 +103,9 @@ class LedgerDraftUpdate(BaseModel):
     external: bool | None = None
     signer_manager_id: int | None = None
     addressees: list[LedgerAddresseeIn] | None = Field(default=None, max_length=50)
+    paper_preset: LedgerPaperPreset | None = None
+    reference_book_ids: list[int] | None = Field(default=None, max_length=MAX_REFERENCES)
+    folder_ids: list[int] | None = Field(default=None, max_length=MAX_FOLDERS)
 
 
 class LedgerDraftRead(ORMBase):
@@ -92,6 +120,9 @@ class LedgerDraftRead(ORMBase):
     external: bool
     signer_manager_id: int | None
     addressees: list[LedgerAddresseeIn]
+    paper_preset: LedgerPaperPreset
+    reference_book_ids: list[int]
+    folder_ids: list[int]
     created_at: datetime
     updated_at: datetime
 
@@ -139,6 +170,9 @@ class LedgerBookRead(ORMBase):
     can_resubmit: bool
     can_create_outlook_draft: bool
     return_note: str | None
+    paper_preset: LedgerPaperPreset
+    references: list[LedgerReferenceRead]
+    folders: list[LedgerFolderRead]
 
 
 class LedgerContentUpdate(BaseModel):

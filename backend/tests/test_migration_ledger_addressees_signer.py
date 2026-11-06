@@ -13,7 +13,9 @@ PARENT = "0113_book_folder_box"
 def test_single_head_and_upgrade_downgrade(tmp_path):
     config = _config(tmp_path / "recipients.db")
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == [HEAD]
+    heads = script.get_heads()
+    assert len(heads) == 1
+    assert HEAD in {revision.revision for revision in script.walk_revisions("base", heads[0])}
     assert script.get_revision(HEAD).down_revision == PARENT
     command.upgrade(config, PARENT)
     engine = create_engine(f"sqlite:///{tmp_path / 'recipients.db'}")

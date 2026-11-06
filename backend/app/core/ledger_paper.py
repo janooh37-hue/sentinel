@@ -59,6 +59,20 @@ class PaperContext:
     signer_name: str | None = None
     signer_title: str | None = None
     signature_src: str | None = None  # same-origin URL, or a data: URI for PDF
+    # ``normal`` (the Word General Book) or ``report`` (تقرير).
+    preset: str = "normal"
+    # The renderer layout pinned on the Revision; only layout 1 exists.
+    layout: int = 1
+    # Report preset «إعداد» block.
+    writer_name: str | None = None
+    writer_g_number: str | None = None
+    # Bottom block: «إشارة إلى:» (ref, date) per referenced book, then folders.
+    references: tuple[tuple[str, date], ...] = ()
+    folder_names: tuple[str, ...] = ()
+
+
+PRESETS: Final = ("normal", "report")
+CURRENT_LAYOUT: Final = 1
 
 
 def _e(text: str) -> str:
@@ -74,8 +88,8 @@ _CSS: Final = """
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
-  font-family: "GSSG Naskh", serif;
-  font-size: 13pt;
+  font-family: Calibri, "Sakkal Majalla", "GSSG Naskh", serif;
+  font-size: 16pt;
   line-height: 1.6;
   color: #000;
   background: #fff;
@@ -88,6 +102,8 @@ body {
   .paper > .rule, .paper > .foot-rule, .paper > .mark, .paper > .footer, .paper > .watermark { position: absolute; }
 }
 .paper { position: relative; inline-size: 210mm; min-block-size: 297mm; }
+/* Fixed layout: a wide body table must never widen the text column off the sheet. */
+.frame { inline-size: 100%; table-layout: fixed; border-collapse: collapse; }
 .frame td { padding-block: 0; padding-inline: 13.2mm 14.3mm; vertical-align: top; }
 .head-space { block-size: 43mm; }
 .foot-space { block-size: 36mm; }
@@ -171,22 +187,82 @@ body {
 }
 .signoff p { margin: 0; }
 .signoff .signature { display: block; margin-inline: auto; max-inline-size: 45mm; max-block-size: 22mm; }
-.copies { display: flex; justify-content: flex-end; gap: 1.5mm; margin-block-start: 4mm; font-size: 10pt; }
-.copies .lines { display: flex; flex-direction: column; }
+/* Bottom block: copies, references, folders; each label once, one entry per line. */
+.bottom { margin-block-start: 4mm; font-size: 10pt; break-inside: avoid; }
+.bottom-section { display: flex; justify-content: flex-end; gap: 1.5mm; margin-block-start: 1.5mm; }
+.bottom-section .lines { display: flex; flex-direction: column; }
+.bottom .ref { unicode-bidi: isolate; direction: ltr; }
+/* Report preset: the report label, then the subject as a centred title; two sign-offs. */
+.report-head { margin: 0 0 5mm; text-align: center; }
+.report-label { margin: 0; font-weight: bold; font-size: 16pt; }
+.report-title {
+  margin: 0; text-align: center; font-weight: bold; font-size: 20pt; line-height: 1.4;
+}
+.report-title span { display: block; }
+.signoffs {
+  display: flex; justify-content: space-between; gap: 10mm; margin-block-start: 8mm;
+  text-align: center; font-weight: bold; font-size: 14pt; break-inside: avoid;
+}
+.signoffs .signoff-col { inline-size: 70mm; }
+.signoffs p { margin: 0; }
+.signoffs .role { text-decoration: underline; margin-block-end: 2mm; }
+.signoffs .g-number { unicode-bidi: isolate; direction: ltr; }
+.signoffs .signature { display: block; margin-inline: auto; max-inline-size: 45mm; max-block-size: 22mm; }
 .body { overflow-wrap: anywhere; }
 .body img { max-inline-size: 100%; }
-.body table { border-collapse: collapse; }
-.body td, .body th { border: 0.2mm solid #000; padding-block: 1mm; padding-inline: 2mm; }
+.body table {
+  inline-size: 100%; max-inline-size: 100%; table-layout: fixed;
+  margin-inline: auto; border-collapse: collapse;
+}
+.body thead { display: table-header-group; }
+.body tr { break-inside: avoid; }
+.body td, .body th {
+  border: 0.2mm solid #000; padding-block: 1mm; padding-inline: 2mm; overflow-wrap: anywhere;
+}
+"""
+
+# Report preset only: numbered headings (1, 1.1) inside the body.
+_REPORT_CSS: Final = """
+.body { counter-reset: h2; }
+.body h2 { counter-increment: h2; counter-reset: h3; }
+.body h3 { counter-increment: h3; }
+.body h2::before { content: counter(h2) ". "; }
+.body h3::before { content: counter(h2) "." counter(h3) " "; }
 """
 
 
+# Licensed fonts are never served (Calibri / Sakkal Majalla fsType 8, Univers
+# Next Arabic fsType 4): ``local()`` only, so a host without them falls back
+# to the bundled Noto Naskh. (family, weight, local names)
+_LOCAL_FONTS: Final = (
+    ("Calibri", 400, ("Calibri",)),
+    ("Calibri", 700, ("Calibri Bold", "Calibri-Bold")),
+    ("Sakkal Majalla", 400, ("Sakkal Majalla",)),
+    ("Sakkal Majalla", 700, ("Sakkal Majalla Bold", "SakkalMajalla-Bold")),
+    ("Univers Next Arabic", 400, ("Univers Next Arabic", "Univers Next Arabic Regular")),
+    ("Univers Next Arabic", 700, ("Univers Next Arabic Bold", "UniversNextArabic-Bold")),
+)
+
+
 def _fonts(ctx: PaperContext) -> str:
+    local = "".join(
+        f"@font-face {{ font-family: '{family}'; font-weight: {weight}; src: "
+        + ", ".join(f'local("{name}")' for name in names)
+        + "; }\n"
+        for family, weight, names in _LOCAL_FONTS
+    )
+    # The bundled OFL Noto files, under our name and the editor's font name.
+    noto = "".join(
+        f"@font-face {{ font-family: '{family}'; font-weight: {weight}; "
+        f"src: url('{_asset(ctx, name)}') format('truetype'); }}\n"
+        for family in ("GSSG Naskh", "Noto Naskh Arabic")
+        for weight, name in (
+            (400, "NotoNaskhArabic-Regular.ttf"),
+            (700, "NotoNaskhArabic-Bold.ttf"),
+        )
+    )
     return (
-        "@font-face { font-family: 'GSSG Naskh'; font-weight: 400; "
-        f"src: url('{_asset(ctx, 'NotoNaskhArabic-Regular.ttf')}') format('truetype'); }}\n"
-        "@font-face { font-family: 'GSSG Naskh'; font-weight: 700; "
-        f"src: url('{_asset(ctx, 'NotoNaskhArabic-Bold.ttf')}') format('truetype'); }}\n"
-        "@font-face { font-family: 'GSSG Barcode 39'; "
+        local + noto + "@font-face { font-family: 'GSSG Barcode 39'; "
         f"src: url('{_asset(ctx, 'LibreBarcode39-Regular.ttf')}') format('truetype'); }}\n"
     )
 
@@ -286,27 +362,80 @@ def _signoff(ctx: PaperContext) -> str:
     return '<div class="signoff">' + "".join(parts) + "</div>"
 
 
-def _copies(ctx: PaperContext) -> str:
-    """ "نسخة إلى:" once, then one CC per line."""
-    if not ctx.cc_names:
+def _section(label: str, lines: list[str], kind: str) -> str:
+    """One bottom-block section: the label once, then one (escaped) entry per line."""
+    if not lines:
         return ""
-    lines = "".join(f"<span>{_e(name)}</span>" for name in ctx.cc_names)
     return (
-        '<div class="copies"><span class="label">نسخة إلى:</span>'
-        f'<span class="lines">{lines}</span></div>'
+        f'<div class="bottom-section {kind}"><span class="label">{label}</span>'
+        f'<span class="lines">{"".join(f"<span>{line}</span>" for line in lines)}</span></div>'
     )
 
 
-def render_paper(ctx: PaperContext) -> str:
-    """The complete A4 HTML paper for a Ledger Book Revision or Draft."""
+def _copies(ctx: PaperContext) -> str:
+    """ "نسخة إلى:" once, then one CC per line."""
+    return _section("نسخة إلى:", [_e(name) for name in ctx.cc_names], "copies")
+
+
+def _references(ctx: PaperContext) -> str:
+    """ "إشارة إلى:" once, then «كتاب رقم {ref} بتاريخ {DD/MM/YYYY}» per reference."""
+    lines = [
+        f'كتاب رقم <span class="ref">{_e(ref)}</span> بتاريخ {issued:%d/%m/%Y}'
+        for ref, issued in ctx.references
+    ]
+    return _section("إشارة إلى:", lines, "references")
+
+
+def _folders(ctx: PaperContext) -> str:
+    return _section("نسخة إلى الملف:", [_e(name) for name in ctx.folder_names], "folders")
+
+
+def _bottom(ctx: PaperContext) -> str:
+    sections = _copies(ctx) + _references(ctx) + _folders(ctx)
+    return f'<div class="bottom">{sections}</div>' if sections else ""
+
+
+def _report_head(ctx: PaperContext) -> str:
+    """Report: «تقرير», then the subject as a centred bold title."""
+    lines = "".join(f"<span>{_e(subject)}</span>" for subject in ctx.subjects)
+    return (
+        '<div class="report-head"><p class="report-label">تقرير</p>'
+        f'<h1 class="report-title">{lines}</h1></div>'
+    )
+
+
+def _report_signoffs(ctx: PaperContext) -> str:
+    """Report: «إعداد» (writer, G-number) beside «اعتماد» (signing manager)."""
+    prepared = ['<p class="role">إعداد</p>']
+    if ctx.writer_name:
+        prepared.append(f"<p>{_e(ctx.writer_name)}</p>")
+    if ctx.writer_g_number:
+        prepared.append(f'<p class="g-number">{_e(ctx.writer_g_number)}</p>')
+    approved = ['<p class="role">اعتماد</p>']
+    if ctx.signer_name:
+        if ctx.signature_src:
+            approved.append(f'<img class="signature" src="{_e(ctx.signature_src)}" alt="">')
+        approved.append(f"<p>{_e(ctx.signer_name)}</p>")
+        if ctx.signer_title:
+            approved.append(f"<p>{_e(ctx.signer_title)}</p>")
+    return (
+        '<div class="signoffs">'
+        f'<div class="signoff-col prepared">{"".join(prepared)}</div>'
+        f'<div class="signoff-col approved">{"".join(approved)}</div></div>'
+    )
+
+
+def _layout_1(ctx: PaperContext) -> str:
+    report = ctx.preset == "report"
     mark = paper_mark(ctx.grade)
     mark_html = f'<div class="mark">{_e(mark)}</div>' if mark else ""
-    subjects_html = _subjects(ctx)
     title = ctx.ref or (f"مسودة {ctx.draft_number}" if ctx.draft_number else "مسودة")
+    opening = _report_head(ctx) if report else _addressees(ctx) + _subjects(ctx)
+    signoff = _report_signoffs(ctx) if report else _signoff(ctx)
     return (
         '<!DOCTYPE html>\n<html lang="ar" dir="rtl"><head><meta charset="utf-8">'
         f"<title>{_e(title)}</title>"
-        f"<style>{_fonts(ctx)}{_CSS}</style></head><body>"
+        f"<style>{_fonts(ctx)}{_CSS}{_REPORT_CSS if report else ''}</style></head><body>"
         '<div class="paper">'
         '<header class="first-head">'
         f'<img class="logo" src="{_asset(ctx, "letterhead-logo.png")}" alt="GSSG">'
@@ -316,10 +445,25 @@ def render_paper(ctx: PaperContext) -> str:
         '<table class="frame" role="presentation">'
         '<thead><tr><td><div class="head-space"></div></td></tr></thead>'
         '<tfoot><tr><td><div class="foot-space"></div></td></tr></tfoot>'
-        f"<tbody><tr><td><main>{_addressees(ctx)}{subjects_html}"
-        f'<div class="body">{ctx.body_html}</div>{_signoff(ctx)}{_copies(ctx)}</main>'
+        f"<tbody><tr><td><main>{opening}"
+        f'<div class="body">{ctx.body_html}</div>{signoff}{_bottom(ctx)}</main>'
         "</td></tr></tbody></table></div></body></html>"
     )
+
+
+# A layout change adds a new entry and keeps the old one: issued Revisions
+# render with the layout pinned on them, so they never change.
+_LAYOUTS: Final = {1: _layout_1}
+
+
+def render_paper(ctx: PaperContext) -> str:
+    """The complete A4 HTML paper for a Ledger Book Revision or Draft."""
+    if ctx.preset not in PRESETS:
+        raise ValueError(f"Unknown paper preset {ctx.preset!r}")
+    renderer = _LAYOUTS.get(ctx.layout)
+    if renderer is None:
+        raise ValueError(f"Unknown paper layout {ctx.layout!r}")
+    return renderer(ctx)
 
 
 def paper_response(html: str) -> HTMLResponse:
