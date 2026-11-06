@@ -82,7 +82,8 @@ class LedgerDraftCreate(BaseModel):
     external: bool = False
     signer_manager_id: int | None = None
     addressees: list[LedgerAddresseeIn] = Field(default_factory=list, max_length=50)
-    paper_preset: LedgerPaperPreset = "normal"
+    # default_factory keeps it optional in the generated TS create type.
+    paper_preset: LedgerPaperPreset = Field(default_factory=lambda: "normal")
     # Books the writer can read; folders in their outgoing box. Service-validated.
     reference_book_ids: list[int] = Field(default_factory=list, max_length=MAX_REFERENCES)
     folder_ids: list[int] = Field(default_factory=list, max_length=MAX_FOLDERS)
