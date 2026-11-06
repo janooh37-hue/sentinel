@@ -4,10 +4,12 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import i18n from '@/lib/i18n'
-import { leasePdfUrl, type PdfDocLease } from '@/lib/pdfDocCache'
+import { leasePdfUrl } from '@/lib/pdfDocCache'
 import { LedgerPaperPdf } from './LedgerPaperPdf'
 
 vi.mock('@/lib/pdfDocCache', () => ({ leasePdfUrl: vi.fn(), PdfFetchError: class extends Error {} }))
+// PdfPages is the rendering seam: these host tests need only the lease lifetime,
+// while its stub supplies page-position events instead of a PDFDocumentProxy.
 vi.mock('./PdfPages', () => {
   return { PdfPages: ({ onCurrentPage }: { onCurrentPage: (page: number, total: number) => void }) => {
     useEffect(() => { onCurrentPage(2, 3) }, [onCurrentPage])
@@ -23,7 +25,7 @@ it.each([
 ])('renders scrollable pages and zoom controls in %s', async (lng, count, fit, zoomIn, zoomOut) => {
   await i18n.changeLanguage(lng)
   const release = vi.fn()
-  vi.mocked(leasePdfUrl).mockResolvedValue({ doc: { numPages: 3 }, release } as PdfDocLease)
+  vi.mocked(leasePdfUrl, { partial: true }).mockResolvedValue({ release })
   const { rerender } = render(<LedgerPaperPdf url="/paper.pdf?revision=71" title="Proof" />)
   expect(await screen.findByText(count)).toBeInTheDocument()
   const region = screen.getByRole('region', { name: 'Proof' })
@@ -53,7 +55,7 @@ it.each(['en', 'ar'])('shows loading and a retryable rendering error in %s', asy
   rerender(<LedgerPaperPdf url="/failed.pdf" />)
   const retry = await screen.findByRole('button', { name: i18n.t('common.retry') })
   expect(screen.getByText(i18n.t('books.paper.errorTitle'))).toBeInTheDocument()
-  vi.mocked(leasePdfUrl).mockResolvedValue({ doc: { numPages: 3 }, release: vi.fn() } as PdfDocLease)
+  vi.mocked(leasePdfUrl, { partial: true }).mockResolvedValue({ release: vi.fn() })
   await userEvent.click(retry)
   expect(await screen.findByText(i18n.t('ledgerBook.paper.pageCount', { page: 2, total: 3 }))).toBeInTheDocument()
 })
