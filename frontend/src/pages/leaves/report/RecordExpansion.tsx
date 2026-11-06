@@ -22,6 +22,7 @@ import { SendButton } from '@/components/notify/SendButton'
 import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
 
 import { actionsFor, canonStatus, displayState, lifecycleGroup } from '../lifecycle'
+import { leaveApprovalEvent, useApprovalNotify } from '../approvalNotify'
 import { leaveErrorToast, useLeaveDecisionActions } from '../useLeaveDecisionActions'
 import { NsControls } from '../NsControls'
 import { AmendLeaveDialog } from '../AmendLeaveDialog'
@@ -58,9 +59,9 @@ export function RecordExpansion({
   const queryClient = useQueryClient()
   const notesId = useId()
   const [notes, setNotes] = useState('')
-  // Approve-only: notify the employee of the approval (On by default). Reject
-  // and Cancel always notify, so this rides only the Approve mutation.
-  const [notifyEmployee, setNotifyEmployee] = useState(true)
+  // Approve-only notify switch, seeded from the approval event's default.
+  // Reject/Cancel send no choice: the backend applies their event default.
+  const approvalNotify = useApprovalNotify(row.leave_type)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
   const [amendOpen, setAmendOpen] = useState(false)
@@ -124,8 +125,7 @@ export function RecordExpansion({
     isNs &&
     displayState(row.leave_type, row.status, row.end_date, today, hasCertificate) === 'AwaitingCertificate'
 
-  // Sick-leave approvals use the sick_leave_registered wording; all others use leave_approved.
-  const sendEvent = lifecycleGroup(row.leave_type) === 'sick' ? 'sick_leave_registered' : 'leave_approved'
+  const sendEvent = leaveApprovalEvent(row.leave_type)
 
   return (
     <>
@@ -199,8 +199,8 @@ export function RecordExpansion({
           {/* Approve-only notify opt-out */}
           {acts.includes('approve') && (
             <NotifyEmployeeToggle
-              checked={notifyEmployee}
-              onChange={setNotifyEmployee}
+              checked={approvalNotify.checked}
+              onChange={approvalNotify.onChange}
               label={t('leaves.notify.label')}
             />
           )}
@@ -233,7 +233,7 @@ export function RecordExpansion({
                 <Button
                   size="sm"
                   onClick={() =>
-                    updateMutation.mutate({ status: 'Approved', n: notes, notify: notifyEmployee })
+                    updateMutation.mutate({ status: 'Approved', n: notes, notify: approvalNotify.field })
                   }
                   disabled={updateMutation.isPending}
                   className="rounded-full"
