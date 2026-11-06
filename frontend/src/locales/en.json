@@ -2884,6 +2884,9 @@
         "toRequired": "Choose at least one To recipient.",
         "signerRequired": "Choose a signing manager.",
         "addresseeInvalid": "One or more recipients are unavailable or not cleared for this grade. Choose the recipients again.",
+        "referenceInvalid": "One or more references are unavailable. Choose the references again.",
+        "folderInvalid": "One or more folders are unavailable in the outgoing box. Choose the folders again.",
+        "gradeBelowFloor": "The references require a grade of at least {{min}}. Raise the grade before Save & Send.",
         "signerInvalid": "Choose an active manager linked to a user account."
       },
       "subjects": {
