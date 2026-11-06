@@ -2,9 +2,10 @@
 
 Every Draft update and every Revision save runs :func:`sanitize_body`. The
 output keeps the editor's formatting (RTL ``dir``, tables, inline styles from a
-short property list) and drops anything that can run script or fetch a remote
-resource: no links, no ``url(`` or ``expression(`` in styles, and an ``img``
-survives only when its ``src`` is one of our same-origin image paths.
+short property list, and approved editor font families) and drops anything that
+can run script or fetch a remote resource: no links, no ``url(`` or
+``expression(`` in styles, and an ``img`` survives only when its ``src`` is one
+of our same-origin image paths.
 """
 
 from __future__ import annotations
@@ -81,19 +82,34 @@ STYLE_PROPERTIES: Final[frozenset[str]] = frozenset(
         "color",
         "background-color",
         "font-size",
+        "font-family",
         "line-height",
         "width",
         "height",
+        "max-width",
+        "max-inline-size",
+        "min-width",
         "vertical-align",
         "list-style-type",
         "margin",
         "padding",
         "border-collapse",
         "border-spacing",
+        "table-layout",
+        "break-before",
+        "break-after",
+        "break-inside",
+        "page-break-before",
+        "page-break-after",
+        "page-break-inside",
         *(f"{box}-{side}" for box in ("margin", "padding") for side in (*_SIDES, *_LOGICAL)),
         *(f"border{part}" for part in _BORDER_PARTS),
         *(f"border-{side}{part}" for side in (*_SIDES, *_LOGICAL) for part in _BORDER_PARTS),
     }
+)
+
+_FONT_FAMILIES: Final[frozenset[str]] = frozenset(
+    {"calibri", "sakkal majalla", "univers next arabic", "noto naskh arabic", "serif", "sans-serif"}
 )
 
 _STYLE_FORBIDDEN = re.compile(r"url\s*\(|expression\s*\(|\\|/\*|@import|javascript:", re.I)
@@ -121,7 +137,23 @@ def sanitize_body(html: str, *, image_src_prefixes: tuple[str, ...]) -> str:
 
     def attribute_filter(tag: str, attr: str, value: str) -> str | None:
         if attr == "style":
-            return None if _STYLE_FORBIDDEN.search(value) else value
+            if _STYLE_FORBIDDEN.search(value):
+                return None
+            # attribute_filter runs before nh3's CSS property filtering and
+            # serialization. Reject only unapproved font-family declarations;
+            # nh3 still validates and serializes every surviving declaration.
+            declarations = []
+            for declaration in value.split(";"):
+                if not declaration.strip():
+                    continue
+                property_name, _, property_value = declaration.partition(":")
+                if property_name.strip().lower() == "font-family" and not all(
+                    family.strip().strip("'\"").strip().casefold() in _FONT_FAMILIES
+                    for family in property_value.split(",")
+                ):
+                    continue
+                declarations.append(declaration)
+            return ";".join(declarations) or None
         if tag == "img" and attr == "src":
             return value if _allowed_image_src(value, image_src_prefixes) else None
         return value

@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 import { api, type LedgerDraftRead } from '@/lib/api'
 import { LedgerComposerPage } from './LedgerComposerPage'
+import { LedgerBodyEditor } from './LedgerBodyEditor'
 
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
 
@@ -105,4 +106,64 @@ it('initializes once after new-draft navigation and preserves the editor through
 
   view.unmount()
   expect(engine.remove).toHaveBeenCalledTimes(1)
+})
+
+type InitOptions = Record<string, unknown> & {
+  paste_postprocess: (editor: unknown, args: { node: HTMLElement }) => void
+  style_formats: { title: string, block: string, styles: Record<string, string> }[]
+}
+
+function renderEditor(onUploadImage?: (file: Blob, filename: string) => Promise<string>): InitOptions {
+  const engine = installEngine()
+  render(<LedgerBodyEditor value="" onChange={() => {}} label="Body" onUploadImage={onUploadImage} />)
+  expect(engine.init).toHaveBeenCalledTimes(1)
+  return engine.init.mock.calls[0][0] as unknown as InitOptions
+}
+
+it('configures the full paper editor without external links, media or source code', () => {
+  const options = renderEditor()
+  expect(options).toMatchObject({
+    menubar: 'edit view insert format table tools',
+    plugins: ['lists', 'advlist', 'table', 'charmap', 'searchreplace', 'visualblocks', 'fullscreen', 'wordcount', 'pagebreak', 'directionality'],
+    toolbar: 'undo redo | blocks styles | fontfamily fontsize | bold italic underline strikethrough forecolor backcolor | alignright aligncenter alignleft alignjustify | rtl ltr | numlist bullist outdent indent | table | pagebreak | removeformat | fullscreen',
+    font_size_formats: '10pt 11pt 12pt 14pt 16pt 18pt 20pt 24pt',
+    table_sizing_mode: 'relative',
+    pagebreak_separator: '<div style="break-after:page;page-break-after:always"></div>',
+    paste_data_images: false,
+  })
+  const fonts = String(options.font_family_formats).split(';').map((entry) => entry.split('=')[1])
+  expect(fonts).toEqual(['Sakkal Majalla', 'Calibri', 'Univers Next Arabic', 'Noto Naskh Arabic'])
+  expect(Number(options.height)).toBeGreaterThanOrEqual(600)
+  expect(options.table_default_styles).toMatchObject({ width: '100%', 'table-layout': 'fixed', 'border-collapse': 'collapse' })
+  const css = String(options.content_style)
+  for (const rule of ['direction: rtl', 'font-size: 16pt', 'line-height: 1.6', 'table-layout: fixed', '0.2mm solid #000', 'max-inline-size: calc(210mm - 13.2mm - 14.3mm)']) {
+    expect(css).toContain(rule)
+  }
+})
+
+it('offers paper heading presets as inline styles', () => {
+  const presets = renderEditor().style_formats
+  expect(presets.map((preset) => [preset.block, preset.styles['font-size']])).toEqual([
+    ['h2', '18pt'], ['h3', '16pt'], ['h4', '14pt'], ['p', '16pt'], ['p', '12pt'],
+  ])
+  expect(presets[0].styles).toMatchObject({ 'text-align': 'center', 'font-weight': 'bold' })
+  expect(presets[2].styles).toMatchObject({ 'text-decoration': 'underline' })
+})
+
+it('adds the image tool only with a server upload', () => {
+  const options = renderEditor(() => Promise.resolve('/x.png'))
+  expect(options.plugins).toContain('image')
+  expect(String(options.toolbar)).toContain('image')
+  expect(options.paste_data_images).toBe(true)
+})
+
+it('strips Word classes from pasted content and keeps table borders', () => {
+  const node = document.createElement('div')
+  node.innerHTML = '<p class="MsoNormal">x</p><table class="MsoTableGrid"><tr><td class="c1">a</td><td style="border: 1px dotted red">b</td></tr></table>'
+  renderEditor().paste_postprocess(null, { node })
+  expect(node.querySelector('[class]')).toBeNull()
+  const [first, second] = node.querySelectorAll('td')
+  expect(first.style.border).toBe('0.2mm solid rgb(0, 0, 0)')
+  expect(second.style.border).toBe('1px dotted red')
+  expect(node.querySelector('table')?.style.borderCollapse).toBe('collapse')
 })
