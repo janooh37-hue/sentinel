@@ -149,12 +149,11 @@ class DocumentGenerateRequest(BaseModel):
     # is retired for this form.
     classification_code: str | None = None
     confidentiality: BookConfidentiality = "general"
-    # Per-book notify opt-out (2026-07-20). The generation preview shows an
-    # On-by-default switch for notifier-backed forms; sending False suppresses
-    # the notification for THIS book only. Default True keeps every existing
-    # caller's behaviour unchanged. ANDed with the global
-    # `sms_autosend_enabled` setting inside notify_dispatch.
-    notify_employee: bool = True
+    # Per-book notify switch. The generation preview shows it seeded from the
+    # event's default (`msgdefault.<event>`); True/False is the operator's
+    # explicit choice for THIS book, None applies the event default. ANDed
+    # with the global `sms_autosend_enabled` setting inside notify_dispatch.
+    notify_employee: bool | None = None
 
 
 class DocumentGenerateResponse(BaseModel):

@@ -5118,6 +5118,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notify/templates/{event}/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Template Default */
+        put: operations["update_template_default_api_v1_notify_templates__event__default_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notify/templates/{event}/render": {
         parameters: {
             query?: never;
@@ -11160,11 +11177,8 @@ export interface components {
              * @enum {string}
              */
             confidentiality: "general" | "personal" | "secret" | "directed";
-            /**
-             * Notify Employee
-             * @default true
-             */
-            notify_employee: boolean;
+            /** Notify Employee */
+            notify_employee?: boolean | null;
         };
         /** DocumentGenerateResponse */
         DocumentGenerateResponse: {
@@ -13202,11 +13216,8 @@ export interface components {
             start_date?: string | null;
             /** End Date */
             end_date?: string | null;
-            /**
-             * Notify Employee
-             * @default true
-             */
-            notify_employee: boolean;
+            /** Notify Employee */
+            notify_employee?: boolean | null;
         };
         /** LedgerAddress */
         LedgerAddress: {
@@ -13692,6 +13703,11 @@ export interface components {
             /** En */
             en: number;
         };
+        /** MessageTemplateDefaultWrite */
+        MessageTemplateDefaultWrite: {
+            /** Enabled */
+            enabled: boolean;
+        };
         /** MessageTemplateRead */
         MessageTemplateRead: {
             /** Event */
@@ -13713,6 +13729,13 @@ export interface components {
             override: components["schemas"]["MessageText"] | null;
             /** Variables */
             variables: components["schemas"]["MessageVariable"][];
+            /** Default Enabled */
+            default_enabled: boolean;
+            /**
+             * Default Mode
+             * @enum {string}
+             */
+            default_mode: "prefill" | "auto";
         };
         /** MessageText */
         MessageText: {
@@ -13932,6 +13955,8 @@ export interface components {
             channel: string | null;
             /** Status */
             status: string;
+            /** Skip Reason */
+            skip_reason?: ("default_off" | "user_off") | null;
             /** Delivery State */
             delivery_state: string | null;
             /** Fell Back */
@@ -13970,6 +13995,8 @@ export interface components {
             timing: "on_approval" | "on_save" | "on_status_change" | "scheduled" | "manual";
             text: components["schemas"]["MessageText"] | null;
             segments: components["schemas"]["MessageSegments"] | null;
+            /** Default Enabled */
+            default_enabled: boolean;
         };
         /** NotifyPreviewRequest */
         NotifyPreviewRequest: {
@@ -14020,6 +14047,8 @@ export interface components {
             channel: string | null;
             /** Status */
             status: string;
+            /** Skip Reason */
+            skip_reason?: ("default_off" | "user_off") | null;
             /** Delivery State */
             delivery_state: string | null;
             /** Fell Back */
@@ -30736,6 +30765,43 @@ export interface operations {
             };
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTemplateRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_template_default_api_v1_notify_templates__event__default_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageTemplateDefaultWrite"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
