@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
@@ -11,10 +11,12 @@ import { normalizeDigits } from '@/lib/utils'
 interface NotifyMessagePreviewProps {
   body: NotifyPreviewRequest
   notifyEmployee: boolean
+  /** Receives the event's default-send setting whenever a preview loads. */
+  onDefaultEnabled?: (enabled: boolean) => void
 }
 
 /** Uses the same unsaved fields as generation; preview failures never gate saving. */
-export function NotifyMessagePreview({ body, notifyEmployee }: NotifyMessagePreviewProps): React.JSX.Element {
+export function NotifyMessagePreview({ body, notifyEmployee, onDefaultEnabled }: NotifyMessagePreviewProps): React.JSX.Element {
   const { t } = useTranslation()
   const [language, setLanguage] = useState<MsgLang | null>(null)
   // Debounce by content, not object identity: the parent rebuilds its payload on render.
@@ -27,6 +29,10 @@ export function NotifyMessagePreview({ body, notifyEmployee }: NotifyMessagePrev
     enabled: serialized === debounced,
     retry: false,
   })
+  const defaultEnabled = preview.data?.default_enabled
+  useEffect(() => {
+    if (defaultEnabled !== undefined) onDefaultEnabled?.(defaultEnabled)
+  }, [defaultEnabled, onDefaultEnabled])
 
   if (preview.isPending || serialized !== debounced) {
     return (

@@ -1343,9 +1343,12 @@ class OutboundMessage(Base):
 
     Unifies the retired sms_messages / whatsapp_messages logs. ``channel`` is the
     channel actually used; NULL when the attempt failed before routing (no phone).
-    ``status`` is queued|sent|failed. ``delivery_state`` is the channel's own
-    delivery outcome (WhatsApp: sent|delivered|read|failed; SMS: Pending|Delivered|
-    Failed). ``fell_back``/``fallback_reason`` record a WhatsApp→SMS downgrade.
+    ``status`` is queued|sent|failed|skipped; ``skipped`` (with ``skip_reason``
+    default_off|user_off) logs an automatic send suppressed by the event default
+    or the operator's switch, and is terminal like ``sent``. ``delivery_state`` is
+    the channel's own delivery outcome (WhatsApp: sent|delivered|read|failed; SMS:
+    Pending|Delivered|Failed). ``fell_back``/``fallback_reason`` record a WhatsApp→SMS
+    downgrade.
     ``attempts``/``next_retry_at`` drive the bounded WhatsApp retry queue.
     """
 
@@ -1368,6 +1371,7 @@ class OutboundMessage(Base):
     provider_msg_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    skip_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
     sent_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 

@@ -23,12 +23,11 @@ def test_should_autosend_false_without_book():
     assert docs_api._should_autosend(commit=True, revise_of_book_id=None, book_id=None) is False
 
 
-def test_should_autosend_false_when_notify_employee_off():
-    """The per-book notify switch, when off, suppresses autosend even for an
-    otherwise-eligible committed initial generation."""
+def test_should_autosend_false_for_system_silence():
+    """A system suppression (inmate reporter) attempts nothing, not even a skip."""
     assert (
         docs_api._should_autosend(
-            commit=True, revise_of_book_id=None, book_id=5, notify_employee=False
+            commit=True, revise_of_book_id=None, book_id=5, notify_employee="silent"
         )
         is False
     )
@@ -37,10 +36,11 @@ def test_should_autosend_false_when_notify_employee_off():
 @pytest.mark.parametrize(
     ("template_id", "notify_kwargs", "expected_dispatches"),
     [
-        ("Salary Deduction Form", {"notify_employee": False}, []),
-        ("Violation Form", {"notify_employee": False}, []),
-        ("Salary Deduction Form", {}, [42]),
-        ("Violation Form", {"notify_employee": True}, [42]),
+        # An explicit off still reaches the dispatcher, which logs a skipped row.
+        ("Salary Deduction Form", {"notify_employee": False}, [(42, False)]),
+        ("Violation Form", {"notify_employee": False}, [(42, False)]),
+        ("Salary Deduction Form", {}, [(42, None)]),
+        ("Violation Form", {"notify_employee": True}, [(42, True)]),
     ],
 )
 def test_run_generation_notification_choice_and_book_id(
@@ -53,7 +53,7 @@ def test_run_generation_notification_choice_and_book_id(
         def close(self) -> None:
             return None
 
-    dispatched: list[int] = []
+    dispatched: list[tuple[int, object]] = []
     monkeypatch.setattr(docs_api, "SessionLocal", FakeSession)
     monkeypatch.setattr(
         docs_api.document_service,
@@ -68,7 +68,7 @@ def test_run_generation_notification_choice_and_book_id(
     monkeypatch.setattr(
         docs_api.notify_dispatch,
         "auto_send_for_book",
-        lambda db, book_id, *, sent_by: dispatched.append(book_id),
+        lambda db, book_id, *, sent_by, choice: dispatched.append((book_id, choice)),
     )
 
     job_id = docs_api.submit_job(owner_user_id=1)

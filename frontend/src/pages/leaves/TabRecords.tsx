@@ -31,6 +31,7 @@ import { FilterSheet } from '@/components/ui/filter-sheet'
 import { Input } from '@/components/ui/input'
 import { SkeletonRow } from '@/components/ui/skeleton'
 import { actionsFor, canonStatus, displayState, lifecycleGroup } from './lifecycle'
+import { leaveApprovalEvent, useApprovalNotify } from './approvalNotify'
 import { useLeaveDecisionActions } from './useLeaveDecisionActions'
 import { NationalServiceDialog } from './NationalServiceDialog'
 import { NsControls } from './NsControls'
@@ -314,8 +315,8 @@ function LeaveDetailDrawer({
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const [notes, setNotes] = useState('')
-  // Approve-only notify opt-out (On by default); reject/cancel always notify.
-  const [notifyEmployee, setNotifyEmployee] = useState(true)
+  // Approve-only notify switch, seeded from the approval event's default.
+  // Reject/cancel send no choice: the backend applies their event default.
   const [seededId, setSeededId] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
@@ -338,6 +339,7 @@ function LeaveDetailDrawer({
   })
 
   const leave: LeaveRead | undefined = detailQuery.data
+  const approvalNotify = useApprovalNotify(leave?.leave_type ?? '')
 
   // Seed notes from the loaded leave once per leave id.
   // Uses React's "setState-during-render" pattern (guarded by seededId) so a
@@ -360,10 +362,7 @@ function LeaveDetailDrawer({
   const acts = leave ? actionsFor(leave.leave_type, leave.status, leave.end_date, today, hasCertificate) : []
   const hasRequestActions =
     acts.includes('approve') || acts.includes('reject') || acts.includes('cancel')
-  // Sick-leave approvals use the sick_leave_registered event; all others use leave_approved.
-  const sendEvent = leave != null && lifecycleGroup(leave.leave_type) === 'sick'
-    ? 'sick_leave_registered'
-    : 'leave_approved'
+  const sendEvent = leaveApprovalEvent(leave?.leave_type ?? '')
   const awaitingCert =
     leave != null &&
     isNs &&
@@ -472,8 +471,8 @@ function LeaveDetailDrawer({
             {/* Approve-only notify opt-out */}
             {acts.includes('approve') && (
               <NotifyEmployeeToggle
-                checked={notifyEmployee}
-                onChange={setNotifyEmployee}
+                checked={approvalNotify.checked}
+                onChange={approvalNotify.onChange}
                 label={t('leaves.notify.label')}
               />
             )}
@@ -496,7 +495,7 @@ function LeaveDetailDrawer({
                   <Button
                     size="sm"
                     onClick={() =>
-                      updateMutation.mutate({ status: 'Approved', n: notes, notify: notifyEmployee })
+                      updateMutation.mutate({ status: 'Approved', n: notes, notify: approvalNotify.field })
                     }
                     disabled={updateMutation.isPending}
                     className="rounded-full"

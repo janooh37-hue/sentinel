@@ -40,6 +40,7 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import { ChevronLeft, ChevronRight, Eye, Mail, Pencil, QrCode, RotateCcw, Search, ArrowRight, ArrowLeft } from 'lucide-react'
 import { toast } from '@/lib/toast'
 
+import { effectiveNotify, notifyEmployeeField } from '@/lib/notifyChoice'
 import { shouldShowNotifyToggle } from './notifyToggle'
 import { GeneratedSaveActions } from './GeneratedSaveActions'
 import { savedGenerationFromJob, type SavedGeneration } from './savedGeneration'
@@ -262,9 +263,12 @@ function StandardApplicationPage(): React.JSX.Element {
   const [bodyMode, setBodyMode] = useState<'editor' | 'word'>('word')
   // General Book Word mode: selected boilerplate template (or null for blank).
   const [templateName, setTemplateName] = useState<string | null>(null)
-  // Per-book notify opt-out — On by default; resets per form. Only surfaced for
-  // the 8 notifying forms when global autosend is on (see notifyToggle.ts).
-  const [notifyEmployee, setNotifyEmployee] = useState(true)
+  // Per-book notify switch: the operator's choice (null = untouched) over the
+  // event's default-send setting reported by the message preview. Resets per
+  // form. Only surfaced for notifying forms when global autosend is on (see notifyToggle.ts).
+  const [notifyChoice, setNotifyChoice] = useState<boolean | null>(null)
+  const [notifyDefault, setNotifyDefault] = useState<boolean | undefined>(undefined)
+  const notifyEmployee = effectiveNotify(notifyChoice, notifyDefault)
   // Draft/Save split: tracks which mode the in-flight job is in. The toast +
   // localStorage-clear in JobStatus.onDone branch on this. Stored in a ref
   // (not state) so we don't re-render the form just to flip the flag.
@@ -594,9 +598,10 @@ function StandardApplicationPage(): React.JSX.Element {
       embed_signature:
         Object.keys(embedSignature).length > 0 ? embedSignature : undefined,
       commit,
-      // Per-book notify opt-out — only meaningful on the committed save of a
-      // notifying form; the backend ignores it otherwise.
-      notify_employee: notifyEmployee,
+      // Per-book notify choice — only when the switch is shown, and then only when
+      // it departs from the event default (or the default is unknown); omitted,
+      // the backend applies the default.
+      notify_employee: showNotifyEmployee ? notifyEmployeeField(notifyChoice, notifyDefault) : undefined,
       attachments: attachmentSpecs.length > 0 ? attachmentSpecs : undefined,
       // Revise mode: only the committed save regenerates a new version under
       // the existing book's ref (the backend requires commit=True for it).
@@ -805,8 +810,9 @@ function StandardApplicationPage(): React.JSX.Element {
     setInmateEntryMode('create')
     setApprovedImport(null)
     pendingNotificationRef.current = undefined
-    // Per-book notify switch is not remembered — each newly-picked form starts On.
-    setNotifyEmployee(true)
+    // Per-book notify switch is not remembered — each newly-picked form starts at its default.
+    setNotifyChoice(null)
+    setNotifyDefault(undefined)
     setSubmitError(null)
     setClassificationCode(null)
     setConfidentiality('general')
@@ -976,8 +982,9 @@ function StandardApplicationPage(): React.JSX.Element {
     setInmateEntryMode('create')
     setApprovedImport(null)
     pendingNotificationRef.current = undefined
-    // Per-book notify switch is not remembered — each newly-picked form starts On.
-    setNotifyEmployee(true)
+    // Per-book notify switch is not remembered — each newly-picked form starts at its default.
+    setNotifyChoice(null)
+    setNotifyDefault(undefined)
     setSubmitError(null)
     setClassificationCode(null)
     setConfidentiality('general')
@@ -1679,6 +1686,8 @@ function StandardApplicationPage(): React.JSX.Element {
                       signingPath={schemaQuery.data?.signing_path}
                       showNotify={showNotifyEmployee}
                       notifyEmployee={notifyEmployee}
+                      notifyOffByDefault={notifyChoice === null && notifyDefault === false}
+                      onNotifyDefault={setNotifyDefault}
                       previewBody={notifyPayload ? {
                         template_id: notifyPayload.template_id,
                         employee_id: notifyPayload.employee_id ?? null,
@@ -1699,7 +1708,7 @@ function StandardApplicationPage(): React.JSX.Element {
                             })
                           : t('application.saveReadyHint')
                       }
-                      onNotifyChange={setNotifyEmployee}
+                      onNotifyChange={setNotifyChoice}
                       onSave={() => void handleSave()}
                       confidentiality={reviseBookId == null ? confidentiality : undefined}
                       onConfidentialityChange={setConfidentiality}

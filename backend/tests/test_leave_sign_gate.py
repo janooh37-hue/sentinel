@@ -180,7 +180,7 @@ def test_generated_leave_waits_for_signing_and_sends_once(gate_env, monkeypatch,
     finish_signing(env, book)
     assert book.approval_state == "approved"
     assert leave.status == "Approved"
-    autosend.assert_called_once_with(env.db, book.id, sent_by=env.signer.id)
+    autosend.assert_called_once_with(env.db, book.id, sent_by=env.signer.id, choice=None)
     assert env.send.call_count == 1
     assert env.send.call_args.args[1] == (
         "leave_permit" if template == "Leave Permit Form" else "admin_leave"

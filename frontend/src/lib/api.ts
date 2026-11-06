@@ -253,9 +253,8 @@ export type LeaveListItem = components['schemas']['LeaveListItem'] & {
 export type LeaveListResponse = components['schemas']['LeaveListResponse']
 export type LeaveAwaitingReturnCount = components['schemas']['LeaveAwaitingReturnCount']
 export type LeaveCreate = components['schemas']['LeaveCreate']
-// notify_employee is server-defaulted (True) and openapi-typescript emits it as
-// required; make it optional for the client so status/date-only callers needn't
-// pass it — only the Approve action sets it (to suppress that one notification).
+// notify_employee is optional (null/omitted = the event's default-send setting);
+// only the Approve action sets it, and only when the operator departs from that default.
 export type LeaveUpdate = Omit<components['schemas']['LeaveUpdate'], 'notify_employee'> & {
   notify_employee?: boolean
 }
@@ -3272,7 +3271,8 @@ export interface NotifyStatus {
   event_ref: string
   language: string
   channel: 'whatsapp' | 'sms' | null
-  status: 'queued' | 'sent' | 'failed'
+  status: 'queued' | 'sent' | 'failed' | 'skipped'
+  skip_reason?: 'default_off' | 'user_off' | null
   delivery_state: string | null
   fell_back: boolean
   fallback_reason: string | null

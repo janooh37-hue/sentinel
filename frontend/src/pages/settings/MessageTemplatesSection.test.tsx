@@ -30,7 +30,7 @@ vi.mock('@/components/templates/EmailDraftEditor', () => ({
 import { MessageTemplatesSection } from './MessageTemplatesSection'
 
 function message(event: string, group: MessageTemplateRead['group'], services: string[]): MessageTemplateRead {
-  return { event, group, services, label: { en: event, ar: event }, timing: 'on_save', default: { en: 'Default', ar: 'النص' }, override: null, variables: [] }
+  return { event, group, services, label: { en: event, ar: event }, timing: 'on_save', default: { en: 'Default', ar: 'النص' }, override: null, variables: [], default_enabled: true, default_mode: 'prefill' }
 }
 
 beforeEach(() => {

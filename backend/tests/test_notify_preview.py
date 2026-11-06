@@ -186,6 +186,7 @@ def test_non_notifying_or_revision_has_no_message(preview_client, template, revi
         "timing": timing,
         "text": None,
         "segments": None,
+        "default_enabled": True,
     }
 
 
@@ -313,7 +314,9 @@ def test_revision_preview_matches_approval_send(
     assert book.approval_state == "approved"
     sent = api_db.scalar(select(OutboundMessage))
     if notify_employee is False:
-        assert sent is None
+        # The revision keeps the original's explicit "off": logged, never sent.
+        assert sent is not None and (sent.status, sent.skip_reason) == ("skipped", "user_off")
+        assert sent.body is None
         assert preview["event"] is None and preview["text"] is None
     else:
         assert sent is not None and sent.status == "sent"

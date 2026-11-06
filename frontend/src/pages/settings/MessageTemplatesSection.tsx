@@ -5,6 +5,7 @@ import { ChevronDown } from 'lucide-react'
 
 import { MessageTemplateEditor } from '@/components/templates/MessageTemplateEditor'
 import { EmailDraftEditor } from '@/components/templates/EmailDraftEditor'
+import { DefaultOffBadge } from '@/components/templates/DefaultOffBadge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMessageTemplates, type MessageTemplateRead } from '@/lib/messageTemplates'
 import { useDraftVariants } from '@/lib/draftTemplates'
@@ -13,7 +14,7 @@ import { useServiceLabel } from '@/pages/books/serviceLabels'
 const messageGroups: MessageTemplateRead['group'][] = ['leaves', 'forms', 'violations', 'reminders']
 const draftGroups = ['leaves', 'forms', 'classifications', 'absences'] as const
 
-function TemplateRow({ id, label, children }: { id: string; label: string; children: ReactNode }) {
+function TemplateRow({ id, label, status, children }: { id: string; label: string; status?: ReactNode; children: ReactNode }) {
   const [visited, setVisited] = useState(false)
   return (
     <details
@@ -23,7 +24,10 @@ function TemplateRow({ id, label, children }: { id: string; label: string; child
     >
       <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-sm px-2 py-3 text-start text-sm font-medium text-foreground hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
         <span className="min-w-0 break-words">{label}</span>
-        <ChevronDown aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+        <span className="ms-auto flex shrink-0 items-center gap-3">
+          {status}
+          <ChevronDown aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+        </span>
       </summary>
       {/* Mount on first expansion, then retain unsaved edits when collapsed. */}
       {visited && <div className="min-w-0 pb-4 pt-2">{children}</div>}
@@ -69,7 +73,7 @@ export function MessageTemplatesSection(): React.JSX.Element {
                 <div key={service} className="min-w-0">
                   {group === 'forms' && service && <h5 className="pt-4 text-sm font-semibold text-foreground">{service.split('|').map(serviceLabel).join(' / ')}</h5>}
                   {templates.filter((template) => group !== 'forms' || template.services.join('|') === service).map((template) => (
-                    <TemplateRow key={template.event} id={template.event} label={template.label[lang]}>
+                    <TemplateRow key={template.event} id={template.event} label={template.label[lang]} status={<DefaultOffBadge template={template} />}>
                       <MessageTemplateEditor template={template} />
                     </TemplateRow>
                   ))}

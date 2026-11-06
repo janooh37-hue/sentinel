@@ -23,6 +23,7 @@ const template: MessageTemplateRead = {
   default: { ar: 'مرحبًا {name}', en: 'Hello {name}' },
   override: { ar: 'عزيزي {name}', en: 'Dear {name}' },
   variables: [{ name: 'name', label_en: 'Employee name', label_ar: 'اسم الموظف', sample: 'Ahmed' }],
+  default_enabled: true, default_mode: 'prefill',
 }
 
 function mount(value = template) {

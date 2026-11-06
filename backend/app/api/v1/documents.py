@@ -64,6 +64,7 @@ from app.services import (
     signature_placement_service,
     staging_service,
 )
+from app.services import notify_format as nf
 from app.services.job_registry import (
     JobDocumentItem as RegistryDocItem,
 )
@@ -83,14 +84,17 @@ def _should_autosend(
     commit: bool,
     revise_of_book_id: int | None,
     book_id: int | None,
-    notify_employee: bool = True,
+    notify_employee: nf.NotifyChoice = None,
 ) -> bool:
-    """Autosend only for a committed, non-revision generation that produced a
-    book, and only when the operator left the per-book notify switch on.
-
-    ``notify_employee`` defaults True so existing callers that predate the
-    per-book switch keep notifying; the generate route passes the request flag."""
-    return bool(commit) and revise_of_book_id is None and book_id is not None and notify_employee
+    """Attempt the automatic notification (a send, or a skipped row when the
+    switch or event default is off) only for a committed, non-revision generation
+    that produced a book. A system suppression ("silent") attempts nothing."""
+    return (
+        bool(commit)
+        and revise_of_book_id is None
+        and book_id is not None
+        and notify_employee != "silent"
+    )
 
 
 documents_router = APIRouter(prefix="/documents", tags=["documents"])
@@ -149,12 +153,11 @@ class DocumentGenerateRequest(BaseModel):
     # is retired for this form.
     classification_code: str | None = None
     confidentiality: BookConfidentiality = "general"
-    # Per-book notify opt-out (2026-07-20). The generation preview shows an
-    # On-by-default switch for notifier-backed forms; sending False suppresses
-    # the notification for THIS book only. Default True keeps every existing
-    # caller's behaviour unchanged. ANDed with the global
-    # `sms_autosend_enabled` setting inside notify_dispatch.
-    notify_employee: bool = True
+    # Per-book notify switch. The generation preview shows it seeded from the
+    # event's default (`msgdefault.<event>`); True/False is the operator's
+    # explicit choice for THIS book, None applies the event default. ANDed
+    # with the global `sms_autosend_enabled` setting inside notify_dispatch.
+    notify_employee: bool | None = None
 
 
 class DocumentGenerateResponse(BaseModel):
@@ -269,9 +272,9 @@ def _run_generation(
         # while this job sat queued is respected, not a stale detached read.
         actor = db.get(User, current_user.id) if current_user is not None else None
         # inmate_reporter's private saves never notify regardless of the request
-        # flag (server-enforced, not just a UI default).
-        notify_employee = (
-            False
+        # flag (server-enforced, not just a UI default), and log no skipped row.
+        notify_employee: nf.NotifyChoice = (
+            "silent"
             if actor is not None and actor.role == INMATE_REPORTER_ROLE
             else request.notify_employee
         )
@@ -301,7 +304,12 @@ def _run_generation(
             notify_employee=notify_employee,
         ):
             try:
-                notify_dispatch.auto_send_for_book(db, result.book_id, sent_by=None)  # type: ignore[arg-type]
+                notify_dispatch.auto_send_for_book(
+                    db,
+                    result.book_id,  # type: ignore[arg-type]
+                    sent_by=actor.id if actor is not None else None,
+                    choice=notify_employee,
+                )
             except Exception:
                 log.exception("auto SMS failed for book %s", result.book_id)
         registry_docs = [

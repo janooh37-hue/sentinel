@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { smsDeliveryTone } from './smsDelivery'
+import { skippedLabelKey, smsDeliveryTone } from './smsDelivery'
 
 describe('smsDeliveryTone', () => {
   it('delivered when gateway confirms delivery', () => {
@@ -14,5 +14,16 @@ describe('smsDeliveryTone', () => {
   it('pending when accepted but not yet confirmed', () => {
     expect(smsDeliveryTone({ status: 'sent', delivery_state: null })).toBe('pending')
     expect(smsDeliveryTone({ status: 'sent', delivery_state: 'Sent' })).toBe('pending')
+  })
+  it('skipped, never failed or pending, when the message was not attempted', () => {
+    expect(smsDeliveryTone({ status: 'skipped', delivery_state: null })).toBe('skipped')
+  })
+})
+
+describe('skippedLabelKey', () => {
+  it('names why the message was not sent', () => {
+    expect(skippedLabelKey('default_off')).toBe('notify.skipped.defaultOff')
+    expect(skippedLabelKey('user_off')).toBe('notify.skipped.userOff')
+    expect(skippedLabelKey(null)).toBe('notify.skipped.generic')
   })
 })

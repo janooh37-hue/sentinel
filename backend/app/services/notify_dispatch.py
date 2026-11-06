@@ -304,19 +304,6 @@ def leave_status_event(leave: Leave) -> str | None:
     return event
 
 
-def _send_leave_status(
-    db: Session, leave_id: int, *, sent_by: int | None
-) -> OutboundMessage | None:
-    """Send the notification matching a leave's current canonical status. No flag checks."""
-    leave = db.get(Leave, leave_id)
-    if leave is None or leave.employee_id is None:
-        return None
-    event = leave_status_event(leave)
-    if event is None:
-        return None
-    return send_for_event(db, event, leave_id, sent_by=sent_by)
-
-
 def _autosend_enabled(db: Session) -> bool:
     from app.services import settings_service
 
@@ -326,15 +313,94 @@ def _autosend_enabled(db: Session) -> bool:
     )
 
 
+def skip_reason(db: Session, event: str, choice: nf.NotifyChoice) -> str | None:
+    """Why an automatic ``event`` send is suppressed, or ``None`` to send.
+
+    An explicit True/False wins; None follows the event default. "silent" is the
+    caller's to handle (it writes no row).
+    """
+    if choice is True:
+        return None
+    if choice is False:
+        return nf.SKIP_USER_OFF
+    return None if sms_templates.default_send_enabled(db, event) else nf.SKIP_DEFAULT_OFF
+
+
+def _log_skip(
+    db: Session,
+    *,
+    employee: Employee,
+    event_type: str,
+    event_ref: str,
+    reason: str,
+    sent_by: int | None,
+) -> OutboundMessage:
+    """Log one terminal ``skipped`` row in place of an automatic send."""
+    phone = normalize_phone(employee.contact, default_cc=get_settings().sms_country_code)
+    return _log_row(
+        db,
+        employee_id=employee.id,
+        event_type=event_type,
+        event_ref=event_ref,
+        language="ar" if (employee.msg_language or "ar") == "ar" else "en",
+        phone=phone or "",
+        channel=None,
+        status="skipped",
+        skip_reason=reason,
+        body=None,
+        sent_by=sent_by,
+    )
+
+
+def _auto_send_event(
+    db: Session,
+    event_type: str,
+    record_id: int,
+    *,
+    choice: nf.NotifyChoice,
+    sent_by: int | None,
+) -> OutboundMessage | None:
+    """Send ``event_type`` for a record, or log why the choice/default suppressed it."""
+    if choice == "silent":
+        return None
+    reason = skip_reason(db, event_type, choice)
+    if reason is None:
+        return send_for_event(db, event_type, record_id, sent_by=sent_by)
+    loader = _LOADERS.get(event_type)
+    record = loader(db, record_id) if loader is not None else None
+    employee: Employee | None = getattr(record, "employee", None)
+    if employee is None:
+        return None
+    return _log_skip(
+        db,
+        employee=employee,
+        event_type=event_type,
+        event_ref=f"{event_type}:{record_id}",
+        reason=reason,
+        sent_by=sent_by,
+    )
+
+
 def auto_send_leave_status(
-    db: Session, leave_id: int, *, sent_by: int | None = None
+    db: Session,
+    leave_id: int,
+    *,
+    sent_by: int | None = None,
+    choice: nf.NotifyChoice = None,
 ) -> OutboundMessage | None:
     """Best-effort notification for a leave's current status (request/approved/rejected/
     cancelled). No-ops unless a channel + auto-send are enabled and the status maps to
-    an event. Called on generation and on every status change."""
+    an event; a choice or event default that suppresses it logs a skipped row.
+    Called on generation and on every status change."""
     if not _autosend_enabled(db):
         return None
-    return _send_leave_status(db, leave_id, sent_by=sent_by)
+    leave = db.get(Leave, leave_id)
+    if leave is None or leave.employee_id is None:
+        return None
+    event = leave_status_event(leave)
+    if event is None:
+        return None
+    return _auto_send_event(db, event, leave_id, choice=choice, sent_by=sent_by)
 
 
 def template_event(template_id: str, leave: Leave | None = None) -> str | None:
@@ -401,9 +467,10 @@ def approval_notification_eligible(
     """
     from app.services import document_service
 
-    # Inheritance includes enrollment: no signing snapshot means no notification.
+    # No signing snapshot (or a system suppression) means no notification at all;
+    # an operator's or default's "off" still reaches the sender as a skipped row.
     if (
-        not document_service.inherited_notify_employee(book)
+        document_service.inherited_notify_employee(book) == "silent"
         or (gated and not status_changed)
         or target is None
     ):
@@ -413,17 +480,25 @@ def approval_notification_eligible(
     if template_id == "Leave Application Form" and not gated and event != nf.EVENT_LEAVE_REQUESTED:
         return False
     sent = last_status(db, event, record_id) if record_id is not None else None
+    # A skipped row is terminal like a sent one: never re-sent or re-skipped.
     return sent is None or sent.status == "failed"
 
 
 def auto_send_for_book(
-    db: Session, book_id: int, *, sent_by: int | None = None
+    db: Session,
+    book_id: int,
+    *,
+    sent_by: int | None = None,
+    choice: nf.NotifyChoice = None,
 ) -> OutboundMessage | None:
     """Best-effort automatic notification for a generated or approved service form.
 
     No-ops unless a channel and auto-send are enabled, the book maps to an event
     (``book_event``), and the book has an employee. An approval-chain form must
-    first reach approved: generating or returning one sends nothing.
+    first reach approved: generating or returning one sends nothing. ``choice`` is
+    the record's notify switch (None: event default); a suppressed send logs a
+    skipped row. A record already sent or skipped (a re-save that reuses it) is
+    final; only a failed attempt is retried.
     """
     if not _autosend_enabled(db):
         return None
@@ -438,7 +513,10 @@ def auto_send_for_book(
     target = book_event(db, book)
     if target is None:
         return None
-    return send_for_event(db, target[0], target[1], sent_by=sent_by)
+    prior = last_status(db, target[0], target[1])
+    if prior is not None and prior.status != "failed":
+        return None
+    return _auto_send_event(db, target[0], target[1], choice=choice, sent_by=sent_by)
 
 
 def auto_send_leave_amended(
@@ -448,7 +526,7 @@ def auto_send_leave_amended(
 
     Pre-rendered via sms_templates.render_leave_amended because the old
     duration is gone from the record after the update. Same gating as the
-    other auto-sends.
+    other auto-sends; an event default of off logs a skipped row instead.
     """
     if not _autosend_enabled(db):
         return None
@@ -456,6 +534,16 @@ def auto_send_leave_amended(
     if leave is None or leave.employee_id is None:
         return None
     employee = leave.employee
+    event_ref = f"leave_amended:{leave_id}"
+    if not sms_templates.default_send_enabled(db, nf.EVENT_LEAVE_AMENDED):
+        return _log_skip(
+            db,
+            employee=employee,
+            event_type=nf.EVENT_LEAVE_AMENDED,
+            event_ref=event_ref,
+            reason=nf.SKIP_DEFAULT_OFF,
+            sent_by=sent_by,
+        )
     lang = "ar" if (employee.msg_language or "ar") == "ar" else "en"
     body = sms_templates.render_leave_amended(
         leave, employee, lang, old_days=old_days, reason=reason, db=db
@@ -466,7 +554,7 @@ def auto_send_leave_amended(
         body=body,
         language=lang,
         event_type="leave_amended",
-        event_ref=f"leave_amended:{leave_id}",
+        event_ref=event_ref,
         sent_by=sent_by,
     )
 
@@ -479,7 +567,8 @@ def send_ending_reminders(db: Session, *, today: date | None = None) -> int:
     leave_lifecycle).  Dedup rides on outbound_messages.event_ref — restart-safe,
     one per leave.  A missed 09:00 run (deploy/restart) is recovered on the next
     run; dedup suppresses duplicates unless the previous attempt hard-failed
-    (status="failed"), in which case the reminder is retried.
+    (status="failed"), in which case the reminder is retried. With the event
+    default off, a candidate gets one terminal skipped row instead.
     """
     if not _autosend_enabled(db):
         return 0
@@ -505,8 +594,11 @@ def send_ending_reminders(db: Session, *, today: date | None = None) -> int:
         if last is not None and last.status != "failed":
             continue
         try:
-            send_for_event(db, nf.EVENT_LEAVE_ENDING, leave.id, sent_by=None)
-            sent += 1
+            if skip_reason(db, nf.EVENT_LEAVE_ENDING, None) is None:
+                send_for_event(db, nf.EVENT_LEAVE_ENDING, leave.id, sent_by=None)
+                sent += 1
+            else:
+                _auto_send_event(db, nf.EVENT_LEAVE_ENDING, leave.id, choice=None, sent_by=None)
         except Exception:
             log.exception("leave-ending reminder failed for leave %s", leave.id)
     return sent

@@ -27,6 +27,9 @@ class Variable(NamedTuple):
 
 
 OVERRIDE_PREFIX = "msgtpl."
+# Present (value False) only when an event's automatic send is switched off;
+# absent means on, so every event sends by default.
+DEFAULT_SEND_PREFIX = "msgdefault."
 _PLACEHOLDER = re.compile(r"\{(\w+)\}")
 
 DEFAULTS: dict[str, dict[str, str]] = {
@@ -437,6 +440,12 @@ def get_override(db: Session | None, event: str) -> dict[str, str] | None:
     if db is None:
         return None
     return cast(dict[str, str] | None, settings_service._get(db, OVERRIDE_PREFIX + event))
+
+
+def default_send_enabled(db: Session | None, event: str) -> bool:
+    if db is None:
+        return True
+    return settings_service._get(db, DEFAULT_SEND_PREFIX + event) is not False
 
 
 def template_for(db: Session | None, event: str, lang: str) -> str:

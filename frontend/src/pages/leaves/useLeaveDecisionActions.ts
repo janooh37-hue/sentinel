@@ -70,9 +70,10 @@ export function useLeaveDecisionActions({
 
   const updateMutation = useMutation({
     mutationFn: ({ status, n, notify }: { status: LeaveStatus; n: string; notify?: boolean }) =>
-      // notify defaults True — only the Approve action passes False to suppress
-      // that one notification; reject/cancel keep notifying.
-      api.updateLeave(leaveId, { status, notes: n || undefined, notify_employee: notify ?? true }),
+      // Only the Approve action passes an explicit choice, and only when the
+      // operator flipped it away from the event default; reject/cancel omit it
+      // so the backend applies their event default.
+      api.updateLeave(leaveId, { status, notes: n || undefined, notify_employee: notify }),
     onSuccess: (_data, { status }) => {
       invalidate()
       if (status === 'Approved') toast.success(t('leaves.toast.approved'))

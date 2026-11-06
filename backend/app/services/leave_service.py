@@ -474,13 +474,13 @@ def update_leave(
     _cache_invalidate_employee(row.employee_id)
     # Notify the employee of the new step (approved / rejected / cancelled).
     # Best-effort — a gateway hiccup must never fail the status change.
-    # notify_employee (default True) lets the approver suppress this one
-    # notification; the UI only offers the opt-out on Approve.
-    if status_changed and payload.notify_employee:
+    # notify_employee: True/False is the operator's explicit choice; None follows
+    # the event default. A suppressed send logs a skipped row.
+    if status_changed:
         try:
             from app.services import notify_dispatch
 
-            notify_dispatch.auto_send_leave_status(db, leave_id)
+            notify_dispatch.auto_send_leave_status(db, leave_id, choice=payload.notify_employee)
         except Exception:
             log.exception("auto leave-status SMS failed for leave %s", leave_id)
     return row
@@ -723,7 +723,7 @@ def file_return(
         current_user=current_user,
         return_for_leave_id=leave_id,
         # The return dialog never notified the employee; its approval doesn't either.
-        notify_employee=False,
+        notify_employee="silent",
     )
 
     # generate_document already linked the doc + committed. Now complete the leave.

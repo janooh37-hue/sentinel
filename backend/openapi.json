@@ -21743,6 +21743,74 @@
         }
       }
     },
+    "/api/v1/notify/templates/{event}/default": {
+      "put": {
+        "tags": [
+          "notify"
+        ],
+        "summary": "Update Template Default",
+        "operationId": "update_template_default_api_v1_notify_templates__event__default_put",
+        "parameters": [
+          {
+            "name": "event",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageTemplateDefaultWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageTemplateRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/notify/templates/{event}/render": {
       "post": {
         "tags": [
@@ -46015,9 +46083,15 @@
             "default": "general"
           },
           "notify_employee": {
-            "type": "boolean",
-            "title": "Notify Employee",
-            "default": true
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Employee"
           }
         },
         "type": "object",
@@ -52212,9 +52286,15 @@
             "title": "End Date"
           },
           "notify_employee": {
-            "type": "boolean",
-            "title": "Notify Employee",
-            "default": true
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Employee"
           }
         },
         "type": "object",
@@ -53735,6 +53815,19 @@
         ],
         "title": "MessageSegments"
       },
+      "MessageTemplateDefaultWrite": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "MessageTemplateDefaultWrite"
+      },
       "MessageTemplateRead": {
         "properties": {
           "event": {
@@ -53791,6 +53884,18 @@
             },
             "type": "array",
             "title": "Variables"
+          },
+          "default_enabled": {
+            "type": "boolean",
+            "title": "Default Enabled"
+          },
+          "default_mode": {
+            "type": "string",
+            "enum": [
+              "prefill",
+              "auto"
+            ],
+            "title": "Default Mode"
           }
         },
         "type": "object",
@@ -53802,7 +53907,9 @@
           "timing",
           "default",
           "override",
-          "variables"
+          "variables",
+          "default_enabled",
+          "default_mode"
         ],
         "title": "MessageTemplateRead"
       },
@@ -54471,6 +54578,21 @@
             "type": "string",
             "title": "Status"
           },
+          "skip_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "default_off",
+                  "user_off"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Reason"
+          },
           "delivery_state": {
             "anyOf": [
               {
@@ -54622,6 +54744,10 @@
                 "type": "null"
               }
             ]
+          },
+          "default_enabled": {
+            "type": "boolean",
+            "title": "Default Enabled"
           }
         },
         "type": "object",
@@ -54630,7 +54756,8 @@
           "language",
           "timing",
           "text",
-          "segments"
+          "segments",
+          "default_enabled"
         ],
         "title": "NotifyPreviewRead"
       },
@@ -54787,6 +54914,21 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "skip_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "default_off",
+                  "user_off"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Reason"
           },
           "delivery_state": {
             "anyOf": [
