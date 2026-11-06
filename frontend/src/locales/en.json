@@ -2864,6 +2864,31 @@
       "loading": "Loading…",
       "loadFailed": "This could not be loaded.",
       "retry": "Retry",
+      "preset": {
+        "label": "Paper format",
+        "normal": "Book",
+        "report": "Report",
+        "openingHint": "To recipients appear in the paper opening."
+      },
+      "ccRules": {
+        "secretReason": "Requires Secret clearance (books.secret).",
+        "removeBeforeSend": "Remove CC recipients before Save & Send.",
+        "removeAll": "Remove all CC recipients"
+      },
+      "references": {
+        "label": "References",
+        "search": "Search by book reference or subject",
+        "selected": "Selected references",
+        "remove": "Remove reference {{ref}}",
+        "limit": "{{count}} of {{max}} references",
+        "empty": "No matching books."
+      },
+      "folders": {
+        "label": "Copy to folder",
+        "limit": "{{count}} of {{max}} outgoing folders",
+        "empty": "No outgoing folders are available.",
+        "unavailable": "Folder #{{id}} is unavailable. Uncheck to remove."
+      },
       "fields": {
         "kind": "Destination",
         "internal": "Internal",

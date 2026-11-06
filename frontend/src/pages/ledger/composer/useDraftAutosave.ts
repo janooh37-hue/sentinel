@@ -14,8 +14,9 @@ export type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
 
 export interface DraftAutosave {
   state: SaveState
-  /** Bumps after every accepted save (the paper preview reloads on it). */
-  savedCount: number
+  /** Last accepted autosave time, used to bust the PDF cache. */
+  savedAt: number | null
+  pending: boolean
   /** Saves `values` now if they differ; resolves false when the save failed. */
   flush: (values: ComposerValues) => Promise<boolean>
 }
@@ -23,25 +24,39 @@ export interface DraftAutosave {
 export function useDraftAutosave(draftId: number, values: ComposerValues, initial: ComposerValues, ms: number, onError?: (err: unknown) => boolean): DraftAutosave {
   const qc = useQueryClient()
   const saved = useRef(initial)
+  const [accepted, setAccepted] = useState(initial)
   const [state, setState] = useState<SaveState>('idle')
-  const [savedCount, setSavedCount] = useState(0)
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+  const inFlight = useRef<Promise<boolean> | null>(null)
 
   const flush = useCallback(async (next: ComposerValues): Promise<boolean> => {
+    // Preview opening and Save & Send can flush while an autosave is running.
+    // Preserve request order so an earlier response cannot mark newer edits saved.
+    while (inFlight.current) await inFlight.current
     const patch = changedFields(saved.current, next)
     if (Object.keys(patch).length === 0) return true
     setState('saving')
+    const request = (async (): Promise<boolean> => {
+      try {
+        await api.updateLedgerDraft(draftId, patch)
+      } catch (err) {
+        onError?.(err)
+        setState('failed')
+        return false
+      }
+      saved.current = { ...saved.current, ...patch } as ComposerValues
+      setState('saved')
+      setAccepted(saved.current)
+      setSavedAt((previous) => Math.max(Date.now(), (previous ?? 0) + 1))
+      void qc.invalidateQueries({ queryKey: LEDGER_DRAFTS_KEY, exact: true })
+      return true
+    })()
+    inFlight.current = request
     try {
-      await api.updateLedgerDraft(draftId, patch)
-    } catch (err) {
-      onError?.(err)
-      setState('failed')
-      return false
+      return await request
+    } finally {
+      if (inFlight.current === request) inFlight.current = null
     }
-    saved.current = { ...saved.current, ...patch } as ComposerValues
-    setState('saved')
-    setSavedCount((n) => n + 1)
-    void qc.invalidateQueries({ queryKey: LEDGER_DRAFTS_KEY, exact: true })
-    return true
   }, [draftId, qc, onError])
 
   useEffect(() => {
@@ -49,5 +64,5 @@ export function useDraftAutosave(draftId: number, values: ComposerValues, initia
     return () => clearTimeout(timer)
   }, [values, ms, flush])
 
-  return { state, savedCount, flush }
+  return { state, savedAt, pending: Object.keys(changedFields(accepted, values)).length > 0, flush }
 }
