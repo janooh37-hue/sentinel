@@ -65,6 +65,12 @@ export const LEDGER_TABLE_DEFAULT_STYLES = {
   'margin-inline': 'auto',
 }
 
+/**
+ * Page break as an element the sanitizer keeps byte-for-byte (nh3's normalised
+ * style form), so HugeRTE recognises it again when a saved body is reloaded.
+ */
+export const LEDGER_PAGEBREAK_SEPARATOR = '<div style="break-after:page;page-break-after:always"></div>'
+
 export const LEDGER_TABLE_DEFAULT_ATTRIBUTES = {}
 
 const CELL_STYLES: Record<string, string> = {

@@ -128,6 +128,7 @@ it('configures the full paper editor without external links, media or source cod
     toolbar: 'undo redo | blocks styles | fontfamily fontsize | bold italic underline strikethrough forecolor backcolor | alignright aligncenter alignleft alignjustify | rtl ltr | numlist bullist outdent indent | table | pagebreak | removeformat | fullscreen',
     font_size_formats: '10pt 11pt 12pt 14pt 16pt 18pt 20pt 24pt',
     table_sizing_mode: 'relative',
+    pagebreak_separator: '<div style="break-after:page;page-break-after:always"></div>',
     paste_data_images: false,
   })
   const fonts = String(options.font_family_formats).split(';').map((entry) => entry.split('=')[1])

@@ -257,3 +257,12 @@ def test_image_pass_handles_nh3_0_3_6_unescaped_attribute_output() -> None:
     from app.core.ledger_html import _drop_srcless_images
 
     assert _drop_srcless_images('<p><img alt="><svg onload=alert(1)>"></p>') == "<p></p>"
+
+
+PAGEBREAK_SEPARATOR = '<div style="break-after:page;page-break-after:always"></div>'
+
+
+def test_editor_pagebreak_separator_survives_unchanged() -> None:
+    assert (
+        clean(f"<p>a</p>{PAGEBREAK_SEPARATOR}<p>b</p>") == f"<p>a</p>{PAGEBREAK_SEPARATOR}<p>b</p>"
+    )
