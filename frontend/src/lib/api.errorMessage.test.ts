@@ -67,7 +67,7 @@ describe('apiErrorMessage', () => {
   })
 
   it.each([
-    ['REFERENCE_INVALID', 'One or more references are unavailable. Choose the references again.', 'أحد المراجع غير متاح. أعد اختيار المراجع.'],
+    ['REFERENCE_INVALID', 'One or more references are unavailable. Choose the references again.', 'إحدى الإشارات غير متاحة. أعد اختيار الإشارات.'],
     ['FOLDER_INVALID', 'One or more folders are unavailable in the outgoing box. Choose the folders again.', 'أحد الملفات غير متاح في صندوق الصادر. أعد اختيار الملفات.'],
   ])('localizes the %s paper selection error', async (code, en, ar) => {
     const error = new ApiError(422, code, 'Server detail')
@@ -84,7 +84,7 @@ describe('apiErrorMessage', () => {
     const error = new ApiError(422, 'GRADE_BELOW_FLOOR', 'Server detail', { min })
     expect(apiErrorMessage(error)).toBe(`The references require a grade of at least ${en}. Raise the grade before Save & Send.`)
     await i18n.changeLanguage('ar')
-    expect(apiErrorMessage(error)).toBe(`تتطلب المراجع درجة ${ar} على الأقل. ارفع الدرجة قبل الحفظ والإرسال.`)
+    expect(apiErrorMessage(error)).toBe(`تتطلب الإشارات درجة ${ar} على الأقل. ارفع الدرجة قبل الحفظ والإرسال.`)
   })
 
   it('keeps server detail in English', () => {

@@ -2871,7 +2871,7 @@
         "openingHint": "To recipients appear in the paper opening."
       },
       "ccRules": {
-        "secretReason": "Requires Secret clearance (books.secret).",
+        "secretReason": "Requires Secret clearance.",
         "removeBeforeSend": "Remove CC recipients before Save & Send.",
         "removeAll": "Remove all CC recipients"
       },

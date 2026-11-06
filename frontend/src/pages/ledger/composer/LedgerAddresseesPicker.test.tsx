@@ -22,8 +22,8 @@ function mount(grade: Grade, initial?: LedgerAddresseeIn[]): void {
 afterEach(async () => { cleanup(); vi.restoreAllMocks(); await i18n.changeLanguage('en') })
 
 it.each([
-  ['en', 'CC', 'Sara', 'Requires Secret clearance (books.secret).'],
-  ['ar', 'نسخة إلى', 'سارة', 'يتطلب تصريح الكتب السرية (books.secret).'],
+  ['en', 'CC', 'Sara', 'Requires Secret clearance.'],
+  ['ar', 'نسخة إلى', 'سارة', 'يتطلب تصريح الكتب السرية.'],
 ])('keeps uncleared Secret CC candidates visible but disabled with a reason in %s', async (language, cc, name, reason) => {
   i18n.addResourceBundle('ar', 'translation', ar, true, true)
   await i18n.changeLanguage(language)
