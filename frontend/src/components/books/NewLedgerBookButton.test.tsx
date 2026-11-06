@@ -11,6 +11,7 @@ const DRAFT: LedgerDraftRead = {
   id: 12, draft_number: '000012', tab: null, grade: 'unclassified', importance: null,
   subjects: [], body_html: '', created_at: '2026-10-28T08:00:00Z', updated_at: '2026-10-28T08:00:00Z',
   external: false, signer_manager_id: null, addressees: [],
+  paper_preset: 'normal', reference_book_ids: [], folder_ids: [],
 }
 
 function Where(): React.JSX.Element {
