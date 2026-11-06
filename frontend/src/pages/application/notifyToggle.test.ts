@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { shouldShowNotifyToggle } from './notifyToggle'
+import { effectiveNotify, notifyEmployeeField, shouldShowNotifyToggle } from './notifyToggle'
 
 describe('notifyToggle', () => {
   it('shows when metadata and global auto-send are enabled for a non-revision', () => {
@@ -32,5 +32,17 @@ describe('notifyToggle', () => {
       autosendEnabled: true,
       isRevision: true,
     })).toBe(false)
+  })
+
+  it.each([true, false])('seeds the switch from the event default (%s) until touched', (defaultEnabled) => {
+    expect(effectiveNotify(null, defaultEnabled)).toBe(defaultEnabled)
+    expect(effectiveNotify(!defaultEnabled, defaultEnabled)).toBe(!defaultEnabled)
+  })
+
+  it.each([true, false])('omits notify_employee unless the choice departs from the default (%s)', (defaultEnabled) => {
+    expect(notifyEmployeeField(null, defaultEnabled)).toBeUndefined()
+    // Flipped and flipped back: back on the default, so the backend decides.
+    expect(notifyEmployeeField(defaultEnabled, defaultEnabled)).toBeUndefined()
+    expect(notifyEmployeeField(!defaultEnabled, defaultEnabled)).toBe(!defaultEnabled)
   })
 })
