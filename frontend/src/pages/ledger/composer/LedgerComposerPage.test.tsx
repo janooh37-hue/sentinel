@@ -23,6 +23,7 @@ const DRAFT: LedgerDraftRead = {
   id: 12, draft_number: '000012', tab: null, grade: 'unclassified', importance: null,
   subjects: ['Leave plan'], body_html: '<p>Hello</p>',
   external: false, signer_manager_id: 3, addressees: [{ role: 'to', user_id: 8 }],
+  paper_preset: 'normal', reference_book_ids: [], folder_ids: [],
   created_at: '2026-10-28T08:00:00Z', updated_at: '2026-10-28T08:00:00Z',
 }
 

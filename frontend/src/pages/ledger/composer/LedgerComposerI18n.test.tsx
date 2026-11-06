@@ -23,6 +23,7 @@ const DRAFT: LedgerDraftRead = {
   id: 12, draft_number: '000012', tab: null, grade: 'secret', importance: null,
   subjects: ['خطة الإجازات'], body_html: '', created_at: '2026-10-28T08:00:00Z', updated_at: '2026-10-28T08:00:00Z',
   external: false, signer_manager_id: null, addressees: [],
+  paper_preset: 'normal', reference_book_ids: [], folder_ids: [],
 }
 
 /** Physical-direction utilities; RTL needs the logical ones (ms/me/ps/pe/start/end). */
@@ -61,6 +62,7 @@ beforeEach(() => {
     revisions: [{ version_id: 71, version_no: 1, trigger: 'initial', created_at: '2026-10-28T08:00:00Z', signed_at: '2026-10-28T09:00:00Z', superseded: false, locked: true }],
     selected_version_id: 71, subjects: ['x'], body_html: '<p>x</p>', content_sha256: 'abc',
     external: false, addressees: [], signer: null, can_sign: false, can_return: false, can_change_signer: false, can_resubmit: false, can_create_outlook_draft: false, return_note: null,
+    paper_preset: 'normal', references: [], folders: [],
   })
 })
 afterEach(() => { cleanup(); vi.restoreAllMocks() })

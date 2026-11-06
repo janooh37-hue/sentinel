@@ -23,7 +23,8 @@ const book = (revisions: LedgerRevisionRead[], over: Partial<LedgerBookRead> = {
   paper_date: '28-10-2026', approval_state: 'none', created_by_user_id: 1, voided: false, revisions,
   selected_version_id: revisions.at(-1)!.version_id, subjects: ['Leave plan'], body_html: '<p>x</p>', content_sha256: 'abc',
   external: false, addressees: [], signer: null, can_sign: false, can_return: false, can_change_signer: false,
-  can_resubmit: false, can_create_outlook_draft: false, return_note: null, ...over,
+  can_resubmit: false, can_create_outlook_draft: false, return_note: null,
+  paper_preset: 'normal', references: [], folders: [], ...over,
 })
 
 function Where(): React.JSX.Element {

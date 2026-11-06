@@ -26,6 +26,7 @@ const BOOK: LedgerBookRead = {
   revisions: [rev(1, true), rev(2, false)], selected_version_id: 72,
   subjects: ['Leave plan'], body_html: '<p>Hello</p>', content_sha256: 'abc',
   external: false, addressees: [], signer: null, can_sign: false, can_return: false, can_change_signer: false, can_resubmit: false, can_create_outlook_draft: false, return_note: null,
+  paper_preset: 'normal', references: [], folders: [],
 }
 
 function Where(): React.JSX.Element {
