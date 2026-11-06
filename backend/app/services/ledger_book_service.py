@@ -435,6 +435,13 @@ def _number_draft(
     classification = _CLASSIFICATION_BY_TAB[draft.tab]
     if db.get(BookCategory, CATEGORY_ID) is None:
         db.add(BookCategory(id=CATEGORY_ID, prefix=CATEGORY_ID))
+        db.flush()
+        # A new category is a new implicitly granted capability. Caps already
+        # memoized on users in this session (the addressee check computes them
+        # for every directory user) predate it and would now deny ``GS``.
+        for mapped in list(db.identity_map.values()):
+            if isinstance(mapped, User):
+                mapped._effective_caps_cache = None
     book = Book(
         category_id=CATEGORY_ID,
         ref_number=classified_ref(draft.tab, serial),
