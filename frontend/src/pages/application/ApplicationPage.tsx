@@ -40,7 +40,8 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import { ChevronLeft, ChevronRight, Eye, Mail, Pencil, QrCode, RotateCcw, Search, ArrowRight, ArrowLeft } from 'lucide-react'
 import { toast } from '@/lib/toast'
 
-import { effectiveNotify, notifyEmployeeField, shouldShowNotifyToggle } from './notifyToggle'
+import { effectiveNotify, notifyEmployeeField } from '@/lib/notifyChoice'
+import { shouldShowNotifyToggle } from './notifyToggle'
 import { GeneratedSaveActions } from './GeneratedSaveActions'
 import { savedGenerationFromJob, type SavedGeneration } from './savedGeneration'
 import { ApprovedViolationUpload } from './ApprovedViolationUpload'

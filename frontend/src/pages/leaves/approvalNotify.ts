@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import { useMessageTemplates } from '@/lib/messageTemplates'
-import { effectiveNotify, notifyEmployeeField } from '@/pages/application/notifyToggle'
+import { effectiveNotify, notifyEmployeeField } from '@/lib/notifyChoice'
 
 import { classifyLeaveType } from './report/kinds'
 
