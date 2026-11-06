@@ -20,8 +20,10 @@ import logging
 import re
 import secrets
 import shutil
-from datetime import UTC, datetime
+from collections.abc import Callable
+from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -33,7 +35,7 @@ from app.core.book_text import build_search_text, html_to_text
 from app.core.classifications import CLASSIFICATIONS, classified_ref
 from app.core.constants import LEDGER_BOOK_TEMPLATE_ID
 from app.core.ledger_html import sanitize_body
-from app.core.ledger_paper import PaperContext, render_paper
+from app.core.ledger_paper import CURRENT_LAYOUT, PaperContext, render_paper
 from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import (
     AddressBookContact,
@@ -43,6 +45,8 @@ from app.db.models import (
     BookApprovalStep,
     BookCategory,
     BookDraft,
+    BookFolder,
+    BookLink,
     BookRecipient,
     BookVersion,
     LedgerBookSave,
@@ -59,12 +63,16 @@ from app.schemas.ledger_book import (
     LedgerDraftImageRead,
     LedgerDraftRead,
     LedgerDraftUpdate,
+    LedgerFolderRead,
     LedgerOutlookDraftRead,
+    LedgerReferenceRead,
     LedgerRevisionRead,
     LedgerSaveRead,
     LedgerSignerRead,
 )
 from app.services import (
+    book_folder_service,
+    book_link_service,
     book_send_service,
     book_service,
     email_service,
@@ -184,6 +192,9 @@ def draft_read(draft: BookDraft) -> LedgerDraftRead:
         external=draft.external,
         signer_manager_id=draft.signer_manager_id,
         addressees=draft.addressees,
+        paper_preset=draft.paper_preset,
+        reference_book_ids=list(draft.reference_book_ids or []),
+        folder_ids=list(draft.folder_ids or []),
         created_at=draft.created_at,
         updated_at=draft.updated_at,
     )
@@ -195,6 +206,49 @@ def get_own_draft(db: Session, user: User, draft_id: int) -> BookDraft:
     if draft is None or draft.owner_user_id != user.id:
         raise NotFoundError("DRAFT_NOT_FOUND", "Draft not found")
     return draft
+
+
+def _can_open(db: Session, user: User, book: Book) -> bool:
+    if book.deleted_at is not None:
+        return False
+    try:
+        book_service.require_full_book_access(db, user, book)
+    except AppError:
+        return False
+    return True
+
+
+def _validate_references(db: Session, user: User, book_ids: list[int]) -> list[Book]:
+    """Distinct books the writer can open; any other id is one opaque field error."""
+    invalid = ValidationFailedError("REFERENCE_INVALID", "Choose books you can open, each once.")
+    if len(set(book_ids)) != len(book_ids):
+        raise invalid
+    targets = []
+    for book_id in book_ids:
+        target = db.get(Book, book_id)
+        if target is None or not _can_open(db, user, target):
+            raise invalid
+        targets.append(target)
+    return targets
+
+
+def _validate_folders(db: Session, user: User, folder_ids: list[int]) -> list[BookFolder]:
+    """Distinct outgoing-box folders the writer may file into (own or shared team)."""
+    invalid = ValidationFailedError(
+        "FOLDER_INVALID", "Choose your own or shared folders in the outgoing box, each once."
+    )
+    if len(set(folder_ids)) != len(folder_ids):
+        raise invalid
+    folders = []
+    for folder_id in folder_ids:
+        try:
+            folder = book_folder_service.get_folder(db, user, folder_id)
+        except AppError:
+            raise invalid from None
+        if folder.box != "outgoing":
+            raise invalid
+        folders.append(folder)
+    return folders
 
 
 def _set_grade(db: Session, user: User, draft: BookDraft, grade: str) -> None:
@@ -268,6 +322,8 @@ def create_draft(db: Session, user: User, payload: LedgerDraftCreate) -> BookDra
         grade=payload.grade,
         addressees=[a.model_dump(exclude_none=True) for a in payload.addressees],
     )
+    _validate_references(db, user, payload.reference_book_ids)
+    _validate_folders(db, user, payload.folder_ids)
     draft = BookDraft(
         owner_user_id=user.id,
         tab=payload.tab,
@@ -278,6 +334,9 @@ def create_draft(db: Session, user: User, payload: LedgerDraftCreate) -> BookDra
         addressees=[a.model_dump(exclude_none=True) for a in payload.addressees],
         subjects=[subject.strip() for subject in payload.subjects],
         body_html="",
+        paper_preset=payload.paper_preset,
+        reference_book_ids=list(payload.reference_book_ids),
+        folder_ids=list(payload.folder_ids),
     )
     db.add(draft)
     db.flush()
@@ -312,6 +371,16 @@ def update_draft(db: Session, user: User, draft_id: int, payload: LedgerDraftUpd
         if payload.addressees is not None
         else draft.addressees,
     )
+    if payload.reference_book_ids is not None:
+        _validate_references(db, user, payload.reference_book_ids)
+    if payload.folder_ids is not None:
+        _validate_folders(db, user, payload.folder_ids)
+    if payload.paper_preset is not None:
+        draft.paper_preset = payload.paper_preset
+    if payload.reference_book_ids is not None:
+        draft.reference_book_ids = list(payload.reference_book_ids)
+    if payload.folder_ids is not None:
+        draft.folder_ids = list(payload.folder_ids)
     if data.get("external") is not None:
         draft.external = data["external"]
     if "signer_manager_id" in data:
@@ -431,6 +500,12 @@ def _number_draft(
     )
     # Clearance may have been withdrawn since the grade was chosen.
     book_service.require_grade_clearance(db, user, draft.grade)
+    # Access may have changed since the draft was saved: re-check, then hold the
+    # grade floor a classified reference sets (refused before any number is used).
+    references = _validate_references(db, user, list(draft.reference_book_ids or []))
+    folders = _validate_folders(db, user, list(draft.folder_ids or []))
+    for target in references:
+        book_link_service.require_grade_floor(db, None, draft.grade, target=target)
 
     classification = _CLASSIFICATION_BY_TAB[draft.tab]
     if db.get(BookCategory, CATEGORY_ID) is None:
@@ -466,7 +541,18 @@ def _number_draft(
         book_id=book.id,
         version_no=1,
         template_id=LEDGER_BOOK_TEMPLATE_ID,
-        fields={"date": datetime.now().strftime(PAPER_DATE_FORMAT), "tab": draft.tab},
+        fields={
+            "date": datetime.now().strftime(PAPER_DATE_FORMAT),
+            "tab": draft.tab,
+            # Printed «نسخة إلى الملف:» names, as chosen at issue.
+            **(
+                {"_ledger_folders": [{"id": f.id, "name": f.name} for f in folders]}
+                if folders
+                else {}
+            ),
+        },
+        paper_preset=draft.paper_preset,
+        paper_layout=CURRENT_LAYOUT,
         trigger="initial",
         status="none",
         created_by_user_id=user.id,
@@ -476,6 +562,20 @@ def _number_draft(
     for addressee in addressees:
         addressee.book_id = book.id
     db.add_all(addressees)
+    db.add_all(
+        BookLink(
+            book_id=book.id,
+            target_book_id=target.id,
+            kind="reference",
+            attached=True,
+            created_by_user_id=user.id,
+        )
+        for target in references
+    )
+    # The writer's own issued book is their outgoing side; the folders were
+    # checked to be outgoing-box folders they may file into.
+    for folder in folders:
+        book_folder_service.stage_filing(db, user, book, folder)
     _open_sign_step(db, user, book, version)
     db.add(
         LedgerBookSave(
@@ -685,7 +785,56 @@ def ledger_book_read(
         and book.voided_at is None
         and book.deleted_at is None,
         return_note=next((s.note for s in selected.approval_steps if s.state == "returned"), None),
+        paper_preset=selected.paper_preset or "normal",
+        references=_references_read(db, user, book),
+        folders=[
+            LedgerFolderRead.model_validate(item)
+            for item in cast(list[object], (selected.fields or {}).get("_ledger_folders") or [])
+        ],
     )
+
+
+def _book_date(book: Book) -> date:
+    """The issue date a reference prints: the paper date, else the record date."""
+    latest = max(book.versions, key=lambda version: version.version_no, default=None)
+    printed = (latest.fields or {}).get("date") if latest is not None else None
+    if isinstance(printed, str):
+        try:
+            return datetime.strptime(printed, PAPER_DATE_FORMAT).date()
+        except ValueError:
+            pass
+    return book.created_at.date()
+
+
+def _references_read(db: Session, user: User, book: Book) -> list[LedgerReferenceRead]:
+    """Outgoing references in the order chosen; ``can_open`` follows the viewer's access."""
+    links = db.scalars(
+        select(BookLink)
+        .where(BookLink.book_id == book.id, BookLink.kind == "reference")
+        .order_by(BookLink.id)
+    )
+    result = []
+    for link in links:
+        target = db.get(Book, link.target_book_id)
+        if target is None:
+            continue
+        result.append(
+            LedgerReferenceRead(
+                book_id=target.id,
+                ref=target.ref_number,
+                date=_book_date(target),
+                can_open=_can_open(db, user, target),
+            )
+        )
+    return result
+
+
+def _writer_name(db: Session, user_id: int | None) -> str | None:
+    if user_id is None:
+        return None
+    return book_service.resolve_names_ar_by_ids(db, {user_id}).get(
+        user_id
+    ) or book_service.resolve_names_by_ids(db, {user_id}).get(user_id)
 
 
 def draft_paper(db: Session, user: User, draft_id: int) -> str:
@@ -695,6 +844,17 @@ def draft_paper(db: Session, user: User, draft_id: int) -> str:
         db, user, external=draft.external, grade=draft.grade, addressees=draft.addressees
     )
     signer = _signer_read(db, draft.signer_manager_id)
+    # The writer chose these; ids that no longer resolve are left out.
+    references = [
+        target
+        for target in (db.get(Book, book_id) for book_id in draft.reference_book_ids or [])
+        if target is not None and target.deleted_at is None
+    ]
+    folders = [
+        folder
+        for folder in (db.get(BookFolder, folder_id) for folder_id in draft.folder_ids or [])
+        if folder is not None
+    ]
     return render_paper(
         PaperContext(
             body_html=draft.body_html,
@@ -710,6 +870,12 @@ def draft_paper(db: Session, user: User, draft_id: int) -> str:
             cc_names=tuple(r.name_ar or r.name_en or "" for r in rows if r.role == "cc"),
             signer_name=(signer.name_ar or signer.name) if signer else None,
             signer_title=signer.title if signer else None,
+            preset=draft.paper_preset,
+            layout=CURRENT_LAYOUT,
+            writer_name=_writer_name(db, user.id),
+            writer_g_number=user.employee_id,
+            references=tuple((t.ref_number, _book_date(t)) for t in references),
+            folder_names=tuple(folder.name for folder in folders),
         )
     )
 
@@ -721,6 +887,7 @@ def book_paper(db: Session, user: User, book_id: int, *, version_id: int | None 
     paper_date = (
         datetime.strptime(read.paper_date, PAPER_DATE_FORMAT).date() if read.paper_date else None
     )
+    version = next(v for v in book.versions if v.id == read.selected_version_id)
     return render_paper(
         PaperContext(
             body_html=read.body_html,
@@ -738,10 +905,16 @@ def book_paper(db: Session, user: User, book_id: int, *, version_id: int | None 
             signer_title=read.signer.title if read.signer else None,
             signature_src=(
                 f"/api/v1/ledger/books/{book.id}/signature?revision={read.selected_version_id}"
-                if next(v for v in book.versions if v.id == read.selected_version_id).signed_at
-                is not None
+                if version.signed_at is not None
                 else None
             ),
+            preset=read.paper_preset,
+            layout=version.paper_layout or CURRENT_LAYOUT,
+            writer_name=_writer_name(db, book.created_by_user_id),
+            writer_g_number=book_service.submitter_g_number(db, book),
+            # A reference the viewer cannot open still prints the ref the writer chose.
+            references=tuple((r.ref, r.date) for r in read.references),
+            folder_names=tuple(folder.name for folder in read.folders),
         )
     )
 
@@ -834,7 +1007,11 @@ def start_correction(db: Session, user: User, book_id: int) -> LedgerBookRead:
         fields={
             "date": datetime.now().strftime(PAPER_DATE_FORMAT),
             "tab": (latest.fields or {}).get("tab"),
+            **{k: v for k, v in (latest.fields or {}).items() if k == "_ledger_folders"},
         },
+        # Issued books do not change: the correction keeps the preset and layout.
+        paper_preset=latest.paper_preset,
+        paper_layout=latest.paper_layout,
         trigger="correction",
         status="none",
         created_by_user_id=user.id,
@@ -1061,25 +1238,50 @@ def change_signer(db: Session, user: User, book_id: int, manager_id: int) -> Led
     return ledger_book_read(db, user, book.id)
 
 
-def _pdf_paper(db: Session, user: User, book: Book, version_id: int) -> str:
-    """Resolve every paper asset locally; headless Edge has no login session."""
-    paper = book_paper(db, user, book.id, version_id=version_id)
+def _local_assets(paper: str, image_prefix: str, image_path: Callable[[str], Path]) -> str:
+    """Resolve assets and body images to local files; headless Edge has no login session."""
     assets = Path(__file__).resolve().parents[1] / "core" / "ledger_paper_assets"
     paper = paper.replace(PAPER_ASSET_BASE, assets.as_uri())
-    signature_url = f"/api/v1/ledger/books/{book.id}/signature?revision={version_id}"
-    paper = paper.replace(
-        signature_url, signature_path(db, user, book.id, version_id).resolve().as_uri()
-    )
-    image_pattern = re.compile(
-        re.escape(book_image_prefix(book.id)) + r"([0-9a-f]{32}\.(?:png|jpg|gif|webp))"
-    )
-    paper = image_pattern.sub(
-        lambda match: book_image_path(db, user, book.id, match.group(1)).resolve().as_uri(),
-        paper,
-    )
+    image_pattern = re.compile(re.escape(image_prefix) + r"([0-9a-f]{32}\.(?:png|jpg|gif|webp))")
+    paper = image_pattern.sub(lambda match: image_path(match.group(1)).resolve().as_uri(), paper)
     csp = "default-src 'none'; img-src file: data:; font-src file: data:; style-src 'unsafe-inline'"
     return paper.replace(
         "<head>", f'<head><meta http-equiv="Content-Security-Policy" content="{csp}">', 1
+    )
+
+
+def _pdf_paper(db: Session, user: User, book: Book, version_id: int) -> str:
+    """One Revision's paper, ready for headless Edge (signature only once signed)."""
+    paper = book_paper(db, user, book.id, version_id=version_id)
+    version = next(v for v in book.versions if v.id == version_id)
+    if version.signed_at is not None:
+        signature_url = f"/api/v1/ledger/books/{book.id}/signature?revision={version_id}"
+        paper = paper.replace(
+            signature_url, signature_path(db, user, book.id, version_id).resolve().as_uri()
+        )
+    return _local_assets(
+        paper,
+        book_image_prefix(book.id),
+        lambda name: book_image_path(db, user, book.id, name),
+    )
+
+
+def book_pdf(db: Session, user: User, book_id: int, *, version_id: int | None = None) -> bytes:
+    """The preview PDF of one Revision, under the paper's read access."""
+    read = ledger_book_read(db, user, book_id, version_id=version_id)
+    book = get_ledger_book(db, book_id)
+    return sheet_pdf_service.print_document(_pdf_paper(db, user, book, read.selected_version_id))
+
+
+def draft_pdf(db: Session, user: User, draft_id: int) -> bytes:
+    """The owner's Draft preview PDF."""
+    paper = draft_paper(db, user, draft_id)
+    return sheet_pdf_service.print_document(
+        _local_assets(
+            paper,
+            draft_image_prefix(draft_id),
+            lambda name: draft_image_path(db, user, draft_id, name),
+        )
     )
 
 

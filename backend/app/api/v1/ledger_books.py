@@ -35,6 +35,7 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from sqlalchemy.orm import Session
 
+from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.core.ledger_paper import paper_response
 from app.db.models import User
@@ -64,6 +65,19 @@ _IMAGE_MEDIA_TYPES = {
     "gif": "image/gif",
     "webp": "image/webp",
 }
+
+# The paper's hardened headers that apply to a PDF (no CSP: not a document we render).
+_PDF_HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+EncodingQuery = Annotated[str | None, Query(pattern="^base64$")]
+
+
+def _pdf_response(pdf: bytes, encoding: str | None) -> Response:
+    """``encoding=base64`` serves text for DocPdfCanvas, as the Word preview does."""
+    if (
+        b64 := maybe_base64(pdf, encoding, extra_headers={"Cache-Control": "no-store"})
+    ) is not None:
+        return b64
+    return Response(content=pdf, media_type="application/pdf", headers=_PDF_HEADERS)
 
 
 def _image_response(path: Path) -> FileResponse:
@@ -128,6 +142,14 @@ def get_draft_paper(draft_id: int, db: DbDep, user: UserDep) -> HTMLResponse:
     return paper_response(service.draft_paper(db, user, draft_id))
 
 
+@router.get("/drafts/{draft_id}/paper.pdf", response_class=Response)
+def get_draft_paper_pdf(
+    draft_id: int, db: DbDep, user: UserDep, encoding: EncodingQuery = None
+) -> Response:
+    """The owner's Draft as real PDF pages for the composer preview."""
+    return _pdf_response(service.draft_pdf(db, user, draft_id), encoding)
+
+
 @router.post("/drafts/{draft_id}/save-and-send", response_model=LedgerBookRead)
 def save_and_send(
     draft_id: int,
@@ -157,6 +179,18 @@ def get_ledger_book_paper(
     revision: Annotated[int | None, Query(description="Revision (version) id")] = None,
 ) -> HTMLResponse:
     return paper_response(service.book_paper(db, user, book_id, version_id=revision))
+
+
+@router.get("/books/{book_id}/paper.pdf", response_class=Response)
+def get_ledger_book_paper_pdf(
+    book_id: int,
+    db: DbDep,
+    user: UserDep,
+    revision: int | None = None,
+    encoding: EncodingQuery = None,
+) -> Response:
+    """One Revision as PDF, under the same read access as its paper."""
+    return _pdf_response(service.book_pdf(db, user, book_id, version_id=revision), encoding)
 
 
 @router.put("/books/{book_id}/content", response_model=LedgerBookRead)
