@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_current_user
 from app.db import session as session_mod
-from app.db.models import Base, Book, BookCategory, BookVersion, User
+from app.db.models import Base, Book, BookCategory, BookVersion, ScanInbox, User
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
 from app.services import perm_service
@@ -177,3 +177,39 @@ def test_delete_only_page_is_refused(api_db, tmp_path) -> None:
     c = _client(api_db, _user(api_db))
     assert c.request("DELETE", "/api/v1/books/1/attachments/0/pages/0").status_code == 422
     assert c.request("DELETE", "/api/v1/books/1/attachments/0/pages/5").status_code == 404
+
+
+def test_scan_drawer_undo_follows_an_emailed_scan_after_a_page_is_added(api_db, tmp_path) -> None:
+    """An emailed scan auto-filed onto the record keeps a working drawer Undo
+    after someone adds a page to it (the file is rewritten under a new name)."""
+    from app.services import scan_inbox_service
+
+    _book_with_attachments(api_db, tmp_path)
+    (tmp_path / "book_attachments" / "1" / "a.pdf").write_bytes(_pdf(1))
+    owner = _user(api_db)
+    item = ScanInbox(
+        source="email_attachment",
+        owner_user_id=owner.id,
+        file_path="mail.pdf",
+        filename="mail.pdf",
+        state="auto_filed",
+        undo_token="book:1:book_attachments/1/a.pdf",
+        resolution="auto_filed",
+        proposed_route="book_attach",
+        proposed_book_id=1,
+    )
+    api_db.add(item)
+    api_db.commit()
+
+    c = _client(api_db, owner)
+    resp = c.post(
+        "/api/v1/books/1/attachments/0/pages",
+        files={"file": ("sheet2.pdf", _pdf(1), "application/pdf")},
+    )
+    assert resp.status_code == 200, resp.text
+    merged = resp.json()["attachment_paths"][0]
+
+    scan_inbox_service.undo(api_db, item.id, user=owner)
+    api_db.expire_all()
+    assert api_db.get(Book, 1).attachment_paths == ["book_attachments/1/b.pdf"]  # type: ignore[union-attr]
+    assert not (tmp_path / merged).exists()

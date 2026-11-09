@@ -66,6 +66,7 @@ from app.db.models import (
     Leave,
     Manager,
     OutboundMessage,
+    ScanInbox,
     User,
 )
 from app.db.repos._locking import begin_immediate_if_idle
@@ -4218,8 +4219,14 @@ def replace_attachment(db: Session, book_id: int, index: int, filename: str, dat
         )
     dest.write_bytes(data)
     old_rel = paths[index]
-    paths[index] = dest_resolved.relative_to(data_dir).as_posix()
+    new_rel = dest_resolved.relative_to(data_dir).as_posix()
+    paths[index] = new_rel
     book.attachment_paths = paths  # reassign so the JSON column dirties
+    # An auto-filed scan's drawer Undo detaches by stored path: follow the file to
+    # its new name, or Undo would silently detach nothing and re-offer the scan.
+    old_token = f"book:{book_id}:{old_rel}"
+    for item in db.scalars(select(ScanInbox).where(ScanInbox.undo_token == old_token)):
+        item.undo_token = f"book:{book_id}:{new_rel}"
     old_abs = resolve_attachment_path(old_rel)
     if old_abs is not None:
         try:
