@@ -3515,7 +3515,6 @@
       "inFlight": "In-flight or signed records can’t be deleted. Use “{{action}}” to void it.",
       "wordSession": "Finish or discard the Word session first.",
       "reviseNoTemplate": "Can’t revise: not made from a form template.",
-      "reviseNoPermission": "Needs document-generation permission.",
       "reviseNotCurrent": "Open the current version to revise.",
       "reviseReporterLocked": "You can revise it only after it is returned to you.",
       "emailNoDoc": "No document to attach yet.",

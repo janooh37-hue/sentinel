@@ -489,8 +489,14 @@ describe('reviseBlockReason', () => {
     expect(reviseBlockReason(noFields, ok)).toBe('noTemplate')
   })
 
-  it('noPermission without documents.generate', () => {
-    expect(reviseBlockReason(book, ctxOf({ canGenerate: false }))).toBe('noPermission')
+  it('is not offered at all without documents.generate', () => {
+    const noGenerate = ctxOf({ canGenerate: false })
+    const returned = recordNextStep(book, noGenerate)
+    expect(returned.primary).not.toBe('revise')
+    expect(returned.disabled?.revise).toBeUndefined()
+    const draft = recordNextStep(bookOf('none'), noGenerate)
+    expect([draft.primary, ...draft.secondary]).not.toContain('continueEditing')
+    expect(draft.disabled?.continueEditing).toBeUndefined()
   })
 
   it('notCurrent when the live revision is not being viewed', () => {
@@ -519,7 +525,6 @@ describe('reviseBlockReason', () => {
 
   it('maps to books.reason keys', () => {
     expect(reviseReasonKey('noTemplate')).toBe('books.reason.reviseNoTemplate')
-    expect(reviseReasonKey('noPermission')).toBe('books.reason.reviseNoPermission')
     expect(reviseReasonKey('notCurrent')).toBe('books.reason.reviseNotCurrent')
     expect(reviseReasonKey('reporterLocked')).toBe('books.reason.reviseReporterLocked')
     expect(reviseReasonKey(null)).toBeNull()
