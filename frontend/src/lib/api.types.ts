@@ -3698,6 +3698,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/attachments/{index}/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Append Book Attachment Pages
+         * @description Append the uploaded PDF/image pages to one attachment, keeping its index.
+         */
+        post: operations["append_book_attachment_pages_api_v1_books__book_id__attachments__index__pages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/attachments/{index}/pages/{page}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Book Attachment Page
+         * @description Remove one zero-based page from an attachment (never its only page).
+         */
+        delete: operations["delete_book_attachment_page_api_v1_books__book_id__attachments__index__pages__page__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/signed-copy/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Append Signed Copy Pages
+         * @description Append pages to the signed scan, keeping the record approved.
+         */
+        post: operations["append_signed_copy_pages_api_v1_books__book_id__signed_copy_pages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/signed-copy/pages/{page}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Signed Copy Page
+         * @description Remove one zero-based page of the signed scan (never its only page).
+         */
+        delete: operations["delete_signed_copy_page_api_v1_books__book_id__signed_copy_pages__page__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/imported-document": {
         parameters: {
             query?: never;
@@ -9063,6 +9143,22 @@ export interface components {
              * @default false
              */
             as_signed: boolean;
+        };
+        /** Body_append_book_attachment_pages_api_v1_books__book_id__attachments__index__pages_post */
+        Body_append_book_attachment_pages_api_v1_books__book_id__attachments__index__pages_post: {
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
+        };
+        /** Body_append_signed_copy_pages_api_v1_books__book_id__signed_copy_pages_post */
+        Body_append_signed_copy_pages_api_v1_books__book_id__signed_copy_pages_post: {
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
         };
         /** Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put */
         Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put: {
@@ -27566,6 +27662,150 @@ export interface operations {
             header?: never;
             path: {
                 book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    append_book_attachment_pages_api_v1_books__book_id__attachments__index__pages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                index: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_append_book_attachment_pages_api_v1_books__book_id__attachments__index__pages_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_book_attachment_page_api_v1_books__book_id__attachments__index__pages__page__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                index: number;
+                page: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    append_signed_copy_pages_api_v1_books__book_id__signed_copy_pages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_append_signed_copy_pages_api_v1_books__book_id__signed_copy_pages_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_signed_copy_page_api_v1_books__book_id__signed_copy_pages__page__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                page: number;
             };
             cookie?: {
                 gssg_session?: string | null;

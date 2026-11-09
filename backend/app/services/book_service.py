@@ -4322,6 +4322,138 @@ def replace_signed_copy(
     return book
 
 
+def _upload_pdf_bytes(filename: str, data: bytes) -> bytes:
+    """Validate one uploaded page file like ``add_attachment`` and return it as PDF bytes."""
+    if len(data) == 0:
+        raise ValidationFailedError("BOOK_EMPTY_FILE", "Uploaded file is empty")
+    if len(data) > MAX_ATTACHMENT_BYTES:
+        raise ValidationFailedError(
+            "BOOK_FILE_TOO_LARGE",
+            f"File exceeds {MAX_ATTACHMENT_BYTES} bytes",
+            max_bytes=MAX_ATTACHMENT_BYTES,
+            size=len(data),
+        )
+    ext = Path(_safe_filename(filename)).suffix.lower()
+    if ext not in ALLOWED_DOC_EXTS:
+        raise ValidationFailedError(
+            "BOOK_BAD_EXTENSION",
+            f"File type {ext!r} is not allowed",
+            allowed=sorted(ALLOWED_DOC_EXTS),
+        )
+    return data if ext == ".pdf" else _image_to_pdf_bytes(data, ext)
+
+
+def _stored_pdf_bytes(rel_path: str) -> bytes:
+    """Read a stored paper as PDF bytes (an image attachment becomes one page)."""
+    abs_path = resolve_attachment_path(rel_path)
+    if abs_path is None:
+        raise NotFoundError("ATTACHMENT_FILE_MISSING", "attachment file missing")
+    data = abs_path.read_bytes()
+    ext = abs_path.suffix.lower()
+    return data if ext == ".pdf" else _image_to_pdf_bytes(data, ext)
+
+
+def _pdf_page_count(data: bytes) -> int:
+    import pymupdf
+
+    try:
+        with pymupdf.open(stream=data, filetype="pdf") as doc:
+            return int(doc.page_count)
+    except Exception as exc:
+        raise ValidationFailedError("BOOK_PDF_UNREADABLE", "Could not read the PDF") from exc
+
+
+def _append_pdf_pages(base: bytes, extra: bytes) -> bytes:
+    """``base`` followed by every page of ``extra``."""
+    import pymupdf
+
+    try:
+        with (
+            pymupdf.open(stream=base, filetype="pdf") as doc,
+            pymupdf.open(stream=extra, filetype="pdf") as add,
+        ):
+            doc.insert_pdf(add)
+            merged: bytes = doc.tobytes(garbage=3, deflate=True)
+    except Exception as exc:
+        raise ValidationFailedError(
+            "BOOK_PDF_UNREADABLE", "Could not read the PDF; upload a valid PDF, PNG or JPEG"
+        ) from exc
+    return merged
+
+
+def _drop_pdf_page(base: bytes, page: int) -> bytes:
+    """``base`` without its zero-based ``page``. The only page cannot be removed:
+    deleting the whole version is the separate, explicit action."""
+    import pymupdf
+
+    with pymupdf.open(stream=base, filetype="pdf") as doc:
+        if page < 0 or page >= doc.page_count:
+            raise NotFoundError("PAGE_NOT_FOUND", "page not found", page=page)
+        if doc.page_count == 1:
+            raise ValidationFailedError(
+                "BOOK_LAST_PAGE", "This is the only page; delete the version instead"
+            )
+        doc.delete_page(page)
+        trimmed: bytes = doc.tobytes(garbage=3, deflate=True)
+    return trimmed
+
+
+def _attachment_rel(book: Book, index: int) -> str:
+    paths = book.attachment_paths or []
+    if index < 0 or index >= len(paths):
+        raise NotFoundError("ATTACHMENT_NOT_FOUND", "attachment not found", index=index)
+    return paths[index]
+
+
+def append_attachment_pages(
+    db: Session, book_id: int, index: int, filename: str, data: bytes
+) -> Book:
+    """Append the uploaded file's pages to attachment ``index`` (kept at its index)."""
+    rel = _attachment_rel(get_book(db, book_id), index)
+    merged = _append_pdf_pages(_stored_pdf_bytes(rel), _upload_pdf_bytes(filename, data))
+    return replace_attachment(db, book_id, index, f"{PurePath(rel).stem}.pdf", merged)
+
+
+def delete_attachment_page(db: Session, book_id: int, index: int, page: int) -> Book:
+    """Remove one page from attachment ``index``."""
+    rel = _attachment_rel(get_book(db, book_id), index)
+    trimmed = _drop_pdf_page(_stored_pdf_bytes(rel), page)
+    return replace_attachment(db, book_id, index, f"{PurePath(rel).stem}.pdf", trimmed)
+
+
+def _signed_base_rel(book: Book) -> str:
+    version = _current_version(book)
+    rel = version and (version.signed_base_pdf_path or version.signed_pdf_path)
+    if not rel:
+        raise ValidationFailedError("NO_SIGNED_COPY", "This record has no signed copy")
+    return rel
+
+
+def append_signed_copy_pages(
+    db: Session, book_id: int, filename: str, data: bytes, *, user: User | None = None
+) -> Book:
+    """Append pages to the signed scan (its base, before included papers), keeping
+    the approval — the "the signed paper had a second sheet" fix."""
+    rel = _signed_base_rel(get_book(db, book_id))
+    merged = _append_pdf_pages(_stored_pdf_bytes(rel), _upload_pdf_bytes(filename, data))
+    return replace_signed_copy(db, book_id, "signed.pdf", merged, user=user)
+
+
+def delete_signed_copy_page(
+    db: Session, book_id: int, page: int, *, user: User | None = None
+) -> Book:
+    """Remove one page of the signed scan. Pages after the scan come from included
+    papers and are managed there, not here."""
+    base = _stored_pdf_bytes(_signed_base_rel(get_book(db, book_id)))
+    if page >= _pdf_page_count(base):
+        raise ValidationFailedError(
+            "BOOK_PAGE_FROM_INCLUDED_PAPER",
+            "This page comes from an included paper; remove it from Add to PDF",
+        )
+    trimmed = _drop_pdf_page(base, page)
+    return replace_signed_copy(db, book_id, "signed.pdf", trimmed, user=user)
+
+
 def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -> Book:
     """Undo a filed signed copy: delete the artifact and revert the record to its
     pre-signed state. A scan-path form returns to ``awaiting_scan``; otherwise the

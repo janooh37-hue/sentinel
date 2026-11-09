@@ -2555,6 +2555,24 @@ export const api = {
     form.append('file', file)
     return multipart<BookRead>(`/books/${bookId}/signed-copy`, form, 'PUT')
   },
+  /** POST /books/{id}/attachments/{index}/pages — append a PDF/image's pages. books.edit. */
+  appendBookAttachmentPages: (bookId: number, index: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<BookRead>(`/books/${bookId}/attachments/${index}/pages`, form)
+  },
+  /** DELETE /books/{id}/attachments/{index}/pages/{page} — drop one zero-based page. books.edit. */
+  deleteBookAttachmentPage: (bookId: number, index: number, page: number) =>
+    request<BookRead>('DELETE', `/books/${bookId}/attachments/${index}/pages/${page}`),
+  /** POST /books/{id}/signed-copy/pages — append pages to the signed scan, keeping approval. books.edit. */
+  appendSignedCopyPages: (bookId: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<BookRead>(`/books/${bookId}/signed-copy/pages`, form)
+  },
+  /** DELETE /books/{id}/signed-copy/pages/{page} — drop one page of the signed scan. books.edit. */
+  deleteSignedCopyPage: (bookId: number, page: number) =>
+    request<BookRead>('DELETE', `/books/${bookId}/signed-copy/pages/${page}`),
   /** DELETE /books/{id}/signed-copy — unfile the signed copy and revert the
    * record's approval state. books.edit. */
   unfileSignedCopy: (bookId: number) =>

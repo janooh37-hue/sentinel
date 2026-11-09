@@ -180,6 +180,31 @@ def test_replace_signed_copy_route(api_db, tmp_path) -> None:
     assert resp.json()["versions"][-1]["signed_source"] == "scan"
 
 
+def test_append_signed_copy_pages_keeps_approved(api_db, tmp_path) -> None:
+    import pymupdf
+
+    def pdf(pages: int) -> bytes:
+        with pymupdf.open() as doc:
+            for _ in range(pages):
+                doc.new_page()
+            data: bytes = doc.tobytes()
+        return data
+
+    _signed_scanback_book(api_db, tmp_path)
+    (tmp_path / "book_attachments" / "1" / "signed-v1.pdf").write_bytes(pdf(1))
+    c = _client(api_db, _user(api_db, email="mgr4@x.ae"))
+    resp = c.post(
+        "/api/v1/books/1/signed-copy/pages",
+        files={"file": ("sheet2.pdf", pdf(1), "application/pdf")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["approval_state"] == "approved"
+    api_db.expire_all()
+    path = api_db.get(Book, 1).versions[-1].signed_pdf_path  # type: ignore[union-attr]
+    with pymupdf.open(tmp_path / path) as doc:
+        assert doc.page_count == 2
+
+
 # ---------------------------------------------------------------------------
 # Task 5 — unfile signed copy (delete + revert approval)
 # ---------------------------------------------------------------------------

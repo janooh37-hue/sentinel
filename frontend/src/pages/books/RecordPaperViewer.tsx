@@ -2,10 +2,11 @@
  * Film-strip paper viewer for the Records pane (design locked off
  * docs/prototypes/records-redesign-2026-06-10/final-records.html).
  *
- * - One strip frame per Paper (signed / original / imported / scan) with a
- *   cached first-page thumbnail and a page-count badge, + an "Add scan" frame
- *   (caps-gated by the parent via addScanSlot). The strip is hidden when there
- *   is one paper and nothing to add.
+ * - A version bar picks the paper (signed / original / imported / attachment
+ *   N) from a dropdown and carries the record's one "Upload file" door
+ *   (parent-routed). Below it, the page strip shows the chosen paper's pages
+ *   (click scrolls to the page) with "＋ Add page" and per-page delete on
+ *   uploaded versions only; the generated original is read-only.
  * - PDF documents come from `lib/pdfDocCache` (zoom and paper switches never
  *   refetch); pages are lazy aspect-correct placeholders (`PdfPages`) painted
  *   at the displayed width — a CSS scale first, then a debounced re-raster.
@@ -22,7 +23,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
-import { Download, FileText, Maximize2, MoreHorizontal, Minus, Plus, RefreshCw, Trash2, X } from 'lucide-react'
+import { Download, FileText, Loader2, Maximize2, MoreHorizontal, Minus, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { DocumentState } from '@/components/books/DocumentState'
@@ -35,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Hint } from '@/components/ui/hint'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { leasePdfUrl, type PdfDocLease } from '@/lib/pdfDocCache'
 import { cn } from '@/lib/utils'
 
@@ -54,15 +56,26 @@ type DocState =
   | { kind: 'loaded'; doc: PDFDocumentProxy }
   | { kind: 'error'; error: unknown }
 
+interface PaperCanvasCallbacks {
+  onNaturalWidth?: (width: number) => void
+  /** total pages once known (an image is one page) */
+  onPageCount?: (count: number) => void
+  /** the page nearest the top of the viewport (1-based) */
+  onCurrentPage?: (page: number) => void
+}
+
 /** Renders one paper (PDF pages stacked, or an image) at `width` px. */
-function PaperCanvas({ paper, width, onNaturalWidth }: { paper: Paper; width: number; onNaturalWidth?: (width: number) => void }): React.JSX.Element {
+function PaperCanvas({ paper, width, onNaturalWidth, onPageCount, onCurrentPage }: { paper: Paper; width: number } & PaperCanvasCallbacks): React.JSX.Element {
+  useEffect(() => {
+    if (!paper.isPdf) onPageCount?.(1)
+  }, [paper.isPdf, onPageCount])
   if (!paper.isPdf) {
     return <img src={paper.url} alt={paper.filename} style={{ width }} onLoad={(event) => onNaturalWidth?.(event.currentTarget.naturalWidth)} className="block shadow-md" draggable={false} />
   }
-  return <PdfPaper key={paper.url} url={paper.url} width={width} onNaturalWidth={onNaturalWidth} />
+  return <PdfPaper key={paper.url} url={paper.url} width={width} onNaturalWidth={onNaturalWidth} onPageCount={onPageCount} onCurrentPage={onCurrentPage} />
 }
 
-function PdfPaper({ url, width, onNaturalWidth }: { url: string; width: number; onNaturalWidth?: (width: number) => void }): React.JSX.Element {
+function PdfPaper({ url, width, onNaturalWidth, onPageCount, onCurrentPage }: { url: string; width: number } & PaperCanvasCallbacks): React.JSX.Element {
   const [state, setState] = useState<DocState>({ kind: 'loading' })
   // Retry bumps this; a failed load is never cached, so the effect refetches.
   const [nonce, setNonce] = useState(0)
@@ -80,6 +93,7 @@ function PdfPaper({ url, width, onNaturalWidth }: { url: string; width: number; 
         }
         lease = l
         setState({ kind: 'loaded', doc: l.doc })
+        onPageCount?.(l.doc.numPages)
       },
       (error: unknown) => {
         if (!controller.signal.aborted) setState({ kind: 'error', error })
@@ -89,6 +103,7 @@ function PdfPaper({ url, width, onNaturalWidth }: { url: string; width: number; 
       controller.abort()
       lease?.release()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onPageCount is a stable setter; a new one must not refetch
   }, [url, nonce])
 
   if (state.kind === 'loading') {
@@ -118,23 +133,24 @@ function PdfPaper({ url, width, onNaturalWidth }: { url: string; width: number; 
       sizing={{ kind: 'width', px: width }}
       pageClassName="shadow-[0_2px_8px_rgba(13,40,69,.18)]"
       onLayout={onNaturalWidth}
+      onCurrentPage={onCurrentPage}
       onError={(error) => setState({ kind: 'error', error })}
     />
   )
 }
 
 // ---------------------------------------------------------------------------
-// Thumbnails (cached first page + page count; built lazily, one at a time)
+// Page thumbnails (cached per page; built lazily, one at a time)
 
-function useThumb(paper: Paper, visible: boolean): ThumbInfo | null {
+function usePageThumb(paper: Paper, page: number, visible: boolean): ThumbInfo | null {
   const [, force] = useState(0)
   const url = paper.url
   const isPdf = paper.isPdf
-  const cached = cachedThumb(url)
+  const cached = cachedThumb(url, page)
   useEffect(() => {
-    if (!isPdf || !visible || cachedThumb(url)) return
+    if (!isPdf || !visible || cachedThumb(url, page)) return
     const controller = new AbortController()
-    loadThumb(url, controller.signal).then(
+    loadThumb(url, controller.signal, page).then(
       () => {
         if (!controller.signal.aborted) force((n) => n + 1)
       },
@@ -143,26 +159,28 @@ function useThumb(paper: Paper, visible: boolean): ThumbInfo | null {
       },
     )
     return () => controller.abort()
-  }, [url, isPdf, visible])
-  return isPdf ? (cached ?? null) : { src: url, pages: null }
+  }, [url, isPdf, page, visible])
+  return isPdf ? (cached ?? null) : { src: url, pages: 1 }
 }
 
-function PaperThumb({
+function PageThumb({
   paper,
-  label,
+  page,
   active,
   onSelect,
+  onDelete,
 }: {
   paper: Paper
-  label: string
+  /** 1-based */
+  page: number
   active: boolean
   onSelect: () => void
+  onDelete?: () => void
 }): React.JSX.Element {
   const { t } = useTranslation()
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [visible, setVisible] = useState(false)
-  // Only a frame that scrolled into view builds its thumbnail (a PDF is fetched
-  // in full for it); once seen it stays eligible.
+  // Only a frame that scrolled into view builds its thumbnail; once seen it stays eligible.
   useEffect(() => {
     const el = buttonRef.current
     if (!el || visible) return
@@ -172,46 +190,46 @@ function PaperThumb({
     io.observe(el)
     return () => io.disconnect()
   }, [visible])
-  const thumb = useThumb(paper, visible)
-  const button = (
-    <button
-      ref={buttonRef}
-      type="button"
-      aria-pressed={active}
-      onClick={onSelect}
-      className="flex w-16 shrink-0 flex-col items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
-    >
-      <span
-        className={cn(
-          'relative grid aspect-[210/297] w-full place-items-center overflow-hidden rounded-[3px] border-2 bg-surface text-faint transition-colors motion-reduce:transition-none',
-          active ? 'border-primary' : 'border-border',
-        )}
+  const thumb = usePageThumb(paper, page, visible)
+  return (
+    <div className="relative w-14 shrink-0">
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-pressed={active}
+        onClick={onSelect}
+        className="flex w-full flex-col items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        {thumb?.src ? (
-          <img src={thumb.src} alt="" draggable={false} className="h-full w-full object-cover object-top" />
-        ) : (
-          <FileText className="h-5 w-5" strokeWidth={1.6} aria-hidden />
-        )}
-        {thumb?.pages != null && thumb.pages > 1 ? (
-          <span className="absolute bottom-0.5 end-0.5 rounded bg-foreground/80 px-1 text-[0.6875rem] font-semibold leading-tight text-background">
-            <bdi dir="ltr" className="tabular-nums">
-              {t('books.paper.pages', { count: thumb.pages })}
-            </bdi>
-          </span>
-        ) : null}
-      </span>
-      <span
-        className={cn(
-          'w-full truncate text-center text-[0.6875rem] leading-tight',
-          active ? 'font-bold text-primary' : 'text-muted-foreground',
-        )}
-      >
-        {label}
-      </span>
-    </button>
+        <span
+          className={cn(
+            'relative grid aspect-[210/297] w-full place-items-center overflow-hidden rounded-[3px] border-2 bg-surface text-faint transition-colors motion-reduce:transition-none',
+            active ? 'border-primary' : 'border-border',
+          )}
+        >
+          {thumb?.src ? (
+            <img src={thumb.src} alt="" draggable={false} className="h-full w-full object-cover object-top" />
+          ) : (
+            <FileText className="h-5 w-5" strokeWidth={1.6} aria-hidden />
+          )}
+        </span>
+        <span className={cn('w-full truncate text-center text-[0.6875rem] leading-tight', active ? 'font-bold text-primary' : 'text-muted-foreground')}>
+          {t('books.pane.pageN', { n: page })}
+        </span>
+      </button>
+      {onDelete && (
+        <Hint label={t('books.pane.deletePage', { n: page })}>
+          <button
+            type="button"
+            aria-label={t('books.pane.deletePage', { n: page })}
+            onClick={onDelete}
+            className="absolute -end-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-hairline bg-surface text-muted-foreground shadow-sm transition-colors hover:border-destructive hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none pointer-coarse:h-7 pointer-coarse:w-7"
+          >
+            <X className="h-3 w-3" aria-hidden />
+          </button>
+        </Hint>
+      )}
+    </div>
   )
-  // A scan's own filename is the only way to tell two scans apart.
-  return paper.kind === 'scan' ? <Hint label={paper.filename}>{button}</Hint> : button
 }
 
 // ---------------------------------------------------------------------------
@@ -225,10 +243,14 @@ export function RecordPaperViewer({
   compact = false,
   onOpenFull,
   onClose,
-  addScanSlot,
   emptySlot,
   onDeletePaper,
   onReplacePaper,
+  onUpload,
+  uploadBusy = false,
+  onAddPages,
+  onDeletePage,
+  pagesBusy = false,
 }: {
   papers: Paper[]
   /** key of the selected paper; falls back to the first paper when absent */
@@ -241,14 +263,20 @@ export function RecordPaperViewer({
   compact?: boolean
   onOpenFull?: () => void
   onClose?: () => void
-  /** parent-provided "＋ Add scan" strip frame (caps-gated) */
-  addScanSlot?: React.ReactNode
   /** parent-provided empty state when papers.length === 0 */
   emptySlot?: React.ReactNode
   /** request delete of a scan/signed paper (parent shows confirm + calls the API) */
   onDeletePaper?: (paper: Paper) => void
   /** request replace of a scan/signed paper (parent opens a file picker) */
   onReplacePaper?: (paper: Paper) => void
+  /** the record's one "Upload file" entry (parent picks the file and routes it) */
+  onUpload?: () => void
+  uploadBusy?: boolean
+  /** append pages to an uploaded version (parent opens a file picker) */
+  onAddPages?: (paper: Paper) => void
+  /** remove one 0-based page of an uploaded version (parent confirms) */
+  onDeletePage?: (paper: Paper, page: number) => void
+  pagesBusy?: boolean
 }): React.JSX.Element {
   const { t } = useTranslation()
   const isOverlay = mode !== 'pane'
@@ -274,6 +302,17 @@ export function RecordPaperViewer({
     setNaturalSize((previous) => previous?.url === url && previous.width === width ? previous : { url, width })
   }, [url])
   const naturalWidth = naturalSize?.url === url ? naturalSize?.width ?? 0 : 0
+  const [pageInfo, setPageInfo] = useState<{ url: string; count: number } | null>(null)
+  const onPageCount = useCallback((count: number): void => {
+    if (url) setPageInfo({ url, count })
+  }, [url])
+  const pageCount = pageInfo?.url === url ? pageInfo.count : 0
+  const [currentPage, setCurrentPage] = useState(1)
+  const [prevUrl, setPrevUrl] = useState(url)
+  if (prevUrl !== url) {
+    setPrevUrl(url)
+    setCurrentPage(1)
+  }
   // Fit width = this container's own width minus padding.
   useLayoutEffect(() => {
     const el = canvasRef.current
@@ -291,9 +330,6 @@ export function RecordPaperViewer({
   const scale = initialFit === 'width' ? (zoom ?? (naturalWidth > 0 ? Math.min(1, fitWidth / naturalWidth) : 1)) : (zoom ?? 1)
   const paperWidth = initialFit === 'width' && naturalWidth > 0 ? naturalWidth * scale : fitWidth * (initialFit === 'width' ? 1 : scale)
   const narrow = containerWidth > 0 && containerWidth < NARROW_TOOLBAR
-  const showStrip =
-    !compact && ((mode === 'pane' && (papers.length > 1 || !!addScanSlot)) ||
-    (mode === 'dialog' && papers.length > 1))
   const labels = paperLabels(t, papers)
   const labelOf = (p: Paper): string => labels[papers.indexOf(p)] ?? ''
 
@@ -335,21 +371,97 @@ export function RecordPaperViewer({
   const manageable = paper && (paper.kind === 'scan' || paper.kind === 'signed')
   const canReplace = !!onReplacePaper && manageable
   const canDelete = !!onDeletePaper && manageable
+  const canAddPages = !!onAddPages && !!manageable
+  const canDeletePage = !!onDeletePage && !!manageable && pageCount > 1
+  // The version bar (which paper + the one upload door) and the page strip
+  // (pages of that paper + "Add page") live above the toolbar in pane/dialog;
+  // the overlay and compact desks keep their toolbar switcher.
+  const stripMode = !compact && mode !== 'overlay'
+  const showVersionBar = stripMode && (papers.length > 1 || (!!onUpload && mode === 'pane'))
+  const showPages = stripMode && !!paper && (pageCount > 1 || canAddPages)
+  const goToPage = (page: number): void => {
+    setCurrentPage(page)
+    canvasRef.current
+      ?.querySelector<HTMLElement>(`[data-pdf-page="${page}"]`)
+      ?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }
 
   return (
     <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', isOverlay && 'h-full')}>
-      {showStrip && (
-        <div className="flex shrink-0 gap-2 overflow-x-auto border-b border-hairline bg-surface-raised px-3 py-2.5">
-          {papers.map((p) => (
-            <PaperThumb
-              key={paperKey(p)}
-              paper={p}
-              label={labelOf(p)}
-              active={paperKey(p) === activeKey}
-              onSelect={() => onSelectKey(paperKey(p))}
+      {showVersionBar && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-hairline bg-surface-raised px-3 py-2">
+          {papers.length > 0 && (
+            <label className="flex min-w-0 flex-1 items-center gap-2 text-[0.75em] font-semibold text-muted-foreground">
+              <span className="shrink-0">{t('books.pane.version')}</span>
+              <Select value={activeKey ?? undefined} onValueChange={(key) => onSelectKey(key as PaperKey)}>
+                <SelectTrigger className="h-8 min-w-0 max-w-64 flex-1 text-[1em] font-semibold pointer-coarse:h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {papers.map((p) => (
+                    <SelectItem key={paperKey(p)} value={paperKey(p)}>
+                      {labelOf(p)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          )}
+          {onUpload && mode === 'pane' && (
+            <Hint label={t('books.pane.uploadHint')}>
+              <button
+                type="button"
+                disabled={uploadBusy}
+                onClick={onUpload}
+                className="ms-auto inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-sm border border-hairline bg-surface px-2.5 text-[0.75em] font-semibold text-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 motion-reduce:transition-none pointer-coarse:min-h-11"
+              >
+                {uploadBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" aria-hidden />
+                )}
+                {t('books.pane.upload')}
+              </button>
+            </Hint>
+          )}
+        </div>
+      )}
+
+      {showPages && paper && (
+        <div
+          role="group"
+          aria-label={t('books.paper.pages', { count: pageCount })}
+          className="flex shrink-0 gap-2.5 overflow-x-auto border-b border-hairline bg-surface-raised px-3 pb-2.5 pt-3"
+        >
+          {Array.from({ length: pageCount }, (_, i) => i + 1).map((page) => (
+            <PageThumb
+              key={`${paper.url}#${page}`}
+              paper={paper}
+              page={page}
+              active={page === currentPage}
+              onSelect={() => goToPage(page)}
+              onDelete={canDeletePage ? () => onDeletePage(paper, page - 1) : undefined}
             />
           ))}
-          {addScanSlot}
+          {canAddPages && (
+            <Hint label={t('books.pane.addPageHint')}>
+              <button
+                type="button"
+                disabled={pagesBusy}
+                onClick={() => onAddPages(paper)}
+                className="flex w-14 shrink-0 flex-col items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span className="grid aspect-[210/297] w-full place-items-center rounded-[3px] border-2 border-dashed border-border bg-surface text-faint transition-colors hover:border-primary hover:text-primary motion-reduce:transition-none">
+                  {pagesBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
+                  ) : (
+                    <Plus className="h-4 w-4" aria-hidden />
+                  )}
+                </span>
+                <span className="w-full truncate text-center text-[0.6875rem] leading-tight text-muted-foreground">{t('books.pane.addPage')}</span>
+              </button>
+            </Hint>
+          )}
         </div>
       )}
 
@@ -476,7 +588,7 @@ export function RecordPaperViewer({
                 <ToolbarBtn
                   isOverlay={isOverlay}
                   danger
-                  label={t('books.pane.deleteScan')}
+                  label={t('books.pane.deletePaper')}
                   onClick={() => onDeletePaper(paper)}
                 >
                   <Trash2 className="h-3 w-3" aria-hidden />
@@ -512,7 +624,7 @@ export function RecordPaperViewer({
         <div className={cn('m-auto shrink-0', initialFit === 'width' ? 'p-[16px]' : 'p-4')}>
           {paper ? (
             fitWidth > 0 ? (
-              <PaperCanvas paper={paper} width={Math.round(paperWidth)} onNaturalWidth={initialFit === 'width' ? onNaturalWidth : undefined} />
+              <PaperCanvas paper={paper} width={Math.round(paperWidth)} onNaturalWidth={initialFit === 'width' ? onNaturalWidth : undefined} onPageCount={onPageCount} onCurrentPage={setCurrentPage} />
             ) : null
           ) : (
             (emptySlot ?? null)
