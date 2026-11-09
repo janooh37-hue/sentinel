@@ -44,9 +44,11 @@ vi.mock('@/lib/authContext', async (importOriginal) => ({
   ...(await importOriginal<typeof AuthContextModule>()),
   useAuth: () => ({ user: { id: 1 }, status: 'authed' }),
 }))
+const templateEditor = vi.hoisted(() => ({ allowed: true }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({
   isLoading: false,
-  has: (capability: string) => capability === 'books.view' || capability === 'documents.generate' || capability.startsWith('books.service.'),
+  has: (capability: string) => capability === 'books.view' || capability === 'documents.generate' ||
+    capability.startsWith('books.service.') || (capability === 'messages.templates' && templateEditor.allowed),
 }) }))
 vi.mock('@/lib/useIdentity', () => ({ useIdentity: () => ({ isAdmin: false }) }))
 vi.mock('@/pages/leaves/useAwaitingReturnCount', () => ({ useAwaitingReturnCount: () => 0 }))
@@ -105,6 +107,7 @@ function renderServices(entry: string): void {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  templateEditor.allowed = true
   void i18n.changeLanguage('en')
   vi.spyOn(messageTemplatesApi, 'list').mockResolvedValue([])
   vi.mocked(api.listTemplates).mockResolvedValue({ items: ['Inmate Conduct Violations', 'Demo'].map((id) => ({
@@ -170,6 +173,21 @@ describe('ApplicationPage service URLs', () => {
 
     expect(await screen.findByTestId('notification-templates')).toHaveAttribute('data-service', 'Violation Form')
     expect(screen.queryByRole('button', { name: 'Email draft' })).not.toBeInTheDocument()
+  })
+
+  it('has no template tabs without messages.templates, even from the URL', async () => {
+    templateEditor.allowed = false
+    vi.mocked(messageTemplatesApi.list).mockResolvedValue([{
+      event: 'demo', label: { en: 'Demo', ar: 'نموذج' }, group: 'forms', services: ['Demo'],
+      timing: 'on_save', default: { en: 'Hello', ar: 'مرحباً' }, override: null, variables: [],
+      default_enabled: true, default_mode: 'prefill',
+    }])
+    renderServices('/services/demo?tab=notification')
+
+    expect(await screen.findByTestId('template-form')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Notification' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Email draft' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('notification-templates')).not.toBeInTheDocument()
   })
 
   it('returns to the filtered catalog on Back after picking a service', async () => {

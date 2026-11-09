@@ -8,8 +8,6 @@ import type { MessageTemplateRead } from '@/lib/messageTemplates'
 import type * as MessageTemplatesModule from '@/lib/messageTemplates'
 import { MessageTemplateEditor } from './MessageTemplateEditor'
 
-const { has } = vi.hoisted(() => ({ has: vi.fn() }))
-vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has }) }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn() } }))
 vi.mock('@/lib/messageTemplates', async (importOriginal) => {
   const original = await importOriginal<typeof MessageTemplatesModule>()
@@ -33,7 +31,6 @@ function mount(value = template) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  has.mockReturnValue(true)
   vi.mocked(messageTemplatesApi.render).mockImplementation(async (_event, body) => ({
     text: { ar: body.ar.replace('{name}', 'Ahmed'), en: body.en.replace('{name}', 'Ahmed') },
     segments: { ar: 1, en: 1 },
@@ -44,19 +41,6 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('MessageTemplateEditor', () => {
-  it('shows text and live previews without editing controls when capability is absent', async () => {
-    has.mockReturnValue(false)
-    const { container } = mount()
-    expect(container.querySelector('textarea')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Save template' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Reset to default' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Employee name' })).not.toBeInTheDocument()
-    expect(await screen.findByText('Dear Ahmed')).toHaveAttribute('dir', 'ltr')
-    expect(screen.getByText('عزيزي Ahmed')).toHaveAttribute('dir', 'rtl')
-    expect(screen.getByText('Sent after manager approval')).toBeVisible()
-    expect(screen.getAllByText(/1 SMS segments/)).toHaveLength(2)
-  })
-
   it('inserts a variable at the selection of the last-focused language and restores its caret', () => {
     mount()
     const english = screen.getByRole('textbox', { name: 'English message' }) as HTMLTextAreaElement

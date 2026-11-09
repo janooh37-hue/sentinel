@@ -25,7 +25,7 @@ export const TEMPLATE_ERROR_CODES = [
   'UNKNOWN_KEY',
 ] as const
 
-/** Capability that unlocks editing; viewing needs none. */
+/** Shows every message/email template surface; without it none renders. */
 export const TEMPLATES_CAP = 'messages.templates'
 
 const enc = encodeURIComponent
