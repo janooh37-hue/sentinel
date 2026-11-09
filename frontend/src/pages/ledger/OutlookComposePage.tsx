@@ -184,10 +184,29 @@ function tagToMessageId(tags: string[]): string | null {
   return tag ? `<${tag.slice('msgid:'.length)}>` : null
 }
 
-/** Open a local attachment in a new tab so the operator can check it first. */
+/** Types a browser renders without running scripts. SVG and HTML are
+ *  deliberately absent: a blob URL shares the app's origin, so an attached
+ *  page could read storage and call the API as the operator. */
+const PREVIEWABLE_TYPES: Record<string, true> = {
+  'application/pdf': true,
+  'image/png': true,
+  'image/jpeg': true,
+  'image/gif': true,
+  'image/webp': true,
+}
+
+/** Let the operator check an attachment before handoff: passive types open in
+ *  a new tab; anything else is downloaded, never rendered in the app's origin. */
 function openFile(file: File): void {
   const url = URL.createObjectURL(file)
-  window.open(url, '_blank', 'noopener')
+  if (Object.hasOwn(PREVIEWABLE_TYPES, file.type)) {
+    window.open(url, '_blank', 'noopener')
+  } else {
+    const link = document.createElement('a')
+    link.href = url
+    link.download = file.name
+    link.click()
+  }
   window.setTimeout(() => URL.revokeObjectURL(url), PREVIEW_URL_TTL_MS)
 }
 
