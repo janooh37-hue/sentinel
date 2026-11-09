@@ -87,7 +87,7 @@ interface BlueprintItem {
   locked?: boolean
   glyph?: string
   artwork?: ServiceArtworkId
-  /** Legacy categories: which services file records into it. */
+  /** Which services file records into this category. */
   description?: string
 }
 
@@ -650,11 +650,6 @@ export function PermissionsPage(): React.JSX.Element {
     queryFn: api.listTemplates,
     staleTime: Infinity,
   })
-  const classificationsQuery = useQuery({
-    queryKey: ['books', 'classifications'],
-    queryFn: () => api.listBookClassifications(),
-    staleTime: Infinity,
-  })
   const requestsQuery = useQuery({
     queryKey: ['permission-requests'],
     queryFn: api.listPermissionRequests,
@@ -768,16 +763,6 @@ export function PermissionsPage(): React.JSX.Element {
         }),
     [capabilityCatalog.entries, i18n.language],
   )
-  const categoryGroups = useMemo(() => {
-    if (!classificationsQuery.isSuccess) return [categoryItems]
-    const codes = new Set(classificationsQuery.data.items.map((item) => item.code))
-    const classifications: BlueprintItem[] = []
-    const legacy: BlueprintItem[] = []
-    for (const item of categoryItems) {
-      (codes.has(item.id) ? classifications : legacy).push(item)
-    }
-    return legacy.length > 0 ? [classifications, legacy] : [classifications]
-  }, [categoryItems, classificationsQuery.data, classificationsQuery.isSuccess])
   const coverageIdPrefix = useId()
 
   // Records visibility is the stronger gate: without it the service is gone
@@ -1336,50 +1321,35 @@ export function PermissionsPage(): React.JSX.Element {
                           <p className="mb-3 text-[0.72em] text-muted-foreground">
                             {t('access.permissions.mirror.categoryHint')}
                           </p>
-                          {categoryGroups.map((items, index) => (
-                            <div key={index === 0 ? 'classifications' : 'legacy'}>
-                              {index === 1 ? (
-                                <h4 className="mb-3 mt-6 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
-                                  {t('access.permissions.mirror.legacyCategories')}
-                                </h4>
-                              ) : null}
-                              <div
-                                className={cn(
-                                  'grid gap-2.5',
-                                  index === 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3',
-                                )}
-                              >
-                                {items.map((item, itemIndex) => {
-                                  const coverageId = `${coverageIdPrefix}-${itemIndex}`
-                                  const showCoverage = index === 1 && Boolean(item.description)
-                                  const button = (
-                                    <BlueprintButton
-                                      key={item.id}
-                                      item={item}
-                                      denied={item.capability != null && !effective.has(item.capability)}
-                                      saving={permissionWritesPending}
-                                      describedBy={showCoverage ? coverageId : undefined}
-                                      onFocus={() => setCaptionItem(item)}
-                                      onToggle={(event) => toggleItem(item, event)}
-                                    />
-                                  )
-                                  return showCoverage ? (
-                                    <div key={item.id} className="grid content-start gap-1">
-                                      {button}
-                                      <p
-                                        id={coverageId}
-                                        className="px-1 text-[0.7em] leading-snug text-muted-foreground"
-                                      >
-                                        <bdi dir="auto">{item.description}</bdi>
-                                      </p>
-                                    </div>
-                                  ) : (
-                                    button
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          ))}
+                          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                            {categoryItems.map((item, itemIndex) => {
+                              const coverageId = `${coverageIdPrefix}-${itemIndex}`
+                              const button = (
+                                <BlueprintButton
+                                  key={item.id}
+                                  item={item}
+                                  denied={item.capability != null && !effective.has(item.capability)}
+                                  saving={permissionWritesPending}
+                                  describedBy={item.description ? coverageId : undefined}
+                                  onFocus={() => setCaptionItem(item)}
+                                  onToggle={(event) => toggleItem(item, event)}
+                                />
+                              )
+                              return item.description ? (
+                                <div key={item.id} className="grid content-start gap-1">
+                                  {button}
+                                  <p
+                                    id={coverageId}
+                                    className="px-1 text-[0.7em] leading-snug text-muted-foreground"
+                                  >
+                                    <bdi dir="auto">{item.description}</bdi>
+                                  </p>
+                                </div>
+                              ) : (
+                                button
+                              )
+                            })}
+                          </div>
                         </div>
                       </div>
 

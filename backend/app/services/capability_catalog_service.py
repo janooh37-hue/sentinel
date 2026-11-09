@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Final
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.classifications import CLASSIFICATIONS, get_classification
-from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS, service_template_ids
+from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
 from app.core.permissions import (
     CAPABILITIES,
     CATEGORY_CAP_PREFIX,
@@ -19,8 +18,8 @@ from app.core.permissions import (
     SERVICE_RECORDS_CAP_PREFIX,
     Capability,
 )
+from app.core.record_categories import SERVICE_RECORD_CATEGORY
 from app.core.roles import INMATE_REPORTER_ROLE
-from app.db.models import BookCategory
 
 _ROLE_ORDER: Final[tuple[str, ...]] = ("operator", "manager", "admin", "inmate_reporter")
 _SERVICE_IDS: Final[tuple[str, ...]] = (*SERVICE_IDS, OTHER_SERVICE_ID)
@@ -125,44 +124,34 @@ def _category_entry(
     capability_id = f"{CATEGORY_CAP_PREFIX}{category_id}"
     label_en = (name_en or "").strip() or capability_id
     label_ar = (name_ar or "").strip() or None
+    names = [
+        _service_names(service_id)
+        for service_id, code in SERVICE_RECORD_CATEGORY.items()
+        if code == category_id
+    ]
+    names_ar = [name_ar for _, name_ar in names]
+    description_en = (
+        f"Covers records from: {', '.join(name_en for name_en, _ in names)}."
+        if names
+        else f"View records in {label_en}."
+    )
+    description_ar = (
+        f"يشمل سجلات: {'، '.join(names_ar)}."
+        if names and all(names_ar)
+        else f"عرض السجلات ضمن {label_ar}."
+        if label_ar
+        else None
+    )
     return CapabilityCatalogEntry(
         id=capability_id,
         domain="categories",
         label_en=label_en,
         label_ar=label_ar,
-        description_en=f"View records in {label_en}.",
-        description_ar=f"عرض السجلات ضمن {label_ar}." if label_ar else None,
+        description_en=description_en,
+        description_ar=description_ar,
         sensitive=False,
         requestable=True,
         default_roles=_dynamic_default_roles(capability_id),
-    )
-
-
-def _book_category_entry(category: BookCategory) -> CapabilityCatalogEntry:
-    """A legacy category, described by the services whose new records it files,
-    so an admin can see what a deny blocks."""
-    from app.services.document_service import record_category_for_template
-
-    entry = _category_entry(category.id, category.name_en, category.name_ar)
-    names = [
-        _service_names(service_id)
-        for service_id in SERVICE_IDS
-        if any(
-            record_category_for_template(template_id) == category.id
-            for template_id in service_template_ids(service_id)
-        )
-    ]
-    if not names:
-        return replace(
-            entry,
-            description_en="Old records only; no service files new records here.",
-            description_ar="سجلات قديمة فقط؛ لا تُنشئ أي خدمة سجلات جديدة هنا.",
-        )
-    names_ar = [name_ar for _, name_ar in names]
-    return replace(
-        entry,
-        description_en=f"Covers records from: {', '.join(name_en for name_en, _ in names)}.",
-        description_ar=f"يشمل سجلات: {'، '.join(names_ar)}." if all(names_ar) else None,
     )
 
 
@@ -174,12 +163,7 @@ def list_catalog(db: Session) -> tuple[CapabilityCatalogEntry, ...]:
         _category_entry(classification.code, classification.name_en, classification.name_ar)
         for classification in CLASSIFICATIONS
     )
-    categories = tuple(
-        _book_category_entry(category)
-        for category in db.scalars(select(BookCategory).order_by(BookCategory.id)).all()
-        if get_classification(category.id) is None
-    )
-    return (*static, *services, *classifications, *categories)
+    return (*static, *services, *classifications)
 
 
 def get_catalog_entry(db: Session, capability_id: str) -> CapabilityCatalogEntry | None:
@@ -207,8 +191,7 @@ def get_catalog_entry(db: Session, capability_id: str) -> CapabilityCatalogEntry
             return _category_entry(
                 classification.code, classification.name_en, classification.name_ar
             )
-        category = db.get(BookCategory, category_id)
-        return _book_category_entry(category) if category is not None else None
+        return None
 
     return None
 
