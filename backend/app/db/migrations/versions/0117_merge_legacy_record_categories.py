@@ -12,7 +12,7 @@ existing targets unchanged. These fail-closed rules prevent wider access.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
@@ -142,7 +142,7 @@ def _remember(
     connection: sa.Connection,
     kind: str,
     key: Sequence[object],
-    row: Mapping[str, object] | None,
+    row: sa.RowMapping | None,
 ) -> None:
     # Plain SQL reads retain SQLite's original datetime text, including precision.
     # NULL row_data records a newly inserted target that downgrade must remove.
@@ -158,7 +158,7 @@ def _remember(
     )
 
 
-def _copy_override(connection: sa.Connection, source: Mapping[str, object], target: str) -> None:
+def _copy_override(connection: sa.Connection, source: sa.RowMapping, target: str) -> None:
     key = {"user_id": source["user_id"], "capability": target}
     existing = (
         connection.execute(

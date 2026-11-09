@@ -369,7 +369,7 @@ def record_category_in_clause(codes: Collection[str]) -> ColumnElement[bool]:
         for category_id, code in LEGACY_CATEGORY_RECORD_CATEGORY.items()
         if code in code_set
     }
-    other_category = Book.category_id.in_(sorted(other_ids))
+    other_category: ColumnElement[bool] = Book.category_id.in_(sorted(other_ids))
     if "15/1" in code_set:
         known_ids = classification_codes | set(LEGACY_CATEGORY_RECORD_CATEGORY)
         other_category = or_(
