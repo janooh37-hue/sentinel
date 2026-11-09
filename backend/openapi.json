@@ -15620,6 +15620,298 @@
         }
       }
     },
+    "/api/v1/books/{book_id}/attachments/{index}/pages": {
+      "post": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Append Book Attachment Pages",
+        "description": "Append the uploaded PDF/image pages to one attachment, keeping its index.",
+        "operationId": "append_book_attachment_pages_api_v1_books__book_id__attachments__index__pages_post",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Index"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_append_book_attachment_pages_api_v1_books__book_id__attachments__index__pages_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/books/{book_id}/attachments/{index}/pages/{page}": {
+      "delete": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Delete Book Attachment Page",
+        "description": "Remove one zero-based page from an attachment (never its only page).",
+        "operationId": "delete_book_attachment_page_api_v1_books__book_id__attachments__index__pages__page__delete",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Index"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Page"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/books/{book_id}/signed-copy/pages": {
+      "post": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Append Signed Copy Pages",
+        "description": "Append pages to the signed scan, keeping the record approved.",
+        "operationId": "append_signed_copy_pages_api_v1_books__book_id__signed_copy_pages_post",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_append_signed_copy_pages_api_v1_books__book_id__signed_copy_pages_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/books/{book_id}/signed-copy/pages/{page}": {
+      "delete": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Delete Signed Copy Page",
+        "description": "Remove one zero-based page of the signed scan (never its only page).",
+        "operationId": "delete_signed_copy_page_api_v1_books__book_id__signed_copy_pages__page__delete",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Page"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/books/{book_id}/imported-document": {
       "get": {
         "tags": [
@@ -39779,6 +40071,34 @@
           "upload"
         ],
         "title": "Body_add_book_attachment_api_v1_books__book_id__attachments_post"
+      },
+      "Body_append_book_attachment_pages_api_v1_books__book_id__attachments__index__pages_post": {
+        "properties": {
+          "upload": {
+            "type": "string",
+            "format": "binary",
+            "title": "Upload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "upload"
+        ],
+        "title": "Body_append_book_attachment_pages_api_v1_books__book_id__attachments__index__pages_post"
+      },
+      "Body_append_signed_copy_pages_api_v1_books__book_id__signed_copy_pages_post": {
+        "properties": {
+          "upload": {
+            "type": "string",
+            "format": "binary",
+            "title": "Upload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "upload"
+        ],
+        "title": "Body_append_signed_copy_pages_api_v1_books__book_id__signed_copy_pages_post"
       },
       "Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put": {
         "properties": {
