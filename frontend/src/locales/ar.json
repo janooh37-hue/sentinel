@@ -4435,7 +4435,6 @@
         "employees": "الموظفون",
         "saved": "محفوظ"
       },
-      "composeBusy": "أنهِ مسودتك الحالية أو أغلقها أولاً.",
       "handoff": {
         "title": "التسليم إلى Outlook",
         "modeLegend": "كيف تريد أن يفتحها Outlook؟",
@@ -4450,7 +4449,9 @@
         "noAccount": "لا يوجد صندوق بريد مُهيّأ، لذلك يتوفر خيار «فتح Outlook الآن» فقط. أضف صندوق بريدك من الإعدادات › تكامل البريد الإلكتروني لدفع المسودات.",
         "pending": "بانتظار الإرسال من Outlook",
         "discardTitle": "تجاهل هذه الرسالة؟",
-        "discardDesc": "لم يُسلَّم شيء إلى Outlook بعد، لذا الإغلاق سيفقد ما كتبته."
+        "discardDesc": "لم يُسلَّم شيء إلى Outlook بعد، لذا الإغلاق سيفقد ما كتبته.",
+        "from": "من",
+        "fromOutlook": "حسابك الافتراضي في Outlook"
       },
       "ref": {
         "label": "مرجع",
@@ -5073,11 +5074,6 @@
     }
   },
   "compose": {
-    "window": {
-      "minimize": "تصغير",
-      "maximize": "تكبير",
-      "restore": "استعادة"
-    },
     "includeSignature": "إدراج التوقيع",
     "invalidAddress": "عنوان بريد إلكتروني غير صالح: {{address}}",
     "replyNoAddress": "لم يُعثر على عنوان بريد إلكتروني لـ \"{{counterparty}}\" — أدخله يدوياً.",
@@ -5092,6 +5088,9 @@
     "sent": "تم إرسال البريد",
     "attachments": "المرفقات",
     "dropFiles": "أسقط الملفات هنا أو انقر للتصفح",
+    "attachmentsLimit": "حتى {{max}} إجمالاً",
+    "openAttachment": "فتح {{name}}",
+    "removeAttachment": "إزالة {{name}}",
     "title": {
       "reply": "ردّ",
       "replyAll": "الرد على الكل",

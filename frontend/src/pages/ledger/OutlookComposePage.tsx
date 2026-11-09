@@ -1,8 +1,7 @@
 /**
- * OutlookHandoffDialog — the ledger's compose surface after the SMTP composer
- * was retired. It never sends: it hands the message to the operator's real
- * Outlook and records a pending ledger row that the 5-minute Sent-folder sync
- * later confirms.
+ * OutlookComposePage — the ledger's full-page compose surface. It never sends:
+ * it hands the message to the operator's real Outlook and records a pending
+ * ledger row that the 5-minute Sent-folder sync later confirms.
  *
  * Two modes, always explicit (never a hidden default):
  *   draft   POST /email/handoff (mode=draft) → the backend IMAP-APPENDs a full
@@ -17,8 +16,11 @@
  * option. Every switch is announced inline — the radios are never silently
  * overridden without a visible reason.
  *
- * Hosted inside `ComposeWindow`, so the desktop drag/minimize chrome and the
- * mobile full-screen page chrome are unchanged from the old composer.
+ * Layout: the shell swaps its mailbox for this page while `?action=compose` is
+ * open. The message (recipients, subject, references, editor) owns the main
+ * column; how it reaches Outlook (mailbox, mode, signature) and what travels
+ * with it (attachments, each openable before handoff) sit in a side column
+ * that stacks under the message on narrow screens.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -26,35 +28,23 @@ import { useForm, FormProvider, Controller } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from '@/lib/toast'
-import {
-  ArrowLeft,
-  Check,
-  Loader2,
-  Maximize2,
-  Minimize2,
-  Minus,
-  Paperclip,
-  Plus,
-  Send,
-  X,
-} from 'lucide-react'
+import { ArrowLeft, Check, ExternalLink, Loader2, Paperclip, Plus, Send, X } from 'lucide-react'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import type { EmployeeLookupItem, LedgerEntryRead } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { base64PdfToFile, desiredRefPdfDocIds, mergeFiles } from '@/lib/refPdfAttachments'
 import { useIdentity } from '@/lib/useIdentity'
+import { useIsMobile } from '@/lib/useIsMobile'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { pushRecentRecipient, recordRecipientsForForm } from '@/lib/recentRecipients'
 import { clearBasket } from '@/lib/emailBasket'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { RecipientChipsInput } from '@/components/ledger/RecipientChipsInput'
 import { RecipientListsMenu } from '@/components/ledger/RecipientListsMenu'
 import { ReferencePicker, type ComposeReference } from '@/components/ledger/ReferencePicker'
 import { RichEditor } from '@/components/ui/rich-editor'
-import type { ComposeWindowControls } from './outlook/ComposeWindow'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -83,12 +73,15 @@ const MAX_ATTACHMENTS_BYTES = 20 * 1024 * 1024
 
 const SIGNATURE_MARKER = '<!-- gssg-signature -->'
 
+/** How long an opened attachment's object URL stays valid for its new tab. */
+const PREVIEW_URL_TTL_MS = 60_000
+
 
 const EMAIL_LIKE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type ComposeMode = 'new' | 'reply' | 'replyall' | 'forward'
 
-export interface OutlookHandoffPrefill {
+export interface OutlookComposePrefill {
   to?: string[]
   cc?: string[]
   subject?: string
@@ -98,13 +91,10 @@ export interface OutlookHandoffPrefill {
   basketKey?: string
 }
 
-interface OutlookHandoffDialogProps {
+interface OutlookComposePageProps {
   mode: ComposeMode
   source?: LedgerEntryRead
-  prefill?: OutlookHandoffPrefill
-  /** 'page' (mobile/full-screen) or 'window' (desktop frame). */
-  chrome?: 'page' | 'window'
-  windowControls?: ComposeWindowControls
+  prefill?: OutlookComposePrefill
   onClose: () => void
   onHandedOff: (entryId: number) => void
 }
@@ -194,20 +184,26 @@ function tagToMessageId(tags: string[]): string | null {
   return tag ? `<${tag.slice('msgid:'.length)}>` : null
 }
 
+/** Open a local attachment in a new tab so the operator can check it first. */
+function openFile(file: File): void {
+  const url = URL.createObjectURL(file)
+  window.open(url, '_blank', 'noopener')
+  window.setTimeout(() => URL.revokeObjectURL(url), PREVIEW_URL_TTL_MS)
+}
+
 // ─── component ───────────────────────────────────────────────────────────────
 
-export function OutlookHandoffDialog({
+export function OutlookComposePage({
   mode,
   source,
   prefill,
-  chrome = 'page',
-  windowControls,
   onClose,
   onHandedOff,
-}: OutlookHandoffDialogProps): React.JSX.Element {
+}: OutlookComposePageProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const { identity } = useIdentity()
+  const isMobile = useIsMobile()
   const selfAddress = identity?.email ?? undefined
 
   const initial: FormValues = useMemo(() => {
@@ -247,7 +243,7 @@ export function OutlookHandoffDialog({
       body: prefill?.bodyHtml ?? '',
     }
     // `t` is stable per language; the prefill/source pair is fixed for the life
-    // of one dialog (the shell mounts a new one per compose).
+    // of one page (the shell mounts a new one per compose).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -271,7 +267,7 @@ export function OutlookHandoffDialog({
   const ccRevealedByUser = useRef(false)
   const ccRowRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const rootRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLElement>(null)
 
   // ── recipient autocomplete ────────────────────────────────────────────────
   const contactsQuery = useQuery({
@@ -342,8 +338,8 @@ export function OutlookHandoffDialog({
   )
 
   // Book reference → its PDF, fetched client-side. The backend never resolves
-  // book PDFs: it only stores what this dialog uploads. (Ported verbatim in
-  // spirit from the retired composer, including the base64 IDM bypass.)
+  // book PDFs: it only stores what this page uploads. (Ported in spirit from
+  // the retired composer, including the base64 IDM bypass.)
   useEffect(() => {
     const desired = desiredRefPdfDocIds(references, attachRefPdf)
     const desiredSet = new Set(desired)
@@ -463,21 +459,10 @@ export function OutlookHandoffDialog({
       ? 'draft'
       : chosenMode
 
-  // ── window chrome focus handling (unchanged behaviour) ────────────────────
-  const prevWinState = useRef(windowControls?.state)
+  // The page replaces the mailbox, so put the caret in the first field.
   useEffect(() => {
-    const prev = prevWinState.current
-    const next = windowControls?.state
-    prevWinState.current = next
-    if (prev === undefined || next === undefined || prev === next) return
-    const root = rootRef.current
-    if (!root) return
-    if (next === 'minimized') {
-      root.querySelector<HTMLElement>('#ledger-handoff-title')?.focus()
-    } else if (prev === 'minimized') {
-      root.querySelector<HTMLElement>('input, textarea, [contenteditable="true"]')?.focus()
-    }
-  }, [windowControls?.state])
+    rootRef.current?.querySelector<HTMLElement>('input, textarea, [contenteditable="true"]')?.focus()
+  }, [])
 
   useEffect(() => {
     if (!showCc || !ccRevealedByUser.current) return
@@ -591,129 +576,71 @@ export function OutlookHandoffDialog({
         ? t('ledger.outlook.handoff.forcedByLength')
         : null
 
+  const totalBytes = allFiles.reduce((sum, file) => sum + file.size, 0)
+
   return (
-    <div
+    <section
       ref={rootRef}
+      aria-labelledby="ledger-compose-title"
       className="flex h-full min-h-0 flex-1 flex-col bg-background"
       onKeyDown={(e) => {
         if (e.key === 'Escape' && !e.defaultPrevented) handleClose()
       }}
     >
-      {chrome === 'window' ? (
-        <div
-          className={cn(
-            'flex shrink-0 items-center gap-2 bg-surface px-4 py-2.5',
-            windowControls?.state !== 'minimized' && 'border-b border-hairline',
-            windowControls &&
-              windowControls.state !== 'minimized' &&
-              'cursor-grab active:cursor-grabbing',
-          )}
-          {...(windowControls?.dragHandleProps ?? {})}
+      <FormProvider {...methods}>
+        <form
+          onSubmit={handleSubmit((values) => {
+            if (!(values.to ?? []).some(Boolean)) {
+              toast.error(t('compose.toRequired', { defaultValue: 'At least one recipient is required' }))
+              return
+            }
+            if (totalBytes > MAX_ATTACHMENTS_BYTES) {
+              toast.error(t('compose.attachmentsTooLarge', {
+                max: formatBytes(MAX_ATTACHMENTS_BYTES),
+                defaultValue: 'Attachments exceed the {{max}} limit',
+              }))
+              return
+            }
+            handoffMutation.mutate(values)
+          })}
+          className="flex min-h-0 flex-1 flex-col"
         >
-          {windowControls?.state === 'minimized' ? (
+          <header className="flex shrink-0 items-center gap-3 border-b border-hairline bg-surface px-4 py-3 sm:px-6">
             <button
               type="button"
-              id="ledger-handoff-title"
-              onClick={windowControls.restore}
-              className="min-w-0 flex-1 truncate rounded-md text-start text-sm font-semibold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={handleClose}
+              className="inline-flex flex-none items-center gap-1.5 rounded-full px-3 py-1 text-sm text-muted-foreground hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {title}
-              {source && ` — ${source.subject}`}
+              <ArrowLeft className="h-4 w-4 rtl:rotate-180" strokeWidth={1.5} />
+              <span className="sr-only sm:not-sr-only">{t('ledger.outlook.back')}</span>
             </button>
-          ) : (
+            <span className="hidden text-border sm:inline" aria-hidden="true">/</span>
             <h2
-              id="ledger-handoff-title"
-              className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-foreground"
+              id="ledger-compose-title"
+              className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight text-foreground"
+              dir="auto"
             >
               {title}
               {source && ` — ${source.subject}`}
             </h2>
-          )}
-          {windowControls && windowControls.state !== 'minimized' && (
-            <>
-              <WinBtn
-                label={t('compose.window.minimize', { defaultValue: 'Minimize' })}
-                onClick={windowControls.minimize}
-              >
-                <Minus className="h-4 w-4" strokeWidth={1.8} />
-              </WinBtn>
-              <WinBtn
-                label={
-                  windowControls.state === 'maximized'
-                    ? t('compose.window.restore', { defaultValue: 'Restore' })
-                    : t('compose.window.maximize', { defaultValue: 'Maximize' })
-                }
-                onClick={windowControls.maximize}
-              >
-                {windowControls.state === 'maximized' ? (
-                  <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-                ) : (
-                  <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-                )}
-              </WinBtn>
-            </>
-          )}
-          {windowControls?.state === 'minimized' && (
-            <WinBtn
-              label={t('compose.window.restore', { defaultValue: 'Restore' })}
-              onClick={windowControls.restore}
-            >
-              <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-            </WinBtn>
-          )}
-          <WinBtn label={t('common.close', { defaultValue: 'Close' })} onClick={handleClose}>
-            <X className="h-4 w-4" strokeWidth={1.8} />
-          </WinBtn>
-        </div>
-      ) : (
-        <div className="flex shrink-0 items-center gap-3 border-b border-hairline bg-surface px-6 py-4">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm text-muted-foreground hover:bg-surface-tinted hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4 rtl:rotate-180" strokeWidth={1.5} />
-            <span>{t('common.back', { defaultValue: 'Back' })}</span>
-          </button>
-          <span className="text-border">/</span>
-          <h2 className="text-lg font-semibold tracking-tight text-foreground">
-            {title}
-            {source && ` — ${source.subject}`}
-          </h2>
-        </div>
-      )}
+            <Button type="submit" className="flex-none rounded-full" disabled={handoffMutation.isPending}>
+              {handoffMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Send className="h-3.5 w-3.5 rtl:-scale-x-100" />
+              )}
+              <span className="sr-only sm:not-sr-only">{t('ledger.outlook.handoff.submit')}</span>
+            </Button>
+          </header>
 
-      {windowControls?.state !== 'minimized' && (
-        <FormProvider {...methods}>
-          <form
-            onSubmit={handleSubmit((values) => {
-              if (!(values.to ?? []).some(Boolean)) {
-                toast.error(t('compose.toRequired', { defaultValue: 'At least one recipient is required' }))
-                return
-              }
-              if (allFiles.reduce((sum, file) => sum + file.size, 0) > MAX_ATTACHMENTS_BYTES) {
-                toast.error(t('compose.attachmentsTooLarge', {
-                  max: formatBytes(MAX_ATTACHMENTS_BYTES),
-                  defaultValue: 'Attachments exceed the {{max}} limit',
-                }))
-                return
-              }
-              handoffMutation.mutate(values)
-            })}
-            className="flex min-h-0 flex-1 flex-col"
-          >
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3">
-              <div
-                className={
-                  chrome === 'window'
-                    ? 'flex min-h-0 w-full flex-1 flex-col gap-2.5'
-                    : 'mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-2.5 rounded-2xl bg-surface p-6'
-                }
-              >
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto grid w-full max-w-[1440px] grid-cols-[minmax(0,1fr)] gap-4 p-3 sm:p-6 lg:h-full lg:grid-cols-[minmax(0,1fr)_340px]">
+              {/* ── The message ─────────────────────────────────────────── */}
+              <div className="flex min-h-[640px] flex-col gap-2.5 rounded-2xl border border-hairline bg-surface p-4 sm:p-5 lg:min-h-0">
                 {/* To row — chips + inline Cc / Lists ▾ / ＋ Ref controls */}
                 <div className="flex flex-col gap-1">
-                  <div className="flex items-start gap-2">
-                    <div className="flex min-h-9 flex-1 rounded-md border border-input bg-surface px-2 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-background">
+                  <div className="flex flex-wrap items-start gap-x-2 gap-y-1.5">
+                    <div className="flex min-h-9 min-w-[min(100%,18rem)] flex-1 rounded-md border border-input bg-surface px-2 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-background">
                       <Controller
                         control={control}
                         name="to"
@@ -822,38 +749,6 @@ export function OutlookHandoffDialog({
                   )}
                 </div>
 
-                {/* Mode — the one decision this surface exists to make. */}
-                <fieldset className="flex flex-col gap-1.5 rounded-lg border border-hairline bg-surface-tinted/50 px-3 py-2.5">
-                  <legend className="px-1 text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
-                    {t('ledger.outlook.handoff.modeLegend')}
-                  </legend>
-                  <ModeOption
-                    id="handoff-mode-draft"
-                    checked={effectiveMode === 'draft'}
-                    disabled={!draftAvailable}
-                    label={t('ledger.outlook.handoff.modeDraft')}
-                    hint={t('ledger.outlook.handoff.modeDraftHint')}
-                    onSelect={() => setChosenMode('draft')}
-                  />
-                  <ModeOption
-                    id="handoff-mode-mailto"
-                    checked={effectiveMode === 'mailto'}
-                    disabled={draftAvailable && forcedDraftReason !== null}
-                    label={t('ledger.outlook.handoff.modeMailto')}
-                    hint={t('ledger.outlook.handoff.modeMailtoHint')}
-                    onSelect={() => setChosenMode('mailto')}
-                  />
-                  {notice && (
-                    <p
-                      role="status"
-                      className="mt-0.5 flex items-start gap-1.5 px-1 text-[0.76em] leading-snug text-muted-foreground"
-                    >
-                      <span aria-hidden="true">↳</span>
-                      <span dir="auto">{notice}</span>
-                    </p>
-                  )}
-                </fieldset>
-
                 {references.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2">
                     {references.map((ref) => (
@@ -894,23 +789,115 @@ export function OutlookHandoffDialog({
                 <RichEditor
                   name="body"
                   variant="full"
-                  fillHeight
-                  minHeightPx={220}
+                  // A phone wraps the toolbar to ~7 rows, so filling the card
+                  // would leave no room to write: give it a tall fixed frame.
+                  fillHeight={!isMobile}
+                  height={isMobile ? 760 : undefined}
+                  minHeightPx={440}
                   label_en={t('compose.body', { defaultValue: 'Message' })}
                   label_ar={t('compose.body', { defaultValue: 'Message' })}
                   defaultValue={initial.body}
                 />
+              </div>
+
+              {/* ── How it reaches Outlook, and what travels with it ──────── */}
+              <aside className="flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto">
+                {/* Mode — the one decision this surface exists to make. */}
+                <fieldset className="flex flex-col gap-1.5 rounded-2xl border border-hairline bg-surface px-4 py-3.5">
+                  <legend className="px-1 text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:normal-case rtl:tracking-normal">
+                    {t('ledger.outlook.handoff.modeLegend')}
+                  </legend>
+                  <p className="mb-1 flex flex-wrap items-baseline gap-x-2 px-1.5 text-[0.8em]">
+                    <span className="font-semibold text-muted-foreground">
+                      {t('ledger.outlook.handoff.from')}
+                    </span>
+                    {effectiveMode === 'draft' && accountEmail ? (
+                      <span className="min-w-0 break-all text-foreground" dir="ltr">
+                        {accountEmail}
+                      </span>
+                    ) : (
+                      <span className="min-w-0 text-foreground">
+                        {t('ledger.outlook.handoff.fromOutlook')}
+                      </span>
+                    )}
+                  </p>
+                  <ModeOption
+                    id="handoff-mode-draft"
+                    checked={effectiveMode === 'draft'}
+                    disabled={!draftAvailable}
+                    label={t('ledger.outlook.handoff.modeDraft')}
+                    hint={t('ledger.outlook.handoff.modeDraftHint')}
+                    onSelect={() => setChosenMode('draft')}
+                  />
+                  <ModeOption
+                    id="handoff-mode-mailto"
+                    checked={effectiveMode === 'mailto'}
+                    disabled={draftAvailable && forcedDraftReason !== null}
+                    label={t('ledger.outlook.handoff.modeMailto')}
+                    hint={t('ledger.outlook.handoff.modeMailtoHint')}
+                    onSelect={() => setChosenMode('mailto')}
+                  />
+                  {notice && (
+                    <p
+                      role="status"
+                      className="mt-0.5 flex items-start gap-1.5 px-1 text-[0.76em] leading-snug text-muted-foreground"
+                    >
+                      <span aria-hidden="true">↳</span>
+                      <span dir="auto">{notice}</span>
+                    </p>
+                  )}
+                  {effectiveMode === 'draft' && (
+                    <label className="mt-1.5 flex cursor-pointer items-center gap-2 border-t border-hairline px-1.5 pt-2.5 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={useSignature}
+                        onChange={(e) => setUseSignature(e.target.checked)}
+                        className="h-3.5 w-3.5 accent-primary"
+                      />
+                      {t('compose.includeSignature')}
+                    </label>
+                  )}
+                </fieldset>
 
                 {/* Attachments — draft-only cargo, so hidden in mailto mode. */}
                 {effectiveMode === 'draft' && (
-                  <div className="flex shrink-0 flex-col gap-2">
-                    <Label className="flex items-center gap-1.5 text-xs">
-                      <Paperclip className="h-3.5 w-3.5" />
+                  <section
+                    aria-labelledby="compose-attachments-title"
+                    className="flex flex-col gap-2.5 rounded-2xl border border-hairline bg-surface px-4 py-3.5"
+                  >
+                    <h3
+                      id="compose-attachments-title"
+                      className="flex items-center gap-1.5 text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:normal-case rtl:tracking-normal"
+                    >
+                      <Paperclip className="h-3.5 w-3.5" aria-hidden />
                       {t('compose.attachments', { defaultValue: 'Attachments' })}
                       {allFiles.length > 0 && (
-                        <span className="text-muted-foreground">({allFiles.length})</span>
+                        <span className="font-mono normal-case tracking-normal" dir="ltr">
+                          ({allFiles.length} · {formatBytes(totalBytes)})
+                        </span>
                       )}
-                    </Label>
+                    </h3>
+                    {allFiles.length > 0 && (
+                      <ul className="flex flex-col gap-1.5">
+                        {files.map((f, i) => (
+                          <AttachmentRow
+                            key={`${f.name}-${f.size}-${i}`}
+                            file={f}
+                            openLabel={t('compose.openAttachment', { name: f.name })}
+                            removeLabel={t('compose.removeAttachment', { name: f.name })}
+                            onRemove={() => setFiles(files.filter((_, x) => x !== i))}
+                          />
+                        ))}
+                        {refPdfList.map((f) => (
+                          <AttachmentRow
+                            key={`refpdf-${f.name}`}
+                            file={f}
+                            openLabel={t('compose.openAttachment', { name: f.name })}
+                            badge={refLabel}
+                          />
+                        ))}
+                      </ul>
+                    )}
                     <div
                       onDragOver={(e) => {
                         e.preventDefault()
@@ -924,7 +911,7 @@ export function OutlookHandoffDialog({
                       }}
                       onClick={() => fileInputRef.current?.click()}
                       className={cn(
-                        'flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-4 text-sm transition-colors',
+                        'flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-5 text-center text-sm transition-colors',
                         dragOver
                           ? 'border-primary bg-primary-soft text-primary'
                           : 'border-border bg-surface-tinted text-muted-foreground hover:border-primary/60',
@@ -934,6 +921,12 @@ export function OutlookHandoffDialog({
                       <span>
                         {t('compose.dropFiles', {
                           defaultValue: 'Drop files here or click to browse',
+                        })}
+                      </span>
+                      <span className="text-[0.8em]">
+                        {/* FSI…PDI keeps "20.0 MB" in order inside the Arabic sentence. */}
+                        {t('compose.attachmentsLimit', {
+                          max: `\u2068${formatBytes(MAX_ATTACHMENTS_BYTES)}\u2069`,
                         })}
                       </span>
                       <input
@@ -947,79 +940,13 @@ export function OutlookHandoffDialog({
                         }}
                       />
                     </div>
-                    {files.length > 0 && (
-                      <ul className="flex flex-col gap-1.5">
-                        {files.map((f, i) => (
-                          <li
-                            key={`${f.name}-${f.size}-${i}`}
-                            className="flex items-center gap-2 rounded-lg bg-surface-tinted px-3 py-2 text-sm"
-                          >
-                            <Paperclip
-                              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                              strokeWidth={1.5}
-                            />
-                            <span className="min-w-0 flex-1 truncate">{f.name}</span>
-                            <span className="font-mono text-xs text-muted-foreground">
-                              {formatBytes(f.size)}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setFiles(files.filter((_, x) => x !== i))}
-                              className="rounded p-0.5 text-muted-foreground hover:text-foreground"
-                              aria-label={t('common.remove', { defaultValue: 'Remove' })}
-                            >
-                              <X className="h-3.5 w-3.5" strokeWidth={1.5} />
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {refPdfList.map((f) => (
-                      <div
-                        key={`refpdf-${f.name}`}
-                        className="flex items-center gap-2 text-xs text-muted-foreground"
-                      >
-                        <Paperclip className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
-                        <span className="min-w-0 truncate" dir="auto">
-                          {f.name}
-                        </span>
-                        <span className="flex-none rounded-sm bg-primary-soft px-1 py-0.5 text-[10px] font-semibold uppercase text-primary-on-soft">
-                          {refLabel}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  </section>
                 )}
-              </div>
+              </aside>
             </div>
-
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-hairline bg-surface px-6 py-3">
-              {effectiveMode === 'draft' && (
-                <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={useSignature}
-                    onChange={(e) => setUseSignature(e.target.checked)}
-                    className="h-3.5 w-3.5 accent-primary"
-                  />
-                  {t('compose.includeSignature')}
-                </label>
-              )}
-              <Button type="button" variant="secondary" className="rounded-full" onClick={handleClose}>
-                {t('common.cancel')}
-              </Button>
-              <Button type="submit" className="rounded-full" disabled={handoffMutation.isPending}>
-                {handoffMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Send className="h-3.5 w-3.5 rtl:-scale-x-100" />
-                )}
-                {t('ledger.outlook.handoff.submit')}
-              </Button>
-            </div>
-          </form>
-        </FormProvider>
-      )}
+          </div>
+        </form>
+      </FormProvider>
 
       <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
         <AlertDialogContent>
@@ -1045,7 +972,7 @@ export function OutlookHandoffDialog({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </section>
   )
 }
 
@@ -1112,6 +1039,57 @@ function ModeOption({
   )
 }
 
+/** One attachment: open it to check before handoff; user files can be removed,
+ *  reference PDFs follow their reference chip instead and carry its badge. */
+function AttachmentRow({
+  file,
+  openLabel,
+  removeLabel,
+  onRemove,
+  badge,
+}: {
+  file: File
+  openLabel: string
+  removeLabel?: string
+  onRemove?: () => void
+  badge?: string
+}): React.JSX.Element {
+  return (
+    <li className="flex items-center gap-2 rounded-lg bg-surface-tinted px-2.5 py-2 text-sm">
+      <button
+        type="button"
+        onClick={() => openFile(file)}
+        aria-label={openLabel}
+        title={openLabel}
+        className="flex min-w-0 flex-1 items-center gap-2 rounded text-start hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.5} aria-hidden />
+        <span className="min-w-0 flex-1 truncate" dir="auto">
+          {file.name}
+        </span>
+      </button>
+      {badge && (
+        <span className="flex-none rounded-sm bg-primary-soft px-1 py-0.5 text-[10px] font-semibold uppercase text-primary-on-soft">
+          {badge}
+        </span>
+      )}
+      <span className="flex-none font-mono text-xs text-muted-foreground" dir="ltr">
+        {formatBytes(file.size)}
+      </span>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="flex-none rounded p-0.5 text-muted-foreground hover:text-foreground"
+          aria-label={removeLabel}
+        >
+          <X className="h-3.5 w-3.5" strokeWidth={1.5} />
+        </button>
+      )}
+    </li>
+  )
+}
+
 function RefPdfToggle({
   on,
   onToggle,
@@ -1139,28 +1117,6 @@ function RefPdfToggle({
     >
       <Paperclip className="h-3 w-3" strokeWidth={2} aria-hidden />
       {pdfLabel}
-    </button>
-  )
-}
-
-function WinBtn({
-  label,
-  onClick,
-  children,
-}: {
-  label: string
-  onClick: () => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className="grid h-7 w-7 flex-none place-items-center rounded-md text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      {children}
     </button>
   )
 }

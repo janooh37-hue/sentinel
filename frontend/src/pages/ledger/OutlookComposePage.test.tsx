@@ -1,5 +1,5 @@
 /**
- * OutlookHandoffDialog — the adaptive mode rules are the whole point of this
+ * OutlookComposePage — the adaptive mode rules are the whole point of this
  * surface, so they get the coverage: what the operator may choose, what the app
  * chooses for them and why, and what actually leaves the browser.
  *
@@ -16,7 +16,7 @@ import { api } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import * as refPdfAttachments from '@/lib/refPdfAttachments'
 import { toast } from '@/lib/toast'
-import { OutlookHandoffDialog } from './OutlookHandoffDialog'
+import { OutlookComposePage } from './OutlookComposePage'
 import {
   browserNavigation,
   buildMailtoUrl,
@@ -59,7 +59,7 @@ const BOOK_REF = {
   fileName: 'GS-0048.pdf',
 }
 
-type DialogProps = Parameters<typeof OutlookHandoffDialog>[0]
+type DialogProps = Parameters<typeof OutlookComposePage>[0]
 
 function renderDialog(
   opts: { mode?: DialogProps['mode']; source?: DialogProps['source']; prefill?: DialogProps['prefill'] } = {},
@@ -69,7 +69,7 @@ function renderDialog(
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={queryClient}>
-      <OutlookHandoffDialog
+      <OutlookComposePage
         mode={opts.mode ?? 'new'}
         source={opts.source}
         prefill={opts.prefill ?? {}}
@@ -104,7 +104,7 @@ afterEach(async () => {
   await i18n.changeLanguage('en')
 })
 
-describe('OutlookHandoffDialog prefill', () => {
+describe('OutlookComposePage prefill', () => {
   it('renders the To, Cc, subject and reference a basket prefill carried in', async () => {
     renderDialog({
       prefill: {
@@ -125,7 +125,7 @@ describe('OutlookHandoffDialog prefill', () => {
   })
 })
 
-describe('OutlookHandoffDialog mode rules', () => {
+describe('OutlookComposePage mode rules', () => {
   it('defaults to a draft and offers both modes when a mailbox is configured', async () => {
     renderDialog({ prefill: { to: ['hr@gssg.ae'], subject: 'Transfer', bodyHtml: '<p>short</p>' } })
     await waitFor(() => expect(draftRadio()).toBeChecked())
@@ -178,7 +178,7 @@ describe('OutlookHandoffDialog mode rules', () => {
   })
 })
 
-describe('OutlookHandoffDialog submit', () => {
+describe('OutlookComposePage submit', () => {
   it('records the pending row then opens Outlook with an encoded mailto URL', async () => {
     vi.mocked(api.getEmailAccount).mockResolvedValue(null)
     const assign = vi.spyOn(browserNavigation, 'assign').mockImplementation(() => {})
@@ -257,7 +257,7 @@ describe('OutlookHandoffDialog submit', () => {
   })
 })
 
-describe('OutlookHandoffDialog reply all', () => {
+describe('OutlookComposePage reply all', () => {
   const source = {
     id: 5,
     entry_date: '2026-08-10',
@@ -290,13 +290,16 @@ describe('OutlookHandoffDialog reply all', () => {
     expect(await screen.findByText('sender@x.ae')).toBeInTheDocument()
     expect(screen.getByText('peer@x.ae')).toBeInTheDocument()
     expect(screen.getByText('cc1@x.ae')).toBeInTheDocument()
-    await waitFor(() =>
-      expect(screen.queryByText('ops@gssg.ae')).not.toBeInTheDocument(),
-    )
+    // The mailbox survives only as the draft's sender, never as a recipient.
+    await waitFor(() => {
+      const shown = screen.getAllByText('ops@gssg.ae')
+      expect(shown).toHaveLength(1)
+      expect(shown[0].closest('fieldset')).toHaveTextContent('From')
+    })
   })
 })
 
-describe('OutlookHandoffDialog mailto encoding helpers', () => {
+describe('OutlookComposePage mailto encoding helpers', () => {
   it('leaves ordinary addresses readable and encodes every query value', () => {
     const url = buildMailtoUrl(['a@x.ae', 'b@x.ae'], ['c@x.ae'], 'رقم GS-0048', 'line one\nline two')
     expect(url.startsWith('mailto:a@x.ae,b@x.ae?')).toBe(true)

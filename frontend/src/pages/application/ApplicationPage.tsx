@@ -87,6 +87,7 @@ import type { AttachmentsState } from '@/components/application/attachmentsState
 import { ApiError } from '@/lib/api'
 import { clearAllDrafts, clearDraft, loadDraft, saveDraft } from '@/lib/formDrafts'
 import { addToBasket, basketLabel, countByFormKind, type EmailBasketItem } from '@/lib/emailBasket'
+import { violationDetailsAr } from '@/lib/violationTypes'
 import { useEmailBasket } from '@/hooks/useEmailBasket'
 import { isQuickActionAllowed } from '@/lib/dashboardLayout'
 import { useCapabilities } from '@/lib/useCapabilities'
@@ -1754,6 +1755,10 @@ function StandardApplicationPage(): React.JSX.Element {
                             v.start_date && v.end_date
                               ? `${String(v.start_date)} → ${String(v.end_date)}`
                               : selectedTemplate
+                          const { violations, notes: violationNotes } = violationDetailsAr(
+                            selectedTemplate,
+                            v,
+                          )
                           const item: EmailBasketItem = {
                             bookId: lastSaved.bookId,
                             docId: lastSaved.docId,
@@ -1770,6 +1775,8 @@ function StandardApplicationPage(): React.JSX.Element {
                                 ? leaveType
                                 : undefined,
                             detail,
+                            ...(violations.length > 0 && { violations }),
+                            ...(violationNotes && { violationNotes }),
                           }
                           const { added, key } = addToBasket(item)
                           const kind = basketLabel(key, (k: string) => t(k))
