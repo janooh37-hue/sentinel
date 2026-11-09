@@ -4101,7 +4101,6 @@
         "employees": "Employees",
         "saved": "Saved"
       },
-      "composeBusy": "Finish or close your current draft first.",
       "handoff": {
         "title": "Hand off to Outlook",
         "modeLegend": "How should Outlook open this?",
@@ -4116,7 +4115,9 @@
         "noAccount": "No mailbox is configured, so only \"Open Outlook now\" is available. Add your mailbox under Settings › Email integration to push drafts.",
         "pending": "Awaiting Outlook send",
         "discardTitle": "Discard this message?",
-        "discardDesc": "Nothing has been handed to Outlook yet, so closing loses what you typed."
+        "discardDesc": "Nothing has been handed to Outlook yet, so closing loses what you typed.",
+        "from": "From",
+        "fromOutlook": "Your default Outlook account"
       },
       "ref": {
         "label": "Ref",
@@ -4688,11 +4689,6 @@
     }
   },
   "compose": {
-    "window": {
-      "minimize": "Minimize",
-      "maximize": "Maximize",
-      "restore": "Restore"
-    },
     "includeSignature": "Include signature",
     "invalidAddress": "Not a valid email address: {{address}}",
     "replyNoAddress": "No email address found for \"{{counterparty}}\" — enter one manually.",
@@ -4707,6 +4703,8 @@
     "sent": "Email sent",
     "attachments": "Attachments",
     "dropFiles": "Drop files here or click to browse",
+    "attachmentsLimit": "Up to {{max}} in total",
+    "openAttachment": "Open {{name}}",
     "title": {
       "reply": "Reply",
       "replyAll": "Reply All",
