@@ -356,9 +356,11 @@ categories are the only category capabilities.
   visibility (`books.servicerecords.*`) stays beside per-category visibility; both must
   allow a record.
 - **Migration `0117_merge_legacy_record_categories` — nobody sees more.** A deny on a live
-  legacy category becomes a deny on `books.servicerecords.<service>` for every service that
-  files there, plus `books.servicerecords.other`; a deny on an old-only category becomes a
-  deny on its mapped record category. A deny wins over an existing grant. A legacy grant
+  legacy category becomes a deny on both `books.service.<service>` (create) and
+  `books.servicerecords.<service>` (see) for every service that files there, plus `other`,
+  so the user can neither create nor see those records, exactly as before; a deny on an
+  old-only category becomes a deny on its mapped record category. A deny wins over an
+  existing grant. A legacy grant
   never opens an opt-in service, and a temporary legacy grant narrows an existing target
   grant to its expiry. Legacy rows are then deleted; the inmate reporter's ceiling is
   `books.category.13/1`. Pending requests for legacy ids are refused with a note. A
