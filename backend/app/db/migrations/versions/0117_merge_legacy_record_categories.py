@@ -1,8 +1,9 @@
 """Merge legacy category permissions without changing records or reference data.
 
-Live legacy categories become service-record overrides, including Other. Old-only
-categories become classification overrides. A recovery journal preserves deleted
-rows and the prior state of touched targets/requests for a best-effort downgrade.
+Live legacy categories become creation and record-visibility service overrides,
+including Other. Old-only categories become classification overrides. A recovery
+journal preserves deleted rows and the prior state of touched targets/requests
+for a best-effort downgrade.
 Downgrade restores that state; subsequent edits to those same rows are not kept.
 Grant sources never opt users into default-denied services. Temporary grants
 narrow existing target grants to the earlier expiry; permanent grants leave
@@ -174,7 +175,8 @@ def _copy_override(connection: sa.Connection, source: sa.RowMapping, target: str
     if existing is None:
         if (
             source["effect"] == "grant"
-            and target.removeprefix("books.servicerecords.") in _OPT_IN_SERVICE_IDS
+            and target.removeprefix("books.servicerecords.").removeprefix("books.service.")
+            in _OPT_IN_SERVICE_IDS
         ):
             return
         _remember(connection, "user", (source["user_id"], target), None)
@@ -234,7 +236,11 @@ def upgrade() -> None:
         _remember(connection, "user", (source["user_id"], source["capability"]), source)
         services = _SERVICES_FILING_INTO_LEGACY_CATEGORY.get(category)
         if services:
-            targets = tuple(f"books.servicerecords.{service}" for service in (*services, "other"))
+            targets = tuple(
+                f"{prefix}{service}"
+                for service in (*services, "other")
+                for prefix in ("books.service.", "books.servicerecords.")
+            )
         else:
             targets = (_CATEGORY_PREFIX + _LEGACY_CATEGORY_RECORD_CATEGORY.get(category, "15/1"),)
         for target in targets:

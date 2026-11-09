@@ -7,7 +7,16 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from sqlalchemy import Connection, Engine, create_engine, inspect, text
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_optional_user
+from app.api.errors import AppError
+from app.db.models import User
+from app.db.session import get_db
+from app.main import create_app
+from app.services import book_service, perm_service
 
 ROOT = Path(__file__).resolve().parents[2]
 PREVIOUS = "0116_outbound_skip_reason"
@@ -149,8 +158,71 @@ def test_live_category_deny_copies_every_filing_service_and_other(
     command.upgrade(config, REVISION)
     with engine.connect() as connection:
         assert _overrides(connection, user_id) == {
-            f"books.servicerecords.{service}": ("deny", EXPIRY) for service in (*services, "other")
+            f"{prefix}{service}": ("deny", EXPIRY)
+            for service in (*services, "other")
+            for prefix in ("books.service.", "books.servicerecords.")
         }
+
+
+@pytest.mark.parametrize(
+    ("legacy", "category_id", "service_id"),
+    [
+        ("HR", "HR", "Leave Application Form"),
+        ("GS", "GS", "General Book"),
+        ("GS", "GS", "other"),
+    ],
+)
+def test_migrated_legacy_deny_preserves_record_creation_gate(
+    migration: tuple[Config, Engine], legacy: str, category_id: str, service_id: str
+) -> None:
+    config, engine = migration
+    with engine.begin() as connection:
+        user_id = _user(connection)
+        _override(connection, user_id, f"books.category.{legacy}")
+        connection.execute(
+            text("INSERT OR IGNORE INTO book_categories (id, prefix) VALUES (:id, :id)"),
+            {"id": category_id},
+        )
+    command.upgrade(config, REVISION)
+    with Session(engine) as db:
+        user = db.get(User, user_id)
+        assert user is not None
+        caps = perm_service.effective_caps(db, user)
+        assert f"books.service.{service_id}" not in caps
+        assert f"books.servicerecords.{service_id}" not in caps
+        # The migrated service gate, not a newly introduced category denial,
+        # preserves the old creation restriction (including direct POST's Other).
+        category_code = "3/1" if service_id == "Leave Application Form" else "15/1"
+        assert f"books.category.{category_code}" in caps
+        with pytest.raises(AppError) as exc:
+            book_service.require_record_type_access(
+                db, user, category_id=category_id, service_id=service_id
+            )
+        assert exc.value.code == "RECORD_TYPE_FORBIDDEN"
+
+
+def test_migrated_gs_deny_blocks_direct_book_post(migration: tuple[Config, Engine]) -> None:
+    config, engine = migration
+    with engine.begin() as connection:
+        user_id = _user(connection)
+        _override(connection, user_id, "books.category.GS")
+        _override(connection, user_id, "books.create", "grant")
+        connection.execute(
+            text("INSERT OR IGNORE INTO book_categories (id, prefix) VALUES ('GS', 'GS')")
+        )
+    command.upgrade(config, REVISION)
+    with Session(engine) as db:
+        # Apply current startup presets, not only historical migration seeds.
+        perm_service.seed_role_defaults(db)
+        user = db.get(User, user_id)
+        assert user is not None
+        assert {"books.create", "books.view"} <= perm_service.effective_caps(db, user)
+        app = create_app()
+        app.dependency_overrides[get_db] = lambda: db
+        app.dependency_overrides[get_optional_user] = lambda: user
+        response = TestClient(app).post("/api/v1/books", json={"category_id": "GS"})
+        assert response.status_code == 403, response.text
+        assert response.json()["error"]["code"] == "RECORD_TYPE_FORBIDDEN"
 
 
 @pytest.mark.parametrize(
@@ -169,7 +241,14 @@ def test_old_only_category_deny_maps_to_record_category(
         assert _overrides(connection, user_id) == {f"books.category.{target}": ("deny", None)}
 
 
-@pytest.mark.parametrize("legacy", ["HR", "1"])
+@pytest.mark.parametrize(
+    "target",
+    [
+        "books.service.HR Request Form",
+        "books.servicerecords.HR Request Form",
+        "books.category.12/1",
+    ],
+)
 @pytest.mark.parametrize(
     ("source_effect", "target_effect", "expected_effect", "expected_expiry"),
     [
@@ -181,14 +260,14 @@ def test_old_only_category_deny_maps_to_record_category(
 )
 def test_collision_obeys_deny_wins_and_existing_target_expiry(
     migration: tuple[Config, Engine],
-    legacy: str,
+    target: str,
     source_effect: str,
     target_effect: str,
     expected_effect: str,
     expected_expiry: str | None,
 ) -> None:
     config, engine = migration
-    target = "books.servicerecords.HR Request Form" if legacy == "HR" else "books.category.12/1"
+    legacy = "1" if target.startswith("books.category.") else "HR"
     with engine.begin() as connection:
         user_id = _user(connection)
         _override(connection, user_id, f"books.category.{legacy}", source_effect, "2028-01-01")
@@ -210,9 +289,10 @@ def test_grant_keeps_exact_expiry_without_opening_opt_in_services(
     command.upgrade(config, REVISION)
     targets = (
         tuple(
-            f"books.servicerecords.{service}"
+            f"{prefix}{service}"
             for service in (*HR_SERVICES, "other")
             if service not in OPT_IN_HR_SERVICES
+            for prefix in ("books.service.", "books.servicerecords.")
         )
         if legacy == "HR"
         else ("books.category.12/1",)
@@ -228,6 +308,8 @@ def test_grant_keeps_exact_expiry_without_opening_opt_in_services(
     [
         "books.servicerecords.HR Request Form",
         "books.servicerecords.Loan Request Form",
+        "books.service.HR Request Form",
+        "books.service.Loan Request Form",
         "books.category.12/1",
     ],
 )
