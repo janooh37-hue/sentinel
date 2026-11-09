@@ -129,15 +129,16 @@ def _category_entry(
         for service_id, code in SERVICE_RECORD_CATEGORY.items()
         if code == category_id
     ]
-    names_ar = [name_ar for _, name_ar in names]
     description_en = (
         f"Covers records from: {', '.join(name_en for name_en, _ in names)}."
         if names
         else f"View records in {label_en}."
     )
+    # A service without an Arabic name keeps its English name in the list rather
+    # than hiding which services the category covers from Arabic readers.
     description_ar = (
-        f"يشمل سجلات: {'، '.join(names_ar)}."
-        if names and all(names_ar)
+        f"يشمل سجلات: {'، '.join(name_ar or name_en for name_en, name_ar in names)}."
+        if names
         else f"عرض السجلات ضمن {label_ar}."
         if label_ar
         else None

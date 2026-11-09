@@ -1321,7 +1321,7 @@ export function PermissionsPage(): React.JSX.Element {
                           <p className="mb-3 text-[0.72em] text-muted-foreground">
                             {t('access.permissions.mirror.categoryHint')}
                           </p>
-                          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                             {categoryItems.map((item, itemIndex) => {
                               const coverageId = `${coverageIdPrefix}-${itemIndex}`
                               const button = (
