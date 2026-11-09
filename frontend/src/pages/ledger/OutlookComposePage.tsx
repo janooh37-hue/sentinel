@@ -35,6 +35,7 @@ import type { EmployeeLookupItem, LedgerEntryRead } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { base64PdfToFile, desiredRefPdfDocIds, mergeFiles } from '@/lib/refPdfAttachments'
 import { useIdentity } from '@/lib/useIdentity'
+import { useIsMobile } from '@/lib/useIsMobile'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { pushRecentRecipient, recordRecipientsForForm } from '@/lib/recentRecipients'
 import { clearBasket } from '@/lib/emailBasket'
@@ -202,6 +203,7 @@ export function OutlookComposePage({
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const { identity } = useIdentity()
+  const isMobile = useIsMobile()
   const selfAddress = identity?.email ?? undefined
 
   const initial: FormValues = useMemo(() => {
@@ -610,9 +612,9 @@ export function OutlookComposePage({
               className="inline-flex flex-none items-center gap-1.5 rounded-full px-3 py-1 text-sm text-muted-foreground hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ArrowLeft className="h-4 w-4 rtl:rotate-180" strokeWidth={1.5} />
-              <span>{t('ledger.outlook.back')}</span>
+              <span className="sr-only sm:not-sr-only">{t('ledger.outlook.back')}</span>
             </button>
-            <span className="text-border" aria-hidden="true">/</span>
+            <span className="hidden text-border sm:inline" aria-hidden="true">/</span>
             <h2
               id="ledger-compose-title"
               className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight text-foreground"
@@ -627,7 +629,7 @@ export function OutlookComposePage({
               ) : (
                 <Send className="h-3.5 w-3.5 rtl:-scale-x-100" />
               )}
-              {t('ledger.outlook.handoff.submit')}
+              <span className="sr-only sm:not-sr-only">{t('ledger.outlook.handoff.submit')}</span>
             </Button>
           </header>
 
@@ -787,8 +789,11 @@ export function OutlookComposePage({
                 <RichEditor
                   name="body"
                   variant="full"
-                  fillHeight
-                  minHeightPx={360}
+                  // A phone wraps the toolbar to ~7 rows, so filling the card
+                  // would leave no room to write: give it a tall fixed frame.
+                  fillHeight={!isMobile}
+                  height={isMobile ? 760 : undefined}
+                  minHeightPx={440}
                   label_en={t('compose.body', { defaultValue: 'Message' })}
                   label_ar={t('compose.body', { defaultValue: 'Message' })}
                   defaultValue={initial.body}
@@ -799,18 +804,22 @@ export function OutlookComposePage({
               <aside className="flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto">
                 {/* Mode — the one decision this surface exists to make. */}
                 <fieldset className="flex flex-col gap-1.5 rounded-2xl border border-hairline bg-surface px-4 py-3.5">
-                  <legend className="px-1 text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
+                  <legend className="px-1 text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:normal-case rtl:tracking-normal">
                     {t('ledger.outlook.handoff.modeLegend')}
                   </legend>
                   <p className="mb-1 flex flex-wrap items-baseline gap-x-2 px-1.5 text-[0.8em]">
                     <span className="font-semibold text-muted-foreground">
                       {t('ledger.outlook.handoff.from')}
                     </span>
-                    <span className="min-w-0 break-all text-foreground" dir="ltr">
-                      {effectiveMode === 'draft' && accountEmail
-                        ? accountEmail
-                        : t('ledger.outlook.handoff.fromOutlook')}
-                    </span>
+                    {effectiveMode === 'draft' && accountEmail ? (
+                      <span className="min-w-0 break-all text-foreground" dir="ltr">
+                        {accountEmail}
+                      </span>
+                    ) : (
+                      <span className="min-w-0 text-foreground">
+                        {t('ledger.outlook.handoff.fromOutlook')}
+                      </span>
+                    )}
                   </p>
                   <ModeOption
                     id="handoff-mode-draft"
@@ -858,7 +867,7 @@ export function OutlookComposePage({
                   >
                     <h3
                       id="compose-attachments-title"
-                      className="flex items-center gap-1.5 text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal"
+                      className="flex items-center gap-1.5 text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:normal-case rtl:tracking-normal"
                     >
                       <Paperclip className="h-3.5 w-3.5" aria-hidden />
                       {t('compose.attachments', { defaultValue: 'Attachments' })}
@@ -875,7 +884,7 @@ export function OutlookComposePage({
                             key={`${f.name}-${f.size}-${i}`}
                             file={f}
                             openLabel={t('compose.openAttachment', { name: f.name })}
-                            removeLabel={`${t('common.remove', { defaultValue: 'Remove' })} ${f.name}`}
+                            removeLabel={t('compose.removeAttachment', { name: f.name })}
                             onRemove={() => setFiles(files.filter((_, x) => x !== i))}
                           />
                         ))}
@@ -915,7 +924,10 @@ export function OutlookComposePage({
                         })}
                       </span>
                       <span className="text-[0.8em]">
-                        {t('compose.attachmentsLimit', { max: formatBytes(MAX_ATTACHMENTS_BYTES) })}
+                        {/* FSI…PDI keeps "20.0 MB" in order inside the Arabic sentence. */}
+                        {t('compose.attachmentsLimit', {
+                          max: `\u2068${formatBytes(MAX_ATTACHMENTS_BYTES)}\u2069`,
+                        })}
                       </span>
                       <input
                         ref={fileInputRef}

@@ -5090,6 +5090,7 @@
     "dropFiles": "أسقط الملفات هنا أو انقر للتصفح",
     "attachmentsLimit": "حتى {{max}} إجمالاً",
     "openAttachment": "فتح {{name}}",
+    "removeAttachment": "إزالة {{name}}",
     "title": {
       "reply": "ردّ",
       "replyAll": "الرد على الكل",

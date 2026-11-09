@@ -4705,6 +4705,7 @@
     "dropFiles": "Drop files here or click to browse",
     "attachmentsLimit": "Up to {{max}} in total",
     "openAttachment": "Open {{name}}",
+    "removeAttachment": "Remove {{name}}",
     "title": {
       "reply": "Reply",
       "replyAll": "Reply All",

@@ -142,7 +142,7 @@ export interface ViolationDetailsAr {
 
 /**
  * The Arabic violation list a Violation / Warning Form record carries, for the
- * official cover email (subject, bulleted البيان cell). Reads the submitted
+ * official cover email (subject, bulleted المخالفات cell). Reads the submitted
  * form fields in every stored shape:
  *   - Violation Form `violations`: `[{row, name}]` (English canonical names;
  *     row 0 is the free-text "Others", whose text lives in `explanation`).

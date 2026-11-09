@@ -350,7 +350,7 @@ function disciplinarySubject(items: EmailBasketItem[]): string {
 /** One violation reads as text; several become the form's bullet list. */
 function violationsCell(item: EmailBasketItem): Cell {
   const list = item.violations ?? []
-  if (list.length === 0) return item.formKind === WARNING_FORM ? 'إنذار' : 'مخالفة'
+  if (list.length === 0) return '—'
   if (list.length === 1) return list[0]
   return { html: list.map((v) => `• ${esc(v)}`).join('<br>') }
 }

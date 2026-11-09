@@ -25,7 +25,7 @@ export interface EmailBasketItem {
   lastWorkDay?: string // resignation: أخر يوم عمل column
   bookDate?: string // ISO issue date (book.created_at) — transfer cover-email date
   classificationCode?: string | null // General Book draft variant, with generic fallback
-  violations?: string[] // Violation / Warning Form: Arabic violation labels — subject + bulleted البيان cell
+  violations?: string[] // Violation / Warning Form: Arabic violation labels — subject + bulleted المخالفات cell
   violationNotes?: string // Violation Form: remarks that are not the "Others" violation text
 }
 
