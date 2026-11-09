@@ -11,6 +11,9 @@
  *              (م · الرقم الوظيفي · المسمى الوظيفي · الاسم · تاريخ الإجازة · ولغاية)
  *   • Non-leave forms → red header, RTL, generic columns
  *              (م · الرقم الوظيفي · المسمى الوظيفي · الاسم · البيان)
+ *   • Violation / Warning forms → red header, RTL, the violations in Arabic
+ *              (… · المخالفات as a bullet list · ملاحظات when remarks exist),
+ *              and an Arabic subject naming the violations and the employee
  *
  * References carry docId + a sane fileName so the compose attaches every PDF
  * named {ref}_{form}_{employee}.pdf.
@@ -112,6 +115,7 @@ function positionArOf(i: EmailBasketItem): string {
 const HEADER_BLUE = '#4472C4'
 export const HEADER_RED = '#C00000'
 export const TD_STYLE = 'border:1px solid #000000;padding:4px 9px;text-align:center'
+const TD_LIST_STYLE = 'border:1px solid #000000;padding:4px 9px;text-align:right'
 const P_STYLE =
   'margin:0 0 8pt;font-family:Arial,sans-serif;font-size:14pt;text-align:right;direction:rtl'
 
@@ -123,16 +127,22 @@ export function p(html: string): string {
   return `<p dir="rtl" style="${P_STYLE}">${html}</p>`
 }
 
+/** A plain cell is escaped text; `{ html }` is trusted markup built here
+ *  (already-escaped bullet lists), right-aligned so the bullets line up. */
+type Cell = string | { html: string }
+
 function tableHtml(
   dir: 'ltr' | 'rtl',
   headerBg: string,
   cols: string[],
-  rows: string[][],
+  rows: Cell[][],
 ): string {
   const head = `<tr>${cols.map((c) => `<th style="${thStyle(headerBg)}">${esc(c)}</th>`).join('')}</tr>`
-  const body = rows
-    .map((r) => `<tr>${r.map((c) => `<td style="${TD_STYLE}">${esc(c)}</td>`).join('')}</tr>`)
-    .join('')
+  const td = (c: Cell): string =>
+    typeof c === 'string'
+      ? `<td style="${TD_STYLE}">${esc(c)}</td>`
+      : `<td style="${TD_LIST_STYLE}">${c.html}</td>`
+  const body = rows.map((r) => `<tr>${r.map(td).join('')}</tr>`).join('')
   return (
     `<table dir="${dir}" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt">` +
     `<thead>${head}</thead><tbody>${body}</tbody></table>`
@@ -315,6 +325,58 @@ function deductionBody(items: EmailBasketItem[], plural: boolean): Omit<DraftPar
   return { intro, table: tableHtml('rtl', HEADER_RED, ['#', 'ID', 'الاسم', 'المهام'], rows) }
 }
 
+// ── Violation Form / Warning Form ─────────────────────────────────────────────
+// The paper itself is the attachment; the letter names WHAT was violated (the
+// form's bullet list, in Arabic) so the recipient never has to open the PDF to
+// know what the record is about.
+const VIOLATION_FORM = 'Violation Form'
+const WARNING_FORM = 'Warning Form'
+
+function isDisciplinary(formKind: string): boolean {
+  return formKind === VIOLATION_FORM || formKind === WARNING_FORM
+}
+
+function disciplinarySubject(items: EmailBasketItem[]): string {
+  const warning = items[0].formKind === WARNING_FORM
+  const plural = items.length > 1
+  const kind = warning
+    ? plural ? 'إنذارات الموظفين' : 'إنذار'
+    : plural ? 'مخالفات الموظفين' : 'مخالفة'
+  const types = [...new Set(items.flatMap((i) => i.violations ?? []))].join('، ')
+  const head = types ? `${kind}: ${types}` : kind
+  return plural ? head : `${head} — ${nameArOf(items[0])}`
+}
+
+/** One violation reads as text; several become the form's bullet list. */
+function violationsCell(item: EmailBasketItem): Cell {
+  const list = item.violations ?? []
+  if (list.length === 0) return item.formKind === WARNING_FORM ? 'إنذار' : 'مخالفة'
+  if (list.length === 1) return list[0]
+  return { html: list.map((v) => `• ${esc(v)}`).join('<br>') }
+}
+
+function disciplinaryBody(items: EmailBasketItem[], plural: boolean): Omit<DraftParts, 'closing'> {
+  const warning = items[0].formKind === WARNING_FORM
+  const line = warning
+    ? plural
+      ? 'مرفق لكم إنذارات الموظفين المذكورين في الجدول أدناه، مع بيان المخالفات الموجبة لكل إنذار.'
+      : 'مرفق لكم إنذار الموظف المذكور في الجدول أدناه، مع بيان المخالفات الموجبة للإنذار.'
+    : plural
+      ? 'مرفق لكم نماذج مخالفات الموظفين المذكورين في الجدول أدناه، مع بيان المخالفات المرصودة على كل منهم.'
+      : 'مرفق لكم نموذج مخالفة الموظف المذكور في الجدول أدناه، مع بيان المخالفات المرصودة عليه.'
+  const withNotes = items.some((i) => i.violationNotes)
+  const rows = items.map((i, idx): Cell[] => [
+    String(idx + 1),
+    i.employeeId,
+    positionArOf(i),
+    nameArOf(i),
+    violationsCell(i),
+    ...(withNotes ? [i.violationNotes ?? ''] : []),
+  ])
+  const cols = ['م', 'الرقم الوظيفي', 'المسمى الوظيفي', 'الاسم', 'المخالفات', ...(withNotes ? ['ملاحظات'] : [])]
+  return { intro: RED_GREETING + p(line), table: tableHtml('rtl', HEADER_RED, cols, rows) }
+}
+
 function sickIntro(plural: boolean): string {
   const greeting = p('عزيزي الفريق<br>السلام عليكم ورحمة الله وبركاته')
   const body = plural
@@ -356,6 +418,7 @@ function defaultBasketSubject(items: EmailBasketItem[]): string {
   if (RESIGNATION_FORMS.includes(fk)) return 'طلب استقالة'
   if (fk === DUTY_RESUMPTION_FORM) return 'العودة من الإجازة'
   if (fk === SALARY_DEDUCTION_FORM) return 'الخصم من الرواتب'
+  if (isDisciplinary(fk)) return disciplinarySubject(items)
   return fk || 'مستندات'
 }
 
@@ -396,6 +459,8 @@ function basketEmailParts(items: EmailBasketItem[]): DraftParts {
     body = returnBody(items, plural)
   } else if (formKind === SALARY_DEDUCTION_FORM) {
     body = deductionBody(items, plural)
+  } else if (isDisciplinary(formKind)) {
+    body = disciplinaryBody(items, plural)
   } else if (leaveType) {
     const rows = items.map((i, idx) => [
       String(idx + 1),

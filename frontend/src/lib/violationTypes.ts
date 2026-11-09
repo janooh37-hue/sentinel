@@ -132,3 +132,58 @@ export function displayViolationValue(value: string, isAr: boolean): string {
   if (!hit) return value
   return isAr ? hit.ar : hit.en
 }
+
+export interface ViolationDetailsAr {
+  /** Each committed violation as its Arabic label, in form order. */
+  violations: string[]
+  /** Violation Form remarks that are not already the "Others" violation text. */
+  notes?: string
+}
+
+/**
+ * The Arabic violation list a Violation / Warning Form record carries, for the
+ * official cover email (subject, bulleted البيان cell). Reads the submitted
+ * form fields in every stored shape:
+ *   - Violation Form `violations`: `[{row, name}]` (English canonical names;
+ *     row 0 is the free-text "Others", whose text lives in `explanation`).
+ *   - Warning Form `violation_type`: `string[]` or the backend's pre-joined
+ *     `"a، b"` string (Arabic canonical presets or custom text).
+ * Other forms return an empty list.
+ */
+export function violationDetailsAr(
+  formKind: string,
+  fields: Record<string, unknown>,
+): ViolationDetailsAr {
+  const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
+  const toAr = (value: string): string => displayViolationValue(value, true)
+
+  if (formKind === 'Warning Form') {
+    const raw = fields['violation_type']
+    const items = Array.isArray(raw) ? raw.map(text) : text(raw).split('، ')
+    return { violations: items.map((v) => v.trim()).filter(Boolean).map(toAr) }
+  }
+
+  if (formKind !== 'Violation Form') return { violations: [] }
+
+  const explanation = text(fields['explanation'])
+  const raw = fields['violations']
+  const entries: unknown[] = Array.isArray(raw) ? raw : text(raw) ? [raw] : []
+  let othersUsed = false
+  const violations: string[] = []
+  for (const entry of entries) {
+    if (entry && typeof entry === 'object') {
+      const { row, name } = entry as { row?: unknown; name?: unknown }
+      if (row === 0) {
+        othersUsed = true
+        violations.push(explanation || 'أخرى')
+        continue
+      }
+      const preset = ALL_VIOLATION_TYPES.find((it) => it.row === row)
+      const label = preset?.ar ?? toAr(text(name))
+      if (label) violations.push(label)
+    } else if (text(entry)) {
+      violations.push(toAr(text(entry)))
+    }
+  }
+  return othersUsed || !explanation ? { violations } : { violations, notes: explanation }
+}
