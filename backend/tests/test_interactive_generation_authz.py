@@ -29,11 +29,11 @@ def db_session(api_db):
 
 
 CASES = [
-    ("return", "HR", "Duty Resumption Form"),
-    ("fines", "VF", "Vehicle Fines"),
-    ("accident", "VA", "Vehicle Accident Report"),
-    ("mileage", "GS", "Vehicle Mileage Log"),
-    ("maintenance", "GS", "General Book"),
+    ("return", "3/1", "Duty Resumption Form"),
+    ("fines", "7/1", "Vehicle Fines"),
+    ("accident", "11/1", "Vehicle Accident Report"),
+    ("mileage", "11/1", "Vehicle Mileage Log"),
+    ("maintenance", "11/1", "General Book"),
 ]
 
 

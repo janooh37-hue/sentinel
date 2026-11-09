@@ -59,13 +59,13 @@ def test_my_records_matches_records_page_state_dates_and_drafts(api_db):
         ("draft", {}),
         ("voided", {"voided_at": datetime(2026, 10, 2)}),
         ("deleted", {"deleted_at": datetime(2026, 10, 2)}),
-        ("hidden", {"category_id": "HIDDEN"}),
+        ("hidden", {"category_id": "HIDDEN", "classification_code": "12/1"}),
     ]:
         values = dict(category_id="GS", created_at=datetime(2026, 10, 2))
         values.update(extra)
         db.add(Book(ref_number=name, created_by_user_id=user.id, **values))
     db.commit()
-    perm_service.set_user_overrides(db, user.id, [("books.category.HIDDEN", "deny", None)])
+    perm_service.set_user_overrides(db, user.id, [("books.category.12/1", "deny", None)])
     app = create_app()
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: user
