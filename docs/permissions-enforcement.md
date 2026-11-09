@@ -5,9 +5,10 @@
 **Audit tool:** `backend/scripts/audit_capability_gates.py` (re-run any time; it reads the
 tree, so it can't go stale).
 
-This is an enforcement map, not a feature design. For the request/approval feature
-built on top of this model see
-`docs/superpowers/specs/2026-06-25-permissions-overhaul-design.md`.
+This is an enforcement map, not a feature design. The rules for adding a gated feature,
+capability, or role preset — and the UI visibility rule — live in
+`.agents/skills/permissions/SKILL.md`. For the request/approval feature built on top of
+this model see `docs/superpowers/specs/2026-06-25-permissions-overhaul-design.md`.
 
 ---
 
