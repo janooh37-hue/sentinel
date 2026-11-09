@@ -339,3 +339,25 @@ describe('OutlookComposePage mailto encoding helpers', () => {
     expect(stripQuote(quoted)).toContain('my reply')
   })
 })
+
+describe('OutlookComposePage attachment preview', () => {
+  it('opens a PDF in a tab but downloads an HTML attachment instead of rendering it in the app origin', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() }))
+    renderDialog({ prefill: { to: ['hr@gssg.ae'], subject: 'Files' } })
+    await waitFor(() => expect(draftRadio()).toBeChecked())
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]')!
+    await userEvent.upload(input, [
+      new File(['%PDF'], 'form.pdf', { type: 'application/pdf' }),
+      new File(['<script>x</script>'], 'notice.html', { type: 'text/html' }),
+    ])
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Open notice.html' }))
+    expect(open).not.toHaveBeenCalled()
+    expect(click).toHaveBeenCalledTimes(1)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open form.pdf' }))
+    expect(open).toHaveBeenCalledWith('blob:x', '_blank', 'noopener')
+  })
+})
