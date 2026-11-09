@@ -457,7 +457,7 @@ def test_preview_employee_language_rule(api_db, preview_client, language, expect
         ("HR Request Form", "books.service.HR Request Form"),
         ("Violation Form", "books.service.Violation Form"),
         ("Leave Application Form", "books.service.Leave Application Form"),
-        ("HR Request Form", "books.category.HR"),
+        ("HR Request Form", "books.category.8/1"),
     ],
 )
 def test_real_employee_preview_requires_save_screen_access(
@@ -490,7 +490,7 @@ def test_real_employee_preview_requires_save_screen_access(
     [
         "books.edit",
         "books.view",
-        "books.category.HR",
+        "books.category.12/1",
         "books.servicerecords.Employee Clearance Form",
     ],
 )

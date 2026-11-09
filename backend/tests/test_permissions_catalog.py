@@ -66,10 +66,9 @@ def test_inmate_reporter_preset_is_exactly_its_fixed_ceiling():
             "books.submit",
             "books.service.Inmate Conduct Violations",
             "books.servicerecords.Inmate Conduct Violations",
-            "books.category.INV",
+            "books.category.13/1",
             "books.service.Report",
             "books.servicerecords.Report",
-            "books.category.GS",
         }
     )
 
@@ -92,7 +91,7 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     db_session.commit()
 
     catalog = capability_catalog_service.list_catalog(db_session)
-    assert len(catalog) == 65 + (2 * (len(SERVICE_IDS) + 1)) + 15 + 2
+    assert len(catalog) == 65 + (2 * (len(SERVICE_IDS) + 1)) + 15
     assert len({entry.id for entry in catalog}) == len(catalog)
 
     dynamic = catalog[len(CAPABILITIES) :]
@@ -108,8 +107,6 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     assert [entry.id for entry in dynamic[:n_service_pairs]] == expected_pair_ids
     assert [entry.id for entry in dynamic[n_service_pairs:]] == [
         *[f"books.category.{tab}/1" for tab in range(1, 16)],
-        "books.category.A",
-        "books.category.Z",
     ]
 
     by_id = {entry.id: entry for entry in catalog}
@@ -123,15 +120,6 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     assert by_id["books.servicerecords.General Book"].label_ar == ("السجلات: كتاب عام")
     assert by_id["books.service.other"].label_ar == "أخرى"
 
-    category = by_id["books.category.A"]
-    assert category.label_en == "Operations"
-    assert category.label_ar is None
-    assert category.description_en == "Old records only; no service files new records here."
-    assert category.description_ar == "سجلات قديمة فقط؛ لا تُنشئ أي خدمة سجلات جديدة هنا."
-    unnamed = by_id["books.category.Z"]
-    assert unnamed.label_en == unnamed.id
-    assert unnamed.label_ar is None
-    assert unnamed.description_en == category.description_en
     assert (by_id["books.category.9/1"].label_en, by_id["books.category.9/1"].label_ar) == (
         "Custody, clothing & ID cards",
         "العهدة والملابس والبطاقات التعريفية",
@@ -140,6 +128,8 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     for tab in range(1, 16):
         entry = by_id[f"books.category.{tab}/1"]
         assert entry.label_ar
+        assert entry.description_en
+        assert entry.description_ar
         assert capability_catalog_service.get_catalog_entry(db_session, entry.id) == entry
 
     inmate_dynamic_ids = {
@@ -147,6 +137,7 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
         "books.servicerecords.Inmate Conduct Violations",
         "books.service.Report",
         "books.servicerecords.Report",
+        "books.category.13/1",
     }
     for entry in dynamic:
         assert entry.requestable and not entry.sensitive
@@ -161,50 +152,60 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
             expected_roles = ("operator", "manager", "admin")
         assert entry.default_roles == expected_roles, entry.id
     assert capability_catalog_service.get_catalog_entry(db_session, passport.id) == passport
-    assert capability_catalog_service.get_catalog_entry(db_session, category.id) == category
     assert capability_catalog_service.get_catalog_entry(db_session, "missing.cap") is None
 
 
-def test_legacy_categories_name_the_services_a_deny_blocks(db_session):
+def test_categories_describe_their_mapped_services_and_ignore_legacy_rows(db_session):
+    from app.core.classifications import CLASSIFICATIONS
+    from app.core.record_categories import SERVICE_RECORD_CATEGORY
     from app.services import capability_catalog_service
 
+    legacy_ids = ("GS", "HR", "NAT", "INV", "SC", "VA", "VF", "1", "2", "12", "imported")
     db_session.add_all(
         [
             BookCategory(id=category_id, name_en=None, name_ar=None, prefix=category_id)
-            for category_id in ("GS", "HR", "NAT", "INV", "SC", "VA", "VF")
+            for category_id in legacy_ids
         ]
     )
     db_session.commit()
-    by_id = {
+    categories = {
         entry.id: entry
         for entry in capability_catalog_service.list_catalog(db_session)
         if entry.domain == "categories"
     }
+    assert set(categories) == {
+        f"books.category.{classification.code}" for classification in CLASSIFICATIONS
+    }
+    assert len(categories) == 15
+    for category_id in legacy_ids:
+        assert (
+            capability_catalog_service.get_catalog_entry(
+                db_session, f"books.category.{category_id}"
+            )
+            is None
+        )
 
-    gs = by_id["books.category.GS"]
-    assert gs.description_en == (
-        "Covers records from: Acknowledgment Form, General Book, Report, Vehicle Mileage Log."
-    )
-    assert gs.description_ar == (
-        "يشمل سجلات: استلام المواد، كتاب عام، تقرير، سجل عداد المسافات والصيانة الشهري للمركبات."
-    )
-    assert by_id["books.category.NAT"].description_en == (
-        "Covers records from: Violation Form, Warning Form."
-    )
-    assert by_id["books.category.INV"].description_en == (
-        "Covers records from: Inmate Conduct Violations."
-    )
-    assert by_id["books.category.SC"].description_en == (
-        "Covers records from: Material Request Form, Material Request Form (Arabic)."
-    )
-    assert by_id["books.category.VA"].description_ar == "يشمل سجلات: بلاغ حادث مركبة."
-    hr = by_id["books.category.HR"].description_en
-    # Mapped HR forms and the unmapped (default-HR) opt-in forms alike.
-    for label in ("Leave Application Form", "Passport Request", "Loan Request"):
-        assert label in hr
-    for label in ("General Book", "Report", "Warning Form", "Vehicle Fines"):
-        assert label not in hr
-    assert capability_catalog_service.get_catalog_entry(db_session, gs.id) == gs
+    for classification in CLASSIFICATIONS:
+        entry = categories[f"books.category.{classification.code}"]
+        names = [
+            capability_catalog_service._service_names(service_id)
+            for service_id, code in SERVICE_RECORD_CATEGORY.items()
+            if code == classification.code
+        ]
+        assert entry.description_ar
+        if names:
+            assert entry.description_en == (
+                f"Covers records from: {', '.join(name_en for name_en, _ in names)}."
+            )
+            assert all(name_ar for _, name_ar in names)
+            assert entry.description_ar == (
+                f"يشمل سجلات: {'، '.join(name_ar for _, name_ar in names)}."
+            )
+        else:
+            assert entry.description_en == f"View records in {classification.name_en}."
+            assert entry.description_ar == f"عرض السجلات ضمن {classification.name_ar}."
+
+    assert categories["books.category.9/1"].description_ar == ("يشمل سجلات: استلام المواد.")
 
 
 def test_every_capability_has_a_nonempty_description():

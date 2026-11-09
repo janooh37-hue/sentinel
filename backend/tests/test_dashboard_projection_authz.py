@@ -149,10 +149,10 @@ def test_dashboard_unread_mail_hides_denied_linked_records_before_limit(api_db: 
     _seed(api_db, actor, other)
     api_db.add(BookCategory(id="HIDDEN", prefix="H"))
     api_db.flush()
-    book = Book(category_id="HIDDEN", ref_number="HIDDEN-MAIL")
+    book = Book(category_id="HIDDEN", classification_code="12/1", ref_number="HIDDEN-MAIL")
     api_db.add(book)
     api_db.flush()
-    api_db.add(UserPermission(user_id=actor.id, capability="books.category.HIDDEN", effect="deny"))
+    api_db.add(UserPermission(user_id=actor.id, capability="books.category.12/1", effect="deny"))
     for index in range(6):
         api_db.add(
             LedgerEntry(

@@ -408,7 +408,7 @@ def test_unrelated_operator_cannot_recall_open_general_record(
 def test_direct_send_overrides_general_record_type_denial(confidentiality_api: ApiHarness) -> None:
     api = confidentiality_api
     perm_service.set_user_override(
-        api.db, api.users["C"].id, "books.category.HR", "deny", actor=api.users["D"]
+        api.db, api.users["C"].id, "books.category.15/1", "deny", actor=api.users["D"]
     )
     api.as_user("C")
     _error(api.client.get(f"{API}/books/{api.records['general'].id}"), 403, "RECORD_TYPE_FORBIDDEN")
@@ -599,7 +599,7 @@ def test_general_recipient_does_not_override_write_type_denial(
 ) -> None:
     api = confidentiality_api
     perm_service.set_user_override(
-        api.db, api.users["B"].id, "books.category.HR", "deny", actor=api.users["D"]
+        api.db, api.users["B"].id, "books.category.15/1", "deny", actor=api.users["D"]
     )
     _send(api, "general", ["B"])
     api.as_user("B")
