@@ -1,10 +1,12 @@
 /**
- * Delete / replace one film-strip paper. Routes by paper kind:
+ * Delete / replace one film-strip paper, or add / remove pages inside it.
+ * Routes by paper kind:
  *   - scan   → the plain-attachment endpoints (by index)
- *   - signed → the signed-copy endpoints (unfile reverts approval; replace keeps it)
- * Generated/imported papers are read-only (no delete/replace). A successful run
- * purges the PDF document and thumbnail caches and invalidates the `['books']`
- * query so every record surface refreshes.
+ *   - signed → the signed-copy endpoints (unfile reverts approval; replace and
+ *     page edits keep it)
+ * Generated/imported papers are read-only. A successful run purges the PDF
+ * document and thumbnail caches and invalidates the `['books']` query so every
+ * record surface refreshes.
  */
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -20,6 +22,8 @@ export function useManagePaper(bookId: number | null, ref?: string): {
   busy: boolean
   deletePaper: (paper: Paper) => Promise<void>
   replacePaper: (paper: Paper, file: File) => Promise<void>
+  addPages: (paper: Paper, file: File) => Promise<void>
+  deletePage: (paper: Paper, page: number) => Promise<void>
 } {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -64,5 +68,27 @@ export function useManagePaper(bookId: number | null, ref?: string): {
     return Promise.resolve()
   }
 
-  return { busy, deletePaper, replacePaper }
+  const addPages = (paper: Paper, file: File): Promise<void> => {
+    if (bookId === null) return Promise.resolve()
+    if (paper.kind === 'signed')
+      return run(() => api.appendSignedCopyPages(bookId, file), 'books.pane.pagesAdded', 'books.pane.pagesAdding')
+    if (paper.kind === 'scan' && paper.attachmentIndex !== undefined) {
+      const index = paper.attachmentIndex
+      return run(() => api.appendBookAttachmentPages(bookId, index, file), 'books.pane.pagesAdded', 'books.pane.pagesAdding')
+    }
+    return Promise.resolve()
+  }
+
+  const deletePage = (paper: Paper, page: number): Promise<void> => {
+    if (bookId === null) return Promise.resolve()
+    if (paper.kind === 'signed')
+      return run(() => api.deleteSignedCopyPage(bookId, page), 'books.pane.pageDeleted')
+    if (paper.kind === 'scan' && paper.attachmentIndex !== undefined) {
+      const index = paper.attachmentIndex
+      return run(() => api.deleteBookAttachmentPage(bookId, index, page), 'books.pane.pageDeleted')
+    }
+    return Promise.resolve()
+  }
+
+  return { busy, deletePaper, replacePaper, addPages, deletePage }
 }

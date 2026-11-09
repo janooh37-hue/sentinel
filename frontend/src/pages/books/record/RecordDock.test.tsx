@@ -202,7 +202,7 @@ describe('RecordDock', () => {
       'awaiting a signed scan',
       bookOf('awaiting_scan'),
       {},
-      ['More', 'Scan signed copy'],
+      ['More', 'Upload signed copy'],
     ],
     [
       'approved with a signed copy',

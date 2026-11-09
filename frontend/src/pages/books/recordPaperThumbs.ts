@@ -1,5 +1,5 @@
 /**
- * First-page thumbnails (+ page count) for the film-strip.
+ * Page thumbnails (+ page count) for the film-strip, one per (paper, page).
  *
  * Every thumbnail needs the whole PDF fetched and parsed, so builds run one at
  * a time through a module-level queue (the doc cache holds only a few
@@ -28,8 +28,12 @@ registerPdfCachePurger(() => {
   generation += 1
 })
 
-export function cachedThumb(url: string): ThumbInfo | undefined {
-  return thumbCache.get(url)
+function thumbKey(url: string, page: number): string {
+  return page === 1 ? url : `${url}#page=${page}`
+}
+
+export function cachedThumb(url: string, page = 1): ThumbInfo | undefined {
+  return thumbCache.get(thumbKey(url, page))
 }
 
 function rememberThumb(url: string, info: ThumbInfo): void {
@@ -41,10 +45,10 @@ function rememberThumb(url: string, info: ThumbInfo): void {
   }
 }
 
-async function buildThumb(url: string, signal: AbortSignal): Promise<ThumbInfo> {
+async function buildThumb(url: string, pageNo: number, signal: AbortSignal): Promise<ThumbInfo> {
   const lease = await leasePdfUrl(url, signal)
   try {
-    const page = await lease.doc.getPage(1)
+    const page = await lease.doc.getPage(pageNo)
     const base = page.getViewport({ scale: 1 })
     const scale = (THUMB_WIDTH * Math.min(window.devicePixelRatio || 1, 2)) / base.width
     const viewport = page.getViewport({ scale })
@@ -63,15 +67,15 @@ async function buildThumb(url: string, signal: AbortSignal): Promise<ThumbInfo> 
 let tail: Promise<unknown> = Promise.resolve()
 
 /**
- * Build (and cache) the thumbnail of `url`, after every earlier request has
- * settled. Aborting `signal` drops a queued request without fetching anything.
+ * Build (and cache) the thumbnail of page `page` of `url`, after every earlier
+ * request has settled. Aborting `signal` drops a queued request without fetching anything.
  */
-export function loadThumb(url: string, signal: AbortSignal): Promise<ThumbInfo> {
+export function loadThumb(url: string, signal: AbortSignal, page = 1): Promise<ThumbInfo> {
   const run = async (): Promise<ThumbInfo> => {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
     const started = generation
-    const info = await buildThumb(url, signal)
-    if (started === generation) rememberThumb(url, info)
+    const info = await buildThumb(url, page, signal)
+    if (started === generation) rememberThumb(thumbKey(url, page), info)
     return info
   }
   const result = tail.then(run, run)

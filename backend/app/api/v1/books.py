@@ -2400,6 +2400,64 @@ async def replace_signed_copy(
     return _build_book_response(db, row, user)
 
 
+@router.post("/{book_id}/attachments/{index}/pages", response_model=BookRead)
+async def append_book_attachment_pages(
+    book_id: int,
+    index: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> BookRead:
+    """Append the uploaded PDF/image pages to one attachment, keeping its index."""
+    _require_full_book(db, user, book_id, write=True)
+    data = await upload.read()
+    row = book_service.append_attachment_pages(db, book_id, index, upload.filename or "page", data)
+    return _build_book_response(db, row, user)
+
+
+@router.delete("/{book_id}/attachments/{index}/pages/{page}", response_model=BookRead)
+def delete_book_attachment_page(
+    book_id: int,
+    index: int,
+    page: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
+) -> BookRead:
+    """Remove one zero-based page from an attachment (never its only page)."""
+    _require_full_book(db, user, book_id, write=True)
+    row = book_service.delete_attachment_page(db, book_id, index, page)
+    return _build_book_response(db, row, user)
+
+
+@router.post("/{book_id}/signed-copy/pages", response_model=BookRead)
+async def append_signed_copy_pages(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> BookRead:
+    """Append pages to the signed scan, keeping the record approved."""
+    _require_full_book(db, user, book_id, write=True)
+    data = await upload.read()
+    row = book_service.append_signed_copy_pages(
+        db, book_id, upload.filename or "page", data, user=user
+    )
+    return _build_book_response(db, row, user)
+
+
+@router.delete("/{book_id}/signed-copy/pages/{page}", response_model=BookRead)
+def delete_signed_copy_page(
+    book_id: int,
+    page: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
+) -> BookRead:
+    """Remove one zero-based page of the signed scan (never its only page)."""
+    _require_full_book(db, user, book_id, write=True)
+    row = book_service.delete_signed_copy_page(db, book_id, page, user=user)
+    return _build_book_response(db, row, user)
+
+
 @router.delete("/{book_id}/signed-copy", response_model=BookRead)
 def unfile_signed_copy(
     book_id: int,
