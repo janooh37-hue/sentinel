@@ -372,7 +372,9 @@ export function RecordPaperViewer({
   const canReplace = !!onReplacePaper && manageable
   const canDelete = !!onDeletePaper && manageable
   const canAddPages = !!onAddPages && !!manageable
-  const canDeletePage = !!onDeletePage && !!manageable && pageCount > 1
+  // While a page edit runs, the shown thumbnails are stale: a second delete
+  // would target a shifted page index on the server.
+  const canDeletePage = !!onDeletePage && !!manageable && pageCount > 1 && !pagesBusy
   // The version bar (which paper + the one upload door) and the page strip
   // (pages of that paper + "Add page") live above the toolbar in pane/dialog;
   // the overlay and compact desks keep their toolbar switcher.
