@@ -227,7 +227,7 @@ describe('BookRecordPage — header', () => {
 
   it.each([false, true])('hides Link from the record tools and denies its URL overlay without books.edit (mobile=%s)', async (mobile) => {
     viewport.mobile = mobile
-    mockHas.mockImplementation((cap) => cap === 'books.create' || cap === 'books.view' || cap === 'books.service.General Book')
+    mockHas.mockImplementation((cap) => ['books.create', 'books.view', 'books.service.General Book', 'books.category.15/1'].includes(cap))
     vi.mocked(api.getBook).mockResolvedValue(fixture() as never)
     renderRecord('/books/48?action=link')
     await screen.findByTestId('record-meta')

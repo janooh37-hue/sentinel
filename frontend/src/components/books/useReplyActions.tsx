@@ -15,7 +15,8 @@ export function useReplyActions(book: BookRead | null | undefined, openOverlay?:
   const { has } = useCapabilities()
   const [selection, setSelection] = useState<{ bookId: number; kind: 'reply' | 'based_on' } | null>(null)
   // Derive creates a General Book in the original's classification: mirror the server's record-type checks.
-  const canCreateGeneralBook = has('books.service.General Book') && (!book?.classification_code || has(`books.category.${book.classification_code}`))
+  // An unclassified General Book falls in (Miscellaneous), `15/1` (backend record_categories).
+  const canCreateGeneralBook = has('books.service.General Book') && has(`books.category.${book?.classification_code ?? '15/1'}`)
   if (!book || !user || user.role === 'inmate_reporter' || book.access_scope !== 'full' || !has('books.create') || !has('books.view') || !canCreateGeneralBook) return { actions: [], dialog: null }
   return {
     actions: [
