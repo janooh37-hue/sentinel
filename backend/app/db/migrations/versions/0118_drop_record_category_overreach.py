@@ -11,27 +11,26 @@ hid every ``5/1`` record, entry-permit letters included, from every user with
 HR denied.
 
 The record gates now cover such stray records exactly: a stray record answers
-to the Other service and to its stored category as well as its own
-(``record_categories.record_services`` / ``record_gate_categories``), so the
-filing-service and Other denies 0117 copied, or the mapped category deny for
-an old-only category, still hide it. For every target 0117 inserted or
-changed, this revision sets what 0117 would have written without those extra
-denies: the row's prior value with only the legacy overrides that copied to
-it. That removes an extra deny, brings back a legacy grant it replaced, and
-takes back an expiry an extra deny stretched.
+to the Other service, and one in a retired category to that category's mapped
+record category (``record_categories.record_services`` /
+``record_gate_categories``), so the filing-service and Other denies 0117
+copied, or the mapped category deny for an old-only category, still hide it.
 
-A target is repaired only while it still holds what 0117 wrote. Which legacy
-denies reached a target as extras comes from 0117's own record scan, rerun:
-the replay of the prior value and those overrides with 0117's rules must match
-the row, so a row an admin has since changed is left alone. When the scan no
-longer finds any extra for the target (its stray record was deleted, revised
-or refiled since 0117), the journal is the evidence: a target no legacy
-override copied to was written only by an extra deny, and if exactly one of
-the user's legacy denies did not copy to it, that deny is the one, so the same
-exact check applies. A target some override copied to, or one with two or more
-candidate denies, has no such evidence and is left as it is (fail-closed). An
-admin's deny set to the very value 0117 wrote cannot be told apart and is
-repaired too. A journal table lets the downgrade put the removed denies back.
+This revision repairs only what 0117's own journal proves was such an extra.
+0117 journals a target only when it writes it, so a journaled target that no
+legacy override copies to was written by an extra deny alone. Replaying the
+user's legacy denies over the journaled prior value with 0117's rules gives
+what it wrote; when every combination of those denies gives the same value
+(always so for one deny, or for permanent ones), that value is certain, and a
+row still holding it gets its prior value back. The live records are never
+consulted: they may have changed since 0117.
+
+Left as they are (fail-closed): a target some legacy override also copied to,
+where the journal cannot show whether an extra reached it; a target whose
+value depends on which of several differently-dated denies reached it; and a
+row an admin has since changed. An admin's deny set to the very value 0117
+wrote cannot be told apart and is repaired too. A journal table lets the
+downgrade put the removed denies back.
 """
 
 from __future__ import annotations
@@ -39,6 +38,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from collections.abc import Sequence
+from itertools import combinations
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -57,7 +57,7 @@ Row = dict[str, Any]
 
 
 def _merge_revision() -> ModuleType:
-    """0117 itself: the replay must use the exact rules and record scan it ran."""
+    """0117 itself: the frozen maps it copied legacy overrides with."""
     path = Path(__file__).with_name("0117_merge_legacy_record_categories.py")
     spec = importlib.util.spec_from_file_location("_record_category_merge_0117", path)
     assert spec is not None and spec.loader is not None
@@ -80,34 +80,17 @@ def _copied_targets(merge: ModuleType, category: str) -> tuple[str, ...]:
     )
 
 
-def _copy(merge: ModuleType, row: Row | None, source: Row, target: str) -> Row | None:
-    """0117's ``_copy_override`` applied to an in-memory row."""
-    effect, expiry = source["effect"], source["expires_at"]
-    if row is None:
-        service = target.removeprefix("books.servicerecords.").removeprefix("books.service.")
-        if effect == "grant" and service in merge._OPT_IN_SERVICE_IDS:
-            return None
-        return {"effect": effect, "expires_at": expiry}
-    if effect == "deny":
-        if row["effect"] == "grant" or None in (expiry, row["expires_at"]):
-            return {"effect": "deny", "expires_at": None}
-        return {"effect": "deny", "expires_at": max(str(expiry), str(row["expires_at"]))}
-    if (
-        row["effect"] == "grant"
-        and expiry is not None
-        and (row["expires_at"] is None or str(expiry) < row["expires_at"])
-    ):
-        return {"effect": "grant", "expires_at": str(expiry)}
-    return row
-
-
-def _replay(
-    merge: ModuleType, prior: Row | None, sources: Sequence[Row], target: str
-) -> Row | None:
-    """Apply legacy ``sources`` to ``prior`` in 0117's order (by capability)."""
+def _replay_denies(prior: Row | None, denies: Sequence[Row]) -> Row | None:
+    """0117's ``_copy_override`` for legacy denies, applied in its order (by capability)."""
     row = prior
-    for source in sorted(sources, key=lambda source: str(source["capability"])):
-        row = _copy(merge, row, source, target)
+    for deny in sorted(denies, key=lambda source: str(source["capability"])):
+        expiry = deny["expires_at"]
+        if row is None:
+            row = {"effect": "deny", "expires_at": expiry}
+        elif row["effect"] == "grant" or None in (expiry, row["expires_at"]):
+            row = {"effect": "deny", "expires_at": None}
+        else:
+            row = {"effect": "deny", "expires_at": max(str(expiry), str(row["expires_at"]))}
     return row
 
 
@@ -139,34 +122,20 @@ def upgrade() -> None:
             touched.append((user_id, capability, row))
         elif prior is not None:
             sources.setdefault(user_id, []).append((category, prior))
-    extras: dict[str, tuple[str, ...]] = {}
-
-    def targets_of(category: str, source: Row) -> tuple[str, ...]:
-        copied = _copied_targets(merge, category)
-        if source["effect"] != "deny":
-            return copied
-        if category not in extras:
-            extras[category] = merge._uncovered_record_targets(connection, category, copied)
-        return (*copied, *extras[category])
-
     for user_id, capability, prior in touched:
         user_sources = sources.get(user_id, [])
-        copying: list[Row] = []
-        extra: list[Row] = []
-        uncopied_denies: list[Row] = []
-        for category, source in user_sources:
-            if capability in _copied_targets(merge, category):
-                copying.append(source)
-            elif source["effect"] == "deny":
-                uncopied_denies.append(source)
-                if capability in targets_of(category, source):
-                    extra.append(source)
-        intended = _replay(merge, prior, copying, capability)
-        if not extra and not copying and len(uncopied_denies) == 1:
-            extra = uncopied_denies
-        if not extra:
+        if any(capability in _copied_targets(merge, category) for category, _ in user_sources):
             continue
-        written = _replay(merge, prior, [*copying, *extra], capability)
+        denies = [source for _, source in user_sources if source["effect"] == "deny"]
+        possible = {
+            json.dumps(_replay_denies(prior, chosen), sort_keys=True)
+            for size in range(1, len(denies) + 1)
+            for chosen in combinations(denies, size)
+        }
+        if len(possible) != 1:
+            continue
+        written = json.loads(possible.pop())
+        intended = prior
         key = {"user_id": user_id, "capability": capability}
         current = (
             connection.execute(

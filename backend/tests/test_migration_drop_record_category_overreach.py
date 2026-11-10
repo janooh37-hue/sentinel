@@ -302,56 +302,65 @@ def test_an_extra_deny_with_ambiguous_provenance_is_left_alone(
         assert _overrides(connection, user_id) == edited
 
 
-def test_an_admin_deny_over_a_copied_grant_is_not_taken_for_an_extra(
+@pytest.mark.parametrize(
+    ("overrides", "stray_category"),
+    [
+        # A GS grant copied to General Book records; an HR extra then denied them.
+        ({"books.category.GS": ("grant", EXPIRY), "books.category.HR": ("deny", None)}, "HR"),
+        # A dated GS deny copied there; an INV extra then made it permanent.
+        ({"books.category.GS": ("deny", EXPIRY), "books.category.INV": ("deny", None)}, "INV"),
+    ],
+)
+def test_a_target_a_legacy_override_copied_to_is_left_alone(
     migration: tuple[Config, Engine],
+    overrides: dict[str, tuple[str, str | None]],
+    stray_category: str,
 ) -> None:
+    # The journal cannot show whether an extra also reached it, so it fails closed.
     config, engine = migration
     with engine.begin() as connection:
-        user_id = _user(connection, "granted-then-denied@x.ae")
-        _override(connection, user_id, "books.category.GS", effect="grant")
-        _override(connection, user_id, "books.category.HR")
-    command.upgrade(config, MERGE)
-    with engine.begin() as connection:
-        assert _overrides(connection, user_id)["books.servicerecords.General Book"] == (
-            "grant",
-            None,
+        user_id = _user(connection, "copied@x.ae")
+        for capability, (effect, expires_at) in overrides.items():
+            _override(connection, user_id, capability, effect=effect, expires_at=expires_at)
+        _book(
+            connection,
+            category_id=stray_category,
+            ref_number="STRAY-3",
+            template_id="General Book",
         )
-        # No stray record: an admin later denies General Book records outright.
-        connection.execute(
-            text(
-                "UPDATE user_permissions SET effect = 'deny' "
-                "WHERE user_id = :user_id AND capability = 'books.servicerecords.General Book'"
-            ),
-            {"user_id": user_id},
-        )
-        edited = _overrides(connection, user_id)
-    command.upgrade(config, REVISION)
-    with engine.connect() as connection:
-        assert _overrides(connection, user_id) == edited
-
-
-def test_a_copied_deny_loses_the_expiry_an_extra_deny_stretched(
-    migration: tuple[Config, Engine],
-) -> None:
-    config, engine = migration
-    with engine.begin() as connection:
-        user_id = _user(connection, "stretched@x.ae")
-        _override(connection, user_id, "books.category.GS", expires_at=EXPIRY)
-        _override(connection, user_id, "books.category.INV")
-        _book(connection, category_id="INV", ref_number="STRAY-5", template_id="General Book")
     command.upgrade(config, MERGE)
     with engine.connect() as connection:
         merged = _overrides(connection, user_id)
     assert merged["books.servicerecords.General Book"] == ("deny", None)
     command.upgrade(config, REVISION)
     with engine.connect() as connection:
-        assert _overrides(connection, user_id) == {
-            **merged,
-            "books.servicerecords.General Book": ("deny", EXPIRY),
-        }
-    command.downgrade(config, MERGE)
-    with engine.connect() as connection:
         assert _overrides(connection, user_id) == merged
+
+
+def test_several_permanent_legacy_denies_still_prove_the_extra(
+    migration: tuple[Config, Engine],
+) -> None:
+    config, engine = migration
+    with engine.begin() as connection:
+        user_id = _user(connection, "several@x.ae")
+        for legacy in ("HR", "NAT", "INV"):
+            _override(connection, user_id, f"books.category.{legacy}")
+        _book(
+            connection,
+            category_id="HR",
+            ref_number="STRAY-8",
+            template_id="General Book",
+            classification_code="5/1",
+        )
+    command.upgrade(config, MERGE)
+    with engine.connect() as connection:
+        merged = _overrides(connection, user_id)
+    assert merged["books.category.5/1"] == ("deny", None)
+    command.upgrade(config, REVISION)
+    with engine.connect() as connection:
+        assert _overrides(connection, user_id) == {
+            k: v for k, v in merged.items() if k != "books.category.5/1"
+        }
 
 
 @pytest.mark.parametrize(
@@ -400,38 +409,3 @@ def test_a_deny_an_admin_changed_after_0117_survives(
     command.downgrade(config, MERGE)
     with engine.connect() as connection:
         assert _overrides(connection, user_id) == edited
-
-
-def test_a_legacy_grant_keeps_its_copy_when_the_extra_deny_goes(
-    migration: tuple[Config, Engine],
-) -> None:
-    config, engine = migration
-    with engine.begin() as connection:
-        user_id = _user(connection, "granted@x.ae")
-        _override(connection, user_id, "books.category.GS", effect="grant", expires_at=EXPIRY)
-        _override(connection, user_id, "books.category.HR")
-        letter_id = _book(
-            connection,
-            category_id="GS",
-            ref_number="1/5/0002",
-            template_id="Security Permit",
-            classification_code="5/1",
-        )
-        _book(connection, category_id="HR", ref_number="STRAY-3", template_id="General Book")
-    command.upgrade(config, MERGE)
-    with engine.connect() as connection:
-        merged = _overrides(connection, user_id)
-    assert merged["books.servicerecords.General Book"] == ("deny", None)
-    command.upgrade(config, REVISION)
-    with engine.connect() as connection:
-        assert _overrides(connection, user_id) == {
-            **merged,
-            "books.servicerecords.General Book": ("grant", EXPIRY),
-        }
-    with Session(engine) as db:
-        user = db.get(User, user_id)
-        assert user is not None
-        assert _visible(db, user, letter_id)
-    command.downgrade(config, MERGE)
-    with engine.connect() as connection:
-        assert _overrides(connection, user_id) == merged
