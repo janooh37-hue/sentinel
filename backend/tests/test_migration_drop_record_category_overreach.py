@@ -223,6 +223,30 @@ def test_a_tightened_existing_deny_gets_its_own_expiry_back(
         assert _overrides(connection, user_id)["books.category.5/1"] == ("deny", None)
 
 
+def test_a_copied_deny_loses_the_expiry_an_extra_deny_stretched(
+    migration: tuple[Config, Engine],
+) -> None:
+    config, engine = migration
+    with engine.begin() as connection:
+        user_id = _user(connection, "stretched@x.ae")
+        _override(connection, user_id, "books.category.GS", expires_at=EXPIRY)
+        _override(connection, user_id, "books.category.INV")
+        _book(connection, category_id="INV", ref_number="STRAY-5", template_id="General Book")
+    command.upgrade(config, MERGE)
+    with engine.connect() as connection:
+        merged = _overrides(connection, user_id)
+    assert merged["books.servicerecords.General Book"] == ("deny", None)
+    command.upgrade(config, REVISION)
+    with engine.connect() as connection:
+        assert _overrides(connection, user_id) == {
+            **merged,
+            "books.servicerecords.General Book": ("deny", EXPIRY),
+        }
+    command.downgrade(config, MERGE)
+    with engine.connect() as connection:
+        assert _overrides(connection, user_id) == merged
+
+
 @pytest.mark.parametrize(
     ("hr_expiry", "inv_deny", "admin_expiry"),
     [

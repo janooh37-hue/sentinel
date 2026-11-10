@@ -14,17 +14,19 @@ The record gates now cover such stray records exactly: a stray record answers
 to the Other service and to its stored category as well as its own
 (``record_categories.record_services`` / ``record_gate_categories``), so the
 filing-service and Other denies 0117 copied, or the mapped category deny for
-an old-only category, still hide it. This revision finds every target 0117
-inserted or tightened that no legacy deny copied to, and sets it to what 0117
-would have left without the extra deny: the row's prior value with the legacy
-grants that copied to it.
+an old-only category, still hide it. For every target 0117 inserted or
+changed, this revision sets what 0117 would have written without those extra
+denies: the row's prior value with only the legacy overrides that copied to
+it. That removes an extra deny, brings back a legacy grant it replaced, and
+takes back an expiry an extra deny stretched.
 
 A target is repaired only while it still holds exactly what 0117 wrote,
 replayed from its prior value and the legacy overrides that reached it with
 0117's own rules and record scan. A row an admin has since changed is left
 alone; an admin's deny set to the very value 0117 wrote cannot be told apart
-and is repaired too. A journal table lets the downgrade put the removed
-denies back.
+and is repaired too. A stray record changed since 0117 no longer reproduces
+its extra deny, so that deny is left in place (fail-closed). A journal table
+lets the downgrade put the removed denies back.
 """
 
 from __future__ import annotations
@@ -142,17 +144,18 @@ def upgrade() -> None:
         return (*copied, *extras[category])
 
     for user_id, capability, prior in touched:
-        user_sources = sources.get(user_id, [])
-        if any(
-            source["effect"] == "deny" and capability in _copied_targets(merge, category)
-            for category, source in user_sources
-        ):
+        reaching: list[Row] = []
+        copying: list[Row] = []
+        for category, source in sources.get(user_id, []):
+            if capability in _copied_targets(merge, category):
+                copying.append(source)
+                reaching.append(source)
+            elif capability in targets_of(category, source):
+                reaching.append(source)
+        written = _replay(merge, prior, reaching, capability)
+        intended = _replay(merge, prior, copying, capability)
+        if written == intended:
             continue
-        reaching = [
-            source
-            for category, source in user_sources
-            if capability in targets_of(category, source)
-        ]
         key = {"user_id": user_id, "capability": capability}
         current = (
             connection.execute(
@@ -165,8 +168,7 @@ def upgrade() -> None:
             .mappings()
             .first()
         )
-        written = _replay(merge, prior, reaching, capability)
-        if current is None or current["effect"] != "deny" or dict(current) != written:
+        if current is None or dict(current) != written:
             continue
         connection.execute(
             sa.text(
@@ -175,9 +177,7 @@ def upgrade() -> None:
             ),
             {**key, "row_data": json.dumps(dict(current))},
         )
-        grants = [source for source in reaching if source["effect"] == "grant"]
-        restored = _replay(merge, prior, grants, capability)
-        if restored is None:
+        if intended is None:
             connection.execute(
                 sa.text(
                     "DELETE FROM user_permissions "
@@ -191,7 +191,7 @@ def upgrade() -> None:
                     "UPDATE user_permissions SET effect = :effect, expires_at = :expires_at "
                     "WHERE user_id = :user_id AND capability = :capability"
                 ),
-                {**key, "effect": restored["effect"], "expires_at": restored["expires_at"]},
+                {**key, "effect": intended["effect"], "expires_at": intended["expires_at"]},
             )
 
 
