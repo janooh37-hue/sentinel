@@ -21,7 +21,7 @@ from app.schemas.employee_activity import (
 from app.schemas.linked_document import LinkedDocumentRead
 
 StatementKind = Literal[
-    "document", "leave", "violation", "ledger", "absence", "duty_location", "status"
+    "document", "leave", "violation", "ledger", "absence", "duty_location", "status", "id_change"
 ]
 StatementPrintKind = Literal["activity", "attendance"]
 StatementLanguage = Literal["ar", "en"]
@@ -98,6 +98,8 @@ class ActivityStatementItemRead(ORMBase):
     return_date: date | None = None
     status_event_kind: StatusEventKind | None = None
     status_source: StatusEventSource | None = None
+    # id_change: reference is the former number; title is the number assigned then.
+    title: str | None = None
     linked_documents: list[LinkedDocumentRead] = Field(default_factory=list)
 
 

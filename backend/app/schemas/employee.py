@@ -170,6 +170,7 @@ class EmployeeUpdate(BaseModel):
 
 class EmployeeRead(ORMBase):
     id: str
+    former_ids: list[str] = Field(default_factory=list)
     name_en: str
     name_ar: str | None
     dob: date | None
@@ -247,6 +248,7 @@ class EmployeeListItem(ORMBase):
     """Minimal projection for the list endpoint — keep the wire small."""
 
     id: str
+    former_ids: list[str] = Field(default_factory=list)
     name_en: str
     name_ar: str | None
     status: EmployeeStatus

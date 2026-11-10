@@ -55,6 +55,7 @@ from app.schemas.employee import (
     EmployeeUpdate,
 )
 from app.schemas.employee_completeness import CompletenessSummaryOut, MissingFieldCount
+from app.schemas.employee_id_change import EmployeeIdChangePreviewRead, EmployeeIdChangeRequest
 from app.schemas.leave import LeaveBalanceRead, LeaveRead
 from app.schemas.vault_file import VaultEntry, VaultTree
 from app.schemas.violation import ViolationCreate, ViolationRead, ViolationUpdate
@@ -63,6 +64,7 @@ from app.services import (
     document_service,
     employee_activity_service,
     employee_detail_service,
+    employee_id_change_service,
     employee_service,
     employee_statement_service,
     leave_service,
@@ -85,6 +87,16 @@ def _photo_fields(db: Session, employee_id: str) -> dict[str, object]:
     """has_photo + photo_version for a single employee read response."""
     version = photo_service.get_photo_version(db, employee_id)
     return {"has_photo": version is not None, "photo_version": version}
+
+
+def _employee_read(db: Session, row: Employee) -> EmployeeRead:
+    return EmployeeRead.model_validate(row).model_copy(
+        update={
+            **_photo_fields(db, row.id),
+            **_passport_scan_field(row.id),
+            "former_ids": employee_service.former_ids_by_employee(db, [row.id])[row.id],
+        }
+    )
 
 
 def _passport_scan_field(employee_id: str) -> dict[str, object]:
@@ -161,9 +173,12 @@ def list_employees(
             select(VaultFile.employee_id).where(VaultFile.kind == "photo").distinct()
         ).scalars()
     )
+    former_ids = employee_service.former_ids_by_employee(db, [row.id for row in rows])
     return EmployeeListResponse(
         items=[
-            EmployeeListItem.model_validate(r).model_copy(update={"has_photo": r.id in photo_ids})
+            EmployeeListItem.model_validate(r).model_copy(
+                update={"has_photo": r.id in photo_ids, "former_ids": former_ids[r.id]}
+            )
             for r in rows
         ],
         total=total,
@@ -216,7 +231,7 @@ def create_employee(
     user: Annotated[User, Depends(require_capability("employees.create"))],
 ) -> EmployeeRead:
     row = employee_service.create_employee(db, payload, actor_user_id=user.id)
-    return EmployeeRead.model_validate(row).model_copy(update=_photo_fields(db, row.id))
+    return _employee_read(db, row)
 
 
 @router.get("/completeness", response_model=CompletenessSummaryOut)
@@ -276,9 +291,7 @@ def get_employee(
     _user: Annotated[User, Depends(require_capability("employees.view"))],
 ) -> EmployeeRead:
     row = employee_service.get_employee(db, employee_id)
-    return EmployeeRead.model_validate(row).model_copy(
-        update={**_photo_fields(db, row.id), **_passport_scan_field(row.id)}
-    )
+    return _employee_read(db, row)
 
 
 @router.patch("/{employee_id}", response_model=EmployeeRead)
@@ -289,9 +302,28 @@ def update_employee(
     user: Annotated[User, Depends(require_capability("employees.edit"))],
 ) -> EmployeeRead:
     row = employee_service.update_employee(db, employee_id, payload, actor_user_id=user.id)
-    return EmployeeRead.model_validate(row).model_copy(
-        update={**_photo_fields(db, row.id), **_passport_scan_field(row.id)}
-    )
+    return _employee_read(db, row)
+
+
+@router.get("/{employee_id}/id-change/preview", response_model=EmployeeIdChangePreviewRead)
+def preview_employee_id_change(
+    employee_id: str,
+    new_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("employees.change_id"))],
+) -> EmployeeIdChangePreviewRead:
+    return employee_id_change_service.preview(db, employee_id, new_id)
+
+
+@router.post("/{employee_id}/id-change", response_model=EmployeeRead)
+def change_employee_id(
+    employee_id: str,
+    payload: EmployeeIdChangeRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("employees.change_id"))],
+) -> EmployeeRead:
+    row = employee_id_change_service.change(db, user, employee_id, payload.new_id, payload.reason)
+    return _employee_read(db, row)
 
 
 # --- Employee detail (aggregate for the Employee Detail page) ----------------

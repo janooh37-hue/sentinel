@@ -11,13 +11,14 @@ from app.db.models import (
     BookVersion,
     Document,
     Employee,
+    EmployeeFormerId,
     Leave,
     LedgerEntry,
     User,
     Violation,
 )
 from app.db.workforce_models import DutyAssignmentEvent
-from app.services import employee_activity_service
+from app.services import employee_activity_service, employee_statement_service
 
 BASE = datetime(2026, 8, 10, 9, 0)
 
@@ -558,3 +559,191 @@ def test_activity_merges_recorded_duty_location_events_and_paginates(
         ("document", "Employment Certificate"),
         ("duty_location", "transfer"),
     ]
+
+
+def test_id_changes_merge_filter_and_paginate_with_historical_numbers(db_session: Session):
+    _employee(db_session, "G1001")
+    _employee(db_session, "G2002", "OTHER EMPLOYEE")
+    db_session.flush()
+    db_session.add_all(
+        [
+            EmployeeFormerId(
+                id=91,
+                employee_id="G1001",
+                former_id="G1000",
+                new_id="G1002",
+                changed_at=BASE,
+                changed_by_user_id=7,
+                reason="Correct the original number",
+            ),
+            EmployeeFormerId(
+                id=92,
+                employee_id="G1001",
+                former_id="G1002",
+                new_id="G1001",
+                changed_at=BASE,
+                changed_by_user_id=7,
+                reason="Correct the second number",
+            ),
+            EmployeeFormerId(
+                id=93,
+                employee_id="G2002",
+                former_id="G2001",
+                new_id="G2002",
+                changed_at=BASE + timedelta(minutes=1),
+                changed_by_user_id=None,
+                reason="Another employee correction",
+            ),
+            _ledger(entry_id=44, employee_id="G1001", created_at=BASE),
+        ]
+    )
+    db_session.commit()
+
+    result = employee_activity_service.list_employee_activity(
+        db_session, owner_user_id=7, employee_id="G1001"
+    )
+    assert result.total == 3
+    assert [(item.kind, item.source_id) for item in result.items] == [
+        ("id_change", 92),
+        ("id_change", 91),
+        ("ledger", 44),
+    ]
+    assert [(item.reference, item.title) for item in result.items[:2]] == [
+        ("G1002", "G1001"),
+        ("G1000", "G1002"),
+    ]
+    assert result.items[1].reason == "Correct the original number"
+    assert result.items[1].actor_name == "activity-reader@test.ae"
+    assert result.items[1].occurred_at == BASE.replace(tzinfo=UTC)
+    assert result.items[1].target_id == 91
+    assert all(item.employee_id == "G1001" for item in result.items)
+    assert all(item.employee_name_en == "ALPHA EMPLOYEE" for item in result.items)
+
+    page = employee_activity_service.list_employee_activity(
+        db_session, owner_user_id=7, employee_id="G1001", kind="id_change", offset=1, limit=1
+    )
+    assert page.total == 2
+    assert [(item.kind, item.source_id) for item in page.items] == [("id_change", 91)]
+    assert (page.limit, page.offset) == (1, 1)
+
+    merged_page = employee_activity_service.list_employee_activity(
+        db_session, owner_user_id=7, employee_id="G1001", offset=1, limit=1
+    )
+    assert merged_page.total == 3
+    assert [item.source_id for item in merged_page.items] == [91]
+
+    global_changes = employee_activity_service.list_employee_activity(
+        db_session, owner_user_id=7, kind="id_change"
+    )
+    assert global_changes.total == 3
+    assert [item.source_id for item in global_changes.items] == [93, 92, 91]
+
+
+@pytest.mark.parametrize(
+    ("display_name", "has_actor", "expected"),
+    [
+        ("Correction Admin", True, "Correction Admin"),
+        ("", True, "activity-reader@test.ae"),
+        (None, True, "activity-reader@test.ae"),
+        (None, False, None),
+    ],
+)
+def test_id_change_actor_uses_display_name_or_email_and_allows_missing_user(
+    db_session: Session, display_name: str | None, has_actor: bool, expected: str | None
+):
+    _employee(db_session, "G1001")
+    caller = db_session.get(User, 7)
+    assert caller is not None
+    caller.display_name = display_name
+    db_session.flush()
+    db_session.add(
+        EmployeeFormerId(
+            employee_id="G1001",
+            former_id="G1000",
+            new_id="G1001",
+            changed_at=BASE,
+            changed_by_user_id=7 if has_actor else None,
+            reason="Correct the employee number",
+        )
+    )
+    db_session.commit()
+
+    activity = employee_activity_service.list_employee_activity(
+        db_session, owner_user_id=7, employee_id="G1001", kind="id_change"
+    )
+    statement = employee_statement_service.activity_statement(
+        db_session, "G1001", user=caller, from_date=None, to_date=None
+    )
+    assert activity.total == 1
+    assert activity.items[0].actor_name == expected
+    assert statement is not None
+    assert len(statement.items) == 1
+    assert statement.items[0].actor_name == expected
+
+
+def test_id_changes_in_statement_obey_site_dates_actor_and_cap(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+):
+    _employee(db_session, "G1001")
+    _employee(db_session, "G2002")
+    caller = db_session.get(User, 7)
+    assert caller is not None
+    caller.employee_id = "G1001"
+    db_session.flush()
+    timestamps = [
+        datetime(2026, 8, 10, 19, 59),
+        datetime(2026, 8, 10, 20),
+        datetime(2026, 8, 11, 19, 59),
+        datetime(2026, 8, 11, 20),
+    ]
+    db_session.add_all(
+        [
+            EmployeeFormerId(
+                id=index + 1,
+                employee_id="G1001",
+                former_id=f"G{1100 + index}",
+                new_id=f"G{1101 + index}" if index < 3 else "G1001",
+                changed_at=changed_at,
+                changed_by_user_id=7,
+                reason=f"Correction number {index + 1}",
+            )
+            for index, changed_at in enumerate(timestamps)
+        ]
+        + [
+            EmployeeFormerId(
+                employee_id="G2002",
+                former_id="G2001",
+                new_id="G2002",
+                changed_at=timestamps[1],
+                changed_by_user_id=7,
+                reason="Another employee correction",
+            )
+        ]
+    )
+    db_session.commit()
+
+    statement = employee_statement_service.activity_statement(
+        db_session, "G1001", user=caller, from_date=date(2026, 8, 11), to_date=date(2026, 8, 11)
+    )
+    assert statement is not None
+    assert not statement.truncated
+    assert [(item.kind, item.source_id) for item in statement.items] == [
+        ("id_change", 3),
+        ("id_change", 2),
+    ]
+    older = statement.items[1]
+    assert older.reference == "G1101"
+    assert older.title == "G1102"
+    assert older.reason == "Correction number 2"
+    assert older.actor_name == "activity-reader@test.ae"
+    assert older.actor_employee_id == "G1001"
+    assert not older.date_only
+    assert older.occurred_at.isoformat() == "2026-08-11T00:00:00+04:00"
+
+    monkeypatch.setattr(employee_statement_service, "STATEMENT_CAP", 1)
+    capped = employee_statement_service.activity_statement(
+        db_session, "G1001", user=caller, from_date=date(2026, 8, 11), to_date=date(2026, 8, 11)
+    )
+    assert capped is not None
+    assert capped.truncated
+    assert [item.source_id for item in capped.items] == [3]
