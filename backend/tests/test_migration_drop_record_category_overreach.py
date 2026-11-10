@@ -223,6 +223,37 @@ def test_a_tightened_existing_deny_gets_its_own_expiry_back(
         assert _overrides(connection, user_id)["books.category.5/1"] == ("deny", None)
 
 
+def test_a_deny_an_admin_changed_after_0117_survives(migration: tuple[Config, Engine]) -> None:
+    config, engine = migration
+    admin_expiry = "2028-01-02 03:04:05.000000"
+    with engine.begin() as connection:
+        user_id = _user(connection, "admin-edited@x.ae")
+        _override(connection, user_id, "books.category.HR")
+        _book(
+            connection,
+            category_id="HR",
+            ref_number="STRAY-4",
+            template_id="General Book",
+            classification_code="5/1",
+        )
+    command.upgrade(config, MERGE)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE user_permissions SET expires_at = :expires_at "
+                "WHERE user_id = :user_id AND capability = 'books.category.5/1'"
+            ),
+            {"user_id": user_id, "expires_at": admin_expiry},
+        )
+        edited = _overrides(connection, user_id)
+    command.upgrade(config, REVISION)
+    with engine.connect() as connection:
+        assert _overrides(connection, user_id) == edited
+    command.downgrade(config, MERGE)
+    with engine.connect() as connection:
+        assert _overrides(connection, user_id) == edited
+
+
 def test_a_legacy_grant_keeps_its_copy_when_the_extra_deny_goes(
     migration: tuple[Config, Engine],
 ) -> None:

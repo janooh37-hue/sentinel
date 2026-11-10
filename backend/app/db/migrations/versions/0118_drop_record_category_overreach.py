@@ -17,9 +17,14 @@ filing-service and Other denies 0117 copied, or the mapped category deny for
 an old-only category, still hide it. This revision finds every target 0117
 inserted or tightened that no legacy deny copied to, and sets it to what 0117
 would have left without the extra deny: the row's prior value, with any legacy
-grant copied onto it the way 0117 copies grants. A row that is no longer a deny
-is left as is; a deny an admin set on such a target after 0117 is reverted too.
-A journal table lets the downgrade put the removed denies back.
+grant copied onto it the way 0117 copies grants.
+
+Only a deny that still carries an expiry 0117 could have written is repaired:
+one of the user's legacy deny expiries, the prior deny's expiry, or permanent
+where 0117 merged a deny into a grant. A row an admin has since turned into a
+grant or given another expiry is left alone. An admin's deny set to the very
+value 0117 wrote cannot be told apart and is repaired too. A journal table lets
+the downgrade put the removed denies back.
 """
 
 from __future__ import annotations
@@ -170,6 +175,7 @@ def upgrade() -> None:
         .all()
     )
     denied: dict[int, set[str]] = {}
+    deny_expiries: dict[int, set[object]] = {}
     grants: dict[tuple[int, str], list[dict[str, object]]] = {}
     touched: list[tuple[int, str, dict[str, object] | None]] = []
     for entry in sorted(journal, key=lambda e: e["row_key"]):
@@ -180,6 +186,7 @@ def upgrade() -> None:
             touched.append((user_id, capability, prior))
         elif prior is not None and prior["effect"] == "deny":
             denied.setdefault(user_id, set()).update(_copied_targets(category))
+            deny_expiries.setdefault(user_id, set()).add(prior["expires_at"])
         elif prior is not None:
             for target in _copied_targets(category):
                 grants.setdefault((user_id, target), []).append(prior)
@@ -199,6 +206,15 @@ def upgrade() -> None:
             .first()
         )
         if current is None or current["effect"] != "deny":
+            continue
+        # Every deny 0117 wrote took a source's expiry, kept the prior deny's
+        # (the later of the two), or became permanent over a grant.
+        written = set(deny_expiries.get(user_id, set()))
+        if prior is not None and prior["effect"] == "deny":
+            written.add(prior["expires_at"])
+        if (prior is not None and prior["effect"] == "grant") or (user_id, capability) in grants:
+            written.add(None)
+        if current["expires_at"] not in written:
             continue
         connection.execute(
             sa.text(
