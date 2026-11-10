@@ -4750,10 +4750,10 @@
     "removeConfirmTitle": "Remove saved signature?",
     "removeConfirmBody": "Forms will no longer embed a signature for this employee until a new one is saved.",
     "uploadBadType": "Choose a PNG or JPG image",
-    "submitterTitle": "Submitter signs page 1",
-    "submitterSigns": "On the application (page 1), {{name}}'s signature is used in place of the employee's.",
-    "submitterNoSig": "{{name}} has no saved signature — page 1's signature cell will print blank.",
-    "submitterNotLinked": "{{name}} isn't linked to an employee — page 1's signature cell will print blank.",
+    "submitterTitle": "Submitter signs for the employee",
+    "submitterSigns": "{{name}}'s signature is printed in the employee signature cell instead of the employee's.",
+    "submitterNoSig": "{{name}} has no saved signature — the employee signature cell will print blank.",
+    "submitterNotLinked": "{{name}} isn't linked to an employee — the employee signature cell will print blank.",
     "submitterAppliesP2": "The signature below applies to the undertaking (page 2)."
   },
   "employee": {
