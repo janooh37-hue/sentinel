@@ -2877,7 +2877,8 @@
                     "violation",
                     "ledger",
                     "duty_location",
-                    "status"
+                    "status",
+                    "id_change"
                   ],
                   "type": "string"
                 },
@@ -3048,6 +3049,141 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/EmployeeUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/{employee_id}/id-change/preview": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Preview Employee Id Change",
+        "operationId": "preview_employee_id_change_api_v1_employees__employee_id__id_change_preview_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "new_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "New Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeIdChangePreviewRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/{employee_id}/id-change": {
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Change Employee Id",
+        "operationId": "change_employee_id_api_v1_employees__employee_id__id_change_post",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployeeIdChangeRequest"
               }
             }
           }
@@ -36818,7 +36954,8 @@
               "ledger",
               "absence",
               "duty_location",
-              "status"
+              "status",
+              "id_change"
             ],
             "title": "Kind"
           },
@@ -37274,6 +37411,17 @@
             ],
             "title": "Status Source"
           },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
           "linked_documents": {
             "items": {
               "$ref": "#/components/schemas/LinkedDocumentRead"
@@ -37326,6 +37474,7 @@
           "return_date",
           "status_event_kind",
           "status_source",
+          "title",
           "linked_documents"
         ],
         "title": "ActivityStatementItemRead",
@@ -47480,7 +47629,8 @@
               "violation",
               "ledger",
               "duty_location",
-              "status"
+              "status",
+              "id_change"
             ],
             "title": "Kind"
           },
@@ -48590,11 +48740,132 @@
         ],
         "title": "EmployeeDetailRead"
       },
+      "EmployeeIdChangeImpactRead": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "documents",
+              "leaves",
+              "violations",
+              "absences",
+              "attendance",
+              "timesheet",
+              "messages",
+              "uniform",
+              "vault_files"
+            ],
+            "title": "Key"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "count"
+        ],
+        "title": "EmployeeIdChangeImpactRead"
+      },
+      "EmployeeIdChangePreviewRead": {
+        "properties": {
+          "new_id": {
+            "type": "string",
+            "title": "New Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "invalid",
+              "same",
+              "taken"
+            ],
+            "title": "Status"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "owner_name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name En"
+          },
+          "owner_name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name Ar"
+          },
+          "impact": {
+            "items": {
+              "$ref": "#/components/schemas/EmployeeIdChangeImpactRead"
+            },
+            "type": "array",
+            "title": "Impact"
+          }
+        },
+        "type": "object",
+        "required": [
+          "new_id",
+          "status",
+          "impact"
+        ],
+        "title": "EmployeeIdChangePreviewRead"
+      },
+      "EmployeeIdChangeRequest": {
+        "properties": {
+          "new_id": {
+            "type": "string",
+            "title": "New Id"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 5,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "new_id",
+          "reason"
+        ],
+        "title": "EmployeeIdChangeRequest"
+      },
       "EmployeeListItem": {
         "properties": {
           "id": {
             "type": "string",
             "title": "Id"
+          },
+          "former_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Former Ids"
           },
           "name_en": {
             "type": "string",
@@ -49027,6 +49298,13 @@
           "id": {
             "type": "string",
             "title": "Id"
+          },
+          "former_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Former Ids"
           },
           "name_en": {
             "type": "string",
