@@ -57,13 +57,19 @@ def _user(connection: Connection, email: str) -> int:
     ).scalar_one()
 
 
-def _deny(connection: Connection, user_id: int, capability: str, expires_at: str | None = None):
+def _override(
+    connection: Connection,
+    user_id: int,
+    capability: str,
+    effect: str = "deny",
+    expires_at: str | None = None,
+) -> None:
     connection.execute(
         text(
             "INSERT INTO user_permissions (user_id, capability, effect, expires_at) "
-            "VALUES (:user_id, :capability, 'deny', :expires_at)"
+            "VALUES (:user_id, :capability, :effect, :expires_at)"
         ),
-        {"user_id": user_id, "capability": capability, "expires_at": expires_at},
+        {"user_id": user_id, "capability": capability, "effect": effect, "expires_at": expires_at},
     )
 
 
@@ -158,7 +164,7 @@ def test_legacy_deny_keeps_the_stray_record_hidden_without_hiding_permit_letters
     config, engine = migration
     with engine.begin() as connection:
         user_id = _user(connection, "permit-viewer@x.ae")
-        _deny(connection, user_id, f"books.category.{legacy}")
+        _override(connection, user_id, f"books.category.{legacy}")
         stray_id = _book(connection, ref_number="STRAY-1", **stray)
         letter_id = _book(
             connection,
@@ -197,8 +203,8 @@ def test_a_tightened_existing_deny_gets_its_own_expiry_back(
     config, engine = migration
     with engine.begin() as connection:
         user_id = _user(connection, "tightened@x.ae")
-        _deny(connection, user_id, "books.category.HR")
-        _deny(connection, user_id, "books.category.5/1", expires_at=EXPIRY)
+        _override(connection, user_id, "books.category.HR")
+        _override(connection, user_id, "books.category.5/1", expires_at=EXPIRY)
         _book(
             connection,
             category_id="HR",
@@ -215,3 +221,38 @@ def test_a_tightened_existing_deny_gets_its_own_expiry_back(
     command.downgrade(config, MERGE)
     with engine.connect() as connection:
         assert _overrides(connection, user_id)["books.category.5/1"] == ("deny", None)
+
+
+def test_a_legacy_grant_keeps_its_copy_when_the_extra_deny_goes(
+    migration: tuple[Config, Engine],
+) -> None:
+    config, engine = migration
+    with engine.begin() as connection:
+        user_id = _user(connection, "granted@x.ae")
+        _override(connection, user_id, "books.category.GS", effect="grant", expires_at=EXPIRY)
+        _override(connection, user_id, "books.category.HR")
+        letter_id = _book(
+            connection,
+            category_id="GS",
+            ref_number="1/5/0002",
+            template_id="Security Permit",
+            classification_code="5/1",
+        )
+        _book(connection, category_id="HR", ref_number="STRAY-3", template_id="General Book")
+    command.upgrade(config, MERGE)
+    with engine.connect() as connection:
+        merged = _overrides(connection, user_id)
+    assert merged["books.servicerecords.General Book"] == ("deny", None)
+    command.upgrade(config, REVISION)
+    with engine.connect() as connection:
+        assert _overrides(connection, user_id) == {
+            **merged,
+            "books.servicerecords.General Book": ("grant", EXPIRY),
+        }
+    with Session(engine) as db:
+        user = db.get(User, user_id)
+        assert user is not None
+        assert _visible(db, user, letter_id)
+    command.downgrade(config, MERGE)
+    with engine.connect() as connection:
+        assert _overrides(connection, user_id) == merged

@@ -14,9 +14,11 @@ The record gates now cover such stray records exactly: a stray record answers
 to the Other service and to its stored category as well as its own
 (``record_categories.record_services`` / ``record_gate_categories``), so the
 filing-service and Other denies 0117 copied, or the mapped category deny for
-an old-only category, still hide it. This revision removes every target 0117
-inserted or tightened that is not one of those copies, restoring a tightened
-row's prior value. A row an admin has since turned into a grant is left as is.
+an old-only category, still hide it. This revision finds every target 0117
+inserted or tightened that no legacy deny copied to, and sets it to what 0117
+would have left without the extra deny: the row's prior value, with any legacy
+grant copied onto it the way 0117 copies grants. A row that is no longer a deny
+is left as is; a deny an admin set on such a target after 0117 is reverted too.
 A journal table lets the downgrade put the removed denies back.
 """
 
@@ -87,6 +89,29 @@ _LEGACY_CATEGORY_RECORD_CATEGORY = {
     "VF": "7/1",
     "VA": "11/1",
 }
+_OPT_IN_SERVICE_IDS = frozenset(
+    {
+        "Manpower Requisition Form",
+        "Employment Application Form",
+        "Interview Assessment Form",
+        "Employment Offer Letter",
+        "Employee Performance Appraisal Form",
+        "Employee Job Description",
+        "Interview Scores Form",
+        "Staff Attendance Form",
+        "Leave Encashment Form",
+        "Loan Request Form",
+        "Employee Information Form",
+        "Employee Exit Form",
+        "Employee Exit Form – Project or Contract",  # noqa: RUF001
+        "Salary Advance Request Form",
+        "Breach of Discipline Form",
+        "Promotion and Salary Increment Request Form",
+        "Allowance Request Form",
+        "Employee Overtime Form",
+        "Expense Claim Form",
+    }
+)
 _CATEGORY_PREFIX = "books.category."
 _MERGE_BACKUP = "_record_category_merge_backup"
 _BACKUP = "_record_category_overreach_backup"
@@ -111,6 +136,24 @@ def _copied_targets(category: str) -> set[str]:
     }
 
 
+def _without_extras(
+    capability: str, prior: dict[str, object] | None, grants: list[dict[str, object]]
+) -> dict[str, object] | None:
+    """The row 0117 would have left without its record-driven deny: ``prior`` with
+    each legacy grant that copied to ``capability`` applied as 0117's ``_copy_override``."""
+    row = dict(prior) if prior is not None else None
+    service = capability.removeprefix("books.servicerecords.").removeprefix("books.service.")
+    for grant in grants:
+        if row is None:
+            if service not in _OPT_IN_SERVICE_IDS:
+                row = {"effect": "grant", "expires_at": grant["expires_at"]}
+        elif row["effect"] == "grant" and grant["expires_at"] is not None:
+            expiry = str(grant["expires_at"])
+            if row["expires_at"] is None or expiry < str(row["expires_at"]):
+                row["expires_at"] = expiry
+    return row
+
+
 def upgrade() -> None:
     op.create_table(
         _BACKUP,
@@ -126,18 +169,22 @@ def upgrade() -> None:
         .mappings()
         .all()
     )
-    copied: dict[int, set[str]] = {}
+    denied: dict[int, set[str]] = {}
+    grants: dict[tuple[int, str], list[dict[str, object]]] = {}
     touched: list[tuple[int, str, dict[str, object] | None]] = []
-    for entry in journal:
+    for entry in sorted(journal, key=lambda e: e["row_key"]):
         user_id, capability = json.loads(entry["row_key"])
         prior = json.loads(entry["row_data"]) if entry["row_data"] is not None else None
         category = _legacy_category(capability)
-        if category is not None:
-            copied.setdefault(user_id, set()).update(_copied_targets(category))
-        else:
+        if category is None:
             touched.append((user_id, capability, prior))
+        elif prior is not None and prior["effect"] == "deny":
+            denied.setdefault(user_id, set()).update(_copied_targets(category))
+        elif prior is not None:
+            for target in _copied_targets(category):
+                grants.setdefault((user_id, target), []).append(prior)
     for user_id, capability, prior in touched:
-        if capability in copied.get(user_id, set()):
+        if capability in denied.get(user_id, set()):
             continue
         key = {"user_id": user_id, "capability": capability}
         current = (
@@ -160,7 +207,8 @@ def upgrade() -> None:
             ),
             {**key, "row_data": json.dumps(dict(current))},
         )
-        if prior is None:
+        restored = _without_extras(capability, prior, grants.get((user_id, capability), []))
+        if restored is None:
             connection.execute(
                 sa.text(
                     "DELETE FROM user_permissions "
@@ -174,7 +222,7 @@ def upgrade() -> None:
                     "UPDATE user_permissions SET effect = :effect, expires_at = :expires_at "
                     "WHERE user_id = :user_id AND capability = :capability"
                 ),
-                {**key, "effect": prior["effect"], "expires_at": prior["expires_at"]},
+                {**key, "effect": restored["effect"], "expires_at": restored["expires_at"]},
             )
 
 
