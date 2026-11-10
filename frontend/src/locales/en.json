@@ -5151,6 +5151,7 @@
     "searchManagers": "Search managers…",
     "clearManager": "Clear manager",
     "managerPickerHint": "Leaving this blank means the manager cell will be empty on the form (not the default manager).",
+    "submitterPickerHint": "Leave empty to use the employee's own signature. Pick a submitter to sign on the employee's behalf.",
     "manageSubmitters": "Manage submitters",
     "submitterManagementTitle": "Submitter management",
     "submitterManagementStub": "Submitter management — coming soon.",
