@@ -282,6 +282,17 @@ def test_service_gates_hide_stray_records_with_other(
     assert clause is not None
     visible = set(db_session.scalars(select(Book.id).where(clause)))
     assert visible == {book.id for book, _code in categorized_records} - hidden
+    documents = set(
+        db_session.scalars(
+            select(Document.id).where(book_service.document_visibility_clause(db_session, user))
+        )
+    )
+    assert documents == {
+        version.document_id
+        for book, _code in categorized_records
+        if book.id not in hidden
+        for version in book.versions
+    }
     general_books: dict[str, set[int]] = {}
     for book, _code in categorized_records:
         if book.versions and book.versions[-1].template_id in {"General Book", "Security Permit"}:

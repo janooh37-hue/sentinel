@@ -223,12 +223,28 @@ def test_a_tightened_existing_deny_gets_its_own_expiry_back(
         assert _overrides(connection, user_id)["books.category.5/1"] == ("deny", None)
 
 
-def test_a_deny_an_admin_changed_after_0117_survives(migration: tuple[Config, Engine]) -> None:
+@pytest.mark.parametrize(
+    ("hr_expiry", "inv_deny", "admin_expiry"),
+    [
+        # The admin re-dates the deny 0117 made permanent.
+        (None, False, "2028-01-02 03:04:05.000000"),
+        # The admin makes permanent a deny 0117 wrote with the HR expiry; the
+        # user's unrelated permanent INV deny never reached books.category.5/1.
+        (EXPIRY, True, None),
+    ],
+)
+def test_a_deny_an_admin_changed_after_0117_survives(
+    migration: tuple[Config, Engine],
+    hr_expiry: str | None,
+    inv_deny: bool,
+    admin_expiry: str | None,
+) -> None:
     config, engine = migration
-    admin_expiry = "2028-01-02 03:04:05.000000"
     with engine.begin() as connection:
         user_id = _user(connection, "admin-edited@x.ae")
-        _override(connection, user_id, "books.category.HR")
+        _override(connection, user_id, "books.category.HR", expires_at=hr_expiry)
+        if inv_deny:
+            _override(connection, user_id, "books.category.INV")
         _book(
             connection,
             category_id="HR",
@@ -238,6 +254,7 @@ def test_a_deny_an_admin_changed_after_0117_survives(migration: tuple[Config, En
         )
     command.upgrade(config, MERGE)
     with engine.begin() as connection:
+        assert _overrides(connection, user_id)["books.category.5/1"] == ("deny", hr_expiry)
         connection.execute(
             text(
                 "UPDATE user_permissions SET expires_at = :expires_at "

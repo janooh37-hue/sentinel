@@ -583,15 +583,21 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
                 for template_id in service_template_ids(service_id)
             }
             clauses.append(Document.template_id.in_(sorted(named_template_ids)))
+    # Stray records answer to Other, but their documents carry a named template.
+    linked_hidden: list[ColumnElement[bool]] = []
+    if OTHER_SERVICE_ID in denied_services:
+        linked_hidden.append(_stray_record_clause())
     if denied_categories:
+        linked_hidden.append(record_gate_category_in_clause(denied_categories))
+    if linked_hidden:
         linked_document = aliased(Document)
-        linked_to_denied_category = exists(
+        linked_to_hidden_record = exists(
             select(BookVersion.id)
             .select_from(BookVersion)
             .join(Book, Book.id == BookVersion.book_id)
             .join(linked_document, linked_document.id == BookVersion.document_id)
             .where(
-                record_gate_category_in_clause(denied_categories),
+                or_(*linked_hidden),
                 or_(
                     linked_document.id == Document.id,
                     and_(
@@ -603,7 +609,7 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
             )
             .correlate(Document)
         )
-        clauses.append(not_(linked_to_denied_category))
+        clauses.append(not_(linked_to_hidden_record))
     if user.role == INMATE_REPORTER_ROLE:
         current_version_id = (
             select(BookVersion.id)

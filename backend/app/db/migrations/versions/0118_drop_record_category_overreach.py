@@ -16,21 +16,25 @@ to the Other service and to its stored category as well as its own
 filing-service and Other denies 0117 copied, or the mapped category deny for
 an old-only category, still hide it. This revision finds every target 0117
 inserted or tightened that no legacy deny copied to, and sets it to what 0117
-would have left without the extra deny: the row's prior value, with any legacy
-grant copied onto it the way 0117 copies grants.
+would have left without the extra deny: the row's prior value with the legacy
+grants that copied to it.
 
-Only a deny that still carries an expiry 0117 could have written is repaired:
-one of the user's legacy deny expiries, the prior deny's expiry, or permanent
-where 0117 merged a deny into a grant. A row an admin has since turned into a
-grant or given another expiry is left alone. An admin's deny set to the very
-value 0117 wrote cannot be told apart and is repaired too. A journal table lets
-the downgrade put the removed denies back.
+A target is repaired only while it still holds exactly what 0117 wrote,
+replayed from its prior value and the legacy overrides that reached it with
+0117's own rules and record scan. A row an admin has since changed is left
+alone; an admin's deny set to the very value 0117 wrote cannot be told apart
+and is repaired too. A journal table lets the downgrade put the removed
+denies back.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from collections.abc import Sequence
+from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 import sqlalchemy as sa
 from alembic import op
@@ -40,122 +44,60 @@ down_revision: str | Sequence[str] | None = "0117_merge_legacy_record_categories
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# Frozen from 0117_merge_legacy_record_categories. Do not import application policy.
-_CLASSIFICATIONS = frozenset(f"{tab}/1" for tab in range(1, 16))
-_SERVICES_FILING_INTO_LEGACY_CATEGORY = {
-    "GS": ("Acknowledgment Form", "General Book", "Report", "Vehicle Mileage Log"),
-    "HR": (
-        "Salary Transfer Request",
-        "Salary Deduction Form",
-        "Employee Clearance Form",
-        "Leave Application Form",
-        "Passport Release Form",
-        "Duty Resumption Form",
-        "HR Request Form",
-        "Resignation Letter",
-        "Leave Permit Form",
-        "Administrative Leave Form",
-        "Passport Release List",
-        "Manpower Requisition Form",
-        "Employment Application Form",
-        "Interview Assessment Form",
-        "Employment Offer Letter",
-        "Employee Performance Appraisal Form",
-        "Employee Job Description",
-        "Interview Scores Form",
-        "Staff Attendance Form",
-        "Leave Encashment Form",
-        "Loan Request Form",
-        "Employee Information Form",
-        "Employee Exit Form",
-        "Employee Exit Form – Project or Contract",  # noqa: RUF001
-        "Salary Advance Request Form",
-        "Breach of Discipline Form",
-        "Promotion and Salary Increment Request Form",
-        "Allowance Request Form",
-        "Employee Overtime Form",
-        "Expense Claim Form",
-    ),
-    "NAT": ("Violation Form", "Warning Form"),
-    "SC": ("Material Request Form", "Material Request Form (Arabic)"),
-    "INV": ("Inmate Conduct Violations",),
-    "VF": ("Vehicle Fines",),
-    "VA": ("Vehicle Accident Report",),
-}
-_LEGACY_CATEGORY_RECORD_CATEGORY = {
-    "1": "12/1",
-    "2": "10/1",
-    "12": "15/1",
-    "HR": "12/1",
-    "GS": "15/1",
-    "NAT": "12/1",
-    "SC": "10/1",
-    "INV": "13/1",
-    "VF": "7/1",
-    "VA": "11/1",
-}
-_OPT_IN_SERVICE_IDS = frozenset(
-    {
-        "Manpower Requisition Form",
-        "Employment Application Form",
-        "Interview Assessment Form",
-        "Employment Offer Letter",
-        "Employee Performance Appraisal Form",
-        "Employee Job Description",
-        "Interview Scores Form",
-        "Staff Attendance Form",
-        "Leave Encashment Form",
-        "Loan Request Form",
-        "Employee Information Form",
-        "Employee Exit Form",
-        "Employee Exit Form – Project or Contract",  # noqa: RUF001
-        "Salary Advance Request Form",
-        "Breach of Discipline Form",
-        "Promotion and Salary Increment Request Form",
-        "Allowance Request Form",
-        "Employee Overtime Form",
-        "Expense Claim Form",
-    }
-)
-_CATEGORY_PREFIX = "books.category."
-_MERGE_BACKUP = "_record_category_merge_backup"
 _BACKUP = "_record_category_overreach_backup"
 
-
-def _legacy_category(capability: str) -> str | None:
-    if not capability.startswith(_CATEGORY_PREFIX):
-        return None
-    category = capability[len(_CATEGORY_PREFIX) :]
-    return None if category in _CLASSIFICATIONS else category
+Row = dict[str, Any]
 
 
-def _copied_targets(category: str) -> set[str]:
+def _merge_revision() -> ModuleType:
+    """0117 itself: the replay must use the exact rules and record scan it ran."""
+    path = Path(__file__).with_name("0117_merge_legacy_record_categories.py")
+    spec = importlib.util.spec_from_file_location("_record_category_merge_0117", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _copied_targets(merge: ModuleType, category: str) -> tuple[str, ...]:
     """The targets 0117 copied a legacy override to, before its record-driven extras."""
-    services = _SERVICES_FILING_INTO_LEGACY_CATEGORY.get(category)
+    services = merge._SERVICES_FILING_INTO_LEGACY_CATEGORY.get(category)
     if not services:
-        return {_CATEGORY_PREFIX + _LEGACY_CATEGORY_RECORD_CATEGORY.get(category, "15/1")}
-    return {
+        return (
+            merge._CATEGORY_PREFIX + merge._LEGACY_CATEGORY_RECORD_CATEGORY.get(category, "15/1"),
+        )
+    return tuple(
         f"{prefix}{service}"
-        for service in (*services, "other")
+        for service in (*services, merge._OTHER_SERVICE)
         for prefix in ("books.service.", "books.servicerecords.")
-    }
+    )
 
 
-def _without_extras(
-    capability: str, prior: dict[str, object] | None, grants: list[dict[str, object]]
-) -> dict[str, object] | None:
-    """The row 0117 would have left without its record-driven deny: ``prior`` with
-    each legacy grant that copied to ``capability`` applied as 0117's ``_copy_override``."""
-    row = dict(prior) if prior is not None else None
-    service = capability.removeprefix("books.servicerecords.").removeprefix("books.service.")
-    for grant in grants:
-        if row is None:
-            if service not in _OPT_IN_SERVICE_IDS:
-                row = {"effect": "grant", "expires_at": grant["expires_at"]}
-        elif row["effect"] == "grant" and grant["expires_at"] is not None:
-            expiry = str(grant["expires_at"])
-            if row["expires_at"] is None or expiry < str(row["expires_at"]):
-                row["expires_at"] = expiry
+def _copy(merge: ModuleType, row: Row | None, source: Row, target: str) -> Row | None:
+    """0117's ``_copy_override`` applied to an in-memory row."""
+    effect, expiry = source["effect"], source["expires_at"]
+    if row is None:
+        service = target.removeprefix("books.servicerecords.").removeprefix("books.service.")
+        if effect == "grant" and service in merge._OPT_IN_SERVICE_IDS:
+            return None
+        return {"effect": effect, "expires_at": expiry}
+    if effect == "deny":
+        if row["effect"] == "grant" or None in (expiry, row["expires_at"]):
+            return {"effect": "deny", "expires_at": None}
+        return {"effect": "deny", "expires_at": max(str(expiry), str(row["expires_at"]))}
+    if (
+        row["effect"] == "grant"
+        and expiry is not None
+        and (row["expires_at"] is None or str(expiry) < row["expires_at"])
+    ):
+        return {"effect": "grant", "expires_at": str(expiry)}
+    return row
+
+
+def _replay(merge: ModuleType, prior: Row | None, sources: list[Row], target: str) -> Row | None:
+    row = prior
+    for source in sources:
+        row = _copy(merge, row, source, target)
     return row
 
 
@@ -166,33 +108,51 @@ def upgrade() -> None:
         sa.Column("capability", sa.String(length=128), primary_key=True),
         sa.Column("row_data", sa.Text(), nullable=False),
     )
+    merge = _merge_revision()
     connection = op.get_bind()
     journal = (
         connection.execute(
-            sa.text(f"SELECT row_key, row_data FROM {_MERGE_BACKUP} WHERE kind = 'user'")
+            sa.text(f"SELECT row_key, row_data FROM {merge._BACKUP} WHERE kind = 'user'")
         )
         .mappings()
         .all()
     )
-    denied: dict[int, set[str]] = {}
-    deny_expiries: dict[int, set[object]] = {}
-    grants: dict[tuple[int, str], list[dict[str, object]]] = {}
-    touched: list[tuple[int, str, dict[str, object] | None]] = []
-    for entry in sorted(journal, key=lambda e: e["row_key"]):
+    # Legacy sources per user in 0117's order (capability), and the targets it touched.
+    sources: dict[int, list[tuple[str, Row]]] = {}
+    touched: list[tuple[int, str, Row | None]] = []
+    for entry in journal:
         user_id, capability = json.loads(entry["row_key"])
         prior = json.loads(entry["row_data"]) if entry["row_data"] is not None else None
-        category = _legacy_category(capability)
+        category = merge._legacy_category(capability)
         if category is None:
-            touched.append((user_id, capability, prior))
-        elif prior is not None and prior["effect"] == "deny":
-            denied.setdefault(user_id, set()).update(_copied_targets(category))
-            deny_expiries.setdefault(user_id, set()).add(prior["expires_at"])
+            row = None if prior is None else {k: prior[k] for k in ("effect", "expires_at")}
+            touched.append((user_id, capability, row))
         elif prior is not None:
-            for target in _copied_targets(category):
-                grants.setdefault((user_id, target), []).append(prior)
+            sources.setdefault(user_id, []).append((category, prior))
+    for user_sources in sources.values():
+        user_sources.sort(key=lambda item: item[1]["capability"])
+    extras: dict[str, tuple[str, ...]] = {}
+
+    def targets_of(category: str, source: Row) -> tuple[str, ...]:
+        copied = _copied_targets(merge, category)
+        if source["effect"] != "deny":
+            return copied
+        if category not in extras:
+            extras[category] = merge._uncovered_record_targets(connection, category, copied)
+        return (*copied, *extras[category])
+
     for user_id, capability, prior in touched:
-        if capability in denied.get(user_id, set()):
+        user_sources = sources.get(user_id, [])
+        if any(
+            source["effect"] == "deny" and capability in _copied_targets(merge, category)
+            for category, source in user_sources
+        ):
             continue
+        reaching = [
+            source
+            for category, source in user_sources
+            if capability in targets_of(category, source)
+        ]
         key = {"user_id": user_id, "capability": capability}
         current = (
             connection.execute(
@@ -205,16 +165,8 @@ def upgrade() -> None:
             .mappings()
             .first()
         )
-        if current is None or current["effect"] != "deny":
-            continue
-        # Every deny 0117 wrote took a source's expiry, kept the prior deny's
-        # (the later of the two), or became permanent over a grant.
-        written = set(deny_expiries.get(user_id, set()))
-        if prior is not None and prior["effect"] == "deny":
-            written.add(prior["expires_at"])
-        if (prior is not None and prior["effect"] == "grant") or (user_id, capability) in grants:
-            written.add(None)
-        if current["expires_at"] not in written:
+        written = _replay(merge, prior, reaching, capability)
+        if current is None or current["effect"] != "deny" or dict(current) != written:
             continue
         connection.execute(
             sa.text(
@@ -223,7 +175,8 @@ def upgrade() -> None:
             ),
             {**key, "row_data": json.dumps(dict(current))},
         )
-        restored = _without_extras(capability, prior, grants.get((user_id, capability), []))
+        grants = [source for source in reaching if source["effect"] == "grant"]
+        restored = _replay(merge, prior, grants, capability)
         if restored is None:
             connection.execute(
                 sa.text(
