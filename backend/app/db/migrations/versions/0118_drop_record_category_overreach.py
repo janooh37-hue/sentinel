@@ -38,7 +38,6 @@ from __future__ import annotations
 import importlib.util
 import json
 from collections.abc import Sequence
-from itertools import combinations
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -127,11 +126,9 @@ def upgrade() -> None:
         if any(capability in _copied_targets(merge, category) for category, _ in user_sources):
             continue
         denies = [source for _, source in user_sources if source["effect"] == "deny"]
-        possible = {
-            json.dumps(_replay_denies(prior, chosen), sort_keys=True)
-            for size in range(1, len(denies) + 1)
-            for chosen in combinations(denies, size)
-        }
+        # A deny merge keeps the later expiry, permanent winning, so every
+        # combination of denies agrees exactly when every single deny does.
+        possible = {json.dumps(_replay_denies(prior, [deny]), sort_keys=True) for deny in denies}
         if len(possible) != 1:
             continue
         written = json.loads(possible.pop())
