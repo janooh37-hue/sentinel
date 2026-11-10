@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { FormProvider, useForm } from 'react-hook-form'
+import { FormProvider, useForm, useWatch } from 'react-hook-form'
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
@@ -28,18 +29,20 @@ function Host({
   const methods = useForm<Record<string, unknown>>({
     defaultValues: value === undefined ? {} : { [NAME]: value },
   })
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const [client] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  )
+  const current: unknown = useWatch({ control: methods.control, name: NAME })
   return (
     <QueryClientProvider client={client}>
       <FormProvider {...methods}>
         <SubmitterPickerField
-          id={NAME}
           name={NAME}
           label_en="Submitter"
           label_ar="مقدم الطلب"
           kind={kind}
         />
-        <output data-testid="value">{JSON.stringify(methods.watch(NAME) ?? null)}</output>
+        <output data-testid="value">{JSON.stringify(current ?? null)}</output>
       </FormProvider>
     </QueryClientProvider>
   )
