@@ -12,7 +12,16 @@ from sqlalchemy import select
 from app.config import Settings
 from app.core import signature as signature_core
 from app.core.vault_manager import Vault
-from app.db.models import Book, BookCategory, BookVersion, Document, Employee, Leave, Manager
+from app.db.models import (
+    Book,
+    BookCategory,
+    BookVersion,
+    Document,
+    Employee,
+    Leave,
+    Manager,
+    Submitter,
+)
 from app.services import document_service, leave_service
 from app.services.document_service import _TEMPLATES_DIR
 
@@ -93,6 +102,76 @@ def test_file_return_embeds_saved_employee_signature(db_session, tmp_path, monke
     signed_count = _drawing_count(settings.data_dir / signed_document.docx_path)
     unsigned_count = _drawing_count(settings.data_dir / unsigned_document.docx_path)
     assert signed_count == unsigned_count + 1
+
+
+def test_file_return_lets_a_submitter_sign_for_the_employee(
+    db_session, tmp_path, monkeypatch
+) -> None:
+    settings = Settings(data_dir=tmp_path / "data", templates_dir=_TEMPLATES_DIR)
+    monkeypatch.setattr(document_service, "get_settings", lambda: settings)
+    monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda _path: None)
+
+    # Neither leave's employee has a saved signature; the submitter does.
+    employee_a = Employee(id="G-4101", name_en="Employee A", name_ar="موظف أ")
+    employee_b = Employee(id="G-4102", name_en="Employee B", name_ar="موظف ب")
+    front_desk = Employee(id="G-4103", name_en="Front Desk", name_ar="الاستقبال")
+    leave_a = Leave(
+        employee_id=employee_a.id,
+        leave_type="Annual Leave",
+        start_date=date(2026, 8, 1),
+        end_date=date(2026, 8, 7),
+        days=7,
+        status="Approved",
+    )
+    leave_b = Leave(
+        employee_id=employee_b.id,
+        leave_type="Annual Leave",
+        start_date=date(2026, 8, 1),
+        end_date=date(2026, 8, 7),
+        days=7,
+        status="Approved",
+    )
+    submitter = Submitter(name="Front Desk", employee_id=front_desk.id)
+    db_session.add_all(
+        [
+            BookCategory(id="HR", prefix="HR"),
+            employee_a,
+            employee_b,
+            front_desk,
+            leave_a,
+            leave_b,
+            submitter,
+        ]
+    )
+    db_session.commit()
+
+    signature_path = signature_core.vault_path(Vault(settings.vault_dir), front_desk.id)
+    signature_path.parent.mkdir(parents=True, exist_ok=True)
+    _make_sig_png(signature_path)
+
+    leave_service.file_return(
+        db_session,
+        leave_a.id,
+        resumption_date=date(2026, 8, 8),
+        submitter_id=submitter.id,
+    )
+    leave_service.file_return(
+        db_session,
+        leave_b.id,
+        resumption_date=date(2026, 8, 8),
+    )
+
+    a_document = db_session.execute(
+        select(Document).where(Document.leave_id == leave_a.id)
+    ).scalar_one()
+    b_document = db_session.execute(
+        select(Document).where(Document.leave_id == leave_b.id)
+    ).scalar_one()
+    assert a_document.docx_path is not None
+    assert b_document.docx_path is not None
+    a_count = _drawing_count(settings.data_dir / a_document.docx_path)
+    b_count = _drawing_count(settings.data_dir / b_document.docx_path)
+    assert a_count == b_count + 1
 
 
 def test_file_return_keeps_unsigned_manager_for_chain(db_session, tmp_path, monkeypatch) -> None:

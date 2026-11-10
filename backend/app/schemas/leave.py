@@ -70,6 +70,7 @@ class LeaveReturnRequest(BaseModel):
     resumption_date: date
     delay_reason: str | None = None
     manager_id: int | None = None
+    submitter_id: int | None = None
 
 
 class LeaveRead(ORMBase):

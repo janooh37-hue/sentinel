@@ -245,6 +245,7 @@ def file_leave_return(
         resumption_date=payload.resumption_date,
         delay_reason=payload.delay_reason,
         manager_id=payload.manager_id,
+        submitter_id=payload.submitter_id,
         actor=user.email,
         current_user=user,
     )

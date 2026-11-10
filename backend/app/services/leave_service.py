@@ -673,13 +673,16 @@ def file_return(
     resumption_date: date,
     delay_reason: str | None = None,
     manager_id: int | None = None,
+    submitter_id: int | None = None,
     actor: str | None = None,
     current_user: User | None = None,
 ) -> Leave:
     """File the Duty Resumption (return) form for a returnable leave.
 
-    Generates the Duty Resumption document with the employee's saved vault
-    signature when present; the manager signs through the book approval chain.
+    Generates the Duty Resumption document with the picked submitter's
+    signature in the employee cell, else the employee's saved vault signature
+    when present (an unknown submitter id raises ``SUBMITTER_NOT_FOUND``); the
+    manager signs through the book approval chain.
     Attaches the result to THIS leave (no standalone register row), records
     the return date, and sets status -> Completed.
     NS requires a certificate already on file.
@@ -719,6 +722,7 @@ def file_return(
         template_id="Duty Resumption Form",
         fields=fields,
         manager_id=manager_id,
+        submitter_id=submitter_id,
         embed_signature={"employee": True},
         current_user=current_user,
         return_for_leave_id=leave_id,

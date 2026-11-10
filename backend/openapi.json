@@ -52541,6 +52541,17 @@
               }
             ],
             "title": "Manager Id"
+          },
+          "submitter_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitter Id"
           }
         },
         "type": "object",
