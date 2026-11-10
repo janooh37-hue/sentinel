@@ -406,6 +406,20 @@
         "label_en": "Submitter",
         "label_ar": "مقدم الطلب",
         "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
       }
     ]
   },

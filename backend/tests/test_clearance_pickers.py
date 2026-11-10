@@ -31,6 +31,12 @@ def test_clearance_has_submitter_picker():
     assert by_type.get("submitter_picker") == "submitter_id"
 
 
+def test_clearance_offers_the_employee_signature():
+    by_type = _fields_by_type("Employee Clearance Form")
+    assert by_type.get("hand_sign_checkbox") == "hand_sign_employee"
+    assert by_type.get("signature") == "employee_sig_path"
+
+
 # --- Submitter signs the employee cell ---------------------------------------
 # The submitter is optional on every form with a Submitter box: picked, their
 # signature fills the employee cell; empty, the employee's own signature does.
