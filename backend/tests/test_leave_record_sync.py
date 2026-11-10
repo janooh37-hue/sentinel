@@ -769,6 +769,77 @@ def test_record_filed_by_a_submitter_syncs_with_the_same_signatures(env):
     assert "book.leave_dates_not_synced" not in actions
 
 
+def add_signed_submitter(env):
+    """A submitter linked to another employee who has a saved signature."""
+    front_desk = Employee(id="G-SUBM", name_en="Front Desk", status="Active")
+    env.db.add(front_desk)
+    env.db.flush()
+    path = signature_core.employee_signature_path(env.settings.vault_dir, front_desk.id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGBA", (120, 40), (80, 0, 0, 255)).save(path)
+    submitter = Submitter(name="Front Desk", employee_id=front_desk.id)
+    env.db.add(submitter)
+    env.db.commit()
+    return submitter
+
+
+def test_submitter_signs_for_an_employee_without_a_signature(env, tmp_path):
+    # The employee has no saved signature and the embed box is off: the picked
+    # submitter alone fills the employee cell, through approval and date sync.
+    submitter = add_signed_submitter(env)
+    book, leave = generate(env, embed_signature={"employee": False}, submitter_id=submitter.id)
+    version = book.versions[-1]
+    doc = env.db.get_one(Document, version.document_id)
+    assert version.fields["_signing"]["submitter_signs"] is True
+    assert roles(env, doc.docx_path) == Counter({"employee": 1})
+    assert roles(env, companion_of(env, doc).docx_path) == Counter()
+
+    manager_png = tmp_path / "manager.png"
+    Image.new("RGBA", (100, 40), (0, 80, 0, 255)).save(manager_png)
+    artifact = document_service.render_signed_artifact(
+        env.db,
+        version=version,
+        signer_signature_path=str(manager_png),
+        signer_user_id=env.signer.id,
+        output_dir=tmp_path / "signed",
+    )
+    signed_roles = Counter(
+        d.role for d in signature_layout.inspect_signature_drawings(artifact.docx_path)
+    )
+    assert signed_roles == Counter({"employee": 1, "manager": 1})
+
+    edit(env, leave)
+    current = book.versions[-1]
+    assert current.trigger == "leave-edit"
+    new_doc = env.db.get_one(Document, current.document_id)
+    assert roles(env, new_doc.docx_path) == Counter({"employee": 1})
+
+
+def test_record_filed_before_the_rule_change_keeps_its_blank_cell(env):
+    # Before every Submitter form let the submitter sign, a Leave Application
+    # with a submitter but no employee opt-in printed a blank employee cell.
+    submitter = add_signed_submitter(env)
+    book, leave = generate(env, embed_signature={"employee": False})
+    version = book.versions[-1]
+    legacy_signing = {k: v for k, v in version.fields["_signing"].items() if k != "submitter_signs"}
+    version.fields = {
+        **version.fields,
+        "_signing": {**legacy_signing, "submitter_id": submitter.id},
+    }
+    env.db.commit()
+    edit(env, leave)
+    current = book.versions[-1]
+    assert current.id != version.id
+    new_doc = env.db.get_one(Document, current.document_id)
+    assert roles(env, new_doc.docx_path) == Counter()
+    actions = env.db.scalars(
+        select(AuditLog.action).where(
+            AuditLog.entity_type == "book", AuditLog.entity_id == str(book.id)
+        )
+    ).all()
+    assert "book.leave_dates_synced" in actions
+
+
 @pytest.mark.parametrize("legacy", [False, True])
 def test_leave_edit_keeps_the_original_request_date(env, monkeypatch, legacy):
     book, leave = generate_on_sept_30(env, monkeypatch)

@@ -1,8 +1,15 @@
 /**
- * SubmitterPickerField — select + gear icon to open the submitter manager.
+ * SubmitterPickerField — optional select + gear icon to open the submitter manager.
  *
- * Fetches GET /api/v1/submitters via TanStack Query.
- * The gear icon opens SubmitterManagerDialog (stub in chunk F).
+ * Fetches GET /api/v1/submitters via TanStack Query. The gear icon opens
+ * SubmitterManagerDialog. "— No selection —" empties the field.
+ *
+ * - `submitter` (default): starts empty. Empty → the employee's own signature
+ *   fills the employee cell; picked → the submitter signs it on their behalf.
+ * - `interviewer`: pre-fills the signed-in user's own row while untouched.
+ *
+ * A stored id whose row no longer exists is dropped once the list loads, so
+ * the form never sends an id the Select cannot show.
  */
 
 import { useEffect, useState } from 'react'
@@ -27,12 +34,20 @@ import { useIdentity } from '@/lib/useIdentity'
 import { SubmitterManagerDialog } from '../SubmitterManagerDialog'
 import type { FieldProps } from '../types'
 
+// Radix Select items cannot carry '' — this sentinel stands for "No selection".
+const NONE_VALUE = '__none__'
+
+export interface SubmitterPickerFieldProps extends FieldProps {
+  kind?: 'submitter' | 'interviewer'
+}
+
 export function SubmitterPickerField({
   name,
   label_en,
   label_ar,
   required,
-}: FieldProps): React.JSX.Element {
+  kind = 'submitter',
+}: SubmitterPickerFieldProps): React.JSX.Element {
   const { i18n, t } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const label = isAr ? label_ar : label_en
@@ -48,23 +63,34 @@ export function SubmitterPickerField({
 
   const { identity } = useIdentity()
 
-  const { data: submitters = [], isLoading, isError: isPickerError } = useQuery<SubmitterRead[]>({
+  const {
+    data: submitters = [],
+    isLoading,
+    isSuccess,
+    isError: isPickerError,
+  } = useQuery<SubmitterRead[]>({
     queryKey: ['submitters'],
     queryFn: () => api.listSubmitters(),
     staleTime: 5 * 60 * 1000,
   })
 
-  // Pre-select the Submitter matching the linked employee. Only fires once
-  // when the form has no value AND a matching Submitter row exists.
-  const currentValue = watch(name) as string | undefined
+  const currentValue = watch(name) as string | null | undefined
+
+  // Interviewer only: pre-fill the signed-in user's own row while the field is
+  // untouched (undefined/null). '' is an explicit "No selection" and is kept.
   useEffect(() => {
+    if (kind !== 'interviewer' || currentValue != null) return
     if (!identity?.linked || !identity.employee_id) return
-    if (currentValue) return // user already picked something — don't override
     const match = submitters.find((s) => s.employee_id === identity.employee_id)
-    if (match) {
-      setValue(name, String(match.id))
-    }
-  }, [identity, submitters, name, currentValue, setValue])
+    if (match) setValue(name, String(match.id))
+  }, [kind, identity, submitters, name, currentValue, setValue])
+
+  // A stored id whose row is gone (deleted submitter, stale draft) shows as empty
+  // yet would still be sent and rejected. Drop it once the list has loaded.
+  useEffect(() => {
+    if (!isSuccess || !currentValue) return
+    if (!submitters.some((s) => String(s.id) === String(currentValue))) setValue(name, '')
+  }, [isSuccess, submitters, currentValue, name, setValue])
 
   const error = (errors[name] as { message?: string } | undefined)?.message
 
@@ -78,24 +104,31 @@ export function SubmitterPickerField({
         <Controller
           control={control}
           name={name}
-          render={({ field }) => (
-            <Select
-              value={(field.value as string) || undefined}
-              onValueChange={field.onChange}
-              disabled={isLoading}
-            >
-              <SelectTrigger id={name} className="flex-1">
-                <SelectValue placeholder={t('application.noSelection')} />
-              </SelectTrigger>
-              <SelectContent>
-                {submitters.map((s) => (
-                  <SelectItem key={s.id} value={String(s.id)}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          render={({ field }) => {
+            // Never hand Radix a value without a matching item.
+            const selected = submitters.some((s) => String(s.id) === String(field.value))
+              ? String(field.value)
+              : NONE_VALUE
+            return (
+              <Select
+                value={selected}
+                onValueChange={(next) => field.onChange(next === NONE_VALUE ? '' : next)}
+                disabled={isLoading}
+              >
+                <SelectTrigger id={name} className="flex-1">
+                  <SelectValue placeholder={t('application.noSelection')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_VALUE}>{t('application.noSelection')}</SelectItem>
+                  {submitters.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )
+          }}
         />
         <CapabilityGate cap="submitters.manage" requestable>
           <Button
@@ -110,6 +143,9 @@ export function SubmitterPickerField({
           </Button>
         </CapabilityGate>
       </div>
+      {kind === 'submitter' && (
+        <p className="text-xs text-muted-foreground">{t('application.submitterPickerHint')}</p>
+      )}
       {isPickerError && (
         <span role="alert" className="text-xs text-destructive">
           {t('application.pickerLoadError')}

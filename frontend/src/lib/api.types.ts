@@ -13296,6 +13296,8 @@ export interface components {
             delay_reason?: string | null;
             /** Manager Id */
             manager_id?: number | null;
+            /** Submitter Id */
+            submitter_id?: number | null;
         };
         /**
          * LeaveUpdate

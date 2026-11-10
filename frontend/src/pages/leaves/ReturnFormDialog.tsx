@@ -3,7 +3,9 @@
  * leave. Pre-fills leave start/end (read-only) + leave type; resumption date
  * defaults to today and is editable; optional delay reason. Manager selection
  * mirrors the Services Duty Resumption template; manager signatures are
- * collected through the signing chain. On success the leave is Completed.
+ * collected through the signing chain. An optional submitter signs the
+ * employee cell in the employee's place; left empty, the employee's saved
+ * signature is used. On success the leave is Completed.
  */
 
 import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
@@ -23,6 +25,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { ManagerPickerField } from '@/components/application/fields/ManagerPickerField'
+import { SubmitterPickerField } from '@/components/application/fields/SubmitterPickerField'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -42,6 +45,7 @@ interface ReturnFormValues {
   resumption_date: string
   delay_reason: string
   manager_id: number | null
+  submitter_id: string
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -56,6 +60,7 @@ function defaultValues(): ReturnFormValues {
     resumption_date: todayIso(),
     delay_reason: '',
     manager_id: null,
+    submitter_id: '',
   }
 }
 
@@ -87,6 +92,7 @@ export function ReturnFormDialog({
         resumption_date: values.resumption_date,
         delay_reason: values.delay_reason.trim() || undefined,
         manager_id: values.manager_id,
+        submitter_id: values.submitter_id ? Number(values.submitter_id) : null,
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['leaves-list'] })
@@ -168,6 +174,7 @@ export function ReturnFormDialog({
                 label_en="Line Manager"
                 label_ar="المدير المباشر"
               />
+              <SubmitterPickerField name="submitter_id" label_en="Submitter" label_ar="مقدم الطلب" />
             </div>
 
             {/* Footer */}

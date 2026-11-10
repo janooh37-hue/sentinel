@@ -449,7 +449,9 @@ def _sync_leave_record(
     # ``date``; pin both to the paper instead of the edit day.
     data.setdefault("today", data.get("date") or render_snapshot["issued"])
     primary_data = data
-    if document_service._submitter_signs_employee_cell(previous.template_id, submitter_id, embed):
+    if document_service._replayed_submitter_signs(
+        previous.template_id, render_snapshot, submitter_id, embed
+    ):
         assert submitter_id is not None
         primary_data = {
             **data,

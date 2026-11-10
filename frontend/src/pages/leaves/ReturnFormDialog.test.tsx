@@ -31,6 +31,20 @@ vi.mock('@/components/application/fields/ManagerPickerField', () => ({
     )
   },
 }))
+vi.mock('@/components/application/fields/SubmitterPickerField', () => ({
+  SubmitterPickerField: ({ name, label_en }: { name: string; label_en: string }) => {
+    const { register } = useFormContext()
+    return (
+      <label>
+        {label_en}
+        <select {...register(name)}>
+          <option value="">No selection</option>
+          <option value="3">Front Desk</option>
+        </select>
+      </label>
+    )
+  },
+}))
 
 const LEAVE = {
   id: 42,
@@ -90,8 +104,21 @@ describe('ReturnFormDialog — chain signing', () => {
       resumption_date: '2026-01-12',
       delay_reason: 'Travel delay',
       manager_id: 7,
+      submitter_id: null,
     })
     expect(spy.mock.calls[0][1]).not.toHaveProperty('embed_manager_signature')
+  })
+
+  it('sends the picked submitter so they sign for the employee', async () => {
+    const user = userEvent.setup()
+    const spy = vi.spyOn(api, 'fileLeaveReturn').mockResolvedValue({} as never)
+    const { onFiled } = renderDialog()
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Submitter' }), '3')
+    await user.click(submitBtn())
+
+    await waitFor(() => expect(onFiled).toHaveBeenCalledOnce())
+    expect(spy.mock.calls[0][1]).toMatchObject({ manager_id: null, submitter_id: 3 })
   })
 
   it('still reports ordinary filing errors and preserves entered values', async () => {
