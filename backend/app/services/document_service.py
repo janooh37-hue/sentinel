@@ -5,7 +5,7 @@ Pipeline (in order):
   2. Determine output directory (personnel vault vs. global output).
   3. Allocate reference number via RefAllocator persisted through refs_repo.
   4. Apply manager override.
-  5. Resolve submitter (Leave Undertaking only).
+  5. Resolve submitter (optional on every form).
   6. Merge caller-supplied fields into the data dict.
   7. Strip signature paths for hand-sign slots.
   8. Fill template via DocxEngine.
@@ -376,24 +376,13 @@ _LEAVE_FORM_IDS: frozenset[str] = frozenset(
 # Forms that log into the shared Violation records (Warning mirrors Violation)
 _VIOLATION_FORM_IDS: frozenset[str] = frozenset({"Violation Form", "Warning Form"})
 
-# Forms that require a submitter
-_SUBMITTER_REQUIRED_IDS: frozenset[str] = frozenset({"Leave Undertaking"})
-
-# Forms where a chosen submitter signs the employee cell in the applicant's
-# place (their signature replaces ``employee_sig_path`` on the primary fill).
-# Leave-related forms only — kept explicit so adding a submitter picker to an
-# unrelated form doesn't silently swap its employee signature.
-_SUBMITTER_SIGN_FORMS: frozenset[str] = frozenset(
+# Snapshots written before every Submitter form let the submitter sign carry no
+# ``submitter_signs`` flag. Their papers were rendered under these rules, and
+# approval / leave-date sync must reproduce them unchanged.
+_LEGACY_SUBMITTER_SIGN_FORMS: frozenset[str] = frozenset(
     {"Leave Application Form", "Duty Resumption Form"}
 )
-
-# Forms where the picked submitter ALWAYS signs the employee cell — no
-# employee-signature opt-in checkbox exists in their schema, so the submitter's
-# signature auto-embeds (mirrors the manager auto-embed on ``auto``-path forms).
-# The Employee Clearance Form is submitted on the leaving employee's behalf and
-# carries only manager + submitter pickers (no signature field), so the
-# submitter's signature is the only one available for the employee slot.
-_SUBMITTER_AUTO_SIGN_FORMS: frozenset[str] = frozenset({"Employee Clearance Form"})
+_LEGACY_SUBMITTER_AUTO_SIGN_FORMS: frozenset[str] = frozenset({"Employee Clearance Form"})
 
 # Reserved ``BookVersion.fields`` key holding a chain/in-app form's generation-time
 # signing snapshot (issue date, employee/submitter embed, notify choice).
@@ -428,23 +417,42 @@ def inherited_notify_employee(book: Book) -> notify_format.NotifyChoice:
     return "silent"
 
 
-def _submitter_signs_employee_cell(
-    template_id: str,
-    submitter_id: int | None,
-    embed_signature: dict[str, bool],
-) -> bool:
-    """Whether a picked submitter's signature replaces the employee cell.
+def _has_submitter_picker(template_id: str) -> bool:
+    """Whether the form's schema offers a Submitter box."""
+    fields = load_fields_meta().get(template_id, {}).get("fields", [])
+    return any(field.get("type") == "submitter_picker" for field in fields)
 
-    Auto-sign forms (``_SUBMITTER_AUTO_SIGN_FORMS``) embed whenever a submitter
-    is picked — they carry no employee-signature checkbox. Regular
-    submitter-sign forms (``_SUBMITTER_SIGN_FORMS``) still require the
-    ``embed_signature.employee`` opt-in. Everything else never swaps.
+
+def _submitter_signs_employee_cell(template_id: str, submitter_id: int | None) -> bool:
+    """Whether a picked submitter's signature fills the employee cell.
+
+    The submitter is optional on every form with a Submitter box: picked, they
+    sign the employee cell on the employee's behalf (no employee signature and
+    no ``embed_signature.employee`` opt-in needed); left empty, the employee's
+    own signature applies.
+    """
+    return submitter_id is not None and _has_submitter_picker(template_id)
+
+
+def _replayed_submitter_signs(
+    template_id: str,
+    signing: Mapping[str, Any],
+    submitter_id: int | None,
+    embed_signature: Mapping[str, bool],
+) -> bool:
+    """The generation-time answer of ``_submitter_signs_employee_cell``, replayed.
+
+    New snapshots record it as ``submitter_signs``; older ones fall back to the
+    rules their paper was rendered under.
     """
     if submitter_id is None:
         return False
-    if template_id in _SUBMITTER_AUTO_SIGN_FORMS:
+    recorded = signing.get("submitter_signs")
+    if isinstance(recorded, bool):
+        return recorded
+    if template_id in _LEGACY_SUBMITTER_AUTO_SIGN_FORMS:
         return True
-    return template_id in _SUBMITTER_SIGN_FORMS and bool(embed_signature.get("employee"))
+    return template_id in _LEGACY_SUBMITTER_SIGN_FORMS and bool(embed_signature.get("employee"))
 
 
 _TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates"
@@ -1699,13 +1707,7 @@ def _build_template_data(
     # ------------------------------------------------------------------
     # 5. Resolve submitter
     # ------------------------------------------------------------------
-    if template_id in _SUBMITTER_REQUIRED_IDS and submitter_id is None:
-        raise AppError(
-            "SUBMITTER_REQUIRED",
-            f"Template {template_id!r} requires a submitter",
-            details={"template_id": template_id},
-        )
-
+    # A submitter is optional on every form; an unknown id is still an error.
     if submitter_id is not None:
         sub_row: Submitter | None = db.get(Submitter, submitter_id)
         if sub_row is None:
@@ -1752,10 +1754,11 @@ def _submitter_sign_path(db: Session, submitter_id: int) -> str | None:
     `stored_sig_path`. Returns None when neither applies — the cell then
     prints blank.
 
-    Used by the leave-related forms in ``_SUBMITTER_SIGN_FORMS``: a picked
-    submitter signs the employee cell in the applicant's place. The Leave
-    Application Form's companion Leave Undertaking keeps the applicant's own
-    signature (it re-uses the untouched ``data``).
+    Used on every form with a Submitter box: a picked submitter signs the
+    employee cell in the applicant's place (see
+    ``_submitter_signs_employee_cell``). The Leave Application Form's companion
+    Leave Undertaking keeps the applicant's own signature (it re-uses the
+    untouched ``data``).
     """
     sub_row = db.get(Submitter, submitter_id)
     if sub_row is None:
@@ -2345,6 +2348,7 @@ def generate_document(
             "issued": datetime.now().strftime("%d/%m/%Y"),
             "employee": bool(embed_signature.get("employee")),
             "submitter_id": submitter_id,
+            "submitter_signs": _submitter_signs_employee_cell(template_id, submitter_id),
             "notify_employee": notify_employee,
         }
 
@@ -2402,14 +2406,13 @@ def generate_document(
         if resolved:
             data["recipient_name"] = resolved
 
-    # Submitter-sign forms: when a submitter is picked, their signature replaces
-    # the applicant's in the employee-signature cell. Leave forms gate on the
-    # embed checkbox; the Clearance Form (no such checkbox) auto-embeds. See
+    # Submitter forms: a picked submitter's signature replaces the applicant's in
+    # the employee-signature cell, with no employee opt-in needed. See
     # _submitter_signs_employee_cell. The Leave Application Form's companion
     # Leave Undertaking re-uses the shared `data` untouched below, so it keeps
     # the applicant's own signature.
     primary_data = data
-    if _submitter_signs_employee_cell(template_id, submitter_id, embed_signature):
+    if _submitter_signs_employee_cell(template_id, submitter_id):
         assert submitter_id is not None  # _submitter_signs_employee_cell requires it
         primary_data = {
             **data,
@@ -2930,10 +2933,8 @@ def generate_document(
         if companion_template_id is not None:
             # NOTE: companions reuse the primary's `data`, so a submitter is only
             # present if one was picked on the primary form. The Leave Undertaking
-            # companion (which lists a submitter when generated standalone) is
-            # rendered WITHOUT enforcing _SUBMITTER_REQUIRED_IDS here — its
-            # adapter (_adapt_leave_undertaking) degrades gracefully, leaving the
-            # submitter block blank rather than failing the whole leave packet.
+            # companion's adapter (_adapt_leave_undertaking) degrades gracefully
+            # without one, leaving the submitter block blank.
             comp_filename = _build_docx_filename(companion_template_id, primary_name, ts)
             companion_artifact = artifact_service.produce_from_template(
                 template_id=companion_template_id,
@@ -3353,8 +3354,8 @@ def render_signed_artifact(
         signer_manager_id = db.scalar(select(Manager.id).where(Manager.user_id == signer_user_id))
         if signer_manager_id is not None:
             data = _data(signer_manager_id)
-    if _submitter_signs_employee_cell(template_id, submitter_id, embed_signature):
-        assert submitter_id is not None  # _submitter_signs_employee_cell requires it
+    if _replayed_submitter_signs(template_id, signing, submitter_id, embed_signature):
+        assert submitter_id is not None  # _replayed_submitter_signs requires it
         data["employee_sig_path"] = _submitter_sign_path(db, submitter_id)
     # Administrative Leave's ``today`` is the branch section's date: once the
     # branch stage is frozen, keep its own signing day (restored by
