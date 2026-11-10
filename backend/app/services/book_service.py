@@ -692,7 +692,10 @@ def require_record_type_access(
         category_id=category_id,
     )
     category_denied = any(f"books.category.{code}" not in caps for code in gate_categories)
-    service_denied = service_id is not None and f"books.service.{service_id}" not in caps
+    service_denied = service_id is not None and any(
+        f"books.service.{gate}" not in caps
+        for gate in record_services(service_id=service_id, category_id=category_id)
+    )
     if category_denied or service_denied:
         raise AppError(
             "RECORD_TYPE_FORBIDDEN",

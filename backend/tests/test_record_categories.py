@@ -321,6 +321,24 @@ def test_service_gates_hide_stray_records_with_other(
         assert not (general_books["HR"] | general_books["INV"]) & visible
 
 
+def test_creating_a_stray_record_also_needs_other(
+    db_session: Session, categorized_records: list[tuple[Book, str]]
+) -> None:
+    user = User(email="stray-create@test.ae", password_hash="x", role="operator", status="active")
+    db_session.add(user)
+    db_session.flush()
+    db_session.add(UserPermission(user_id=user.id, capability="books.service.other", effect="deny"))
+    db_session.commit()
+    book_service.require_record_type_access(
+        db_session, user, category_id="GS", service_id="General Book"
+    )
+    with pytest.raises(AppError) as exc:
+        book_service.require_record_type_access(
+            db_session, user, category_id="HR", service_id="General Book"
+        )
+    assert exc.value.code == "RECORD_TYPE_FORBIDDEN"
+
+
 def test_newest_service_decides_unclassified_category_even_in_document_subqueries(
     db_session: Session, categorized_records: list[tuple[Book, str]]
 ) -> None:
