@@ -1,13 +1,14 @@
 # Permissions — how enforcement actually works
 
-**Date:** 2026-08-12 · updated 2026-08-24 for the granular capability split (§7)
+**Date:** 2026-08-12 · updated 2026-08-24 for the granular capability split (§7) · 2026-11-09 for the single record-category axis (§8)
 **Scope:** how a capability check reaches a request, and which routes are gated by what.
 **Audit tool:** `backend/scripts/audit_capability_gates.py` (re-run any time; it reads the
 tree, so it can't go stale).
 
-This is an enforcement map, not a feature design. For the request/approval feature
-built on top of this model see
-`docs/superpowers/specs/2026-06-25-permissions-overhaul-design.md`.
+This is an enforcement map, not a feature design. The rules for adding a gated feature,
+capability, or role preset — and the UI visibility rule — live in
+`.agents/skills/permissions/SKILL.md`. For the request/approval feature built on top of
+this model see `docs/superpowers/specs/2026-06-25-permissions-overhaul-design.md`.
 
 ---
 
@@ -333,3 +334,43 @@ discard keep `books.edit`; (4) the two word-template GETs (`/books/word-template
 read the library without holding template-admin; rename/delete/save-as-template stay on
 `books.templates`. A bulk-endpoint hardening collapses duplicate capability items in one
 batch (last occurrence wins) so autoflush=False sessions can't double-insert.
+
+## 8. One record-category axis (2026-11-09)
+
+The permission page used to show two category lists: the 15 record categories
+(`books.category.1/1`…`15/1`, General Book classifications) and "legacy categories"
+(`books.category.GS`, `HR`, `NAT`, `SC`, `INV`, `VF`, `VA`, old-only `1`/`2`/`12`,
+imported ids). Most "legacy" ids were still live filing categories. Now the 15 record
+categories are the only category capabilities.
+
+- **Resolution.** `backend/app/core/record_categories.py::record_category` maps every
+  record to one category: its `classification_code` if set (General Books, Security
+  Permit `5/1`, Mileage Log `11/1`, annual/sick leave `3/1`/`4/1`, resignation `12/1`),
+  else its service through `SERVICE_RECORD_CATEGORY` (total over `SERVICE_IDS`, enforced by
+  `test_record_categories.py`), else — for the Other bucket — its persisted
+  `category_id` through `LEGACY_CATEGORY_RECORD_CATEGORY` (unknown ids → `15/1`).
+  `book_service.record_category_in_clause` is the SQL mirror used by the register,
+  documents, and detail checks; creation checks the same category.
+- **Unchanged:** reference numbers and prefixes, `Book.category_id`,
+  `Book.classification_code`, `BookCategory` rows, ledger/correspondence rules. Per-service
+  visibility (`books.servicerecords.*`) stays beside per-category visibility; both must
+  allow a record.
+- **Migration `0117_merge_legacy_record_categories` — nobody sees more.** A deny on a live
+  legacy category becomes a deny on both `books.service.<service>` (create) and
+  `books.servicerecords.<service>` (see) for every service that files there, plus `other`,
+  so the user can neither create nor see those records, exactly as before; a deny on an
+  old-only category becomes a deny on its mapped record category. Records already filed
+  in the denied legacy category that those targets miss (imported, hand-filed, or
+  classified outside the category's services, e.g. an HR-filed `5/1` General Book or an
+  old-category-`1` leave form) stay hidden too: a classified record adds a deny on its
+  classification, any other a `books.servicerecords.<service>` deny on its resolved
+  service. A deny wins over an existing grant; a deny meeting an existing deny keeps the
+  later expiry, a permanent one winning. A legacy grant
+  never opens an opt-in service, and a temporary legacy grant narrows an existing target
+  grant to its expiry. Legacy rows are then deleted; the inmate reporter's ceiling is
+  `books.category.13/1`. Pending requests for legacy ids are refused with a note. A
+  journal table makes `downgrade()` restore the prior rows.
+- **Drift, fail-closed only.** Where exactness was impossible the migration hides more:
+  the Other-service deny covers unclaimed records from every category, and an old-only
+  deny covers its whole merged category; a record-driven deny hides every record of that
+  classification or service, not only the record that triggered it.

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import literal, select, union_all
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
@@ -36,17 +36,14 @@ from app.core.permissions import (
     default_caps_for_role,
 )
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
-from app.db.models import BookCategory, RolePermission, User, UserPermission
+from app.db.models import RolePermission, User, UserPermission
 
 
 def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
-    """Load role defaults and category defaults together in one query.
+    """Load role defaults and the recognized implicit service/category grants.
 
-    ``inmate_reporter`` is a fixed, narrow-scope role: it must NOT receive the
-    implicit all-service/all-category union every other role gets (that union
-    is what makes ``books.category.*``/``books.service.*`` "dynamic" —
-    granted by default, deny-only). It gets only the two dynamic ids its
-    ceiling names; every other service/category is denied by omission.
+    ``inmate_reporter`` is a fixed, narrow-scope role and receives only the
+    dynamic ids its ceiling names, never the general implicit grants.
     """
     if role == INMATE_REPORTER_ROLE:
         role_caps: set[str] = set(
@@ -58,27 +55,14 @@ def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
             if cap.startswith(SERVICE_CAP_PREFIX) or cap.startswith(SERVICE_RECORDS_CAP_PREFIX)
         }
         return role_caps, dynamic_caps
-    tagged_caps = union_all(
-        select(
-            RolePermission.capability.label("capability"),
-            literal(False).label("is_dynamic"),
-        ).where(RolePermission.role == role),
-        select(
-            literal(CATEGORY_CAP_PREFIX).concat(BookCategory.id).label("capability"),
-            literal(True).label("is_dynamic"),
-        ),
+    role_caps = set(
+        db.scalars(select(RolePermission.capability).where(RolePermission.role == role))
     )
-    role_caps = set()
     dynamic_caps = (
         set(AUTO_GRANTED_SERVICE_CAPABILITY_IDS)
         | set(AUTO_GRANTED_SERVICE_RECORDS_CAPABILITY_IDS)
         | set(CLASSIFICATION_CATEGORY_CAPABILITY_IDS)
     )
-    for capability, is_dynamic in db.execute(tagged_caps):
-        if is_dynamic:
-            dynamic_caps.add(capability)
-        else:
-            role_caps.add(capability)
     if not role_caps:
         role_caps = set(default_caps_for_role(role))
     return role_caps, dynamic_caps
@@ -96,11 +80,8 @@ def role_default_caps_with_dynamic(db: Session, role: str) -> set[str]:
 
 
 def category_capability_ids(db: Session) -> set[str]:
-    """Dynamic deny-only capability ids for the current category catalog."""
-    return {
-        f"{CATEGORY_CAP_PREFIX}{category_id}"
-        for category_id in db.scalars(select(BookCategory.id)).all()
-    } | set(CLASSIFICATION_CATEGORY_CAPABILITY_IDS)
+    """The fifteen record-category capability ids, independent of stored prefixes."""
+    return set(CLASSIFICATION_CATEGORY_CAPABILITY_IDS)
 
 
 def dynamic_capability_ids(db: Session) -> set[str]:

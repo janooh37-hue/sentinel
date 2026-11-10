@@ -207,7 +207,7 @@ def test_expiry_capability_is_static_and_operator_default() -> None:
 def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
     db_session: Session,
 ) -> None:
-    category = _category(db_session, "MIR", name_en="Mirror")
+    _category(db_session, "MIR", name_en="Mirror")
     operator = _user(db_session, role="operator", email="dynamic-op@test.ae")
     admin = _user(db_session, role="admin", email="dynamic-admin@test.ae")
 
@@ -217,12 +217,8 @@ def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
     service_record_caps = {
         f"books.servicerecords.{service_id}" for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
     }
-    category_cap = f"books.category.{category.id}"
     expected_dynamic = (
-        service_caps
-        | service_record_caps
-        | {category_cap}
-        | {f"books.category.{tab}/1" for tab in range(1, 16)}
+        service_caps | service_record_caps | {f"books.category.{tab}/1" for tab in range(1, 16)}
     )
 
     # 2026-09-21 HR intake additions (permissions.OPT_IN_SERVICE_IDS) are
@@ -239,10 +235,14 @@ def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
     assert expected_dynamic <= perm_service.effective_caps(db_session, admin)
     assert perm_service.denied_record_types(db_session, admin) == (set(), set())
     reporter = _user(db_session, role=INMATE_REPORTER_ROLE, email="dynamic-reporter@test.ae")
-    assert {f"books.category.{tab}/1" for tab in range(1, 16)}.isdisjoint(
-        perm_service.effective_caps(db_session, reporter)
+    assert {
+        cap
+        for cap in perm_service.effective_caps(db_session, reporter)
+        if cap.startswith("books.category.")
+    } == {"books.category.13/1"}
+    assert (expected_dynamic - permissions.INMATE_REPORTER_CAPS).isdisjoint(
+        permissions.ALL_CAPABILITIES
     )
-    assert expected_dynamic.isdisjoint(permissions.ALL_CAPABILITIES)
 
     # inmate_reporter is the one deliberate exception: its fixed-scope
     # ceiling (core.permissions.INMATE_REPORTER_CAPS) seeds these same
@@ -277,13 +277,13 @@ def test_override_validation_accepts_dynamic_ids_and_rejects_unknown(
         operator.id,
         [
             ("books.service.General Book", "deny", None),
-            ("books.category.MIR", "deny", None),
+            ("books.category.12/1", "deny", None),
         ],
         actor=admin,
     )
     assert perm_service.get_user_overrides(db_session, operator.id) == {
         "books.service.General Book": "deny",
-        "books.category.MIR": "deny",
+        "books.category.12/1": "deny",
     }
 
     with pytest.raises(AppError) as exc_info:
@@ -293,6 +293,12 @@ def test_override_validation_accepts_dynamic_ids_and_rejects_unknown(
             "books.service.Nope",
             "deny",
             actor=admin,
+        )
+    assert exc_info.value.code == "UNKNOWN_CAPABILITY"
+
+    with pytest.raises(AppError) as exc_info:
+        perm_service.set_user_override(
+            db_session, operator.id, "books.category.MIR", "deny", actor=admin
         )
     assert exc_info.value.code == "UNKNOWN_CAPABILITY"
 
@@ -346,13 +352,8 @@ def test_bulk_expiring_dynamic_grant_requires_deny_before_any_write(
 def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
     mirror_api: ApiHarness,
 ) -> None:
-    category = _category(
-        mirror_api.db,
-        "OPS",
-        name_en="Operations",
-        name_ar="العمليات",
-    )
-    unnamed_category = _category(mirror_api.db, "NOAR")
+    _category(mirror_api.db, "OPS", name_en="Operations", name_ar="العمليات")
+    _category(mirror_api.db, "NOAR")
     operator = _user(
         mirror_api.db,
         role="operator",
@@ -420,31 +421,8 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
         assert item["sensitive"] is False
         assert item["requestable"] is True
         assert item["default_roles"] == expected["default_roles"]
-    assert catalog[f"books.category.{category.id}"] == {
-        "id": f"books.category.{category.id}",
-        "domain": "categories",
-        "label_en": "Operations",
-        "label_ar": "العمليات",
-        "description_en": "Old records only; no service files new records here.",
-        "description_ar": "سجلات قديمة فقط؛ لا تُنشئ أي خدمة سجلات جديدة هنا.",
-        "label": "Operations",
-        "description": "Old records only; no service files new records here.",
-        "sensitive": False,
-        "requestable": True,
-        "default_roles": ["operator", "manager", "admin"],
-    }
-    assert catalog[f"books.category.{unnamed_category.id}"] == {
-        "id": "books.category.NOAR",
-        "domain": "categories",
-        "label_en": "books.category.NOAR",
-        "label_ar": None,
-        "description_en": "Old records only; no service files new records here.",
-        "description_ar": "سجلات قديمة فقط؛ لا تُنشئ أي خدمة سجلات جديدة هنا.",
-        "label": "books.category.NOAR",
-        "description": "Old records only; no service files new records here.",
-        "sensitive": False,
-        "requestable": True,
-        "default_roles": ["operator", "manager", "admin"],
+    assert {item["id"] for item in catalog.values() if item["domain"] == "categories"} == {
+        f"books.category.{tab}/1" for tab in range(1, 16)
     }
 
     mirror_api.as_user(admin)
@@ -452,7 +430,7 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
     assert detail.status_code == 200, detail.text
     payload = detail.json()
     assert "books.service.General Book" in payload["role_defaults"]
-    assert f"books.category.{category.id}" in payload["role_defaults"]
+    assert "books.category.12/1" in payload["role_defaults"]
     assert "books.service.General Book" in payload["effective"]
 
 
@@ -594,7 +572,7 @@ def test_creation_cap_deny_does_not_hide_existing_service_records(
     assert _error_code(generated) == "RECORD_TYPE_FORBIDDEN"
 
 
-def test_record_type_denies_hide_list_query_facets_categories_and_details(
+def test_record_type_denies_hide_list_query_facets_and_details(
     mirror_api: ApiHarness,
 ) -> None:
     _category(mirror_api.db, "OPEN", name_en="Open")
@@ -629,7 +607,7 @@ def test_record_type_denies_hide_list_query_facets_categories_and_details(
         [
             ("books.service.General Book", "deny", None),
             ("books.servicerecords.General Book", "deny", None),
-            ("books.category.HIDDEN", "deny", None),
+            ("books.category.12/1", "deny", None),
         ],
         actor=admin,
     )
@@ -650,10 +628,6 @@ def test_record_type_denies_hide_list_query_facets_categories_and_details(
     assert facets.json()["total"] == 1
     assert [item["id"] for item in facets.json()["services"]] == ["Report"]
 
-    categories = mirror_api.client.get("/api/v1/book-categories")
-    assert categories.status_code == 200, categories.text
-    assert [item["id"] for item in categories.json()] == ["OPEN"]
-
     for row in (hidden_service, hidden_category):
         detail = mirror_api.client.get(f"/api/v1/books/{row.id}")
         assert detail.status_code == 403
@@ -672,6 +646,7 @@ def test_api_create_endpoints_use_stored_record_classification(
 ) -> None:
     _category(mirror_api.db, "OPEN", name_en="Open")
     _category(mirror_api.db, "GS", name_en="General Services")
+    _category(mirror_api.db, "HR", name_en="Human Resources")
     _category(mirror_api.db, "HIDDEN", name_en="Hidden")
     manager = _user(
         mirror_api.db,
@@ -685,7 +660,7 @@ def test_api_create_endpoints_use_stored_record_classification(
         [
             ("books.service.General Book", "deny", None),
             ("books.service.Report", "deny", None),
-            ("books.category.HIDDEN", "deny", None),
+            ("books.category.12/1", "deny", None),
         ],
         actor=admin,
     )
@@ -694,7 +669,7 @@ def test_api_create_endpoints_use_stored_record_classification(
     denied_category = mirror_api.client.post(
         "/api/v1/books",
         json={
-            "category_id": "HIDDEN",
+            "category_id": "HR",
             "subject": "Warning Form — hidden category",
             "direction": "incoming",
         },
@@ -972,7 +947,7 @@ def test_approve_only_assignee_can_reach_signing_and_decide_denied_record(
         reviewer.id,
         [
             ("books.view", "deny", None),
-            ("books.category.ASSIGNED", "deny", None),
+            ("books.category.15/1", "deny", None),
         ],
         actor=mirror_api.actor,
     )
@@ -1663,7 +1638,7 @@ def test_direct_book_creation_checks_other_not_subject_guess(
     assert allowed_other.status_code == 201, allowed_other.text
 
 
-def test_word_session_creation_checks_gs_category(
+def test_word_session_creation_checks_miscellaneous_category(
     mirror_api: ApiHarness,
 ) -> None:
     _category(mirror_api.db, "GS", name_en="General Services")
@@ -1675,7 +1650,7 @@ def test_word_session_creation_checks_gs_category(
     perm_service.set_user_override(
         mirror_api.db,
         manager.id,
-        "books.category.GS",
+        "books.category.15/1",
         "deny",
         actor=mirror_api.actor,
     )
@@ -1703,7 +1678,7 @@ def test_generate_checks_target_category_and_companion_as_other(
     perm_service.set_user_override(
         mirror_api.db,
         manager.id,
-        "books.category.HR",
+        "books.category.7/1",
         "deny",
         actor=admin,
     )
@@ -1719,7 +1694,7 @@ def test_generate_checks_target_category_and_companion_as_other(
     perm_service.set_user_override(
         mirror_api.db,
         manager.id,
-        "books.category.HR",
+        "books.category.7/1",
         None,
         actor=admin,
     )
@@ -1741,7 +1716,7 @@ def test_generate_checks_target_category_and_companion_as_other(
 
 @pytest.mark.parametrize(
     "denied_capability",
-    ["books.category.INV", "books.service.Inmate Conduct Violations"],
+    ["books.category.13/1", "books.service.Inmate Conduct Violations"],
 )
 def test_approved_violation_commit_checks_record_type(
     mirror_api: ApiHarness,
@@ -1870,7 +1845,7 @@ def test_denied_linked_document_blocks_metadata_and_download(
     perm_service.set_user_override(
         mirror_api.db,
         manager.id,
-        "books.category.OPS",
+        "books.category.15/1",
         "deny",
         actor=mirror_api.actor,
     )
@@ -1984,7 +1959,7 @@ def test_pending_assignees_can_read_linked_documents_until_their_decision(
         [
             ("books.view", "deny", None),
             ("documents.generate", "deny", None),
-            ("books.category.REVIEW", "deny", None),
+            ("books.category.15/1", "deny", None),
         ],
         actor=mirror_api.actor,
     )
@@ -2083,7 +2058,7 @@ def test_dashboard_document_stats_exclude_denied_service_and_category(
     hidden_category = add_document(
         "DOC-HIDDEN-CATEGORY",
         category_id="HIDDEN",
-        service_id="Report",
+        service_id="Warning Form",
     )
     hidden_category_companion = Document(
         template_id="Leave Undertaking",
@@ -2109,7 +2084,7 @@ def test_dashboard_document_stats_exclude_denied_service_and_category(
         manager.id,
         [
             ("books.servicerecords.General Book", "deny", None),
-            ("books.category.HIDDEN", "deny", None),
+            ("books.category.12/1", "deny", None),
         ],
         actor=mirror_api.actor,
     )
@@ -2176,7 +2151,7 @@ def test_generation_attachment_sources_require_full_source_book_access(
     perm_service.set_user_override(
         mirror_api.db,
         manager.id,
-        "books.category.SOURCE",
+        "books.category.13/1",
         "deny",
         actor=mirror_api.actor,
     )
@@ -2210,7 +2185,7 @@ def test_generation_attachment_sources_require_full_source_book_access(
     perm_service.set_user_override(
         mirror_api.db,
         manager.id,
-        "books.category.SOURCE",
+        "books.category.13/1",
         None,
         actor=mirror_api.actor,
     )
@@ -2277,7 +2252,7 @@ def test_generate_revision_preflights_edit_and_source_row_access(
     perm_service.set_user_override(
         mirror_api.db,
         manager.id,
-        "books.category.SOURCE",
+        "books.category.15/1",
         "deny",
         actor=admin,
     )
@@ -2389,7 +2364,7 @@ def test_generate_attachment_source_preflight_requires_full_record_access(
     perm_service.set_user_override(
         mirror_api.db,
         manager.id,
-        "books.category.SOURCE",
+        "books.category.13/1",
         "deny",
         actor=admin,
     )
@@ -2421,7 +2396,7 @@ def test_generate_attachment_source_preflight_requires_full_record_access(
     perm_service.set_user_override(
         mirror_api.db,
         manager.id,
-        "books.category.SOURCE",
+        "books.category.13/1",
         None,
         actor=admin,
     )
@@ -2512,25 +2487,25 @@ def test_expiry_routes_require_expiry_view_independent_of_employees_view(
         assert allowed.status_code == 200, allowed.text
 
 
-def test_catalog_dynamic_capability_labels_use_category_and_template_names(
+def test_catalog_dynamic_capability_labels_use_classification_and_template_names(
     db_session: Session,
 ) -> None:
     from app.services import capability_catalog_service
 
     _category(db_session, "OPS", name_en="Operations")
 
-    category = capability_catalog_service.get_catalog_entry(db_session, "books.category.OPS")
+    category = capability_catalog_service.get_catalog_entry(db_session, "books.category.12/1")
     service = capability_catalog_service.get_catalog_entry(db_session, "books.service.General Book")
     records = capability_catalog_service.get_catalog_entry(
         db_session, "books.servicerecords.General Book"
     )
 
-    assert category is not None and category.label_en == "Operations"
+    assert category is not None and category.label_en == "Force affairs"
     assert service is not None and service.label_en == "General Book"
     assert records is not None and records.label_en == "Records: General Book"
 
 
-def test_classification_category_filter_excludes_auto_classified_leave(
+def test_classification_category_filter_includes_auto_classified_leave(
     mirror_api: ApiHarness,
 ) -> None:
     _category(mirror_api.db, "GS", name_en="General Services")
@@ -2549,8 +2524,8 @@ def test_classification_category_filter_excludes_auto_classified_leave(
     response = mirror_api.client.get("/api/v1/books", params={"category_id": "3/1"})
 
     assert response.status_code == 200, response.text
-    assert [item["id"] for item in response.json()["items"]] == [general_book.id]
-    assert response.json()["total"] == 1
+    assert {item["id"] for item in response.json()["items"]} == {general_book.id, leave.id}
+    assert response.json()["total"] == 2
 
 
 def test_classification_denial_hides_records_and_linked_documents(
@@ -2561,7 +2536,7 @@ def test_classification_denial_hides_records_and_linked_documents(
     hidden = _book(mirror_api.db, ref_number="1/5/1", category_id="GS", service_id="General Book")
     hidden.classification_code = "5/1"
     legacy = _book(
-        mirror_api.db, ref_number="LEGACY-5", category_id="5/1", service_id="General Book"
+        mirror_api.db, ref_number="LEGACY-5", category_id="5/1", service_id=OTHER_SERVICE_ID
     )
     visible = _book(mirror_api.db, ref_number="1/12/2", category_id="GS", service_id="General Book")
     visible.classification_code = "12/1"
@@ -2616,50 +2591,6 @@ def test_classification_denial_hides_records_and_linked_documents(
     assert mirror_api.client.get("/api/v1/books").json()["total"] == 4
     assert mirror_api.client.get(f"/api/v1/books/{hidden.id}").status_code == 200
     assert book_service.document_visibility_clause(mirror_api.db, admin) is None
-
-
-def test_classification_denial_spares_auto_classified_papers_from_other_forms(
-    mirror_api: ApiHarness,
-) -> None:
-    """12/1 deny hides the classified-register General Book, not a resignation paper
-    that document_service auto-filed under 12/1."""
-    _category(mirror_api.db, "GS", name_en="General Services")
-    _category(mirror_api.db, "HR", name_en="HR")
-    general_book = _book(
-        mirror_api.db, ref_number="1/12/9", category_id="GS", service_id="General Book"
-    )
-    general_book.classification_code = "12/1"
-    resignation = _book(
-        mirror_api.db, ref_number="HR-0009", category_id="HR", service_id="Resignation Letter"
-    )
-    resignation.classification_code = "12/1"
-    paper = Document(
-        template_id="Resignation Letter",
-        ref_number=resignation.ref_number,
-        submission_id="resignation",
-        role="primary",
-        created_at=datetime.now(),
-    )
-    mirror_api.db.add(paper)
-    mirror_api.db.flush()
-    resignation.versions[0].document_id = paper.id
-    mirror_api.db.commit()
-    operator = _user(mirror_api.db, role="operator", email="classified-boundary@test.ae")
-    perm_service.set_user_override(
-        mirror_api.db, operator.id, "books.category.12/1", "deny", actor=mirror_api.actor
-    )
-    mirror_api.as_user(operator)
-
-    listed = mirror_api.client.get("/api/v1/books")
-    assert listed.status_code == 200, listed.text
-    assert {item["id"] for item in listed.json()["items"]} == {resignation.id}
-    assert mirror_api.client.get(f"/api/v1/books/{resignation.id}").status_code == 200
-    assert _error_code(mirror_api.client.get(f"/api/v1/books/{general_book.id}")) == (
-        "RECORD_TYPE_FORBIDDEN"
-    )
-    document_clause = book_service.document_visibility_clause(mirror_api.db, operator)
-    assert document_clause is not None
-    assert list(mirror_api.db.scalars(select(Document.id).where(document_clause))) == [paper.id]
 
 
 def test_classification_denial_blocks_general_book_generation_and_word_creation(

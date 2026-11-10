@@ -691,7 +691,7 @@ def test_derive_access_create_clearance_and_classification_checks(links_api: Lin
     [
         ("books.create", "FORBIDDEN"),
         ("books.view", "FORBIDDEN"),
-        ("books.category.GS", "RECORD_TYPE_FORBIDDEN"),
+        ("books.category.5/1", "RECORD_TYPE_FORBIDDEN"),
     ],
 )
 def test_read_grant_does_not_bypass_general_book_creation_permissions(

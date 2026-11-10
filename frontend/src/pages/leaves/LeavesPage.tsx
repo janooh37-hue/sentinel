@@ -20,14 +20,19 @@ import { ServiceNotificationTab } from '@/components/templates/ServiceNotificati
 import { ServiceDraftTab } from '@/components/templates/ServiceDraftTab'
 import { TabRecords } from './TabRecords'
 import { TabBalance } from './TabBalance'
+import { TEMPLATES_CAP } from '@/lib/messageTemplates'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 type Tab = 'records' | 'balance' | 'notification' | 'email-draft'
-const ORDER: Tab[] = ['records', 'balance', 'notification', 'email-draft']
+const ORDER: Tab[] = ['records', 'balance']
+const TEMPLATE_TABS: Tab[] = ['notification', 'email-draft']
 
 export function LeavesPage(): React.JSX.Element {
   const { t } = useTranslation()
+  const { has } = useCapabilities()
+  const tabs = has(TEMPLATES_CAP) ? [...ORDER, ...TEMPLATE_TABS] : ORDER
   const [requestedTab, setTab] = useSearchParam('tab', { fallback: 'records' })
-  const tab = ORDER.includes(requestedTab as Tab) ? requestedTab : 'records'
+  const tab = tabs.includes(requestedTab as Tab) ? requestedTab : 'records'
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
@@ -52,7 +57,7 @@ export function LeavesPage(): React.JSX.Element {
 
       {/* Inner tabs — primary-color underline on active */}
       <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-border px-4 md:px-6" role="tablist" data-print-hide>
-        {ORDER.map((key) => {
+        {tabs.map((key) => {
           const isActive = tab === key
           return (
             <button

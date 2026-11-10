@@ -684,32 +684,30 @@ export function VehiclesHubPage(): React.JSX.Element {
                   </option>
                 ))}
               </select>
-              <div className="flex items-center gap-2 text-[0.75rem] text-muted-foreground">
-                <label htmlFor={notifyId}>{t('vehicles.notifyBefore')}</label>
-                <Input
-                  id={notifyId}
-                  type="number"
-                  inputMode="numeric"
-                  min={NOTIFY_MIN}
-                  max={NOTIFY_MAX}
-                  className="h-9 w-[5.5rem] font-mono tabular-nums"
-                  aria-describedby={notifyUnitId}
-                  readOnly={!canEdit}
-                  disabled={notifyDays == null || setNotifyDays.isPending}
-                  value={notifyValue}
-                  onChange={(event) => {
-                    if (!canEdit) return
-                    setNotifyDraft(event.target.value)
-                  }}
-                  onBlur={commitNotifyDays}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter') return
-                    event.preventDefault()
-                    commitNotifyDays()
-                  }}
-                />
-                <span id={notifyUnitId}>{t('vehicles.days')}</span>
-              </div>
+              {canEdit && (
+                <div className="flex items-center gap-2 text-[0.75rem] text-muted-foreground">
+                  <label htmlFor={notifyId}>{t('vehicles.notifyBefore')}</label>
+                  <Input
+                    id={notifyId}
+                    type="number"
+                    inputMode="numeric"
+                    min={NOTIFY_MIN}
+                    max={NOTIFY_MAX}
+                    className="h-9 w-[5.5rem] font-mono tabular-nums"
+                    aria-describedby={notifyUnitId}
+                    disabled={notifyDays == null || setNotifyDays.isPending}
+                    value={notifyValue}
+                    onChange={(event) => setNotifyDraft(event.target.value)}
+                    onBlur={commitNotifyDays}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter') return
+                      event.preventDefault()
+                      commitNotifyDays()
+                    }}
+                  />
+                  <span id={notifyUnitId}>{t('vehicles.days')}</span>
+                </div>
+              )}
               {summary && (
                 <MaintenanceContractorSetting
                   key={summary.maintenance_contractor_id ?? 'none'}

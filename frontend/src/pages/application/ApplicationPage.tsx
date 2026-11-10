@@ -72,7 +72,7 @@ import { TemplateForm } from '@/components/application/TemplateForm'
 import { AttachmentsBlock } from '@/components/application/AttachmentsBlock'
 import { ServiceNotificationTab } from '@/components/templates/ServiceNotificationTab'
 import { ServiceDraftTab } from '@/components/templates/ServiceDraftTab'
-import { useMessageTemplates } from '@/lib/messageTemplates'
+import { TEMPLATES_CAP, useMessageTemplates } from '@/lib/messageTemplates'
 import { draftKeysForService, useDraftVariants } from '@/lib/draftTemplates'
 import {
   attachmentsWithSeed,
@@ -348,11 +348,13 @@ function StandardApplicationPage(): React.JSX.Element {
   const selectedMeta = templates.find((tpl) => tpl.id === selectedTemplate) ?? null
   const messageTemplates = useMessageTemplates()
   const draftVariants = useDraftVariants()
-  const hasNotificationTab = selectedTemplate !== null && (
+  // Template tabs exist only for users who may edit them (see the permissions skill).
+  const canManageTemplates = has(TEMPLATES_CAP)
+  const hasNotificationTab = canManageTemplates && selectedTemplate !== null && (
     messageTemplates.data?.some((template) => template.services.includes(selectedTemplate)) ||
     selectedMeta?.notifies_employee === true
   )
-  const hasDraftTab = selectedTemplate !== null &&
+  const hasDraftTab = canManageTemplates && selectedTemplate !== null &&
     draftKeysForService(draftVariants, selectedTemplate).length > 0
   const activeTab =
     (requestedTab === 'notification' && hasNotificationTab) ||

@@ -183,14 +183,21 @@ afterEach(() => {
 })
 
 describe('AbsencesPage', () => {
-  it('opens the email draft tab from its URL without template-edit permission', async () => {
-    hasCapability.mockImplementation((cap) => cap === 'leaves.view')
+  it('opens the email draft tab from its URL for a template editor', async () => {
     renderPage(['/absences?tab=email-draft&q=John'])
     expect(screen.getByRole('tab', { name: 'Email draft' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByTestId('draft-templates')).toHaveAttribute('data-service', 'absences')
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Records' }))
     expect(screen.getByRole('searchbox', { name: 'Search by ID or name' })).toHaveValue('John')
     expect(screen.getByTestId('location')).toHaveTextContent('/absences?q=John')
+  })
+
+  it('has no email draft tab without messages.templates, even from its URL', () => {
+    hasCapability.mockImplementation((cap) => cap !== 'messages.templates')
+    renderPage(['/absences?tab=email-draft&q=John'])
+    expect(screen.queryByRole('tab', { name: 'Email draft' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('draft-templates')).not.toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Search by ID or name' })).toHaveValue('John')
   })
 
   it('keeps the form hidden until an employee is picked', () => {
@@ -487,12 +494,11 @@ describe('AbsencesPage', () => {
     hasCapability.mockImplementation((cap) => cap !== 'leaves.edit')
     listAbsenceRegister.mockResolvedValue(REGISTER)
     renderPage()
-    const user = userEvent.setup()
 
     await screen.findAllByText('John Doe')
-    await user.click(screen.getByTestId('pick-employee'))
 
-    expect(screen.getByRole('button', { name: 'Record absence' })).toBeDisabled()
+    expect(screen.queryByTestId('pick-employee')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Record absence' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Copy table' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit absence' })).not.toBeInTheDocument()
     expect(

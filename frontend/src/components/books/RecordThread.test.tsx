@@ -95,9 +95,13 @@ describe('derive and reply actions', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] })
   })
 
-  it('requires the shared General Book classification picker only when the original lacks one', async () => {
+  it('requires the shared General Book classification picker only when the original lacks one, offering only allowed categories', async () => {
+    auth.denied.add('books.category.3/1')
     vi.spyOn(api, 'listBookClassifications').mockResolvedValue({
-      items: [{ code: '2/1', tab: 2, name_ar: 'شؤون الموظفين', name_en: 'Personnel', unit_ar: '' }],
+      items: [
+        { code: '2/1', tab: 2, name_ar: 'شؤون الموظفين', name_en: 'Personnel', unit_ar: '' },
+        { code: '3/1', tab: 3, name_ar: 'الإجازات السنوية', name_en: 'Annual leaves', unit_ar: '' },
+      ],
     })
     const derive = vi.spyOn(api, 'deriveBook').mockResolvedValue({
       book_id: 99, ref_number: 'NEW-99', token: 'token', filename: 'copy.docx', word_url: '/word', dav_url: '/dav',
@@ -106,7 +110,9 @@ describe('derive and reply actions', () => {
     const submit = screen.getByRole('button', { name: 'Create from' })
     expect(submit).toBeDisabled()
     await userEvent.click(screen.getByRole('combobox', { name: /Classification/ }))
-    await userEvent.click(await screen.findByRole('option', { name: /2\/1/ }))
+    const allowed = await screen.findByRole('option', { name: /2\/1/ })
+    expect(screen.queryByRole('option', { name: /3\/1/ })).toBeNull()
+    await userEvent.click(allowed)
     await userEvent.click(submit)
     await waitFor(() => expect(derive).toHaveBeenCalledWith(7, {
       kind: 'based_on', confidentiality: 'general', attach_reference: true, classification_code: '2/1',
@@ -159,6 +165,20 @@ describe('derive and reply actions', () => {
   it.each(['books.service.General Book', 'books.category.1/1'])('hides Reply and Create from without %s, which the server requires to create the draft', (cap) => {
     auth.denied.add(cap)
     mount(<Actions />)
+    expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Create from' })).toBeNull()
+  })
+
+  it('offers Reply and Create from on an unclassified original while any category is creatable', () => {
+    auth.denied.add('books.category.15/1')
+    mount(<Actions book={{ ...BOOK, classification_code: null }} />)
+    expect(screen.getByRole('button', { name: 'Reply' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Create from' })).toBeInTheDocument()
+  })
+
+  it('hides Reply and Create from on an unclassified original when no category is creatable', () => {
+    for (let tab = 1; tab <= 15; tab += 1) auth.denied.add(`books.category.${tab}/1`)
+    mount(<Actions book={{ ...BOOK, classification_code: null }} />)
     expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Create from' })).toBeNull()
   })

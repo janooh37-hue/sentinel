@@ -100,7 +100,7 @@ def _item_id(engine: Engine, drawing: str) -> int:
 
 def test_uniform_is_single_head() -> None:
     script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
-    assert script.get_heads() == ["0116_outbound_skip_reason"]
+    assert script.get_heads() == ["0117_merge_legacy_record_categories"]
     assert script.get_revision(HEAD).down_revision == PARENT
 
 

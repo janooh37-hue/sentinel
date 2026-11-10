@@ -203,8 +203,9 @@ def test_decision_exclusions(api_db: Session, excluded: str):
         book.confidentiality = "personal"
         book.created_by_user_id = decider.id
     elif excluded == "category":
+        book.classification_code = "12/1"
         api_db.add(
-            UserPermission(user_id=submitter.id, capability="books.category.HR", effect="deny")
+            UserPermission(user_id=submitter.id, capability="books.category.12/1", effect="deny")
         )
     elif excluded == "service":
         book.versions[0].template_id = "Report"

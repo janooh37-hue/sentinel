@@ -143,6 +143,7 @@ describe('RecordPane footer', () => {
     gates.caps.add('books.create')
     gates.caps.add('books.view')
     gates.caps.add('books.service.General Book')
+    gates.caps.add('books.category.15/1')
     gates.role = 'operator'
     renderPane(makeBook())
     await userEvent.click(await screen.findByRole('button', { name: /More/ }))

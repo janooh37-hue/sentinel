@@ -69,6 +69,13 @@ Infobip BSP), and SMS (via an on-site Android SMS-gateway). Wording flows throug
 `services/notify_format.py` + `services/sms_templates.py`; channels are gated by
 `GSSG_*` env/settings and stay dormant until provisioned.
 
+## Permissions — one way to gate a feature
+
+A user without the capability never sees the feature: no disabled, read-only,
+or locked copies of things they cannot do. Before adding a gated feature, a
+capability, or a role preset, or changing record visibility, read
+`.agents/skills/permissions/SKILL.md` and follow its steps.
+
 ## Bilingual (Arabic/English) + RTL — the #1 recurring defect
 
 Arabic is first-class. The classic bug is English leaking into Arabic

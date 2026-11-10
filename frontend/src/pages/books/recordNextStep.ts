@@ -83,19 +83,18 @@ export type ReasonKey =
   | 'books.reason.inFlight'
   | 'books.reason.wordSession'
   | 'books.reason.reviseNoTemplate'
-  | 'books.reason.reviseNoPermission'
   | 'books.reason.reviseNotCurrent'
   | 'books.reason.reviseReporterLocked'
   | 'books.reason.emailNoDoc'
 
-export type ReviseBlockReason = 'noTemplate' | 'noPermission' | 'notCurrent' | 'reporterLocked'
+export type ReviseBlockReason = 'noTemplate' | 'notCurrent' | 'reporterLocked'
 
 export interface NextStepContext {
   /** The user's capability check (`useCapabilities().has`). */
   has: (cap: string) => boolean
   /** `has('books.edit') && book.can_write`. */
   canEdit: boolean
-  /** `has('documents.generate') && book.can_write` — needed for Revise. */
+  /** `has('documents.generate') && book.can_write` — without it Revise and Continue are not offered. */
   canGenerate: boolean
   /** Writable full access AND the live revision (BRP `canMutateCurrent`). */
   canMutateCurrent: boolean
@@ -118,7 +117,7 @@ export interface NextStepContext {
 
 export type ReviseContext = Pick<
   NextStepContext,
-  'canGenerate' | 'canMutateCurrent' | 'isInmateReporter' | 'inmateAction'
+  'canMutateCurrent' | 'isInmateReporter' | 'inmateAction'
 >
 
 export interface NextStep {
@@ -146,13 +145,13 @@ function currentVersionOf(book: BookRead): BookVersionRead | undefined {
 
 /**
  * Why Revise cannot run, or `null` when it can. Splits BRP's `canRevise`:
- * no form template / no generate permission / not the live revision / an
- * inmate reporter whose record has not been returned to them.
+ * no form template / not the live revision / an inmate reporter whose record
+ * has not been returned to them. A user without generate permission is never
+ * offered Revise, so that is not a reason here.
  */
 export function reviseBlockReason(book: BookRead, ctx: ReviseContext): ReviseBlockReason | null {
   const current = currentVersionOf(book)
   if (!current?.template_id || !current.has_fields) return 'noTemplate'
-  if (!ctx.canGenerate) return 'noPermission'
   if (!ctx.canMutateCurrent) return 'notCurrent'
   if (ctx.isInmateReporter && ctx.inmateAction !== 'correct-resubmit') return 'reporterLocked'
   return null
@@ -160,7 +159,6 @@ export function reviseBlockReason(book: BookRead, ctx: ReviseContext): ReviseBlo
 
 const REVISE_REASON_KEYS: Record<ReviseBlockReason, ReasonKey> = {
   noTemplate: 'books.reason.reviseNoTemplate',
-  noPermission: 'books.reason.reviseNoPermission',
   notCurrent: 'books.reason.reviseNotCurrent',
   reporterLocked: 'books.reason.reviseReporterLocked',
 }
@@ -288,10 +286,11 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
     book.can_write &&
     !book.is_word_book &&
     !isInmateReport &&
+    ctx.canGenerate &&
     ctx.canMutateCurrent &&
     (inmate ? ctx.inmateAction === 'edit-submit' : ctx.canEdit)
-  // The same template / permission reasons as Revise; "reporter locked" is
-  // moot here — `canContinue` already requires the reporter's edit rights.
+  // The same template reason as Revise; "reporter locked" is moot here —
+  // `canContinue` already requires the reporter's edit rights.
   const continueBlock = reviseBlockReason(book, ctx)
   const continueKey = continueBlock === 'reporterLocked' ? null : reviseReasonKey(continueBlock)
   const continueDisabled: Partial<Record<ActionId, ReasonKey>> =
@@ -455,13 +454,13 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
         { key: state, vars: { name: name(decider) } },
         {
           quote: decider?.note?.trim() ? decider.note : undefined,
-          primary: book.can_write && (inmate || ctx.canEdit) ? 'revise' : undefined,
+          primary: book.can_write && ctx.canGenerate && (inmate || ctx.canEdit) ? 'revise' : undefined,
           overflow: pick([
             ['print', true],
             ['deleteRecord', deleteVisible],
           ]),
           disabled: {
-            ...(book.can_write && reviseKey && (inmate || ctx.canEdit) ? { revise: reviseKey } : {}),
+            ...(book.can_write && ctx.canGenerate && reviseKey && (inmate || ctx.canEdit) ? { revise: reviseKey } : {}),
             ...deleteDisabled('deleteRecord'),
           },
         },

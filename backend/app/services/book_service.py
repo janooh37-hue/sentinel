@@ -12,7 +12,7 @@ import json
 import logging
 import re
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path, PurePath
@@ -37,8 +37,9 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
+from app.core.classifications import CLASSIFICATIONS, get_classification
 from app.core.clock import ORGANIZATION_TIMEZONE
-from app.core.constants import ALLOWED_DOC_EXTS, CLASSIFIED_BOOK_FORMS, STAMP_STYLES
+from app.core.constants import ALLOWED_DOC_EXTS, STAMP_STYLES
 from app.core.form_kind import (
     OTHER_SERVICE_ID,
     SERVICE_IDS,
@@ -49,6 +50,11 @@ from app.core.form_kind import (
 )
 from app.core.form_policy import BRANCH_MANAGER_STAGE_FORMS
 from app.core.fts_query import and_prefix_query, has_nul
+from app.core.record_categories import (
+    LEGACY_CATEGORY_RECORD_CATEGORY,
+    SERVICE_RECORD_CATEGORY,
+    record_category,
+)
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import (
     AuditLog,
@@ -196,12 +202,12 @@ def _fts_query_books(db: Session, q: str) -> dict[int, str]:
 def _active_word_draft_clause() -> ColumnElement[bool]:
     return and_(
         Book.category_id == "GS",
-        Book.id.not_in(select(BookVersion.book_id)),
+        Book.id.not_in(select(BookVersion.book_id).correlate(Book)),
         or_(Book.ref_number.like("REPORT-%"), Book.classification_code.is_not(None)),
         exists(
-            select(BookEditSession.id).where(
-                BookEditSession.book_id == Book.id, BookEditSession.state == "active"
-            )
+            select(BookEditSession.id)
+            .where(BookEditSession.book_id == Book.id, BookEditSession.state == "active")
+            .correlate(Book)
         ),
     )
 
@@ -246,6 +252,7 @@ def service_clause(service_id: str) -> ColumnElement[bool]:
         .where(BookVersion.book_id == Book.id)
         .order_by(BookVersion.version_no.desc())
         .limit(1)
+        .correlate(Book)
         .scalar_subquery()
     )
     is_newest_version_of = and_(
@@ -267,7 +274,7 @@ def service_clause(service_id: str) -> ColumnElement[bool]:
         is_newest_version_of,
         draft_match,
         and_(
-            Book.id.not_in(select(BookVersion.book_id)),
+            Book.id.not_in(select(BookVersion.book_id).correlate(Book)),
             not_(word_draft),
             Book.subject.is_not(None),
             or_(*[Book.subject.ilike(f"{p}%") for p in prefixes]),
@@ -351,24 +358,37 @@ def _inmate_reporter_book_visible(book: Book, user_id: int) -> bool:
     return False
 
 
-def _classified_under_clause(category_ids: set[str]) -> ColumnElement[bool]:
-    """A classified-register book (General Book / Security Permit, or version-less
-    or template-less) filed under one of these classifications. Auto-classified papers
-    from other forms (leave, resignation) carry a code too but are never matched."""
-    newest_template_id = (
-        select(BookVersion.template_id)
-        .where(BookVersion.book_id == Book.id)
-        .order_by(BookVersion.version_no.desc())
-        .limit(1)
-        .scalar_subquery()
-    )
-    return and_(
-        Book.classification_code.is_not(None),
-        Book.classification_code.in_(sorted(category_ids)),
-        or_(
-            newest_template_id.is_(None),
-            newest_template_id.in_(sorted(CLASSIFIED_BOOK_FORMS)),
+def record_category_in_clause(codes: Collection[str]) -> ColumnElement[bool]:
+    """SQL mirror of ``record_categories.record_category`` for the correlated Book."""
+    if not codes:
+        return false()
+    code_set = set(codes)
+    classification_codes = {classification.code for classification in CLASSIFICATIONS}
+    other_ids = (classification_codes & code_set) | {
+        category_id
+        for category_id, code in LEGACY_CATEGORY_RECORD_CATEGORY.items()
+        if code in code_set
+    }
+    other_category: ColumnElement[bool] = Book.category_id.in_(sorted(other_ids))
+    if "15/1" in code_set:
+        known_ids = classification_codes | set(LEGACY_CATEGORY_RECORD_CATEGORY)
+        other_category = or_(
+            other_category,
+            Book.category_id.is_(None),
+            Book.category_id.not_in(sorted(known_ids)),
+        )
+    unclassified = [
+        service_clause(service_id)
+        for service_id, code in SERVICE_RECORD_CATEGORY.items()
+        if code in code_set
+    ]
+    unclassified.append(and_(service_clause(OTHER_SERVICE_ID), other_category))
+    return or_(
+        and_(
+            Book.classification_code.is_not(None),
+            Book.classification_code.in_(sorted(code_set)),
         ),
+        and_(Book.classification_code.is_(None), or_(*unclassified)),
     )
 
 
@@ -455,8 +475,7 @@ def _record_type_clause(db: Session, user: User) -> ColumnElement[bool] | None:
     denied_services, denied_categories = perm_service.denied_record_types(db, user)
     clauses: list[ColumnElement[bool]] = []
     if denied_categories:
-        clauses.append(Book.category_id.not_in(denied_categories))
-        clauses.append(not_(_classified_under_clause(denied_categories)))
+        clauses.append(not_(record_category_in_clause(denied_categories)))
     if denied_services:
         clauses.append(
             not_(or_(*[service_clause(service_id) for service_id in sorted(denied_services)]))
@@ -523,13 +542,7 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
             .join(Book, Book.id == BookVersion.book_id)
             .join(linked_document, linked_document.id == BookVersion.document_id)
             .where(
-                or_(
-                    Book.category_id.in_(sorted(denied_categories)),
-                    and_(
-                        Book.classification_code.in_(sorted(denied_categories)),
-                        linked_document.template_id.in_(sorted(CLASSIFIED_BOOK_FORMS)),
-                    ),
-                ),
+                record_category_in_clause(denied_categories),
                 or_(
                     linked_document.id == Document.id,
                     and_(
@@ -612,12 +625,14 @@ def require_record_type_access(
             category_id=category_id,
         )
     caps = perm_service.effective_caps(db, user)
-    category_denied = category_id is not None and f"books.category.{category_id}" not in caps
-    service_denied = service_id is not None and f"books.service.{service_id}" not in caps
-    classification_denied = (
-        classification_code is not None and f"books.category.{classification_code}" not in caps
+    category_code = record_category(
+        service_id=service_id or OTHER_SERVICE_ID,
+        classification_code=classification_code,
+        category_id=category_id,
     )
-    if category_denied or service_denied or classification_denied:
+    category_denied = f"books.category.{category_code}" not in caps
+    service_denied = service_id is not None and f"books.service.{service_id}" not in caps
+    if category_denied or service_denied:
         raise AppError(
             "RECORD_TYPE_FORBIDDEN",
             "You don't have access to this record type.",
@@ -642,15 +657,12 @@ def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
             newest.template_id if newest is not None else None,
             versioned=newest is not None,
         )
-    newest_template_id = newest.template_id if newest is not None else None
-    classification_denied = row.classification_code in denied_categories and (
-        newest_template_id is None or newest_template_id in CLASSIFIED_BOOK_FORMS
+    category_code = record_category(
+        service_id=service_id,
+        classification_code=row.classification_code,
+        category_id=row.category_id,
     )
-    if (
-        row.category_id in denied_categories
-        or classification_denied
-        or service_id in denied_services
-    ):
+    if category_code in denied_categories or service_id in denied_services:
         raise AppError(
             "RECORD_TYPE_FORBIDDEN",
             "You don't have access to this record type.",
@@ -1224,8 +1236,10 @@ def list_books(
         count_stmt = count_stmt.where(inbox_filter)
 
     if category_id is not None:
-        category_clause = or_(
-            Book.category_id == category_id, _classified_under_clause({category_id})
+        category_clause = (
+            record_category_in_clause({category_id})
+            if get_classification(category_id) is not None
+            else Book.category_id == category_id
         )
         stmt = stmt.where(category_clause)
         count_stmt = count_stmt.where(category_clause)
@@ -4681,6 +4695,7 @@ __all__ = [
     "list_revision_access",
     "mark_seen",
     "messages_for_book",
+    "record_category_in_clause",
     "record_review",
     "remove_reviewer",
     "replace_attachment",
