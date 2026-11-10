@@ -53,7 +53,9 @@ from app.core.fts_query import and_prefix_query, has_nul
 from app.core.record_categories import (
     LEGACY_CATEGORY_RECORD_CATEGORY,
     SERVICE_RECORD_CATEGORY,
-    record_category,
+    record_gate_categories,
+    record_services,
+    service_filing_category,
 )
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import (
@@ -358,37 +360,82 @@ def _inmate_reporter_book_visible(book: Book, user_id: int) -> bool:
     return False
 
 
+def _stray_record_clause() -> ColumnElement[bool]:
+    """SQL mirror of ``record_categories.is_stray_record`` for the correlated Book."""
+    services_by_filing: dict[str, list[str]] = {}
+    for service_id in SERVICE_IDS:
+        services_by_filing.setdefault(service_filing_category(service_id), []).append(service_id)
+    classification_codes = [classification.code for classification in CLASSIFICATIONS]
+    return or_(
+        *[
+            and_(
+                Book.category_id.is_not(None),
+                Book.category_id.not_in(sorted([*classification_codes, filing_category])),
+                or_(*[service_clause(service_id) for service_id in service_ids]),
+            )
+            for filing_category, service_ids in sorted(services_by_filing.items())
+        ]
+    )
+
+
+def record_service_clause(service_id: str) -> ColumnElement[bool]:
+    """SQL mirror of ``record_categories.record_services``: the correlated Book
+    answers to ``service_id``'s ``books.servicerecords.*`` gate."""
+    if service_id == OTHER_SERVICE_ID:
+        return or_(service_clause(OTHER_SERVICE_ID), _stray_record_clause())
+    return service_clause(service_id)
+
+
+def _stored_category_in_clause(code_set: set[str]) -> ColumnElement[bool]:
+    """SQL: the correlated Book's stored ``category_id`` maps into ``code_set``."""
+    classification_codes = {classification.code for classification in CLASSIFICATIONS}
+    stored_ids = (classification_codes & code_set) | {
+        category_id
+        for category_id, code in LEGACY_CATEGORY_RECORD_CATEGORY.items()
+        if code in code_set
+    }
+    stored: ColumnElement[bool] = Book.category_id.in_(sorted(stored_ids))
+    if "15/1" in code_set:
+        known_ids = classification_codes | set(LEGACY_CATEGORY_RECORD_CATEGORY)
+        stored = or_(
+            stored,
+            Book.category_id.is_(None),
+            Book.category_id.not_in(sorted(known_ids)),
+        )
+    return stored
+
+
 def record_category_in_clause(codes: Collection[str]) -> ColumnElement[bool]:
     """SQL mirror of ``record_categories.record_category`` for the correlated Book."""
     if not codes:
         return false()
     code_set = set(codes)
-    classification_codes = {classification.code for classification in CLASSIFICATIONS}
-    other_ids = (classification_codes & code_set) | {
-        category_id
-        for category_id, code in LEGACY_CATEGORY_RECORD_CATEGORY.items()
-        if code in code_set
-    }
-    other_category: ColumnElement[bool] = Book.category_id.in_(sorted(other_ids))
-    if "15/1" in code_set:
-        known_ids = classification_codes | set(LEGACY_CATEGORY_RECORD_CATEGORY)
-        other_category = or_(
-            other_category,
-            Book.category_id.is_(None),
-            Book.category_id.not_in(sorted(known_ids)),
-        )
     unclassified = [
         service_clause(service_id)
         for service_id, code in SERVICE_RECORD_CATEGORY.items()
         if code in code_set
     ]
-    unclassified.append(and_(service_clause(OTHER_SERVICE_ID), other_category))
+    unclassified.append(
+        and_(service_clause(OTHER_SERVICE_ID), _stored_category_in_clause(code_set))
+    )
     return or_(
         and_(
             Book.classification_code.is_not(None),
             Book.classification_code.in_(sorted(code_set)),
         ),
         and_(Book.classification_code.is_(None), or_(*unclassified)),
+    )
+
+
+def record_gate_category_in_clause(codes: Collection[str]) -> ColumnElement[bool]:
+    """SQL mirror of ``record_categories.record_gate_categories``: one of the
+    correlated Book's gate categories is in ``codes``."""
+    if not codes:
+        return false()
+    code_set = set(codes)
+    return or_(
+        record_category_in_clause(code_set),
+        and_(_stray_record_clause(), _stored_category_in_clause(code_set)),
     )
 
 
@@ -475,10 +522,12 @@ def _record_type_clause(db: Session, user: User) -> ColumnElement[bool] | None:
     denied_services, denied_categories = perm_service.denied_record_types(db, user)
     clauses: list[ColumnElement[bool]] = []
     if denied_categories:
-        clauses.append(not_(record_category_in_clause(denied_categories)))
+        clauses.append(not_(record_gate_category_in_clause(denied_categories)))
     if denied_services:
         clauses.append(
-            not_(or_(*[service_clause(service_id) for service_id in sorted(denied_services)]))
+            not_(
+                or_(*[record_service_clause(service_id) for service_id in sorted(denied_services)])
+            )
         )
     if user.role == INMATE_REPORTER_ROLE:
         clauses.append(_inmate_reporter_visibility_clause(user))
@@ -542,7 +591,7 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
             .join(Book, Book.id == BookVersion.book_id)
             .join(linked_document, linked_document.id == BookVersion.document_id)
             .where(
-                record_category_in_clause(denied_categories),
+                record_gate_category_in_clause(denied_categories),
                 or_(
                     linked_document.id == Document.id,
                     and_(
@@ -625,12 +674,12 @@ def require_record_type_access(
             category_id=category_id,
         )
     caps = perm_service.effective_caps(db, user)
-    category_code = record_category(
+    gate_categories = record_gate_categories(
         service_id=service_id or OTHER_SERVICE_ID,
         classification_code=classification_code,
         category_id=category_id,
     )
-    category_denied = f"books.category.{category_code}" not in caps
+    category_denied = any(f"books.category.{code}" not in caps for code in gate_categories)
     service_denied = service_id is not None and f"books.service.{service_id}" not in caps
     if category_denied or service_denied:
         raise AppError(
@@ -657,12 +706,15 @@ def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
             newest.template_id if newest is not None else None,
             versioned=newest is not None,
         )
-    category_code = record_category(
+    gate_categories = record_gate_categories(
         service_id=service_id,
         classification_code=row.classification_code,
         category_id=row.category_id,
     )
-    if category_code in denied_categories or service_id in denied_services:
+    gate_services = record_services(service_id=service_id, category_id=row.category_id)
+    if not denied_categories.isdisjoint(gate_categories) or not denied_services.isdisjoint(
+        gate_services
+    ):
         raise AppError(
             "RECORD_TYPE_FORBIDDEN",
             "You don't have access to this record type.",
@@ -4696,7 +4748,9 @@ __all__ = [
     "mark_seen",
     "messages_for_book",
     "record_category_in_clause",
+    "record_gate_category_in_clause",
     "record_review",
+    "record_service_clause",
     "remove_reviewer",
     "replace_attachment",
     "replace_signed_copy",
