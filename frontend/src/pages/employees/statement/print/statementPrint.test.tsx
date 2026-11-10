@@ -107,6 +107,23 @@ afterEach(() => {
 })
 
 describe('activity print setup', () => {
+  it('prints employee number corrections with the original numbers, reason and actor', async () => {
+    getActivityStatement.mockResolvedValue({
+      employee_id: 'G3190',
+      from_date: '2026-01-01',
+      to_date: '2026-10-27',
+      truncated: false,
+      items: [item('id_change', 99, { reference: 'G3028', title: 'G3190', reason: 'Corrected personnel register' })],
+    })
+    renderAt('/employees/G3190/activity/print?period=year&lang=en&cats=id_change')
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const section = sheet().querySelector('[data-section="id_change"]') as HTMLElement
+    expect(section).toHaveTextContent('Employee number changed from G3028 to G3190')
+    expect(section).toHaveTextContent('Corrected personnel register')
+    expect(section).toHaveTextContent('G4602')
+    expect(section).not.toHaveTextContent('Mariam Al Kaabi')
+  })
+
   it('prints no scope line when every section is in, and names only the exclusions otherwise', async () => {
     const user = userEvent.setup()
     renderAt('/employees/G3190/activity/print?period=year&lang=en')
@@ -123,7 +140,7 @@ describe('activity print setup', () => {
     expect(sheet().querySelector('[data-section="ledger"]')).toBeNull()
     expect(sheet().querySelector('[data-section="leave.annual"]')).not.toBeNull()
     // The toggle is in the URL, so a reload keeps it.
-    expect(screen.getByTestId('location').textContent).toContain('leave.others%2Cabsence%2Cdocument%2Cplacement&')
+    expect(screen.getByTestId('location').textContent).toContain('leave.others%2Cabsence%2Cdocument%2Cplacement%2Cid_change&')
   })
 
   it.each([

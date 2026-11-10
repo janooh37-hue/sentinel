@@ -8,6 +8,7 @@ import { StatusActivity } from './StatusActivity'
 import { EmployeeActivityLookup } from './EmployeeActivityLookup'
 import { api, type EmployeeActivityItemRead, type EmployeeActivityKind, type EmployeeListItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { bidi } from '@/lib/bidi'
 
 const PAGE_SIZE = 25
 
@@ -42,6 +43,11 @@ const KIND_STYLES: Record<EmployeeActivityKind, { soft: string; color: string; i
     color: 'var(--info)',
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13m-4-4 4 4-4 4M20 16H7m4-4-4 4 4 4" /></svg>,
   },
+  id_change: {
+    soft: 'var(--primary-soft)',
+    color: 'var(--primary-text)',
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13m-4-4 4 4-4 4M20 16H7m4-4-4 4 4 4" /></svg>,
+  },
 }
 
 function activityHref(item: EmployeeActivityItemRead): string {
@@ -55,6 +61,7 @@ function activityHref(item: EmployeeActivityItemRead): string {
     case 'ledger':
       return `/ledger?mail=${item.source_id}`
     case 'duty_location':
+    case 'id_change':
       return `/employees/${encodeURIComponent(item.employee_id)}?tab=activity`
     case 'status':
       return `/employees/${encodeURIComponent(item.employee_id)}`
@@ -167,7 +174,7 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
             <div className="mb-6 flex flex-wrap items-center gap-2.5">
               <EmployeeActivityLookup onSelect={handleEmployeeSelect} onOpenProfile={onOpenProfile} />
               <div role="group" aria-label={t('employees.activity.typeLabel')} className="flex flex-wrap gap-1.5">
-                {(['all', 'document', 'leave', 'violation', 'ledger', 'duty_location', 'status'] as const).map((value) => (
+                {(['all', 'document', 'leave', 'violation', 'ledger', 'duty_location', 'status', 'id_change'] as const).map((value) => (
                   <button
                     key={value}
                     type="button"
@@ -179,7 +186,7 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
                         : 'rounded-full border border-border bg-surface px-4 py-2.5 text-[12.5px] font-bold text-muted-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
                     }
                   >
-                    {t(value === 'all' ? 'employees.activity.all' : `employees.activity.${value}`)}
+                    {t(value === 'id_change' ? 'employees.idChangeActivity.label' : value === 'all' ? 'employees.activity.all' : `employees.activity.${value}`)}
                   </button>
                 ))}
               </div>
@@ -290,7 +297,7 @@ function ActivityRow({
     .join('')
     .toUpperCase()
   const date = new Date(item.occurred_at)
-  const action = item.kind === 'duty_location' || item.kind === 'status'
+  const action = item.kind === 'duty_location' || item.kind === 'status' || item.kind === 'id_change'
     ? null
     : t(
         `employees.activity.actions.${item.kind}`,
@@ -305,6 +312,7 @@ function ActivityRow({
         leave: 'employees.activity.openLeave',
         violation: 'employees.activity.openViolation',
         ledger: 'employees.activity.openLedger',
+        id_change: 'employees.activity.dutyLocation.openEmployeeActivity',
       }[item.kind]
   const kindStyle = KIND_STYLES[item.kind]
 
@@ -321,6 +329,12 @@ function ActivityRow({
           <DutyLocationActivity item={item} />
         ) : item.kind === 'status' ? (
           <StatusActivity item={item} />
+        ) : item.kind === 'id_change' ? (
+          <>
+            <span className="block text-sm font-semibold text-foreground">{t('employees.idChangeActivity.sentence', { reference: item.reference, title: item.title })}</span>
+            {item.reason && <span className="mt-0.5 block text-xs text-muted-foreground">{t('employees.idChangeActivity.reason')}: <bdi dir="auto">{item.reason}</bdi></span>}
+            {item.actor_name && <span className="mt-0.5 block text-xs text-muted-foreground">{t('employees.idChangeActivity.actor', { actor: bidi(item.actor_name) })}</span>}
+          </>
         ) : (
           <>
             <span dir="auto" className="block truncate text-sm font-semibold text-foreground">{item.title}</span>

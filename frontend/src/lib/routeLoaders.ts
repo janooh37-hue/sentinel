@@ -91,6 +91,8 @@ export const loadEmployeesOrgTreePage = () =>
   }))
 export const loadEmployeeDetailPage = () =>
   import('@/pages/employees/EmployeeDetailPage').then((m) => ({ default: m.EmployeeDetailPage }))
+export const loadEmployeeEditPage = () =>
+  import('@/pages/employees/EmployeeEditPage').then((m) => ({ default: m.EmployeeEditPage }))
 export const loadActivityPrintPage = () =>
   import('@/pages/employees/statement/print/ActivityPrintPage').then((m) => ({
     default: m.ActivityPrintPage,

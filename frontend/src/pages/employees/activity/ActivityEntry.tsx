@@ -19,6 +19,7 @@ const ICONS: Record<StatementKind, ComponentType<{ className?: string }>> = {
   absence: UserX,
   duty_location: MapPin,
   status: ArrowLeftRight,
+  id_change: ArrowLeftRight,
 }
 
 /** Render `<b>` markers from a translated sentence as bold text. */
@@ -62,7 +63,7 @@ export function ActivityEntry({ item, expanded, onToggle, language, actions }: P
   const facts = entryFacts(item, t, language)
   const date = formatStatementDate(item.occurred_at, language)
   const time = item.date_only ? null : formatStatementTime(item.occurred_at)
-  const kindLabel = t(`activityStatement.kind.${item.kind}`)
+  const kindLabel = t(item.kind === 'id_change' ? 'employees.idChangeActivity.label' : `activityStatement.kind.${item.kind}`)
 
   return (
     <li className="border-b border-hairline last:border-b-0" data-testid={`activity-entry-${item.kind}-${item.source_id}`}>

@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { toast } from '@/lib/toast'
-import { api, ApiError, type ReturnedFormOut } from '@/lib/api'
+import { api, ApiError, type ExternalOut, type ReturnedFormOut } from '@/lib/api'
 import { IntakePanel, ReturnedFormCard } from './IntakePanel'
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }))
+const { has } = vi.hoisted(() => ({ has: vi.fn(() => true) }))
+vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has }) }))
 vi.mock('@/lib/toast', () => ({ toast: {
   loading: vi.fn(() => 'intake-job'), success: vi.fn(), error: vi.fn(), dismiss: vi.fn(),
 } }))
@@ -17,7 +19,7 @@ const result: ReturnedFormOut = {
 }
 const file = new File([], 'scan.pdf', { type: 'application/pdf' })
 
-beforeEach(() => { vi.restoreAllMocks(); vi.clearAllMocks() })
+beforeEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); has.mockReturnValue(true) })
 
 describe('IntakePanel toast lifecycle', () => {
   it.each([true, false])('resolves OCR loading (success=%s)', async (success) => {
@@ -56,4 +58,32 @@ describe('IntakePanel toast lifecycle', () => {
     ))
     expect(attach).toHaveBeenCalledWith(42, file, true)
   })
+})
+
+function IntakeDestination() {
+  const location = useLocation()
+  return <output data-testid="intake-destination">{location.pathname}{JSON.stringify(location.state)}</output>
+}
+
+it.each([true, false])('routes a matched scan to edit only with editing capability (allowed=%s)', async (allowed) => {
+  has.mockReturnValue(allowed)
+  const external: ExternalOut = {
+    mode: 'external', document_type: 'passport', document_type_confidence: 0.99,
+    alternatives: [], extraction: [], matched_employee_id: 'G100', match_score: 1,
+    matched_employee_name_en: 'John Doe', matched_employee_name_ar: null,
+    route_kind: 'employee', route_form_slug: null,
+  }
+  vi.spyOn(api, 'postIntake').mockResolvedValue(external)
+  const view = render(<MemoryRouter><QueryClientProvider client={new QueryClient()}>
+    <IntakePanel /><IntakeDestination />
+  </QueryClientProvider></MemoryRouter>)
+  fireEvent.change(view.container.querySelector('input[type="file"]')!, { target: { files: [file] } })
+  await screen.findByText('intake.external.detected')
+  if (allowed) {
+    fireEvent.click(screen.getByRole('button', { name: 'intake.external.openRecord' }))
+    expect(screen.getByTestId('intake-destination')).toHaveTextContent('/employees/G100/edit')
+    expect(screen.getByTestId('intake-destination')).toHaveTextContent('injectedExtraction')
+  } else {
+    expect(screen.queryByRole('button', { name: 'intake.external.openRecord' })).not.toBeInTheDocument()
+  }
 })
