@@ -22,6 +22,7 @@ from app.db.models import (
     Document,
     Employee,
     EmployeeFormerId,
+    InmateViolationWorkflow,
     Leave,
     OutboundMessage,
     SmsMessage,
@@ -41,7 +42,7 @@ from app.db.session import get_db
 from app.db.workforce_models import AttendanceCase, AttendancePunchProfile, WorkShiftOverride
 from app.main import create_app
 from app.services import employee_id_change_service as service
-from app.services import employee_service, photo_service, vault_service
+from app.services import employee_service, inmate_statistics_service, photo_service, vault_service
 
 
 @pytest.fixture()
@@ -442,3 +443,60 @@ def test_former_ids_lookup_is_batched(setup):
     event.remove(db.get_bind(), "before_cursor_execute", record)
     assert result == {"G100": ["G099"], "G200": ["G199"]}
     assert len(statements) == 1
+
+
+def test_corrected_number_stays_reserved_for_new_employees(setup):
+    db, _user, _settings, client = setup
+    response = client.post(
+        "/api/v1/employees/G100/id-change", json={"new_id": "G300", "reason": "Correction reason"}
+    )
+    assert response.status_code == 200, response.text
+    for candidate in ("G100", "g100"):
+        created = client.post("/api/v1/employees", json={"id": candidate, "name_en": "GAMMA"})
+        assert created.status_code == 409, created.text
+        assert created.json()["error"]["code"] == "EMPLOYEE_ID_TAKEN"
+    assert db.get(Employee, "G100") is None
+    assert (
+        client.post("/api/v1/employees", json={"id": "G500", "name_en": "GAMMA"}).status_code == 201
+    )
+
+
+def test_pending_report_assignments_follow_correction_but_completed_stages_keep_number(setup):
+    db, user, _settings, client = setup
+    reviewer = User(
+        email="reviewer@x.ae", password_hash="x", role="admin", status="active", employee_id="G200"
+    )
+    db.add(reviewer)
+    db.flush()
+    pending = InmateViolationWorkflow(
+        year=2026,
+        month=1,
+        state="awaiting_review",
+        reviewer_user_id=user.id,
+        reviewer_employee_id="G100",
+        actors={"prepared": {"user_id": reviewer.id, "employee_id": "G200", "name_ar": "ب"}},
+    )
+    reviewed = InmateViolationWorkflow(
+        year=2026,
+        month=2,
+        state="awaiting_manager",
+        reviewer_user_id=user.id,
+        reviewer_employee_id="G100",
+        manager_user_id=reviewer.id,
+        manager_employee_id="G200",
+        actors={"reviewed": {"user_id": user.id, "employee_id": "G100", "name_ar": "ألف"}},
+    )
+    db.add_all([pending, reviewed])
+    db.commit()
+    response = client.post(
+        "/api/v1/employees/G100/id-change", json={"new_id": "G300", "reason": "Correction reason"}
+    )
+    assert response.status_code == 200, response.text
+    pending = db.scalar(select(InmateViolationWorkflow).where(InmateViolationWorkflow.month == 1))
+    reviewed = db.scalar(select(InmateViolationWorkflow).where(InmateViolationWorkflow.month == 2))
+    assert pending.reviewer_employee_id == "G300"
+    assert reviewed.reviewer_employee_id == "G100"
+    assert reviewed.actors["reviewed"]["employee_id"] == "G100"
+    actor = db.get(User, user.id)
+    facts = inmate_statistics_service._stage_actor(db, pending, actor, "review")
+    assert facts["employee_id"] == "G300"

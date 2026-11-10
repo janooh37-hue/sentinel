@@ -445,7 +445,9 @@
       "dismiss": "Dismiss confirmation",
       "takenError": "This number belongs to another employee. Choose a different number.",
       "reasonInvalid": "Enter a reason between 5 and 500 characters.",
-      "vaultConflict": "A vault folder already uses this number. Resolve the folder conflict before changing the employee number."
+      "vaultConflict": "A vault folder already uses this number. Resolve the folder conflict before changing the employee number.",
+      "unsavedProfile": "You have unsaved changes to this employee's information. Save them first, or discard them, before correcting the number.",
+      "discardProfile": "Discard unsaved changes"
     },
     "intake": {
       "reviewAndApply": "Review the scanned data and apply to this employee record."

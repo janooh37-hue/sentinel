@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.core.clock import organization_today
 from app.db.models import Employee, EmployeeFormerId, Leave, Violation
+from app.db.repos._locking import begin_immediate_if_idle
 from app.schemas.employee import (
     EMPLOYEE_STATUS_ACTIVE,
     EMPLOYEE_STATUS_RESIGNED,
@@ -60,6 +61,20 @@ def former_ids_by_employee(db: Session, employee_ids: Collection[str]) -> dict[s
             seen[employee_id].add(former_id)
             result[employee_id].append(former_id)
     return result
+
+
+def former_number_owner(
+    db: Session, number: str, *, excluding: str | None = None
+) -> Employee | None:
+    """The employee who once held ``number``: a corrected number stays reserved."""
+    query = (
+        select(Employee)
+        .join(EmployeeFormerId, EmployeeFormerId.employee_id == Employee.id)
+        .where(func.upper(EmployeeFormerId.former_id) == number.strip().upper())
+    )
+    if excluding is not None:
+        query = query.where(EmployeeFormerId.employee_id != excluding)
+    return db.scalar(query.limit(1))
 
 
 def list_employees(
@@ -235,12 +250,23 @@ def _validate_transfer(
 def create_employee(
     db: Session, payload: EmployeeCreate, *, actor_user_id: int | None = None
 ) -> Employee:
+    # Serialize the reservation check against concurrent number corrections.
+    begin_immediate_if_idle(db)
     existing = db.get(Employee, payload.id)
     if existing is not None:
         raise ConflictError(
             "EMPLOYEE_EXISTS",
             f"Employee {payload.id!r} already exists",
             id=payload.id,
+        )
+    former_owner = former_number_owner(db, payload.id)
+    if former_owner is not None:
+        raise ConflictError(
+            "EMPLOYEE_ID_TAKEN",
+            "This number belongs to another employee.",
+            owner_id=former_owner.id,
+            owner_name_en=former_owner.name_en,
+            owner_name_ar=former_owner.name_ar,
         )
     data = payload.model_dump()
     target: str = payload.status

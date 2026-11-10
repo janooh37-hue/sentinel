@@ -12,7 +12,7 @@
  *     touching end_date) still get caught.
  */
 
-import { createContext, useContext, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -93,6 +93,8 @@ interface Props {
   onSubmit: (values: EmployeeFormOutput) => Promise<void> | void
   onCancel?: () => void
   submitting?: boolean
+  /** Notified whenever the form starts or stops differing from `initial`. */
+  onChangesChange?: (hasChanges: boolean) => void
 }
 
 function todayIso(): string {
@@ -174,6 +176,7 @@ export function EmployeeForm({
   onSubmit,
   onCancel,
   submitting = false,
+  onChangesChange,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const [defaults] = useState(() => initial ? fromInitial(initial) : blankDefaults())
@@ -208,6 +211,7 @@ export function EmployeeForm({
     normalized(values[key]) !== normalized(defaults[key]),
   )
   const hasChanges = changedFields.length > 0
+  useEffect(() => { onChangesChange?.(hasChanges) }, [hasChanges, onChangesChange])
 
   function shape(vals: EmployeeFormOutput): EmployeeFormOutput {
     // Pending transfers must retain their destination when saving a working employee.

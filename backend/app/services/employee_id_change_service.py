@@ -1,10 +1,10 @@
 """Correct a live employee number without rewriting issued history.
 
 Every metadata FK to employees.id follows the employee, including workforce
-models. Operational non-FKs (supervisors, start acknowledgements, Word signers
-and the legacy admin setting) follow too. Frozen timesheet_snapshot_rows,
-inmate-report reviewer_employee_id/manager_employee_id/actors, audit payloads
-and document field snapshots deliberately retain the number recorded then.
+models. Operational non-FKs (supervisors, start acknowledgements, Word signers,
+the legacy admin setting and pending inmate-report assignments) follow too.
+Frozen timesheet_snapshot_rows, completed inmate-report stages and actors, audit
+payloads and document field snapshots deliberately retain the number recorded then.
 Generated DOCX/PDF bytes and filenames are never changed: only their stored
 location pointers follow the vault folder move. Thumbnail caches are path-hashed
 and therefore miss naturally after a move; leave/imported-book caches are cleared.
@@ -38,6 +38,12 @@ _OPERATIONAL_COLUMNS = (
     ("employees", "supervisor_id"),
     ("timesheet_start_acks", "employee_id"),
     ("book_edit_sessions", "signer_employee_id"),
+)
+# Inmate-report assignees still owed a stage: the assigned person must remain
+# recognisable. Once the stage is done the captured number is history.
+_PENDING_ASSIGNEE_COLUMNS = (
+    ("awaiting_review", "reviewer_employee_id"),
+    ("awaiting_manager", "manager_employee_id"),
 )
 
 
@@ -114,17 +120,9 @@ def preview(db: Session, employee_id: str, new_id: str) -> EmployeeIdChangePrevi
     elif normalized == employee_id:
         result.status = "same"
     else:
-        owner = db.get(Employee, normalized)
-        if owner is None:
-            owner = db.scalar(
-                select(Employee)
-                .join(EmployeeFormerId, EmployeeFormerId.employee_id == Employee.id)
-                .where(
-                    EmployeeFormerId.former_id == normalized,
-                    EmployeeFormerId.employee_id != employee_id,
-                )
-                .limit(1)
-            )
+        owner = db.get(Employee, normalized) or employee_service.former_number_owner(
+            db, normalized, excluding=employee_id
+        )
         if owner is not None:
             result.status = "taken"
             result.owner_id = owner.id
@@ -245,6 +243,13 @@ def change(db: Session, user: User, employee_id: str, new_id: str, reason: str) 
             db.execute(
                 table.update()
                 .where(table.c[column_name] == employee_id)
+                .values({column_name: new_id})
+            )
+        workflows = Base.metadata.tables["inmate_violation_workflows"]
+        for state, column_name in _PENDING_ASSIGNEE_COLUMNS:
+            db.execute(
+                workflows.update()
+                .where(workflows.c.state == state, workflows.c[column_name] == employee_id)
                 .values({column_name: new_id})
             )
         db.execute(

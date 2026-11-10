@@ -19,9 +19,12 @@ const correctionSchema = z.object({
 }).refine((value) => value.confirmation === value.new_id, { path: ['confirmation'] })
 type CorrectionValues = z.input<typeof correctionSchema>
 
-export function EmployeeIdChangePanel({ employeeId, onCancel }: {
+export function EmployeeIdChangePanel({ employeeId, onCancel, unsavedProfileChanges, onDiscardProfileChanges }: {
   employeeId: string
   onCancel: () => void
+  /** The correction reopens the editor under the new number, which would drop these. */
+  unsavedProfileChanges: boolean
+  onDiscardProfileChanges: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
@@ -77,7 +80,13 @@ export function EmployeeIdChangePanel({ employeeId, onCancel }: {
           </li>
         ))}
       </ol>
-      <form onSubmit={handleSubmit((values) => { if (step === 3 && canContinue) mutation.mutate(values) })} className="space-y-5 p-4 md:p-6">
+      <form onSubmit={handleSubmit((values) => { if (step === 3 && canContinue && !unsavedProfileChanges) mutation.mutate(values) })} className="space-y-5 p-4 md:p-6">
+        {unsavedProfileChanges && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning-soft p-3 text-sm">
+            <p>{t('employees.idChange.unsavedProfile')}</p>
+            <Button type="button" variant="outline" className="min-h-11" onClick={onDiscardProfileChanges}>{t('employees.idChange.discardProfile')}</Button>
+          </div>
+        )}
         {step === 1 && (
           <div className="space-y-3">
             <div className="flex flex-wrap items-end gap-6">
@@ -122,7 +131,7 @@ export function EmployeeIdChangePanel({ employeeId, onCancel }: {
         {mutation.isError && <p role="alert" className="text-sm text-destructive-text">{apiErrorMessage(mutation.error)}</p>}
         <div className="flex flex-wrap justify-between gap-3 border-t border-border pt-4">
           <Button type="button" variant="outline" className="min-h-11" disabled={mutation.isPending} onClick={() => step === 1 ? onCancel() : setStep(step - 1)}>{t(step === 1 ? 'common.cancel' : 'employees.idChange.back')}</Button>
-          {step < 3 ? <Button type="button" className="min-h-11" disabled={!canContinue} onClick={() => setStep(step + 1)}>{t('employees.idChange.continue')}</Button> : <Button type="submit" className="min-h-11" disabled={!canContinue || reason.length < 5 || reason.length > 500 || confirmation !== newId || mutation.isPending}>{mutation.isPending ? t('common.saving') : t('employees.idChange.apply', { from: employeeId, to: newId })}</Button>}
+          {step < 3 ? <Button type="button" className="min-h-11" disabled={!canContinue} onClick={() => setStep(step + 1)}>{t('employees.idChange.continue')}</Button> : <Button type="submit" className="min-h-11" disabled={!canContinue || unsavedProfileChanges || reason.length < 5 || reason.length > 500 || confirmation !== newId || mutation.isPending}>{mutation.isPending ? t('common.saving') : t('employees.idChange.apply', { from: employeeId, to: newId })}</Button>}
         </div>
       </form>
     </section>
