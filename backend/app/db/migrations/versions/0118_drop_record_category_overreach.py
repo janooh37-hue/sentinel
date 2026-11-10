@@ -25,12 +25,13 @@ denies reached a target as extras comes from 0117's own record scan, rerun:
 the replay of the prior value and those overrides with 0117's rules must match
 the row, so a row an admin has since changed is left alone. When the scan no
 longer finds any extra for the target (its stray record was deleted, revised
-or refiled since 0117), the journal still names the user's legacy denies: if
-exactly one of them did not copy to the target, it is the one that reached it,
-and the same exact check applies. With two or more the provenance is ambiguous
-and the row is left as it is (fail-closed). An admin's deny set to the very
-value 0117 wrote cannot be told apart and is repaired too. A journal table
-lets the downgrade put the removed denies back.
+or refiled since 0117), the journal is the evidence: a target no legacy
+override copied to was written only by an extra deny, and if exactly one of
+the user's legacy denies did not copy to it, that deny is the one, so the same
+exact check applies. A target some override copied to, or one with two or more
+candidate denies, has no such evidence and is left as it is (fail-closed). An
+admin's deny set to the very value 0117 wrote cannot be told apart and is
+repaired too. A journal table lets the downgrade put the removed denies back.
 """
 
 from __future__ import annotations
@@ -161,7 +162,7 @@ def upgrade() -> None:
                 if capability in targets_of(category, source):
                     extra.append(source)
         intended = _replay(merge, prior, copying, capability)
-        if not extra and len(uncopied_denies) == 1:
+        if not extra and not copying and len(uncopied_denies) == 1:
             extra = uncopied_denies
         if not extra:
             continue

@@ -302,6 +302,34 @@ def test_an_extra_deny_with_ambiguous_provenance_is_left_alone(
         assert _overrides(connection, user_id) == edited
 
 
+def test_an_admin_deny_over_a_copied_grant_is_not_taken_for_an_extra(
+    migration: tuple[Config, Engine],
+) -> None:
+    config, engine = migration
+    with engine.begin() as connection:
+        user_id = _user(connection, "granted-then-denied@x.ae")
+        _override(connection, user_id, "books.category.GS", effect="grant")
+        _override(connection, user_id, "books.category.HR")
+    command.upgrade(config, MERGE)
+    with engine.begin() as connection:
+        assert _overrides(connection, user_id)["books.servicerecords.General Book"] == (
+            "grant",
+            None,
+        )
+        # No stray record: an admin later denies General Book records outright.
+        connection.execute(
+            text(
+                "UPDATE user_permissions SET effect = 'deny' "
+                "WHERE user_id = :user_id AND capability = 'books.servicerecords.General Book'"
+            ),
+            {"user_id": user_id},
+        )
+        edited = _overrides(connection, user_id)
+    command.upgrade(config, REVISION)
+    with engine.connect() as connection:
+        assert _overrides(connection, user_id) == edited
+
+
 def test_a_copied_deny_loses_the_expiry_an_extra_deny_stretched(
     migration: tuple[Config, Engine],
 ) -> None:
