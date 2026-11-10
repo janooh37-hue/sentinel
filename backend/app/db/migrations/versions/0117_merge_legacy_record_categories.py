@@ -1,13 +1,18 @@
 """Merge legacy category permissions without changing records or reference data.
 
 Live legacy categories become creation and record-visibility service overrides,
-including Other. Old-only categories become classification overrides. A recovery
-journal preserves deleted rows and the prior state of touched targets/requests
-for a best-effort downgrade.
+including Other. Old-only categories become classification overrides. A deny
+also covers every existing record filed in the legacy category that those
+targets miss (a record classified, or recognised as a service, outside the
+category's filing services): a classified record adds a deny on its
+classification, any other record a records deny on its resolved service.
+A recovery journal preserves deleted rows and the prior state of touched
+targets/requests for a best-effort downgrade.
 Downgrade restores that state; subsequent edits to those same rows are not kept.
 Grant sources never opt users into default-denied services. Temporary grants
 narrow existing target grants to the earlier expiry; permanent grants leave
-existing targets unchanged. These fail-closed rules prevent wider access.
+existing targets unchanged. A deny meeting an existing deny keeps the later
+expiry, a permanent one winning. These fail-closed rules prevent wider access.
 """
 
 from __future__ import annotations
@@ -124,6 +129,65 @@ _LEGACY_CATEGORY_RECORD_CATEGORY = {
     "VF": "7/1",
     "VA": "11/1",
 }
+# Frozen from record_categories.SERVICE_RECORD_CATEGORY and form_kind's
+# SERVICE_ALIASES / LEGACY_SUBJECT_ALIASES at this revision.
+_SERVICE_RECORD_CATEGORY = {
+    "Leave Application Form": "3/1",
+    "Leave Permit Form": "3/1",
+    "Administrative Leave Form": "3/1",
+    "Duty Resumption Form": "3/1",
+    "Salary Transfer Request": "7/1",
+    "Salary Deduction Form": "7/1",
+    "Salary Advance Request Form": "7/1",
+    "Loan Request Form": "7/1",
+    "Allowance Request Form": "7/1",
+    "Employee Overtime Form": "7/1",
+    "Expense Claim Form": "7/1",
+    "Leave Encashment Form": "7/1",
+    "Vehicle Fines": "7/1",
+    "Passport Release Form": "8/1",
+    "Passport Release List": "8/1",
+    "HR Request Form": "8/1",
+    "Acknowledgment Form": "9/1",
+    "Material Request Form": "10/1",
+    "Material Request Form (Arabic)": "10/1",
+    "Vehicle Mileage Log": "11/1",
+    "Vehicle Accident Report": "11/1",
+    "Resignation Letter": "12/1",
+    "Employee Clearance Form": "12/1",
+    "Violation Form": "12/1",
+    "Warning Form": "12/1",
+    "Breach of Discipline Form": "12/1",
+    "Promotion and Salary Increment Request Form": "12/1",
+    "Employee Performance Appraisal Form": "12/1",
+    "Manpower Requisition Form": "12/1",
+    "Employment Application Form": "12/1",
+    "Interview Assessment Form": "12/1",
+    "Interview Scores Form": "12/1",
+    "Employment Offer Letter": "12/1",
+    "Employee Job Description": "12/1",
+    "Employee Information Form": "12/1",
+    "Employee Exit Form": "12/1",
+    "Employee Exit Form – Project or Contract": "12/1",  # noqa: RUF001
+    "Staff Attendance Form": "12/1",
+    "Inmate Conduct Violations": "13/1",
+    "Report": "13/1",
+    "General Book": "15/1",
+}
+_OTHER_SERVICE = "other"
+_TEMPLATE_SERVICE_ALIASES = {"Security Permit": "General Book"}
+# (lower-cased subject prefix, service), longest first, as form_kind._PREFIX_TABLE.
+_SUBJECT_PREFIXES = tuple(
+    sorted(
+        (
+            *((service.lower(), service) for service in _SERVICE_RECORD_CATEGORY),
+            ("resignation form", "Resignation Letter"),
+            ("كتاب عام", "General Book"),
+        ),
+        key=lambda pair: len(pair[0]),
+        reverse=True,
+    )
+)
 _CATEGORY_PREFIX = "books.category."
 _BACKUP = "_record_category_merge_backup"
 _REQUEST_REASON = (
@@ -137,6 +201,77 @@ def _legacy_category(capability: str) -> str | None:
         return None
     category = capability[len(_CATEGORY_PREFIX) :]
     return None if category in _CLASSIFICATIONS else category
+
+
+def _subject_service(subject: str) -> str:
+    lowered = subject.lower()
+    for prefix, service in _SUBJECT_PREFIXES:
+        if lowered.startswith(prefix):
+            return service
+    return _OTHER_SERVICE
+
+
+def _record_services(book: sa.RowMapping) -> set[str]:
+    """Every service the Python and SQL record resolvers can assign to ``book``."""
+    if book["versioned"]:
+        template = book["template_id"] or ""
+        service = _TEMPLATE_SERVICE_ALIASES.get(template, template)
+        return {service if service in _SERVICE_RECORD_CATEGORY else _OTHER_SERVICE}
+    subject = book["subject"] or ""
+    # resolve_service strips the subject; its SQL ILIKE mirror does not.
+    services = {_subject_service(subject.strip()), _subject_service(subject)}
+    # A version-less GS Word draft resolves by its marker while a session is open.
+    if book["category_id"] == "GS":
+        if book["ref_number"].startswith("REPORT-"):
+            services.add("Report")
+        elif book["classification_code"] is not None:
+            services.add("General Book")
+    return services
+
+
+def _record_category(service: str, classification: str | None, category_id: str) -> str:
+    """Frozen ``record_categories.record_category`` for a legacy ``category_id``."""
+    if classification is not None:
+        return classification
+    if service != _OTHER_SERVICE:
+        return _SERVICE_RECORD_CATEGORY[service]
+    return _LEGACY_CATEGORY_RECORD_CATEGORY.get(category_id, "15/1")
+
+
+def _uncovered_record_targets(
+    connection: sa.Connection, category: str, targets: Sequence[str]
+) -> tuple[str, ...]:
+    """Denies that keep hidden each existing record in ``category`` that ``targets`` miss.
+
+    The legacy deny hid a record by its stored category alone, whatever produced
+    it. Records imported or entered by hand need not match the filing services,
+    so their resolved service and record category may escape the mapped targets.
+    """
+    covered = set(targets)
+    books = connection.execute(
+        sa.text(
+            "SELECT b.category_id, b.subject, b.ref_number, b.classification_code, "
+            "EXISTS (SELECT 1 FROM book_versions v WHERE v.book_id = b.id) AS versioned, "
+            "(SELECT v.template_id FROM book_versions v WHERE v.book_id = b.id "
+            "ORDER BY v.version_no DESC LIMIT 1) AS template_id "
+            "FROM books b WHERE b.category_id = :category"
+        ),
+        {"category": category},
+    ).mappings()
+    extra: set[str] = set()
+    for book in books:
+        classification = book["classification_code"]
+        for service in _record_services(book):
+            records = f"books.servicerecords.{service}"
+            code = _record_category(service, classification, category)
+            if records in covered or _CATEGORY_PREFIX + code in covered:
+                continue
+            # A classified record is hidden by its classification; any other by
+            # its service records, which (unlike a category) leaves creation open.
+            extra.add(
+                _CATEGORY_PREFIX + classification if classification in _CLASSIFICATIONS else records
+            )
+    return tuple(sorted(extra))
 
 
 def _remember(
@@ -187,15 +322,22 @@ def _copy_override(connection: sa.Connection, source: sa.RowMapping, target: str
             ),
             {**key, "effect": source["effect"], "expires_at": source["expires_at"]},
         )
-    elif source["effect"] == "deny" and existing["effect"] == "grant":
-        _remember(connection, "user", (source["user_id"], target), existing)
-        connection.execute(
-            sa.text(
-                "UPDATE user_permissions SET effect = 'deny', expires_at = NULL "
-                "WHERE user_id = :user_id AND capability = :capability"
-            ),
-            key,
-        )
+    elif source["effect"] == "deny":
+        # Deny wins over a grant; two denies keep the later expiry, NULL (permanent)
+        # dominating, so the merged deny lasts as long as either did.
+        if existing["effect"] == "grant" or None in (source["expires_at"], existing["expires_at"]):
+            deny_expiry = None
+        else:
+            deny_expiry = max(str(source["expires_at"]), str(existing["expires_at"]))
+        if existing["effect"] != "deny" or existing["expires_at"] != deny_expiry:
+            _remember(connection, "user", (source["user_id"], target), existing)
+            connection.execute(
+                sa.text(
+                    "UPDATE user_permissions SET effect = 'deny', expires_at = :expires_at "
+                    "WHERE user_id = :user_id AND capability = :capability"
+                ),
+                {**key, "expires_at": deny_expiry},
+            )
     elif source["effect"] == existing["effect"] == "grant" and source["expires_at"] is not None:
         source_expiry = str(source["expires_at"])
         if existing["expires_at"] is None or source_expiry < existing["expires_at"]:
@@ -229,6 +371,7 @@ def upgrade() -> None:
         .mappings()
         .all()
     )
+    uncovered: dict[str, tuple[str, ...]] = {}
     for source in overrides:
         category = _legacy_category(source["capability"])
         if category is None:
@@ -236,13 +379,17 @@ def upgrade() -> None:
         _remember(connection, "user", (source["user_id"], source["capability"]), source)
         services = _SERVICES_FILING_INTO_LEGACY_CATEGORY.get(category)
         if services:
-            targets = tuple(
+            targets: tuple[str, ...] = tuple(
                 f"{prefix}{service}"
-                for service in (*services, "other")
+                for service in (*services, _OTHER_SERVICE)
                 for prefix in ("books.service.", "books.servicerecords.")
             )
         else:
             targets = (_CATEGORY_PREFIX + _LEGACY_CATEGORY_RECORD_CATEGORY.get(category, "15/1"),)
+        if source["effect"] == "deny":
+            if category not in uncovered:
+                uncovered[category] = _uncovered_record_targets(connection, category, targets)
+            targets = (*targets, *uncovered[category])
         for target in targets:
             _copy_override(connection, source, target)
         connection.execute(

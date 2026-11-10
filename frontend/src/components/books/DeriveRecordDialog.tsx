@@ -39,6 +39,7 @@ export function DeriveRecordDialog({ book, kind, open, onOpenChange }: Props): R
 
 function Body({ book, kind, close }: Pick<Props, 'book' | 'kind'> & { close: () => void }): React.JSX.Element {
   const { t } = useTranslation()
+  const { has } = useCapabilities()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [level, setLevel] = useState<Confidentiality>(book.confidentiality)
@@ -84,7 +85,7 @@ function Body({ book, kind, close }: Pick<Props, 'book' | 'kind'> & { close: () 
         </label>
         {!book.classification_code && (
           <fieldset disabled={mutation.isPending}>
-            <ClassificationField name="derive-classification" label_en={t('books.thread.classification')} label_ar={t('books.thread.classification')} required value={classification} onChange={setClassification} />
+            <ClassificationField name="derive-classification" label_en={t('books.thread.classification')} label_ar={t('books.thread.classification')} required value={classification} onChange={setClassification} isAllowed={(code) => has(`books.category.${code}`)} />
           </fieldset>
         )}
       </div>

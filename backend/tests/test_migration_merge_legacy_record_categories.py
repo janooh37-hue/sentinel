@@ -8,12 +8,12 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import Connection, Engine, create_engine, inspect, text
+from sqlalchemy import Connection, Engine, create_engine, inspect, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_optional_user
 from app.api.errors import AppError
-from app.db.models import User
+from app.db.models import Book, User
 from app.db.session import get_db
 from app.main import create_app
 from app.services import book_service, perm_service
@@ -136,6 +136,43 @@ def _snapshot(connection: Connection, *tables: str) -> dict[str, list[tuple]]:
     }
 
 
+def _book(
+    connection: Connection,
+    *,
+    category_id: str,
+    ref_number: str,
+    subject: str | None = None,
+    classification_code: str | None = None,
+    template_id: str | None = None,
+) -> int:
+    connection.execute(
+        text("INSERT OR IGNORE INTO book_categories (id, prefix) VALUES (:id, :id)"),
+        {"id": category_id},
+    )
+    book_id = connection.execute(
+        text(
+            "INSERT INTO books (category_id, classification_code, ref_number, subject, created_at) "
+            "VALUES (:category_id, :classification_code, :ref_number, :subject, '2026-01-01') "
+            "RETURNING id"
+        ),
+        {
+            "category_id": category_id,
+            "classification_code": classification_code,
+            "ref_number": ref_number,
+            "subject": subject,
+        },
+    ).scalar_one()
+    if template_id is not None:
+        connection.execute(
+            text(
+                "INSERT INTO book_versions (book_id, version_no, template_id) "
+                "VALUES (:book_id, 1, :template_id)"
+            ),
+            {"book_id": book_id, "template_id": template_id},
+        )
+    return book_id
+
+
 @pytest.mark.parametrize(
     ("category", "services"),
     [
@@ -255,7 +292,7 @@ def test_old_only_category_deny_maps_to_record_category(
         ("deny", "grant", "deny", None),
         ("grant", "deny", "deny", EXPIRY),
         ("grant", "grant", "grant", EXPIRY),
-        ("deny", "deny", "deny", EXPIRY),
+        ("deny", "deny", "deny", "2028-01-01"),
     ],
 )
 def test_collision_obeys_deny_wins_and_existing_target_expiry(
@@ -275,6 +312,98 @@ def test_collision_obeys_deny_wins_and_existing_target_expiry(
     command.upgrade(config, REVISION)
     with engine.connect() as connection:
         assert _overrides(connection, user_id)[target] == (expected_effect, expected_expiry)
+
+
+@pytest.mark.parametrize(
+    ("source_expiry", "target_expiry", "expected_expiry"),
+    [(None, EXPIRY, None), (EXPIRY, None, None), ("2026-01-01", EXPIRY, EXPIRY)],
+)
+def test_deny_meeting_deny_keeps_the_longer_restriction_and_is_reversible(
+    migration: tuple[Config, Engine],
+    source_expiry: str | None,
+    target_expiry: str | None,
+    expected_expiry: str | None,
+) -> None:
+    config, engine = migration
+    target = "books.servicerecords.HR Request Form"
+    with engine.begin() as connection:
+        user_id = _user(connection)
+        _override(connection, user_id, "books.category.HR", "deny", source_expiry)
+        _override(connection, user_id, target, "deny", target_expiry)
+        before = _snapshot(connection, "user_permissions")
+    command.upgrade(config, REVISION)
+    with engine.connect() as connection:
+        assert _overrides(connection, user_id)[target] == ("deny", expected_expiry)
+    command.downgrade(config, PREVIOUS)
+    with engine.connect() as connection:
+        assert _snapshot(connection, "user_permissions") == before
+
+
+def test_permanent_legacy_deny_outlives_an_expired_target_deny(
+    migration: tuple[Config, Engine],
+) -> None:
+    config, engine = migration
+    with engine.begin() as connection:
+        user_id = _user(connection)
+        _override(connection, user_id, "books.category.HR")
+        _override(connection, user_id, "books.servicerecords.HR Request Form", "deny", "2020-01-01")
+    command.upgrade(config, REVISION)
+    with Session(engine) as db:
+        user = db.get(User, user_id)
+        assert user is not None
+        assert "books.servicerecords.HR Request Form" not in perm_service.effective_caps(db, user)
+
+
+@pytest.mark.parametrize(
+    ("legacy", "book", "target"),
+    [
+        # A General Book filed under HR resolves to its classification, not HR.
+        (
+            "HR",
+            {
+                "category_id": "HR",
+                "ref_number": "1/5/0007",
+                "classification_code": "5/1",
+                "template_id": "General Book",
+            },
+            "books.category.5/1",
+        ),
+        # An imported leave form in old category 1 resolves to Leave (3/1), not 12/1.
+        (
+            "1",
+            {
+                "category_id": "1",
+                "ref_number": "IMP-0001",
+                "subject": "Leave Application Form - imported",
+            },
+            "books.servicerecords.Leave Application Form",
+        ),
+    ],
+)
+def test_legacy_deny_keeps_existing_off_map_records_hidden(
+    migration: tuple[Config, Engine], legacy: str, book: dict[str, str], target: str
+) -> None:
+    config, engine = migration
+    with engine.begin() as connection:
+        user_id = _user(connection)
+        _override(connection, user_id, f"books.category.{legacy}")
+        book_id = _book(connection, **book)
+        before = _snapshot(connection, "user_permissions")
+    command.upgrade(config, REVISION)
+    with Session(engine) as db:
+        user = db.get(User, user_id)
+        row = db.get(Book, book_id)
+        assert user is not None and row is not None
+        assert target not in perm_service.effective_caps(db, user)
+        with pytest.raises(AppError) as exc:
+            book_service.assert_record_type_visible(db, user, row)
+        assert exc.value.code == "RECORD_TYPE_FORBIDDEN"
+        clause = book_service._record_type_clause(db, user)
+        assert clause is not None
+        assert book_id not in db.scalars(select(Book.id).where(clause)).all()
+    command.downgrade(config, PREVIOUS)
+    with engine.connect() as connection:
+        assert _snapshot(connection, "user_permissions") == before
 
 
 @pytest.mark.parametrize("legacy", ["HR", "1"])

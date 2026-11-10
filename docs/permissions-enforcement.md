@@ -359,12 +359,18 @@ categories are the only category capabilities.
   legacy category becomes a deny on both `books.service.<service>` (create) and
   `books.servicerecords.<service>` (see) for every service that files there, plus `other`,
   so the user can neither create nor see those records, exactly as before; a deny on an
-  old-only category becomes a deny on its mapped record category. A deny wins over an
-  existing grant. A legacy grant
+  old-only category becomes a deny on its mapped record category. Records already filed
+  in the denied legacy category that those targets miss (imported, hand-filed, or
+  classified outside the category's services, e.g. an HR-filed `5/1` General Book or an
+  old-category-`1` leave form) stay hidden too: a classified record adds a deny on its
+  classification, any other a `books.servicerecords.<service>` deny on its resolved
+  service. A deny wins over an existing grant; a deny meeting an existing deny keeps the
+  later expiry, a permanent one winning. A legacy grant
   never opens an opt-in service, and a temporary legacy grant narrows an existing target
   grant to its expiry. Legacy rows are then deleted; the inmate reporter's ceiling is
   `books.category.13/1`. Pending requests for legacy ids are refused with a note. A
   journal table makes `downgrade()` restore the prior rows.
 - **Drift, fail-closed only.** Where exactness was impossible the migration hides more:
   the Other-service deny covers unclaimed records from every category, and an old-only
-  deny covers its whole merged category.
+  deny covers its whole merged category; a record-driven deny hides every record of that
+  classification or service, not only the record that triggered it.

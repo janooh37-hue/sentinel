@@ -33,6 +33,8 @@ interface ClassificationFieldProps {
   required?: boolean
   value?: string | null
   onChange: (code: string | null) => void
+  /** Offer only the codes this accepts, e.g. those the user may create in. */
+  isAllowed?: (code: string) => boolean
 }
 
 export function ClassificationField({
@@ -42,6 +44,7 @@ export function ClassificationField({
   required,
   value,
   onChange,
+  isAllowed,
 }: ClassificationFieldProps): React.JSX.Element {
   const { i18n, t } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
@@ -53,7 +56,7 @@ export function ClassificationField({
     staleTime: Infinity,
   })
 
-  const classifications = data?.items ?? []
+  const classifications = (data?.items ?? []).filter((c) => !isAllowed || isAllowed(c.code))
 
   return (
     <div className="flex flex-col gap-1.5">
