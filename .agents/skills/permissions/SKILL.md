@@ -28,7 +28,9 @@ the only category axis. Every record maps to exactly one through
 `backend/app/core/record_categories.py`: classification code first, then its
 service, then its old filing category. A stray record, stored in a legacy
 category its service never files into, also answers to the `other` records
-gate and to its stored category (`record_services`, `record_gate_categories`).
+gate (`record_services`); one stored in a retired category (`1`/`2`/`12`,
+imported ids) also answers to that category's mapped record category
+(`record_gate_categories`).
 Admins control visibility per service and per category; both stay. A new
 service gets an entry in `SERVICE_RECORD_CATEGORY` (a test enforces that the
 map is total).

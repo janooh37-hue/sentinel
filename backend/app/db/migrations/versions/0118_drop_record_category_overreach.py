@@ -25,10 +25,11 @@ denies reached a target as extras comes from 0117's own record scan, rerun:
 the replay of the prior value and those overrides with 0117's rules must match
 the row, so a row an admin has since changed is left alone. When the scan no
 longer finds any extra for the target (its stray record was deleted, revised
-or refiled since 0117), the journal cannot say which of the user's other
-legacy denies reached it, so the row is repaired if it matches the replay with
-any combination of them. In both cases an admin's deny set to a value 0117
-could have written cannot be told apart and is repaired too. A journal table
+or refiled since 0117), the journal still names the user's legacy denies: if
+exactly one of them did not copy to the target, it is the one that reached it,
+and the same exact check applies. With two or more the provenance is ambiguous
+and the row is left as it is (fail-closed). An admin's deny set to the very
+value 0117 wrote cannot be told apart and is repaired too. A journal table
 lets the downgrade put the removed denies back.
 """
 
@@ -37,7 +38,6 @@ from __future__ import annotations
 import importlib.util
 import json
 from collections.abc import Sequence
-from itertools import combinations
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -161,14 +161,11 @@ def upgrade() -> None:
                 if capability in targets_of(category, source):
                     extra.append(source)
         intended = _replay(merge, prior, copying, capability)
-        if extra:
-            written = [_replay(merge, prior, [*copying, *extra], capability)]
-        else:
-            written = [
-                _replay(merge, prior, [*copying, *chosen], capability)
-                for size in range(1, len(uncopied_denies) + 1)
-                for chosen in combinations(uncopied_denies, size)
-            ]
+        if not extra and len(uncopied_denies) == 1:
+            extra = uncopied_denies
+        if not extra:
+            continue
+        written = _replay(merge, prior, [*copying, *extra], capability)
         key = {"user_id": user_id, "capability": capability}
         current = (
             connection.execute(
@@ -181,7 +178,7 @@ def upgrade() -> None:
             .mappings()
             .first()
         )
-        if current is None or dict(current) == intended or dict(current) not in written:
+        if current is None or dict(current) == intended or dict(current) != written:
             continue
         connection.execute(
             sa.text(

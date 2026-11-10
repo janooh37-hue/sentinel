@@ -91,8 +91,8 @@ def is_stray_record(*, service_id: str, category_id: str | None) -> bool:
     """Whether a record is stored in a legacy category its service never files into.
 
     A form revised into a General Book keeps its HR or INV category; hand-filed
-    and imported records can sit anywhere. Such a record answers to two
-    services and two categories (``record_services``, ``record_gate_categories``).
+    and imported records can sit anywhere. Such a record also answers to the
+    Other service (``record_services``).
     """
     return (
         service_id != OTHER_SERVICE_ID
@@ -127,18 +127,31 @@ def record_category(
     return LEGACY_CATEGORY_RECORD_CATEGORY.get(category_id or "", "15/1")
 
 
+def is_retired_category(category_id: str | None) -> bool:
+    """Whether ``category_id`` is a legacy category no service files into any more
+    (old-only ``1``/``2``/``12`` and imported ids)."""
+    return (
+        category_id is not None
+        and get_classification(category_id) is None
+        and category_id not in _service_filing_categories().values()
+    )
+
+
 def record_gate_categories(
     *, service_id: str, classification_code: str | None, category_id: str | None
 ) -> tuple[str, ...]:
     """Every record category whose ``books.category.*`` gate must allow the record.
 
-    Its listed category, plus, for a stray record, the category its stored
-    legacy category maps to, so a deny on an old-only category still hides it.
+    Its listed category, plus, for a record stored in a retired legacy category,
+    the category that one maps to: a deny on an old-only category, migrated to
+    its mapped category, still hides every record filed there, whatever its
+    service or classification. Live legacy categories need no such gate; their
+    denies became service denies plus Other (``record_services``).
     """
     listed = record_category(
         service_id=service_id, classification_code=classification_code, category_id=category_id
     )
-    if not is_stray_record(service_id=service_id, category_id=category_id):
+    if not is_retired_category(category_id):
         return (listed,)
     stored = LEGACY_CATEGORY_RECORD_CATEGORY.get(category_id or "", "15/1")
     return (listed,) if stored == listed else (listed, stored)

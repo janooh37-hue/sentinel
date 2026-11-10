@@ -156,6 +156,12 @@ def _visible(db: Session, user: User, book_id: int) -> bool:
             {"category_id": "1", "template_id": "Leave Application Form"},
             "books.servicerecords.Leave Application Form",
         ),
+        # An imported record of no known service, classified 5/1, in old-only category 1.
+        (
+            "1",
+            {"category_id": "1", "template_id": "Unknown template", "classification_code": "5/1"},
+            "books.category.5/1",
+        ),
     ],
 )
 def test_legacy_deny_keeps_the_stray_record_hidden_without_hiding_permit_letters(
@@ -260,6 +266,40 @@ def test_the_extra_deny_goes_even_after_its_stray_record_changed(
     command.downgrade(config, MERGE)
     with engine.connect() as connection:
         assert _overrides(connection, user_id) == merged
+
+
+def test_an_extra_deny_with_ambiguous_provenance_is_left_alone(
+    migration: tuple[Config, Engine],
+) -> None:
+    config, engine = migration
+    with engine.begin() as connection:
+        user_id = _user(connection, "ambiguous@x.ae")
+        _override(connection, user_id, "books.category.HR", expires_at=EXPIRY)
+        _override(connection, user_id, "books.category.INV")
+        stray_id = _book(
+            connection,
+            category_id="HR",
+            ref_number="STRAY-7",
+            template_id="General Book",
+            classification_code="5/1",
+        )
+    command.upgrade(config, MERGE)
+    with engine.begin() as connection:
+        assert _overrides(connection, user_id)["books.category.5/1"] == ("deny", EXPIRY)
+        # An admin makes it permanent, then the stray record goes away.
+        connection.execute(
+            text(
+                "UPDATE user_permissions SET expires_at = NULL "
+                "WHERE user_id = :user_id AND capability = 'books.category.5/1'"
+            ),
+            {"user_id": user_id},
+        )
+        connection.execute(text("DELETE FROM book_versions WHERE book_id = :id"), {"id": stray_id})
+        connection.execute(text("DELETE FROM books WHERE id = :id"), {"id": stray_id})
+        edited = _overrides(connection, user_id)
+    command.upgrade(config, REVISION)
+    with engine.connect() as connection:
+        assert _overrides(connection, user_id) == edited
 
 
 def test_a_copied_deny_loses_the_expiry_an_extra_deny_stretched(

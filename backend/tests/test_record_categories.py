@@ -40,20 +40,18 @@ def test_classification_always_overrides_the_service_and_legacy_category(service
 
 
 @pytest.mark.parametrize("service_id", SERVICE_IDS)
-def test_a_stray_record_also_answers_to_other_and_its_stored_category(service_id: str) -> None:
-    stray = next(c for c in ("1", "HR", "GS") if c != service_filing_category(service_id))
-    assert record_services(service_id=service_id, category_id=stray) == (
-        service_id,
-        OTHER_SERVICE_ID,
-    )
+def test_a_stray_record_also_answers_to_other(service_id: str) -> None:
+    live = next(c for c in ("HR", "GS") if c != service_filing_category(service_id))
     listed = SERVICE_RECORD_CATEGORY[service_id]
-    stored = LEGACY_CATEGORY_RECORD_CATEGORY[stray]
-    assert set(
-        record_gate_categories(service_id=service_id, classification_code=None, category_id=stray)
-    ) == {listed, stored}
-    assert set(
-        record_gate_categories(service_id=service_id, classification_code="5/1", category_id=stray)
-    ) == {"5/1", stored}
+    for stray in (live, "1"):
+        assert record_services(service_id=service_id, category_id=stray) == (
+            service_id,
+            OTHER_SERVICE_ID,
+        )
+    # A live legacy category adds no category gate; the Other gate covers it.
+    assert record_gate_categories(
+        service_id=service_id, classification_code=None, category_id=live
+    ) == (listed,)
     # Filed where its service files, or under a record category, it answers only to itself.
     for category_id in (service_filing_category(service_id), "5/1", None):
         assert record_services(service_id=service_id, category_id=category_id) == (service_id,)
@@ -64,6 +62,25 @@ def test_a_stray_record_also_answers_to_other_and_its_stored_category(service_id
                 service_id=service_id, classification_code=None, category_id=category_id
             ),
         )
+
+
+@pytest.mark.parametrize("service_id", [*SERVICE_IDS, OTHER_SERVICE_ID])
+@pytest.mark.parametrize("category_id", ["1", "2", "12", "imported-unknown"])
+def test_a_record_in_a_retired_category_also_answers_to_its_mapped_category(
+    service_id: str, category_id: str
+) -> None:
+    stored = LEGACY_CATEGORY_RECORD_CATEGORY.get(category_id, "15/1")
+    for classification_code in (None, "5/1"):
+        listed = record_category(
+            service_id=service_id, classification_code=classification_code, category_id=category_id
+        )
+        assert set(
+            record_gate_categories(
+                service_id=service_id,
+                classification_code=classification_code,
+                category_id=category_id,
+            )
+        ) == {listed, stored}
 
 
 @pytest.mark.parametrize("category_id, expected", LEGACY_CATEGORY_RECORD_CATEGORY.items())
@@ -131,6 +148,7 @@ def categorized_records(db_session: Session) -> list[tuple[Book, str]]:
         ("General Book", None, "HR", None, "15/1"),
         ("General Book", None, "INV", None, "15/1"),
         ("General Book", None, "HR", "5/1", "5/1"),
+        ("Unknown template", None, "1", "5/1", "5/1"),
         (None, "Leave Application Form - imported", "1", None, "3/1"),
     ]
     cases += [

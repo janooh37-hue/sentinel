@@ -433,9 +433,15 @@ def record_gate_category_in_clause(codes: Collection[str]) -> ColumnElement[bool
     if not codes:
         return false()
     code_set = set(codes)
+    live_categories = {service_filing_category(service_id) for service_id in SERVICE_IDS}
+    classification_codes = {classification.code for classification in CLASSIFICATIONS}
+    retired = and_(
+        Book.category_id.is_not(None),
+        Book.category_id.not_in(sorted(classification_codes | live_categories)),
+    )
     return or_(
         record_category_in_clause(code_set),
-        and_(_stray_record_clause(), _stored_category_in_clause(code_set)),
+        and_(retired, _stored_category_in_clause(code_set)),
     )
 
 

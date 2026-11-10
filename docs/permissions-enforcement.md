@@ -351,11 +351,12 @@ categories are the only category capabilities.
   `category_id` through `LEGACY_CATEGORY_RECORD_CATEGORY` (unknown ids → `15/1`).
   `book_service.record_category_in_clause` is the SQL mirror used by the register's
   category filter.
-- **Stray records answer to two gates.** A record stored in a legacy category its
+- **Stray records answer to extra gates.** A record stored in a legacy category its
   service never files into (a form revised into a General Book keeps its HR or INV
   category; hand-filed and imported records) must also pass the `other` records gate
-  and the category its stored legacy category maps to:
-  `record_categories.record_services` / `record_gate_categories`, mirrored in SQL by
+  (`record_categories.record_services`). A record stored in a retired category (old-only
+  `1`/`2`/`12`, imported ids) must also pass the category that one maps to, whatever its
+  service or classification (`record_gate_categories`). SQL mirrors:
   `book_service.record_service_clause` / `record_gate_category_in_clause`. The register,
   documents, detail checks, and creation all use these gates. Everything else answers
   only to its own service and its one record category.
