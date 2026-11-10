@@ -20,12 +20,15 @@ denies: the row's prior value with only the legacy overrides that copied to
 it. That removes an extra deny, brings back a legacy grant it replaced, and
 takes back an expiry an extra deny stretched.
 
-A target is repaired only while it still holds exactly what 0117 wrote,
-replayed from its prior value and the legacy overrides that reached it with
-0117's own rules and record scan. A row an admin has since changed is left
-alone; an admin's deny set to the very value 0117 wrote cannot be told apart
-and is repaired too. A stray record changed since 0117 no longer reproduces
-its extra deny, so that deny is left in place (fail-closed). A journal table
+A target is repaired only while it still holds what 0117 wrote. Which legacy
+denies reached a target as extras comes from 0117's own record scan, rerun:
+the replay of the prior value and those overrides with 0117's rules must match
+the row, so a row an admin has since changed is left alone. When the scan no
+longer finds any extra for the target (its stray record was deleted, revised
+or refiled since 0117), the journal cannot say which of the user's other
+legacy denies reached it, so the row is repaired if it matches the replay with
+any combination of them. In both cases an admin's deny set to a value 0117
+could have written cannot be told apart and is repaired too. A journal table
 lets the downgrade put the removed denies back.
 """
 
@@ -34,6 +37,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from collections.abc import Sequence
+from itertools import combinations
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -96,9 +100,12 @@ def _copy(merge: ModuleType, row: Row | None, source: Row, target: str) -> Row |
     return row
 
 
-def _replay(merge: ModuleType, prior: Row | None, sources: list[Row], target: str) -> Row | None:
+def _replay(
+    merge: ModuleType, prior: Row | None, sources: Sequence[Row], target: str
+) -> Row | None:
+    """Apply legacy ``sources`` to ``prior`` in 0117's order (by capability)."""
     row = prior
-    for source in sources:
+    for source in sorted(sources, key=lambda source: str(source["capability"])):
         row = _copy(merge, row, source, target)
     return row
 
@@ -119,7 +126,7 @@ def upgrade() -> None:
         .mappings()
         .all()
     )
-    # Legacy sources per user in 0117's order (capability), and the targets it touched.
+    # Legacy sources per user, and the targets 0117 touched.
     sources: dict[int, list[tuple[str, Row]]] = {}
     touched: list[tuple[int, str, Row | None]] = []
     for entry in journal:
@@ -131,8 +138,6 @@ def upgrade() -> None:
             touched.append((user_id, capability, row))
         elif prior is not None:
             sources.setdefault(user_id, []).append((category, prior))
-    for user_sources in sources.values():
-        user_sources.sort(key=lambda item: item[1]["capability"])
     extras: dict[str, tuple[str, ...]] = {}
 
     def targets_of(category: str, source: Row) -> tuple[str, ...]:
@@ -144,18 +149,26 @@ def upgrade() -> None:
         return (*copied, *extras[category])
 
     for user_id, capability, prior in touched:
-        reaching: list[Row] = []
+        user_sources = sources.get(user_id, [])
         copying: list[Row] = []
-        for category, source in sources.get(user_id, []):
+        extra: list[Row] = []
+        uncopied_denies: list[Row] = []
+        for category, source in user_sources:
             if capability in _copied_targets(merge, category):
                 copying.append(source)
-                reaching.append(source)
-            elif capability in targets_of(category, source):
-                reaching.append(source)
-        written = _replay(merge, prior, reaching, capability)
+            elif source["effect"] == "deny":
+                uncopied_denies.append(source)
+                if capability in targets_of(category, source):
+                    extra.append(source)
         intended = _replay(merge, prior, copying, capability)
-        if written == intended:
-            continue
+        if extra:
+            written = [_replay(merge, prior, [*copying, *extra], capability)]
+        else:
+            written = [
+                _replay(merge, prior, [*copying, *chosen], capability)
+                for size in range(1, len(uncopied_denies) + 1)
+                for chosen in combinations(uncopied_denies, size)
+            ]
         key = {"user_id": user_id, "capability": capability}
         current = (
             connection.execute(
@@ -168,7 +181,7 @@ def upgrade() -> None:
             .mappings()
             .first()
         )
-        if current is None or dict(current) != written:
+        if current is None or dict(current) == intended or dict(current) not in written:
             continue
         connection.execute(
             sa.text(

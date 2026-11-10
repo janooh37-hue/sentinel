@@ -223,6 +223,45 @@ def test_a_tightened_existing_deny_gets_its_own_expiry_back(
         assert _overrides(connection, user_id)["books.category.5/1"] == ("deny", None)
 
 
+@pytest.mark.parametrize(
+    "change",
+    [
+        "DELETE FROM book_versions WHERE book_id = :book_id; DELETE FROM books WHERE id = :book_id",
+        "UPDATE books SET classification_code = '6/1' WHERE id = :book_id",
+        "UPDATE books SET category_id = 'GS' WHERE id = :book_id",
+    ],
+    ids=["deleted", "reclassified", "refiled"],
+)
+def test_the_extra_deny_goes_even_after_its_stray_record_changed(
+    migration: tuple[Config, Engine], change: str
+) -> None:
+    config, engine = migration
+    with engine.begin() as connection:
+        user_id = _user(connection, "changed-stray@x.ae")
+        _override(connection, user_id, "books.category.HR")
+        stray_id = _book(
+            connection,
+            category_id="HR",
+            ref_number="STRAY-6",
+            template_id="General Book",
+            classification_code="5/1",
+        )
+    command.upgrade(config, MERGE)
+    with engine.begin() as connection:
+        merged = _overrides(connection, user_id)
+        assert merged["books.category.5/1"] == ("deny", None)
+        for statement in change.split("; "):
+            connection.execute(text(statement), {"book_id": stray_id})
+    command.upgrade(config, REVISION)
+    with engine.connect() as connection:
+        assert _overrides(connection, user_id) == {
+            k: v for k, v in merged.items() if k != "books.category.5/1"
+        }
+    command.downgrade(config, MERGE)
+    with engine.connect() as connection:
+        assert _overrides(connection, user_id) == merged
+
+
 def test_a_copied_deny_loses_the_expiry_an_extra_deny_stretched(
     migration: tuple[Config, Engine],
 ) -> None:
