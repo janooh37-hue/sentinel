@@ -109,17 +109,39 @@ function ContentForm({ book }: { book: LedgerBookRead }): React.JSX.Element {
   useEffect(() => {
     if (form.formState.isDirty) return
     reset({ subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the content hash; dirtiness is read, not watched
-  }, [book.content_sha256])
+  }, [book.body_html, book.content_sha256, book.subjects, form, reset])
   const keepEditingButton = useRef<HTMLButtonElement>(null)
   const dialogOpener = useRef<HTMLElement | null>(null)
   // Set once leaving is allowed: the edit is saved, or the writer chose to discard it.
   const leaveAllowed = useRef(false)
+  const save = useMutation({
+    mutationFn: (values: ContentValues) => api.updateLedgerBookContent(book.id, values),
+    onSuccess: (accepted, submitted) => {
+      // The desk's routing rows and record detail carry the subject too.
+      void qc.invalidateQueries({ queryKey: ['books'] })
+      void qc.invalidateQueries({ queryKey: ['ledger', 'books', book.id] })
+      if (leaveAllowed.current) return
+      toast.success(t('ledgerBook.composer.content.saved'))
+      // A completed request does not include text entered while it was pending.
+      const current = form.getValues()
+      if (JSON.stringify(current) !== JSON.stringify(submitted)) {
+        reset({ subjects: accepted.subjects, body_html: accepted.body_html }, { keepValues: true })
+        form.setValue('subjects', current.subjects, { shouldDirty: true })
+        form.setValue('body_html', current.body_html, { shouldDirty: true })
+        return
+      }
+      leaveAllowed.current = true
+      navigate(deskBookUrl(book.id))
+    },
+    // A failed save keeps the form and its edits; leaving still asks first.
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  })
+  const hasUnsavedChanges = isDirty || save.isPending
   const blocker = useBlocker(({ currentLocation, nextLocation }) => (
-    !leaveAllowed.current && isDirty && currentLocation.pathname !== nextLocation.pathname
+    !leaveAllowed.current && hasUnsavedChanges && currentLocation.pathname !== nextLocation.pathname
   ))
   useEffect(() => {
-    if (!isDirty) return
+    if (!hasUnsavedChanges) return
     const warn = (event: BeforeUnloadEvent): void => {
       if (leaveAllowed.current) return
       event.preventDefault()
@@ -127,22 +149,7 @@ function ContentForm({ book }: { book: LedgerBookRead }): React.JSX.Element {
     }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [isDirty])
-  const save = useMutation({
-    mutationFn: (values: ContentValues) => api.updateLedgerBookContent(book.id, values),
-    onSuccess: (_accepted, submitted) => {
-      // The desk's routing rows and record detail carry the subject too.
-      void qc.invalidateQueries({ queryKey: ['books'] })
-      void qc.invalidateQueries({ queryKey: ['ledger', 'books', book.id] })
-      toast.success(t('ledgerBook.composer.content.saved'))
-      // A completed request does not include text entered while it was pending.
-      if (JSON.stringify(form.getValues()) !== JSON.stringify(submitted)) return
-      leaveAllowed.current = true
-      navigate(deskBookUrl(book.id))
-    },
-    // A failed save keeps the form and its edits; leaving still asks first.
-    onError: (err) => toast.error(apiErrorMessage(err)),
-  })
+  }, [hasUnsavedChanges])
   const blocked = blocker.state === 'blocked'
   const keepEditing = (): void => { if (blocker.state === 'blocked') blocker.reset() }
   const discard = (): void => {

@@ -216,3 +216,38 @@ it('keeps edits typed while an earlier save is in flight', async () => {
   await userEvent.click(screen.getByRole('link', { name: 'Back to Ledger' }))
   expect(await screen.findByRole('dialog', { name: DISCARD_TITLE })).toBeInTheDocument()
 })
+
+it('protects a revert to the initial text while a different save is pending', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(BOOK)
+  let resolveSave!: (book: LedgerBookRead) => void
+  const put = vi.spyOn(api, 'updateLedgerBookContent').mockReturnValue(new Promise((resolve) => { resolveSave = resolve }))
+  mount()
+  await openAndRevise()
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(put).toHaveBeenCalled())
+  await userEvent.clear(screen.getByLabelText('Subject line 1'))
+  await userEvent.type(screen.getByLabelText('Subject line 1'), 'Leave plan')
+  await userEvent.click(screen.getByRole('link', { name: 'Back to Ledger' }))
+  expect(await screen.findByRole('dialog', { name: DISCARD_TITLE })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Keep editing' }))
+  await act(async () => resolveSave({ ...BOOK, subjects: ['Leave plan (revised)'], content_sha256: 'saved' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled())
+  expect(screen.getByLabelText('Subject line 1')).toHaveValue('Leave plan')
+  await userEvent.click(screen.getByRole('link', { name: 'Back to Ledger' }))
+  expect(await screen.findByRole('dialog', { name: DISCARD_TITLE })).toBeInTheDocument()
+})
+
+it('does not redirect after the writer discards and a pending save completes', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(BOOK)
+  let resolveSave!: (book: LedgerBookRead) => void
+  const put = vi.spyOn(api, 'updateLedgerBookContent').mockReturnValue(new Promise((resolve) => { resolveSave = resolve }))
+  const { router } = mount()
+  await openAndRevise()
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(put).toHaveBeenCalled())
+  await act(() => router.navigate(-1))
+  await userEvent.click(await screen.findByRole('button', { name: 'Discard changes' }))
+  expect(await screen.findByText('/records')).toBeInTheDocument()
+  await act(async () => resolveSave({ ...BOOK, subjects: ['Leave plan (revised)'], content_sha256: 'saved' }))
+  expect(screen.getByLabelText('URL')).toHaveTextContent('/records')
+})
