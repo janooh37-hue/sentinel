@@ -932,6 +932,7 @@ export type LedgerBookRead = components['schemas']['LedgerBookRead']
 export type LedgerAddresseeIn = components['schemas']['LedgerAddresseeIn']
 export type LedgerRevisionRead = components['schemas']['LedgerRevisionRead']
 export type LedgerContentUpdate = components['schemas']['LedgerContentUpdate']
+export type LedgerSignRequest = components['schemas']['LedgerSignRequest']
 export type LedgerPaperPreset = LedgerDraftRead['paper_preset']
 export type LedgerReferenceRead = components['schemas']['LedgerReferenceRead']
 export type LedgerFolderRead = components['schemas']['LedgerFolderRead']
@@ -1157,6 +1158,7 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   LEDGER_BOOK_CHAIN_ONLY: 'errors.ledger.chainOnly',
   LEDGER_BOOK_CONTENT_ONLY: 'errors.ledger.contentOnly',
   CONTENT_CONFLICT: 'errors.ledger.contentConflict',
+  SIGNING_CONTENT_CONFLICT: 'errors.ledger.signingContentConflict',
   REVISION_LOCKED: 'errors.ledger.revisionLocked',
   REVISION_NOT_SIGNED: 'errors.ledger.revisionNotSigned',
   DRAFT_TAB_REQUIRED: 'errors.ledger.draftTabRequired',
@@ -2367,7 +2369,7 @@ export const api = {
   /** Opens a new correction Revision under the same reference (latest must be signed). */
   startLedgerCorrection: (id: number) =>
     request<LedgerBookRead>('POST', `/ledger/books/${id}/corrections`),
-  signLedgerBook: (id: number) => request<LedgerBookRead>('POST', `/ledger/books/${id}/sign`),
+  signLedgerBook: (id: number, body: LedgerSignRequest) => request<LedgerBookRead>('POST', `/ledger/books/${id}/sign`, body),
   returnLedgerBook: (id: number, note: string) => request<LedgerBookRead>('POST', `/ledger/books/${id}/return`, { note }),
   resubmitLedgerBook: (id: number) => request<LedgerBookRead>('POST', `/ledger/books/${id}/resubmit`),
   changeLedgerSigner: (id: number, managerId: number) => request<LedgerBookRead>('PUT', `/ledger/books/${id}/signer`, { manager_id: managerId }),
@@ -2377,8 +2379,8 @@ export const api = {
   ledgerDraftPaperPdfUrl: (id: number, ts: string) =>
     `${BASE}/ledger/drafts/${id}/paper.pdf?ts=${encodeURIComponent(ts)}`,
   /** A Revision's paper as PDF; `revision` omitted = the newest the caller may read. */
-  ledgerBookPaperPdfUrl: (id: number, revision?: number) =>
-    `${BASE}/ledger/books/${id}/paper.pdf${qs({ revision })}`,
+  ledgerBookPaperPdfUrl: (id: number, revision?: number, contentHash?: string) =>
+    `${BASE}/ledger/books/${id}/paper.pdf${qs({ revision, v: contentHash })}`,
   /** POST /books/word-sessions — create a draft book + open-in-Word session.
    *  Returns WordSessionRead with a word_url for WebDAV/Word Direct Access. */
   createWordBook: (body: components['schemas']['WordBookCreate']) =>

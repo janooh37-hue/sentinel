@@ -86,6 +86,10 @@ def content_payload(detail, content):
     }
 
 
+def sign_payload(detail):
+    return content_payload(detail, {})
+
+
 def saves(db, version_id):
     return list(
         db.scalars(
@@ -492,7 +496,7 @@ def test_desk_rows_carry_importance_and_ledger_template(ledger, monkeypatch):
     db.commit()
     monkeypatch.setattr(user_signature_service, "get_settings", lambda: Settings(data_dir=root))
     actor[0] = signer
-    signed = client.post(f"{BOOKS}/{ledger_book['id']}/sign")
+    signed = client.post(f"{BOOKS}/{ledger_book['id']}/sign", json=sign_payload(ledger_book))
     assert signed.status_code == 200, signed.text
     actor[0] = owner
     db.add(BookCategory(id="HR", prefix="HR", requires_approval=False))
@@ -580,7 +584,7 @@ def test_signed_grade_and_paper_survive_correction_regrade(ledger, monkeypatch, 
     monkeypatch.setattr(user_signature_service, "resolve_signature", lambda user: signature)
     monkeypatch.setattr(push_service, "send_to_user", lambda *args, **kwargs: None)
     actor[0] = db.get(User, detail["signer"]["user_id"])
-    response = client.post(f"{url}/sign")
+    response = client.post(f"{url}/sign", json=sign_payload(detail))
     assert response.status_code == 200, response.text
     version_id = detail["selected_version_id"]
     version = db.get(BookVersion, version_id)

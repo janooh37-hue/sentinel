@@ -60,6 +60,7 @@ describe('apiErrorMessage', () => {
     ],
     ['DRAFT_TAB_REQUIRED', 'Choose the tab (classification) first.', 'اختر التبويب أولاً.'],
     ['LEDGER_BOOK_CONTENT_ONLY', 'Edit Ledger Book subjects in the Ledger content editor.', 'عدّل مواضيع كتاب السجل في محرّر محتواه.'],
+    ['SIGNING_CONTENT_CONFLICT', 'This book changed after you opened it. Review the updated paper before signing again.', 'تغيّر هذا الكتاب بعد فتحه. راجع الورقة المحدّثة قبل التوقيع مرة أخرى.'],
     ['CONTENT_CONFLICT', 'This book changed in another session. Your edits are still here. Copy any text you need, then reopen the book before saving.', 'تغيّر هذا الكتاب في جلسة أخرى. ما زالت تعديلاتك هنا. انسخ أي نص تحتاجه، ثم أعد فتح الكتاب قبل الحفظ.'],
   ])('localizes the %s Ledger Book refusal even when the server text has Arabic letters', async (code, en, ar) => {
     const refusal = new ApiError(409, code, 'Choose the tab (التبويب) first.')

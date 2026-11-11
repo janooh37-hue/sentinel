@@ -567,6 +567,9 @@ def _send_references(
     ).all()
     results = []
     for reference in references:
+        # Ledger recipients come only from their signing chain, never an attached reference.
+        if book_service.is_ledger_book(reference):
+            continue
         try:
             book_service.require_full_book_access(db, user, reference)
         except AppError:

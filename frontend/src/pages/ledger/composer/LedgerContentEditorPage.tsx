@@ -90,8 +90,9 @@ export function LedgerContentEditorPage(): React.JSX.Element {
 function ContentSession({ book, editable }: { book: LedgerBookRead; editable: boolean }): React.JSX.Element {
   const { t } = useTranslation()
   const [editingStarted, setEditingStarted] = useState(editable)
+  const [readyPaperUrl, setReadyPaperUrl] = useState<string | null>(null)
   if (editable && !editingStarted) setEditingStarted(true)
-  const latest = book.revisions.at(-1)
+  const paperUrl = api.ledgerBookPaperPdfUrl(book.id, book.selected_version_id, book.content_sha256)
   // A refresh can lock or replace the Revision while its local edits still need protection.
   return editingStarted ? <ContentForm book={book} editable={editable} /> : (
     <>
@@ -99,8 +100,8 @@ function ContentSession({ book, editable }: { book: LedgerBookRead; editable: bo
         <Lock aria-hidden="true" className="size-4 shrink-0" />
         {t('ledgerBook.composer.content.locked')}
       </p>
-      <LedgerBookActions bookId={book.id} />
-      <LedgerPaperPdf url={api.ledgerBookPaperPdfUrl(book.id, latest?.version_id)} title={t('ledgerBook.composer.paper.title')} className="h-[calc(100dvh-12rem)] min-h-96" />
+      <LedgerBookActions bookId={book.id} reviewedPaper={readyPaperUrl === paperUrl ? { versionId: book.selected_version_id, contentHash: book.content_sha256 } : null} />
+      <LedgerPaperPdf url={paperUrl} onReady={() => setReadyPaperUrl(paperUrl)} title={t('ledgerBook.composer.paper.title')} className="h-[calc(100dvh-12rem)] min-h-96" />
     </>
   )
 }

@@ -37,7 +37,7 @@ function leafKeys(node: unknown, prefix = ''): string[] {
 function mountAll(): HTMLElement {
   const router = createMemoryRouter([{
     path: '/ledger/compose/:draftId',
-    element: <><NewLedgerBookButton /><LedgerDraftsList /><LedgerBookActions bookId={40} onRevisionChange={() => {}} /><LedgerComposerPage /></>,
+    element: <><NewLedgerBookButton /><LedgerDraftsList /><LedgerBookActions bookId={40} reviewedPaper={null} onRevisionChange={() => {}} /><LedgerComposerPage /></>,
   }], { initialEntries: ['/ledger/compose/12'] })
   const { container } = render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>

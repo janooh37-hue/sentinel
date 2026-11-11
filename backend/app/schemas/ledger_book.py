@@ -175,6 +175,13 @@ class LedgerBookRead(ORMBase):
     folders: list[LedgerFolderRead]
 
 
+class LedgerSignRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_version_id: int = Field(gt=0)
+    expected_content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class LedgerContentUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

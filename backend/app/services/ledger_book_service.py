@@ -904,9 +904,22 @@ def draft_paper(db: Session, user: User, draft_id: int) -> str:
     )
 
 
-def book_paper(db: Session, user: User, book_id: int, *, version_id: int | None = None) -> str:
+def book_paper(
+    db: Session,
+    user: User,
+    book_id: int,
+    *,
+    version_id: int | None = None,
+    expected_content_sha256: str | None = None,
+) -> str:
     """One Revision as paper, under the same read access as the detail route."""
     read = ledger_book_read(db, user, book_id, version_id=version_id)
+    if expected_content_sha256 is not None and read.content_sha256 != expected_content_sha256:
+        raise AppError(
+            "SIGNING_CONTENT_CONFLICT",
+            "The revision or content changed. Review the latest paper before signing.",
+            http_status=409,
+        )
     book = get_ledger_book(db, book_id)
     paper_date = (
         datetime.strptime(read.paper_date, PAPER_DATE_FORMAT).date() if read.paper_date else None
@@ -1163,11 +1176,24 @@ def signature_path(db: Session, user: User, book_id: int, revision: int | None) 
     return path
 
 
-def sign(db: Session, user: User, book_id: int) -> LedgerBookRead:
+def sign(
+    db: Session, user: User, book_id: int, *, expected_version_id: int, expected_content_sha256: str
+) -> LedgerBookRead:
     """Lock the Revision and stage internal deliveries in one transaction."""
     target: Path | None = None
     try:
         book, version, step = _pending_assignee(db, user, book_id)
+        current = _current_save(db, version.id)
+        if (
+            version.id != expected_version_id
+            or current is None
+            or current.content_sha256 != expected_content_sha256
+        ):
+            raise AppError(
+                "SIGNING_CONTENT_CONFLICT",
+                "The revision or content changed. Review the latest paper before signing.",
+                http_status=409,
+            )
         source = user_signature_service.resolve_signature(user)
         if source is None:
             raise ValidationFailedError("NO_SIGNATURE", "Save your own signature before signing.")
@@ -1325,9 +1351,18 @@ def _local_assets(paper: str, image_prefix: str, image_path: Callable[[str], Pat
     )
 
 
-def _pdf_paper(db: Session, user: User, book: Book, version_id: int) -> str:
+def _pdf_paper(
+    db: Session,
+    user: User,
+    book: Book,
+    version_id: int,
+    *,
+    expected_content_sha256: str | None = None,
+) -> str:
     """One Revision's paper, ready for headless Edge (signature only once signed)."""
-    paper = book_paper(db, user, book.id, version_id=version_id)
+    paper = book_paper(
+        db, user, book.id, version_id=version_id, expected_content_sha256=expected_content_sha256
+    )
     version = next(v for v in book.versions if v.id == version_id)
     if version.signed_at is not None:
         signature_url = f"/api/v1/ledger/books/{book.id}/signature?revision={version_id}"
@@ -1341,11 +1376,26 @@ def _pdf_paper(db: Session, user: User, book: Book, version_id: int) -> str:
     )
 
 
-def book_pdf(db: Session, user: User, book_id: int, *, version_id: int | None = None) -> bytes:
+def book_pdf(
+    db: Session,
+    user: User,
+    book_id: int,
+    *,
+    version_id: int | None = None,
+    expected_content_sha256: str | None = None,
+) -> bytes:
     """The preview PDF of one Revision, under the paper's read access."""
     read = ledger_book_read(db, user, book_id, version_id=version_id)
     book = get_ledger_book(db, book_id)
-    return sheet_pdf_service.print_document(_pdf_paper(db, user, book, read.selected_version_id))
+    return sheet_pdf_service.print_document(
+        _pdf_paper(
+            db,
+            user,
+            book,
+            read.selected_version_id,
+            expected_content_sha256=expected_content_sha256,
+        )
+    )
 
 
 def draft_pdf(db: Session, user: User, draft_id: int) -> bytes:

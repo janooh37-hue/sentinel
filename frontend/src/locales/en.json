@@ -4893,6 +4893,7 @@
       "draftBodyRequired": "Write the letter body first.",
       "contentOnly": "Edit Ledger Book subjects in the Ledger content editor.",
       "contentConflict": "This book changed in another session. Your edits are still here. Copy any text you need, then reopen the book before saving.",
+      "signingContentConflict": "This book changed after you opened it. Review the updated paper before signing again.",
       "imageEmpty": "The image is empty.",
       "imageTooLarge": "The image is too large (5 MB at most).",
       "imageTypeUnsupported": "Only PNG, JPEG, GIF and WebP images are accepted."

@@ -16,7 +16,9 @@ from app.db.models import (
     AuditLog,
     Base,
     Book,
+    BookApprovalStep,
     BookDraft,
+    BookRecipient,
     BookVersion,
     ClassifiedRefSequence,
     LedgerBookSave,
@@ -357,3 +359,91 @@ def test_concurrent_content_saves_accept_only_one_editor_snapshot(ledger_session
         current = ledger_book_service.ledger_book_read(db, db.get(User, writer_id), opened.id)
         assert current.subjects == [f"Editor {winner}"]
         assert current.body_html == f"<p>Editor {winner}</p>"
+
+
+def test_waiting_signer_rechecks_reviewed_hash_after_writer_commit(ledger_sessions, monkeypatch):
+    from app.api.errors import AppError
+    from app.db.repos._locking import begin_immediate_if_idle
+
+    sessions, settings = ledger_sessions
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    signature = settings.data_dir / "manager-signature.png"
+    signature.write_bytes(b"signature")
+    monkeypatch.setattr(
+        ledger_book_service.user_signature_service, "resolve_signature", lambda user: signature
+    )
+    with sessions() as db:
+        writer = make_user(db, role="manager", email="sign-race-writer@test.ae")
+        draft = ledger_book_service.create_draft(
+            db,
+            writer,
+            LedgerDraftCreate(
+                tab=4, subjects=["Before"], body_html="<p>Before</p>", **signer_fields(db)
+            ),
+        )
+        book = ledger_book_service.save_and_send(db, writer, draft.id)
+        opened = ledger_book_service.ledger_book_read(db, writer, book.id)
+        writer_id, signer_id = writer.id, opened.signer.user_id
+    ready, sign_started, lock_attempted = Event(), Event(), Event()
+    real_begin = ledger_book_service.begin_immediate_if_idle
+
+    def begin_sign(db):
+        lock_attempted.set()
+        return real_begin(db)
+
+    monkeypatch.setattr(ledger_book_service, "begin_immediate_if_idle", begin_sign)
+
+    def sign():
+        with sessions() as db:
+            user = db.get(User, signer_id)
+            stale_book = ledger_book_service.get_ledger_book(db, opened.id)
+            assert stale_book.versions[0].signed_at is None
+            ready.set()
+            assert sign_started.wait(timeout=10)
+            try:
+                ledger_book_service.sign(
+                    db,
+                    user,
+                    opened.id,
+                    expected_version_id=opened.selected_version_id,
+                    expected_content_sha256=opened.content_sha256,
+                )
+            except AppError as exc:
+                return exc.code
+            return "signed"
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(sign)
+        assert ready.wait(timeout=10)
+        with sessions() as db:
+            begin_immediate_if_idle(db)
+            body = "<p>Unreviewed change</p>"
+            changed_book = db.get(Book, opened.id)
+            changed_book.subject = "Changed"
+            changed_book.search_text = ledger_book_service._search_text(
+                changed_book, ["Changed"], body
+            )
+            db.add(
+                LedgerBookSave(
+                    version_id=opened.selected_version_id,
+                    saved_by_user_id=writer_id,
+                    subjects=["Changed"],
+                    body_html=body,
+                    content_sha256=ledger_book_service._content_sha256(["Changed"], body),
+                )
+            )
+            db.flush()
+            sign_started.set()
+            assert lock_attempted.wait(timeout=10)
+            with pytest.raises(TimeoutError):
+                future.result(timeout=0.2)
+            db.commit()
+        assert future.result(timeout=10) == "SIGNING_CONTENT_CONFLICT"
+    with sessions() as db:
+        assert db.get(BookVersion, opened.selected_version_id).signed_at is None
+        assert db.scalar(select(BookApprovalStep.state)) == "pending"
+        assert db.scalar(select(func.count()).select_from(BookRecipient)) == 0
+        assert db.scalar(select(func.count()).select_from(LedgerBookSave)) == 2
+        assert not ledger_book_service._revision_signature_file(
+            opened.id, opened.selected_version_id
+        ).exists()

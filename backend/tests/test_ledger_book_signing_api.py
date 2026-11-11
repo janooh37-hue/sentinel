@@ -11,7 +11,15 @@ from app.services import email_service, push_service, sheet_pdf_service, user_si
 from tests.conftest import make_user
 from tests.fakes.imap import FakeImapServer
 from tests.test_email_routes import _account
-from tests.test_ledger_book_api import BOOKS, CONTENT, DRAFTS, PNG, content_payload, error
+from tests.test_ledger_book_api import (
+    BOOKS,
+    CONTENT,
+    DRAFTS,
+    PNG,
+    content_payload,
+    error,
+    sign_payload,
+)
 from tests.test_ledger_book_api import ledger as ledger
 
 
@@ -143,11 +151,11 @@ def test_manager_signs_with_own_signature_and_delivers_after_lock(ledger, monkey
     monkeypatch.setattr(push_service, "send_to_user", lambda *args, **kwargs: None)
     book, to, cc = submitted(ledger)
     url = f"{BOOKS}/{book['id']}"
-    assert client.post(f"{url}/sign").status_code == 403
+    assert client.post(f"{url}/sign", json=sign_payload(book)).status_code == 403
     actor[0] = manager_user
-    error(client.post(f"{url}/sign"), 422, "NO_SIGNATURE")
+    error(client.post(f"{url}/sign", json=sign_payload(book)), 422, "NO_SIGNATURE")
     saved_signature(db, manager_user, root, monkeypatch)
-    response = client.post(f"{url}/sign")
+    response = client.post(f"{url}/sign", json=sign_payload(book))
     assert response.status_code == 200, response.text
     assert response.json()["approval_state"] == "approved"
     assert response.json()["revisions"][0]["locked"]
@@ -166,7 +174,7 @@ def test_manager_signs_with_own_signature_and_delivers_after_lock(ledger, monkey
         received = next(row for row in rows if row["id"] == book["id"])
         assert received["my_inbox"]["purpose"] == purpose
         assert received["my_inbox"]["sent_by_user_id"] == writer.id
-        assert client.post(f"{url}/sign").status_code in (403, 409)
+        assert client.post(f"{url}/sign", json=sign_payload(book)).status_code in (403, 409)
 
 
 def test_generic_send_cannot_deliver_unsigned_ledger_book(ledger):
@@ -209,7 +217,10 @@ def test_return_edit_resubmit_keeps_reference_and_allows_manager_sign(ledger, mo
     assert not response.json()["can_resubmit"]
     actor[0] = manager_user
     saved_signature(db, manager_user, root, monkeypatch)
-    assert client.post(f"{url}/sign").json()["approval_state"] == "approved"
+    assert (
+        client.post(f"{url}/sign", json=sign_payload(changed.json())).json()["approval_state"]
+        == "approved"
+    )
 
 
 def test_writer_changes_pending_signer_but_not_signed_revision(ledger, monkeypatch):
@@ -232,11 +243,11 @@ def test_writer_changes_pending_signer_but_not_signed_revision(ledger, monkeypat
     assert response.status_code == 200, response.text
     assert response.json()["signer"]["manager_id"] == replacement.id
     actor[0] = manager_user
-    assert client.post(f"{url}/sign").status_code in (403, 404)
+    assert client.post(f"{url}/sign", json=sign_payload(book)).status_code in (403, 404)
     actor[0] = replacement_user
     assert client.get(url).json()["can_sign"]
     saved_signature(db, replacement_user, root, monkeypatch)
-    signed = client.post(f"{url}/sign")
+    signed = client.post(f"{url}/sign", json=sign_payload(book))
     assert signed.status_code == 200, signed.text
     actor[0] = writer
     error(
@@ -249,7 +260,9 @@ def test_writer_changes_pending_signer_but_not_signed_revision(ledger, monkeypat
     assert correction.json()["can_resubmit"]
     assert client.post(f"{url}/resubmit").json()["approval_state"] == "pending"
     actor[0] = replacement_user
-    assert client.post(f"{url}/sign").json()["revisions"][-1]["locked"]
+    assert client.post(f"{url}/sign", json=sign_payload(correction.json())).json()["revisions"][-1][
+        "locked"
+    ]
     actor[0] = writer
     recipients = client.get(f"/api/v1/books/{book['id']}/recipients").json()
     assert len(recipients) == 2
@@ -287,7 +300,7 @@ def test_external_contacts_and_signed_pdf_outlook_draft(ledger, monkeypatch, gra
     assert not book["can_create_outlook_draft"]
     actor[0] = manager_user
     saved_signature(db, manager_user, root, monkeypatch)
-    assert client.post(f"{url}/sign").status_code == 200
+    assert client.post(f"{url}/sign", json=sign_payload(book)).status_code == 200
     assert client.post(f"{url}/outlook-draft").status_code in (403, 404)
     actor[0] = writer
     assert client.get(url).json()["can_create_outlook_draft"]
@@ -357,3 +370,91 @@ def test_recipient_eligibility_ownership_and_exactly_one_id_are_atomic(ledger):
     for manager in (inactive_manager, unlinked):
         error(client.patch(url, json={"signer_manager_id": manager.id}), 422, "SIGNER_INVALID")
         assert client.get(url).json() == draft
+
+
+@pytest.mark.parametrize("stale", ["content", "revision"])
+def test_signing_requires_the_reviewed_revision_and_content(ledger, monkeypatch, stale):
+    from sqlalchemy import select
+
+    from app.db.models import (
+        AuditLog,
+        Book,
+        BookApprovalStep,
+        BookRecipient,
+        BookVersion,
+        LedgerBookSave,
+    )
+
+    client, db, actor, writer, manager_user, root = ledger
+    monkeypatch.setattr(push_service, "send_to_user", lambda *args, **kwargs: None)
+    opened, _, _ = submitted(ledger)
+    saved_signature(db, manager_user, root, monkeypatch)
+    url = f"{BOOKS}/{opened['id']}"
+    reviewed = {
+        "expected_version_id": opened["selected_version_id"],
+        "expected_content_sha256": opened["content_sha256"],
+    }
+    if stale == "revision":
+        actor[0] = manager_user
+        initial = client.post(f"{url}/sign", json=reviewed)
+        assert initial.status_code == 200, initial.text
+        actor[0] = writer
+        correction = client.post(f"{url}/corrections")
+        assert correction.status_code == 201, correction.text
+        assert client.post(f"{url}/resubmit").status_code == 200
+    else:
+        changed = client.put(
+            f"{url}/content",
+            json=content_payload(
+                opened, {"subjects": ["Changed"], "body_html": "<p>Transfer funds immediately</p>"}
+            ),
+        )
+        assert changed.status_code == 200, changed.text
+    actor[0] = manager_user
+
+    def state():
+        return {
+            model.__tablename__: list(
+                db.execute(select(model.__table__).order_by(model.__table__.c.id)).mappings()
+            )
+            for model in (
+                Book,
+                BookVersion,
+                LedgerBookSave,
+                BookApprovalStep,
+                BookRecipient,
+                AuditLog,
+            )
+        }
+
+    def files():
+        return {
+            str(path.relative_to(root)): path.read_bytes()
+            for path in root.rglob("*")
+            if path.is_file()
+        }
+
+    before, before_files = state(), files()
+    response = client.post(f"{url}/sign", json=reviewed)
+    error(response, 409, "SIGNING_CONTENT_CONFLICT")
+    assert state() == before
+    assert files() == before_files
+    latest = client.get(url).json()
+    fresh = client.post(
+        f"{url}/sign",
+        json={
+            "expected_version_id": latest["selected_version_id"],
+            "expected_content_sha256": latest["content_sha256"],
+        },
+    )
+    assert fresh.status_code == 200, fresh.text
+    assert fresh.json()["revisions"][-1]["locked"]
+
+
+def test_ledger_sign_requires_a_reviewed_snapshot(ledger):
+    client, _db, actor, _, manager_user, _ = ledger
+    book, _, _ = submitted(ledger)
+    actor[0] = manager_user
+    response = client.post(f"{BOOKS}/{book['id']}/sign", json={})
+    assert response.status_code == 422, response.text
+    assert client.get(f"{BOOKS}/{book['id']}").json()["can_sign"]

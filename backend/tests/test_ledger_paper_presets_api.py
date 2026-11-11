@@ -18,7 +18,16 @@ from app.db.models import (
     UserPermission,
 )
 from app.services import book_send_service, ledger_book_service, sheet_pdf_service
-from tests.test_ledger_book_api import BOOKS, CONTENT, DRAFTS, addressees_payload, error, send
+from tests.test_ledger_book_api import (
+    BOOKS,
+    CONTENT,
+    DRAFTS,
+    addressees_payload,
+    content_payload,
+    error,
+    send,
+    sign_payload,
+)
 from tests.test_ledger_book_api import ledger as ledger
 from tests.test_ledger_book_signing_api import saved_signature
 
@@ -184,7 +193,7 @@ def test_correction_inherits_preset_and_layout(ledger, monkeypatch):
     signing_user = db.get(User, db.get(Book, book["id"]).approval_steps[0].assignee_user_id)
     saved_signature(db, signing_user, root, monkeypatch)
     actor[0] = signing_user
-    assert client.post(f"{BOOKS}/{book['id']}/sign").status_code == 200
+    assert client.post(f"{BOOKS}/{book['id']}/sign", json=sign_payload(book)).status_code == 200
     actor[0] = owner
     corrected = client.post(f"{BOOKS}/{book['id']}/corrections")
     assert corrected.status_code == 201, corrected.text
@@ -285,7 +294,7 @@ def test_signed_reference_paper_survives_target_correction_with_live_access(ledg
 
     def sign_book(detail):
         actor[0] = signer
-        response = client.post(f"{BOOKS}/{detail['id']}/sign")
+        response = client.post(f"{BOOKS}/{detail['id']}/sign", json=sign_payload(detail))
         assert response.status_code == 200, response.text
         actor[0] = owner
         return response.json()
@@ -382,7 +391,7 @@ def test_signed_writer_identity_survives_profile_relink_and_correction(ledger, m
     signer = db.get(User, book["signer"]["user_id"])
     saved_signature(db, signer, root, monkeypatch)
     actor[0] = signer
-    signed = client.post(f"{BOOKS}/{book['id']}/sign")
+    signed = client.post(f"{BOOKS}/{book['id']}/sign", json=sign_payload(book))
     assert signed.status_code == 200, signed.text
     actor[0] = owner
     url = f"{BOOKS}/{book['id']}"
@@ -449,3 +458,67 @@ def test_draft_preview_omits_revoked_reference_and_folder_metadata(ledger, monke
     assert visible_reference["ref_number"] in current
     assert "Visible folder" in current
     assert client.get(f"{DRAFTS}/{draft['id']}").json() == draft
+
+
+def test_book_pdf_hash_binds_the_rendered_content_before_conversion(ledger, monkeypatch):
+    client, _, _, _, _, _ = ledger
+    printed = capture_pdf(monkeypatch)
+    _, opened = send(client)
+    url = f"{BOOKS}/{opened['id']}"
+    changed = client.put(
+        f"{url}/content",
+        json=content_payload(
+            opened, {"subjects": ["Changed"], "body_html": "<p>Unreviewed content</p>"}
+        ),
+    )
+    assert changed.status_code == 200, changed.text
+    current = changed.json()
+    stale = client.get(
+        f"{url}/paper.pdf",
+        params={"revision": opened["selected_version_id"], "v": opened["content_sha256"]},
+    )
+    error(stale, 409, "SIGNING_CONTENT_CONFLICT")
+    assert printed == []
+    matched = client.get(
+        f"{url}/paper.pdf",
+        params={"revision": current["selected_version_id"], "v": current["content_sha256"]},
+    )
+    assert matched.status_code == 200, matched.text
+    assert matched.content == FAKE_PDF
+    assert len(printed) == 1
+    assert "Unreviewed content" in printed[0]
+    assert "Original body" not in printed[0]
+    invalid = client.get(f"{url}/paper.pdf", params={"v": "invalid"})
+    assert invalid.status_code == 422
+    assert len(printed) == 1
+
+
+def test_pdf_hash_check_covers_content_changes_between_metadata_and_render(ledger, monkeypatch):
+    client, db, _, owner, _, _ = ledger
+    printed = capture_pdf(monkeypatch)
+    _, opened = send(client)
+    url = f"{BOOKS}/{opened['id']}"
+    before = ledger_book_service.ledger_book_read(db, owner, opened["id"])
+    changed = client.put(
+        f"{url}/content",
+        json=content_payload(
+            opened, {"subjects": ["Changed"], "body_html": "<p>Unreviewed content</p>"}
+        ),
+    )
+    assert changed.status_code == 200, changed.text
+    after = ledger_book_service.ledger_book_read(db, owner, opened["id"])
+    snapshots = iter([before, after])
+    monkeypatch.setattr(
+        ledger_book_service, "ledger_book_read", lambda *args, **kwargs: next(snapshots, after)
+    )
+    response = client.get(
+        f"{url}/paper.pdf",
+        params={"revision": opened["selected_version_id"], "v": opened["content_sha256"]},
+    )
+    if response.status_code == 200:
+        assert len(printed) == 1
+        assert "Original body" in printed[0]
+        assert "Unreviewed content" not in printed[0]
+    else:
+        error(response, 409, "SIGNING_CONTENT_CONFLICT")
+        assert printed == []

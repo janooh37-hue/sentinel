@@ -625,6 +625,11 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
     queryFn: () => api.getLedgerBook(book.id, revision),
     enabled: isLedgerBook && !loading,
   })
+  const paperUrl = ledgerBook.data
+    ? api.ledgerBookPaperPdfUrl(book.id, ledgerBook.data.selected_version_id, ledgerBook.data.content_sha256) : null
+  const [readyPaperUrl, setReadyPaperUrl] = useState<string | null>(null)
+  const reviewedPaper = paperUrl !== null && readyPaperUrl === paperUrl && ledgerBook.data
+    ? { versionId: ledgerBook.data.selected_version_id, contentHash: ledgerBook.data.content_sha256 } : null
   const [sendOpen, setSendOpen] = useState(false)
   const [pickedPaper, setPickedPaper] = useState<PaperKey | null>(null)
   const papers = useMemo(() => papersOf(book, { inmateReporter: false }), [book])
@@ -663,7 +668,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
         <span aria-hidden className="mx-1 hidden h-5 w-px shrink-0 bg-border sm:block" />
         {inboxActions.map((action) => <Button key={action.key} className="shrink-0" variant={action.key === 'done' ? 'default' : 'outline'} size="sm" disabled={action.pending} aria-busy={action.pending} onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
         {canSend && <Button className="shrink-0" variant="outline" size="sm" disabled={loading} onClick={() => setSendOpen(true)}><Send className="h-4 w-4 rtl:-scale-x-100" aria-hidden />{t('ledger.booksDesk.forward')}</Button>}
-        {isLedgerBook && !loading && <LedgerBookActions className="min-w-0 max-w-full" bookId={book.id} revision={revision} onRevisionChange={(versionId) => setRev(String(versionId))} />}
+        {isLedgerBook && !loading && <LedgerBookActions className="min-w-0 max-w-full" bookId={book.id} revision={revision} reviewedPaper={reviewedPaper} onRevisionChange={(versionId) => setRev(String(versionId))} />}
         {reply.actions.map((action) => <Button key={action.key} className="shrink-0" variant="outline" size="sm" onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
         <BookFolderMenu bookId={book.id} boxes={boxes} disabled={loading} />
         <div className="ms-auto flex shrink-0 items-center gap-1 ps-2">
@@ -683,7 +688,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
       <div className={cn('flex min-w-0', isMobile ? 'shrink-0 flex-col' : 'min-h-0 flex-1')}>
         <div className={cn('flex min-w-0 flex-col', isMobile ? 'h-[65dvh] min-h-[24rem] shrink-0' : 'min-h-0 flex-1')}>
           {loading ? <DeskLoading /> : isLedgerBook ? (
-            <LedgerPaperPdf url={api.ledgerBookPaperPdfUrl(book.id, revision)} className="min-h-0 flex-1 rounded-none border-0" />
+            <LedgerPaperPdf url={paperUrl} onReady={() => setReadyPaperUrl(paperUrl)} className="min-h-0 flex-1 rounded-none border-0" />
           ) : papers.length === 0 ? (
             <DocumentState kind="empty" title={t('ledger.booksDesk.noDocument')} body={t('ledger.booksDesk.noDocumentHint')} />
           ) : <Suspense fallback={<DeskLoading />}><RecordPaperViewer papers={papers} selectedKey={selectedPaper} onSelectKey={setPickedPaper} mode="pane" initialFit="width" compact /></Suspense>}

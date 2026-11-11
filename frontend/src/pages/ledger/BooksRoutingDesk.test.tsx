@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18n from 'i18next'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
@@ -17,7 +17,7 @@ vi.mock('@/pages/books/RecordPaperViewer', () => ({
   default: ({ papers }: { papers: { url: string }[] }) => <div role="document" data-url={papers[0]?.url} />,
 }))
 vi.mock('@/components/books/LedgerPaperPdf', () => ({
-  LedgerPaperPdf: ({ url }: { url: string | null }) => <div role="document" data-url={url} />,
+  LedgerPaperPdf: ({ url, onReady }: { url: string | null; onReady?: () => void }) => <div role="document" data-url={url}><button onClick={onReady}>Preview loaded</button></div>,
 }))
 vi.mock('@/lib/api', async (original) => {
   const actual = await original<typeof ApiModule>()
@@ -109,10 +109,10 @@ describe('Books routing desk: Ledger Books', () => {
     vi.mocked(useIsMobile).mockReturnValue(mobile)
     vi.stubGlobal('innerWidth', mobile ? 390 : 1280)
     vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book', can_send: true })
-    vi.spyOn(api, 'getLedgerBook').mockResolvedValue(LEDGER_BOOK)
+    vi.spyOn(api, 'getLedgerBook').mockImplementation(async (_id, revision) => ({ ...LEDGER_BOOK, selected_version_id: revision ?? 72 }))
     mount('/ledger?tab=books&book=7&rev=71')
     const paper = await screen.findByRole('document')
-    expect(paper).toHaveAttribute('data-url', '/api/v1/ledger/books/7/paper.pdf?revision=71')
+    await waitFor(() => expect(paper).toHaveAttribute('data-url', '/api/v1/ledger/books/7/paper.pdf?revision=71&v=abc'))
     if (mobile) expect(paper.parentElement).toHaveClass('h-[65dvh]', 'min-w-0')
     expect(document.querySelector('iframe')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument()
@@ -122,7 +122,7 @@ describe('Books routing desk: Ledger Books', () => {
     expect(picker).toHaveValue('71')
     await userEvent.selectOptions(picker, '72')
     expect(screen.getByLabelText('URL')).toHaveTextContent('rev=72')
-    expect(await screen.findByRole('document')).toHaveAttribute('data-url', '/api/v1/ledger/books/7/paper.pdf?revision=72')
+    await waitFor(() => expect(screen.getByRole('document')).toHaveAttribute('data-url', '/api/v1/ledger/books/7/paper.pdf?revision=72&v=abc'))
   })
 
   it.each([
@@ -169,10 +169,28 @@ describe('Books routing desk: Ledger Books', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Return' }))
     await waitFor(() => expect(sendBack).toHaveBeenCalledWith(7, 'Correct the addressees.'))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'Preview loaded' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Sign' }))
     await userEvent.click(within(screen.getByRole('dialog', { name: 'Sign this Ledger Book?' })).getByRole('button', { name: 'Sign' }))
-    await waitFor(() => expect(sign).toHaveBeenCalledWith(7))
+    await waitFor(() => expect(sign).toHaveBeenCalledWith(7, { expected_version_id: 72, expected_content_sha256: 'abc' }))
     expect(genericSign).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])('requires the refreshed paper to load before signing (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book' })
+    const get = vi.spyOn(api, 'getLedgerBook').mockResolvedValue({ ...LEDGER_BOOK, can_sign: true })
+    const qc = mount('/ledger?tab=books&book=7')
+    expect(await screen.findByRole('button', { name: 'Sign' })).toBeDisabled()
+    await waitFor(() => expect(screen.getByRole('document')).toHaveAttribute('data-url', '/api/v1/ledger/books/7/paper.pdf?revision=72&v=abc'))
+    await userEvent.click(screen.getByRole('button', { name: 'Preview loaded' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign' })).toBeEnabled())
+    get.mockResolvedValue({ ...LEDGER_BOOK, can_sign: true, content_sha256: 'changed' })
+    await act(() => qc.invalidateQueries({ queryKey: ['ledger', 'books', 7] }))
+    await waitFor(() => expect(screen.getByRole('document')).toHaveAttribute('data-url', '/api/v1/ledger/books/7/paper.pdf?revision=72&v=changed'))
+    expect(screen.getByRole('button', { name: 'Sign' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Preview loaded' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign' })).toBeEnabled())
   })
 
   it.each([false, true])('T-F3 mounts writer Change signer and Resubmit after Return (mobile=%s)', async (mobile) => {

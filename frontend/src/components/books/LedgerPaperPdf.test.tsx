@@ -11,8 +11,9 @@ vi.mock('@/lib/pdfDocCache', () => ({ leasePdfUrl: vi.fn(), PdfFetchError: class
 // PdfPages is the rendering seam: these host tests need only the lease lifetime,
 // while its stub supplies page-position events instead of a PDFDocumentProxy.
 vi.mock('./PdfPages', () => {
-  return { PdfPages: ({ onCurrentPage }: { onCurrentPage: (page: number, total: number) => void }) => {
+  return { PdfPages: ({ onCurrentPage, onPainted }: { onCurrentPage: (page: number, total: number) => void; onPainted: () => void }) => {
     useEffect(() => { onCurrentPage(2, 3) }, [onCurrentPage])
+    useEffect(() => { onPainted() }, [onPainted])
     return <canvas aria-label="PDF pages" />
   } }
 })
@@ -25,9 +26,11 @@ it.each([
 ])('renders scrollable pages and zoom controls in %s', async (lng, count, fit, zoomIn, zoomOut) => {
   await i18n.changeLanguage(lng)
   const release = vi.fn()
+  const onReady = vi.fn()
   vi.mocked(leasePdfUrl, { partial: true }).mockResolvedValue({ release })
-  const { rerender } = render(<LedgerPaperPdf url="/paper.pdf?revision=71" title="Proof" />)
+  const { rerender } = render(<LedgerPaperPdf url="/paper.pdf?revision=71" title="Proof" onReady={onReady} />)
   expect(await screen.findByText(count)).toBeInTheDocument()
+  expect(onReady).toHaveBeenCalledTimes(1)
   const region = screen.getByRole('region', { name: 'Proof' })
   expect(region).toHaveAttribute('dir', lng === 'ar' ? 'rtl' : 'ltr')
   expect(leasePdfUrl).toHaveBeenCalledWith('/paper.pdf?revision=71', expect.any(AbortSignal))

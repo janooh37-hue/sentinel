@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, MemoryRouter, Outlet, Route, RouterProvider, Routes, useLocation } from 'react-router-dom'
@@ -11,7 +12,7 @@ import i18n from '@/lib/i18n'
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'employee' } }) }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
-import { LedgerBookActions } from './LedgerBookActions'
+import { LedgerBookActions, type LedgerReviewedPaper } from './LedgerBookActions'
 import { ledgerBookKey } from './ledgerBookKeys'
 
 const rev = (n: number, locked: boolean): LedgerRevisionRead => ({
@@ -36,7 +37,7 @@ function mount(onRevisionChange = vi.fn()): void {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={['/ledger']}>
-        <Routes><Route path="*" element={<><LedgerBookActions bookId={40} onRevisionChange={onRevisionChange} /><Where /></>} /></Routes>
+        <Routes><Route path="*" element={<><LedgerBookActions bookId={40} reviewedPaper={{ versionId: 71, contentHash: 'abc' }} onRevisionChange={onRevisionChange} /><Where /></>} /></Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -44,12 +45,12 @@ function mount(onRevisionChange = vi.fn()): void {
 
 afterEach(async () => { cleanup(); vi.restoreAllMocks(); vi.clearAllMocks(); await i18n.changeLanguage('en') })
 
-function mountCorrectionVisit(strict: boolean): { router: ReturnType<typeof createMemoryRouter>; qc: QueryClient } {
+function mountCorrectionVisit(strict: boolean, reviewedPaper: LedgerReviewedPaper | null = { versionId: 71, contentHash: 'abc' }): { router: ReturnType<typeof createMemoryRouter>; qc: QueryClient } {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter([{
     element: <><Outlet /><Where /></>,
     children: [
-      { path: '/ledger', element: <CorrectionVisitActions /> },
+      { path: '/ledger', element: <CorrectionVisitActions initialPaper={reviewedPaper} /> },
       { path: '*', element: null },
     ],
   }], { initialEntries: ['/ledger'] })
@@ -57,9 +58,17 @@ function mountCorrectionVisit(strict: boolean): { router: ReturnType<typeof crea
   return { router, qc }
 }
 
-function CorrectionVisitActions(): React.JSX.Element {
+function CorrectionVisitActions({ initialPaper }: { initialPaper: LedgerReviewedPaper | null }): React.JSX.Element {
   const bookId = Number(new URLSearchParams(useLocation().search).get('book') ?? 40)
-  return <LedgerBookActions bookId={bookId} />
+  const qc = useQueryClient()
+  const [reviewedPaper, setReviewedPaper] = useState(initialPaper)
+  return <>
+    <LedgerBookActions bookId={bookId} reviewedPaper={reviewedPaper} />
+    <button onClick={() => {
+      const current = qc.getQueryData<LedgerBookRead>(ledgerBookKey(bookId))!
+      setReviewedPaper({ versionId: current.selected_version_id, contentHash: current.content_sha256 })
+    }}>Paper loaded</button>
+  </>
 }
 
 it.each([false, true])('does not redirect a departed correction visit; StrictMode=%s', async (strict) => {
@@ -97,6 +106,79 @@ it('does not redirect an old correction after the selected book changes', async 
   await act(async () => resolveCorrection(book([rev(1, true), rev(2, false)])))
   expect(router.state.location).toMatchObject({ pathname: '/ledger', search: '?book=41' })
   expect(qc.getQueryState(ledgerBookKey(40))?.isInvalidated).toBe(true)
+})
+
+it('signs the snapshot reviewed when confirmation opened despite a background refresh', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, false)], { can_sign: true }))
+  const sign = vi.spyOn(api, 'signLedgerBook').mockResolvedValue(book([rev(1, true)]))
+  const { qc } = mountCorrectionVisit(false)
+  await userEvent.click(await screen.findByRole('button', { name: 'Sign' }))
+  act(() => qc.setQueryData(ledgerBookKey(40), book([rev(1, false), rev(2, false)], { can_sign: true, content_sha256: 'changed' })))
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign' }))
+  await waitFor(() => expect(sign).toHaveBeenCalledWith(40, { expected_version_id: 71, expected_content_sha256: 'abc' }))
+})
+
+it.each([null, { versionId: 71, contentHash: 'old-paper' }, { versionId: 72, contentHash: 'abc' }])('disables signing until the shown paper snapshot is ready: %j', async (reviewedPaper) => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, false)], { can_sign: true }))
+  const sign = vi.spyOn(api, 'signLedgerBook')
+  mountCorrectionVisit(false, reviewedPaper)
+  expect(await screen.findByRole('button', { name: 'Sign' })).toBeDisabled()
+  await userEvent.click(screen.getByRole('button', { name: 'Sign' }))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(sign).not.toHaveBeenCalled()
+  await userEvent.click(screen.getByRole('button', { name: 'Paper loaded' }))
+  expect(screen.getByRole('button', { name: 'Sign' })).toBeEnabled()
+})
+
+it.each(['Sign', 'Return', 'Change signer'])('closes the old %s dialog and resets its inputs when the selected book changes', async (action) => {
+  vi.spyOn(api, 'getLedgerBook').mockImplementation(async (id) => ({ ...book([rev(1, false)], {
+    can_sign: true, can_return: true, can_change_signer: true,
+  }), id }))
+  vi.spyOn(api, 'listManagers').mockResolvedValue([
+    { id: 3, name_en: 'New manager', name_ar: 'المدير الجديد', user_id: 10, active: true, title: 'Director', has_signature: true },
+  ])
+  const sign = vi.spyOn(api, 'signLedgerBook').mockResolvedValue(book([rev(1, true)], { id: 41 }))
+  const sendBack = vi.spyOn(api, 'returnLedgerBook')
+  const changeSigner = vi.spyOn(api, 'changeLedgerSigner')
+  const { router } = mountCorrectionVisit(false)
+  await userEvent.click(await screen.findByRole('button', { name: action }))
+  if (action === 'Return') await userEvent.type(screen.getByRole('textbox', { name: 'Return note' }), 'Note for book 40')
+  if (action === 'Change signer') {
+    await screen.findByRole('option', { name: 'New manager · Director' })
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Signing manager' }), '3')
+  }
+  await act(() => router.navigate('/ledger?book=41'))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  expect(sign).not.toHaveBeenCalled()
+  expect(sendBack).not.toHaveBeenCalled()
+  expect(changeSigner).not.toHaveBeenCalled()
+  await userEvent.click(await screen.findByRole('button', { name: action }))
+  if (action === 'Return') expect(screen.getByRole('textbox', { name: 'Return note' })).toHaveValue('')
+  else if (action === 'Change signer') expect(screen.getByRole('combobox', { name: 'Signing manager' })).toHaveValue('')
+  else {
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign' }))
+    await waitFor(() => expect(sign).toHaveBeenCalledWith(41, { expected_version_id: 71, expected_content_sha256: 'abc' }))
+  }
+})
+
+it('refreshes a signing conflict and requires a new explicit confirmation for the latest snapshot', async () => {
+  const get = vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, false)], { can_sign: true }))
+  const sign = vi.spyOn(api, 'signLedgerBook').mockRejectedValueOnce(new ApiError(409, 'SIGNING_CONTENT_CONFLICT', 'Review latest content'))
+    .mockResolvedValue(book([rev(1, true)]))
+  mountCorrectionVisit(false)
+  await userEvent.click(await screen.findByRole('button', { name: 'Sign' }))
+  get.mockResolvedValue(book([rev(1, false)], { can_sign: true, content_sha256: 'latest' }))
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign' }))
+  expect(await screen.findByRole('alert')).toBeInTheDocument()
+  await waitFor(() => expect(get).toHaveBeenCalledTimes(2))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(sign).toHaveBeenCalledTimes(1)
+  expect(screen.getByRole('button', { name: 'Sign' })).toBeDisabled()
+  await userEvent.click(screen.getByRole('button', { name: 'Paper loaded' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Sign' })).toBeEnabled())
+  await userEvent.click(screen.getByRole('button', { name: 'Sign' }))
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign' }))
+  await waitFor(() => expect(sign).toHaveBeenLastCalledWith(40, { expected_version_id: 71, expected_content_sha256: 'latest' }))
 })
 
 it('T-C8 Start correction on a signed Revision opens the content editor', async () => {
@@ -140,7 +222,7 @@ it('T-F3 manager confirms Sign on the Ledger API, never the generic book API', a
   expect(sign).not.toHaveBeenCalled()
   const confirm = screen.getByRole('dialog', { name: 'Sign this Ledger Book?' })
   await userEvent.click(within(confirm).getByRole('button', { name: 'Sign' }))
-  await waitFor(() => expect(sign).toHaveBeenCalledWith(40))
+  await waitFor(() => expect(sign).toHaveBeenCalledWith(40, { expected_version_id: 71, expected_content_sha256: 'abc' }))
   expect(genericSign).not.toHaveBeenCalled()
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Sign' })).not.toBeInTheDocument())
 })

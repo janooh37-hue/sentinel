@@ -51,6 +51,7 @@ from app.schemas.ledger_book import (
     LedgerReturnIn,
     LedgerSaveRead,
     LedgerSignerIn,
+    LedgerSignRequest,
 )
 from app.services import ledger_book_service as service
 
@@ -187,10 +188,14 @@ def get_ledger_book_paper_pdf(
     db: DbDep,
     user: UserDep,
     revision: int | None = None,
+    v: Annotated[str | None, Query(pattern=r"^[0-9a-f]{64}$")] = None,
     encoding: EncodingQuery = None,
 ) -> Response:
     """One Revision as PDF, under the same read access as its paper."""
-    return _pdf_response(service.book_pdf(db, user, book_id, version_id=revision), encoding)
+    return _pdf_response(
+        service.book_pdf(db, user, book_id, version_id=revision, expected_content_sha256=v),
+        encoding,
+    )
 
 
 @router.put("/books/{book_id}/content", response_model=LedgerBookRead)
@@ -230,8 +235,16 @@ def get_book_image(book_id: int, name: str, db: DbDep, user: UserDep) -> FileRes
 
 
 @router.post("/books/{book_id}/sign", response_model=LedgerBookRead)
-def sign_ledger_book(book_id: int, db: DbDep, user: UserDep) -> LedgerBookRead:
-    return service.sign(db, user, book_id)
+def sign_ledger_book(
+    book_id: int, payload: LedgerSignRequest, db: DbDep, user: UserDep
+) -> LedgerBookRead:
+    return service.sign(
+        db,
+        user,
+        book_id,
+        expected_version_id=payload.expected_version_id,
+        expected_content_sha256=payload.expected_content_sha256,
+    )
 
 
 @router.post("/books/{book_id}/return", response_model=LedgerBookRead)

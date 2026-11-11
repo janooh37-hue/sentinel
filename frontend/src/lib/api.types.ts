@@ -14268,6 +14268,13 @@ export interface components {
             /** Content Sha256 */
             content_sha256: string;
         };
+        /** LedgerSignRequest */
+        LedgerSignRequest: {
+            /** Expected Version Id */
+            expected_version_id: number;
+            /** Expected Content Sha256 */
+            expected_content_sha256: string;
+        };
         /** LedgerSignerIn */
         LedgerSignerIn: {
             /** Manager Id */
@@ -29389,6 +29396,7 @@ export interface operations {
         parameters: {
             query?: {
                 revision?: number | null;
+                v?: string | null;
                 encoding?: string | null;
             };
             header?: never;
@@ -29568,7 +29576,11 @@ export interface operations {
                 gssg_session?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerSignRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

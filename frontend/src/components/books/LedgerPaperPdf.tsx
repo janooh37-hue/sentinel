@@ -8,18 +8,20 @@ import { cn } from '@/lib/utils'
 // Keep pdf.js and its worker in the preview chunk, as in the document viewer.
 const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
 
-export function LedgerPaperPdf({ url, title, className }: {
+export function LedgerPaperPdf({ url, title, className, onReady }: {
   url: string | null
   title?: string
   className?: string
+  onReady?: () => void
 }): React.JSX.Element {
-  return <PaperPreview key={url} url={url} title={title} className={className} />
+  return <PaperPreview key={url} url={url} title={title} className={className} onReady={onReady} />
 }
 
-function PaperPreview({ url, title, className }: {
+function PaperPreview({ url, title, className, onReady }: {
   url: string | null
   title?: string
   className?: string
+  onReady?: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const [zoom, setZoom] = useState(100)
@@ -48,7 +50,7 @@ function PaperPreview({ url, title, className }: {
         {url ? (
           <div data-ledger-pdf-width className="mx-auto" style={{ width: `${zoom}%` }}>
             <Suspense fallback={loading}>
-              <DocPdfCanvas pdfUrl={url} bare sizing="fit" onPageChange={(page, total) => setPosition((current) => current.page === page && current.total === total ? current : { page, total })} />
+              <DocPdfCanvas pdfUrl={url} bare sizing="fit" onReady={onReady} onPageChange={(page, total) => setPosition((current) => current.page === page && current.total === total ? current : { page, total })} />
             </Suspense>
           </div>
         ) : loading}

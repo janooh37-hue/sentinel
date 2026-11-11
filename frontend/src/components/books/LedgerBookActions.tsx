@@ -14,21 +14,30 @@ import { buttonVariants } from '@/components/ui/button-variants'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DialogContent, DialogDescription, DialogHeader, DialogRoot, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import { api, apiErrorMessage } from '@/lib/api'
+import { api, apiErrorMessage, ApiError, type LedgerSignRequest } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { ledgerBookKey, ledgerPaperUrl } from './ledgerBookKeys'
 import { SigningManagerPicker } from './SigningManagerPicker'
 
-export function LedgerBookActions({ bookId, revision, onRevisionChange, className }: {
+export interface LedgerReviewedPaper { versionId: number; contentHash: string }
+
+interface LedgerBookActionsProps {
   bookId: number
+  reviewedPaper: LedgerReviewedPaper | null
   /** The shown Revision's `version_id`; omitted = the newest the viewer may read. */
   revision?: number
   /** Without it the Revision picker is hidden. */
   onRevisionChange?: (versionId: number) => void
   className?: string
-}): React.JSX.Element | null {
+}
+
+export function LedgerBookActions(props: LedgerBookActionsProps): React.JSX.Element {
+  return <BookActions key={props.bookId} {...props} />
+}
+
+function BookActions({ bookId, reviewedPaper, revision, onRevisionChange, className }: LedgerBookActionsProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
@@ -40,6 +49,7 @@ export function LedgerBookActions({ bookId, revision, onRevisionChange, classNam
   const userId = useAuth().user?.id
   const pickerId = useId()
   const [signOpen, setSignOpen] = useState(false)
+  const [signSnapshot, setSignSnapshot] = useState<LedgerSignRequest | null>(null)
   const [returnOpen, setReturnOpen] = useState(false)
   const [returnNote, setReturnNote] = useState('')
   const [returnError, setReturnError] = useState(false)
@@ -59,14 +69,21 @@ export function LedgerBookActions({ bookId, revision, onRevisionChange, classNam
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
   const sign = useMutation({
-    mutationFn: () => api.signLedgerBook(bookId),
+    mutationFn: (snapshot: LedgerSignRequest) => api.signLedgerBook(bookId, snapshot),
     onSuccess: (updated) => {
       qc.setQueryData(ledgerBookKey(bookId), updated)
       void qc.invalidateQueries({ queryKey: ['ledger', 'books', bookId] })
       void qc.invalidateQueries({ queryKey: ['books'] })
       toast.success(t('ledgerBook.actions.signed'))
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err) => {
+      if (err instanceof ApiError && err.code === 'SIGNING_CONTENT_CONFLICT') {
+        setSignOpen(false)
+        void qc.invalidateQueries({ queryKey: ['ledger', 'books', bookId] })
+        void qc.invalidateQueries({ queryKey: ['books'] })
+      }
+      toast.error(apiErrorMessage(err))
+    },
   })
   const sendBack = useMutation({
     mutationFn: () => api.returnLedgerBook(bookId, returnNote.trim()),
@@ -113,6 +130,8 @@ export function LedgerBookActions({ bookId, revision, onRevisionChange, classNam
   const book = query.data
   if (!book) return null
   const shown = revision ?? book.selected_version_id
+  const paperReady = reviewedPaper?.versionId === shown && reviewedPaper.contentHash === book.content_sha256
+  const signConflict = sign.error instanceof ApiError && sign.error.code === 'SIGNING_CONTENT_CONFLICT'
   const latest = book.revisions.at(-1)
   const isWriter = userId !== undefined && book.created_by_user_id === userId && !book.voided
 
@@ -128,17 +147,21 @@ export function LedgerBookActions({ bookId, revision, onRevisionChange, classNam
         {t('ledgerBook.composer.book.print')}
       </Button>
       {book.can_sign && (
-        <Button type="button" variant="outline" size="sm" disabled={sign.isPending} onClick={() => setSignOpen(true)}>
+        <Button type="button" variant="outline" size="sm" disabled={sign.isPending || !paperReady || query.isFetching || query.isError} onClick={() => {
+          setSignSnapshot({ expected_version_id: shown, expected_content_sha256: book.content_sha256 })
+          setSignOpen(true)
+        }}>
           {t('ledgerBook.actions.sign')}
         </Button>
       )}
+      {signConflict && <p role="alert" className="basis-full text-sm text-destructive">{apiErrorMessage(sign.error)}</p>}
       <ConfirmDialog
         open={signOpen}
         onOpenChange={setSignOpen}
         title={t('ledgerBook.actions.signConfirmTitle')}
         description={t('ledgerBook.actions.signConfirmDescription')}
         confirmLabel={t('ledgerBook.actions.sign')}
-        onConfirm={() => sign.mutate()}
+        onConfirm={() => { if (signSnapshot) sign.mutate(signSnapshot) }}
       />
       {book.can_return && (
         <Button type="button" variant="outline" size="sm" disabled={sign.isPending || sendBack.isPending} onClick={() => {
