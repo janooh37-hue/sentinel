@@ -711,6 +711,15 @@ def test_restricted_grade_send_is_writer_only(grade_api: ApiHarness, grade: str)
     _send(api, "creator_only", ["B"])
     assert record.grade == grade
     assert record.distribution == "named"
+    for actor, expected in (("A", True), ("B", False)):
+        api.as_user(actor)
+        detail = api.client.get(f"{API}/books/{record.id}")
+        assert detail.status_code == 200, detail.text
+        assert detail.json()["can_send"] is expected
+        listing = api.client.get(f"{API}/books")
+        assert listing.status_code == 200, listing.text
+        row = next(item for item in listing.json()["items"] if item["id"] == record.id)
+        assert row["can_send"] is expected
     api.as_user("B")
     _error(
         api.client.post(

@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, ValidationFailedError
-from app.core import form_policy
+from app.core import form_policy, grades
 from app.core.classifications import CLASSIFICATIONS
 from app.core.form_kind import OTHER_SERVICE_ID
 from app.core.roles import INMATE_REPORTER_ROLE
@@ -1681,7 +1681,11 @@ def _build_book_response(
         item.can_sign = can_sign
         item.can_review = can_review
         item.your_step_kind = your_step_kind
-        item.can_send = user.role != INMATE_REPORTER_ROLE and not book_service.is_ledger_book(row)
+        item.can_send = (
+            user.role != INMATE_REPORTER_ROLE
+            and not book_service.is_ledger_book(row)
+            and (row.grade not in grades.RESTRICTED_GRADES or row.created_by_user_id == user.id)
+        )
         try:
             book_service.require_full_book_access(db, user, row, write=True)
         except AppError:
