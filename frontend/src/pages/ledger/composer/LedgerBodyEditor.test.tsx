@@ -1,14 +1,15 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
 import i18n from 'i18next'
 import ar from '@/locales/ar.json'
+import { createRef } from 'react'
 
 import { api, type LedgerDraftRead } from '@/lib/api'
 import { LedgerComposerPage } from './LedgerComposerPage'
-import { LedgerBodyEditor } from './LedgerBodyEditor'
+import { LedgerBodyEditor, type LedgerBodyEditorHandle } from './LedgerBodyEditor'
 
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
 
@@ -16,11 +17,15 @@ vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => t
 // regressions. Only the browser engine is substituted (jsdom has no layout).
 // Native iframe/event-receiver and toolbar rendering require real Chromium;
 // this seam intentionally does not claim to exercise those browser internals.
-function installEngine() {
+function installEngine(defer = false) {
+  const documents: Document[] = []
+  let initialize = () => {}
   const listeners = new Map<string, Set<() => void>>()
   let content = ''
   const editor = {
     initialized: true,
+    getBody: () => documents.at(-1)!.body,
+    focus: vi.fn(),
     on: (events: string, handler: () => void) => {
       for (const event of events.split(' ')) {
         const handlers = listeners.get(event) ?? new Set<() => void>()
@@ -44,13 +49,24 @@ function installEngine() {
     setup: (instance: typeof editor) => void
     init_instance_callback: (instance: typeof editor) => void
   }) => {
-    content = options.target.value
-    options.setup(editor)
-    options.init_instance_callback(editor)
+    initialize = () => {
+      documents.push(document.implementation.createHTMLDocument())
+      content = options.target.value
+      options.setup(editor)
+      options.init_instance_callback(editor)
+    }
+    if (!defer) initialize()
   })
   vi.stubGlobal('hugerte', { init })
   return {
     init,
+    initialize: () => initialize(),
+    documents,
+    focus: editor.focus,
+    replaceContent: () => {
+      editor.getBody().replaceChildren()
+      for (const handler of listeners.get('SetContent') ?? []) handler()
+    },
     remove: editor.remove,
     type: (html: string) => {
       content = html
@@ -63,6 +79,71 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+})
+
+it('uses current validation when editor initialization finishes after a prop update', () => {
+  const engine = installEngine(true)
+  const view = render(<LedgerBodyEditor value="" onChange={() => {}} label="Body" />)
+  view.rerender(<LedgerBodyEditor value="" onChange={() => {}} label="Current body" invalid errorMessage="Required now" />)
+  act(() => engine.initialize())
+  const body = engine.documents[0].body
+  expect(body.getAttribute('aria-label')).toBe('Current body')
+  expect(body.getAttribute('aria-invalid')).toBe('true')
+  expect(body.ownerDocument.getElementById(body.getAttribute('aria-describedby')!)?.textContent).toBe('Required now')
+})
+
+it('excludes iframe validation descriptions from the installed HugeRTE HTML serializer', async () => {
+  vi.stubGlobal('hugerte', undefined)
+  const { default: hugerte } = await import('hugerte')
+  const html = '<p>Letter body</p><span hidden data-mce-bogus="all" contenteditable="false">Body is required</span>'
+  const parsed = hugerte.html.DomParser().parse(html)
+  expect(hugerte.html.Serializer().serialize(parsed)).toBe('<p>Letter body</p>')
+})
+
+it('focuses the editing surface and keeps validation descriptions inside its document across updates and remounts', async () => {
+  const engine = installEngine()
+  const ref = createRef<LedgerBodyEditorHandle>()
+  const view = render(<LedgerBodyEditor ref={ref} value="" onChange={() => {}} label="Body" invalid errorMessage="Body is required" describedBy="outer-error" />)
+  const body = engine.documents[0].body
+  expect(body.getAttribute('aria-label')).toBe('Body')
+  expect(body.getAttribute('aria-invalid')).toBe('true')
+  expect(body.ownerDocument.getElementById(body.getAttribute('aria-describedby')!)?.textContent).toBe('Body is required')
+  act(() => ref.current!.focus())
+  expect(engine.focus).toHaveBeenCalledOnce()
+  act(() => engine.replaceContent())
+  expect(body.ownerDocument.getElementById(body.getAttribute('aria-describedby')!)?.textContent).toBe('Body is required')
+  view.rerender(<LedgerBodyEditor ref={ref} value="" onChange={() => {}} label="Updated body" />)
+  expect(body.getAttribute('aria-label')).toBe('Updated body')
+  expect(body.hasAttribute('aria-invalid')).toBe(false)
+  expect(body.hasAttribute('aria-describedby')).toBe(false)
+  try {
+    await act(async () => { await i18n.changeLanguage('ar') })
+    view.rerender(<LedgerBodyEditor ref={ref} value="" onChange={() => {}} label="المحتوى" invalid errorMessage="المحتوى مطلوب" />)
+    const arabicBody = engine.documents[1].body
+    expect(arabicBody.getAttribute('aria-label')).toBe('المحتوى')
+    expect(arabicBody.ownerDocument.getElementById(arabicBody.getAttribute('aria-describedby')!)?.textContent).toBe('المحتوى مطلوب')
+  } finally {
+    view.unmount()
+    expect(ref.current).toBeNull()
+    await i18n.changeLanguage('en')
+  }
+})
+
+it('focuses and describes the fallback textarea when the editor script fails', async () => {
+  vi.stubGlobal('hugerte', undefined)
+  const ref = createRef<LedgerBodyEditorHandle>()
+  render(<LedgerBodyEditor ref={ref} value="" onChange={() => {}} label="Body" invalid errorMessage="Body is required" />)
+  const script = await waitFor(() => {
+    const node = document.querySelector('script[src="/hugerte/hugerte.min.js"]')
+    expect(node).not.toBeNull()
+    return node!
+  })
+  act(() => script.dispatchEvent(new Event('error')))
+  const textarea = await screen.findByRole('textbox', { name: 'Body' })
+  act(() => ref.current!.focus())
+  expect(textarea).toHaveFocus()
+  expect(textarea).toHaveAttribute('aria-invalid', 'true')
+  expect(textarea).toHaveAccessibleDescription('Body is required')
 })
 
 it('runs the editor UI in the app language and remounts with Arabic labels on a switch', async () => {
@@ -98,12 +179,10 @@ it('initializes once after new-draft navigation and preserves the editor through
   const update = vi.spyOn(api, 'updateLedgerDraft').mockResolvedValue(draft)
   const view = render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MemoryRouter initialEntries={['/ledger/compose']}>
-        <Routes>
-          <Route path="/ledger/compose" element={<LedgerComposerPage autosaveMs={10} />} />
-          <Route path="/ledger/compose/:draftId" element={<LedgerComposerPage autosaveMs={10} />} />
-        </Routes>
-      </MemoryRouter>
+      <RouterProvider router={createMemoryRouter([
+        { path: '/ledger/compose', element: <LedgerComposerPage autosaveMs={10} /> },
+        { path: '/ledger/compose/:draftId', element: <LedgerComposerPage autosaveMs={10} /> },
+      ], { initialEntries: ['/ledger/compose'] })} />
     </QueryClientProvider>,
   )
   await screen.findByRole('heading', { name: /DRAFT 000012/ })

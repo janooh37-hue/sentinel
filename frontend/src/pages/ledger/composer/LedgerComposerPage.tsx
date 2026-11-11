@@ -10,13 +10,14 @@ import { ArrowLeft, Eye, EyeOff, Send, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom'
 
 import { GradeSelect } from '@/components/books/GradeSelect'
 import { GRADE_META } from '@/components/books/grades'
 import { deskBookUrl, LEDGER_DRAFTS_KEY, ledgerDraftKey } from '@/components/books/ledgerBookKeys'
 import { LedgerPaperPdf } from '@/components/books/LedgerPaperPdf'
 import { SigningManagerPicker } from '@/components/books/SigningManagerPicker'
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet'
@@ -28,7 +29,7 @@ import { useIsMobile } from '@/lib/useIsMobile'
 import { composerSchema, valuesFromDraft, type ComposerValues } from './composerForm'
 import { ImportancePicker } from './ImportancePicker'
 import { LedgerAddresseesPicker } from './LedgerAddresseesPicker'
-import { LedgerBodyEditor } from './LedgerBodyEditor'
+import { LedgerBodyEditor, type LedgerBodyEditorHandle } from './LedgerBodyEditor'
 import { LedgerReferencesPicker } from './LedgerReferencesPicker'
 import { LedgerFoldersPicker } from './LedgerFoldersPicker'
 import { SubjectLines } from './SubjectLines'
@@ -116,15 +117,47 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
   const foldersId = useId()
   const [initial] = useState(() => valuesFromDraft(draft))
   const form = useForm<ComposerValues>({ resolver: zodResolver(composerSchema), defaultValues: initial })
-  const values = useWatch({ control: form.control }) as ComposerValues
+  const [gradeValue, external, paperPreset, addressees, signer] = useWatch({ control: form.control, name: ['grade', 'external', 'paper_preset', 'addressees', 'signer_manager_id'] })
+  const values = { grade: gradeValue, external, paper_preset: paperPreset, addressees, signer_manager_id: signer }
+  const bodyEditor = useRef<LedgerBodyEditorHandle>(null)
+  const backLink = useRef<HTMLAnchorElement>(null)
+  const subjectId = useId()
+  const bypassNavigation = useRef(false)
   const [errors, setErrors] = useState<FieldErrors>({})
   const handleFieldError = useCallback((err: unknown): boolean => {
     const field = err instanceof ApiError ? FIELD_OF_CODE[err.code] : undefined
     if (!field) return false
     setErrors({ [field]: apiErrorMessage(err) })
     return true
-  }, [])
-  const autosave = useDraftAutosave(draft.id, values, initial, autosaveMs, handleFieldError)
+  }, [setErrors])
+  const autosave = useDraftAutosave(draft.id, form, initial, autosaveMs, handleFieldError)
+  const { flush, isDirty } = autosave
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => !bypassNavigation.current && currentLocation.pathname !== nextLocation.pathname && autosave.isDirty())
+  const leaving = useRef(false)
+  const [leaveFailed, setLeaveFailed] = useState(false)
+  const leave = useCallback(async () => {
+    if (leaving.current) return
+    leaving.current = true
+    do {
+      if (!(await flush(form.getValues()))) {
+        setLeaveFailed(true)
+        leaving.current = false
+        return
+      }
+    } while (isDirty())
+    if (blocker.state === 'blocked') blocker.proceed()
+    leaving.current = false
+  }, [flush, isDirty, form, blocker, setLeaveFailed])
+  useEffect(() => {
+    if (blocker.state === 'blocked' && !leaveFailed) void Promise.resolve().then(leave)
+  }, [blocker.state, leaveFailed, leave])
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent): void => {
+      if (!bypassNavigation.current && isDirty()) { event.preventDefault(); event.returnValue = '' }
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [isDirty])
   const [confirm, setConfirm] = useState<'send' | 'delete' | null>(null)
   const [preview, setPreview] = useState(false)
   const isMobile = useIsMobile()
@@ -136,12 +169,15 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
       setPreviewUrl(api.ledgerDraftPaperPdfUrl(draft.id, autosave.savedAt == null ? draft.updated_at : String(autosave.savedAt)))
     }, 250)
     return () => window.clearTimeout(timer)
-  }, [preview, values, autosave.pending, autosave.state, autosave.savedAt, draft.id, draft.updated_at])
+  }, [preview, autosave.pending, autosave.state, autosave.savedAt, draft.id, draft.updated_at])
   const previewId = useId()
   useEffect(() => {
+    if (confirm) return
+    if (errors.body) { bodyEditor.current?.focus(); return }
+    if (errors.subjects) { document.getElementById(subjectId)?.focus(); return }
     const field = errors.to ? toId : errors.signer ? signerId : errors.tab ? tabId : errors.references ? referencesId : errors.folders ? foldersId : undefined
     if (field && !confirm) document.getElementById(field)?.focus()
-  }, [errors, confirm, toId, signerId, tabId, referencesId, foldersId])
+  }, [errors, confirm, toId, signerId, tabId, referencesId, foldersId, subjectId])
   const classifications = useQuery({
     queryKey: ['books', 'classifications'],
     queryFn: () => api.listBookClassifications(),
@@ -164,6 +200,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
       return api.saveAndSendLedgerDraft(draft.id)
     },
     onSuccess: (book) => {
+      bypassNavigation.current = true
       forgetDraft()
       toast.success(t('ledgerBook.composer.send.sent', { ref: bidi(book.ref_number) }))
       navigate(deskBookUrl(book.id))
@@ -178,6 +215,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
   const remove = useMutation({
     mutationFn: () => api.deleteLedgerDraft(draft.id),
     onSuccess: () => {
+      bypassNavigation.current = true
       forgetDraft()
       toast.success(t('ledgerBook.composer.delete.deleted'))
       navigate('/ledger?tab=books')
@@ -194,6 +232,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-3 py-4 sm:px-6">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Link
+          ref={backLink}
           to="/ledger?tab=books"
           className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-[0.84em] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
@@ -205,6 +244,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
           <bdi>{draftLabel}</bdi>
         </h1>
         <SaveStatus state={autosave.state} />
+        {autosave.state === 'failed' && <Button type="button" variant="outline" onClick={() => void autosave.flush(form.getValues())}>{t('ledgerBook.composer.retry')}</Button>}
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <Button
             type="button"
@@ -316,6 +356,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
             name="subjects"
             render={({ field }) => (
               <SubjectLines
+                firstInputId={subjectId}
                 value={field.value}
                 onChange={(lines) => {
                   clearError('subjects')
@@ -333,6 +374,8 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
               name="body_html"
               render={({ field }) => (
                 <LedgerBodyEditor
+                  ref={bodyEditor}
+                  errorMessage={errors.body}
                   value={field.value}
                   onChange={(html) => {
                     clearError('body')
@@ -365,6 +408,18 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
         </SheetContent>
       </Sheet>
 
+      <AlertDialog open={blocker.state === 'blocked' && leaveFailed} onOpenChange={(open) => { if (!open && blocker.state === 'blocked') { blocker.reset(); setLeaveFailed(false) } }}>
+        <AlertDialogContent onCloseAutoFocus={(event) => { event.preventDefault(); backLink.current?.focus() }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('ledgerBook.composer.navigation.title')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('ledgerBook.composer.navigation.body')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button onClick={() => { setLeaveFailed(false); void leave() }}>{t('ledgerBook.composer.retry')}</Button>
+            <Button variant="outline" onClick={() => { if (blocker.state === 'blocked') blocker.reset(); setLeaveFailed(false) }}>{t('common.cancel')}</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <ConfirmDialog
         open={confirm === 'send'}
         onOpenChange={(open) => !open && setConfirm(null)}
@@ -390,6 +445,7 @@ function SaveStatus({ state }: { state: SaveState }): React.JSX.Element {
   const { t } = useTranslation()
   return (
     <p role="status" className={cn('text-[0.78em]', state === 'failed' ? 'font-semibold text-destructive' : 'text-muted-foreground')}>
+      {state === 'pending' && t('ledgerBook.composer.save.pending')}
       {state === 'saving' && t('ledgerBook.composer.save.saving')}
       {state === 'saved' && t('ledgerBook.composer.save.saved')}
       {state === 'failed' && t('ledgerBook.composer.save.failed')}

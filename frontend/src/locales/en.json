@@ -2927,9 +2927,14 @@
         "label": "Body"
       },
       "save": {
+        "pending": "Unsaved changes",
         "saving": "Saving…",
         "saved": "Saved",
         "failed": "Not saved. Your next change tries again."
+      },
+      "navigation": {
+        "title": "Save changes before leaving",
+        "body": "Your changes could not be saved. Retry to save them before leaving, or cancel to keep editing."
       },
       "preview": {
         "show": "Preview",

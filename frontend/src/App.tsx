@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 
 import { AppToaster } from '@/components/shell/AppToaster'
 import { BottomTabBar } from '@/components/shell/BottomTabBar'
@@ -638,23 +638,26 @@ function Shell(): React.JSX.Element {
   )
 }
 
+const router = createBrowserRouter([{
+  path: '*',
+  element: (
+    <KeyboardShortcutsProvider>
+      <TooltipProvider delayDuration={400} skipDelayDuration={150}>
+        <RecordDeleteProvider>
+          <MigrationGate><Shell /></MigrationGate>
+        </RecordDeleteProvider>
+      </TooltipProvider>
+    </KeyboardShortcutsProvider>
+  ),
+}])
+
 function App(): React.JSX.Element {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <RefreshShellHost />
         <AuthProvider>
-          <BrowserRouter>
-            <KeyboardShortcutsProvider>
-              <TooltipProvider delayDuration={400} skipDelayDuration={150}>
-                <RecordDeleteProvider>
-                  <MigrationGate>
-                    <Shell />
-                  </MigrationGate>
-                </RecordDeleteProvider>
-              </TooltipProvider>
-            </KeyboardShortcutsProvider>
-          </BrowserRouter>
+          <RouterProvider router={router} />
         </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>

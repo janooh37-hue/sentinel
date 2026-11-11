@@ -1,25 +1,32 @@
+import type { Ref } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { createMemoryRouter, RouterProvider, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import i18n from 'i18next'
 import ar from '@/locales/ar.json'
 import en from '@/locales/en.json'
 
+import { ledgerDraftKey } from '@/components/books/ledgerBookKeys'
 import { api, ApiError, type LedgerBookRead, type LedgerDraftRead } from '@/lib/api'
 
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
 // HugeRTE can't mount in jsdom: a plain textarea stands in for the body editor.
 vi.mock('./LedgerBodyEditor', () => ({
-  LedgerBodyEditor: ({ value, onChange, label, height }: { value: string; onChange: (v: string) => void; label: string; height: number }) => (
-    <textarea aria-label={label} data-editor-height={height} value={value} onChange={(e) => onChange(e.target.value)} />
+  LedgerBodyEditor: ({ value, onChange, label, height, ref }: { ref?: Ref<{ focus(): void }>; value: string; onChange: (v: string) => void; label: string; height: number }) => (
+    <textarea ref={(node) => { const handle = node ? { focus: () => node.focus() } : null; if (typeof ref === 'function') ref(handle); else if (ref) ref.current = handle }} aria-label={label} data-editor-height={height} value={value} onChange={(e) => onChange(e.target.value)} />
   ),
 }))
 vi.mock('@/components/books/LedgerPaperPdf', () => ({
   LedgerPaperPdf: ({ url, title }: { url: string | null; title: string }) => <div title={title} data-url={url} />,
 }))
 
+vi.mock('./LedgerAddresseesPicker', async (original) => {
+  const actual = await original<typeof import('./LedgerAddresseesPicker')>()
+  return { ...actual, LedgerAddresseesPicker: vi.fn(actual.LedgerAddresseesPicker) }
+})
+import { LedgerAddresseesPicker } from './LedgerAddresseesPicker'
 import { LedgerComposerPage } from './LedgerComposerPage'
 
 const DRAFT: LedgerDraftRead = {
@@ -35,19 +42,22 @@ function Where(): React.JSX.Element {
   return <output aria-label="URL">{location.pathname + location.search}</output>
 }
 
-function mountComposer(url = '/ledger/compose/12'): void {
+let router: ReturnType<typeof createMemoryRouter>
+function mountComposer(url = '/ledger/compose/12', autosaveMs = 10): QueryClient {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MemoryRouter initialEntries={[url]}>
+    <QueryClientProvider client={client}>
+      <RouterProvider router={router = createMemoryRouter([{ path: '*', element: <>
         <Routes>
-          <Route path="/ledger/compose" element={<LedgerComposerPage autosaveMs={10} />} />
-          <Route path="/ledger/compose/:draftId" element={<LedgerComposerPage autosaveMs={10} />} />
+          <Route path="/ledger/compose" element={<LedgerComposerPage autosaveMs={autosaveMs} />} />
+          <Route path="/ledger/compose/:draftId" element={<LedgerComposerPage autosaveMs={autosaveMs} />} />
           <Route path="*" element={null} />
         </Routes>
         <Where />
-      </MemoryRouter>
+      </> }], { initialEntries: ['/employees', url] })} />
     </QueryClientProvider>,
   )
+  return client
 }
 
 let update: MockInstance<typeof api.updateLedgerDraft>
@@ -75,6 +85,163 @@ beforeEach(() => {
 afterEach(async () => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); await i18n.changeLanguage('en') })
 
 describe('Ledger Book composer', () => {
+  it('protects browser Back and preserves its original destination', async () => {
+    mountComposer('/ledger/compose/12', 60000)
+    fireEvent.change(await screen.findByLabelText('Body'), { target: { value: 'Back edit' } })
+    await act(() => router.navigate(-1))
+    await waitFor(() => expect(screen.getByLabelText('URL')).toHaveTextContent('/employees'))
+    expect(update).toHaveBeenCalledWith(12, { body_html: 'Back edit' })
+  })
+
+  it('saves edits made while a blocked exit waits for its first request', async () => {
+    let accept!: (draft: LedgerDraftRead) => void
+    update.mockReturnValueOnce(new Promise((resolve) => { accept = resolve }))
+    mountComposer('/ledger/compose/12', 60000)
+    const body = await screen.findByLabelText('Body')
+    fireEvent.change(body, { target: { value: 'First exit edit' } })
+    await userEvent.click(screen.getByRole('link', { name: 'Back to Ledger' }))
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+    fireEvent.change(body, { target: { value: 'Later exit edit' } })
+    accept({ ...DRAFT, body_html: 'First exit edit' })
+    await waitFor(() => expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger?tab=books'))
+    expect(update).toHaveBeenLastCalledWith(12, { body_html: 'Later exit edit' })
+  })
+
+  it('allows clean navigation without PATCH or reload warning', async () => {
+    mountComposer()
+    await screen.findByLabelText('Body')
+    const reload = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(reload)
+    expect(reload.defaultPrevented).toBe(false)
+    await act(() => router.navigate('/employees'))
+    expect(screen.getByLabelText('URL')).toHaveTextContent('/employees')
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('flushes an immediate Back exit before the debounce expires', async () => {
+    mountComposer('/ledger/compose/12', 60000)
+    fireEvent.change(await screen.findByLabelText('Body'), { target: { value: 'Immediate' } })
+    await userEvent.click(screen.getByRole('link', { name: 'Back to Ledger' }))
+    await waitFor(() => expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger?tab=books'))
+    expect(update).toHaveBeenCalledWith(12, { body_html: 'Immediate' })
+  })
+
+  it('waits for an in-flight save before leaving, and warns on reload', async () => {
+    let accept!: (draft: LedgerDraftRead) => void
+    update.mockReturnValueOnce(new Promise((resolve) => { accept = resolve }))
+    mountComposer()
+    fireEvent.change(await screen.findByLabelText('Body'), { target: { value: 'In flight' } })
+    await waitFor(() => expect(update).toHaveBeenCalled())
+    const reload = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(reload)
+    expect(reload.defaultPrevented).toBe(true)
+    await userEvent.click(screen.getByRole('link', { name: 'Back to Ledger' }))
+    expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger/compose/12')
+    accept({ ...DRAFT, body_html: 'In flight' })
+    await waitFor(() => expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger?tab=books'))
+    expect(update).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps failed exit edits available and retries the exit', async () => {
+    mountComposer('/ledger/compose/12', 60000)
+    fireEvent.change(await screen.findByLabelText('Body'), { target: { value: 'Offline' } })
+    update.mockRejectedValueOnce(new Error('offline'))
+    await userEvent.click(screen.getByRole('link', { name: 'Back to Ledger' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Save changes before leaving' })
+    expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger/compose/12')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger?tab=books'))
+    expect(update).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(['cancel', 'escape'])('returns focus to Back after dismissing a failed-exit dialog with %s', async (dismiss) => {
+    mountComposer('/ledger/compose/12', 60000)
+    const body = await screen.findByLabelText('Body')
+    update.mockRejectedValue(new TypeError('offline'))
+    fireEvent.change(body, { target: { value: 'Unsaved text' } })
+    const back = screen.getByRole('link', { name: 'Back to Ledger' })
+    await userEvent.click(back)
+    const dialog = await screen.findByRole('dialog', { name: 'Save changes before leaving' })
+    if (dismiss === 'cancel') await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    else await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(back).toHaveFocus())
+    expect(body).toHaveValue('Unsaved text')
+    expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger/compose/12')
+  })
+
+  it('does not restore a deleted draft cache when an earlier save response arrives late', async () => {
+    let accept!: (value: LedgerDraftRead) => void
+    update.mockImplementationOnce(() => new Promise((resolve) => { accept = resolve }))
+    vi.spyOn(api, 'deleteLedgerDraft').mockResolvedValue(undefined)
+    const client = mountComposer()
+    fireEvent.change(await screen.findByLabelText('Body'), { target: { value: 'Last save' } })
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+    await userEvent.click(screen.getByRole('button', { name: 'Delete draft' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete draft' }))
+    await waitFor(() => expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger?tab=books'))
+    await act(async () => { accept({ ...DRAFT, body_html: 'Last save' }) })
+    expect(client.getQueryData(ledgerDraftKey(DRAFT.id))).toBeUndefined()
+  })
+
+  it('clears a failed status when edits are reverted to the saved content', async () => {
+    mountComposer()
+    const body = await screen.findByLabelText('Body')
+    update.mockRejectedValueOnce(new TypeError('offline'))
+    fireEvent.change(body, { target: { value: 'Unsaved text' } })
+    await screen.findByText('Not saved. Your next change tries again.')
+    fireEvent.change(body, { target: { value: DRAFT.body_html } })
+    expect(await screen.findByText('Saved')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+    expect(update).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps unrelated recipient controls stable during successive body keystrokes', async () => {
+    mountComposer('/ledger/compose/12', 60000)
+    const body = await screen.findByLabelText('Body')
+    fireEvent.change(body, { target: { value: 'First' } })
+    const renders = vi.mocked(LedgerAddresseesPicker).mock.calls.length
+    fireEvent.change(body, { target: { value: 'Second' } })
+    fireEvent.change(body, { target: { value: 'Latest' } })
+    expect(vi.mocked(LedgerAddresseesPicker).mock.calls.length).toBe(renders)
+    await userEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { body_html: 'Latest' }))
+  })
+
+  it.each(['en', 'ar'])('focuses subject and body validation after confirmation closes in %s', async (language) => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage(language)
+    const send = vi.spyOn(api, 'saveAndSendLedgerDraft').mockRejectedValueOnce(new ApiError(422, 'DRAFT_SUBJECT_REQUIRED', 'Subject required'))
+    mountComposer()
+    const label = language === 'ar' ? ar.ledgerBook.composer.send.button : en.ledgerBook.composer.send.button
+    await userEvent.click(await screen.findByRole('button', { name: label }))
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: label }))
+    await waitFor(() => expect(screen.getByLabelText(i18n.t('ledgerBook.composer.subjects.line', { n: 1 }))).toHaveFocus())
+    send.mockRejectedValueOnce(new ApiError(422, 'DRAFT_BODY_REQUIRED', 'Body required'))
+    await userEvent.click(screen.getByRole('button', { name: label }))
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: label }))
+    await waitFor(() => expect(screen.getByLabelText(i18n.t('ledgerBook.composer.body.label'))).toHaveFocus())
+  })
+
+  it('caches the accepted PATCH snapshot for reopening the same draft', async () => {
+    const client = mountComposer()
+    fireEvent.change(await screen.findByLabelText('Body'), { target: { value: '<p>Latest</p>' } })
+    await waitFor(() => expect(client.getQueryData<LedgerDraftRead>(ledgerDraftKey(12))?.body_html).toBe('<p>Latest</p>'))
+    await act(() => router.navigate('/employees'))
+    await act(() => router.navigate('/ledger/compose/12'))
+    expect(await screen.findByLabelText('Body')).toHaveValue('<p>Latest</p>')
+    expect(api.getLedgerDraft).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops claiming Saved immediately when another edit is pending', async () => {
+    mountComposer()
+    fireEvent.change(await screen.findByLabelText('Body'), { target: { value: 'First' } })
+    await screen.findByText('Saved')
+    fireEvent.change(screen.getByLabelText('Body'), { target: { value: 'Second' } })
+    expect(screen.queryByText('Saved')).not.toBeInTheDocument()
+  })
+
   it('gives the body editor the viewport column height with a 600px minimum', async () => {
     mountComposer()
     const body = await screen.findByLabelText('Body')

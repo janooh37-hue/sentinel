@@ -4,27 +4,29 @@
  * pending, so the next edit sends them again.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { UseFormReturn } from 'react-hook-form'
 import { useQueryClient } from '@tanstack/react-query'
 
-import { LEDGER_DRAFTS_KEY } from '@/components/books/ledgerBookKeys'
-import { api } from '@/lib/api'
+import { LEDGER_DRAFTS_KEY, ledgerDraftKey } from '@/components/books/ledgerBookKeys'
+import { api, type LedgerDraftRead } from '@/lib/api'
 import { changedFields, type ComposerValues } from './composerForm'
 
-export type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
+export type SaveState = 'idle' | 'pending' | 'saving' | 'saved' | 'failed'
 
 export interface DraftAutosave {
   state: SaveState
   /** Last accepted autosave time, used to bust the PDF cache. */
   savedAt: number | null
   pending: boolean
+  isDirty: () => boolean
   /** Saves `values` now if they differ; resolves false when the save failed. */
   flush: (values: ComposerValues) => Promise<boolean>
 }
 
-export function useDraftAutosave(draftId: number, values: ComposerValues, initial: ComposerValues, ms: number, onError?: (err: unknown) => boolean): DraftAutosave {
+export function useDraftAutosave(draftId: number, form: UseFormReturn<ComposerValues>, initial: ComposerValues, ms: number, onError?: (err: unknown) => boolean): DraftAutosave {
   const qc = useQueryClient()
   const saved = useRef(initial)
-  const [accepted, setAccepted] = useState(initial)
+  const [pending, setPending] = useState(false)
   const [state, setState] = useState<SaveState>('idle')
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const inFlight = useRef<Promise<boolean> | null>(null)
@@ -38,15 +40,18 @@ export function useDraftAutosave(draftId: number, values: ComposerValues, initia
     setState('saving')
     const request = (async (): Promise<boolean> => {
       try {
-        await api.updateLedgerDraft(draftId, patch)
+        const accepted = await api.updateLedgerDraft(draftId, patch)
+        // A completed Delete/Send removes this entry; late saves must not recreate it.
+        qc.setQueryData<LedgerDraftRead>(ledgerDraftKey(draftId), (current) => current ? accepted : undefined)
       } catch (err) {
         onError?.(err)
         setState('failed')
         return false
       }
       saved.current = { ...saved.current, ...patch } as ComposerValues
-      setState('saved')
-      setAccepted(saved.current)
+      const dirty = Object.keys(changedFields(saved.current, form.getValues())).length > 0
+      setPending(dirty)
+      setState(dirty ? 'pending' : 'saved')
       setSavedAt((previous) => Math.max(Date.now(), (previous ?? 0) + 1))
       void qc.invalidateQueries({ queryKey: LEDGER_DRAFTS_KEY, exact: true })
       return true
@@ -57,12 +62,20 @@ export function useDraftAutosave(draftId: number, values: ComposerValues, initia
     } finally {
       if (inFlight.current === request) inFlight.current = null
     }
-  }, [draftId, qc, onError])
+  }, [draftId, qc, onError, form])
 
   useEffect(() => {
-    const timer = setTimeout(() => void flush(values), ms)
-    return () => clearTimeout(timer)
-  }, [values, ms, flush])
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const subscription = form.watch(() => {
+      const dirty = Object.keys(changedFields(saved.current, form.getValues())).length > 0
+      setPending(dirty)
+      setState((current) => current === 'saving' ? current : !dirty ? 'saved' : current === 'failed' ? 'failed' : 'pending')
+      clearTimeout(timer)
+      timer = setTimeout(() => void flush(form.getValues()), ms)
+    })
+    return () => { clearTimeout(timer); subscription.unsubscribe() }
+  }, [form, ms, flush])
 
-  return { state, savedAt, pending: Object.keys(changedFields(accepted, values)).length > 0, flush }
+  const isDirty = useCallback(() => inFlight.current !== null || Object.keys(changedFields(saved.current, form.getValues())).length > 0, [form])
+  return { state, savedAt, pending, isDirty, flush }
 }

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen } from '@testing-library/react'
 import i18n from 'i18next'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LedgerBookActions } from '@/components/books/LedgerBookActions'
@@ -35,16 +35,13 @@ function leafKeys(node: unknown, prefix = ''): string[] {
 }
 
 function mountAll(): HTMLElement {
+  const router = createMemoryRouter([{
+    path: '/ledger/compose/:draftId',
+    element: <><NewLedgerBookButton /><LedgerDraftsList /><LedgerBookActions bookId={40} onRevisionChange={() => {}} /><LedgerComposerPage /></>,
+  }], { initialEntries: ['/ledger/compose/12'] })
   const { container } = render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MemoryRouter initialEntries={['/ledger/compose/12']}>
-        <Routes>
-          <Route
-            path="/ledger/compose/:draftId"
-            element={<><NewLedgerBookButton /><LedgerDraftsList /><LedgerBookActions bookId={40} onRevisionChange={() => {}} /><LedgerComposerPage /></>}
-          />
-        </Routes>
-      </MemoryRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   )
   return container

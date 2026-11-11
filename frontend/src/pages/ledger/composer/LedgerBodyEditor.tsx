@@ -11,7 +11,8 @@
  * visibility and the toolbar rather than treating that attribute as a failure.
  */
 import { Editor } from '@hugerte/hugerte-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react'
+import type { Editor as HugeEditor } from 'hugerte'
 import { useTranslation } from 'react-i18next'
 
 import { apiErrorMessage } from '@/lib/api'
@@ -32,7 +33,10 @@ import {
 
 interface BlobInfo { blob: () => Blob; filename: () => string }
 
-export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invalid, describedBy, height = LEDGER_EDITOR_MIN_HEIGHT }: {
+export interface LedgerBodyEditorHandle { focus: () => void }
+
+export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invalid, describedBy, errorMessage, ref, height = LEDGER_EDITOR_MIN_HEIGHT }: {
+  ref?: Ref<LedgerBodyEditorHandle>
   value: string
   onChange: (html: string) => void
   label: string
@@ -40,13 +44,52 @@ export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invali
   onUploadImage?: (file: Blob, filename: string) => Promise<string>
   invalid?: boolean
   describedBy?: string
+  errorMessage?: string
   /** Editor height in px; never below the 600px minimum. */
   height?: number
 }): React.JSX.Element {
   const { i18n, t } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const [scriptFailed, setScriptFailed] = useState(false)
+  const editorRef = useRef<HugeEditor | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const errorId = useId()
+  useImperativeHandle(ref, () => ({ focus: () => {
+    if (scriptFailed) textareaRef.current?.focus()
+    else editorRef.current?.focus()
+  } }), [scriptFailed])
+  const syncAccessibility = useCallback((editor: HugeEditor) => {
+    const body = editor.getBody()
+    body.setAttribute('aria-label', label)
+    if (invalid) body.setAttribute('aria-invalid', 'true')
+    else body.removeAttribute('aria-invalid')
+    body.ownerDocument.getElementById(errorId)?.remove()
+    if (invalid && errorMessage) {
+      const description = body.ownerDocument.createElement('span')
+      description.id = errorId
+      description.hidden = true
+      // HugeRTE excludes this accessibility text from the saved document.
+      description.setAttribute('data-mce-bogus', 'all')
+      description.contentEditable = 'false'
+      description.textContent = errorMessage
+      body.append(description)
+      body.setAttribute('aria-describedby', errorId)
+    } else body.removeAttribute('aria-describedby')
+  }, [errorId, errorMessage, invalid, label])
+  const accessibilityRef = useRef(syncAccessibility)
+  useEffect(() => {
+    accessibilityRef.current = syncAccessibility
+    const editor = editorRef.current
+    if (editor) syncAccessibility(editor)
+  }, [syncAccessibility])
+  useEffect(() => () => { editorRef.current = null }, [])
   const init = useMemo(() => ({
+    init_instance_callback: (editor: HugeEditor) => {
+      editorRef.current = editor
+      accessibilityRef.current(editor)
+      editor.on('SetContent', () => accessibilityRef.current(editor))
+      editor.on('remove', () => { if (editorRef.current === editor) editorRef.current = null })
+    },
     base_url: '/hugerte',
     suffix: '.min',
     menubar: LEDGER_MENUBAR,
@@ -93,14 +136,16 @@ export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invali
     return (
       <div className="flex flex-col gap-1">
         <textarea
+          ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           dir={isAr ? 'rtl' : 'ltr'}
           aria-label={label}
           aria-invalid={invalid || undefined}
-          aria-describedby={describedBy}
+          aria-describedby={describedBy ?? (invalid && errorMessage ? errorId : undefined)}
           className="min-h-60 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         />
+        {!describedBy && invalid && errorMessage ? <span id={errorId} className="sr-only">{errorMessage}</span> : null}
         <span className="text-xs text-muted-foreground">{t('editor.loadFailed')}</span>
       </div>
     )

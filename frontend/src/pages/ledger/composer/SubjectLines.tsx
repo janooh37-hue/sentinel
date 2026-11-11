@@ -12,7 +12,8 @@ import { MAX_SUBJECT_LINES } from './composerForm'
 
 interface Rows { keys: number[]; next: number }
 
-export function SubjectLines({ value, onChange, error, disabled }: {
+export function SubjectLines({ value, onChange, error, disabled, firstInputId }: {
+  firstInputId?: string
   value: string[]
   onChange: (value: string[]) => void
   error?: string
@@ -54,6 +55,7 @@ export function SubjectLines({ value, onChange, error, disabled }: {
             <li key={keys[index]} className="flex items-center gap-1">
               <span aria-hidden="true" className="w-6 shrink-0 text-center text-[0.78em] tabular-nums text-muted-foreground">{n}</span>
               <Input
+                id={index === 0 ? firstInputId : undefined}
                 value={line}
                 aria-label={t('ledgerBook.composer.subjects.line', { n })}
                 aria-describedby={[index === 0 ? hintId : '', error ? errorId : ''].filter(Boolean).join(' ') || undefined}

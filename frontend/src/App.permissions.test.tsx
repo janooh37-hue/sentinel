@@ -123,18 +123,31 @@ const routes = [
   ['/vehicles/import', ['vehicles.view', 'vehicles.edit'], 'vehicle-import-page'],
 ] as const
 
+function visit(path: string): void {
+  window.history.pushState({}, '', path)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
 beforeEach(() => {
   capabilityState.allowed = new Set()
 })
 
 afterEach(() => {
   cleanup()
-  window.history.pushState({}, '', '/')
+  visit('/')
 })
 
 describe('App route capability gates', () => {
+  it('does not create browser-history listeners while rendering in StrictMode', () => {
+    const listen = vi.spyOn(window, 'addEventListener')
+    render(<React.StrictMode><App /></React.StrictMode>)
+    const historyListeners = listen.mock.calls.filter(([event]) => event === 'popstate')
+    listen.mockRestore()
+    expect(historyListeners).toHaveLength(0)
+  })
+
   it.each(routes)('denies %s without its required capabilities', async (path) => {
-    window.history.pushState({}, '', path)
+    visit(path)
     render(<App />)
 
     const denialCopy =
@@ -148,7 +161,7 @@ describe('App route capability gates', () => {
     ['/employees', "You don't have access to this page"],
     ['/permissions', 'Access to this area is managed by administrators and cannot be requested.'],
   ] as const)('offers no request action for the %s route denial state', async (path, copy) => {
-    window.history.pushState({}, '', path)
+    visit(path)
     render(<App />)
 
     expect(await screen.findByText(copy)).toBeVisible()
@@ -157,7 +170,7 @@ describe('App route capability gates', () => {
 
   it.each(routes)('renders %s with all required capabilities', async (path, capabilities, pageText) => {
     capabilityState.allowed = new Set(capabilities)
-    window.history.pushState({}, '', path)
+    visit(path)
     render(<App />)
 
     expect(await screen.findByText(pageText)).toBeVisible()
@@ -167,7 +180,7 @@ describe('App route capability gates', () => {
     'denies /services when %s is the only granted capability',
     async (capability) => {
       capabilityState.allowed = new Set([capability])
-      window.history.pushState({}, '', '/services')
+      visit('/services')
       render(<App />)
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
@@ -179,7 +192,7 @@ describe('App route capability gates', () => {
     'denies /scan-back when %s is the only granted capability',
     async (capability) => {
       capabilityState.allowed = new Set([capability])
-      window.history.pushState({}, '', '/scan-back')
+      visit('/scan-back')
       render(<App />)
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
@@ -191,7 +204,7 @@ describe('App route capability gates', () => {
     'denies /vehicles/edit when %s is the only granted capability',
     async (capability) => {
       capabilityState.allowed = new Set([capability])
-      window.history.pushState({}, '', '/vehicles/edit')
+      visit('/vehicles/edit')
       render(<App />)
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
@@ -200,14 +213,14 @@ describe('App route capability gates', () => {
   )
 
   it('renders /books/approvals for an authenticated user with no capabilities — plain authenticated, not capability-gated', async () => {
-    window.history.pushState({}, '', '/books/approvals')
+    visit('/books/approvals')
     render(<App />)
 
     expect(await screen.findByText('approvals-page')).toBeVisible()
   })
 
   it('renders an assigned-record route for an authenticated user without book capabilities', async () => {
-    window.history.pushState({}, '', '/books/42')
+    visit('/books/42')
     render(<App />)
 
     expect(await screen.findByText('book-record-page')).toBeVisible()
@@ -215,7 +228,7 @@ describe('App route capability gates', () => {
   })
 
   it('renders the signature-placement route for an authenticated user without book capabilities', async () => {
-    window.history.pushState({}, '', '/documents/9/signature-placement')
+    visit('/documents/9/signature-placement')
     render(<App />)
 
     expect(await screen.findByText('signature-placement-page')).toBeVisible()
@@ -224,7 +237,7 @@ describe('App route capability gates', () => {
 
   it('keeps the global books register denied with books.approve alone', async () => {
     capabilityState.allowed = new Set(['books.approve'])
-    window.history.pushState({}, '', '/books')
+    visit('/books')
     render(<App />)
 
     expect(await screen.findByText("You don't have access to this page")).toBeVisible()
@@ -242,7 +255,7 @@ describe('App legacy links', () => {
     ],
   ] as const)('sends the delivered link %s to its service URL', async (legacy, pathname, search) => {
     capabilityState.allowed = new Set(['documents.generate', 'books.view'])
-    window.history.pushState({}, '', legacy)
+    visit(legacy)
     render(<App />)
 
     expect(await screen.findByText('application-page')).toBeVisible()
@@ -253,7 +266,7 @@ describe('App legacy links', () => {
 
 describe('App unknown paths', () => {
   it('shows Not found at the requested URL instead of the dashboard', async () => {
-    window.history.pushState({}, '', '/nope')
+    visit('/nope')
     render(<App />)
 
     expect(await screen.findByRole('heading', { level: 1, name: /page not found/i })).toBeVisible()
