@@ -4003,7 +4003,11 @@
         "saved": "Saved.",
         "cancel": "Cancel",
         "locked": "This Revision is signed and locked. Start a correction to change it.",
-        "imagesNote": "Images already in the body stay; new images can only be added in a draft."
+        "imagesNote": "Images already in the body stay; new images can only be added in a draft.",
+        "discardTitle": "Discard unsaved changes?",
+        "discardBody": "Your changes to this book are not saved. Leaving now discards them.",
+        "discardConfirm": "Discard changes",
+        "keepEditing": "Keep editing"
       }
     }
   },

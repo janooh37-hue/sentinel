@@ -2,20 +2,29 @@
  * Ledger Book content editor — `/ledger/books/:bookId/edit`. The writer edits
  * the subject lines and body of the latest, unsigned Revision (PUT /content;
  * each save is tracked). A signed Revision is locked: it shows read-only with
- * "Start correction".
+ * "Start correction". Unsaved edits block leaving: in-app navigation asks to
+ * discard them, and a reload or tab close gets the browser's own warning.
  */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Lock } from 'lucide-react'
-import { useId } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom'
 import { z } from 'zod'
 
 import { LedgerBookActions } from '@/components/books/LedgerBookActions'
 import { deskBookUrl, ledgerBookKey } from '@/components/books/ledgerBookKeys'
 import { LedgerPaperPdf } from '@/components/books/LedgerPaperPdf'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { api, apiErrorMessage, type LedgerBookRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
@@ -68,7 +77,9 @@ export function LedgerContentEditorPage(): React.JSX.Element {
         </h1>
       </header>
       {editable
-        ? <ContentForm key={book.content_sha256} book={book} />
+        // Keyed by Revision, not content hash: a background refetch must not
+        // remount the form and drop what the writer has typed.
+        ? <ContentForm key={latest.version_id} book={book} />
         : (
           <>
             <p role="note" className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-[0.84em]">
@@ -92,16 +103,53 @@ function ContentForm({ book }: { book: LedgerBookRead }): React.JSX.Element {
     resolver: zodResolver(contentSchema),
     defaultValues: { subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html },
   })
+  const { errors, isDirty } = form.formState
+  const { reset } = form
+  // Content that changed on the server replaces an untouched form only.
+  useEffect(() => {
+    if (form.formState.isDirty) return
+    reset({ subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the content hash; dirtiness is read, not watched
+  }, [book.content_sha256])
+  const keepEditingButton = useRef<HTMLButtonElement>(null)
+  const dialogOpener = useRef<HTMLElement | null>(null)
+  // Set once leaving is allowed: the edit is saved, or the writer chose to discard it.
+  const leaveAllowed = useRef(false)
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => (
+    !leaveAllowed.current && isDirty && currentLocation.pathname !== nextLocation.pathname
+  ))
+  useEffect(() => {
+    if (!isDirty) return
+    const warn = (event: BeforeUnloadEvent): void => {
+      if (leaveAllowed.current) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [isDirty])
   const save = useMutation({
     mutationFn: (values: ContentValues) => api.updateLedgerBookContent(book.id, values),
-    onSuccess: () => {
+    onSuccess: (_accepted, submitted) => {
+      // The desk's routing rows and record detail carry the subject too.
+      void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['ledger', 'books', book.id] })
       toast.success(t('ledgerBook.composer.content.saved'))
+      // A completed request does not include text entered while it was pending.
+      if (JSON.stringify(form.getValues()) !== JSON.stringify(submitted)) return
+      leaveAllowed.current = true
       navigate(deskBookUrl(book.id))
     },
+    // A failed save keeps the form and its edits; leaving still asks first.
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
-  const { errors } = form.formState
+  const blocked = blocker.state === 'blocked'
+  const keepEditing = (): void => { if (blocker.state === 'blocked') blocker.reset() }
+  const discard = (): void => {
+    if (blocker.state !== 'blocked') return
+    leaveAllowed.current = true
+    blocker.proceed()
+  }
 
   return (
     <form className="flex flex-col gap-4" noValidate onSubmit={form.handleSubmit((values) => save.mutate(values))}>
@@ -140,6 +188,28 @@ function ContentForm({ book }: { book: LedgerBookRead }): React.JSX.Element {
         <Button type="submit" disabled={save.isPending}>{t('ledgerBook.composer.content.save')}</Button>
         <Button type="button" variant="outline" onClick={() => navigate(deskBookUrl(book.id))}>{t('ledgerBook.composer.content.cancel')}</Button>
       </div>
+      <AlertDialog open={blocked} onOpenChange={(open) => { if (!open && !leaveAllowed.current) keepEditing() }}>
+        <AlertDialogContent
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            dialogOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+            keepEditingButton.current?.focus()
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            if (!leaveAllowed.current && dialogOpener.current?.isConnected) dialogOpener.current.focus()
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('ledgerBook.composer.content.discardTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('ledgerBook.composer.content.discardBody')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button type="button" variant="destructive" onClick={discard}>{t('ledgerBook.composer.content.discardConfirm')}</Button>
+            <Button ref={keepEditingButton} type="button" variant="secondary" onClick={keepEditing}>{t('ledgerBook.composer.content.keepEditing')}</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   )
 }
