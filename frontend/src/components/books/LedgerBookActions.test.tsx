@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { createMemoryRouter, MemoryRouter, Outlet, Route, RouterProvider, Routes, useLocation } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { api, ApiError, type LedgerBookRead, type LedgerRevisionRead } from '@/lib/api'
@@ -12,6 +12,7 @@ vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'em
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { LedgerBookActions } from './LedgerBookActions'
+import { ledgerBookKey } from './ledgerBookKeys'
 
 const rev = (n: number, locked: boolean): LedgerRevisionRead => ({
   version_id: 70 + n, version_no: n, trigger: n === 1 ? 'initial' : 'correction',
@@ -42,6 +43,61 @@ function mount(onRevisionChange = vi.fn()): void {
 }
 
 afterEach(async () => { cleanup(); vi.restoreAllMocks(); vi.clearAllMocks(); await i18n.changeLanguage('en') })
+
+function mountCorrectionVisit(strict: boolean): { router: ReturnType<typeof createMemoryRouter>; qc: QueryClient } {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const router = createMemoryRouter([{
+    element: <><Outlet /><Where /></>,
+    children: [
+      { path: '/ledger', element: <CorrectionVisitActions /> },
+      { path: '*', element: null },
+    ],
+  }], { initialEntries: ['/ledger'] })
+  render(<QueryClientProvider client={qc}><RouterProvider router={router} /></QueryClientProvider>, { reactStrictMode: strict })
+  return { router, qc }
+}
+
+function CorrectionVisitActions(): React.JSX.Element {
+  const bookId = Number(new URLSearchParams(useLocation().search).get('book') ?? 40)
+  return <LedgerBookActions bookId={bookId} />
+}
+
+it.each([false, true])('does not redirect a departed correction visit; StrictMode=%s', async (strict) => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, true)]))
+  let resolveCorrection!: (book: LedgerBookRead) => void
+  const start = vi.spyOn(api, 'startLedgerCorrection').mockReturnValue(new Promise((resolve) => { resolveCorrection = resolve }))
+  const { router, qc } = mountCorrectionVisit(strict)
+  await userEvent.click(await screen.findByRole('button', { name: 'Start correction' }))
+  await waitFor(() => expect(start).toHaveBeenCalledWith(40))
+  await act(() => router.navigate('/employees'))
+  await act(async () => resolveCorrection(book([rev(1, true), rev(2, false)])))
+  expect(screen.getByLabelText('URL')).toHaveTextContent('/employees')
+  expect(qc.getQueryState(ledgerBookKey(40))?.isInvalidated).toBe(true)
+})
+
+it.each([false, true])('opens the correction editor for an active visit; StrictMode=%s', async (strict) => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, true)]))
+  let resolveCorrection!: (book: LedgerBookRead) => void
+  const start = vi.spyOn(api, 'startLedgerCorrection').mockReturnValue(new Promise((resolve) => { resolveCorrection = resolve }))
+  mountCorrectionVisit(strict)
+  await userEvent.click(await screen.findByRole('button', { name: 'Start correction' }))
+  await waitFor(() => expect(start).toHaveBeenCalledWith(40))
+  await act(async () => resolveCorrection(book([rev(1, true), rev(2, false)])))
+  expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger/books/40/edit')
+})
+
+it('does not redirect an old correction after the selected book changes', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockImplementation(async (id) => ({ ...book([rev(1, true)]), id }))
+  let resolveCorrection!: (book: LedgerBookRead) => void
+  const start = vi.spyOn(api, 'startLedgerCorrection').mockReturnValue(new Promise((resolve) => { resolveCorrection = resolve }))
+  const { router, qc } = mountCorrectionVisit(false)
+  await userEvent.click(await screen.findByRole('button', { name: 'Start correction' }))
+  await waitFor(() => expect(start).toHaveBeenCalledWith(40))
+  await act(() => router.navigate('/ledger?book=41'))
+  await act(async () => resolveCorrection(book([rev(1, true), rev(2, false)])))
+  expect(router.state.location).toMatchObject({ pathname: '/ledger', search: '?book=41' })
+  expect(qc.getQueryState(ledgerBookKey(40))?.isInvalidated).toBe(true)
+})
 
 it('T-C8 Start correction on a signed Revision opens the content editor', async () => {
   vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, true)]))

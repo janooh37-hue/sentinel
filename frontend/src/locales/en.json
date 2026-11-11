@@ -4892,6 +4892,7 @@
       "draftSubjectRequired": "Write at least one subject.",
       "draftBodyRequired": "Write the letter body first.",
       "contentOnly": "Edit Ledger Book subjects in the Ledger content editor.",
+      "contentConflict": "This book changed in another session. Your edits are still here. Copy any text you need, then reopen the book before saving.",
       "imageEmpty": "The image is empty.",
       "imageTooLarge": "The image is too large (5 MB at most).",
       "imageTypeUnsupported": "Only PNG, JPEG, GIF and WebP images are accepted."

@@ -204,6 +204,12 @@ def _mutate(api: LedgerBookAPI, method: str, route: str, payload: str | None = N
             files={"file": ("replacement.pdf", b"%PDF-1.4\nreplacement\n%%EOF", "application/pdf")},
             data={"as_signed": "true"} if payload == "upload_signed" else None,
         )
+    if payload == "content":
+        read = ledger_book_service.ledger_book_read(api.db, api.creator, api.book_id)
+        payloads[payload].update(
+            expected_version_id=read.selected_version_id,
+            expected_content_sha256=read.content_sha256,
+        )
     kwargs = {"json": payloads[payload]} if payload else {}
     return api.client.request(method, f"/api/v1{path}", **kwargs)
 

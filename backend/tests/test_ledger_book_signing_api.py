@@ -11,7 +11,7 @@ from app.services import email_service, push_service, sheet_pdf_service, user_si
 from tests.conftest import make_user
 from tests.fakes.imap import FakeImapServer
 from tests.test_email_routes import _account
-from tests.test_ledger_book_api import BOOKS, CONTENT, DRAFTS, PNG, error
+from tests.test_ledger_book_api import BOOKS, CONTENT, DRAFTS, PNG, content_payload, error
 from tests.test_ledger_book_api import ledger as ledger
 
 
@@ -158,7 +158,7 @@ def test_manager_signs_with_own_signature_and_delivers_after_lock(ledger, monkey
     assert "المدير" in paper and "Director" in paper
     assert "To Snapshot" in paper and "CC Snapshot" in paper
     actor[0] = writer
-    error(client.put(f"{url}/content", json=CONTENT), 409, "REVISION_LOCKED")
+    error(client.put(f"{url}/content", json=content_payload(book, CONTENT)), 409, "REVISION_LOCKED")
     for recipient, purpose in [(to, "action"), (cc, "info")]:
         actor[0] = recipient
         assert client.get(url).status_code == 200
@@ -195,7 +195,10 @@ def test_return_edit_resubmit_keeps_reference_and_allows_manager_sign(ledger, mo
     assert client.post(f"{url}/resubmit").status_code in (403, 404)
     actor[0] = writer
     changed = client.put(
-        f"{url}/content", json={"subjects": ["Fixed subject"], "body_html": "<p>Fixed body</p>"}
+        f"{url}/content",
+        json=content_payload(
+            book, {"subjects": ["Fixed subject"], "body_html": "<p>Fixed body</p>"}
+        ),
     )
     assert changed.status_code == 200, changed.text
     assert changed.json()["can_resubmit"]

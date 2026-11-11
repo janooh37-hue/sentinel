@@ -35,7 +35,8 @@ interface BlobInfo { blob: () => Blob; filename: () => string }
 
 export interface LedgerBodyEditorHandle { focus: () => void }
 
-export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invalid, describedBy, errorMessage, ref, height = LEDGER_EDITOR_MIN_HEIGHT }: {
+export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invalid, describedBy, errorMessage, disabled = false, ref, height = LEDGER_EDITOR_MIN_HEIGHT }: {
+  disabled?: boolean
   ref?: Ref<LedgerBodyEditorHandle>
   value: string
   onChange: (html: string) => void
@@ -136,9 +137,10 @@ export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invali
     return (
       <div className="flex flex-col gap-1">
         <textarea
+          disabled={disabled}
           ref={textareaRef}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => { if (!disabled) onChange(e.target.value) }}
           dir={isAr ? 'rtl' : 'ltr'}
           aria-label={label}
           aria-invalid={invalid || undefined}
@@ -157,7 +159,8 @@ export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invali
         key={isAr ? 'ar' : 'en'}
         hugerteScriptSrc="/hugerte/hugerte.min.js"
         value={value}
-        onEditorChange={(html) => onChange(html)}
+        disabled={disabled}
+        onEditorChange={(html) => { if (!disabled) onChange(html) }}
         onScriptsLoadError={() => setScriptFailed(true)}
         init={init}
       />

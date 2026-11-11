@@ -5,7 +5,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FilePenLine, Printer } from 'lucide-react'
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 
@@ -32,6 +32,11 @@ export function LedgerBookActions({ bookId, revision, onRevisionChange, classNam
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const activeVisit = useRef<number | null>(null)
+  useEffect(() => {
+    activeVisit.current = bookId
+    return () => { activeVisit.current = null }
+  }, [bookId])
   const userId = useAuth().user?.id
   const pickerId = useId()
   const [signOpen, setSignOpen] = useState(false)
@@ -45,10 +50,11 @@ export function LedgerBookActions({ bookId, revision, onRevisionChange, classNam
   const correction = useMutation({
     mutationFn: () => api.startLedgerCorrection(bookId),
     onSuccess: (book) => {
-      void qc.invalidateQueries({ queryKey: ['ledger', 'books', bookId] })
+      void qc.invalidateQueries({ queryKey: ['ledger', 'books', book.id] })
+      if (activeVisit.current !== book.id) return
       const latest = book.revisions.at(-1)
       if (latest) toast.success(t('ledgerBook.composer.book.correctionStarted', { n: latest.version_no }))
-      navigate(`/ledger/books/${bookId}/edit`)
+      navigate(`/ledger/books/${book.id}/edit`)
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })

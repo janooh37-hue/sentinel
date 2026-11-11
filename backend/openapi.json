@@ -54690,6 +54690,16 @@
       },
       "LedgerContentUpdate": {
         "properties": {
+          "expected_version_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Expected Version Id"
+          },
+          "expected_content_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Content Sha256"
+          },
           "subjects": {
             "items": {
               "type": "string"
@@ -54707,6 +54717,8 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "expected_version_id",
+          "expected_content_sha256",
           "subjects",
           "body_html"
         ],

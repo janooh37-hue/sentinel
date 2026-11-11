@@ -14,8 +14,8 @@ import { api, ApiError, type LedgerBookRead, type LedgerDraftRead } from '@/lib/
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
 // HugeRTE can't mount in jsdom: a plain textarea stands in for the body editor.
 vi.mock('./LedgerBodyEditor', () => ({
-  LedgerBodyEditor: ({ value, onChange, label, height, ref }: { ref?: Ref<{ focus(): void }>; value: string; onChange: (v: string) => void; label: string; height: number }) => (
-    <textarea ref={(node) => { const handle = node ? { focus: () => node.focus() } : null; if (typeof ref === 'function') ref(handle); else if (ref) ref.current = handle }} aria-label={label} data-editor-height={height} value={value} onChange={(e) => onChange(e.target.value)} />
+  LedgerBodyEditor: ({ value, onChange, label, height, ref, disabled }: { disabled?: boolean; ref?: Ref<{ focus(): void }>; value: string; onChange: (v: string) => void; label: string; height: number }) => (
+    <textarea disabled={disabled} ref={(node) => { const handle = node ? { focus: () => node.focus() } : null; if (typeof ref === 'function') ref(handle); else if (ref) ref.current = handle }} aria-label={label} data-editor-height={height} value={value} onChange={(e) => onChange(e.target.value)} />
   ),
 }))
 vi.mock('@/components/books/LedgerPaperPdf', () => ({
@@ -88,6 +88,73 @@ beforeEach(() => {
 afterEach(async () => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); await i18n.changeLanguage('en') })
 
 describe('Ledger Book composer', () => {
+  it.each([
+    ['send', false], ['send', true], ['delete', false], ['delete', true],
+  ] as const)('preserves the destination after departing pending %s (StrictMode: %s)', async (operation, strict) => {
+    let accept!: () => void
+    const mutation = operation === 'send'
+      ? vi.spyOn(api, 'saveAndSendLedgerDraft').mockImplementation(() => new Promise((resolve) => { accept = () => resolve({ id: 40, ref_number: '1/2/7' } as LedgerBookRead) }))
+      : vi.spyOn(api, 'deleteLedgerDraft').mockImplementation(() => new Promise((resolve) => { accept = () => resolve(undefined) }))
+    const client = mountComposer('/ledger/compose/12', 10, strict)
+    client.setQueryData(LEDGER_DRAFTS_KEY, [])
+    const label = operation === 'send' ? 'Save & Send' : 'Delete draft'
+    await userEvent.click(await screen.findByRole('button', { name: label }))
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: label }))
+    await waitFor(() => expect(mutation).toHaveBeenCalledTimes(1))
+    await act(() => router.navigate('/employees'))
+    expect(screen.getByLabelText('URL')).toHaveTextContent('/employees')
+    await act(async () => { accept() })
+    await waitFor(() => expect(client.getQueryData(ledgerDraftKey(12))).toBeUndefined())
+    expect(client.getQueryState(LEDGER_DRAFTS_KEY)?.isInvalidated).toBe(true)
+    expect(screen.getByLabelText('URL')).toHaveTextContent('/employees')
+  })
+
+  it('freezes every editing surface through the final flush and issuance, then unlocks on failure', async () => {
+    let accept!: (draft: LedgerDraftRead) => void
+    let rejectIssue!: (error: Error) => void
+    update.mockReturnValueOnce(new Promise((resolve) => { accept = resolve }))
+    const issue = vi.spyOn(api, 'saveAndSendLedgerDraft').mockReturnValue(new Promise((_resolve, reject) => { rejectIssue = reject }))
+    mountComposer('/ledger/compose/12', 60000)
+    const body = await screen.findByLabelText('Body')
+    fireEvent.change(body, { target: { value: 'Final body' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Save & Send' }))
+    await userEvent.dblClick(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save & Send' }))
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+    const assertLocked = () => {
+      for (const control of ['Body', 'Subject line 1', 'Tab', 'Grade', 'To', 'CC', 'Signing manager', 'References']) expect(screen.getByLabelText(control)).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Add line' })).toBeDisabled()
+      expect(body.closest('fieldset')).toHaveAttribute('inert')
+    }
+    assertLocked()
+    // A previously opened portaled picker can still deliver its callback.
+    const picker = vi.mocked(LedgerAddresseesPicker).mock.calls.at(-1)![0]
+    act(() => picker.onChange([]))
+    fireEvent.change(body, { target: { value: 'Too late' } })
+    expect(body).toHaveValue('Final body')
+    await act(async () => { accept({ ...DRAFT, body_html: 'Final body' }) })
+    await waitFor(() => expect(issue).toHaveBeenCalledTimes(1))
+    assertLocked()
+    await act(async () => { rejectIssue(new Error('offline')) })
+    await waitFor(() => expect(body).toBeEnabled())
+    expect(screen.getByLabelText('Subject line 1')).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Remove Ali from To' })).toBeInTheDocument()
+    fireEvent.change(body, { target: { value: 'Editable again' } })
+    expect(body).toHaveValue('Editable again')
+  })
+
+  it('restores editing when the final flush fails before issuance', async () => {
+    update.mockRejectedValueOnce(new Error('offline'))
+    const issue = vi.spyOn(api, 'saveAndSendLedgerDraft')
+    mountComposer('/ledger/compose/12', 60000)
+    const body = await screen.findByLabelText('Body')
+    fireEvent.change(body, { target: { value: 'Unsaved final body' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Save & Send' }))
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save & Send' }))
+    await screen.findByText('Not saved. Your next change tries again.')
+    expect(body).toBeEnabled()
+    expect(issue).not.toHaveBeenCalled()
+  })
+
   it.each([false, true])('does not redirect a departed creation visit (StrictMode: %s)', async (strict) => {
     let accept!: (draft: LedgerDraftRead) => void
     const create = vi.spyOn(api, 'createLedgerDraft').mockReturnValue(new Promise((resolve) => { accept = resolve }))

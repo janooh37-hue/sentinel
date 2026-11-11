@@ -78,6 +78,14 @@ def send(client, **changes):
     return draft, response.json()
 
 
+def content_payload(detail, content):
+    return {
+        **content,
+        "expected_version_id": detail["selected_version_id"],
+        "expected_content_sha256": detail["content_sha256"],
+    }
+
+
 def saves(db, version_id):
     return list(
         db.scalars(
@@ -205,7 +213,7 @@ def test_content_saves_are_append_only_sanitized_and_deduplicated(ledger):
         "subjects": ["Changed", "Additional"],
         "body_html": '<script>bad()</script><p onerror="bad()">Edited</p>',
     }
-    response = client.put(f"{url}/content", json=payload)
+    response = client.put(f"{url}/content", json=content_payload(detail, payload))
     assert response.status_code == 200, response.text
     current = response.json()
     assert current["body_html"] == "<p>Edited</p>"
@@ -213,7 +221,7 @@ def test_content_saves_are_append_only_sanitized_and_deduplicated(ledger):
     history = saves(db, detail["selected_version_id"])
     assert len(history) == 2
     assert history[0].body_html == CONTENT["body_html"]
-    assert client.put(f"{url}/content", json=payload).json() == current
+    assert client.put(f"{url}/content", json=content_payload(current, payload)).json() == current
     assert len(saves(db, detail["selected_version_id"])) == 2
     response = client.get(f"{url}/revisions/{detail['selected_version_id']}/saves")
     assert response.status_code == 200
@@ -234,12 +242,14 @@ def test_creator_only_writes_and_corrections_and_hidden_book_access(ledger):
     url = f"{BOOKS}/{detail['id']}"
     actor[0] = other
     error(client.get(url), 404, "BOOK_NOT_FOUND")
-    error(client.put(f"{url}/content", json=CONTENT), 404, "BOOK_NOT_FOUND")
+    error(
+        client.put(f"{url}/content", json=content_payload(detail, CONTENT)), 404, "BOOK_NOT_FOUND"
+    )
     book = db.get(Book, detail["id"])
     book.distribution = "organization"
     db.commit()
     assert client.get(url).status_code == 200
-    assert client.put(f"{url}/content", json=CONTENT).status_code == 403
+    assert client.put(f"{url}/content", json=content_payload(detail, CONTENT)).status_code == 403
     assert client.post(f"{url}/corrections").status_code == 403
 
 
@@ -249,7 +259,9 @@ def test_signed_revision_requires_correction_and_preserves_selected_history(ledg
     url = f"{BOOKS}/{detail['id']}"
     error(client.post(f"{url}/corrections"), 409, "REVISION_NOT_SIGNED")
     sign(db, detail)
-    error(client.put(f"{url}/content", json=CONTENT), 409, "REVISION_LOCKED")
+    error(
+        client.put(f"{url}/content", json=content_payload(detail, CONTENT)), 409, "REVISION_LOCKED"
+    )
     book = db.get(Book, detail["id"])
     book.approval_state = "approved"
     db.commit()
@@ -275,7 +287,7 @@ def test_signed_revision_requires_correction_and_preserves_selected_history(ledg
         is not None
     )
     updated = {"subjects": ["Correction"], "body_html": "<p>Corrected body</p>"}
-    assert client.put(f"{url}/content", json=updated).status_code == 200
+    assert client.put(f"{url}/content", json=content_payload(corrected, updated)).status_code == 200
     old = client.get(url, params={"revision": first["version_id"]}).json()
     assert old["selected_version_id"] == first["version_id"]
     assert old["body_html"] == CONTENT["body_html"]
@@ -289,7 +301,7 @@ def test_voided_or_deleted_books_cannot_be_edited(ledger, state):
     setattr(db.get(Book, detail["id"]), state, datetime(2026, 1, 1))
     db.commit()
     error(
-        client.put(f"{BOOKS}/{detail['id']}/content", json=CONTENT),
+        client.put(f"{BOOKS}/{detail['id']}/content", json=content_payload(detail, CONTENT)),
         409,
         "BOOK_VOIDED" if state == "voided_at" else "BOOK_DELETED",
     )
@@ -349,7 +361,11 @@ def test_papers_follow_read_access_and_are_hardened(ledger):
     ("method", "suffix", "payload"),
     [
         ("get", "", None),
-        ("put", "/content", CONTENT),
+        (
+            "put",
+            "/content",
+            {**CONTENT, "expected_version_id": 1, "expected_content_sha256": "0" * 64},
+        ),
         ("get", "/revisions/1/saves", None),
         ("post", "/corrections", None),
         ("get", "/images/00000000000000000000000000000000.png", None),
@@ -612,14 +628,20 @@ def test_downgrade_does_not_grant_historical_sensitive_revision_access(ledger):
     assert (
         client.put(
             f"{BOOKS}/{detail['id']}/content",
-            json={**CONTENT, "body_html": f'<p>Private image</p><img src="{image_src}">'},
+            json=content_payload(
+                detail, {**CONTENT, "body_html": f'<p>Private image</p><img src="{image_src}">'}
+            ),
         ).status_code
         == 200
     )
     sign(db, detail)
     url = f"{BOOKS}/{detail['id']}"
-    assert client.post(f"{url}/corrections").status_code == 201
-    assert client.put(f"{url}/content", json=CONTENT).status_code == 200
+    correction = client.post(f"{url}/corrections")
+    assert correction.status_code == 201, correction.text
+    assert (
+        client.put(f"{url}/content", json=content_payload(correction.json(), CONTENT)).status_code
+        == 200
+    )
     book = db.get(Book, detail["id"])
     book_send_service.set_grade(db, owner, book, "unclassified")
     # Admins can open Unclassified records but need to be named for Top Secret.
@@ -647,3 +669,58 @@ def test_downgrade_does_not_grant_historical_sensitive_revision_access(ledger):
     assert old.status_code == 200, old.text
     assert old.json()["grade"] == "top_secret"
     assert client.get(image_src).status_code == 200
+
+
+@pytest.mark.parametrize("stale", ["revision", "revision_same_content", "content"])
+def test_stale_content_save_cannot_overwrite_newer_revision_or_content(ledger, stale):
+    client, db, _, _, _, _ = ledger
+    _, opened = send(client)
+    url = f"{BOOKS}/{opened['id']}"
+    current = opened
+    if stale.startswith("revision"):
+        sign(db, opened)
+        correction = client.post(f"{url}/corrections")
+        assert correction.status_code == 201, correction.text
+        current = correction.json()
+    updated = (
+        CONTENT
+        if stale == "revision_same_content"
+        else {"subjects": ["New correction"], "body_html": "<p>Corrected instructions</p>"}
+    )
+    accepted = client.put(f"{url}/content", json=content_payload(current, updated))
+    assert accepted.status_code == 200, accepted.text
+    current = accepted.json()
+    paper = client.get(f"{url}/paper").text
+    book = db.get(Book, opened["id"])
+    before = (
+        book.subject,
+        book.search_text,
+        [(v.id, [save.id for save in saves(db, v.id)]) for v in book.versions],
+    )
+    stale_body = {"subjects": ["Old tab"], "body_html": "<p>Original instructions with edits</p>"}
+    response = client.put(f"{url}/content", json=content_payload(opened, stale_body))
+    error(response, 409, "CONTENT_CONFLICT")
+    db.expire_all()
+    book = db.get(Book, opened["id"])
+    assert (
+        book.subject,
+        book.search_text,
+        [(v.id, [save.id for save in saves(db, v.id)]) for v in book.versions],
+    ) == before
+    read = client.get(url).json()
+    assert read["selected_version_id"] == current["selected_version_id"]
+    assert read["content_sha256"] == current["content_sha256"]
+    assert read["subjects"] == updated["subjects"]
+    assert read["body_html"] == updated["body_html"]
+    assert client.get(f"{url}/paper").text == paper
+
+
+@pytest.mark.parametrize("missing", ["expected_version_id", "expected_content_sha256"])
+def test_content_save_requires_both_expected_values(ledger, missing):
+    client, db, _, _, _, _ = ledger
+    _, opened = send(client)
+    payload = content_payload(opened, CONTENT)
+    del payload[missing]
+    response = client.put(f"{BOOKS}/{opened['id']}/content", json=payload)
+    assert response.status_code == 422, response.text
+    assert len(saves(db, opened["selected_version_id"])) == 1

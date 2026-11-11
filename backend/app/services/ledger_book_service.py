@@ -967,9 +967,16 @@ def _require_creator_write(db: Session, user: User, book: Book) -> None:
 
 
 def save_content(
-    db: Session, user: User, book_id: int, *, subjects: list[str], body_html: str
+    db: Session,
+    user: User,
+    book_id: int,
+    *,
+    subjects: list[str],
+    body_html: str,
+    expected_version_id: int,
+    expected_content_sha256: str,
 ) -> LedgerBookRead:
-    """Append a tracked save to the latest Revision (no row when unchanged)."""
+    """Append a tracked save only while the editor's Revision and content are current."""
     begin_immediate_if_idle(db)
     book = get_ledger_book(db, book_id)
     db.refresh(book)
@@ -977,16 +984,26 @@ def save_content(
         db.refresh(version)
     _require_creator_write(db, user, book)
     book_service.require_ledger_revision_unlocked(db, book)
+    latest = _versions(book)[-1]
+    current = _current_save(db, latest.id)
+    if (
+        latest.id != expected_version_id
+        or current is None
+        or current.content_sha256 != expected_content_sha256
+    ):
+        raise AppError(
+            "CONTENT_CONFLICT",
+            "The revision or content changed. Reload the latest revision before saving.",
+            http_status=409,
+        )
     cleaned_subjects = _clean_subjects(subjects)
     if not cleaned_subjects:
         raise ValidationFailedError("LEDGER_SUBJECT_REQUIRED", "Write at least one subject.")
     cleaned_body = sanitize_body(body_html, image_src_prefixes=(book_image_prefix(book.id),))
     if not _has_body(cleaned_body):
         raise ValidationFailedError("LEDGER_BODY_REQUIRED", "The letter body cannot be empty.")
-    latest = _versions(book)[-1]
     digest = _content_sha256(cleaned_subjects, cleaned_body)
-    current = _current_save(db, latest.id)
-    if current is None or current.content_sha256 != digest:
+    if current.content_sha256 != digest:
         db.add(
             LedgerBookSave(
                 version_id=latest.id,

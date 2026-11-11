@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, Outlet, RouterProvider, useLocation } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
 
-import { api, type LedgerBookRead, type LedgerRevisionRead } from '@/lib/api'
+import { api, ApiError, type LedgerBookRead, type LedgerRevisionRead } from '@/lib/api'
 
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'employee' } }) }))
 vi.mock('./LedgerBodyEditor', () => ({
@@ -121,7 +121,7 @@ it('T-C8 saving the content editor PUTs subjects and body, then returns to the d
   await userEvent.click(screen.getByRole('button', { name: 'Add line' }))
   await userEvent.type(screen.getByLabelText('Subject line 2'), 'Annex')
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-  await waitFor(() => expect(put).toHaveBeenCalledWith(40, { subjects: ['Leave plan (revised)', 'Annex'], body_html: '<p>Hello</p>' }))
+  await waitFor(() => expect(put).toHaveBeenCalledWith(40, { subjects: ['Leave plan (revised)', 'Annex'], body_html: '<p>Hello</p>', expected_version_id: 72, expected_content_sha256: 'abc' }))
   expect(await screen.findByText('/ledger?tab=books&book=40')).toBeInTheDocument()
 })
 
@@ -240,11 +240,15 @@ it('a background refetch with new content does not drop what the writer typed', 
 
 it('a background refetch refreshes an untouched form', async () => {
   const get = vi.spyOn(api, 'getLedgerBook').mockResolvedValue(BOOK)
+  const put = vi.spyOn(api, 'updateLedgerBookContent').mockResolvedValue(BOOK)
   const { qc } = mount()
   expect(await screen.findByRole('heading', { name: /Edit .1\/2\/7/ })).toBeInTheDocument()
   get.mockResolvedValue({ ...BOOK, subjects: ['Changed elsewhere'], content_sha256: 'def' })
   await act(() => qc.invalidateQueries({ queryKey: ['ledger', 'books', 40] }))
   expect(await screen.findByDisplayValue('Changed elsewhere')).toBeInTheDocument()
+  await userEvent.type(screen.getByLabelText('Subject line 1'), ' edited')
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(put).toHaveBeenCalledWith(40, expect.objectContaining({ expected_content_sha256: 'def' })))
 })
 
 it('keeps edits typed while an earlier save is in flight', async () => {
@@ -260,6 +264,24 @@ it('keeps edits typed while an earlier save is in flight', async () => {
   await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled())
   expect(screen.getByLabelText('URL')).toHaveTextContent(EDIT_URL)
   expect(screen.getByLabelText('Subject line 1')).toHaveValue('Leave plan (revised) more')
+  put.mockResolvedValue({ ...BOOK, subjects: ['Leave plan (revised) more'], content_sha256: 'saved-again' })
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(put).toHaveBeenLastCalledWith(40, expect.objectContaining({ expected_version_id: 72, expected_content_sha256: 'saved' })))
+  expect(await screen.findByText(DESK_URL)).toBeInTheDocument()
+})
+
+it('retains the edited baseline after a dirty refetch and preserves text on conflict', async () => {
+  const get = vi.spyOn(api, 'getLedgerBook').mockResolvedValue(BOOK)
+  const put = vi.spyOn(api, 'updateLedgerBookContent').mockRejectedValue(new ApiError(409, 'CONTENT_CONFLICT', 'Content changed'))
+  const { qc } = mount()
+  await openAndRevise()
+  get.mockResolvedValue({ ...BOOK, subjects: ['Changed elsewhere'], content_sha256: 'newer' })
+  await act(() => qc.invalidateQueries({ queryKey: ['ledger', 'books', 40] }))
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(put).toHaveBeenCalledWith(40, expect.objectContaining({ expected_version_id: 72, expected_content_sha256: 'abc' })))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Copy any text you need')
+  expect(screen.getByLabelText('Subject line 1')).toHaveValue('Leave plan (revised)')
+  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   await userEvent.click(screen.getByRole('link', { name: 'Back to Ledger' }))
   expect(await screen.findByRole('dialog', { name: DISCARD_TITLE })).toBeInTheDocument()
 })

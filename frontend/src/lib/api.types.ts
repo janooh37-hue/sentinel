@@ -13863,6 +13863,10 @@ export interface components {
         };
         /** LedgerContentUpdate */
         LedgerContentUpdate: {
+            /** Expected Version Id */
+            expected_version_id: number;
+            /** Expected Content Sha256 */
+            expected_content_sha256: string;
             /** Subjects */
             subjects: string[];
             /** Body Html */

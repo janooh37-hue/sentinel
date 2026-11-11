@@ -178,6 +178,8 @@ class LedgerBookRead(ORMBase):
 class LedgerContentUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    expected_version_id: int = Field(gt=0)
+    expected_content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     subjects: list[str] = Field(max_length=20)
     body_html: str = Field(max_length=2_000_000)
 

@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { api, apiErrorMessage, type LedgerBookRead } from '@/lib/api'
+import { api, ApiError, apiErrorMessage, type LedgerBookRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { bidi } from '@/lib/bidi'
 import { toast } from '@/lib/toast'
@@ -110,8 +110,10 @@ function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boole
   const navigate = useNavigate()
   const qc = useQueryClient()
   const bodyErrorId = useId()
-  const [revisionId] = useState(book.revisions.at(-1)?.version_id)
-  const staleRevision = !editable || book.revisions.at(-1)?.version_id !== revisionId
+  const [revisionId] = useState(book.selected_version_id)
+  const contentHash = useRef(book.content_sha256)
+  const [contentConflict, setContentConflict] = useState(false)
+  const staleRevision = contentConflict || !editable || book.revisions.at(-1)?.version_id !== revisionId
   const form = useForm<ContentValues>({
     resolver: zodResolver(contentSchema),
     defaultValues: { subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html },
@@ -122,18 +124,22 @@ function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boole
   useEffect(() => {
     if (form.formState.isDirty || staleRevision) return
     reset({ subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html })
+    contentHash.current = book.content_sha256
   }, [book.body_html, book.content_sha256, book.subjects, form, reset, staleRevision])
   const keepEditingButton = useRef<HTMLButtonElement>(null)
   const dialogOpener = useRef<HTMLElement | null>(null)
   // Set once leaving is allowed: the edit is saved, or the writer chose to discard it.
   const leaveAllowed = useRef(false)
   const save = useMutation({
-    mutationFn: (values: ContentValues) => api.updateLedgerBookContent(book.id, values),
+    mutationFn: (values: ContentValues) => api.updateLedgerBookContent(book.id, {
+      ...values, expected_version_id: revisionId, expected_content_sha256: contentHash.current,
+    }),
     onSuccess: (accepted, submitted) => {
       // The desk's routing rows and record detail carry the subject too.
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['ledger', 'books', book.id] })
       if (leaveAllowed.current || staleRevision) return
+      contentHash.current = accepted.content_sha256
       toast.success(t('ledgerBook.composer.content.saved'))
       // A completed request does not include text entered while it was pending.
       const current = form.getValues()
@@ -147,7 +153,10 @@ function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boole
       navigate(deskBookUrl(book.id))
     },
     // A failed save keeps the form and its edits; leaving still asks first.
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err) => {
+      if (err instanceof ApiError && err.code === 'CONTENT_CONFLICT') setContentConflict(true)
+      toast.error(apiErrorMessage(err))
+    },
   })
   const hasUnsavedChanges = isDirty || save.isPending
   const blocker = useBlocker(({ currentLocation, nextLocation }) => (
@@ -173,7 +182,7 @@ function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boole
 
   return (
     <form className="flex flex-col gap-4" noValidate onSubmit={form.handleSubmit((values) => { if (!staleRevision) save.mutate(values) })}>
-      {staleRevision && <p role="alert" className="rounded-lg bg-muted px-3 py-2 text-[0.84em]">{t('ledgerBook.composer.content.revisionChanged')}</p>}
+      {staleRevision && <p role="alert" className="rounded-lg bg-muted px-3 py-2 text-[0.84em]">{t(contentConflict ? 'errors.ledger.contentConflict' : 'ledgerBook.composer.content.revisionChanged')}</p>}
       <Controller
         control={form.control}
         name="subjects"

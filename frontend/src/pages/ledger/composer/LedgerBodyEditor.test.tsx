@@ -65,6 +65,7 @@ function installEngine(defer = false) {
     initialize: () => initialize(),
     documents,
     focus: editor.focus,
+    mode: editor.mode.set,
     replaceContent: () => {
       editor.getBody().replaceChildren()
       for (const handler of listeners.get('SetContent') ?? []) handler()
@@ -172,7 +173,7 @@ it('focuses the editing surface and keeps validation descriptions inside its doc
 it('focuses and describes the fallback textarea when the editor script fails', async () => {
   vi.stubGlobal('hugerte', undefined)
   const ref = createRef<LedgerBodyEditorHandle>()
-  render(<LedgerBodyEditor ref={ref} value="" onChange={() => {}} label="Body" invalid errorMessage="Body is required" />)
+  const view = render(<LedgerBodyEditor ref={ref} value="" onChange={() => {}} label="Body" invalid errorMessage="Body is required" />)
   const script = await waitFor(() => {
     const node = document.querySelector('script[src="/hugerte/hugerte.min.js"]')
     expect(node).not.toBeNull()
@@ -184,6 +185,10 @@ it('focuses and describes the fallback textarea when the editor script fails', a
   expect(textarea).toHaveFocus()
   expect(textarea).toHaveAttribute('aria-invalid', 'true')
   expect(textarea).toHaveAccessibleDescription('Body is required')
+  view.rerender(<LedgerBodyEditor ref={ref} value="" onChange={() => {}} label="Body" disabled />)
+  expect(textarea).toBeDisabled()
+  view.rerender(<LedgerBodyEditor ref={ref} value="" onChange={() => {}} label="Body" />)
+  expect(textarea).toBeEnabled()
 })
 
 it('runs the editor UI in the app language and remounts with Arabic labels on a switch', async () => {
@@ -306,4 +311,18 @@ it('strips Word classes from pasted content and keeps table borders', () => {
   expect(first.style.border).toBe('0.2mm solid rgb(0, 0, 0)')
   expect(second.style.border).toBe('1px dotted red')
   expect(node.querySelector('table')?.style.borderCollapse).toBe('collapse')
+})
+
+it('switches the actual HugeRTE engine to readonly while disabled and restores editing', () => {
+  const engine = installEngine()
+  const change = vi.fn()
+  const view = render(<LedgerBodyEditor value="" onChange={change} label="Body" />)
+  view.rerender(<LedgerBodyEditor value="" onChange={change} label="Body" disabled />)
+  expect(engine.mode).toHaveBeenLastCalledWith('readonly')
+  act(() => engine.type('<p>Late change</p>'))
+  expect(change).not.toHaveBeenCalled()
+  view.rerender(<LedgerBodyEditor value="" onChange={change} label="Body" />)
+  expect(engine.mode).toHaveBeenLastCalledWith('design')
+  act(() => engine.type('<p>Allowed change</p>'))
+  expect(change).toHaveBeenCalledWith('<p>Allowed change</p>')
 })

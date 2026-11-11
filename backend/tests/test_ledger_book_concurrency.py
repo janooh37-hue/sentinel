@@ -261,6 +261,7 @@ def test_waiting_content_save_refreshes_signed_revision_under_write_lock(
         )
         book = ledger_book_service.save_and_send(db, writer, draft.id)
         book_id, version_id = book.id, book.versions[0].id
+        expected_hash = ledger_book_service.ledger_book_read(db, writer, book_id).content_sha256
     ready, edit_started, lock_attempted = Event(), Event(), Event()
     real_begin = ledger_book_service.begin_immediate_if_idle
 
@@ -280,7 +281,13 @@ def test_waiting_content_save_refreshes_signed_revision_under_write_lock(
             edit_started.wait(timeout=10)
             try:
                 ledger_book_service.save_content(
-                    db, writer, book_id, subjects=["Late"], body_html="<p>Late</p>"
+                    db,
+                    writer,
+                    book_id,
+                    subjects=["Late"],
+                    body_html="<p>Late</p>",
+                    expected_version_id=version_id,
+                    expected_content_sha256=expected_hash,
                 )
             except AppError as exc:
                 return exc.code
@@ -303,3 +310,50 @@ def test_waiting_content_save_refreshes_signed_revision_under_write_lock(
         assert future.result(timeout=10) == "REVISION_LOCKED"
     with sessions() as db:
         assert db.scalar(select(func.count()).select_from(LedgerBookSave)) == 1
+
+
+def test_concurrent_content_saves_accept_only_one_editor_snapshot(ledger_sessions):
+    from app.api.errors import AppError
+
+    sessions, _ = ledger_sessions
+    with sessions() as db:
+        writer = make_user(db, role="manager", email="competing-editors@test.ae")
+        writer_id = writer.id
+        draft = ledger_book_service.create_draft(
+            db,
+            writer,
+            LedgerDraftCreate(
+                tab=4, subjects=["Before"], body_html="<p>Before</p>", **signer_fields(db)
+            ),
+        )
+        book = ledger_book_service.save_and_send(db, writer, draft.id)
+        opened = ledger_book_service.ledger_book_read(db, writer, book.id)
+    barrier = Barrier(2)
+
+    def edit(index):
+        with sessions() as db:
+            writer = db.get(User, writer_id)
+            barrier.wait(timeout=10)
+            try:
+                ledger_book_service.save_content(
+                    db,
+                    writer,
+                    opened.id,
+                    subjects=[f"Editor {index}"],
+                    body_html=f"<p>Editor {index}</p>",
+                    expected_version_id=opened.selected_version_id,
+                    expected_content_sha256=opened.content_sha256,
+                )
+            except AppError as exc:
+                return exc.code, index
+            return "saved", index
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(edit, range(2)))
+    assert sorted(code for code, _ in results) == ["CONTENT_CONFLICT", "saved"]
+    winner = next(index for code, index in results if code == "saved")
+    with sessions() as db:
+        assert db.scalar(select(func.count()).select_from(LedgerBookSave)) == 2
+        current = ledger_book_service.ledger_book_read(db, db.get(User, writer_id), opened.id)
+        assert current.subjects == [f"Editor {winner}"]
+        assert current.body_html == f"<p>Editor {winner}</p>"

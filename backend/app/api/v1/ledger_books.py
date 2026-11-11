@@ -198,7 +198,13 @@ def save_ledger_content(
     book_id: int, payload: LedgerContentUpdate, db: DbDep, user: UserDep
 ) -> LedgerBookRead:
     return service.save_content(
-        db, user, book_id, subjects=payload.subjects, body_html=payload.body_html
+        db,
+        user,
+        book_id,
+        subjects=payload.subjects,
+        body_html=payload.body_html,
+        expected_version_id=payload.expected_version_id,
+        expected_content_sha256=payload.expected_content_sha256,
     )
 
 
