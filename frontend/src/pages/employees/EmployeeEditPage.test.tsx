@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import i18n from 'i18next'
 import { api } from '@/lib/api'
+import ar from '@/locales/ar.json'
 import { EmployeeEditPage } from './EmployeeEditPage'
 
 const { has } = vi.hoisted(() => ({ has: vi.fn<(cap: string) => boolean>(() => true) }))
@@ -18,7 +20,8 @@ function LocationProbe() {
 function renderPage() {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}><MemoryRouter initialEntries={['/employees/G100/edit']}><Routes><Route path="/employees/:id/edit" element={<EmployeeEditPage />} /><Route path="/employees/:id" element={<div>Employee file</div>} /></Routes><LocationProbe /></MemoryRouter></QueryClientProvider>)
 }
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('en')
   vi.restoreAllMocks()
   has.mockReturnValue(true)
   vi.spyOn(api, 'getEmployeeDetail').mockResolvedValue(detail as never)
@@ -28,6 +31,37 @@ beforeEach(() => {
 })
 
 describe('dedicated employee edit page', () => {
+  it('renders the correction-only task in Arabic in the main content', async () => {
+    i18n.addResourceBundle('ar', 'translation', ar)
+    await i18n.changeLanguage('ar')
+    has.mockImplementation((cap) => cap === 'employees.change_id')
+    renderPage()
+    expect(await screen.findByRole('heading', { name: 'تصحيح رقم الموظف' })).toBeInTheDocument()
+    const panel = within(screen.getByRole('main')).getByRole('region', { name: 'تصحيح رقم الموظف' })
+    expect(within(panel).getByLabelText('الرقم الصحيح')).toBeInTheDocument()
+    expect(screen.getAllByRole('textbox')).toHaveLength(1)
+    expect(api.updateEmployee).not.toHaveBeenCalled()
+  })
+
+  it('offers only number correction without profile-edit permission and keeps it after success', async () => {
+    has.mockImplementation((cap) => cap === 'employees.change_id')
+    vi.mocked(api.getEmployeeDetail).mockImplementation(async (id) => ({ ...detail, employee: { ...employee, id } }) as never)
+    renderPage()
+    expect(await screen.findByRole('heading', { name: 'Correct employee number' })).toBeInTheDocument()
+    expect(within(screen.getByRole('main')).getByRole('region', { name: 'Correct employee number' })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Name (English)' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Correct number'), { target: { value: 'G200' } })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Correct transposed digits' } })
+    fireEvent.change(screen.getByLabelText('Type G200 again to confirm'), { target: { value: 'G200' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Change G100 to G200' }))
+    expect(await screen.findByText(/Employee number changed from G100 to G200/)).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Name (English)' })).not.toBeInTheDocument()
+    expect(api.updateEmployee).not.toHaveBeenCalled()
+  })
+
   it('hides the entire correction workflow without employees.change_id', async () => {
     has.mockImplementation((cap) => cap !== 'employees.change_id')
     renderPage()

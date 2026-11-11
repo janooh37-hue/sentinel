@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import date, datetime
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from fastapi import UploadFile
 from fastapi.testclient import TestClient
 from sqlalchemy import event, select, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.api.errors import AppError
+from app.api.v1.employees import upload_to_vault
 from app.config import Settings
 from app.db.models import (
     Absence,
@@ -19,6 +25,7 @@ from app.db.models import (
     Book,
     BookCategory,
     BookEditSession,
+    BookVersion,
     Document,
     Employee,
     EmployeeFormerId,
@@ -39,10 +46,23 @@ from app.db.models import (
     WhatsAppMessage,
 )
 from app.db.session import get_db
-from app.db.workforce_models import AttendanceCase, AttendancePunchProfile, WorkShiftOverride
+from app.db.workforce_models import (
+    AttendanceCase,
+    AttendancePunchProfile,
+    DutyAssignmentEvent,
+    WorkShiftOverride,
+)
 from app.main import create_app
+from app.services import (
+    book_service,
+    document_service,
+    employee_service,
+    inmate_statistics_service,
+    photo_service,
+    vault_service,
+    word_book_service,
+)
 from app.services import employee_id_change_service as service
-from app.services import employee_service, inmate_statistics_service, photo_service, vault_service
 
 
 @pytest.fixture()
@@ -275,13 +295,20 @@ def test_rename_moves_live_references_paths_folder_and_preserves_history(setup):
         select(AppSetting.value).where(AppSetting.key == "settings.admin_employee_id")
     ) == json.dumps("G300")
     assert db.scalar(select(VaultFile.path)) == "G300/photo/photo.png"
-    assert db.scalar(select(Document.docx_path)) == str(settings.vault_dir / "G300/issued.docx")
+    assert (
+        db.scalar(select(Document.docx_path))
+        == (settings.vault_dir / "G300/issued.docx").as_posix()
+    )
     book = db.scalar(select(Book))
     assert book.doc_path == "G300/issued.docx"
     assert book.attachment_paths == ["vault/G300/photo/photo.png"]
-    assert book.merged_attachment_paths[0]["path"] == str(settings.vault_dir / "G300/issued.docx")
-    assert db.scalar(select(Submitter.stored_sig_path)) == str(
-        settings.vault_dir / "G300/signature.png"
+    assert (
+        book.merged_attachment_paths[0]["path"]
+        == (settings.vault_dir / "G300/issued.docx").as_posix()
+    )
+    assert (
+        db.scalar(select(Submitter.stored_sig_path))
+        == (settings.vault_dir / "G300/signature.png").as_posix()
     )
     assert not (settings.vault_dir / "G100").exists()
     assert (settings.vault_dir / "G300/issued.docx").read_bytes() == b"Issued to G100"
@@ -500,3 +527,192 @@ def test_pending_report_assignments_follow_correction_but_completed_stages_keep_
     actor = db.get(User, user.id)
     facts = inmate_statistics_service._stage_actor(db, pending, actor, "review")
     assert facts["employee_id"] == "G300"
+
+
+@pytest.mark.parametrize("template", ["Inmate Conduct Violations", "Report"])
+@pytest.mark.parametrize(
+    "state,action", [("none", "revise"), ("returned", "revise"), ("none", "submit")]
+)
+def test_corrected_reporter_can_write_unchanged_document_fields(setup, template, state, action):
+    db, user, _settings, _client = setup
+    user_id = user.id
+    fields = {"reporter_id": "G100", "signer_employee_id": "G100", "signed": True}
+    db.add(BookCategory(id="GS", prefix="GS"))
+    db.commit()
+    book = Book(
+        category_id="GS",
+        ref_number="REPORT-0001" if template == "Report" else "IV-0001",
+        approval_state=state,
+        versions=[
+            BookVersion(
+                version_no=1,
+                template_id=template,
+                fields=fields,
+                status="approved",
+                created_by_user_id=user_id,
+            )
+        ],
+    )
+    db.add(book)
+    db.commit()
+    book_id = book.id
+    service.change(db, user, "G100", "G300", "Correction reason")
+    service.change(db, db.get(User, user_id), "G300", "G400", "Second correction")
+    version = book_service.require_inmate_report_write_access(
+        db, db.get(User, user_id), db.get(Book, book_id), action=action
+    )
+    assert version.fields == fields
+
+
+@pytest.mark.parametrize("with_history", [False, True])
+def test_open_register_resolves_corrected_reporter_name_and_duty_unit(setup, with_history):
+    db, user, _settings, _client = setup
+    db.get(Employee, "G100").duty_unit = "السرية الخامسة"
+    if with_history:
+        db.add(
+            DutyAssignmentEvent(
+                employee_id="G100",
+                event_type="baseline",
+                to_unit="السرية الأولى",
+                effective_at=datetime(2026, 1, 1),
+            )
+        )
+    db.add(BookCategory(id="INV", prefix="IV"))
+    db.commit()
+    fields = {"reporter_id": "G100", "report_date": "2026-08-05", "inmates": [{"name": "نزيل"}]}
+    book = Book(
+        category_id="INV",
+        ref_number="IV-0001",
+        versions=[
+            BookVersion(version_no=1, template_id="Inmate Conduct Violations", fields=fields)
+        ],
+    )
+    db.add(book)
+    db.commit()
+    service.change(db, user, "G100", "G300", "Correction reason")
+    entry = inmate_statistics_service.build_month(db, 2026, 8).entries[0]
+    assert entry.reporter_id == "G100"
+    assert entry.reporter_name == "ألف"
+    assert entry.duty_unit == ("السرية الأولى" if with_history else "السرية الخامسة")
+
+
+@pytest.mark.parametrize("stage", ["review", "approve"])
+def test_corrected_employee_cannot_fill_another_role_through_second_account(setup, stage):
+    db, user, _settings, _client = setup
+    twin = User(
+        email="twin@x.ae", password_hash="x", role="admin", status="active", employee_id="G100"
+    )
+    db.add(twin)
+    db.commit()
+    twin_id = twin.id
+    earlier = [inmate_statistics_service._identity(db, user, "prepare")]
+    service.change(db, user, "G100", "G300", "Correction reason")
+    with pytest.raises(AppError) as error:
+        inmate_statistics_service._identity(db, db.get(User, twin_id), stage, earlier=earlier)
+    assert error.value.code == "INMATE_REGISTER_ACTORS_NOT_DISTINCT"
+    assert earlier[0]["employee_id"] == "G100"
+
+
+def test_upload_rechecks_employee_after_correction_during_read(setup):
+    db, user, settings, _client = setup
+    user_id = user.id
+    stale_employee = db.get(Employee, "G100")
+    upload = UploadFile(filename="scan.pdf", file=BytesIO(b"scan"))
+
+    async def read_after_correction():
+        with Session(db.get_bind()) as other:
+            service.change(other, other.get(User, user_id), "G100", "G300", "Correction reason")
+        assert db.get(Employee, "G100") is stale_employee
+        return b"scan"
+
+    with (
+        patch.object(upload, "read", side_effect=read_after_correction),
+        pytest.raises(AppError) as error,
+    ):
+        asyncio.run(upload_to_vault("G100", db, user, "other", upload))
+    assert error.value.code == "EMPLOYEE_NOT_FOUND"
+    assert not (settings.vault_dir / "G100").exists()
+
+
+def test_upload_holds_correction_write_lock_until_file_is_saved(setup):
+    db, user, settings, _client = setup
+    original_save = vault_service.save_upload
+
+    def save_while_locked(*args):
+        with Session(db.get_bind()) as other:
+            other.connection().exec_driver_sql("PRAGMA busy_timeout=1")
+            with pytest.raises(OperationalError, match="database is locked"):
+                other.connection().exec_driver_sql("BEGIN IMMEDIATE")
+        return original_save(*args)
+
+    upload = UploadFile(filename="scan.pdf", file=BytesIO(b"scan"))
+    with patch.object(vault_service, "save_upload", side_effect=save_while_locked):
+        entry = asyncio.run(upload_to_vault("G100", db, user, "other", upload))
+    assert (settings.vault_dir / "G100/documents/other" / entry.filename).read_bytes() == b"scan"
+    service.change(db, user, "G100", "G300", "Correction after upload")
+    assert (settings.vault_dir / "G300/documents/other" / entry.filename).read_bytes() == b"scan"
+
+
+def test_signed_violation_template_resolves_reporter_but_keeps_recorded_number(setup):
+    db, user, _settings, _client = setup
+    fields = {"reporter_id": "G100", "submitter_g": "G100"}
+    service.change(db, user, "G100", "G300", "Correction reason")
+    data = document_service._build_template_data(
+        db,
+        template_id="Inmate Conduct Violations",
+        employee=None,
+        employee_id=None,
+        fields=fields,
+        manager_id=None,
+        submitter_id=None,
+        embed_signature=None,
+        current_user=None,
+    )
+    assert data["reporter_name"] == "ألف"
+    assert data["reporter_g"] == data["submitter_g"] == "G100"
+    assert fields == {"reporter_id": "G100", "submitter_g": "G100"}
+
+
+def test_reopened_word_report_resolves_live_signer_without_changing_prior_fields(
+    setup, monkeypatch
+):
+    from docx import Document as DocxFile
+
+    db, user, settings, _client = setup
+    user_id = user.id
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: settings)
+    source = settings.data_dir / "report.docx"
+    DocxFile().save(source)
+    db.add(BookCategory(id="GS", prefix="GS"))
+    document = Document(
+        template_id="Report",
+        ref_number="REPORT-0001",
+        docx_path=str(source),
+        submission_id="report-test",
+    )
+    db.add(document)
+    db.commit()
+    fields = {"signer_employee_id": "G100", "signed": True}
+    book = Book(
+        category_id="GS",
+        ref_number="REPORT-0001",
+        approval_state="returned",
+        versions=[
+            BookVersion(
+                version_no=1,
+                template_id="Report",
+                document_id=document.id,
+                fields=fields,
+                created_by_user_id=user_id,
+            )
+        ],
+    )
+    db.add(book)
+    db.commit()
+    book_id = book.id
+    service.change(db, user, "G100", "G300", "Correction reason")
+    info = word_book_service.reopen_word_session(db, user=db.get(User, user_id), book_id=book_id)
+    session = db.scalar(select(BookEditSession).where(BookEditSession.token == info.token))
+    assert session.signer_employee_id == "G300"
+    assert session.sign_on_finish is True
+    assert db.get(Book, book_id).versions[0].fields == fields

@@ -31,6 +31,7 @@ from app.core import signature as signature_core
 from app.core.employee_completeness import TRACKED_FIELDS, missing_fields
 from app.core.vault_manager import Vault
 from app.db.models import Employee, User, VaultFile
+from app.db.repos._locking import begin_immediate_if_idle
 from app.db.session import get_db
 from app.schemas import employee_activity as activity_schemas
 from app.schemas import employee_detail as detail_schemas
@@ -622,7 +623,17 @@ async def upload_to_vault(
 ) -> VaultEntry:
     employee_service.get_employee(db, employee_id)
     data = await upload.read()
-    entry = vault_service.save_upload(employee_id, kind, upload.filename or "upload", data)
+    owns_transaction = begin_immediate_if_idle(db)
+    try:
+        # A correction may have moved this employee while the upload was read.
+        if db.get(Employee, employee_id, populate_existing=True) is None:
+            raise NotFoundError(
+                "EMPLOYEE_NOT_FOUND", f"Employee {employee_id!r} does not exist", id=employee_id
+            )
+        entry = vault_service.save_upload(employee_id, kind, upload.filename or "upload", data)
+    finally:
+        if owns_transaction:
+            db.rollback()
     if kind == "passport":
         # Best-effort: fill passport_no from a validated MRZ. Never fail the
         # upload if OCR is unavailable or the scan is unreadable.

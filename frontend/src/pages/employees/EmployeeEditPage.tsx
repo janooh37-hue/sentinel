@@ -29,12 +29,13 @@ export function EmployeeEditPage(): React.JSX.Element {
 function EmployeeEditRecord({ id }: { id: string }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const { has } = useCapabilities()
+  const canEdit = has('employees.edit')
   const navigate = useNavigate()
   const location = useLocation()
   const qc = useQueryClient()
   const [injectedState] = useState(() => location.state as EditLocationState | null)
   const [idChanged, setIdChanged] = useState(injectedState?.idChanged)
-  const [correctingNumber, setCorrectingNumber] = useState(false)
+  const [correctingNumber, setCorrectingNumber] = useState(!canEdit)
   const [profileChanged, setProfileChanged] = useState(false)
   // Bumping the key remounts the form at the stored values: an explicit discard.
   const [formGeneration, setFormGeneration] = useState(0)
@@ -73,6 +74,7 @@ function EmployeeEditRecord({ id }: { id: string }): React.JSX.Element {
   const formerIds = employee.former_ids ?? []
   const position = pickPosition(employee, i18n.language)
   const employeeHref = `/employees/${encodeURIComponent(employee.id)}`
+  const correctionPanel = has('employees.change_id') && correctingNumber && <EmployeeIdChangePanel employeeId={employee.id} onCancel={() => setCorrectingNumber(false)} unsavedProfileChanges={profileChanged} onDiscardProfileChanges={() => setFormGeneration((n) => n + 1)} />
 
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-auto bg-background">
@@ -83,7 +85,7 @@ function EmployeeEditRecord({ id }: { id: string }): React.JSX.Element {
           </Link>
           <div className="mt-3 flex flex-wrap items-end gap-6">
             <div className="min-w-0 flex-1 basis-80">
-              <h1 className="mb-2 text-sm font-semibold text-white/85">{t('employees.editPage.title')}</h1>
+              <h1 className="mb-2 text-sm font-semibold text-white/85">{t(canEdit ? 'employees.editPage.title' : 'employees.idChange.correct')}</h1>
               <p className="break-words text-[clamp(1.8rem,3.5vw,3rem)] font-extrabold leading-tight tracking-tight"><bdi>{name}</bdi></p>
               {otherName && <p className="mt-2 text-lg text-white/85"><bdi>{otherName}</bdi></p>}
               <div className="mt-4 flex flex-wrap gap-2">
@@ -96,13 +98,14 @@ function EmployeeEditRecord({ id }: { id: string }): React.JSX.Element {
               {has('employees.change_id') && !correctingNumber && <Button type="button" className="min-h-11 bg-white text-primary hover:bg-white/90" onClick={() => setCorrectingNumber(true)}><Hash className="me-2 size-4" aria-hidden />{t('employees.idChange.correct')}</Button>}
             </div>
           </div>
-          {has('employees.change_id') && correctingNumber && <EmployeeIdChangePanel employeeId={employee.id} onCancel={() => setCorrectingNumber(false)} unsavedProfileChanges={profileChanged} onDiscardProfileChanges={() => setFormGeneration((n) => n + 1)} />}
+          {canEdit && correctionPanel}
         </div>
       </header>
       <main className="mx-auto w-full max-w-[1240px] px-4 py-6 md:px-8">
         {idChanged && <div role="status" className="mb-5 flex items-start justify-between gap-4 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-foreground"><p>{t('employees.idChange.done', idChanged)}</p><Button type="button" variant="ghost" className="size-11 shrink-0 p-0" aria-label={t('employees.idChange.dismiss')} onClick={() => setIdChanged(undefined)}><X className="size-4" aria-hidden /></Button></div>}
-        {injectedState?.injectedExtraction && <p className="mb-4 text-sm text-muted-foreground">{t('employees.intake.reviewAndApply')}</p>}
-        <EmployeeForm key={formGeneration} mode="edit" initial={employee} initialExtraction={injectedState?.injectedExtraction} onSubmit={async (values) => { await editMutation.mutateAsync(values) }} onCancel={() => navigate(employeeHref)} submitting={editMutation.isPending} onChangesChange={setProfileChanged} />
+        {!canEdit && correctionPanel}
+        {canEdit && injectedState?.injectedExtraction && <p className="mb-4 text-sm text-muted-foreground">{t('employees.intake.reviewAndApply')}</p>}
+        {canEdit && <EmployeeForm key={formGeneration} mode="edit" initial={employee} initialExtraction={injectedState?.injectedExtraction} onSubmit={async (values) => { await editMutation.mutateAsync(values) }} onCancel={() => navigate(employeeHref)} submitting={editMutation.isPending} onChangesChange={setProfileChanged} />}
       </main>
     </div>
   )

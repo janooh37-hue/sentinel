@@ -26,6 +26,7 @@ from app.core.clock import utcnow
 from app.db import workforce_models  # noqa: F401 -- register workforce metadata
 from app.db.base import Base
 from app.db.models import AppSetting, AuditLog, Employee, EmployeeFormerId, User, VaultFile
+from app.db.repos._locking import begin_immediate_if_idle
 from app.schemas.employee_id_change import (
     EmployeeIdChangeImpactRead,
     EmployeeIdChangePreviewRead,
@@ -201,10 +202,7 @@ def change(db: Session, user: User, employee_id: str, new_id: str, reason: str) 
         # Serialize validation/reservation against other SQLite writers. Auth
         # can already have opened a SQLAlchemy transaction, but sqlite3 normally
         # hasn't begun its physical transaction until the first write.
-        connection = db.connection()
-        driver = connection.connection.driver_connection
-        if connection.dialect.name == "sqlite" and driver is not None and not driver.in_transaction:
-            connection.exec_driver_sql("BEGIN IMMEDIATE")
+        begin_immediate_if_idle(db)
         db.execute(text("PRAGMA defer_foreign_keys = ON"))
         result = preview(db, employee_id, new_id)
         if result.status == "invalid":

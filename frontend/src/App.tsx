@@ -359,9 +359,9 @@ function Shell(): React.JSX.Element {
               <Route
                 path="/employees/:id/edit"
                 element={
-                  <RequireCapability cap="employees.edit">
+                  <RequireAnyCapability caps={['employees.edit', 'employees.change_id']}>
                     <EmployeeEditPage />
-                  </RequireCapability>
+                  </RequireAnyCapability>
                 }
               />
               <Route

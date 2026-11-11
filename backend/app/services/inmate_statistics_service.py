@@ -64,7 +64,7 @@ from app.db.models import (
 )
 from app.db.repos.audit_repo import append_audit
 from app.db.workforce_models import DutyAssignmentEvent
-from app.services import book_service, perm_service
+from app.services import book_service, employee_service, perm_service
 
 #: The service/template this register counts. Never the employee ``Violation``
 #: table — that is staff misconduct, a different domain sharing one word.
@@ -306,6 +306,9 @@ def resolve_duty_unit(db: Session, reporter_id: str | None, on_date: date) -> st
     reporter = _text(reporter_id)
     if not reporter:
         return UNSPECIFIED
+    employee = db.get(Employee, reporter) or employee_service.former_number_owner(db, reporter)
+    if employee is not None:
+        reporter = employee.id
     event = db.scalar(
         select(DutyAssignmentEvent)
         .where(
@@ -316,7 +319,6 @@ def resolve_duty_unit(db: Session, reporter_id: str | None, on_date: date) -> st
     )
     if event is not None and _text(event.to_unit):
         return _text(event.to_unit)
-    employee = db.get(Employee, reporter)
     if employee is not None and _text(employee.duty_unit):
         return _text(employee.duty_unit)
     return UNSPECIFIED
@@ -326,7 +328,7 @@ def _reporter_name(db: Session, reporter_id: str | None) -> str | None:
     reporter = _text(reporter_id)
     if not reporter:
         return None
-    employee = db.get(Employee, reporter)
+    employee = db.get(Employee, reporter) or employee_service.former_number_owner(db, reporter)
     if employee is None:
         return None
     return employee.name_ar or employee.name_en or None
@@ -1305,7 +1307,13 @@ def _identity(
             "INMATE_REGISTER_ASSIGNEE_RELINKED",
             "The selected account's employee link changed. Prepare a new submission.",
         )
-    if any(item["user_id"] == user.id or item["employee_id"] == employee.id for item in earlier):
+    employee_numbers = [
+        employee.id,
+        *employee_service.former_ids_by_employee(db, [employee.id])[employee.id],
+    ]
+    if any(
+        item["user_id"] == user.id or item["employee_id"] in employee_numbers for item in earlier
+    ):
         raise ValidationFailedError(
             "INMATE_REGISTER_ACTORS_NOT_DISTINCT",
             "Preparation, review and approval require different accounts and employees.",

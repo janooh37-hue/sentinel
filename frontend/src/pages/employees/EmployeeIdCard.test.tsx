@@ -182,6 +182,14 @@ describe('EmployeeIdCard — the time-sheet action', () => {
 })
 
 describe('EmployeeIdCard — status pill dates', () => {
+  it('offers a correction-only entry without profile-edit permission', () => {
+    caps.add('employees.change_id')
+    wrap(EMPLOYEE)
+    expect(screen.getByRole('button', { name: 'Correct employee number' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /photo/i })).not.toBeInTheDocument()
+  })
+
   it('shows the departure date on a resigned employee', () => {
     wrap({ ...EMPLOYEE, status: 'Resigned', end_date: '2026-08-15' } as EmployeeRead)
     expect(screen.getByText(/Resigned · .*15\/08\/2026/)).toBeInTheDocument()
