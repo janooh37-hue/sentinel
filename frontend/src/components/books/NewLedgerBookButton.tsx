@@ -4,6 +4,7 @@
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { FilePlus2 } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
@@ -20,11 +21,16 @@ export function NewLedgerBookButton({ className, variant = 'default', size }: {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const activeVisit = useRef(false)
+  useEffect(() => {
+    activeVisit.current = true
+    return () => { activeVisit.current = false }
+  }, [])
   const create = useMutation({
     mutationFn: () => api.createLedgerDraft({ grade: 'unclassified', body_html: '', external: false }),
     onSuccess: (draft) => {
       void qc.invalidateQueries({ queryKey: LEDGER_DRAFTS_KEY })
-      navigate(`/ledger/compose/${draft.id}`)
+      if (activeVisit.current) navigate(`/ledger/compose/${draft.id}`)
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })

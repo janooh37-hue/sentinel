@@ -196,6 +196,7 @@ function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boole
               onChange={field.onChange}
               label={t('ledgerBook.composer.body.label')}
               invalid={Boolean(errors.body_html)}
+              errorMessage={errors.body_html?.message && t(errors.body_html.message)}
               describedBy={errors.body_html ? bodyErrorId : undefined}
             />
           )}

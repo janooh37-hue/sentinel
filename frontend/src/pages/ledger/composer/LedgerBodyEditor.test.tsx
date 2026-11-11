@@ -7,11 +7,13 @@ import i18n from 'i18next'
 import ar from '@/locales/ar.json'
 import { createRef } from 'react'
 
-import { api, type LedgerDraftRead } from '@/lib/api'
+import { api, type LedgerBookRead, type LedgerDraftRead } from '@/lib/api'
 import { LedgerComposerPage } from './LedgerComposerPage'
+import { LedgerContentEditorPage } from './LedgerContentEditorPage'
 import { LedgerBodyEditor, type LedgerBodyEditorHandle } from './LedgerBodyEditor'
 
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'employee' } }) }))
 
 // Keep the real React integration: replacing <Editor> would hide mount/init
 // regressions. Only the browser engine is substituted (jsdom has no layout).
@@ -79,6 +81,44 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+})
+
+it.each(['en', 'ar'])('describes an empty correction body inside the editing document in %s', async (language) => {
+  const engine = installEngine()
+  i18n.addResourceBundle('ar', 'translation', ar, true, true)
+  await i18n.changeLanguage(language)
+  const book: LedgerBookRead = {
+    id: 40, ref_number: '1/2/7', grade: 'unclassified', importance: null, tab: 2, classification_code: '2/1',
+    paper_date: '28-10-2026', approval_state: 'none', created_by_user_id: 1, voided: false,
+    revisions: [{ version_id: 72, version_no: 2, trigger: 'correction', created_at: '2026-10-28T08:00:00Z', signed_at: null, superseded: false, locked: false }],
+    selected_version_id: 72, subjects: ['Subject'], body_html: '', content_sha256: 'abc',
+    external: false, addressees: [], signer: null, can_sign: false, can_return: false, can_change_signer: false,
+    can_resubmit: false, can_create_outlook_draft: false, return_note: null, paper_preset: 'normal', references: [], folders: [],
+  }
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book)
+  const save = vi.spyOn(api, 'updateLedgerBookContent')
+  const view = render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <RouterProvider router={createMemoryRouter([
+        { path: '/ledger/books/:bookId/edit', element: <LedgerContentEditorPage /> },
+      ], { initialEntries: ['/ledger/books/40/edit'] })} />
+    </QueryClientProvider>,
+  )
+  try {
+    await userEvent.click(await screen.findByRole('button', { name: i18n.t('ledgerBook.composer.content.save') }))
+    const message = i18n.t('errors.ledger.draftBodyRequired')
+    expect(await screen.findByRole('alert')).toHaveTextContent(message)
+    const body = engine.documents[0].body
+    expect(body.getAttribute('aria-invalid')).toBe('true')
+    const descriptionId = body.getAttribute('aria-describedby')
+    expect(descriptionId).toBeTruthy()
+    expect(body.ownerDocument.getElementById(descriptionId!)?.textContent).toBe(message)
+    expect(document.getElementById(descriptionId!)).toBeNull()
+    expect(save).not.toHaveBeenCalled()
+  } finally {
+    view.unmount()
+    await i18n.changeLanguage('en')
+  }
 })
 
 it('uses current validation when editor initialization finishes after a prop update', () => {

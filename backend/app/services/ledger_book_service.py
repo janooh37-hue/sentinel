@@ -867,17 +867,18 @@ def draft_paper(db: Session, user: User, draft_id: int) -> str:
         db, user, external=draft.external, grade=draft.grade, addressees=draft.addressees
     )
     signer = _signer_read(db, draft.signer_manager_id)
-    # The writer chose these; ids that no longer resolve are left out.
+    # Selections may lose access after drafting; omit them without changing the draft.
     references = [
         target
         for target in (db.get(Book, book_id) for book_id in draft.reference_book_ids or [])
-        if target is not None and target.deleted_at is None
+        if target is not None and _can_open(db, user, target)
     ]
-    folders = [
-        folder
-        for folder in (db.get(BookFolder, folder_id) for folder_id in draft.folder_ids or [])
-        if folder is not None
-    ]
+    folders = []
+    for folder_id in draft.folder_ids or []:
+        try:
+            folders.append(book_folder_service.get_folder(db, user, folder_id))
+        except NotFoundError:
+            continue
     return render_paper(
         PaperContext(
             body_html=draft.body_html,

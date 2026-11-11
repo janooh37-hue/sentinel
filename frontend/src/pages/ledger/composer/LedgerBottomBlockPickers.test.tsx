@@ -33,6 +33,17 @@ function mount(node: React.ReactNode): void {
 afterEach(async () => { cleanup(); vi.restoreAllMocks(); await i18n.changeLanguage('en') })
 
 describe('paper bottom block selections', () => {
+  it('excludes metadata-only references and shows the filtered empty state', async () => {
+    vi.spyOn(api, 'listBooks').mockResolvedValue({ items: [{ ...BOOK, metadata_only: true }], total: 1, limit: 8, offset: 0 })
+    const get = vi.spyOn(api, 'getBook')
+    mount(<References />)
+    await userEvent.click(screen.getByLabelText('References'))
+    expect(await screen.findByText(i18n.t('ledgerBook.composer.references.empty'))).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /GS-0040/ })).not.toBeInTheDocument()
+    expect(screen.getByText('[]')).toBeInTheDocument()
+    expect(get).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['en', 'References', 'Remove reference GS-0040'],
     ['ar', 'إشارة إلى', 'إزالة الإشارة إلى GS-0040'],

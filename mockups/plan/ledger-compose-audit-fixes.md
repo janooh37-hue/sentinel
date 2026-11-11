@@ -85,3 +85,9 @@
 - Previous head CI: both checks passed. Full supported-runtime backend baseline still running; no services or data touched.
 - Round-three regression evidence: generic subject changed/null/no-op rejected without list/paper/save mutation; 7 backend checks passed including tracked content and signed lock precedence. Draft creation: normal/StrictMode abandonment reproduced; 4 focused creation tests pass with cache/list updates retained. Correction lock/replacement and pending-save redirect reproduced; final editor + API error suites 43 passed. Required i18n/RTL review clean; recovery is explicit copy-before-leaving, not automatic correction creation.
 - Round-three final TypeScript, scoped ESLint and whitespace checks passed. Full backend baseline remains in progress; live browser verification not repeated. No deployment or service restart.
+
+## PR Agent round 4
+
+- Bot cleared round-three findings at 446e0315 (both CI checks passed), confidence remains 2/5. New scope: recheck access to draft preview references/folders; guard NewLedgerBookButton late completion; forward iframe-local body validation description; exclude metadata-only reference results. Three Sol workers own independent fixes, parent owns picker and integration. No services/data changes.
+- Round-four validation: all4 findings reproduced before fixes. Button4tests pass incl StrictMode, editor29tests pass incl EN/AR iframe-local descriptions, picker8tests pass incl metadata-only empty result. TypeScript/scoped ESLint/whitespace pass; required i18n/RTL review clean. Paper API15tests passed; final revoked-access2case rerun follows narrower NotFoundError handling. Preview omits inaccessible targets without mutating draft selections; unrelated errors propagate. Full baseline backend still running, no failure reported; no live UI recheck.
+- Final narrowed-handler revoked-access rerun:2passed on Python3.12; changed backend Ruff/format checks clean. Ready for bot review round4.

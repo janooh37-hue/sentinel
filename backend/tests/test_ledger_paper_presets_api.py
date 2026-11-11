@@ -10,13 +10,14 @@ from app.db.models import (
     Book,
     BookFolder,
     BookFolderItem,
+    BookFolderShare,
     BookLink,
     BookVersion,
     Employee,
     User,
     UserPermission,
 )
-from app.services import ledger_book_service, sheet_pdf_service
+from app.services import book_send_service, ledger_book_service, sheet_pdf_service
 from tests.test_ledger_book_api import BOOKS, CONTENT, DRAFTS, addressees_payload, error, send
 from tests.test_ledger_book_api import ledger as ledger
 from tests.test_ledger_book_signing_api import saved_signature
@@ -398,3 +399,53 @@ def test_signed_writer_identity_survives_profile_relink_and_correction(ledger, m
     assert "الكاتب الجديد" in current and "G902" in current
     assert "الكاتب الأصلي" not in current
     assert client.get(f"{url}/paper", params={"revision": version_id}).text == original
+
+
+@pytest.mark.parametrize("preview", ["paper", "paper.pdf"])
+def test_draft_preview_omits_revoked_reference_and_folder_metadata(ledger, monkeypatch, preview):
+    client, db, actor, owner, other, _ = ledger
+    printed = capture_pdf(monkeypatch)
+    _, visible_reference = send(client)
+    actor[0] = other
+    _, restricted_reference = send(client)
+    target = db.get(Book, restricted_reference["id"])
+    target.distribution = "organization"
+    owner.role = "operator"
+    owner._effective_caps_cache = None
+    db.commit()
+    actor[0] = owner
+    visible_folder = folder(db, owner_id=owner.id, name="Visible folder")
+    shared_folder = folder(db, owner_id=None, name="Selected shared folder")
+    share = BookFolderShare(folder_id=shared_folder.id, user_id=owner.id)
+    db.add(share)
+    db.commit()
+    draft = new_draft(
+        client,
+        reference_book_ids=[restricted_reference["id"], visible_reference["id"]],
+        folder_ids=[shared_folder.id, visible_folder.id],
+    )
+    url = f"{DRAFTS}/{draft['id']}/{preview}"
+
+    def rendered():
+        response = client.get(url)
+        assert response.status_code == 200, response.text
+        return response.text if preview == "paper" else printed[-1]
+
+    original = rendered()
+    assert restricted_reference["ref_number"] in original
+    assert "Selected shared folder" in original
+    book_send_service.set_grade(db, other, target, "top_secret")
+    target_version = db.get(BookVersion, restricted_reference["selected_version_id"])
+    target_version.fields = {**target_version.fields, "date": "02-01-2099"}
+    shared_folder.name = "Hidden current folder"
+    share.user_id = other.id
+    db.commit()
+
+    current = rendered()
+    assert restricted_reference["ref_number"] not in current
+    assert "02/01/2099" not in current
+    assert "Hidden current folder" not in current
+    assert "Selected shared folder" not in current
+    assert visible_reference["ref_number"] in current
+    assert "Visible folder" in current
+    assert client.get(f"{DRAFTS}/{draft['id']}").json() == draft

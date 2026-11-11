@@ -44,6 +44,7 @@ export function LedgerReferencesPicker({ id, value, onChange, error }: {
     return () => window.clearTimeout(timer)
   }, [raw])
   const books = useQuery({ queryKey: ['ledger', 'reference-search', q], queryFn: () => api.listBooks({ q, limit: 8 }), enabled: focused && value.length < 20, staleTime: 30_000 })
+  const available = books.data?.items.filter((book) => !book.metadata_only && !value.includes(book.id)) ?? []
   const pick = (book: BookRead): void => {
     if (value.length >= 20 || value.includes(book.id)) return
     qc.setQueryData(referenceKey(book.id), book)
@@ -62,10 +63,10 @@ export function LedgerReferencesPicker({ id, value, onChange, error }: {
     {focused && value.length < 20 && <div className="max-h-60 overflow-y-auto rounded-lg border border-border bg-surface">
       {books.isPending && <p role="status" className="p-3 text-sm text-muted-foreground">{t('ledgerBook.composer.loading')}</p>}
       {books.isError && <p role="alert" className="p-3 text-sm text-destructive">{apiErrorMessage(books.error)}</p>}
-      {books.data?.items.filter((book) => !value.includes(book.id)).map((book) => <button type="button" key={book.id} className="flex min-h-11 w-full flex-wrap items-center gap-2 px-3 py-2 text-start text-sm hover:bg-surface-tinted focus-visible:ring-2 focus-visible:ring-ring" onClick={() => pick(book)}>
+      {available.map((book) => <button type="button" key={book.id} className="flex min-h-11 w-full flex-wrap items-center gap-2 px-3 py-2 text-start text-sm hover:bg-surface-tinted focus-visible:ring-2 focus-visible:ring-ring" onClick={() => pick(book)}>
         <bdi dir="ltr" className="break-all font-mono">{book.ref_number}</bdi><bdi className="min-w-0 break-words">{book.subject}</bdi>
       </button>)}
-      {books.data && books.data.items.every((book) => value.includes(book.id)) && <p className="p-3 text-sm text-muted-foreground">{t('ledgerBook.composer.references.empty')}</p>}
+      {books.data && available.length === 0 && <p className="p-3 text-sm text-muted-foreground">{t('ledgerBook.composer.references.empty')}</p>}
     </div>}
     <ul aria-label={t('ledgerBook.composer.references.selected')} className="flex flex-wrap gap-2">
       {value.map((bookId) => <ReferenceChip key={bookId} id={bookId} onRemove={() => onChange(value.filter((v) => v !== bookId))} />)}
