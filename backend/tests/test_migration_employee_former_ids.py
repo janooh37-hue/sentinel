@@ -10,8 +10,8 @@ from sqlalchemy import create_engine, inspect, text
 from app.db.session import attach_sqlite_pragmas
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0118_employee_former_ids"
-PARENT = "0117_merge_legacy_record_categories"
+HEAD = "0119_employee_former_ids"
+PARENT = "0118_drop_record_category_overreach"
 
 
 def test_single_head_roundtrip_and_foreign_keys(tmp_path: Path) -> None:

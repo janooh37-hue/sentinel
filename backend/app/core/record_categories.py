@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from functools import cache
 from types import MappingProxyType
 from typing import Final
 
@@ -71,10 +72,52 @@ LEGACY_CATEGORY_RECORD_CATEGORY: Final[Mapping[str, str]] = MappingProxyType(
 )
 
 
+def service_filing_category(service_id: str) -> str:
+    """The legacy category a generated record of ``service_id`` is stored under."""
+    return _service_filing_categories()[service_id]
+
+
+@cache
+def _service_filing_categories() -> Mapping[str, str]:
+    # Document generation depends on record permissions; import only when needed.
+    from app.services.document_service import record_category_for_template
+
+    return MappingProxyType(
+        {service_id: record_category_for_template(service_id) for service_id in SERVICE_IDS}
+    )
+
+
+def is_stray_record(*, service_id: str, category_id: str | None) -> bool:
+    """Whether a record is stored in a legacy category its service never files into.
+
+    A form revised into a General Book keeps its HR or INV category; hand-filed
+    and imported records can sit anywhere. Such a record also answers to the
+    Other service (``record_services``).
+    """
+    return (
+        service_id != OTHER_SERVICE_ID
+        and category_id is not None
+        and get_classification(category_id) is None
+        and category_id != service_filing_category(service_id)
+    )
+
+
+def record_services(*, service_id: str, category_id: str | None) -> tuple[str, ...]:
+    """Every service whose ``books.servicerecords.*`` gate must allow the record.
+
+    A stray record also answers to Other, so a deny on a legacy category,
+    migrated to its filing services plus Other, still hides the records filed
+    there by hand, without hiding the stray record's whole service from anyone.
+    """
+    if is_stray_record(service_id=service_id, category_id=category_id):
+        return (service_id, OTHER_SERVICE_ID)
+    return (service_id,)
+
+
 def record_category(
     *, service_id: str, classification_code: str | None, category_id: str | None
 ) -> str:
-    """Resolve the single category checked by record permission gates."""
+    """The one record category a record is listed under."""
     if classification_code is not None:
         return classification_code
     if service_id != OTHER_SERVICE_ID:
@@ -84,13 +127,40 @@ def record_category(
     return LEGACY_CATEGORY_RECORD_CATEGORY.get(category_id or "", "15/1")
 
 
+def is_retired_category(category_id: str | None) -> bool:
+    """Whether ``category_id`` is a legacy category no service files into any more
+    (old-only ``1``/``2``/``12`` and imported ids)."""
+    return (
+        category_id is not None
+        and get_classification(category_id) is None
+        and category_id not in _service_filing_categories().values()
+    )
+
+
+def record_gate_categories(
+    *, service_id: str, classification_code: str | None, category_id: str | None
+) -> tuple[str, ...]:
+    """Every record category whose ``books.category.*`` gate must allow the record.
+
+    Its listed category, plus, for a record stored in a retired legacy category,
+    the category that one maps to: a deny on an old-only category, migrated to
+    its mapped category, still hides every record filed there, whatever its
+    service or classification. Live legacy categories need no such gate; their
+    denies became service denies plus Other (``record_services``).
+    """
+    listed = record_category(
+        service_id=service_id, classification_code=classification_code, category_id=category_id
+    )
+    if not is_retired_category(category_id):
+        return (listed,)
+    stored = LEGACY_CATEGORY_RECORD_CATEGORY.get(category_id or "", "15/1")
+    return (listed,) if stored == listed else (listed, stored)
+
+
 def services_filing_into_legacy_category(category_id: str) -> tuple[str, ...]:
     """Services whose generated records retain this persisted legacy category."""
-    # Document generation depends on record permissions; import only when needed.
-    from app.services.document_service import record_category_for_template
-
     return tuple(
         service_id
         for service_id in SERVICE_IDS
-        if record_category_for_template(service_id) == category_id
+        if service_filing_category(service_id) == category_id
     )
