@@ -1165,6 +1165,7 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   DRAFT_SUBJECT_REQUIRED: 'errors.ledger.draftSubjectRequired',
   DRAFT_BODY_REQUIRED: 'errors.ledger.draftBodyRequired',
   ADDRESSEE_INVALID: 'ledgerBook.composer.errors.addresseeInvalid',
+  ADDRESSEE_ONLY_CC_NOT_ALLOWED: 'ledgerBook.composer.errors.addresseeOnlyCc',
   REFERENCE_INVALID: 'ledgerBook.composer.errors.referenceInvalid',
   FOLDER_INVALID: 'ledgerBook.composer.errors.folderInvalid',
   SIGNER_INVALID: 'ledgerBook.composer.errors.signerInvalid',

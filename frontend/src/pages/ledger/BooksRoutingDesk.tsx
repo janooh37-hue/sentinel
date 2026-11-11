@@ -385,7 +385,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
             </>
           )}
         </div>
-        {(offset > 0 || (list.data?.total ?? 0) > PAGE_SIZE) && (
+        {!showDrafts && (offset > 0 || (list.data?.total ?? 0) > PAGE_SIZE) && (
           <div className="flex shrink-0 justify-between gap-2 border-t border-hairline px-4 py-3 lg:px-6">
             <Button variant="outline" size="sm" className={TOUCH} disabled={offset === 0 || list.isFetching} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>{t('ledger.booksDesk.previous')}</Button>
             <Button variant="outline" size="sm" className={TOUCH} disabled={offset + PAGE_SIZE >= (list.data?.total ?? 0) || list.isFetching} onClick={() => setOffset(offset + PAGE_SIZE)}>{t('ledger.booksDesk.next')}</Button>

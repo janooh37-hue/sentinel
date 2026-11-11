@@ -295,6 +295,11 @@ def test_external_contacts_and_signed_pdf_outlook_draft(ledger, monkeypatch, gra
     preview = client.get(f"{DRAFTS}/{draft['id']}/paper")
     assert "External To" in preview.text and "External CC" in preview.text
     assert '<img class="signature"' not in preview.text
+    if grade == "addressee_only":
+        response = client.patch(
+            f"{DRAFTS}/{draft['id']}", json={"addressees": [{"role": "to", "contact_id": to.id}]}
+        )
+        assert response.status_code == 200, response.text
     book = client.post(f"{DRAFTS}/{draft['id']}/save-and-send").json()
     url = f"{BOOKS}/{book['id']}"
     assert not book["can_create_outlook_draft"]
@@ -320,13 +325,14 @@ def test_external_contacts_and_signed_pdf_outlook_draft(ledger, monkeypatch, gra
     assert response.status_code == 200, response.text
     assert response.json()["id"] > 0
     assert len(printed) == 1
-    assert "External To" in printed[0] and "External CC" in printed[0]
+    assert "External To" in printed[0]
+    assert ("External CC" in printed[0]) == (grade != "addressee_only")
     assert '<img class="signature" src="file:' in printed[0]
     assert "/api/v1/" not in printed[0]
     assert len(folder.messages) == 1
     message = BytesParser(policy=policy.default).parsebytes(folder.messages[0].raw)
     assert message["To"] == "external@example.org"
-    assert message["Cc"] == "copy@example.org"
+    assert message["Cc"] == (None if grade == "addressee_only" else "copy@example.org")
     assert message["Subject"] == "1/5/1 — First subject"
     attached = list(message.iter_attachments())
     assert len(attached) == 1
@@ -458,3 +464,78 @@ def test_ledger_sign_requires_a_reviewed_snapshot(ledger):
     response = client.post(f"{BOOKS}/{book['id']}/sign", json={})
     assert response.status_code == 422, response.text
     assert client.get(f"{BOOKS}/{book['id']}").json()["can_sign"]
+
+
+@pytest.mark.parametrize("external", [False, True])
+def test_service_rejects_legacy_addressee_only_cc_before_numbering(ledger, external):
+    from sqlalchemy import func, select
+
+    from app.api.errors import ValidationFailedError
+    from app.db.models import Book, BookAddressee, BookDraft, BookRecipient, BookVersion
+    from app.services import ledger_book_service
+
+    client, db, _, writer, manager_user, _ = ledger
+    manager = setup_signer(db, manager_user)
+    draft = client.post(DRAFTS, json={"tab": 5, **CONTENT, "signer_manager_id": manager.id}).json()
+    stored = db.get(BookDraft, draft["id"])
+    # Persisted legacy/corrupt values bypass request validation deliberately.
+    stored.grade = "addressee_only"
+    stored.external = external
+    if external:
+        to = AddressBookContact(
+            owner_user_id=writer.id, display_name="To", address="to@example.org"
+        )
+        cc = AddressBookContact(
+            owner_user_id=writer.id, display_name="CC", address="cc@example.org"
+        )
+        db.add_all([to, cc])
+        db.flush()
+        stored.addressees = [
+            {"role": "to", "contact_id": to.id},
+            {"role": "cc", "contact_id": cc.id},
+        ]
+    else:
+        cc = make_user(db, role="manager", email="legacy-cc@example.ae")
+        stored.addressees = [
+            {"role": "to", "user_id": manager_user.id},
+            {"role": "cc", "user_id": cc.id},
+        ]
+    db.commit()
+    models = (Book, BookVersion, BookAddressee, BookRecipient)
+    before = [db.scalar(select(func.count()).select_from(model)) for model in models]
+    with pytest.raises(ValidationFailedError) as exc:
+        ledger_book_service.save_and_send(db, writer, stored.id)
+    assert exc.value.code == "ADDRESSEE_ONLY_CC_NOT_ALLOWED"
+    assert [db.scalar(select(func.count()).select_from(model)) for model in models] == before
+    assert db.get(BookDraft, draft["id"]) is not None
+
+
+def test_sign_rechecks_addressee_only_cc_after_grade_change(ledger, monkeypatch):
+    from sqlalchemy import func, select
+
+    from app.db.models import Book, BookApprovalStep, BookRecipient, BookVersion
+    from app.services import book_send_service, ledger_book_service
+
+    client, db, actor, writer, manager_user, root = ledger
+    book, _, _ = submitted(ledger)
+    saved_signature(db, manager_user, root, monkeypatch)
+    book_send_service.set_grade(db, writer, db.get(Book, book["id"]), "addressee_only")
+    actor[0] = manager_user
+    error(
+        client.post(f"{BOOKS}/{book['id']}/sign", json=sign_payload(book)),
+        422,
+        "ADDRESSEE_ONLY_CC_NOT_ALLOWED",
+    )
+    version = db.get(BookVersion, book["selected_version_id"])
+    assert version.signed_at is None and version.signed_by_user_id is None
+    step = db.scalar(select(BookApprovalStep).where(BookApprovalStep.version_id == version.id))
+    assert step.state == "pending" and step.decided_at is None
+    assert (
+        db.scalar(
+            select(func.count())
+            .select_from(BookRecipient)
+            .where(BookRecipient.book_id == book["id"])
+        )
+        == 0
+    )
+    assert not ledger_book_service._revision_signature_file(book["id"], version.id).exists()

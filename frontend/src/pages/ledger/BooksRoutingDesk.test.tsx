@@ -106,6 +106,23 @@ describe('Books routing desk: Ledger Books', () => {
     expect(await screen.findByText('No drafts.')).toBeInTheDocument()
   })
 
+  it('hides cached Incoming pagination in Drafts while preserving book pagination', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [BOOK], total: 75, limit: 50, offset: 0 })
+    mount()
+    const next = await screen.findByRole('button', { name: 'Next' })
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled()
+    await userEvent.click(next)
+    await waitFor(() => expect(api.listBooks).toHaveBeenLastCalledWith(expect.objectContaining({ inbox: 'received', offset: 50 })))
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Previous' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled())
+    await userEvent.click(screen.getByRole('button', { name: 'Drafts' }))
+    await screen.findByText('No drafts.')
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Previous' })).not.toBeInTheDocument()
+  })
+
   // W3
   it.each([false, true])('shows a Ledger Book PDF at ?rev with its actions (mobile=%s)', async (mobile) => {
     vi.mocked(useIsMobile).mockReturnValue(mobile)

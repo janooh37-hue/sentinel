@@ -70,6 +70,7 @@ describe('apiErrorMessage', () => {
   })
 
   it.each([
+    ['ADDRESSEE_ONLY_CC_NOT_ALLOWED', 'Addressee Only books cannot include CC recipients.', 'لا يمكن أن تتضمن كتب «لعنايته فقط» مستلمي نسخة.'],
     ['REFERENCE_INVALID', 'One or more references are unavailable. Choose the references again.', 'إحدى الإشارات غير متاحة. أعد اختيار الإشارات.'],
     ['FOLDER_INVALID', 'One or more folders are unavailable in the outgoing box. Choose the folders again.', 'أحد الملفات غير متاح في صندوق الصادر. أعد اختيار الملفات.'],
   ])('localizes the %s paper selection error', async (code, en, ar) => {

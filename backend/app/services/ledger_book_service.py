@@ -20,7 +20,7 @@ import logging
 import re
 import secrets
 import shutil
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import cast
@@ -275,6 +275,14 @@ def _validate_signer(db: Session, manager_id: int | None) -> Manager | None:
     return manager
 
 
+def _validate_addressee_roles(grade: str, roles: Iterable[str]) -> None:
+    if grade == grades.ADDRESSEE_ONLY and "cc" in roles:
+        raise ValidationFailedError(
+            "ADDRESSEE_ONLY_CC_NOT_ALLOWED",
+            "Remove CC addressees before sending an Addressee Only book.",
+        )
+
+
 def _resolve_addressees(
     db: Session,
     user: User,
@@ -482,6 +490,7 @@ def save_and_send(db: Session, user: User, draft_id: int) -> Book:
 def _number_draft(
     db: Session, user: User, draft: BookDraft, serial: int, copied: list[Path]
 ) -> Book:
+    _validate_addressee_roles(draft.grade, (a["role"] for a in draft.addressees))
     if draft.tab is None:
         raise ValidationFailedError("DRAFT_TAB_REQUIRED", "Choose the tab (التبويب) first.")
     subjects = _clean_subjects(list(draft.subjects or []))
@@ -1194,6 +1203,10 @@ def sign(
                 "The revision or content changed. Review the latest paper before signing.",
                 http_status=409,
             )
+        _validate_addressee_roles(
+            book.grade,
+            db.scalars(select(BookAddressee.role).where(BookAddressee.book_id == book.id)),
+        )
         source = user_signature_service.resolve_signature(user)
         if source is None:
             raise ValidationFailedError("NO_SIGNATURE", "Save your own signature before signing.")
