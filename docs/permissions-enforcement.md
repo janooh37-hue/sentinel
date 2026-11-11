@@ -349,8 +349,17 @@ categories are the only category capabilities.
   else its service through `SERVICE_RECORD_CATEGORY` (total over `SERVICE_IDS`, enforced by
   `test_record_categories.py`), else — for the Other bucket — its persisted
   `category_id` through `LEGACY_CATEGORY_RECORD_CATEGORY` (unknown ids → `15/1`).
-  `book_service.record_category_in_clause` is the SQL mirror used by the register,
-  documents, and detail checks; creation checks the same category.
+  `book_service.record_category_in_clause` is the SQL mirror used by the register's
+  category filter.
+- **Stray records answer to extra gates.** A record stored in a legacy category its
+  service never files into (a form revised into a General Book keeps its HR or INV
+  category; hand-filed and imported records) must also pass the `other` records gate
+  (`record_categories.record_services`). A record stored in a retired category (old-only
+  `1`/`2`/`12`, imported ids) must also pass the category that one maps to, whatever its
+  service or classification (`record_gate_categories`). SQL mirrors:
+  `book_service.record_service_clause` / `record_gate_category_in_clause`. The register,
+  documents, detail checks, and creation all use these gates. Everything else answers
+  only to its own service and its one record category.
 - **Unchanged:** reference numbers and prefixes, `Book.category_id`,
   `Book.classification_code`, `BookCategory` rows, ledger/correspondence rules. Per-service
   visibility (`books.servicerecords.*`) stays beside per-category visibility; both must
@@ -360,17 +369,17 @@ categories are the only category capabilities.
   `books.servicerecords.<service>` (see) for every service that files there, plus `other`,
   so the user can neither create nor see those records, exactly as before; a deny on an
   old-only category becomes a deny on its mapped record category. Records already filed
-  in the denied legacy category that those targets miss (imported, hand-filed, or
-  classified outside the category's services, e.g. an HR-filed `5/1` General Book or an
-  old-category-`1` leave form) stay hidden too: a classified record adds a deny on its
-  classification, any other a `books.servicerecords.<service>` deny on its resolved
-  service. A deny wins over an existing grant; a deny meeting an existing deny keeps the
+  in the denied legacy category outside those services are stray records, which the
+  `other` deny or the mapped category deny still hides. 0117 originally also added a
+  deny on a stray record's whole classification or service (an HR-filed `5/1` General
+  Book denied every `5/1` record, so HR-denied users lost every entry-permit letter);
+  `0118_drop_record_category_overreach` removes those denies and restores any row they
+  tightened. A deny wins over an existing grant; a deny meeting an existing deny keeps the
   later expiry, a permanent one winning. A legacy grant
   never opens an opt-in service, and a temporary legacy grant narrows an existing target
   grant to its expiry. Legacy rows are then deleted; the inmate reporter's ceiling is
   `books.category.13/1`. Pending requests for legacy ids are refused with a note. A
   journal table makes `downgrade()` restore the prior rows.
 - **Drift, fail-closed only.** Where exactness was impossible the migration hides more:
-  the Other-service deny covers unclaimed records from every category, and an old-only
-  deny covers its whole merged category; a record-driven deny hides every record of that
-  classification or service, not only the record that triggered it.
+  the Other-service deny covers unclaimed and stray records from every category, and an
+  old-only deny covers its whole merged category.

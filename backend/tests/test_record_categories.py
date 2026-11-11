@@ -12,6 +12,9 @@ from app.core.record_categories import (
     LEGACY_CATEGORY_RECORD_CATEGORY,
     SERVICE_RECORD_CATEGORY,
     record_category,
+    record_gate_categories,
+    record_services,
+    service_filing_category,
     services_filing_into_legacy_category,
 )
 from app.db.models import Book, BookCategory, BookVersion, Document, User, UserPermission
@@ -34,6 +37,50 @@ def test_classification_always_overrides_the_service_and_legacy_category(service
         record_category(service_id=service_id, classification_code=None, category_id="INV")
         == SERVICE_RECORD_CATEGORY[service_id]
     )
+
+
+@pytest.mark.parametrize("service_id", SERVICE_IDS)
+def test_a_stray_record_also_answers_to_other(service_id: str) -> None:
+    live = next(c for c in ("HR", "GS") if c != service_filing_category(service_id))
+    listed = SERVICE_RECORD_CATEGORY[service_id]
+    for stray in (live, "1"):
+        assert record_services(service_id=service_id, category_id=stray) == (
+            service_id,
+            OTHER_SERVICE_ID,
+        )
+    # A live legacy category adds no category gate; the Other gate covers it.
+    assert record_gate_categories(
+        service_id=service_id, classification_code=None, category_id=live
+    ) == (listed,)
+    # Filed where its service files, or under a record category, it answers only to itself.
+    for category_id in (service_filing_category(service_id), "5/1", None):
+        assert record_services(service_id=service_id, category_id=category_id) == (service_id,)
+        assert record_gate_categories(
+            service_id=service_id, classification_code=None, category_id=category_id
+        ) == (
+            record_category(
+                service_id=service_id, classification_code=None, category_id=category_id
+            ),
+        )
+
+
+@pytest.mark.parametrize("service_id", [*SERVICE_IDS, OTHER_SERVICE_ID])
+@pytest.mark.parametrize("category_id", ["1", "2", "12", "imported-unknown"])
+def test_a_record_in_a_retired_category_also_answers_to_its_mapped_category(
+    service_id: str, category_id: str
+) -> None:
+    stored = LEGACY_CATEGORY_RECORD_CATEGORY.get(category_id, "15/1")
+    for classification_code in (None, "5/1"):
+        listed = record_category(
+            service_id=service_id, classification_code=classification_code, category_id=category_id
+        )
+        assert set(
+            record_gate_categories(
+                service_id=service_id,
+                classification_code=classification_code,
+                category_id=category_id,
+            )
+        ) == {listed, stored}
 
 
 @pytest.mark.parametrize("category_id, expected", LEGACY_CATEGORY_RECORD_CATEGORY.items())
@@ -97,6 +144,12 @@ def categorized_records(db_session: Session) -> list[tuple[Book, str]]:
         (None, None, "1", None, "12/1"),
         (None, None, "imported-unknown", None, "15/1"),
         ("Unknown template", "Leave Application Form - ignored", "HR", None, "12/1"),
+        # Stored outside its service's filing category (stray): listed by service.
+        ("General Book", None, "HR", None, "15/1"),
+        ("General Book", None, "INV", None, "15/1"),
+        ("General Book", None, "HR", "5/1", "5/1"),
+        ("Unknown template", None, "1", "5/1", "5/1"),
+        (None, "Leave Application Form - imported", "1", None, "3/1"),
     ]
     cases += [
         (None, None, category_id, None, code)
@@ -161,7 +214,22 @@ def test_sql_predicate_agrees_with_python_for_every_category(
         assert actual == {book.id for book, expected in categorized_records if expected in codes}
 
 
-@pytest.mark.parametrize("denied_code", ["3/1", "4/1", "7/1", "12/1", "15/1"])
+def _gates(book: Book) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    newest = book.versions[-1] if book.versions else None
+    service_id = resolve_service(
+        book.subject, newest.template_id if newest else None, versioned=newest is not None
+    )
+    return (
+        record_services(service_id=service_id, category_id=book.category_id),
+        record_gate_categories(
+            service_id=service_id,
+            classification_code=book.classification_code,
+            category_id=book.category_id,
+        ),
+    )
+
+
+@pytest.mark.parametrize("denied_code", ["3/1", "4/1", "7/1", "12/1", "13/1", "15/1"])
 def test_document_and_direct_gates_match_the_record_category(
     db_session: Session, categorized_records: list[tuple[Book, str]], denied_code: str
 ) -> None:
@@ -176,6 +244,7 @@ def test_document_and_direct_gates_match_the_record_category(
         UserPermission(user_id=user.id, capability=f"books.category.{denied_code}", effect="deny")
     )
     db_session.commit()
+    hidden = {book.id for book, _code in categorized_records if denied_code in _gates(book)[1]}
     visible = set(
         db_session.scalars(
             select(Document.id).where(book_service.document_visibility_clause(db_session, user))
@@ -183,18 +252,91 @@ def test_document_and_direct_gates_match_the_record_category(
     )
     expected = {
         version.document_id
-        for book, code in categorized_records
-        if code != denied_code
+        for book, _code in categorized_records
+        if book.id not in hidden
         for version in book.versions
     }
     assert visible == expected
-    for book, code in categorized_records:
-        if code == denied_code:
+    clause = book_service._record_type_clause(db_session, user)
+    assert clause is not None
+    assert (
+        set(db_session.scalars(select(Book.id).where(clause)))
+        == {book.id for book, _code in categorized_records} - hidden
+    )
+    for book, _code in categorized_records:
+        if book.id in hidden:
             with pytest.raises(AppError) as exc:
                 book_service.assert_record_type_visible(db_session, user, book)
             assert exc.value.code == "RECORD_TYPE_FORBIDDEN"
         else:
             book_service.assert_record_type_visible(db_session, user, book)
+
+
+@pytest.mark.parametrize("denied_service", ["General Book", "Leave Application Form", "other"])
+def test_service_gates_hide_stray_records_with_other(
+    db_session: Session, categorized_records: list[tuple[Book, str]], denied_service: str
+) -> None:
+    user = User(email="services@test.ae", password_hash="x", role="operator", status="active")
+    db_session.add(user)
+    db_session.flush()
+    db_session.add_all(
+        UserPermission(
+            user_id=user.id,
+            capability=capability,
+            effect="deny" if capability == f"books.servicerecords.{denied_service}" else "grant",
+        )
+        for capability in SERVICE_RECORDS_CAPABILITY_IDS
+    )
+    db_session.commit()
+    hidden = {book.id for book, _code in categorized_records if denied_service in _gates(book)[0]}
+    for book, _code in categorized_records:
+        if book.id in hidden:
+            with pytest.raises(AppError) as exc:
+                book_service.assert_record_type_visible(db_session, user, book)
+            assert exc.value.code == "RECORD_TYPE_FORBIDDEN"
+        else:
+            book_service.assert_record_type_visible(db_session, user, book)
+    clause = book_service._record_type_clause(db_session, user)
+    assert clause is not None
+    visible = set(db_session.scalars(select(Book.id).where(clause)))
+    assert visible == {book.id for book, _code in categorized_records} - hidden
+    documents = set(
+        db_session.scalars(
+            select(Document.id).where(book_service.document_visibility_clause(db_session, user))
+        )
+    )
+    assert documents == {
+        version.document_id
+        for book, _code in categorized_records
+        if book.id not in hidden
+        for version in book.versions
+    }
+    general_books: dict[str, set[int]] = {}
+    for book, _code in categorized_records:
+        if book.versions and book.versions[-1].template_id in {"General Book", "Security Permit"}:
+            general_books.setdefault(book.category_id, set()).add(book.id)
+    if denied_service == "other":
+        # Hand-filed General Books go with Other; filed ones, permit letters included, stay.
+        assert general_books["GS"] <= visible
+        assert not (general_books["HR"] | general_books["INV"]) & visible
+
+
+def test_creating_a_stray_record_also_needs_other(
+    db_session: Session, categorized_records: list[tuple[Book, str]]
+) -> None:
+    user = User(email="stray-create@test.ae", password_hash="x", role="operator", status="active")
+    db_session.add(user)
+    db_session.flush()
+    db_session.add(UserPermission(user_id=user.id, capability="books.service.other", effect="deny"))
+    db_session.commit()
+    book_service.require_record_type_access(
+        db_session, user, category_id="GS", service_id="General Book"
+    )
+    with pytest.raises(AppError) as exc:
+        book_service.require_record_type_access(
+            db_session, user, category_id="HR", service_id="General Book"
+        )
+    assert exc.value.code == "RECORD_TYPE_FORBIDDEN"
 
 
 def test_newest_service_decides_unclassified_category_even_in_document_subqueries(
