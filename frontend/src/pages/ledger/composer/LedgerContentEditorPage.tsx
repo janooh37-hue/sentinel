@@ -8,7 +8,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Lock } from 'lucide-react'
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom'
@@ -82,29 +82,36 @@ export function LedgerContentEditorPage(): React.JSX.Element {
           <Button type="button" variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>{t('ledgerBook.composer.retry')}</Button>
         </div>
       )}
-      {editable
-        // Keyed by Revision, not content hash: a background refetch must not
-        // remount the form and drop what the writer has typed.
-        ? <ContentForm key={latest.version_id} book={book} />
-        : (
-          <>
-            <p role="note" className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-[0.84em]">
-              <Lock aria-hidden="true" className="size-4 shrink-0" />
-              {t('ledgerBook.composer.content.locked')}
-            </p>
-            <LedgerBookActions bookId={book.id} />
-            <LedgerPaperPdf url={api.ledgerBookPaperPdfUrl(book.id, latest?.version_id)} title={t('ledgerBook.composer.paper.title')} className="h-[calc(100dvh-12rem)] min-h-96" />
-          </>
-        )}
+      <ContentSession key={book.id} book={book} editable={editable} />
     </div>
   )
 }
 
-function ContentForm({ book }: { book: LedgerBookRead }): React.JSX.Element {
+function ContentSession({ book, editable }: { book: LedgerBookRead; editable: boolean }): React.JSX.Element {
+  const { t } = useTranslation()
+  const [editingStarted, setEditingStarted] = useState(editable)
+  if (editable && !editingStarted) setEditingStarted(true)
+  const latest = book.revisions.at(-1)
+  // A refresh can lock or replace the Revision while its local edits still need protection.
+  return editingStarted ? <ContentForm book={book} editable={editable} /> : (
+    <>
+      <p role="note" className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-[0.84em]">
+        <Lock aria-hidden="true" className="size-4 shrink-0" />
+        {t('ledgerBook.composer.content.locked')}
+      </p>
+      <LedgerBookActions bookId={book.id} />
+      <LedgerPaperPdf url={api.ledgerBookPaperPdfUrl(book.id, latest?.version_id)} title={t('ledgerBook.composer.paper.title')} className="h-[calc(100dvh-12rem)] min-h-96" />
+    </>
+  )
+}
+
+function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boolean }): React.JSX.Element {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const bodyErrorId = useId()
+  const [revisionId] = useState(book.revisions.at(-1)?.version_id)
+  const staleRevision = !editable || book.revisions.at(-1)?.version_id !== revisionId
   const form = useForm<ContentValues>({
     resolver: zodResolver(contentSchema),
     defaultValues: { subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html },
@@ -113,9 +120,9 @@ function ContentForm({ book }: { book: LedgerBookRead }): React.JSX.Element {
   const { reset } = form
   // Content that changed on the server replaces an untouched form only.
   useEffect(() => {
-    if (form.formState.isDirty) return
+    if (form.formState.isDirty || staleRevision) return
     reset({ subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html })
-  }, [book.body_html, book.content_sha256, book.subjects, form, reset])
+  }, [book.body_html, book.content_sha256, book.subjects, form, reset, staleRevision])
   const keepEditingButton = useRef<HTMLButtonElement>(null)
   const dialogOpener = useRef<HTMLElement | null>(null)
   // Set once leaving is allowed: the edit is saved, or the writer chose to discard it.
@@ -126,7 +133,7 @@ function ContentForm({ book }: { book: LedgerBookRead }): React.JSX.Element {
       // The desk's routing rows and record detail carry the subject too.
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['ledger', 'books', book.id] })
-      if (leaveAllowed.current) return
+      if (leaveAllowed.current || staleRevision) return
       toast.success(t('ledgerBook.composer.content.saved'))
       // A completed request does not include text entered while it was pending.
       const current = form.getValues()
@@ -165,7 +172,8 @@ function ContentForm({ book }: { book: LedgerBookRead }): React.JSX.Element {
   }
 
   return (
-    <form className="flex flex-col gap-4" noValidate onSubmit={form.handleSubmit((values) => save.mutate(values))}>
+    <form className="flex flex-col gap-4" noValidate onSubmit={form.handleSubmit((values) => { if (!staleRevision) save.mutate(values) })}>
+      {staleRevision && <p role="alert" className="rounded-lg bg-muted px-3 py-2 text-[0.84em]">{t('ledgerBook.composer.content.revisionChanged')}</p>}
       <Controller
         control={form.control}
         name="subjects"
@@ -198,7 +206,7 @@ function ContentForm({ book }: { book: LedgerBookRead }): React.JSX.Element {
         <p className="text-[0.76em] text-muted-foreground">{t('ledgerBook.composer.content.imagesNote')}</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={save.isPending}>{t('ledgerBook.composer.content.save')}</Button>
+        <Button type="submit" disabled={save.isPending || staleRevision}>{t('ledgerBook.composer.content.save')}</Button>
         <Button type="button" variant="outline" onClick={() => navigate(deskBookUrl(book.id))}>{t('ledgerBook.composer.content.cancel')}</Button>
       </div>
       <AlertDialog open={blocked} onOpenChange={(open) => { if (!open && !leaveAllowed.current) keepEditing() }}>

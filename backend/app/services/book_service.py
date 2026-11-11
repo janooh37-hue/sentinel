@@ -1717,6 +1717,12 @@ def update_book(db: Session, book_id: int, payload: BookUpdate) -> Book:
     row = get_book(db, book_id)
     require_ledger_revision_unlocked(db, row)
     data: dict[str, Any] = payload.model_dump(exclude_unset=True)
+    if "subject" in data and is_ledger_book(row):
+        raise AppError(
+            "LEDGER_BOOK_CONTENT_ONLY",
+            f"Edit Ledger Book subjects through PUT /api/v1/ledger/books/{row.id}/content.",
+            http_status=409,
+        )
     for k, v in data.items():
         setattr(row, k, v)
     db.commit()

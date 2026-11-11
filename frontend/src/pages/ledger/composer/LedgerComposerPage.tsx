@@ -77,20 +77,24 @@ function NewDraft(): React.JSX.Element {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const started = useRef(false)
+  const activeVisit = useRef(false)
   const create = useMutation({
     mutationFn: () => api.createLedgerDraft({ grade: 'unclassified', body_html: '', external: false }),
     onSuccess: (draft) => {
       qc.setQueryData(ledgerDraftKey(draft.id), draft)
       void qc.invalidateQueries({ queryKey: LEDGER_DRAFTS_KEY, exact: true })
-      navigate(`/ledger/compose/${draft.id}`, { replace: true })
+      if (activeVisit.current) navigate(`/ledger/compose/${draft.id}`, { replace: true })
     },
   })
   const { mutate } = create
   useEffect(() => {
+    activeVisit.current = true
     // One draft per visit, also under StrictMode's double effect run.
-    if (started.current) return
-    started.current = true
-    mutate()
+    if (!started.current) {
+      started.current = true
+      mutate()
+    }
+    return () => { activeVisit.current = false }
   }, [mutate])
   if (create.isError) return <Failed onRetry={() => create.mutate()} />
   return <p role="status" className="p-6 text-muted-foreground">{t('ledgerBook.composer.creating')}</p>

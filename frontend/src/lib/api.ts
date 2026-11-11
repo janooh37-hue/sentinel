@@ -1155,6 +1155,7 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   INMATE_REPORTER_IDENTITY_MISMATCH: 'errors.forbidden.signerMismatch',
   APPROVED_IMPORT_TOKEN_FORBIDDEN: 'errors.forbidden.stagedImportOwner',
   LEDGER_BOOK_CHAIN_ONLY: 'errors.ledger.chainOnly',
+  LEDGER_BOOK_CONTENT_ONLY: 'errors.ledger.contentOnly',
   REVISION_LOCKED: 'errors.ledger.revisionLocked',
   REVISION_NOT_SIGNED: 'errors.ledger.revisionNotSigned',
   DRAFT_TAB_REQUIRED: 'errors.ledger.draftTabRequired',

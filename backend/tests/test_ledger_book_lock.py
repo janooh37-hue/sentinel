@@ -364,11 +364,10 @@ def test_unsigned_ledger_book_refuses_generic_approval_flow(ledger_api, method, 
 @pytest.mark.parametrize(
     ("method", "route", "payload"),
     [
-        ("PATCH", "/books/{book_id}", "metadata"),
         ("PUT", "/books/{book_id}/grade", "grade"),
         ("PUT", "/ledger/books/{book_id}/content", "content"),
     ],
-    ids=["metadata", "grade", "content"],
+    ids=["grade", "content"],
 )
 def test_unsigned_revision_accepts_mutation(ledger_api, method, route, payload):
     response = _mutate(ledger_api, method, route, payload)
@@ -513,3 +512,30 @@ def test_background_regeneration_rechecks_ledger_books(ledger_api):
     assert _snapshot(api) == before
     version = api.db.get(BookVersion, api.version_id)
     assert version.template_id == "Ledger Book"
+
+
+@pytest.mark.parametrize("subject", ["Changed subject", None, "Original subject"])
+def test_generic_ledger_subject_update_requires_tracked_content(ledger_api, subject):
+    api = ledger_api
+    before = _snapshot(api)
+    api.actor[0] = api.creator
+    url = f"/api/v1/ledger/books/{api.book_id}"
+    paper = api.client.get(f"{url}/paper").text
+    response = api.client.patch(f"/api/v1/books/{api.book_id}", json={"subject": subject})
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "LEDGER_BOOK_CONTENT_ONLY"
+    assert f"/ledger/books/{api.book_id}/content" in response.json()["error"]["message"]
+    assert _snapshot(api) == before
+    assert api.client.get(url).json()["subjects"] == ["Original subject"]
+    assert api.client.get(f"{url}/paper").text == paper
+    listed = api.client.get("/api/v1/books").json()["items"]
+    assert next(row for row in listed if row["id"] == api.book_id)["subject"] == "Original subject"
+
+
+def test_unsigned_ledger_generic_noncontent_metadata_remains_editable(ledger_api):
+    api = ledger_api
+    api.actor[0] = api.creator
+    response = api.client.patch(f"/api/v1/books/{api.book_id}", json={"direction": "incoming"})
+    assert response.status_code == 200, response.text
+    assert response.json()["direction"] == "incoming"
+    assert response.json()["subject"] == "Original subject"

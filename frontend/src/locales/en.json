@@ -4003,6 +4003,7 @@
         "saved": "Saved.",
         "cancel": "Cancel",
         "locked": "This Revision is signed and locked. Start a correction to change it.",
+        "revisionChanged": "This Revision is no longer editable or a newer Revision is available. Your text is still here, but cannot be saved. Copy any text you need before leaving, then reopen the book to continue.",
         "imagesNote": "Images already in the body stay; new images can only be added in a draft.",
         "discardTitle": "Discard unsaved changes?",
         "discardBody": "Your changes to this book are not saved. Leaving now discards them.",
@@ -4890,6 +4891,7 @@
       "draftTabRequired": "Choose the tab (classification) first.",
       "draftSubjectRequired": "Write at least one subject.",
       "draftBodyRequired": "Write the letter body first.",
+      "contentOnly": "Edit Ledger Book subjects in the Ledger content editor.",
       "imageEmpty": "The image is empty.",
       "imageTooLarge": "The image is too large (5 MB at most).",
       "imageTypeUnsupported": "Only PNG, JPEG, GIF and WebP images are accepted."

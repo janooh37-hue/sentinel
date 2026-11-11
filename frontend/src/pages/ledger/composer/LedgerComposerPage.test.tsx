@@ -1,4 +1,4 @@
-import type { Ref } from 'react'
+import { Fragment, StrictMode, type Ref } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -8,7 +8,7 @@ import i18n from 'i18next'
 import ar from '@/locales/ar.json'
 import en from '@/locales/en.json'
 
-import { ledgerDraftKey } from '@/components/books/ledgerBookKeys'
+import { LEDGER_DRAFTS_KEY, ledgerDraftKey } from '@/components/books/ledgerBookKeys'
 import { api, ApiError, type LedgerBookRead, type LedgerDraftRead } from '@/lib/api'
 
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
@@ -43,9 +43,11 @@ function Where(): React.JSX.Element {
 }
 
 let router: ReturnType<typeof createMemoryRouter>
-function mountComposer(url = '/ledger/compose/12', autosaveMs = 10): QueryClient {
+function mountComposer(url = '/ledger/compose/12', autosaveMs = 10, strict = false): QueryClient {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const Wrapper = strict ? StrictMode : Fragment
   render(
+    <Wrapper>
     <QueryClientProvider client={client}>
       <RouterProvider router={router = createMemoryRouter([{ path: '*', element: <>
         <Routes>
@@ -55,7 +57,8 @@ function mountComposer(url = '/ledger/compose/12', autosaveMs = 10): QueryClient
         </Routes>
         <Where />
       </> }], { initialEntries: ['/employees', url] })} />
-    </QueryClientProvider>,
+    </QueryClientProvider>
+    </Wrapper>,
   )
   return client
 }
@@ -85,6 +88,29 @@ beforeEach(() => {
 afterEach(async () => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); await i18n.changeLanguage('en') })
 
 describe('Ledger Book composer', () => {
+  it.each([false, true])('does not redirect a departed creation visit (StrictMode: %s)', async (strict) => {
+    let accept!: (draft: LedgerDraftRead) => void
+    const create = vi.spyOn(api, 'createLedgerDraft').mockReturnValue(new Promise((resolve) => { accept = resolve }))
+    const client = mountComposer('/ledger/compose', 10, strict)
+    client.setQueryData(LEDGER_DRAFTS_KEY, [])
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    await act(() => router.navigate('/employees'))
+    await act(async () => { accept(DRAFT) })
+    await waitFor(() => expect(client.getQueryData(ledgerDraftKey(DRAFT.id))).toEqual(DRAFT))
+    expect(client.getQueryState(LEDGER_DRAFTS_KEY)?.isInvalidated).toBe(true)
+    expect(screen.getByLabelText('URL')).toHaveTextContent('/employees')
+  })
+
+  it('creates once and redirects an active visit after StrictMode effect replay', async () => {
+    let accept!: (draft: LedgerDraftRead) => void
+    const create = vi.spyOn(api, 'createLedgerDraft').mockReturnValue(new Promise((resolve) => { accept = resolve }))
+    mountComposer('/ledger/compose', 10, true)
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    await act(async () => { accept(DRAFT) })
+    await waitFor(() => expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger/compose/12'))
+    expect(create).toHaveBeenCalledTimes(1)
+  })
+
   it('protects browser Back and preserves its original destination', async () => {
     mountComposer('/ledger/compose/12', 60000)
     fireEvent.change(await screen.findByLabelText('Body'), { target: { value: 'Back edit' } })

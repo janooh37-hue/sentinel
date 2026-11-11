@@ -65,6 +65,53 @@ async function openAndRevise(): Promise<void> {
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
+it.each(['locked', 'replaced'] as const)('preserves a dirty correction when its revision is %s during refresh', async (change) => {
+  const get = vi.spyOn(api, 'getLedgerBook').mockResolvedValue(BOOK)
+  const put = vi.spyOn(api, 'updateLedgerBookContent')
+  const { qc } = mount()
+  await openAndRevise()
+  await userEvent.clear(screen.getByLabelText('Body'))
+  await userEvent.type(screen.getByLabelText('Body'), '<p>Recover this body</p>')
+  get.mockResolvedValue({ ...BOOK, subjects: ['New server subject'], body_html: '<p>New server body</p>',
+    revisions: change === 'locked' ? [rev(1, true), rev(2, true)] : [...BOOK.revisions, rev(3, false)],
+  })
+  await act(() => qc.invalidateQueries({ queryKey: ['ledger', 'books', 40] }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Copy any text you need')
+  expect(screen.getByLabelText('Subject line 1')).toHaveValue('Leave plan (revised)')
+  expect(screen.getByLabelText('Body')).toHaveValue('<p>Recover this body</p>')
+  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  const form = screen.getByLabelText('Body').closest('form')!
+  await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+  expect(put).not.toHaveBeenCalled()
+  const unload = new Event('beforeunload', { cancelable: true })
+  window.dispatchEvent(unload)
+  expect(unload.defaultPrevented).toBe(true)
+  await userEvent.click(screen.getByRole('link', { name: 'Back to Ledger' }))
+  expect(await screen.findByRole('dialog', { name: DISCARD_TITLE })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Keep editing' }))
+  expect(screen.getByLabelText('Body')).toHaveValue('<p>Recover this body</p>')
+  await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Discard changes' }))
+  expect(await screen.findByText(DESK_URL)).toBeInTheDocument()
+})
+
+it('keeps the edit session when a pending save completes after a revision is locked', async () => {
+  const get = vi.spyOn(api, 'getLedgerBook').mockResolvedValue(BOOK)
+  let resolveSave!: (book: LedgerBookRead) => void
+  const put = vi.spyOn(api, 'updateLedgerBookContent').mockReturnValue(new Promise((resolve) => { resolveSave = resolve }))
+  const { qc } = mount()
+  await openAndRevise()
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(put).toHaveBeenCalled())
+  get.mockResolvedValue({ ...BOOK, revisions: [rev(1, true), rev(2, true)] })
+  await act(() => qc.invalidateQueries({ queryKey: ['ledger', 'books', 40] }))
+  await screen.findByRole('alert')
+  await act(async () => resolveSave({ ...BOOK, subjects: ['Leave plan (revised)'] }))
+  expect(screen.getByLabelText('URL')).toHaveTextContent(EDIT_URL)
+  expect(screen.getByLabelText('Subject line 1')).toHaveValue('Leave plan (revised)')
+  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+})
+
 it('T-C8 saving the content editor PUTs subjects and body, then returns to the desk', async () => {
   vi.spyOn(api, 'getLedgerBook').mockResolvedValue(BOOK)
   const put = vi.spyOn(api, 'updateLedgerBookContent').mockResolvedValue(BOOK)
