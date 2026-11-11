@@ -15,6 +15,14 @@ onto the office server, so every fix must be committed **and pushed to
 `origin/main`** or the next pull silently overwrites it. Test on a branch; merge
 to `main` when ready.
 
+**One branch owns a change.** Cut it from `origin/main`, commit every edit on
+it, and open its PR to `main`. Branch `dev` (the laptop dev channel) is only a
+preview of `origin/main` plus the branches under test: never edit, commit, or
+cherry-pick there, and never copy commits between `dev` and a feature branch.
+Follow `.agents/skills/dev-cycle/SKILL.md`; parallel agents and heavy test runs
+go to the desktop per `.agents/skills/dtop-writers/SKILL.md`; shipping to the
+production server is `.agents/skills/deploy/SKILL.md`.
+
 ## Commands
 
 All Python runs through the repo venv (`venv/Scripts/...`, forward slashes: bash
