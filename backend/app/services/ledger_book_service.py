@@ -795,7 +795,7 @@ def ledger_book_read(
         and book.deleted_at is None,
         return_note=next((s.note for s in selected.approval_steps if s.state == "returned"), None),
         paper_preset=selected.paper_preset or "normal",
-        references=_references_read(db, user, book),
+        references=_references_read(db, user, book, version=selected),
         folders=[
             LedgerFolderRead.model_validate(item)
             for item in cast(list[object], (selected.fields or {}).get("_ledger_folders") or [])
@@ -815,8 +815,22 @@ def _book_date(book: Book) -> date:
     return book.created_at.date()
 
 
-def _references_read(db: Session, user: User, book: Book) -> list[LedgerReferenceRead]:
-    """Outgoing references in the order chosen; ``can_open`` follows the viewer's access."""
+def _references_read(
+    db: Session, user: User, book: Book, *, version: BookVersion | None = None
+) -> list[LedgerReferenceRead]:
+    """Printed references stay signed; ``can_open`` follows the viewer's current access."""
+    if version is not None and version.signed_at is not None:
+        snapshot = (version.fields or {}).get("_ledger_references")
+        if snapshot is not None:
+            references = [
+                LedgerReferenceRead.model_validate({**item, "can_open": False})
+                for item in cast(list[dict[str, object]], snapshot)
+            ]
+            for reference in references:
+                target = db.get(Book, reference.book_id)
+                reference.can_open = target is not None and _can_open(db, user, target)
+            return references
+        # Legacy signed revisions have no recoverable printed-reference snapshot.
     links = db.scalars(
         select(BookLink)
         .where(BookLink.book_id == book.id, BookLink.kind == "reference")
@@ -897,6 +911,18 @@ def book_paper(db: Session, user: User, book_id: int, *, version_id: int | None 
         datetime.strptime(read.paper_date, PAPER_DATE_FORMAT).date() if read.paper_date else None
     )
     version = next(v for v in book.versions if v.id == read.selected_version_id)
+    # Legacy signed revisions without a writer snapshot retain their live fallback.
+    writer = (
+        cast(dict[str, str | None] | None, (version.fields or {}).get("_ledger_writer"))
+        if version.signed_at is not None
+        else None
+    )
+    writer_name = (
+        writer["name"] if writer is not None else _writer_name(db, book.created_by_user_id)
+    )
+    writer_g_number = (
+        writer["g_number"] if writer is not None else book_service.submitter_g_number(db, book)
+    )
     return render_paper(
         PaperContext(
             body_html=read.body_html,
@@ -905,7 +931,7 @@ def book_paper(db: Session, user: User, book_id: int, *, version_id: int | None 
             ref=read.ref_number,
             paper_date=paper_date,
             draft_number=None,
-            submitter_g_number=book_service.submitter_g_number(db, book),
+            submitter_g_number=writer_g_number,
             viewer_g_number=user.employee_id,
             asset_base=PAPER_ASSET_BASE,
             to_names=tuple(a.name_ar or a.name for a in read.addressees if a.role == "to"),
@@ -919,8 +945,8 @@ def book_paper(db: Session, user: User, book_id: int, *, version_id: int | None 
             ),
             preset=read.paper_preset,
             layout=version.paper_layout or CURRENT_LAYOUT,
-            writer_name=_writer_name(db, book.created_by_user_id),
-            writer_g_number=book_service.submitter_g_number(db, book),
+            writer_name=writer_name,
+            writer_g_number=writer_g_number,
             # A reference the viewer cannot open still prints the ref the writer chose.
             references=tuple((r.ref, r.date) for r in read.references),
             folder_names=tuple(folder.name for folder in read.folders),
@@ -1164,6 +1190,14 @@ def sign(db: Session, user: User, book_id: int) -> LedgerBookRead:
             **(version.fields or {}),
             "_ledger_signer": signer.model_dump() if signer else None,
             "_ledger_grade": book.grade,
+            "_ledger_writer": {
+                "name": _writer_name(db, book.created_by_user_id),
+                "g_number": book_service.submitter_g_number(db, book),
+            },
+            "_ledger_references": [
+                reference.model_dump(mode="json", exclude={"can_open"})
+                for reference in _references_read(db, user, book)
+            ],
         }
         step.state = "approved"
         step.decided_at = version.signed_at

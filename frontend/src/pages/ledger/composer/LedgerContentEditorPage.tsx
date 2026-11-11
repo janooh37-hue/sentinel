@@ -49,7 +49,7 @@ export function LedgerContentEditorPage(): React.JSX.Element {
   const bookId = Number(useParams().bookId)
   const userId = useAuth().user?.id
   const query = useQuery({ queryKey: ledgerBookKey(bookId), queryFn: () => api.getLedgerBook(bookId) })
-  if (query.isError) {
+  if (query.isError && !query.data) {
     return (
       <div className="mx-auto flex max-w-xl flex-col items-start gap-3 p-6">
         <p role="alert">{apiErrorMessage(query.error)}</p>
@@ -76,6 +76,12 @@ export function LedgerContentEditorPage(): React.JSX.Element {
           {t('ledgerBook.composer.content.title', { ref: bidi(book.ref_number) })}
         </h1>
       </header>
+      {query.isError && (
+        <div className="flex flex-wrap items-center gap-3">
+          <p role="alert">{apiErrorMessage(query.error)}</p>
+          <Button type="button" variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>{t('ledgerBook.composer.retry')}</Button>
+        </div>
+      )}
       {editable
         // Keyed by Revision, not content hash: a background refetch must not
         // remount the form and drop what the writer has typed.

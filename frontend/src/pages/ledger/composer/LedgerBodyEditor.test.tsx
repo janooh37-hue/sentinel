@@ -223,6 +223,7 @@ it('configures the full paper editor without external links, media or source cod
   const options = renderEditor()
   expect(options).toMatchObject({
     menubar: 'edit view insert format table tools',
+    // The real React wrapper normalizes ledgerPlugins' string before engine.init.
     plugins: ['lists', 'advlist', 'table', 'charmap', 'searchreplace', 'visualblocks', 'fullscreen', 'wordcount', 'pagebreak', 'directionality'],
     toolbar: 'undo redo | blocks styles | fontfamily fontsize | bold italic underline strikethrough forecolor backcolor | alignright aligncenter alignleft alignjustify | rtl ltr | numlist bullist outdent indent | table | pagebreak | removeformat | fullscreen',
     font_size_formats: '10pt 11pt 12pt 14pt 16pt 18pt 20pt 24pt',

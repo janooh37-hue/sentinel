@@ -12,6 +12,7 @@ from app.db.models import (
     BookFolderItem,
     BookLink,
     BookVersion,
+    Employee,
     User,
     UserPermission,
 )
@@ -270,3 +271,130 @@ def test_book_pdf_follows_paper_read_access_and_revision(ledger, monkeypatch):
     actor[0] = other
     error(client.get(url), 404, "BOOK_NOT_FOUND")
     assert len(printed) == 2
+
+
+def test_signed_reference_paper_survives_target_correction_with_live_access(ledger, monkeypatch):
+    client, db, actor, owner, other, root = ledger
+    _, target = send(client)
+    target_version = db.get(BookVersion, target["selected_version_id"])
+    target_version.fields = {**target_version.fields, "date": "10-11-2026"}
+    db.commit()
+    signer = db.get(User, target["signer"]["user_id"])
+    saved_signature(db, signer, root, monkeypatch)
+
+    def sign_book(detail):
+        actor[0] = signer
+        response = client.post(f"{BOOKS}/{detail['id']}/sign")
+        assert response.status_code == 200, response.text
+        actor[0] = owner
+        return response.json()
+
+    sign_book(target)
+    draft = new_draft(
+        client, reference_book_ids=[target["id"]], addressees=[{"role": "to", "user_id": other.id}]
+    )
+    sent = client.post(f"{DRAFTS}/{draft['id']}/save-and-send")
+    assert sent.status_code == 200, sent.text
+    book = sign_book(sent.json())
+    version_id = book["selected_version_id"]
+    url = f"{BOOKS}/{book['id']}"
+    paper = client.get(f"{url}/paper", params={"revision": version_id})
+    assert paper.status_code == 200, paper.text
+    assert "10/11/2026" in paper.text
+
+    correction = client.post(f"{BOOKS}/{target['id']}/corrections")
+    assert correction.status_code == 201, correction.text
+    newer = db.get(BookVersion, correction.json()["selected_version_id"])
+    newer.fields = {**newer.fields, "date": "11-11-2026"}
+    db.commit()
+    assert client.get(f"{url}/paper", params={"revision": version_id}).text == paper.text
+    read = client.get(url, params={"revision": version_id}).json()
+    assert read["references"] == [
+        {
+            "book_id": target["id"],
+            "ref": target["ref_number"],
+            "date": "2026-11-10",
+            "can_open": True,
+        }
+    ]
+
+    # Current access changes independently of the printed snapshot.
+    actor[0] = other
+    read = client.get(url, params={"revision": version_id})
+    assert read.status_code == 200, read.text
+    assert read.json()["references"][0]["can_open"] is False
+    assert read.json()["references"][0]["date"] == "2026-11-10"
+    assert "subjects" not in read.json()["references"][0]
+    actor[0] = owner
+    own_correction = client.post(f"{url}/corrections")
+    assert own_correction.status_code == 201, own_correction.text
+    assert own_correction.json()["references"][0]["date"] == "2026-11-11"
+    assert client.get(f"{url}/paper", params={"revision": version_id}).text == paper.text
+    assert client.post(f"{url}/resubmit").status_code == 200
+    corrected = sign_book(own_correction.json())
+    assert db.get(BookVersion, corrected["selected_version_id"]).fields["_ledger_references"] == [
+        {"book_id": target["id"], "ref": target["ref_number"], "date": "2026-11-11"}
+    ]
+    db.get(Book, target["id"]).deleted_at = datetime(2026, 11, 12)
+    db.commit()
+    old = client.get(url, params={"revision": version_id}).json()
+    assert old["references"][0]["date"] == "2026-11-10"
+    assert old["references"][0]["can_open"] is False
+    assert client.get(f"{url}/paper", params={"revision": version_id}).text == paper.text
+
+
+def test_legacy_signed_reference_without_snapshot_uses_live_fallback(ledger):
+    from tests.test_ledger_book_api import sign
+
+    client, db, _, owner, _, _ = ledger
+    _, target = send(client)
+    draft = new_draft(client, reference_book_ids=[target["id"]])
+    book = client.post(f"{DRAFTS}/{draft['id']}/save-and-send").json()
+    sign(db, book)
+    target_version = db.get(BookVersion, target["selected_version_id"])
+    target_version.fields = {**target_version.fields, "date": "10-11-2026"}
+    db.commit()
+    read = client.get(f"{BOOKS}/{book['id']}")
+    assert read.status_code == 200, read.text
+    assert read.json()["references"][0]["date"] == "2026-11-10"
+    owner.display_name = "Current legacy writer"
+    version = db.get(BookVersion, book["selected_version_id"])
+    version.paper_preset = "report"
+    db.commit()
+    assert "Current legacy writer" in client.get(f"{BOOKS}/{book['id']}/paper").text
+    assert "_ledger_references" not in version.fields
+    assert "_ledger_writer" not in version.fields
+
+
+def test_signed_writer_identity_survives_profile_relink_and_correction(ledger, monkeypatch):
+    client, db, actor, owner, _, root = ledger
+    db.add_all(
+        [
+            Employee(id="G901", name_en="Original Writer", name_ar="الكاتب الأصلي"),
+            Employee(id="G902", name_en="Renamed Writer", name_ar="الكاتب الجديد"),
+        ]
+    )
+    db.commit()
+    owner.employee_id = "G901"
+    db.commit()
+    _, book = send(client, paper_preset="report")
+    signer = db.get(User, book["signer"]["user_id"])
+    saved_signature(db, signer, root, monkeypatch)
+    actor[0] = signer
+    signed = client.post(f"{BOOKS}/{book['id']}/sign")
+    assert signed.status_code == 200, signed.text
+    actor[0] = owner
+    url = f"{BOOKS}/{book['id']}"
+    version_id = book["selected_version_id"]
+    original = client.get(f"{url}/paper", params={"revision": version_id}).text
+    assert "الكاتب الأصلي" in original and "G901" in original
+    owner.employee_id = "G902"
+    owner.display_name = "Changed profile name"
+    db.commit()
+    assert client.get(f"{url}/paper", params={"revision": version_id}).text == original
+    correction = client.post(f"{url}/corrections")
+    assert correction.status_code == 201, correction.text
+    current = client.get(f"{url}/paper").text
+    assert "الكاتب الجديد" in current and "G902" in current
+    assert "الكاتب الأصلي" not in current
+    assert client.get(f"{url}/paper", params={"revision": version_id}).text == original
