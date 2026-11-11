@@ -43,3 +43,19 @@
 - Parent verification: combined composer/App run initially 129 passed; after review fixes, composer/App subset 108 passed. TypeScript passed. Scoped ESLint now passes after correcting hook dependencies. Final combined run/build pending. Live screen-reader/browser validation not claimed.
 - Existing PR #268 has merge conflicts with main and no initial bot score. No rebase, renumbering, merge, or deployment performed as part of these five fixes.
 - Final verification: `pnpm -C frontend test src/pages/ledger/composer src/App.permissions.test.tsx` — 134 passed across 7 files. Scoped ESLint — clean. `pnpm -C frontend run build` — passed (TypeScript + Vite); existing large-chunk warning remains. `git diff --check` — clean. No backend tests were needed for these frontend-only changes.
+
+## PR Agent round 1
+
+- Published compose fixes: `f16c12e4`; PR Agent reviewed that head at **1/5**. The four active findings concern the wider draft PR, not the five completed compose fixes.
+- [ ] Backend Sol worker: snapshot selected revision grade and preserve signed historical paper on correction regrade (comment 4534338350). Prefer existing revision JSON metadata; cover legacy missing snapshots before mutation.
+- [ ] Backend Sol worker: serialize save_content with signing and refresh ORM revision state under the write lock (4534338456). Verify with two-session regression.
+- [ ] Fable: correction-editor dirty navigation/reload protection with explicit discard or successful save (4534338546), using the newly available data router.
+- [ ] Fable: invalidate Books routing/detail caches after correction saves (4534338642).
+- [ ] Parent: review/test/integrate fixes, assess existing main conflicts, push and request another bot review. Keep watching; 5/5 remains unachieved.
+
+## Main integration plan
+
+- Main head inspected: `4d57ea01`. Read-only merge-tree found 20 conflicts; no merge started while workers edit.
+- Preserve main's ordered Administrative Leave approvals, outcome unread tracking, attachment/Word flows, optional submitter, notification defaults and unified category permissions alongside Ledger grade/distribution and chain-only rules.
+- Preserve all published main migration identities through `0118_drop_record_category_overreach`. Renumber the unpublished Ledger chain to `0119_record_grade` through `0124_ledger_paper_preset`, update test references, and verify on disposable databases only. Existing sandbox stamps require separate reconciliation before a future restart/upgrade.
+- Regenerate OpenAPI and TypeScript after resolving routes/schemas. Validate migration chain, affected backend/frontend tests, i18n/RTL and Alembic review. No merge into main or deployment is authorized.

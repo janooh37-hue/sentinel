@@ -95,6 +95,10 @@ def can_change_grade(user: User, book: Book) -> bool:
 def _change_grade(db: Session, user: User, book: Book, grade: str) -> None:
     """Stage a grade change + its audit row (caller commits)."""
     book_link_service.require_grade_floor(db, book, grade)
+    if book_service.is_ledger_book(book):
+        from app.services.ledger_book_service import freeze_signed_grades
+
+        freeze_signed_grades(book)
     old = book.grade
     book.grade = grade
     payload: dict[str, object] = {"old": old, "new": grade}

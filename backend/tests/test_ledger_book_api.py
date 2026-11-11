@@ -549,3 +549,101 @@ def test_papers_print_no_importance_or_urgency(ledger, importance):
         assert "الأهمية" not in paper.text
         assert "الاستعجال" not in paper.text
         assert 'class="urgency"' not in paper.text
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_signed_grade_and_paper_survive_correction_regrade(ledger, monkeypatch, legacy):
+    from app.services import book_send_service
+
+    client, db, actor, owner, _, root = ledger
+    _, detail = send(client, grade="top_secret")
+    url = f"{BOOKS}/{detail['id']}"
+    signature = root / "signature.png"
+    signature.parent.mkdir(parents=True, exist_ok=True)
+    signature.write_bytes(PNG)
+    monkeypatch.setattr(user_signature_service, "resolve_signature", lambda user: signature)
+    monkeypatch.setattr(push_service, "send_to_user", lambda *args, **kwargs: None)
+    actor[0] = db.get(User, detail["signer"]["user_id"])
+    response = client.post(f"{url}/sign")
+    assert response.status_code == 200, response.text
+    version_id = detail["selected_version_id"]
+    version = db.get(BookVersion, version_id)
+    if legacy:
+        version.fields = {k: v for k, v in version.fields.items() if k != "_ledger_grade"}
+        db.commit()
+    else:
+        assert version.fields["_ledger_grade"] == "top_secret"
+    actor[0] = owner
+    old_paper = client.get(f"{url}/paper", params={"revision": version_id}).text
+    assert client.post(f"{url}/corrections").status_code == 201
+    book = db.get(Book, detail["id"])
+    book_send_service.set_grade(db, owner, book, "unclassified")
+    assert client.get(url).json()["grade"] == "unclassified"
+    assert client.get(url, params={"revision": version_id}).json()["grade"] == "top_secret"
+    assert client.get(f"{url}/paper", params={"revision": version_id}).text == old_paper
+    assert db.get(BookVersion, version_id).fields["_ledger_grade"] == "top_secret"
+
+
+def test_grade_change_freezes_legacy_signed_revision_before_mutation(ledger):
+    from app.services import book_send_service
+
+    client, db, _, owner, _, _ = ledger
+    _, detail = send(client, grade="top_secret")
+    sign(db, detail)
+    assert client.post(f"{BOOKS}/{detail['id']}/corrections").status_code == 201
+    version = db.get(BookVersion, detail["selected_version_id"])
+    version.fields = {k: v for k, v in version.fields.items() if k != "_ledger_grade"}
+    db.commit()
+    book_send_service.set_grade(db, owner, db.get(Book, detail["id"]), "unclassified")
+    assert version.fields["_ledger_grade"] == "top_secret"
+
+
+def test_downgrade_does_not_grant_historical_sensitive_revision_access(ledger):
+    from app.services import book_send_service
+
+    client, db, actor, owner, _, root = ledger
+    _, detail = send(client, grade="top_secret")
+    version_id = detail["selected_version_id"]
+    image_name = "00000000000000000000000000000000.png"
+    image_src = f"{BOOKS}/{detail['id']}/images/{image_name}"
+    image_path = root / "book_attachments" / str(detail["id"]) / "images" / image_name
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(PNG)
+    assert (
+        client.put(
+            f"{BOOKS}/{detail['id']}/content",
+            json={**CONTENT, "body_html": f'<p>Private image</p><img src="{image_src}">'},
+        ).status_code
+        == 200
+    )
+    sign(db, detail)
+    url = f"{BOOKS}/{detail['id']}"
+    assert client.post(f"{url}/corrections").status_code == 201
+    assert client.put(f"{url}/content", json=CONTENT).status_code == 200
+    book = db.get(Book, detail["id"])
+    book_send_service.set_grade(db, owner, book, "unclassified")
+    # Admins can open Unclassified records but need to be named for Top Secret.
+    admin = make_user(db, role="admin", email="grade-history-admin@test.ae")
+    actor[0] = admin
+    current = client.get(url)
+    assert current.status_code == 200, current.text
+    assert [r["version_no"] for r in current.json()["revisions"]] == [2]
+    for suffix in ("", "/paper"):
+        assert client.get(f"{url}{suffix}", params={"revision": version_id}).status_code == 404
+    assert client.get(f"{url}/revisions/{version_id}/saves").status_code == 404
+    assert client.get(image_src).status_code == 404
+    # Explicit retained revision access still opens the signed revision.
+    db.add(
+        BookRevisionAccess(
+            version_id=version_id,
+            user_id=admin.id,
+            kind="reviewer",
+            state="reviewed",
+            decided_at=datetime(2026, 1, 2),
+        )
+    )
+    db.commit()
+    old = client.get(url, params={"revision": version_id})
+    assert old.status_code == 200, old.text
+    assert old.json()["grade"] == "top_secret"
+    assert client.get(image_src).status_code == 200

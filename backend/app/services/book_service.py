@@ -438,26 +438,33 @@ def _grade_clause(db: Session, user: User, type_ok: ColumnElement[bool]) -> Colu
 
 
 def _grade_allows(
-    db: Session, user: User, book: Book, *, existing: bool, write: bool = False
+    db: Session,
+    user: User,
+    book: Book,
+    *,
+    existing: bool,
+    write: bool = False,
+    grade: str | None = None,
 ) -> bool:
     """Python mirror of ``_grade_clause``. ``existing`` is the pre-grade verdict
     (books.view + record type [+ reporter matrix]). A direct send grants reads only."""
+    grade = grade or book.grade
     creator = book.created_by_user_id is not None and book.created_by_user_id == user.id
     if user.role == INMATE_REPORTER_ROLE:
         return (
             existing
-            and book.grade == grades.UNCLASSIFIED
+            and grade == grades.UNCLASSIFIED
             and (book.distribution == grades.ORGANIZATION or creator)
         )
 
     def named() -> bool:
         return creator or (not write and is_active_recipient(db, user.id, book.id))
 
-    if book.grade in grades.RESTRICTED_GRADES:
+    if grade in grades.RESTRICTED_GRADES:
         return named()
     if user.role == ADMIN_ROLE:
         return existing
-    if book.grade == grades.SECRET and not perm_service.has_capability(db, user, "books.secret"):
+    if grade == grades.SECRET and not perm_service.has_capability(db, user, "books.secret"):
         return False
     if book.distribution == grades.NAMED:
         return named()
@@ -741,8 +748,23 @@ def resolve_book_read_access(
                 raise
             existing = False
             record_type_error = exc
+    readable = set()
     if _grade_allows(db, user, book, existing=existing):
-        return BookReadAccess(True, ids, version_id or (versions[-1].id if versions else None))
+        readable = {
+            version.id
+            for version in versions
+            if _grade_allows(
+                db,
+                user,
+                book,
+                existing=existing,
+                grade=(version.fields or {}).get("_ledger_grade")
+                if version.template_id == LEDGER_BOOK_TEMPLATE_ID and version.signed_at is not None
+                else None,
+            )
+        }
+        if readable == ids:
+            return BookReadAccess(True, ids, version_id or (versions[-1].id if versions else None))
     level_hidden = _hidden_by_grade(user, book, existing=existing)
     allowed = set(
         db.scalars(
@@ -755,6 +777,7 @@ def resolve_book_read_access(
             )
         )
     )
+    allowed.update(readable)
     if versions and book.deleted_at is None and book.voided_at is None:
         current = versions[-1]
         if any(

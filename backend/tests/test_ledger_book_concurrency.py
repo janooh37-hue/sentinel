@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pathlib import Path
-from threading import Barrier
+from threading import Barrier, Event
 
 import pytest
 from sqlalchemy import create_engine, func, select
@@ -238,3 +238,68 @@ def test_copy_failing_mid_file_leaves_no_book_images(ledger_sessions, monkeypatc
         images_root = settings.data_dir / "book_attachments"
         assert not any(path.is_file() for path in images_root.rglob("*"))
         assert db.get(BookDraft, draft.id) is not None
+
+
+def test_waiting_content_save_refreshes_signed_revision_under_write_lock(
+    ledger_sessions, monkeypatch
+):
+    from datetime import datetime
+
+    from app.api.errors import AppError
+    from app.db.repos._locking import begin_immediate_if_idle
+
+    sessions, _ = ledger_sessions
+    with sessions() as db:
+        writer = make_user(db, role="manager", email="edit-race@test.ae")
+        writer_id = writer.id
+        draft = ledger_book_service.create_draft(
+            db,
+            writer,
+            LedgerDraftCreate(
+                tab=4, subjects=["Before"], body_html="<p>Before</p>", **signer_fields(db)
+            ),
+        )
+        book = ledger_book_service.save_and_send(db, writer, draft.id)
+        book_id, version_id = book.id, book.versions[0].id
+    ready, edit_started, lock_attempted = Event(), Event(), Event()
+    real_begin = ledger_book_service.begin_immediate_if_idle
+
+    def begin_edit(db):
+        lock_attempted.set()
+        return real_begin(db)
+
+    monkeypatch.setattr(ledger_book_service, "begin_immediate_if_idle", begin_edit)
+
+    def edit():
+        with sessions() as db:
+            writer = db.get(User, writer_id)
+            # Keep stale ORM objects across the other session's signing commit.
+            book = ledger_book_service.get_ledger_book(db, book_id)
+            assert book.versions[0].signed_at is None
+            ready.set()
+            edit_started.wait(timeout=10)
+            try:
+                ledger_book_service.save_content(
+                    db, writer, book_id, subjects=["Late"], body_html="<p>Late</p>"
+                )
+            except AppError as exc:
+                return exc.code
+            return "saved"
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(edit)
+        assert ready.wait(timeout=10)
+        with sessions() as signing:
+            begin_immediate_if_idle(signing)
+            version = signing.get(BookVersion, version_id)
+            version.signed_at = datetime(2026, 1, 2)
+            signing.flush()
+            edit_started.set()
+            # The editing worker is blocked on this transaction until commit.
+            assert lock_attempted.wait(timeout=10)
+            with pytest.raises(TimeoutError):
+                future.result(timeout=0.2)
+            signing.commit()
+        assert future.result(timeout=10) == "REVISION_LOCKED"
+    with sessions() as db:
+        assert db.scalar(select(func.count()).select_from(LedgerBookSave)) == 1

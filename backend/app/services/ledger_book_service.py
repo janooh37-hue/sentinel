@@ -641,6 +641,13 @@ def _versions(book: Book) -> list[BookVersion]:
     return sorted(book.versions, key=lambda version: version.version_no)
 
 
+def freeze_signed_grades(book: Book) -> None:
+    """Preserve the last known grade before changing a legacy signed record."""
+    for version in book.versions:
+        if version.signed_at is not None and "_ledger_grade" not in (version.fields or {}):
+            version.fields = {**(version.fields or {}), "_ledger_grade": book.grade}
+
+
 def _current_save(db: Session, version_id: int) -> LedgerBookSave | None:
     return db.scalar(
         select(LedgerBookSave)
@@ -743,7 +750,9 @@ def ledger_book_read(
     return LedgerBookRead(
         id=book.id,
         ref_number=book.ref_number,
-        grade=book.grade,
+        grade=(selected.fields or {}).get("_ledger_grade", book.grade)
+        if selected.signed_at is not None
+        else book.grade,
         importance=book.importance,
         tab=tab if isinstance(tab, int) else None,
         classification_code=book.classification_code,
@@ -934,7 +943,11 @@ def save_content(
     db: Session, user: User, book_id: int, *, subjects: list[str], body_html: str
 ) -> LedgerBookRead:
     """Append a tracked save to the latest Revision (no row when unchanged)."""
+    begin_immediate_if_idle(db)
     book = get_ledger_book(db, book_id)
+    db.refresh(book)
+    for version in book.versions:
+        db.refresh(version)
     _require_creator_write(db, user, book)
     book_service.require_ledger_revision_unlocked(db, book)
     cleaned_subjects = _clean_subjects(subjects)
@@ -997,6 +1010,7 @@ def start_correction(db: Session, user: User, book_id: int) -> LedgerBookRead:
             "Only a signed Revision can be corrected; edit this one instead.",
             http_status=409,
         )
+    freeze_signed_grades(book)
     signed = _current_save(db, latest.id)
     if signed is None:
         raise AppError("REVISION_EMPTY", "The signed Revision has no content.", http_status=409)
@@ -1047,7 +1061,15 @@ def start_correction(db: Session, user: User, book_id: int) -> LedgerBookRead:
 
 def book_image_path(db: Session, user: User, book_id: int, name: str) -> Path:
     book = get_ledger_book(db, book_id)
-    book_service.resolve_book_read_access(db, user, book)
+    access = book_service.resolve_book_read_access(db, user, book)
+    if not access.full_access:
+        src = f'src="{book_image_prefix(book.id)}{name}"'
+        if not any(
+            src in save.body_html
+            for version_id in access.allowed_version_ids
+            if (save := _current_save(db, version_id)) is not None
+        ):
+            raise NotFoundError("IMAGE_NOT_FOUND", "Image not found")
     path = _contained_file(_book_image_dir(book.id), name)
     if path is None:
         raise NotFoundError("IMAGE_NOT_FOUND", "Image not found")
@@ -1141,6 +1163,7 @@ def sign(db: Session, user: User, book_id: int) -> LedgerBookRead:
         version.fields = {
             **(version.fields or {}),
             "_ledger_signer": signer.model_dump() if signer else None,
+            "_ledger_grade": book.grade,
         }
         step.state = "approved"
         step.decided_at = version.signed_at
