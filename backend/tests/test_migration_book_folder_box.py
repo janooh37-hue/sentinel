@@ -11,8 +11,8 @@ from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0122_book_folder_box"
-PARENT = "0121_ledger_book_importance"
+HEAD = "0123_book_folder_box"
+PARENT = "0122_ledger_book_importance"
 FOLDER_INSERT = (
     "INSERT INTO book_folders (id, owner_user_id, name, created_by_user_id{columns}) "
     "VALUES ({id}, {owner}, '{name}', 7{values})"

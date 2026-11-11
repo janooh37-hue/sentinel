@@ -33,6 +33,7 @@ from app.schemas import employee_detail as sx
 from app.schemas.employee import EmployeeRead
 from app.schemas.employee_completeness import CompletenessRead
 from app.services import document_service, ledger_service, perm_service, photo_service
+from app.services.employee_service import former_ids_by_employee
 
 # Cap each recent-* array. The Employee Detail page paginates the per-tab
 # views via dedicated endpoints; this aggregate is for the at-a-glance hero.
@@ -276,7 +277,11 @@ def get_employee_detail(
     _filled, _tracked = _completeness(emp)
     return sx.EmployeeDetailRead(
         employee=EmployeeRead.model_validate(emp).model_copy(
-            update={"has_photo": _ver is not None, "photo_version": _ver}
+            update={
+                "has_photo": _ver is not None,
+                "photo_version": _ver,
+                "former_ids": former_ids_by_employee(db, [emp.id])[emp.id],
+            }
         ),
         stats=stats,
         recent_documents=recent_docs,

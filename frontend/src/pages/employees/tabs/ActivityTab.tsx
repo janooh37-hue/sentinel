@@ -183,6 +183,7 @@ export function ActivityTab({
         return { ...none, action: { label: 'openAbsences', run: () => onOpenTab('absences') } }
       case 'duty_location':
       case 'status':
+      case 'id_change':
         return none
     }
   }

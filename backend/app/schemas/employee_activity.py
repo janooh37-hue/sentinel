@@ -9,7 +9,7 @@ from app.schemas._base import ORMBase
 
 DutyLocationEventType = Literal["initial_placement", "transfer"]
 EmployeeActivityKind = Literal[
-    "document", "leave", "violation", "ledger", "duty_location", "status"
+    "document", "leave", "violation", "ledger", "duty_location", "status", "id_change"
 ]
 # `employee_status_events.kind` / `.source` — see EmployeeStatusEvent.
 StatusEventKind = Literal["changed", "scheduled", "scheduled_cancelled", "applied", "imported"]
@@ -49,6 +49,7 @@ class EmployeeActivityItemRead(ORMBase):
     return_date: date | None = None
     status_event_kind: StatusEventKind | None = None
     status_source: StatusEventSource | None = None
+    # Recorder for status and id_change events.
     actor_name: str | None = None
 
 

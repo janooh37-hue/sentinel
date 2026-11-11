@@ -8,8 +8,8 @@ shares and filed items keep their ``folder_id`` rows.
 Downgrade LOSES INFORMATION: every folder's box is dropped, so a later upgrade
 puts every folder back in ``incoming``.
 
-Revision ID: 0122_book_folder_box
-Revises: 0121_ledger_book_importance
+Revision ID: 0123_book_folder_box
+Revises: 0122_ledger_book_importance
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0122_book_folder_box"
-down_revision: str | Sequence[str] | None = "0121_ledger_book_importance"
+revision: str = "0123_book_folder_box"
+down_revision: str | Sequence[str] | None = "0122_ledger_book_importance"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

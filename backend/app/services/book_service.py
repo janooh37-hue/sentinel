@@ -94,7 +94,12 @@ from app.schemas.book import (
     BookUpdate,
     ImportedDocRead,
 )
-from app.services import inmate_violation_whatsapp, perm_service, user_signature_service
+from app.services import (
+    employee_service,
+    inmate_violation_whatsapp,
+    perm_service,
+    user_signature_service,
+)
 from app.services import notify_format as nf
 
 log = logging.getLogger(__name__)
@@ -1085,9 +1090,13 @@ def require_inmate_report_write_access(
         raise AppError(
             "INMATE_REPORTER_NOT_OWNER", "This report has no finished version.", http_status=403
         )
+    employee_numbers = [
+        user.employee_id,
+        *employee_service.former_ids_by_employee(db, [user.employee_id])[user.employee_id],
+    ]
     if is_violation:
         stored_reporter_g = str((version.fields or {}).get("reporter_id") or "").strip().upper()
-        if stored_reporter_g and stored_reporter_g != user.employee_id:
+        if stored_reporter_g and stored_reporter_g not in employee_numbers:
             raise AppError(
                 "INMATE_REPORTER_IDENTITY_CHANGED",
                 "Your linked employee record changed since this draft was created.",
@@ -1095,7 +1104,7 @@ def require_inmate_report_write_access(
             )
     else:
         signer_employee_id = (version.fields or {}).get("signer_employee_id")
-        if signer_employee_id != user.employee_id:
+        if signer_employee_id not in employee_numbers:
             raise AppError(
                 "INMATE_REPORTER_IDENTITY_CHANGED",
                 "Your linked employee record changed since this Report was created.",

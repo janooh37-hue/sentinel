@@ -1,7 +1,7 @@
 """Ledger addressee snapshots and a draft signing manager.
 
-Revision ID: 0123_ledger_addressees_signer
-Revises: 0122_book_folder_box
+Revision ID: 0124_ledger_addressees_signer
+Revises: 0123_book_folder_box
 
 Downgrade loses addressees and external/signer selections. Frozen SQL preserves
 books FTS triggers and the draft AUTOINCREMENT high-water mark during rebuilds.
@@ -10,8 +10,8 @@ books FTS triggers and the draft AUTOINCREMENT high-water mark during rebuilds.
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0123_ledger_addressees_signer"
-down_revision = "0122_book_folder_box"
+revision = "0124_ledger_addressees_signer"
+down_revision = "0123_book_folder_box"
 branch_labels = None
 depends_on = None
 

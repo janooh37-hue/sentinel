@@ -12,8 +12,8 @@ restore them. ``book_drafts`` is rebuilt with AUTOINCREMENT kept.
 Downgrade LOSES INFORMATION: every importance is dropped, and restored drafts
 get urgency ``Normal``.
 
-Revision ID: 0121_ledger_book_importance
-Revises: 0120_ledger_book_drafts
+Revision ID: 0122_ledger_book_importance
+Revises: 0121_ledger_book_drafts
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0121_ledger_book_importance"
-down_revision: str | Sequence[str] | None = "0120_ledger_book_drafts"
+revision: str = "0122_ledger_book_importance"
+down_revision: str | Sequence[str] | None = "0121_ledger_book_drafts"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

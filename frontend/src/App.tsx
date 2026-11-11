@@ -40,6 +40,7 @@ import {
   loadDashboardPage,
   loadDutyLocationsPage,
   loadEmployeeDetailPage,
+  loadEmployeeEditPage,
   loadDebugConsolePage,
   loadEmployeesOrgTreePage,
   loadExpiryPage,
@@ -127,6 +128,7 @@ const AbsencesPage = lazy(() =>
 )
 const EmployeesOrgTreePage = lazy(loadEmployeesOrgTreePage)
 const EmployeeDetailPage = lazy(loadEmployeeDetailPage)
+const EmployeeEditPage = lazy(loadEmployeeEditPage)
 // Statement print setups: full pages beside the file, so Back leaves the preview.
 const ActivityPrintPage = lazy(loadActivityPrintPage)
 const AttendancePrintPage = lazy(loadAttendancePrintPage)
@@ -358,6 +360,14 @@ function Shell(): React.JSX.Element {
                   <RequireCapability cap="employees.view">
                     <EmployeeDetailPage />
                   </RequireCapability>
+                }
+              />
+              <Route
+                path="/employees/:id/edit"
+                element={
+                  <RequireAnyCapability caps={['employees.edit', 'employees.change_id']}>
+                    <EmployeeEditPage />
+                  </RequireAnyCapability>
                 }
               />
               <Route

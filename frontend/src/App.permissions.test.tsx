@@ -82,6 +82,7 @@ vi.mock('@/lib/routeLoaders', () => ({
   loadDashboardPage: () => Promise.resolve({ default: () => <div>dashboard-page</div> }),
   loadDutyLocationsPage: () => Promise.resolve({ default: () => <div>duty-page</div> }),
   loadEmployeeDetailPage: () => Promise.resolve({ default: () => <div>employee-detail-page</div> }),
+  loadEmployeeEditPage: () => Promise.resolve({ default: () => <div>employee-edit-page</div> }),
   loadActivityPrintPage: () => Promise.resolve({ default: () => <div>activity-print-page</div> }),
   loadAttendancePrintPage: () => Promise.resolve({ default: () => <div>attendance-print-page</div> }),
   loadEmployeesOrgTreePage: () => Promise.resolve({ default: () => <div>org-tree-page</div> }),
@@ -124,6 +125,8 @@ import { api } from '@/lib/api'
 const routes = [
   ['/employees', ['employees.view'], 'employees-page'],
   ['/employees/G-1', ['employees.view'], 'employee-detail-page'],
+  ['/employees/G100/edit', ['employees.edit'], 'employee-edit-page'],
+  ['/employees/G100/edit', ['employees.change_id'], 'employee-edit-page'],
   ['/services', ['documents.generate', 'books.view'], 'application-page'],
   ['/services/general_book', ['documents.generate', 'books.view'], 'application-page'],
   ['/books', ['books.view'], 'books-page'],

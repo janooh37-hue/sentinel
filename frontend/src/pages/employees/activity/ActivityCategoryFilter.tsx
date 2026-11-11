@@ -13,6 +13,7 @@ const ICONS: Record<StatementCategory, ComponentType<{ className?: string }>> = 
   document: FileText,
   ledger: MailIcon,
   placement: ArrowLeftRight,
+  id_change: ArrowLeftRight,
 }
 
 interface Props {
@@ -47,7 +48,7 @@ export function ActivityCategoryFilter({ counts, hidden, unavailable, shown, tot
               )}
             >
               {on ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Icon className="h-3.5 w-3.5" aria-hidden />}
-              <span>{t(`statement.category.${category}`)}</span>
+              <span>{t(category === 'id_change' ? 'employees.idChangeActivity.label' : `statement.category.${category}`)}</span>
               <span className="tabular-nums text-muted-foreground">{counts[category]}</span>
             </button>
           )

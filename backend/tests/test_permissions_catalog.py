@@ -5,7 +5,7 @@ from app.db.models import BookCategory
 
 
 def test_static_catalog_has_complete_bilingual_request_policy_metadata():
-    assert len(CAPABILITIES) == 65
+    assert len(CAPABILITIES) == 66
     assert {cap.id for cap in CAPABILITIES if cap.domain == "uniform"} == {
         "uniform.view",
         "uniform.edit",
@@ -31,10 +31,10 @@ def test_static_catalog_has_complete_bilingual_request_policy_metadata():
     assert {cap.id for cap in CAPABILITIES if cap.sensitive} == set(
         permissions.SENSITIVE_CAPABILITY_IDS
     )
-    # books.secret is the one non-sensitive cap that can't be self-requested:
-    # clearance is granted by an admin or manager, never asked for.
+    # Clearance and employee-number corrections require an explicit grant.
     assert {cap.id for cap in CAPABILITIES if not cap.sensitive and not cap.requestable} == {
-        "books.secret"
+        "books.secret",
+        "employees.change_id",
     }
 
 
@@ -44,12 +44,20 @@ def test_static_role_default_counts_are_preserved():
     } == {
         "operator": 19,
         "manager": 45,
-        "admin": 65,
+        "admin": 66,
     }
     assert {"uniform.view", "uniform.edit"} <= ROLE_DEFAULTS["admin"]
     assert "uniform.view" in ROLE_DEFAULTS["manager"]
     assert "uniform.edit" not in ROLE_DEFAULTS["manager"]
     assert not {"uniform.view", "uniform.edit"} & ROLE_DEFAULTS["operator"]
+    assert "employees.change_id" in ROLE_DEFAULTS["admin"]
+    assert all(
+        "employees.change_id" not in caps for role, caps in ROLE_DEFAULTS.items() if role != "admin"
+    )
+    change_id = next(cap for cap in CAPABILITIES if cap.id == "employees.change_id")
+    assert change_id.domain == "employees"
+    assert not change_id.sensitive
+    assert not change_id.requestable
 
 
 def test_inmate_reporter_preset_is_exactly_its_fixed_ceiling():
@@ -91,7 +99,7 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     db_session.commit()
 
     catalog = capability_catalog_service.list_catalog(db_session)
-    assert len(catalog) == 65 + (2 * (len(SERVICE_IDS) + 1)) + 15
+    assert len(catalog) == len(CAPABILITIES) + (2 * (len(SERVICE_IDS) + 1)) + 15
     assert len({entry.id for entry in catalog}) == len(catalog)
 
     dynamic = catalog[len(CAPABILITIES) :]

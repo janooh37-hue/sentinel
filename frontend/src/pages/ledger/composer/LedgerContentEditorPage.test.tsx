@@ -27,7 +27,7 @@ const BOOK: LedgerBookRead = {
   id: 40, ref_number: '1/2/7', grade: 'unclassified', importance: null, tab: 2, classification_code: '2/1',
   paper_date: '28-10-2026', approval_state: 'none', created_by_user_id: 1, voided: false,
   revisions: [rev(1, true), rev(2, false)], selected_version_id: 72,
-  subjects: ['Leave plan'], body_html: '<p>Hello</p>', content_sha256: 'abc',
+  addressed_to: 'HR director', subjects: ['Leave plan'], body_html: '<p>Hello</p>', content_sha256: 'abc',
   external: false, addressees: [], signer: null, can_sign: false, can_return: false, can_change_signer: false, can_resubmit: false, can_create_outlook_draft: false, return_note: null,
   paper_preset: 'normal', references: [], folders: [],
 }
@@ -64,6 +64,23 @@ async function openAndRevise(): Promise<void> {
 }
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
+
+it('requires a printed salutation when saving a legacy correction and sends it with the content snapshot', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue({ ...BOOK, addressed_to: null })
+  const put = vi.spyOn(api, 'updateLedgerBookContent').mockResolvedValue(BOOK)
+  mount()
+  const salutation = await screen.findByRole('textbox', { name: 'Addressed to' })
+  expect(salutation).toHaveValue('')
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Enter the printed salutation.')
+  expect(put).not.toHaveBeenCalled()
+  await userEvent.type(salutation, 'مدير إدارة الموارد البشرية')
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(put).toHaveBeenCalledWith(40, {
+    addressed_to: 'مدير إدارة الموارد البشرية', subjects: BOOK.subjects, body_html: BOOK.body_html,
+    expected_version_id: 72, expected_content_sha256: 'abc',
+  }))
+})
 
 it.each(['locked', 'replaced'] as const)('preserves a dirty correction when its revision is %s during refresh', async (change) => {
   const get = vi.spyOn(api, 'getLedgerBook').mockResolvedValue(BOOK)
@@ -121,7 +138,7 @@ it('T-C8 saving the content editor PUTs subjects and body, then returns to the d
   await userEvent.click(screen.getByRole('button', { name: 'Add line' }))
   await userEvent.type(screen.getByLabelText('Subject line 2'), 'Annex')
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-  await waitFor(() => expect(put).toHaveBeenCalledWith(40, { subjects: ['Leave plan (revised)', 'Annex'], body_html: '<p>Hello</p>', expected_version_id: 72, expected_content_sha256: 'abc' }))
+  await waitFor(() => expect(put).toHaveBeenCalledWith(40, { addressed_to: 'HR director', subjects: ['Leave plan (revised)', 'Annex'], body_html: '<p>Hello</p>', expected_version_id: 72, expected_content_sha256: 'abc' }))
   expect(await screen.findByText('/ledger?tab=books&book=40')).toBeInTheDocument()
 })
 
@@ -260,10 +277,12 @@ it('keeps edits typed while an earlier save is in flight', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(put).toHaveBeenCalled())
   await userEvent.type(screen.getByLabelText('Subject line 1'), ' more')
+  await userEvent.type(screen.getByLabelText('Addressed to'), ' amended')
   await act(async () => resolveSave({ ...BOOK, subjects: ['Leave plan (revised)'], content_sha256: 'saved' }))
   await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled())
   expect(screen.getByLabelText('URL')).toHaveTextContent(EDIT_URL)
   expect(screen.getByLabelText('Subject line 1')).toHaveValue('Leave plan (revised) more')
+  expect(screen.getByLabelText('Addressed to')).toHaveValue('HR director amended')
   put.mockResolvedValue({ ...BOOK, subjects: ['Leave plan (revised) more'], content_sha256: 'saved-again' })
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(put).toHaveBeenLastCalledWith(40, expect.objectContaining({ expected_version_id: 72, expected_content_sha256: 'saved' })))

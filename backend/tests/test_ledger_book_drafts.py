@@ -174,6 +174,7 @@ def test_draft_ids_are_never_reused(drafts, finish):
         BASE,
         json={
             "tab": 2,
+            "addressed_to": "Printed office",
             "subjects": ["One"],
             "body_html": "<p>Body</p>",
             "signer_manager_id": manager.id,

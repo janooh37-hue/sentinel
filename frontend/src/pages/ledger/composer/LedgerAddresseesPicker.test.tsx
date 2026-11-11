@@ -44,5 +44,5 @@ it.each([
   expect(screen.getByRole('alert')).toHaveTextContent(warning)
   await userEvent.click(screen.getByRole('button', { name: remove }))
   expect(screen.queryByText(warning)).not.toBeInTheDocument()
-  expect(screen.getByLabelText(language === 'ar' ? 'إلى' : 'To')).toBeInTheDocument()
+  expect(screen.getByLabelText(language === 'ar' ? 'إرسال إلى' : 'Send to')).toBeInTheDocument()
 })

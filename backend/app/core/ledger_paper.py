@@ -53,6 +53,7 @@ class PaperContext:
     viewer_g_number: str | None  # tiled across the sheet for Secret and above
     asset_base: str  # URL prefix where the asset router is mounted
     # Printed addressees, in order: "السيد \ {name} المحترم" per To, "نسخة إلى:" CC.
+    addressed_to: str | None = None
     to_names: tuple[str, ...] = ()
     cc_names: tuple[str, ...] = ()
     # The signing manager; their signature image only once the Revision is signed.
@@ -332,9 +333,14 @@ def _footer(ctx: PaperContext) -> str:
 
 def _addressees(ctx: PaperContext) -> str:
     """General Book opening: one line per To, then the greeting once."""
-    if not ctx.to_names:
+    names = (
+        ctx.to_names
+        if ctx.addressed_to is None
+        else ((ctx.addressed_to,) if ctx.addressed_to else ())
+    )
+    if not names:
         return ""
-    lines = "".join(f'<p class="to">السيد \\ {_e(name)} المحترم</p>' for name in ctx.to_names)
+    lines = "".join(f'<p class="to">السيد \\ {_e(name)} المحترم</p>' for name in names)
     return f'<div class="addressees">{lines}<p class="greeting">تحية طيبة وبعد،</p></div>'
 
 
@@ -431,6 +437,8 @@ def _layout_1(ctx: PaperContext) -> str:
     mark_html = f'<div class="mark">{_e(mark)}</div>' if mark else ""
     title = ctx.ref or (f"مسودة {ctx.draft_number}" if ctx.draft_number else "مسودة")
     opening = _report_head(ctx) if report else _addressees(ctx) + _subjects(ctx)
+    if report and ctx.addressed_to:
+        opening = f'<div class="addressees"><p>التوجيه: {_e(ctx.addressed_to)}</p></div>' + opening
     signoff = _report_signoffs(ctx) if report else _signoff(ctx)
     return (
         '<!DOCTYPE html>\n<html lang="ar" dir="rtl"><head><meta charset="utf-8">'

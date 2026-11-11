@@ -84,6 +84,7 @@ def ledger_api(api_db, monkeypatch, tmp_path):
             "/api/v1/ledger/drafts",
             json={
                 "tab": 3,
+                "addressed_to": "Printed office",
                 "subjects": ["Original subject"],
                 "body_html": "<p>Original body</p>",
                 "signer_manager_id": manager.id,
@@ -221,6 +222,7 @@ def _prepare_mutation(api: LedgerBookAPI, method: str, route: str) -> None:
             "/api/v1/ledger/drafts",
             json={
                 "tab": 3,
+                "addressed_to": "Printed office",
                 "subjects": ["Reference target"],
                 "body_html": "<p>Reference body</p>",
                 "signer_manager_id": api.db.scalar(select(Manager.id)),

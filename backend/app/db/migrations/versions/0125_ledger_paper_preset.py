@@ -1,7 +1,7 @@
 """Ledger paper preset, bottom-block references/folders and the Revision layout pin.
 
-Revision ID: 0124_ledger_paper_preset
-Revises: 0123_ledger_addressees_signer
+Revision ID: 0125_ledger_paper_preset
+Revises: 0124_ledger_addressees_signer
 
 Drafts gain ``paper_preset`` (``normal``/``report``), ``reference_book_ids``
 and ``folder_ids``. Revisions gain ``paper_preset`` and ``paper_layout``, set
@@ -14,8 +14,8 @@ the preset, reference and folder selections.
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0124_ledger_paper_preset"
-down_revision = "0123_ledger_addressees_signer"
+revision = "0125_ledger_paper_preset"
+down_revision = "0124_ledger_addressees_signer"
 branch_labels = None
 depends_on = None
 

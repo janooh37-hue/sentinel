@@ -58,6 +58,7 @@ def signer_fields(db):
     db.add(manager)
     db.commit()
     return {
+        "addressed_to": "Printed office",
         "signer_manager_id": manager.id,
         "addressees": [LedgerAddresseeIn(role="to", user_id=user.id)],
     }
@@ -286,6 +287,7 @@ def test_waiting_content_save_refreshes_signed_revision_under_write_lock(
                     db,
                     writer,
                     book_id,
+                    addressed_to="Printed office",
                     subjects=["Late"],
                     body_html="<p>Late</p>",
                     expected_version_id=version_id,
@@ -341,6 +343,7 @@ def test_concurrent_content_saves_accept_only_one_editor_snapshot(ledger_session
                     db,
                     writer,
                     opened.id,
+                    addressed_to="Printed office",
                     subjects=[f"Editor {index}"],
                     body_html=f"<p>Editor {index}</p>",
                     expected_version_id=opened.selected_version_id,

@@ -92,7 +92,7 @@ it.each(['en', 'ar'])('describes an empty correction body inside the editing doc
     id: 40, ref_number: '1/2/7', grade: 'unclassified', importance: null, tab: 2, classification_code: '2/1',
     paper_date: '28-10-2026', approval_state: 'none', created_by_user_id: 1, voided: false,
     revisions: [{ version_id: 72, version_no: 2, trigger: 'correction', created_at: '2026-10-28T08:00:00Z', signed_at: null, superseded: false, locked: false }],
-    selected_version_id: 72, subjects: ['Subject'], body_html: '', content_sha256: 'abc',
+    selected_version_id: 72, addressed_to: 'HR director', subjects: ['Subject'], body_html: '', content_sha256: 'abc',
     external: false, addressees: [], signer: null, can_sign: false, can_return: false, can_change_signer: false,
     can_resubmit: false, can_create_outlook_draft: false, return_note: null, paper_preset: 'normal', references: [], folders: [],
   }
@@ -212,7 +212,7 @@ it('initializes once after new-draft navigation and preserves the editor through
   const engine = installEngine()
   const draft: LedgerDraftRead = {
     id: 12, draft_number: '000012', tab: null, grade: 'unclassified', importance: null,
-    subjects: ['Subject'], body_html: '', created_at: '2026-10-28T08:00:00Z', updated_at: '2026-10-28T08:00:00Z',
+    addressed_to: '', subjects: ['Subject'], body_html: '', created_at: '2026-10-28T08:00:00Z', updated_at: '2026-10-28T08:00:00Z',
     external: false, signer_manager_id: null, addressees: [],
     paper_preset: 'normal', reference_book_ids: [], folder_ids: [],
   }

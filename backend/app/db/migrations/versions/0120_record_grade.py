@@ -24,8 +24,8 @@ records user ids, not sufficient state to safely distinguish subsequent admin
 changes. Refusal keeps both recipient state and the journal intact. Very High
 urgency becomes High on a permitted downgrade.
 
-Revision ID: 0119_record_grade
-Revises: 0118_drop_record_category_overreach
+Revision ID: 0120_record_grade
+Revises: 0119_employee_former_ids
 """
 
 from __future__ import annotations
@@ -35,8 +35,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0119_record_grade"
-down_revision: str | Sequence[str] | None = "0118_drop_record_category_overreach"
+revision: str = "0120_record_grade"
+down_revision: str | Sequence[str] | None = "0119_employee_former_ids"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -162,7 +162,7 @@ def downgrade() -> None:
         LIMIT 1
     """)
     ).first():
-        raise RuntimeError("Cannot downgrade 0119: legacy levels cannot preserve record visibility")
+        raise RuntimeError("Cannot downgrade 0120: legacy levels cannot preserve record visibility")
     if connection.execute(
         sa.text(f"""
         SELECT id FROM audit_log
@@ -175,7 +175,7 @@ def downgrade() -> None:
     """)
     ).first():
         raise RuntimeError(
-            "Cannot downgrade 0119: Personal recipient revocations lack sufficient reversal evidence; "
+            "Cannot downgrade 0120: Personal recipient revocations lack sufficient reversal evidence; "
             "keep the migration journal and reconcile recipient history before downgrading"
         )
     with op.batch_alter_table("books") as batch:

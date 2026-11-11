@@ -208,6 +208,8 @@ export type EmployeeUpdate = components['schemas']['EmployeeUpdate'] & {
   msg_language?: 'ar' | 'en' | null
 }
 export type EmployeeStatus = EmployeeRead['status']
+export type EmployeeIdChangePreviewRead = components['schemas']['EmployeeIdChangePreviewRead']
+export type EmployeeIdChangeRequest = components['schemas']['EmployeeIdChangeRequest']
 
 // Unified outbound log read type (covers WhatsApp + SMS); used for the book/employee Messages surface.
 export type NotifyMessageRead = components['schemas']['NotifyMessageRead']
@@ -1165,6 +1167,7 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   DRAFT_SUBJECT_REQUIRED: 'errors.ledger.draftSubjectRequired',
   DRAFT_BODY_REQUIRED: 'errors.ledger.draftBodyRequired',
   ADDRESSEE_INVALID: 'ledgerBook.composer.errors.addresseeInvalid',
+  ADDRESSED_TO_REQUIRED: 'ledgerBook.composer.errors.addressedToRequired',
   ADDRESSEE_ONLY_CC_NOT_ALLOWED: 'ledgerBook.composer.errors.addresseeOnlyCc',
   REFERENCE_INVALID: 'ledgerBook.composer.errors.referenceInvalid',
   FOLDER_INVALID: 'ledgerBook.composer.errors.folderInvalid',
@@ -1175,6 +1178,11 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   IMAGE_EMPTY: 'errors.ledger.imageEmpty',
   IMAGE_TOO_LARGE: 'errors.ledger.imageTooLarge',
   IMAGE_TYPE_UNSUPPORTED: 'errors.ledger.imageTypeUnsupported',
+  EMPLOYEE_ID_INVALID: 'employees.idChange.invalid',
+  EMPLOYEE_ID_SAME: 'employees.idChange.same',
+  EMPLOYEE_ID_TAKEN: 'employees.idChange.takenError',
+  EMPLOYEE_ID_REASON_INVALID: 'employees.idChange.reasonInvalid',
+  EMPLOYEE_ID_VAULT_CONFLICT: 'employees.idChange.vaultConflict',
 }
 
 /** Localized user-facing error text. A module's own `codeKey` mapping wins
@@ -1520,6 +1528,13 @@ export const api = {
     request<EmployeeRead>('POST', '/employees', payload),
   updateEmployee: (id: string, payload: EmployeeUpdate) =>
     request<EmployeeRead>('PATCH', `/employees/${encodeURIComponent(id)}`, payload),
+  getEmployeeIdChangePreview: (id: string, newId: string) =>
+    request<EmployeeIdChangePreviewRead>(
+      'GET',
+      `/employees/${encodeURIComponent(id)}/id-change/preview${qs({ new_id: newId })}`,
+    ),
+  changeEmployeeId: (id: string, payload: EmployeeIdChangeRequest) =>
+    request<EmployeeRead>('POST', `/employees/${encodeURIComponent(id)}/id-change`, payload),
 
   /** POST /employees/{id}/passport/extract — OCR-extract passport number from
    * the employee's passport vault scan. Never writes; caller must PATCH to save. */

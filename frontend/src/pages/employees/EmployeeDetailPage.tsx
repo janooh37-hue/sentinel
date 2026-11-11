@@ -10,23 +10,18 @@
  * Calls recordRecentEmployee when data loads.
  */
 
-import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { toast } from '@/lib/toast'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useUrlOverlay } from '@/lib/urlState'
 import {
   DocumentViewerDialog,
 } from '@/components/ui/document-viewer-dialog'
-import { ApiError, api, apiErrorMessage } from '@/lib/api'
+import { ApiError, api } from '@/lib/api'
 import { NotFoundPage } from '@/pages/NotFoundPage'
-import type { EmployeeFormOutput } from '@/components/employees/schema'
-import type { ExtractionResponse } from '@/lib/extraction'
-import { EmployeeForm } from '@/components/employees/EmployeeForm'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { recordRecentEmployee } from '@/lib/employeeRecents'
 import {
@@ -70,7 +65,6 @@ export function EmployeeDetailPage(): React.JSX.Element {
 
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const { i18n, t } = useTranslation()
   const { has, isLoading: capabilitiesLoading } = useCapabilities()
@@ -131,19 +125,6 @@ export function EmployeeDetailPage(): React.JSX.Element {
   // shown the operator the server's message — so `void` is the whole handler.
   const employeeSheet = useEmployeeSheetDownload()
 
-  // Consume injected extraction from the intake flow (Task 5). Clear history
-  // state after consuming so a refresh doesn't re-open the panel.
-  const [initialExtraction, setInitialExtraction] = useState<ExtractionResponse | undefined>(() => {
-    const s = location.state as { injectedExtraction?: ExtractionResponse } | null
-    return s?.injectedExtraction
-  })
-  useEffect(() => {
-    if (initialExtraction) {
-      navigate(location.pathname, { replace: true, state: {} })
-    }
-    // Run once on mount only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // Wire Ctrl+K keyboard shortcut to navigate to employees lookup
   useEffect(() => {
@@ -161,31 +142,11 @@ export function EmployeeDetailPage(): React.JSX.Element {
     }
   }, [navigate])
 
-  const editMutation = useMutation({
-    mutationFn: (values: EmployeeFormOutput) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { id: _id, ...patch } = values
-      return api.updateEmployee(id!, patch)
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['employee-detail', id] })
-      void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
-      void qc.invalidateQueries({ queryKey: ['employees'] })
-      setInitialExtraction(undefined)
-      editOverlay.close()
-      toast.success(t('employees.toast.updated'))
-    },
-    onError: (err) => {
-      toast.error(apiErrorMessage(err))
-    },
-  })
-
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['employee-detail', id],
     queryFn: () => api.getEmployeeDetail(id!),
     enabled: !!id,
   })
-  const editing = action === 'edit' && has('employees.edit')
   const statusOpen = action === 'status' && has('employees.edit')
   const recentPreviewDocs: PreviewDoc[] = data?.recent_documents.map((doc) => ({
     id: doc.id,
@@ -206,7 +167,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
 
   useEffect(() => {
     if (!data || capabilitiesLoading) return
-    if (action === 'edit' || action === 'status') {
+    if (action === 'status') {
       if (!has('employees.edit')) editOverlay.close()
     } else if (action) {
       editOverlay.close()
@@ -287,34 +248,6 @@ export function EmployeeDetailPage(): React.JSX.Element {
         </div>
       </div>
 
-      {/* ── Inline edit form (above layout) ──────────────────────────────────── */}
-      {(editing || initialExtraction) && (
-        <div className="mx-auto max-w-[1180px] mt-6 px-4 md:px-8">
-          <div className="rounded-2xl border border-hairline bg-surface p-6">
-            {initialExtraction && (
-              <p className="mb-4 text-[0.82em] font-medium text-muted-foreground">
-                {t('employees.intake.reviewAndApply', {
-                  defaultValue: 'Review the scanned data and apply to this employee record.',
-                })}
-              </p>
-            )}
-            <EmployeeForm
-              mode="edit"
-              initial={data.employee}
-              initialExtraction={initialExtraction}
-              onSubmit={async (values) => {
-                await editMutation.mutateAsync(values)
-              }}
-              onCancel={() => {
-                editOverlay.close()
-                setInitialExtraction(undefined)
-              }}
-              submitting={editMutation.isPending}
-            />
-          </div>
-        </div>
-      )}
-
       {/* ── Main page layout ──────────────────────────────────────────────────── */}
       <div className="mx-auto max-w-[1180px] px-4 py-6 pb-20 md:px-8">
         <div className="grid items-start gap-5 md:grid-cols-[350px_1fr]">
@@ -322,7 +255,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
           <div className="flex flex-col gap-4 md:sticky md:top-5">
             <EmployeeIdCard
               employee={data.employee}
-              onEdit={() => editOverlay.open('edit')}
+              onEdit={() => navigate(`/employees/${encodeURIComponent(data.employee.id)}/edit`)}
               onAddLeave={() =>
                 navigate(
                   `/services/leave_application?employee_id=${encodeURIComponent(data.employee.id)}`,
@@ -334,7 +267,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
               onTimesheet={(span) =>
                 void employeeSheet.download({ employeeId: data.employee.id, ...span })
               }
-              onChangeStatus={editing || initialExtraction ? undefined : () => editOverlay.open('status')}
+              onChangeStatus={() => editOverlay.open('status')}
             />
             <EmployeeGapsCard
               missing={data.missing_fields}
@@ -346,8 +279,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
                   handleTabChange('profile')
                   setFixField(field)
                 } else {
-                  // «أكمل البيانات الآن» — bulk path keeps the full edit form.
-                  editOverlay.open('edit')
+                  navigate(`/employees/${encodeURIComponent(data.employee.id)}/edit`)
                 }
               }}
             />

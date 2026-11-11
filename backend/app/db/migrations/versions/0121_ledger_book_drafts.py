@@ -9,8 +9,8 @@ edit history of one Ledger Book Revision (``book_versions`` row).
 rebuild), so the ``books_fts`` triggers are untouched. Downgrade drops the two
 tables and the column; their contents are lost.
 
-Revision ID: 0120_ledger_book_drafts
-Revises: 0119_record_grade
+Revision ID: 0121_ledger_book_drafts
+Revises: 0120_record_grade
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0120_ledger_book_drafts"
-down_revision: str | Sequence[str] | None = "0119_record_grade"
+revision: str = "0121_ledger_book_drafts"
+down_revision: str | Sequence[str] | None = "0120_record_grade"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

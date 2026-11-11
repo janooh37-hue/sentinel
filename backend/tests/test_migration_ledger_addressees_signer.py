@@ -6,8 +6,8 @@ from sqlalchemy import create_engine, inspect, text
 
 from tests.test_migration_ledger_book_importance import _config, assert_seed_and_fts_survive
 
-HEAD = "0123_ledger_addressees_signer"
-PARENT = "0122_book_folder_box"
+HEAD = "0124_ledger_addressees_signer"
+PARENT = "0123_book_folder_box"
 
 
 def test_single_head_and_upgrade_downgrade(tmp_path):

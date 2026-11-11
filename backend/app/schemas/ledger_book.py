@@ -77,6 +77,7 @@ class LedgerDraftCreate(BaseModel):
     tab: int | None = Field(default=None, ge=1, le=15)
     grade: BookGrade = "unclassified"
     importance: BookImportance | None = None
+    addressed_to: str = Field(default_factory=lambda: "", max_length=500)
     subjects: list[str] = Field(default_factory=list, max_length=20)
     body_html: str = Field(default="", max_length=2_000_000)
     external: bool = False
@@ -98,6 +99,7 @@ class LedgerDraftUpdate(BaseModel):
     grade: BookGrade | None = None
     # Sent as null: clears the importance.
     importance: BookImportance | None = None
+    addressed_to: str | None = Field(default=None, max_length=500)
     subjects: list[str] | None = Field(default=None, max_length=20)
     body_html: str | None = Field(default=None, max_length=2_000_000)
     external: bool | None = None
@@ -115,6 +117,7 @@ class LedgerDraftRead(ORMBase):
     tab: int | None
     grade: BookGrade
     importance: BookImportance | None
+    addressed_to: str
     subjects: list[str]
     body_html: str
     external: bool
@@ -158,6 +161,7 @@ class LedgerBookRead(ORMBase):
     voided: bool
     revisions: list[LedgerRevisionRead]
     selected_version_id: int
+    addressed_to: str | None
     subjects: list[str]
     body_html: str
     content_sha256: str
@@ -187,6 +191,7 @@ class LedgerContentUpdate(BaseModel):
 
     expected_version_id: int = Field(gt=0)
     expected_content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    addressed_to: str = Field(max_length=500)
     subjects: list[str] = Field(max_length=20)
     body_html: str = Field(max_length=2_000_000)
 

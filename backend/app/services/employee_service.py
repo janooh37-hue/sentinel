@@ -14,6 +14,7 @@ is small (272 employees in live data) and the React side already wants a
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from datetime import UTC, date, datetime
 from typing import Any, Final, cast
 
@@ -22,7 +23,8 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.core.clock import organization_today
-from app.db.models import Employee, Leave, Violation
+from app.db.models import Employee, EmployeeFormerId, Leave, Violation
+from app.db.repos._locking import begin_immediate_if_idle
 from app.schemas.employee import (
     EMPLOYEE_STATUS_ACTIVE,
     EMPLOYEE_STATUS_RESIGNED,
@@ -42,6 +44,39 @@ LIST_MAX_LIMIT = 500
 LIST_DEFAULT_LIMIT = 100
 
 
+def former_ids_by_employee(db: Session, employee_ids: Collection[str]) -> dict[str, list[str]]:
+    """Fetch earlier numbers in one query, oldest first, excluding current IDs."""
+    result: dict[str, list[str]] = {employee_id: [] for employee_id in employee_ids}
+    if not result:
+        return result
+
+    rows = db.execute(
+        select(EmployeeFormerId.employee_id, EmployeeFormerId.former_id)
+        .where(EmployeeFormerId.employee_id.in_(result))
+        .order_by(EmployeeFormerId.changed_at, EmployeeFormerId.id)
+    )
+    seen: dict[str, set[str]] = {employee_id: {employee_id} for employee_id in result}
+    for employee_id, former_id in rows:
+        if former_id not in seen[employee_id]:
+            seen[employee_id].add(former_id)
+            result[employee_id].append(former_id)
+    return result
+
+
+def former_number_owner(
+    db: Session, number: str, *, excluding: str | None = None
+) -> Employee | None:
+    """The employee who once held ``number``: a corrected number stays reserved."""
+    query = (
+        select(Employee)
+        .join(EmployeeFormerId, EmployeeFormerId.employee_id == Employee.id)
+        .where(func.upper(EmployeeFormerId.former_id) == number.strip().upper())
+    )
+    if excluding is not None:
+        query = query.where(EmployeeFormerId.employee_id != excluding)
+    return db.scalar(query.limit(1))
+
+
 def list_employees(
     db: Session,
     *,
@@ -59,7 +94,7 @@ def list_employees(
 ) -> tuple[list[Employee], int]:
     """Filtered + paginated list. Returns ``(rows, total_count)``.
 
-    ``q`` also matches ``uae_id_no``/``passport_no``. When the exact/ILIKE pass
+    ``q`` also matches former IDs and ``uae_id_no``/``passport_no``. When the exact/ILIKE pass
     returns zero rows and ``q`` isn't pure digits, falls back to rapidfuzz
     name matching (``token_sort_ratio`` >= ``extraction_service._MATCH_THRESHOLD``),
     ordered by score then name (or by ``end_date`` when ``pending=True``, to
@@ -89,6 +124,12 @@ def list_employees(
             Employee.name_ar.ilike(needle),
             Employee.uae_id_no.ilike(needle),
             Employee.passport_no.ilike(needle),
+            select(EmployeeFormerId.id)
+            .where(
+                EmployeeFormerId.employee_id == Employee.id,
+                EmployeeFormerId.former_id.ilike(needle),
+            )
+            .exists(),
         )
         stmt = stmt.where(clause)
         count_stmt = count_stmt.where(clause)
@@ -209,12 +250,23 @@ def _validate_transfer(
 def create_employee(
     db: Session, payload: EmployeeCreate, *, actor_user_id: int | None = None
 ) -> Employee:
+    # Serialize the reservation check against concurrent number corrections.
+    begin_immediate_if_idle(db)
     existing = db.get(Employee, payload.id)
     if existing is not None:
         raise ConflictError(
             "EMPLOYEE_EXISTS",
             f"Employee {payload.id!r} already exists",
             id=payload.id,
+        )
+    former_owner = former_number_owner(db, payload.id)
+    if former_owner is not None:
+        raise ConflictError(
+            "EMPLOYEE_ID_TAKEN",
+            "This number belongs to another employee.",
+            owner_id=former_owner.id,
+            owner_name_en=former_owner.name_en,
+            owner_name_ar=former_owner.name_ar,
         )
     data = payload.model_dump()
     target: str = payload.status
@@ -600,6 +652,7 @@ __all__ = [
     "apply_due_departures",
     "apply_due_transfer_returns",
     "create_employee",
+    "former_ids_by_employee",
     "get_employee",
     "list_employees",
     "update_employee",

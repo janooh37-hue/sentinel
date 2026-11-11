@@ -20,6 +20,7 @@ import { SigningManagerPicker } from '@/components/books/SigningManagerPicker'
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Input } from '@/components/ui/input'
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { api, ApiError, apiErrorMessage, type LedgerDraftRead } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
@@ -37,13 +38,14 @@ import { useDraftAutosave, type SaveState } from './useDraftAutosave'
 
 const AUTOSAVE_MS = 800
 
-type Field = 'tab' | 'subjects' | 'body' | 'to' | 'signer' | 'references' | 'folders'
+type Field = 'tab' | 'subjects' | 'addressedTo' | 'body' | 'to' | 'signer' | 'references' | 'folders'
 type FieldErrors = Partial<Record<Field, string>>
 
 /** Save & Send refusals that belong next to a field. */
 const FIELD_OF_CODE: Readonly<Record<string, Field>> = {
   DRAFT_TAB_REQUIRED: 'tab',
   DRAFT_SUBJECT_REQUIRED: 'subjects',
+  ADDRESSED_TO_REQUIRED: 'addressedTo',
   DRAFT_BODY_REQUIRED: 'body',
   DRAFT_TO_REQUIRED: 'to',
   ADDRESSEE_INVALID: 'to',
@@ -114,6 +116,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
   const navigate = useNavigate()
   const qc = useQueryClient()
   const tabId = useId()
+  const addressedToId = useId()
   const bodyErrorId = useId()
   const toId = useId()
   const signerId = useId()
@@ -186,9 +189,9 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
     if (confirm) return
     if (errors.body) { bodyEditor.current?.focus(); return }
     if (errors.subjects) { document.getElementById(subjectId)?.focus(); return }
-    const field = errors.to ? toId : errors.signer ? signerId : errors.tab ? tabId : errors.references ? referencesId : errors.folders ? foldersId : undefined
+    const field = errors.addressedTo ? addressedToId : errors.to ? toId : errors.signer ? signerId : errors.tab ? tabId : errors.references ? referencesId : errors.folders ? foldersId : undefined
     if (field && !confirm) document.getElementById(field)?.focus()
-  }, [errors, confirm, toId, signerId, tabId, referencesId, foldersId, subjectId])
+  }, [errors, confirm, addressedToId, toId, signerId, tabId, referencesId, foldersId, subjectId])
   const classifications = useQuery({
     queryKey: ['books', 'classifications'],
     queryFn: () => api.listBookClassifications(),
@@ -241,7 +244,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
   )
 
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-3 py-4 sm:px-6">
+    <div className="ledger-composer mx-auto flex min-h-0 w-full max-w-[1600px] flex-col gap-4 overflow-y-auto px-3 py-4 sm:px-6">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Link
           ref={backLink}
@@ -361,10 +364,15 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
             </label>)}
           </fieldset>
           <Controller control={form.control} name="addressees" render={({ field }) => <LedgerAddresseesPicker external={values.external} grade={values.grade} value={field.value} onChange={(v) => { clearError('to'); if (!sendingRef.current) field.onChange(v) }} toId={toId} error={errors.to} />} />
-          {values.paper_preset === 'normal' && <p className="text-[0.78em] text-muted-foreground">{t('ledgerBook.composer.preset.openingHint')}</p>}
           <Controller control={form.control} name="signer_manager_id" render={({ field }) => <SigningManagerPicker id={signerId} value={field.value} onChange={(v) => { clearError('signer'); if (!sendingRef.current) field.onChange(v) }} error={errors.signer} />} />
           <Controller control={form.control} name="reference_book_ids" render={({ field }) => <LedgerReferencesPicker id={referencesId} value={field.value} onChange={(v) => { clearError('references'); if (!sendingRef.current) field.onChange(v) }} error={errors.references} />} />
           <Controller control={form.control} name="folder_ids" render={({ field }) => <LedgerFoldersPicker id={foldersId} value={field.value} onChange={(v) => { clearError('folders'); if (!sendingRef.current) field.onChange(v) }} error={errors.folders} />} />
+          <div className="flex flex-col gap-1">
+            <label htmlFor={addressedToId} className="text-[0.78em] font-semibold text-muted-foreground">{t('ledgerBook.composer.fields.addressedTo')}</label>
+            <Controller control={form.control} name="addressed_to" render={({ field }) => <Input {...field} id={addressedToId} dir="auto" maxLength={500} aria-required="true" aria-invalid={Boolean(errors.addressedTo)} aria-describedby={`${addressedToId}-hint${errors.addressedTo ? ` ${addressedToId}-error` : ''}`} onChange={(event) => { if (!sendingRef.current) { clearError('addressedTo'); field.onChange(event) } }} />} />
+            <p id={`${addressedToId}-hint`} className="text-[0.78em] text-muted-foreground">{t('ledgerBook.composer.preset.openingHint')}</p>
+            {errors.addressedTo && <p id={`${addressedToId}-error`} role="alert" className="text-[0.78em] text-destructive">{errors.addressedTo}</p>}
+          </div>
           <Controller
             control={form.control}
             name="subjects"

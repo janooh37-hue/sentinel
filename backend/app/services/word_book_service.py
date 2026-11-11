@@ -35,7 +35,16 @@ from app.core.classifications import (
 from app.core.constants import TEMPLATE_FILES
 from app.core.docx_engine import aztec_corner_for
 from app.core.roles import INMATE_REPORTER_ROLE
-from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, Manager, User
+from app.db.models import (
+    Book,
+    BookCategory,
+    BookEditSession,
+    BookVersion,
+    Document,
+    Employee,
+    Manager,
+    User,
+)
 from app.db.repos import classified_refs_repo
 from app.db.repos._locking import begin_immediate_if_idle
 from app.schemas.book import (
@@ -49,6 +58,7 @@ from app.services import (
     book_service,
     book_template_service,
     document_service,
+    employee_service,
     manager_service,
 )
 from app.services._pdf_executor import convert_docx_to_pdf
@@ -1093,6 +1103,12 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
         fields = latest_version.fields or {}
         signer = fields.get("signer_employee_id")
         signer_employee_id = signer if isinstance(signer, str) and signer else None
+        if signer_employee_id:
+            employee = db.get(Employee, signer_employee_id) or employee_service.former_number_owner(
+                db, signer_employee_id
+            )
+            if employee is not None:
+                signer_employee_id = employee.id
         sign_on_finish = True if signer_employee_id else None
 
     token = secrets.token_urlsafe(32)

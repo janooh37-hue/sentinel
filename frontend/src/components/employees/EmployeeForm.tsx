@@ -1,9 +1,8 @@
 /**
  * Profile editor.
  *
- * Three section cards (Identity · Employment · Contact) instead of a flat
- * field grid. Mirrors how Workday and Oracle HCM segment person records —
- * grouping reduces visual noise on a 20+ field form.
+ * Identity, employment and contact columns share one document-like surface.
+ * Edits are reviewed against the stored record before confirmation.
  *
  * Validation:
  *   * Client-side: Zod (see ./schema.ts) — handles the status/end-date
@@ -13,7 +12,7 @@
  *     touching end_date) still get caught.
  */
 
-import { useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -21,7 +20,6 @@ import { Controller, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -37,6 +35,7 @@ import { ExtractionDropzone } from '@/components/extraction/ExtractionDropzone'
 import { ExtractionReviewPanel } from '@/components/extraction/ExtractionReviewPanel'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { formatDmy } from '@/lib/formatDmy'
 
 import {
   EMPLOYEE_STATUSES,
@@ -94,6 +93,8 @@ interface Props {
   onSubmit: (values: EmployeeFormOutput) => Promise<void> | void
   onCancel?: () => void
   submitting?: boolean
+  /** Notified whenever the form starts or stops differing from `initial`. */
+  onChangesChange?: (hasChanges: boolean) => void
 }
 
 function todayIso(): string {
@@ -161,6 +162,13 @@ function fromInitial(initial: Partial<EmployeeRead>): EmployeeFormValues {
   }
 }
 
+type FieldName = keyof EmployeeFormValues
+const ChangeContext = createContext<((id: string) => React.ReactNode) | null>(null)
+
+function normalized(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 export function EmployeeForm({
   mode,
   initial,
@@ -168,11 +176,16 @@ export function EmployeeForm({
   onSubmit,
   onCancel,
   submitting = false,
+  onChangesChange,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const [defaults] = useState(() => initial ? fromInitial(initial) : blankDefaults())
+  const [review, setReview] = useState<EmployeeFormOutput | null>(null)
+  const reviewHeading = useRef<HTMLHeadingElement>(null)
+  const saveButton = useRef<HTMLButtonElement>(null)
   const form = useForm<EmployeeFormValues, unknown, EmployeeFormOutput>({
     resolver: zodResolver(employeeFormSchema),
-    defaultValues: initial ? fromInitial(initial) : blankDefaults(),
+    defaultValues: defaults,
     mode: 'onBlur',
   })
   const {
@@ -191,6 +204,80 @@ export function EmployeeForm({
   const isReactivation =
     mode === 'edit' && initial?.status != null && !isWorkingStatus(initial.status) && isWorkingStatus(status)
 
+  const values = watch()
+  const changedFields = (Object.keys(defaults) as FieldName[]).filter((key) =>
+    (key !== 'effective_date' || isReactivation) &&
+    (key !== 'transfer_site' && key !== 'transfer_return_date' || isTransferred) &&
+    normalized(values[key]) !== normalized(defaults[key]),
+  )
+  const hasChanges = changedFields.length > 0
+  useEffect(() => { onChangesChange?.(hasChanges) }, [hasChanges, onChangesChange])
+
+  function shape(vals: EmployeeFormOutput): EmployeeFormOutput {
+    // Pending transfers must retain their destination when saving a working employee.
+    const keepPendingTransfer =
+      isWorkingStatus(vals.status) && initial?.pending_status === 'Transferred'
+    return {
+      ...vals,
+      transfer_site: vals.status === 'Transferred' ? vals.transfer_site :
+        keepPendingTransfer ? (initial?.transfer_site ?? null) : null,
+      transfer_return_date: vals.status === 'Transferred' ? vals.transfer_return_date :
+        keepPendingTransfer ? (initial?.transfer_return_date ?? null) : null,
+      effective_date: mode === 'edit' && initial?.status != null &&
+        !isWorkingStatus(initial.status) && isWorkingStatus(vals.status)
+        ? vals.effective_date : null,
+    }
+  }
+
+  function shown(key: string, value: unknown): string {
+    const text = normalized(value)
+    if (!text) return t('employees.editForm.empty')
+    if (key === 'status') return t(`employees.status.${text}`)
+    if (key === 'msg_language') return fld(text === 'ar' ? 'msgLanguageAr' : 'msgLanguageEn')
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return formatDmy(text)
+    return text
+  }
+
+  function fieldLabel(key: string): string {
+    if (key === 'effective_date') return fld('return_date')
+    if (key === 'end_date' && (review?.status ?? status) === 'Transferred') return fld('effective_date')
+    return fld(key)
+  }
+
+  function changeNote(id: string): React.ReactNode {
+    const key = id as FieldName
+    if (mode !== 'edit' || !changedFields.includes(key)) return null
+    return (
+      <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+        <span>{t('employees.editForm.was')} <bdi dir="auto">{shown(key, key === 'effective_date' ? null : defaults[key])}</bdi></span>
+        <span aria-hidden>·</span>
+        <Button type="button" variant="link" className="min-h-[44px] min-w-[44px] px-1 text-xs text-primary-text"
+          aria-label={t('employees.editForm.undoField', { field: fieldLabel(key) })}
+          disabled={submitting}
+          onClick={() => {
+            setValue(key, defaults[key], { shouldDirty: true, shouldValidate: true })
+            setReview(null)
+          }}>
+          {t('employees.editForm.undo')}
+        </Button>
+      </div>
+    )
+  }
+
+  const reviewFields = review ? (Object.keys(review) as FieldName[]).filter((key) =>
+    normalized(review[key]) !== normalized(key === 'effective_date' ? null : defaults[key]),
+  ) : []
+
+  const confirmSave = handleSubmit(async (vals) => {
+    if (!review || !hasChanges || submitting) return
+    const submitted = shape(vals)
+    // A programmatic/extraction change must be reviewed too, never silently submitted.
+    if (JSON.stringify(submitted) !== JSON.stringify(review)) {
+      setReview(submitted)
+      return
+    }
+    await onSubmit(submitted)
+  }, () => setReview(null))
   // Seed the extraction panel from an injected extraction (intake flow).
   const [extractionResult, setExtractionResult] = useState<ExtractionResponse | null>(
     () => initialExtraction ?? null,
@@ -225,6 +312,7 @@ export function EmployeeForm({
     : baseFieldMap
 
   function handleAccept(accepted: Record<string, string>): void {
+    setReview(null)
     for (const [field, value] of Object.entries(accepted)) {
       setValue(field as keyof EmployeeFormValues, value, {
         shouldDirty: true,
@@ -235,32 +323,20 @@ export function EmployeeForm({
   }
 
   return (
+    <ChangeContext.Provider value={changeNote}>
     <form
+      onChangeCapture={() => setReview(null)}
       onSubmit={handleSubmit(async (vals) => {
-        // Only send what applies to the chosen status: transfer fields for
-        // Transferred, the return date only when reactivating. A still-working
-        // (Active/Loaned) employee with a PENDING transfer keeps its stored site/return
-        // date — sending nulls would make the flip land a site-less transfer.
-        const keepPendingTransfer =
-          isWorkingStatus(vals.status) && initial?.pending_status === 'Transferred'
-        await onSubmit({
-          ...vals,
-          transfer_site:
-            vals.status === 'Transferred'
-              ? vals.transfer_site
-              : keepPendingTransfer
-                ? (initial?.transfer_site ?? null)
-                : null,
-          transfer_return_date:
-            vals.status === 'Transferred'
-              ? vals.transfer_return_date
-              : keepPendingTransfer
-                ? (initial?.transfer_return_date ?? null)
-                : null,
-          effective_date: isReactivation ? vals.effective_date : null,
-        })
+        if (submitting) return
+        const submitted = shape(vals)
+        if (mode === 'create') {
+          await onSubmit(submitted)
+        } else if (hasChanges) {
+          setReview(submitted)
+          requestAnimationFrame(() => reviewHeading.current?.focus())
+        }
       })}
-      className="space-y-4 pb-20"
+      className="@container space-y-4 pb-6 [&_input]:min-h-[44px] [&_textarea]:min-h-[88px] [&_[role=combobox]]:min-h-[44px]"
       aria-label={t(`employees.${mode === 'create' ? 'newEmployee' : 'tabs.profile'}`)}
     >
       {/* Scan-to-fill dropzone — above the Identity card */}
@@ -277,26 +353,39 @@ export function EmployeeForm({
         <DuplicateGuardBanner result={extractionResult} language={i18n.language} />
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('employees.sections.identity')}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field id="id" label={fld('id')} error={errFor('id')}>
-            <Input
-              id="id"
-              {...register('id')}
-              disabled={mode === 'edit'}
-              placeholder="G0000"
-              className="font-mono"
-            />
+      <div className="grid grid-cols-1 overflow-hidden rounded-lg border border-border bg-surface @min-[1000px]:grid-cols-3">
+      <section aria-labelledby="employee-identity-heading" className="min-w-0 p-5 @min-[1000px]:p-6">
+        <h2 id="employee-identity-heading" className="mb-5 text-lg font-bold">{t('employees.sections.identity')}</h2>
+        <div className="grid grid-cols-1 gap-4">
+          {mode === 'create' && (
+            <Field id="id" label={fld('id')} error={errFor('id')}>
+              <Input id="id" {...register('id')} placeholder="G0000" className="font-mono" />
+            </Field>
+          )}
+          <Field id="name_en" label={fld('name_en')} error={errFor('name_en')}>
+            <Input id="name_en" {...register('name_en')} />
           </Field>
+          <Field id="name_ar" label={fld('name_ar')} error={errFor('name_ar')}>
+            <Input id="name_ar" dir="rtl" {...register('name_ar')} />
+          </Field>
+          <Field id="nationality" label={fld('nationality')}>
+            <Input id="nationality" {...register('nationality')} />
+          </Field>
+          <Field id="dob" label={fld('dob')}>
+            <Input id="dob" type="date" {...register('dob')} className="font-mono" />
+          </Field>
+        </div>
+      </section>
+
+      <section aria-labelledby="employee-employment-heading" className="min-w-0 border-t border-border p-5 @min-[1000px]:border-t-0 @min-[1000px]:border-s @min-[1000px]:p-6">
+        <h2 id="employee-employment-heading" className="mb-5 text-lg font-bold">{t('employees.sections.employment')}</h2>
+        <div className="grid grid-cols-1 gap-4">
           <Field id="status" label={fld('status')} error={errFor('status')}>
             <Controller
               control={control}
               name="status"
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select value={field.value} onValueChange={(value) => { field.onChange(value); setReview(null) }}>
                   <SelectTrigger id="status">
                     <SelectValue />
                   </SelectTrigger>
@@ -311,26 +400,6 @@ export function EmployeeForm({
               )}
             />
           </Field>
-          <Field id="name_en" label={fld('name_en')} error={errFor('name_en')}>
-            <Input id="name_en" {...register('name_en')} />
-          </Field>
-          <Field id="name_ar" label={fld('name_ar')} error={errFor('name_ar')}>
-            <Input id="name_ar" dir="rtl" {...register('name_ar')} />
-          </Field>
-          <Field id="nationality" label={fld('nationality')}>
-            <Input id="nationality" {...register('nationality')} />
-          </Field>
-          <Field id="dob" label={fld('dob')}>
-            <Input id="dob" type="date" {...register('dob')} className="font-mono" />
-          </Field>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('employees.sections.employment')}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field id="department" label={fld('department')}>
             <Input id="department" {...register('department')} />
           </Field>
@@ -396,14 +465,12 @@ export function EmployeeForm({
               />
             </Field>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('employees.sections.contact')}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <section aria-labelledby="employee-contact-heading" className="min-w-0 border-t border-border p-5 @min-[1000px]:border-t-0 @min-[1000px]:border-s @min-[1000px]:p-6">
+        <h2 id="employee-contact-heading" className="mb-5 text-lg font-bold">{t('employees.sections.contact')}</h2>
+        <div className="grid grid-cols-1 gap-4">
           <Field id="passport_no" label={fld('passport_no')}>
             <Input id="passport_no" {...register('passport_no')} className="font-mono" />
           </Field>
@@ -435,7 +502,7 @@ export function EmployeeForm({
               control={control}
               name="msg_language"
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select value={field.value} onValueChange={(value) => { field.onChange(value); setReview(null) }}>
                   <SelectTrigger id="msg_language">
                     <SelectValue />
                   </SelectTrigger>
@@ -450,23 +517,67 @@ export function EmployeeForm({
           <Field id="other" label={fld('other')}>
             <Input id="other" {...register('other')} />
           </Field>
-          <Field id="notes" label={fld('notes')} className="sm:col-span-2">
-            <Textarea id="notes" {...register('notes')} rows={3} />
-          </Field>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
+      <div className="col-span-full border-t border-border p-5 @min-[1000px]:p-6">
+        <Field id="notes" label={fld('notes')}>
+          <Textarea id="notes" {...register('notes')} rows={3} />
+        </Field>
+      </div>
+      </div>
 
-      <div className="sticky bottom-0 -mx-6 flex items-center justify-end gap-2 border-t border-border bg-background/85 px-6 py-3 backdrop-blur-md">
-        {onCancel && (
-          <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>
-            {t('common.cancel')}
-          </Button>
+      <div className={`sticky bottom-0 z-20 border-t bg-surface px-4 py-4 ${review ? 'border-t-2 border-primary shadow-lg' : 'border-border'}`}>
+        {review ? (
+          <section aria-labelledby="employee-review-heading">
+            <h3 id="employee-review-heading" ref={reviewHeading} tabIndex={-1} className="mb-3 text-lg font-bold">
+              {t('employees.editForm.review')}
+            </h3>
+            <div className="max-h-[35dvh] overflow-auto">
+              <table className="w-full table-fixed text-start text-sm">
+                <thead>
+                  <tr className="text-muted-foreground">
+                    <th scope="col" className="px-2 py-2 text-start font-semibold">{t('employees.editForm.field')}</th>
+                    <th scope="col" className="px-2 py-2 text-start font-semibold">{t('employees.editForm.before')}</th>
+                    <th scope="col" className="px-2 py-2 text-start font-semibold">{t('employees.editForm.after')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reviewFields.map((key) => (
+                    <tr key={key} className="border-t border-hairline align-top [overflow-wrap:anywhere]">
+                      <th scope="row" className="px-2 py-2 text-start font-medium">{fieldLabel(key)}</th>
+                      <td className="whitespace-pre-wrap px-2 py-2 text-muted-foreground line-through"><bdi dir="auto">{shown(key, key === 'effective_date' ? null : defaults[key])}</bdi></td>
+                      <td className="whitespace-pre-wrap px-2 py-2 font-semibold"><bdi dir="auto">{shown(key, review[key])}</bdi></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="secondary" className="min-h-[44px] whitespace-normal" disabled={submitting}
+                onClick={() => { setReview(null); requestAnimationFrame(() => saveButton.current?.focus()) }}>
+                {t('employees.editForm.keepEditing')}
+              </Button>
+              <Button type="button" className="min-h-[44px] whitespace-normal" disabled={submitting} onClick={() => void confirmSave()}>
+                {submitting ? t('common.loading') : t('employees.editForm.confirmSave')}
+              </Button>
+            </div>
+          </section>
+        ) : (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {mode === 'edit' && <p role="status" className="me-auto text-sm text-muted-foreground">{hasChanges ? t('employees.editForm.changed', { count: changedFields.length }) : t('employees.editForm.unchanged')}</p>}
+            {onCancel && (
+              <Button type="button" variant="secondary" className="min-h-[44px]" onClick={onCancel} disabled={submitting}>
+                {t('common.cancel')}
+              </Button>
+            )}
+            <Button ref={saveButton} type="submit" className="min-h-[44px]" disabled={submitting || mode === 'edit' && !hasChanges}>
+              {submitting ? t('common.loading') : t('common.save')}
+            </Button>
+          </div>
         )}
-        <Button type="submit" disabled={submitting}>
-          {submitting ? t('common.loading') : t('common.save')}
-        </Button>
       </div>
     </form>
+    </ChangeContext.Provider>
   )
 }
 
@@ -483,10 +594,12 @@ function Field({
   className?: string
   children: React.ReactNode
 }): React.JSX.Element {
+  const changeNote = useContext(ChangeContext)
   return (
     <div className={`flex flex-col gap-1.5 ${className ?? ''}`}>
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id} className="text-[0.86rem] font-bold normal-case tracking-normal text-foreground">{label}</Label>
       {children}
+      {changeNote?.(id)}
       {error && (
         <span role="alert" className="text-xs text-destructive">
           {error}

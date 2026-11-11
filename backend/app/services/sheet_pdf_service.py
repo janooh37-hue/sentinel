@@ -21,6 +21,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from app.api.errors import AppError
@@ -107,6 +108,7 @@ def print_document(html: str) -> bytes:
         page = work / "sheet.html"
         page.write_text(html, encoding="utf-8")
         out = work / "sheet.pdf"
+        deadline = time.monotonic() + TIMEOUT_S
         proc = subprocess.Popen(
             [
                 str(browser),
@@ -125,11 +127,20 @@ def print_document(html: str) -> bytes:
             stderr=subprocess.DEVNULL,
         )
         try:
-            proc.wait(timeout=TIMEOUT_S)
+            exit_code = proc.wait(timeout=TIMEOUT_S)
         except subprocess.TimeoutExpired:
             _kill_tree(proc)
-        if not out.is_file() or out.stat().st_size == 0:
-            raise AppError(
-                "PDF_NOT_AVAILABLE", "The browser could not print the report.", http_status=503
-            )
-        return out.read_bytes()
+            exit_code = -1
+        # Windows browser launchers can exit before their child finishes writing the PDF.
+        while True:
+            try:
+                pdf = out.read_bytes()
+            except FileNotFoundError:
+                pdf = b""
+            if pdf.startswith(b"%PDF-") and pdf.rstrip().endswith(b"%%EOF"):
+                return pdf
+            if exit_code != 0 or time.monotonic() >= deadline:
+                raise AppError(
+                    "PDF_NOT_AVAILABLE", "The browser could not print the report.", http_status=503
+                )
+            time.sleep(0.1)

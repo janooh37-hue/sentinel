@@ -3037,3 +3037,38 @@ body {
     page-break-inside: avoid;
   }
 }
+
+/* Official correspondence fields: distinct writing surfaces within the cream/dark workspace. */
+.ledger-composer {
+  --composer-field-border: color-mix(in srgb, var(--text-muted) 65%, var(--border-strong));
+}
+
+.ledger-composer :is(input:not([type='radio']):not([type='checkbox']):not([type='hidden']):not([type='file']), select, textarea, [role='combobox']) {
+  background-color: var(--surface);
+  border: 1px solid var(--composer-field-border);
+  border-radius: 6px;
+}
+
+.ledger-composer :is(input, select, textarea, [role='combobox']):focus-visible {
+  border-color: var(--primary);
+}
+
+.ledger-composer :is(input, select, textarea, [role='combobox'])[aria-invalid='true'],
+.ledger-composer [aria-invalid='true'] .tox.tox-tinymce {
+  border-color: var(--destructive);
+}
+
+.ledger-composer :is(input, select, textarea, [role='combobox']):disabled {
+  background-color: var(--surface-tinted);
+}
+
+.ledger-composer .tox.tox-tinymce {
+  border: 1px solid var(--composer-field-border);
+  border-radius: 6px;
+}
+
+.ledger-composer .tox.tox-tinymce:focus-within {
+  border-color: var(--primary);
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}

@@ -164,7 +164,8 @@ def test_manager_signs_with_own_signature_and_delivers_after_lock(ledger, monkey
     paper = client.get(f"{url}/paper").text
     assert signature_url in paper
     assert "المدير" in paper and "Director" in paper
-    assert "To Snapshot" in paper and "CC Snapshot" in paper
+    assert CONTENT["addressed_to"] in paper and "CC Snapshot" in paper
+    assert "To Snapshot" not in paper
     actor[0] = writer
     error(client.put(f"{url}/content", json=content_payload(book, CONTENT)), 409, "REVISION_LOCKED")
     for recipient, purpose in [(to, "action"), (cc, "info")]:
@@ -293,7 +294,8 @@ def test_external_contacts_and_signed_pdf_outlook_draft(ledger, monkeypatch, gra
     assert patched.json()["external"]
     assert [a["contact_id"] for a in patched.json()["addressees"]] == [to.id, cc.id]
     preview = client.get(f"{DRAFTS}/{draft['id']}/paper")
-    assert "External To" in preview.text and "External CC" in preview.text
+    assert CONTENT["addressed_to"] in preview.text and "External CC" in preview.text
+    assert "External To" not in preview.text
     assert '<img class="signature"' not in preview.text
     if grade == "addressee_only":
         response = client.patch(
@@ -325,7 +327,8 @@ def test_external_contacts_and_signed_pdf_outlook_draft(ledger, monkeypatch, gra
     assert response.status_code == 200, response.text
     assert response.json()["id"] > 0
     assert len(printed) == 1
-    assert "External To" in printed[0]
+    assert CONTENT["addressed_to"] in printed[0]
+    assert "External To" not in printed[0]
     assert ("External CC" in printed[0]) == (grade != "addressee_only")
     assert '<img class="signature" src="file:' in printed[0]
     assert "/api/v1/" not in printed[0]

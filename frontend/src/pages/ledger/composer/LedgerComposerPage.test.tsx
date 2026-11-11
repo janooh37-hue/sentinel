@@ -31,7 +31,7 @@ import { LedgerComposerPage } from './LedgerComposerPage'
 
 const DRAFT: LedgerDraftRead = {
   id: 12, draft_number: '000012', tab: null, grade: 'unclassified', importance: null,
-  subjects: ['Leave plan'], body_html: '<p>Hello</p>',
+  addressed_to: '', subjects: ['Leave plan'], body_html: '<p>Hello</p>',
   external: false, signer_manager_id: 3, addressees: [{ role: 'to', user_id: 8 }],
   paper_preset: 'normal', reference_book_ids: [], folder_ids: [],
   created_at: '2026-10-28T08:00:00Z', updated_at: '2026-10-28T08:00:00Z',
@@ -88,6 +88,19 @@ beforeEach(() => {
 afterEach(async () => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); await i18n.changeLanguage('en') })
 
 describe('Ledger Book composer', () => {
+  it('autosaves the printed salutation independently of delivery recipients', async () => {
+    mountComposer()
+    const salutation = await screen.findByRole('textbox', { name: 'Addressed to' })
+    await userEvent.clear(salutation)
+    await userEvent.type(salutation, 'مدير إدارة الموارد البشرية')
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { addressed_to: 'مدير إدارة الموارد البشرية' }))
+    expect(screen.getByRole('combobox', { name: 'Send to' })).toBeInTheDocument()
+    expect(screen.getByText('Ali')).toBeInTheDocument()
+    expect(salutation).toHaveAttribute('maxlength', '500')
+    await userEvent.click(screen.getByRole('radio', { name: 'Report' }))
+    expect(salutation).toHaveValue('مدير إدارة الموارد البشرية')
+  })
+
   it.each([
     ['send', false], ['send', true], ['delete', false], ['delete', true],
   ] as const)('preserves the destination after departing pending %s (StrictMode: %s)', async (operation, strict) => {
@@ -121,7 +134,7 @@ describe('Ledger Book composer', () => {
     await userEvent.dblClick(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save & Send' }))
     await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
     const assertLocked = () => {
-      for (const control of ['Body', 'Subject line 1', 'Tab', 'Grade', 'To', 'CC', 'Signing manager', 'References']) expect(screen.getByLabelText(control)).toBeDisabled()
+      for (const control of ['Body', 'Subject line 1', 'Tab', 'Grade', 'Send to', 'CC', 'Signing manager', 'References']) expect(screen.getByLabelText(control)).toBeDisabled()
       expect(screen.getByRole('button', { name: 'Add line' })).toBeDisabled()
       expect(body.closest('fieldset')).toHaveAttribute('inert')
     }
@@ -137,7 +150,7 @@ describe('Ledger Book composer', () => {
     await act(async () => { rejectIssue(new Error('offline')) })
     await waitFor(() => expect(body).toBeEnabled())
     expect(screen.getByLabelText('Subject line 1')).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Remove Ali from To' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove Ali from Send to' })).toBeInTheDocument()
     fireEvent.change(body, { target: { value: 'Editable again' } })
     expect(body).toHaveValue('Editable again')
   })
@@ -342,8 +355,8 @@ describe('Ledger Book composer', () => {
   })
 
   it.each([
-    ['en', 'Paper format', 'Book', 'Report', 'To recipients appear in the paper opening.'],
-    ['ar', 'نوع الورقة', 'كتاب', 'تقرير', 'يظهر مستلمو «إلى» في افتتاحية الكتاب.'],
+    ['en', 'Paper format', 'Book', 'Report', 'The salutation is printed on the paper. Delivery recipients are selected separately.'],
+    ['ar', 'نوع الورقة', 'كتاب', 'تقرير', 'يُطبع التوجيه على الورقة. تُختار جهات الإرسال بشكل منفصل.'],
   ])('autosaves the paper preset in %s while keeping To available for Report', async (language, label, book, report, hint) => {
     i18n.addResourceBundle('ar', 'translation', ar, true, true)
     await i18n.changeLanguage(language)
@@ -353,8 +366,8 @@ describe('Ledger Book composer', () => {
     expect(screen.getByText(hint)).toBeInTheDocument()
     await userEvent.click(within(presets).getByRole('radio', { name: report }))
     await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { paper_preset: 'report' }))
-    expect(screen.queryByText(hint)).not.toBeInTheDocument()
-    expect(screen.getByLabelText(language === 'ar' ? 'إلى' : 'To')).toBeInTheDocument()
+    expect(screen.getByText(hint)).toBeInTheDocument()
+    expect(screen.getByLabelText(language === 'ar' ? 'إرسال إلى' : 'Send to')).toBeInTheDocument()
   })
   it('autosaves reference removal and outgoing folder selections independently', async () => {
     vi.mocked(api.getLedgerDraft).mockResolvedValue({ ...DRAFT, reference_book_ids: [40] })
@@ -510,21 +523,21 @@ describe('Ledger Book composer', () => {
 
   it('T-F1 picks ordered internal To/CC, linked signer and saved external contacts, patching only changes', async () => {
     mountComposer()
-    const to = await screen.findByLabelText('To')
+    const to = await screen.findByLabelText('Send to')
     await within(to).findByRole('option', { name: /Sara/ })
     await userEvent.selectOptions(to, '9')
     await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { addressees: [{ role: 'to', user_id: 8 }, { role: 'to', user_id: 9 }] }))
     await userEvent.selectOptions(screen.getByLabelText('CC'), '8')
     await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { addressees: [{ role: 'to', user_id: 8 }, { role: 'to', user_id: 9 }, { role: 'cc', user_id: 8 }] }))
-    await userEvent.click(screen.getByRole('button', { name: 'Remove Ali from To' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Ali from Send to' }))
     await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { addressees: [{ role: 'to', user_id: 9 }, { role: 'cc', user_id: 8 }] }))
     expect(screen.getByLabelText('Signing manager')).not.toHaveTextContent('Unlinked')
     await userEvent.selectOptions(screen.getByLabelText('Signing manager'), '')
     await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { signer_manager_id: null }))
     await userEvent.click(screen.getByRole('radio', { name: 'External' }))
     await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { external: true, addressees: [] }))
-    await within(screen.getByLabelText('To')).findByRole('option', { name: /Partner/ })
-    await userEvent.selectOptions(screen.getByLabelText('To'), '5')
+    await within(screen.getByLabelText('Send to')).findByRole('option', { name: /Partner/ })
+    await userEvent.selectOptions(screen.getByLabelText('Send to'), '5')
     await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { addressees: [{ role: 'to', contact_id: 5 }] }))
     expect(api.listLedgerContacts).toHaveBeenCalled()
   })
@@ -535,10 +548,10 @@ describe('Ledger Book composer', () => {
     mountComposer()
     await userEvent.click(await screen.findByRole('button', { name: 'Save & Send' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('To')).toHaveAccessibleDescription('Choose at least one To recipient.')
-    expect(screen.getByLabelText('To')).toHaveFocus()
-    await within(screen.getByLabelText('To')).findByRole('option', { name: /Ali/ })
-    await userEvent.selectOptions(screen.getByLabelText('To'), '8')
+    expect(screen.getByLabelText('Send to')).toHaveAccessibleDescription('Choose at least one recipient in Send to.')
+    expect(screen.getByLabelText('Send to')).toHaveFocus()
+    await within(screen.getByLabelText('Send to')).findByRole('option', { name: /Ali/ })
+    await userEvent.selectOptions(screen.getByLabelText('Send to'), '8')
     await userEvent.click(screen.getByRole('button', { name: 'Save & Send' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Signing manager')).toHaveAccessibleDescription('Choose a signing manager.')
@@ -547,9 +560,10 @@ describe('Ledger Book composer', () => {
   })
 
   it.each([
-    ['DRAFT_TO_REQUIRED', 'To', 'Choose at least one To recipient.'],
+    ['ADDRESSED_TO_REQUIRED', 'Addressed to', 'The salutation is printed on the paper. Delivery recipients are selected separately. Enter the printed salutation.'],
+    ['DRAFT_TO_REQUIRED', 'Send to', 'Choose at least one recipient in Send to.'],
     ['DRAFT_SIGNER_REQUIRED', 'Signing manager', 'Choose a signing manager.'],
-    ['ADDRESSEE_INVALID', 'To', 'One or more recipients are unavailable or not cleared for this grade. Choose the recipients again.'],
+    ['ADDRESSEE_INVALID', 'Send to', 'One or more recipients are unavailable or not cleared for this grade. Choose the recipients again.'],
     ['SIGNER_INVALID', 'Signing manager', 'Choose an active manager linked to a user account.'],
   ])('T-F2 maps %s to the matching field', async (code, field, message) => {
     vi.spyOn(api, 'saveAndSendLedgerDraft').mockRejectedValue(new ApiError(422, code, 'Server detail'))
@@ -574,7 +588,7 @@ describe('Ledger Book composer', () => {
   it('T-F2 autosave validation errors also appear at the recipient field', async () => {
     update.mockRejectedValueOnce(new ApiError(422, 'ADDRESSEE_INVALID', 'Invalid'))
     mountComposer()
-    const to = await screen.findByLabelText('To')
+    const to = await screen.findByLabelText('Send to')
     await within(to).findByRole('option', { name: /Sara/ })
     await userEvent.selectOptions(to, '9')
     await waitFor(() => expect(to).toHaveAccessibleDescription(en.ledgerBook.composer.errors.addresseeInvalid))
@@ -590,7 +604,7 @@ describe('Ledger Book composer', () => {
     expect(screen.getByRole('radio', { name: 'خارجي' })).toBeInTheDocument()
     expect(screen.getByLabelText('نسخة إلى')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'حفظ وإرسال' }))
-    expect(screen.getByLabelText('إلى')).toHaveAccessibleDescription(ar.ledgerBook.composer.errors.toRequired)
+    expect(screen.getByLabelText('إرسال إلى')).toHaveAccessibleDescription(ar.ledgerBook.composer.errors.toRequired)
     expect(Object.keys(ar.ledgerBook.actions).sort()).toEqual(Object.keys(en.ledgerBook.actions).sort())
     expect(Object.keys(ar.ledgerBook.composer.fields).sort()).toEqual(Object.keys(en.ledgerBook.composer.fields).sort())
     for (const text of Object.values(ar.ledgerBook.actions)) expect(text).toMatch(/[ء-ي]/)
@@ -601,7 +615,7 @@ describe('Ledger Book composer', () => {
     vi.mocked(api.listRecipientCandidates).mockReturnValue(Promise.race([]))
     mountComposer()
     await userEvent.click(await screen.findByRole('button', { name: 'Save & Send' }))
-    expect(screen.getByLabelText('To')).toHaveFocus()
+    expect(screen.getByLabelText('Send to')).toHaveFocus()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

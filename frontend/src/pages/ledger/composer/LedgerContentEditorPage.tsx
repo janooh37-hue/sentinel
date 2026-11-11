@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { api, ApiError, apiErrorMessage, type LedgerBookRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { bidi } from '@/lib/bidi'
@@ -35,6 +36,7 @@ import { LedgerBodyEditor } from './LedgerBodyEditor'
 import { SubjectLines } from './SubjectLines'
 
 const contentSchema = z.object({
+  addressed_to: z.string().max(500, 'ledgerBook.composer.errors.addressedToTooLong').refine((value) => value.trim() !== '', 'ledgerBook.composer.errors.addressedToRequired'),
   subjects: z.array(z.string()).max(MAX_SUBJECT_LINES)
     .refine((lines) => lines.some((line) => line.trim() !== ''), 'errors.ledger.draftSubjectRequired'),
   body_html: z.string().refine(
@@ -111,22 +113,23 @@ function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boole
   const navigate = useNavigate()
   const qc = useQueryClient()
   const bodyErrorId = useId()
+  const addressedToId = useId()
   const [revisionId] = useState(book.selected_version_id)
   const contentHash = useRef(book.content_sha256)
   const [contentConflict, setContentConflict] = useState(false)
   const staleRevision = contentConflict || !editable || book.revisions.at(-1)?.version_id !== revisionId
   const form = useForm<ContentValues>({
     resolver: zodResolver(contentSchema),
-    defaultValues: { subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html },
+    defaultValues: { addressed_to: book.addressed_to ?? '', subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html },
   })
   const { errors, isDirty } = form.formState
   const { reset } = form
   // Content that changed on the server replaces an untouched form only.
   useEffect(() => {
     if (form.formState.isDirty || staleRevision) return
-    reset({ subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html })
+    reset({ addressed_to: book.addressed_to ?? '', subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html })
     contentHash.current = book.content_sha256
-  }, [book.body_html, book.content_sha256, book.subjects, form, reset, staleRevision])
+  }, [book.addressed_to, book.body_html, book.content_sha256, book.subjects, form, reset, staleRevision])
   const keepEditingButton = useRef<HTMLButtonElement>(null)
   const dialogOpener = useRef<HTMLElement | null>(null)
   // Set once leaving is allowed: the edit is saved, or the writer chose to discard it.
@@ -145,7 +148,8 @@ function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boole
       // A completed request does not include text entered while it was pending.
       const current = form.getValues()
       if (JSON.stringify(current) !== JSON.stringify(submitted)) {
-        reset({ subjects: accepted.subjects, body_html: accepted.body_html }, { keepValues: true })
+        reset({ addressed_to: accepted.addressed_to ?? '', subjects: accepted.subjects, body_html: accepted.body_html }, { keepValues: true })
+        form.setValue('addressed_to', current.addressed_to, { shouldDirty: true })
         form.setValue('subjects', current.subjects, { shouldDirty: true })
         form.setValue('body_html', current.body_html, { shouldDirty: true })
         return
@@ -182,8 +186,14 @@ function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boole
   }
 
   return (
-    <form className="flex flex-col gap-4" noValidate onSubmit={form.handleSubmit((values) => { if (!staleRevision) save.mutate(values) })}>
+    <form className="ledger-composer flex flex-col gap-4" noValidate onSubmit={form.handleSubmit((values) => { if (!staleRevision) save.mutate(values) })}>
       {staleRevision && <p role="alert" className="rounded-lg bg-muted px-3 py-2 text-[0.84em]">{t(contentConflict ? 'errors.ledger.contentConflict' : 'ledgerBook.composer.content.revisionChanged')}</p>}
+      <div className="flex flex-col gap-1">
+        <label htmlFor={addressedToId} className="text-[0.78em] font-semibold text-muted-foreground">{t('ledgerBook.composer.fields.addressedTo')}</label>
+        <Input {...form.register('addressed_to')} id={addressedToId} dir="auto" maxLength={500} aria-required="true" aria-invalid={Boolean(errors.addressed_to)} aria-describedby={`${addressedToId}-hint${errors.addressed_to ? ` ${addressedToId}-error` : ''}`} />
+        <p id={`${addressedToId}-hint`} className="text-[0.78em] text-muted-foreground">{t('ledgerBook.composer.preset.openingHint')}</p>
+        {errors.addressed_to?.message && <p id={`${addressedToId}-error`} role="alert" className="text-[0.78em] text-destructive">{t(errors.addressed_to.message)}</p>}
+      </div>
       <Controller
         control={form.control}
         name="subjects"

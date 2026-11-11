@@ -141,14 +141,29 @@ def _clean_subjects(subjects: list[str]) -> list[str]:
     return [subject.strip() for subject in subjects if subject.strip()]
 
 
+def _require_addressed_to(value: str) -> str:
+    value = value.strip()
+    if not value:
+        raise ValidationFailedError(
+            "ADDRESSED_TO_REQUIRED", "Write the printed addressee before sending."
+        )
+    if len(value) > 500:
+        raise ValidationFailedError(
+            "VALIDATION_ERROR", "The printed addressee must be at most 500 characters."
+        )
+    return value
+
+
 def _has_body(html: str) -> bool:
     return bool(html_to_text(html).strip()) or "<img" in html
 
 
-def _content_sha256(subjects: list[str], body_html: str) -> str:
-    canonical = json.dumps(
-        {"subjects": subjects, "body_html": body_html}, ensure_ascii=False, sort_keys=True
-    )
+def _content_sha256(subjects: list[str], body_html: str, addressed_to: str | None = None) -> str:
+    content = {"subjects": subjects, "body_html": body_html}
+    # Legacy saves keep their original tokens and paper until explicitly edited.
+    if addressed_to is not None:
+        content["addressed_to"] = addressed_to
+    canonical = json.dumps(content, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -188,6 +203,7 @@ def draft_read(draft: BookDraft) -> LedgerDraftRead:
         tab=draft.tab,
         grade=draft.grade,
         importance=draft.importance,
+        addressed_to=draft.addressed_to,
         subjects=list(draft.subjects or []),
         body_html=draft.body_html,
         external=draft.external,
@@ -341,6 +357,7 @@ def create_draft(db: Session, user: User, payload: LedgerDraftCreate) -> BookDra
         external=payload.external,
         signer_manager_id=payload.signer_manager_id,
         addressees=[a.model_dump(exclude_none=True) for a in payload.addressees],
+        addressed_to=payload.addressed_to.strip(),
         subjects=[subject.strip() for subject in payload.subjects],
         body_html="",
         paper_preset=payload.paper_preset,
@@ -405,6 +422,8 @@ def update_draft(db: Session, user: User, draft_id: int, payload: LedgerDraftUpd
         _set_grade(db, user, draft, data["grade"])
     if "importance" in data:
         draft.importance = data["importance"]
+    if data.get("addressed_to") is not None:
+        draft.addressed_to = data["addressed_to"].strip()
     if data.get("subjects") is not None:
         draft.subjects = [subject.strip() for subject in data["subjects"]]
     if data.get("body_html") is not None:
@@ -491,6 +510,7 @@ def save_and_send(db: Session, user: User, draft_id: int) -> Book:
 def _number_draft(
     db: Session, user: User, draft: BookDraft, serial: int, copied: list[Path]
 ) -> Book:
+    addressed_to = _require_addressed_to(draft.addressed_to)
     _validate_addressee_roles(draft.grade, (a["role"] for a in draft.addressees))
     if draft.tab is None:
         raise ValidationFailedError("DRAFT_TAB_REQUIRED", "Choose the tab (التبويب) first.")
@@ -593,7 +613,8 @@ def _number_draft(
             saved_by_user_id=user.id,
             subjects=subjects,
             body_html=body_html,
-            content_sha256=_content_sha256(subjects, body_html),
+            addressed_to=addressed_to,
+            content_sha256=_content_sha256(subjects, body_html, addressed_to),
         )
     )
     _audit(
@@ -783,6 +804,7 @@ def ledger_book_read(
             for v in visible
         ],
         selected_version_id=selected.id,
+        addressed_to=save.addressed_to if save is not None else None,
         subjects=list(save.subjects) if save is not None else [],
         body_html=save.body_html if save is not None else "",
         content_sha256=save.content_sha256 if save is not None else "",
@@ -903,6 +925,7 @@ def draft_paper(db: Session, user: User, draft_id: int) -> str:
             submitter_g_number=user.employee_id,
             viewer_g_number=user.employee_id,
             asset_base=PAPER_ASSET_BASE,
+            addressed_to=draft.addressed_to,
             to_names=tuple(r.name_ar or r.name_en or "" for r in rows if r.role == "to"),
             cc_names=tuple(r.name_ar or r.name_en or "" for r in rows if r.role == "cc"),
             signer_name=(signer.name_ar or signer.name) if signer else None,
@@ -961,6 +984,7 @@ def book_paper(
             submitter_g_number=writer_g_number,
             viewer_g_number=user.employee_id,
             asset_base=PAPER_ASSET_BASE,
+            addressed_to=read.addressed_to,
             to_names=tuple(a.name_ar or a.name for a in read.addressees if a.role == "to"),
             cc_names=tuple(a.name_ar or a.name for a in read.addressees if a.role == "cc"),
             signer_name=(read.signer.name_ar or read.signer.name) if read.signer else None,
@@ -997,6 +1021,7 @@ def save_content(
     user: User,
     book_id: int,
     *,
+    addressed_to: str,
     subjects: list[str],
     body_html: str,
     expected_version_id: int,
@@ -1022,18 +1047,20 @@ def save_content(
             "The revision or content changed. Reload the latest revision before saving.",
             http_status=409,
         )
+    addressed_to = _require_addressed_to(addressed_to)
     cleaned_subjects = _clean_subjects(subjects)
     if not cleaned_subjects:
         raise ValidationFailedError("LEDGER_SUBJECT_REQUIRED", "Write at least one subject.")
     cleaned_body = sanitize_body(body_html, image_src_prefixes=(book_image_prefix(book.id),))
     if not _has_body(cleaned_body):
         raise ValidationFailedError("LEDGER_BODY_REQUIRED", "The letter body cannot be empty.")
-    digest = _content_sha256(cleaned_subjects, cleaned_body)
+    digest = _content_sha256(cleaned_subjects, cleaned_body, addressed_to)
     if current.content_sha256 != digest:
         db.add(
             LedgerBookSave(
                 version_id=latest.id,
                 saved_by_user_id=user.id,
+                addressed_to=addressed_to,
                 subjects=cleaned_subjects,
                 body_html=cleaned_body,
                 content_sha256=digest,
@@ -1106,6 +1133,7 @@ def start_correction(db: Session, user: User, book_id: int) -> LedgerBookRead:
         LedgerBookSave(
             version_id=version.id,
             saved_by_user_id=user.id,
+            addressed_to=signed.addressed_to,
             subjects=list(signed.subjects),
             body_html=signed.body_html,
             content_sha256=signed.content_sha256,

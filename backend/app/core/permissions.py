@@ -152,6 +152,16 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "تعديل البيانات والصور والتوقيع وبيانات جواز السفر.",
     ),
     Capability(
+        "employees.change_id",
+        "employees",
+        "Change employee number",
+        "تغيير رقم الموظف",
+        "Correct an employee's G-number. Every linked record moves to the new number.",
+        "تصحيح رقم الموظف. تنتقل جميع السجلات المرتبطة إلى الرقم الجديد.",
+        sensitive=False,
+        requestable=False,
+    ),
+    Capability(
         "employees.vault.manage",
         "employees",
         "Manage document vaults",

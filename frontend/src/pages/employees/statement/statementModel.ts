@@ -10,7 +10,7 @@ import { CANONICAL_KINDS, classifyLeaveType, type KindId } from '@/pages/leaves/
 
 import type { ActivityStatementItem, StatementKind } from './statementTypes'
 
-export type StatementCategory = 'leave' | 'violation' | 'absence' | 'document' | 'ledger' | 'placement'
+export type StatementCategory = 'leave' | 'violation' | 'absence' | 'document' | 'ledger' | 'placement' | 'id_change'
 
 /** Display and paper order. Labels: `statement.category.*` / `statement.section.*`. */
 export const STATEMENT_CATEGORIES: readonly StatementCategory[] = [
@@ -20,6 +20,7 @@ export const STATEMENT_CATEGORIES: readonly StatementCategory[] = [
   'document',
   'ledger',
   'placement',
+  'id_change',
 ]
 
 /** Placement and status read as one history; every other kind is its own category. */
@@ -52,6 +53,7 @@ export const ACTIVITY_SECTIONS: readonly ActivitySection[] = [
   'document',
   'ledger',
   'placement',
+  'id_change',
 ]
 
 /** Sections that count days (leave kinds and absences, one day each). */
@@ -67,6 +69,7 @@ export function sectionOf(item: Pick<ActivityStatementItem, 'kind' | 'leave_type
 
 /** Translation key of a section's heading. */
 export function sectionLabelKey(section: ActivitySection): string {
+  if (section === 'id_change') return 'employees.idChangeActivity.label'
   const leave = LEAVE_SECTIONS.find((s) => s.id === section)
   return leave ? `statement.section.leaveKind.${leave.kind}` : `statement.section.${section}`
 }

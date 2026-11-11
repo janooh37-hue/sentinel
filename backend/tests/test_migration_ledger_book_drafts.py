@@ -11,8 +11,8 @@ from sqlalchemy import Engine, create_engine, event, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0120_ledger_book_drafts"
-PARENT = "0119_record_grade"
+HEAD = "0121_ledger_book_drafts"
+PARENT = "0120_record_grade"
 DRAFT_INSERT = (
     "INSERT INTO book_drafts (owner_user_id, created_at, updated_at{columns}) "
     "VALUES (7, '2026-10-01 00:00:00', '2026-10-01 00:00:00'{values})"

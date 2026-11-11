@@ -376,6 +376,79 @@
     }
   },
   "employees": {
+    "editPage": {
+      "back": "Back to employee file",
+      "title": "Edit employee information"
+    },
+    "editForm": {
+      "empty": "Not set",
+      "was": "Was:",
+      "undo": "Undo",
+      "undoField": "Undo {{field}}",
+      "review": "Review changes before saving",
+      "field": "Field",
+      "before": "Before",
+      "after": "After",
+      "keepEditing": "Keep editing",
+      "confirmSave": "Confirm and save",
+      "changed": "Changed fields: {{count}}",
+      "unchanged": "No changes to save"
+    },
+    "idChangeActivity": {
+      "label": "Employee number changes",
+      "sentence": "Employee number changed from {{reference}} to {{title}}",
+      "reason": "Reason",
+      "actor": "Recorded by {{actor}}",
+      "formerly": "formerly {{id}}",
+      "summary_one": "{{count}} employee number change",
+      "summary_other": "{{count}} employee number changes"
+    },
+    "idChange": {
+      "employeeNumber": "Employee number",
+      "correct": "Correct employee number",
+      "current": "Current number",
+      "correctNumber": "Correct number",
+      "newNumber": "New number",
+      "whatMoves": "What moves",
+      "reasonAndConfirm": "Reason and confirm",
+      "format": "G followed by 3–4 digits, e.g. G3082.",
+      "invalid": "Use G followed by 3–4 digits.",
+      "same": "This is already the employee’s number.",
+      "taken": "{{id}} already belongs to {{name}}. Merging two records is not part of this change.",
+      "openOwner": "Open that record",
+      "available": "{{id}} is not used by any employee.",
+      "impactLead": "Everything linked to {{from}} moves to {{to}} in one step:",
+      "impactNone": "No documents, leaves or other records are linked yet. Only the employee record changes.",
+      "impact": {
+        "documents": "Generated documents",
+        "leaves": "Leave records",
+        "violations": "Violations",
+        "absences": "Absence records",
+        "attendance": "Attendance days",
+        "timesheet": "Timesheet months",
+        "messages": "SMS & WhatsApp messages",
+        "uniform": "Uniform issues",
+        "vault_files": "Vault files (photo, signature, scans)"
+      },
+      "keepDocuments": "Documents already issued keep {{id}} as printed. New documents use the new number.",
+      "oldSearch": "Searching {{id}} still finds this employee, shown as “formerly {{id}}”.",
+      "reason": "Reason",
+      "reasonHint": "Required, 5–500 characters. Saved with the change and who made it in the employee’s Activity history.",
+      "retype": "Type {{id}} again to confirm",
+      "mismatch": "Doesn’t match the new number.",
+      "apply": "Change {{from}} to {{to}}",
+      "continue": "Continue",
+      "back": "Back",
+      "done": "Employee number changed from {{from}} to {{to}}. The change is in the Activity history.",
+      "formerly": "formerly {{ids}}",
+      "changedToast": "{{from}} is now {{to}}.",
+      "dismiss": "Dismiss confirmation",
+      "takenError": "This number belongs to another employee. Choose a different number.",
+      "reasonInvalid": "Enter a reason between 5 and 500 characters.",
+      "vaultConflict": "A vault folder already uses this number. Resolve the folder conflict before changing the employee number.",
+      "unsavedProfile": "You have unsaved changes to this employee's information. Save them first, or discard them, before correcting the number.",
+      "discardProfile": "Discard unsaved changes"
+    },
     "intake": {
       "reviewAndApply": "Review the scanned data and apply to this employee record."
     },
@@ -3906,7 +3979,7 @@
         "label": "Paper format",
         "normal": "Book",
         "report": "Report",
-        "openingHint": "To recipients appear in the paper opening."
+        "openingHint": "The salutation is printed on the paper. Delivery recipients are selected separately."
       },
       "ccRules": {
         "secretReason": "Requires Secret clearance.",
@@ -3931,7 +4004,8 @@
         "kind": "Destination",
         "internal": "Internal",
         "external": "External",
-        "to": "To",
+        "to": "Send to",
+        "addressedTo": "Addressed to",
         "cc": "CC",
         "signer": "Signing manager",
         "signerPlaceholder": "Choose a linked manager",
@@ -3944,7 +4018,9 @@
         "gradeBanner": "{{label}}: {{grade}}"
       },
       "errors": {
-        "toRequired": "Choose at least one To recipient.",
+        "addressedToRequired": "Enter the printed salutation.",
+        "addressedToTooLong": "Keep the salutation within 500 characters.",
+        "toRequired": "Choose at least one recipient in Send to.",
         "signerRequired": "Choose a signing manager.",
         "addresseeInvalid": "One or more recipients are unavailable or not cleared for this grade. Choose the recipients again.",
         "addresseeOnlyCc": "Addressee Only books cannot include CC recipients.",

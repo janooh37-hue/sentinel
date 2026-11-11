@@ -31,7 +31,11 @@ from tests.conftest import make_user
 DRAFTS = "/api/v1/ledger/drafts"
 BOOKS = "/api/v1/ledger/books"
 PNG = b"\x89PNG\r\n\x1a\npayload"
-CONTENT = {"subjects": ["First subject", "Second subject"], "body_html": "<p>Original body</p>"}
+CONTENT = {
+    "addressed_to": "Printed office",
+    "subjects": ["First subject", "Second subject"],
+    "body_html": "<p>Original body</p>",
+}
 
 
 @pytest.fixture
@@ -80,6 +84,7 @@ def send(client, **changes):
 
 def content_payload(detail, content):
     return {
+        "addressed_to": detail.get("addressed_to") or "Printed office",
         **content,
         "expected_version_id": detail["selected_version_id"],
         "expected_content_sha256": detail["content_sha256"],
@@ -87,7 +92,10 @@ def content_payload(detail, content):
 
 
 def sign_payload(detail):
-    return content_payload(detail, {})
+    return {
+        "expected_version_id": detail["selected_version_id"],
+        "expected_content_sha256": detail["content_sha256"],
+    }
 
 
 def saves(db, version_id):
@@ -728,3 +736,126 @@ def test_content_save_requires_both_expected_values(ledger, missing):
     response = client.put(f"{BOOKS}/{opened['id']}/content", json=payload)
     assert response.status_code == 422, response.text
     assert len(saves(db, opened["selected_version_id"])) == 1
+
+
+@pytest.mark.parametrize("preset", ["normal", "report"])
+def test_printed_direction_is_independent_tracked_and_signed(ledger, monkeypatch, preset):
+    client, db, actor, writer, signer, root = ledger
+    from tests.test_ledger_book_signing_api import saved_signature
+
+    draft = client.post(
+        DRAFTS,
+        json={
+            "tab": 5,
+            **CONTENT,
+            **addressees_payload(client),
+            "addressed_to": "مدير إدارة الموارد البشرية",
+            "paper_preset": preset,
+        },
+    )
+    assert draft.status_code == 201, draft.text
+    assert draft.json()["addressed_to"] == "مدير إدارة الموارد البشرية"
+    preview = client.get(f"{DRAFTS}/{draft.json()['id']}/paper")
+    assert "مدير إدارة الموارد البشرية" in preview.text
+    issued = client.post(f"{DRAFTS}/{draft.json()['id']}/save-and-send")
+    assert issued.status_code == 200, issued.text
+    book = issued.json()
+    assert book["addressed_to"] == "مدير إدارة الموارد البشرية"
+    assert book["addressees"][0]["user_id"] != writer.id
+    changed = client.put(
+        f"{BOOKS}/{book['id']}/content",
+        json={**content_payload(book, CONTENT), "addressed_to": "<مدير جديد>"},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["content_sha256"] != book["content_sha256"]
+    book = changed.json()
+    signer = db.get(User, book["signer"]["user_id"])
+    saved_signature(db, signer, root, monkeypatch)
+    actor[0] = signer
+    error(
+        client.post(f"{BOOKS}/{book['id']}/sign", json=sign_payload(issued.json())),
+        409,
+        "SIGNING_CONTENT_CONFLICT",
+    )
+    signed = client.post(f"{BOOKS}/{book['id']}/sign", json=sign_payload(book))
+    assert signed.status_code == 200, signed.text
+    actor[0] = writer
+    url = f"{BOOKS}/{book['id']}"
+    original = client.get(f"{url}/paper").text
+    assert "&lt;مدير جديد&gt;" in original
+    correction = client.post(f"{url}/corrections").json()
+    assert correction["addressed_to"] == "<مدير جديد>"
+    changed = client.put(
+        f"{url}/content",
+        json={**content_payload(correction, CONTENT), "addressed_to": "Another office"},
+    )
+    assert changed.status_code == 200, changed.text
+    assert (
+        client.get(f"{url}/paper", params={"revision": book["selected_version_id"]}).text
+        == original
+    )
+
+
+def test_issuance_and_content_require_nonblank_direction(ledger):
+    client, _, _, _, _, _ = ledger
+    draft = client.post(
+        DRAFTS, json={"tab": 5, **CONTENT, **addressees_payload(client), "addressed_to": "  "}
+    )
+    assert draft.status_code == 201, draft.text
+    error(client.post(f"{DRAFTS}/{draft.json()['id']}/save-and-send"), 422, "ADDRESSED_TO_REQUIRED")
+    assert (
+        client.patch(f"{DRAFTS}/{draft.json()['id']}", json={"addressed_to": "Office"}).status_code
+        == 200
+    )
+    issued = client.post(f"{DRAFTS}/{draft.json()['id']}/save-and-send")
+    assert issued.status_code == 200, issued.text
+    book = issued.json()
+    assert book["ref_number"] == "1/5/1"
+    error(
+        client.put(
+            f"{BOOKS}/{book['id']}/content",
+            json={**content_payload(book, CONTENT), "addressed_to": " "},
+        ),
+        422,
+        "ADDRESSED_TO_REQUIRED",
+    )
+    assert client.get(f"{BOOKS}/{book['id']}").json()["content_sha256"] == book["content_sha256"]
+
+
+@pytest.mark.parametrize("preset", ["normal", "report"])
+def test_legacy_pending_direction_hash_and_signed_paper_are_preserved(ledger, monkeypatch, preset):
+    from tests.test_ledger_book_signing_api import saved_signature
+
+    client, db, actor, writer, _, root = ledger
+    _, book = send(client, paper_preset=preset)
+    save = saves(db, book["selected_version_id"])[0]
+    save.addressed_to = None
+    save.content_sha256 = ledger_book_service._content_sha256(save.subjects, save.body_html)
+    db.commit()
+    url = f"{BOOKS}/{book['id']}"
+    legacy = client.get(url).json()
+    assert legacy["addressed_to"] is None
+    assert legacy["content_sha256"] == save.content_sha256
+    before = client.get(f"{url}/paper").text
+    assert "Printed office" not in before
+    if preset == "normal":
+        assert book["addressees"][0]["name"] in before
+    else:
+        assert "التوجيه:" not in before
+    signer = db.get(User, book["signer"]["user_id"])
+    saved_signature(db, signer, root, monkeypatch)
+    actor[0] = signer
+    signed = client.post(f"{url}/sign", json=sign_payload(legacy))
+    assert signed.status_code == 200, signed.text
+    assert signed.json()["content_sha256"] == legacy["content_sha256"]
+    actor[0] = writer
+    paper = client.get(f"{url}/paper").text
+    correction = client.post(f"{url}/corrections").json()
+    assert correction["addressed_to"] is None
+    assert correction["content_sha256"] == legacy["content_sha256"]
+    payload = content_payload(correction, CONTENT)
+    payload["addressed_to"] = "Corrected office"
+    assert client.put(f"{url}/content", json=payload).status_code == 200
+    assert (
+        client.get(f"{url}/paper", params={"revision": legacy["selected_version_id"]}).text == paper
+    )

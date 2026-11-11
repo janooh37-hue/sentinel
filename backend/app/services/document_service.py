@@ -81,6 +81,7 @@ from app.schemas.linked_document import LinkedDocumentRead
 from app.services import (
     absence_service,
     artifact_service,
+    employee_service,
     inmate_violation_whatsapp,
     manager_service,
     notify_format,
@@ -1623,13 +1624,17 @@ def _build_template_data(
     # ------------------------------------------------------------------
     if template_id == "Inmate Conduct Violations":
         reporter_id = str(fields.get("reporter_id", "") or "").strip()
-        reporter = db.get(Employee, reporter_id) if reporter_id else None
+        reporter = (
+            db.get(Employee, reporter_id) or employee_service.former_number_owner(db, reporter_id)
+            if reporter_id
+            else None
+        )
         # Arabic paper: prefer the Arabic name, fall back to English only when
         # the record has none.
         data["reporter_name"] = (
             (reporter.name_ar or reporter.name_en or "") if reporter is not None else ""
         )
-        data["reporter_g"] = reporter.id if reporter is not None else ""
+        data["reporter_g"] = reporter_id if reporter is not None else ""
         # Supervisor action checkboxes → the template's `{%p for a in actions %}`
         # bullet loop. Fixed paper order (_INMATE_ACTION_LABELS), free-text
         # "other" entry appended last, blank/whitespace-only text dropped.

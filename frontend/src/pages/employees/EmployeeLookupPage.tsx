@@ -172,7 +172,7 @@ export function EmployeeLookupPage(): React.JSX.Element {
           ) : filteredQuery.data.items.length === 0 ? <p className="text-muted-foreground">{t('dashboard.widgets.workspace.noMatches')}</p> : (
             <ul className="divide-y divide-hairline rounded-xl border border-hairline bg-surface">
               {filteredQuery.data.items.map((employee) => <li key={employee.id}><Link to={`/employees/${encodeURIComponent(employee.id)}${filters.open_violations ? '?tab=violations' : ''}`} className="flex items-center justify-between gap-3 px-4 py-3 text-start hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-                <span className="min-w-0"><bdi className="block truncate font-medium">{pickEmployeeName(employee, i18n.language)}</bdi><bdi className="font-mono text-[0.75em] text-muted-foreground">{employee.id}</bdi></span><span className="text-[0.75em] text-muted-foreground">{t(`employees.status.${employee.status}`)}</span>
+                <span className="min-w-0"><bdi className="block truncate font-medium">{pickEmployeeName(employee, i18n.language)}</bdi><bdi className="font-mono text-[0.75em] text-muted-foreground">{employee.id}</bdi>{employee.former_ids?.map((id) => <span key={id} className="ms-2 inline-block text-[0.75em] text-muted-foreground">{t('employees.idChangeActivity.formerly', { id })}</span>)}</span><span className="text-[0.75em] text-muted-foreground">{t(`employees.status.${employee.status}`)}</span>
               </Link></li>)}
             </ul>
           )}
