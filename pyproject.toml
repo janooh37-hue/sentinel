@@ -6,7 +6,7 @@ requires-python = ">=3.12,<3.13"
 readme = "README.md"
 dependencies = [
     "pytesseract>=0.3.13",
-    "PyMuPDF>=1.28.2,<2.0",  # fitz — every PDF rasterise/text-layer/certificate-compression
+    "PyMuPDF>=1.28.2,<2.0",  # pymupdf — every PDF rasterise/text-layer/certificate-compression
     # path needs it; the floor is the installed version whose Document.rewrite_images
     # API vehicle certificate compression depends on.
     "Pillow>=12.2.0,<13.0",
@@ -58,6 +58,10 @@ files = ["backend/app", "backend/main.py"]
 exclude = ["venv", "frontend", "data", "backend/tests"]
 plugins = ["pydantic.mypy"]
 
+# PyMuPDF ships py.typed but leaves much of its API unannotated (Document(),
+# insert_pdf, close, ...). Exempt those calls only; everything else is checked.
+untyped_calls_exclude = ["pymupdf"]
+
 [[tool.mypy.overrides]]
 module = [
     "webview",
@@ -72,8 +76,6 @@ module = [
     "docxtpl",
     "openpyxl",
     "openpyxl.*",
-    "fitz",
-    "fitz.*",
     "lxml",
     "lxml.*",
     "apscheduler",

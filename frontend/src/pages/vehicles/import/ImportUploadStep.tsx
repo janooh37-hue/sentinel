@@ -44,7 +44,7 @@ export function ImportUploadStep({
       toast.success(t('vehicles.import.templateDownloaded'), { id: toastId })
     },
     onError: (err, _vars, toastId) => {
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setDownloadError(message)
       toast.error(message, { id: toastId })
     },

@@ -209,11 +209,23 @@ def test_admin_link_route_binds_inmate_reporter_g_number(api_db: Session) -> Non
     assert resp.json()["employee_id"] == "G100"
 
 
-def test_grant_outside_inmate_reporter_ceiling_is_rejected(api_db: Session) -> None:
+@pytest.mark.parametrize(
+    "capability",
+    [
+        "employees.view",
+        "books.category.12/1",
+        "books.service.General Book",
+        "books.servicerecords.General Book",
+        "books.servicerecords.other",
+    ],
+)
+def test_grant_outside_inmate_reporter_ceiling_is_rejected(
+    api_db: Session, capability: str
+) -> None:
     admin = _user(api_db, email="admin@x.ae", role=ADMIN_ROLE)
     a = _user(api_db, email="a@x.ae", role=INMATE_REPORTER_ROLE)
     with pytest.raises(Exception) as exc:
-        perm_service.set_user_override(api_db, a.id, "employees.view", "grant", actor=admin)
+        perm_service.set_user_override(api_db, a.id, capability, "grant", actor=admin)
     assert getattr(exc.value, "code", None) == "INMATE_REPORTER_SCOPE_FIXED"
 
 
@@ -730,7 +742,12 @@ def test_legacy_versionless_pending_inmate_record_is_shared_readable(api_db: Ses
 
 def test_other_service_and_deleted_voided_books_stay_hidden(api_db: Session) -> None:
     api_db.add(BookCategory(id="HR", prefix="HR", name_en="HR", name_ar="HR"))
-    other = Book(category_id="HR", ref_number="HR-0001", subject="General Book — unrelated")
+    other = Book(
+        category_id="HR",
+        classification_code="13/1",
+        ref_number="HR-0001",
+        subject="General Book — unrelated",
+    )
     deleted = Book(
         category_id="INV",
         ref_number="NAT-9002",
@@ -994,7 +1011,8 @@ def test_signed_report_submit_routes_to_manager_pending_worklist(api_db: Session
     assert book.versions[-1].approval_steps[0].assignee_user_id == manager_user.id
 
     pending = _client(api_db, manager_user).get(
-        "/api/v1/books/approval-log", params={"scope": "received", "status": "pending"}
+        "/api/v1/books/approval-log",
+        params={"scope": "received", "kind": "reviewer", "status": "pending"},
     )
     assert pending.status_code == 200, pending.text
     assert book.id in {item["book_id"] for item in pending.json()["items"]}

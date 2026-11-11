@@ -8,6 +8,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.expiry import expiry_status
 from app.db.models import User, Vehicle, VehicleFile, VehicleMaintenance
 from app.services import perm_service, push_service, settings_service, vehicle_service
 
@@ -152,7 +153,7 @@ def send_due_reminders(db: Session, *, today: date) -> int:
         db.scalars(select(Vehicle).where(Vehicle.archived_at.is_(None)).order_by(Vehicle.id))
     )
     for vehicle in vehicles:
-        state = vehicle_service.expiry_status(
+        state = expiry_status(
             vehicle.license_expiry,
             today=today,
             notify_days=notify_days,
@@ -173,7 +174,7 @@ def send_due_reminders(db: Session, *, today: date) -> int:
     for vehicle in vehicles:
         if vehicle.insurance_expiry is None:
             continue
-        insurance_state = vehicle_service.expiry_status(
+        insurance_state = expiry_status(
             vehicle.insurance_expiry,
             today=today,
             notify_days=notify_days,
@@ -245,7 +246,7 @@ def send_due_reminders(db: Session, *, today: date) -> int:
         expiry_date = certificate.expiry_date
         if expiry_date is None:
             continue
-        certificate_state = vehicle_service.expiry_status(
+        certificate_state = expiry_status(
             expiry_date,
             today=today,
             notify_days=notify_days,

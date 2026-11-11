@@ -11,7 +11,6 @@ vi.mock('@/lib/api', () => ({
     listCapabilities: vi.fn(),
     getUserPermissions: vi.fn(),
     listTemplates: vi.fn(),
-    listBookClassifications: vi.fn(),
     listPermissionRequests: vi.fn(),
     setUserPermission: vi.fn(),
     setUserPermissionsBulk: vi.fn(),
@@ -82,6 +81,7 @@ const pageCaps = [
   'books.view',
   'permits.view',
   'vehicles.view',
+  'store.view',
   'settings.view',
   'expiry.view',
 ]
@@ -101,7 +101,7 @@ function permissionFixture(over: Partial<UserPermissionRead> = {}): UserPermissi
     ...pageCaps,
     'books.service.General Book',
     'books.servicerecords.General Book',
-    'books.category.incoming',
+    'books.category.1/1',
     'documents.duty_transfer',
   ]
   return {
@@ -177,7 +177,6 @@ const categoryCapabilities = [
       'General Book classification',
     ),
   ),
-  catalogEntry('books.category.incoming', 'books', 'Incoming', 'Incoming records'),
 ]
 
 const capabilities: CapabilityRead[] = [
@@ -205,15 +204,6 @@ function configure(
   }
   vi.mocked(api.listCapabilities).mockResolvedValue(options.capabilities ?? capabilities)
   vi.mocked(api.getUserPermissions).mockResolvedValue(perms)
-  vi.mocked(api.listBookClassifications).mockResolvedValue({
-    items: Array.from({ length: 15 }, (_, index) => ({
-      code: `${index + 1}/1`,
-      tab: 1,
-      name_ar: `تصنيف ${index + 1}`,
-      name_en: `Classification ${index + 1}`,
-      unit_ar: '',
-    })),
-  })
   vi.mocked(api.listTemplates).mockResolvedValue({
     items: [
       {
@@ -421,7 +411,7 @@ describe('PermissionsPage Mirror editor', () => {
     expect(within(mirror).getAllByText('General Book').length).toBeGreaterThan(0)
     expect(mirror.querySelectorAll('img[src*="service-icons"]').length).toBeGreaterThan(0)
     expect(within(mirror).queryByText('Report')).not.toBeInTheDocument()
-    expect(within(mirror).getByText('Incoming')).toBeVisible()
+    expect(within(mirror).getByText('Classification 1')).toBeVisible()
   })
 
   it('lists every catalog category in catalog order, including all General Book classifications', async () => {
@@ -429,73 +419,14 @@ describe('PermissionsPage Mirror editor', () => {
     const blueprint = await screen.findByRole('region', { name: 'Permission blueprint' })
     await within(blueprint).findByRole('button', { name: /Classification 15 Deny/ })
     const categories = within(blueprint).getAllByRole('button').filter(
-      (button) => /Classification \d+ Deny|Incoming Grant/.test(button.textContent ?? ''),
+      (button) => /Classification \d+ (Deny|Grant)/.test(button.textContent ?? ''),
     )
     expect(categories.map((button) => button.querySelector('bdi')?.textContent)).toEqual(
       categoryCapabilities.map((entry) => entry.label_en),
     )
-  })
-
-  it('groups classifications before legacy categories and keeps legacy toggles independent', async () => {
-    const base = permissionFixture()
-    const legacyCapability = 'books.category.HR'
-    const perms = permissionFixture({
-      effective: [...base.effective, legacyCapability],
-      role_defaults: [...base.role_defaults, legacyCapability],
-    })
-    renderPage(perms, {
-      requests: [],
-      capabilities: [
-        catalogEntry(
-          legacyCapability,
-          'books',
-          'Human Resources',
-          'Covers records from: Leave Application Form, Passport Request.',
-        ),
-        catalogEntry('books.category.5/1', 'books', 'Finance classification', 'Classification'),
-        // This code also exists in legacy rows; the catalog emits it only once.
-        catalogEntry('books.category.9/1', 'books', 'Shared classification', 'Classification'),
-      ],
-    })
-    vi.mocked(api.setUserPermission).mockResolvedValue({
-      ...perms,
-      effective: base.effective,
-      overrides: { ...base.overrides, [legacyCapability]: 'deny' },
-    })
-
-    const blueprint = await screen.findByRole('region', { name: 'Permission blueprint' })
-    const legacyHeading = await within(blueprint).findByRole('heading', {
-      level: 4,
-      name: 'Legacy categories',
-    })
-    for (const label of ['Finance classification', 'Shared classification']) {
-      const button = within(blueprint).getByRole('button', { name: `${label} Deny` })
-      expect(button.compareDocumentPosition(legacyHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
-        .toBeTruthy()
+    for (const [index, button] of categories.entries()) {
+      expect(button).toHaveAccessibleDescription(categoryCapabilities[index]!.description_en!)
     }
-    expect(within(blueprint).getAllByRole('button', { name: 'Shared classification Deny' }))
-      .toHaveLength(1)
-    const legacyButton = within(blueprint).getByRole('button', { name: 'Human Resources Grant' })
-    expect(legacyHeading.compareDocumentPosition(legacyButton) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy()
-    expect(legacyHeading).toHaveClass('rtl:tracking-normal')
-    const financeButton = within(blueprint).getByRole('button', { name: 'Finance classification Deny' })
-    expect(financeButton.parentElement).toHaveClass('grid', 'grid-cols-2', 'sm:grid-cols-3')
-    expect(financeButton).not.toHaveAccessibleDescription()
-    // A legacy category says which services a deny blocks.
-    expect(legacyButton).toHaveAccessibleDescription(
-      'Covers records from: Leave Application Form, Passport Request.',
-    )
-    expect(legacyButton.parentElement?.parentElement).toHaveClass('grid', 'grid-cols-1', 'sm:grid-cols-2')
-
-    await userEvent.click(legacyButton)
-    expect(api.setUserPermission).toHaveBeenCalledExactlyOnceWith(
-      operator.id,
-      legacyCapability,
-      'deny',
-    )
-    expect(api.setUserPermissionsBulk).not.toHaveBeenCalled()
-    await waitFor(() => expect(legacyButton).toHaveAttribute('aria-busy', 'false'))
   })
 
   it('toggles duty transfer as one capability and updates its preview and hidden count', async () => {
@@ -607,19 +538,19 @@ describe('PermissionsPage Mirror editor', () => {
     renderPage(
       permissionFixture({
         effective: base.effective.filter(
-          (capability) => capability !== 'books.category.incoming',
+          (capability) => capability !== 'books.category.1/1',
         ),
-        overrides: { ...base.overrides, 'books.category.incoming': 'deny' },
+        overrides: { ...base.overrides, 'books.category.1/1': 'deny' },
       }),
     )
     vi.mocked(api.setUserPermission).mockResolvedValue(base)
 
-    await userEvent.click(await screen.findByRole('button', { name: /Incoming Deny/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /Classification 1 Deny/ }))
 
     await waitFor(() =>
       expect(api.setUserPermission).toHaveBeenCalledWith(
         operator.id,
-        'books.category.incoming',
+        'books.category.1/1',
         null,
       ),
     )
@@ -634,7 +565,7 @@ describe('PermissionsPage Mirror editor', () => {
 
     const mirror = await openDesktopPreview()
     const before = hiddenTotal()
-    expect(within(mirror).getByText('Incoming')).toBeVisible()
+    expect(within(mirror).getByText('Classification 1')).toBeVisible()
     expect(within(mirror).getAllByText('General Book').length).toBeGreaterThan(0)
 
     await userEvent.click(serviceRadio('General Book', 'Records only'))
@@ -655,7 +586,7 @@ describe('PermissionsPage Mirror editor', () => {
     expect(checkGlyph(recordsRadio)).not.toBeNull()
     expect(checkGlyph(serviceRadio('General Book', 'Full'))).toBeNull()
     expect(within(mirror).queryByText('General Book')).not.toBeInTheDocument()
-    expect(within(mirror).getByText('Incoming')).toBeVisible()
+    expect(within(mirror).getByText('Classification 1')).toBeVisible()
     expect(hiddenTotal()).toBe(before + 1)
 
     deferred.resolve(
@@ -971,15 +902,6 @@ describe('PermissionsPage Mirror editor', () => {
       'max-h-[calc(100dvh-8rem)]',
     )
     expect(screen.getByRole('link', { name: 'Permission requests' })).toHaveClass('min-h-11')
-    const blueprint = screen.getByRole('region', { name: 'Permission blueprint' })
-    const legacyHeading = await within(blueprint).findByRole('heading', {
-      name: 'Legacy categories',
-    })
-    expect(legacyHeading).toBeVisible()
-    expect(within(blueprint).getByRole('button', { name: 'Classification 15 Deny' }).parentElement)
-      .toHaveClass('grid', 'grid-cols-2', 'sm:grid-cols-3')
-    expect(within(blueprint).getByRole('button', { name: 'Incoming Grant' }).parentElement?.parentElement)
-      .toHaveClass('grid', 'grid-cols-1', 'sm:grid-cols-2')
   })
 
   it('warns when Records is denied and books.approve is the only warning trigger', async () => {

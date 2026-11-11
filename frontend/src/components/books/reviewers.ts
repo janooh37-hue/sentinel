@@ -1,12 +1,22 @@
-/** Pure helpers for partitioning the approval chain into the single approver
- *  (the signing manager) and the advisory reviewers. Mirrors the backend kind
- *  split; reviewer steps never gate. Sibling-module pattern (react-refresh). */
+/** Pure helpers for the sequential signing approvers and advisory reviewers.
+ * Reviewer steps never gate approval. */
 import type { BookApprovalStepRead } from '@/lib/api'
 
 const isReviewerKind = (s: BookApprovalStepRead): boolean => s.kind === 'reviewer'
 
 export function approverStep(steps: BookApprovalStepRead[]): BookApprovalStepRead | undefined {
-  return steps.find((s) => !isReviewerKind(s)) // kind undefined (legacy) = approver
+  let active: BookApprovalStepRead | undefined
+  for (const step of steps) {
+    if (isReviewerKind(step) || step.state === 'approved') continue
+    if (!active || step.step_order < active.step_order) active = step
+  }
+  return active
+}
+
+export function approvalStageLabel(stage: string | null | undefined): 'books.approval.branchManager' | 'books.approval.projectManager' | null {
+  if (stage === 'branch_manager') return 'books.approval.branchManager'
+  if (stage === 'project_manager') return 'books.approval.projectManager'
+  return null
 }
 export function reviewerSteps(steps: BookApprovalStepRead[]): BookApprovalStepRead[] {
   return steps.filter(isReviewerKind)

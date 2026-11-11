@@ -244,7 +244,7 @@ export function MultiRecipientPickerField({
                 </div>
 
                 {/* Manage button — requires books.edit capability */}
-                <CapabilityGate cap="books.edit" requestable>
+                <CapabilityGate cap="books.edit">
                   <Button
                     type="button"
                     variant="secondary"

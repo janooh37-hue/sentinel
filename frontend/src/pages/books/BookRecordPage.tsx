@@ -43,9 +43,10 @@ import {
 } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useDecisionNotices } from '@/lib/useDecisionNotices'
 import { canFileSignedCopy, canSendForApproval, footerActionFor, inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
 import { reportReviewOf, signedSourceOf, type ReportReview } from './bookStateLabel'
-import { changesRequestedCount, isApproverAssignee, myPendingReviewerStep } from '@/components/books/reviewers'
+import { approverStep, changesRequestedCount, isApproverAssignee, myPendingReviewerStep } from '@/components/books/reviewers'
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
 import { RecordStateOverrideDialog } from '@/components/books/RecordStateOverrideDialog'
 import { RevisionAccessPanel } from '@/components/books/RevisionAccessPanel'
@@ -381,6 +382,7 @@ function BookRecordPageBody(): React.JSX.Element {
     subject: string
     versionNo: number
   } | null>(null)
+  const [signNote, setSignNote] = useState('')
 
   const { data: book, isPending, isError, error, refetch } = useQuery({
     queryKey: ['books', 'detail', bookId, effectiveVersionId ?? null],
@@ -479,6 +481,8 @@ function BookRecordPageBody(): React.JSX.Element {
   // approval_steps type lacks them until `gen:api` is run.
   const currentSteps: BookApprovalStepRead[] = current?.approval_steps ?? book?.approval_steps ?? []
   const isAssignee = isLiveCurrentVersion && isApproverAssignee(currentSteps, user?.id)
+  const activeApprover = approverStep(currentSteps)
+  const signingBranch = isAssignee && activeApprover?.stage_label === 'branch_manager'
   const myReview = isLiveCurrentVersion ? myPendingReviewerStep(currentSteps, user?.id) : null
   const action = isInmateReporter
     ? reporterAction === 'correct-resubmit' && !isInmateReport
@@ -562,6 +566,37 @@ function BookRecordPageBody(): React.JSX.Element {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [book?.id, myStep?.id, myStep?.seen_at])
+
+  const decisionsQuery = useDecisionNotices()
+  const unseenDecision = decisionsQuery.data?.items.find((item) => item.book_id === book?.id)
+  // The server clears the current revision's outcome, so acknowledge only while
+  // that revision is on screen, never while an older one is being browsed.
+  const showsCurrentOutcome =
+    isLiveCurrentVersion && (unseenDecision == null || unseenDecision.version_id === current?.id)
+  // The bell list is capped at five, so the submitter also acknowledges on open.
+  const isSubmitter = book != null && user != null && book.submitted_by_user_id === user.id
+  const decisionKey = !showsCurrentOutcome
+    ? null
+    : unseenDecision
+      ? `${user?.id}:${unseenDecision.book_id}:${unseenDecision.version_id}:${unseenDecision.decided_at}`
+      : isSubmitter && decisionsQuery.isSuccess ? `${user?.id}:${book?.id}` : null
+  const seenDecisionRef = useRef<string | null>(null)
+  useEffect(() => {
+    const seen = seenDecisionRef.current
+    if (!book || !decisionKey || seen === decisionKey || seen?.startsWith(`${decisionKey}:`)) return
+    seenDecisionRef.current = decisionKey
+    void api.markBookSeen(book.id).then(
+      () => {
+        void qc.invalidateQueries({ queryKey: ['notifications', 'decisions'] })
+        void qc.invalidateQueries({ queryKey: ['books', 'approval-log'] })
+      },
+      () => {
+        // Release the claim so the next decisions refresh retries it.
+        if (seenDecisionRef.current === decisionKey) seenDecisionRef.current = seen
+      },
+    )
+    // dataUpdatedAt re-runs this on every decisions refresh: the retry cadence.
+  }, [book, decisionKey, decisionsQuery.dataUpdatedAt, qc])
 
   // Annotation overlay (Slice 3). Marks live on the current version; shown while
   // the book is in an active review state.
@@ -783,6 +818,7 @@ function BookRecordPageBody(): React.JSX.Element {
     // already-null state would be undefined by then, so focus would fall
     // back to <body>. This ref is stable and never read during render.
     lastSignTriggerRef.current = triggerRef.current
+    setSignNote('')
     setSignConfirm({
       bookId: book.id,
       versionId: current.id,
@@ -790,7 +826,7 @@ function BookRecordPageBody(): React.JSX.Element {
       subject: book.subject ?? '',
       versionNo: current.version_no,
     })
-  }, [book, current, busy, setSignConfirm])
+  }, [book, current, busy, setSignConfirm, setSignNote])
 
   // Discard (never re-fire) the confirmation the instant the captured
   // record/version stops being the one on screen, or decide eligibility is
@@ -813,7 +849,7 @@ function BookRecordPageBody(): React.JSX.Element {
       current?.id === signConfirm.versionId &&
       action === 'decide' &&
       !busy
-    if (stillEligible) signMutation.mutate()
+    if (stillEligible) signMutation.mutate(signingBranch ? signNote : undefined)
   }
 
   // The one "what is this record waiting for / what can I do" answer, shared by
@@ -1188,7 +1224,8 @@ function BookRecordPageBody(): React.JSX.Element {
         title={t(isReport ? 'books.approval.reviewConfirmTitle' : 'books.approval.signConfirmTitle')}
         description={
           signConfirm
-            ? t(isReport ? 'books.approval.reviewConfirmBody' : 'books.approval.signConfirmBody', {
+            ? <div className="space-y-3">
+              <p>{t(isReport ? 'books.approval.reviewConfirmBody' : 'books.approval.signConfirmBody', {
                 // Isolate the LTR ref/subject runs so they can't scramble the
                 // surrounding Arabic sentence (same `bidi()` idiom BookWordActions
                 // uses for the same "ref token inside a plain translated string"
@@ -1196,7 +1233,22 @@ function BookRecordPageBody(): React.JSX.Element {
                 ref: bidi(signConfirm.ref),
                 version: signConfirm.versionNo,
                 subject: bidi(signConfirm.subject),
-              })
+              })}</p>
+              {signingBranch && (
+                <label className="block space-y-1 text-start">
+                  <span className="block font-medium">{t('books.approval.branchNotes')}</span>
+                  <textarea
+                    dir="auto"
+                    value={signNote}
+                    onChange={(event) => setSignNote(event.target.value)}
+                    maxLength={1000}
+                    rows={4}
+                    className="block w-full rounded-lg border border-hairline bg-background px-3 py-2 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  <span className="block text-end text-xs tabular-nums">{t('books.approval.noteCounter', { count: signNote.length, max: 1000 })}</span>
+                </label>
+              )}
+            </div>
             : undefined
         }
         confirmLabel={t(isReport ? 'books.approval.markReviewed' : 'books.approval.signApprove')}
@@ -1262,6 +1314,20 @@ function BookRecordPageBody(): React.JSX.Element {
       {book && <RecordInboxStrip book={book} />}
       {book && <RecordRecipientsPanel bookId={book.id} bookRef={book.ref_number} />}
       {book && <RecordThreadSection book={book} />}
+
+      {currentSteps.some((step) => step.stage_label === 'branch_manager') && (
+        <ol className="space-y-2 border-b border-hairline bg-surface px-4 py-3 text-sm sm:px-5" aria-label={t('books.approval.stageProgress')} data-print-hide>
+          {currentSteps.filter((step) => step.kind === 'approver').sort((a, b) => a.step_order - b.step_order).map((step) => (
+            <li key={step.id}>
+              <span className="font-medium">{t(step.stage_label === 'branch_manager' ? 'books.approval.branchManager' : step.stage_label === 'project_manager' ? 'books.approval.projectManager' : 'books.approval.signingManager')}</span>
+              {' · '}{t(`books.spine.${step.state}`)}
+              {step.stage_label === 'branch_manager' && step.state === 'approved' && step.note && (
+                <p dir="auto" className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">{step.note}</p>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
 
       <RecordPhoneProgress book={book} view={view} />
 

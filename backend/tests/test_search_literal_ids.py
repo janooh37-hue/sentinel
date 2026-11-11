@@ -378,11 +378,12 @@ def test_very_long_token_neither_raises_nor_broadens(books_db: Session) -> None:
 def _restricted_scenario(db: Session) -> SimpleNamespace:
     visible = _book(db, body="visit log E-40817 for the gate", category="GS")
     hidden = _book(db, body="classified sensitive E-40817 watch list", category="SEC")
+    hidden.classification_code = "5/1"
     deleted = _book(db, body="deleted note E-40817", category="GS", deleted=True)
     _rebuild_books_fts(db)
     admin = make_user(db, role="admin", email="admin-lit@test.ae")
     clerk = make_user(db, role="operator", email="clerk-lit@test.ae")
-    perm_service.set_user_override(db, clerk.id, "books.category.SEC", "deny", actor=admin)
+    perm_service.set_user_override(db, clerk.id, "books.category.5/1", "deny", actor=admin)
     return SimpleNamespace(
         visible=visible, hidden=hidden, deleted=deleted, admin=admin, clerk=clerk
     )
@@ -413,7 +414,7 @@ def test_revoking_the_deny_takes_effect_on_the_next_identifier_search(books_db: 
     s = _restricted_scenario(books_db)
     assert set(_books(books_db, "E-40817", user=s.clerk)[0]) == {s.visible.ref_number}
 
-    perm_service.set_user_override(books_db, s.clerk.id, "books.category.SEC", None, actor=s.admin)
+    perm_service.set_user_override(books_db, s.clerk.id, "books.category.5/1", None, actor=s.admin)
 
     assert set(_books(books_db, "E-40817", user=s.clerk)[0]) == {
         s.visible.ref_number,

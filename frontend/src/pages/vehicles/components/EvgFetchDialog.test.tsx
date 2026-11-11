@@ -10,21 +10,21 @@ import { api } from '@/lib/api'
 import type { EvgPreviewResponse, EvgPreviewRow, VehicleListItem } from '@/lib/api'
 import i18n from '@/lib/i18n'
 
-import type * as VehicleDialogShellModule from './VehicleDialogShell'
+import type * as DialogShellModule from '@/components/forms/DialogShell'
 import { EvgFetchDialog } from './EvgFetchDialog'
 
 vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
 const shellBusyMock = vi.hoisted(() => vi.fn())
 
-vi.mock('./VehicleDialogShell', async (importOriginal) => {
-  const mod = await importOriginal<typeof VehicleDialogShellModule>()
-  const RealVehicleDialogShell = mod.VehicleDialogShell
+vi.mock('@/components/forms/DialogShell', async (importOriginal) => {
+  const mod = await importOriginal<typeof DialogShellModule>()
+  const RealDialogShell = mod.DialogShell
   return {
     ...mod,
-    VehicleDialogShell: (props: Parameters<typeof RealVehicleDialogShell>[0]) => {
+    DialogShell: (props: Parameters<typeof RealDialogShell>[0]) => {
       shellBusyMock(props.busy ?? false)
-      return <RealVehicleDialogShell {...props} />
+      return <RealDialogShell {...props} />
     },
   }
 })

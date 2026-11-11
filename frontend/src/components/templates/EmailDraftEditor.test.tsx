@@ -11,8 +11,7 @@ import { messageTemplatesApi } from '@/lib/messageTemplates'
 import type * as MessageTemplatesModule from '@/lib/messageTemplates'
 import { EmailDraftEditor } from './EmailDraftEditor'
 
-const { has, sample } = vi.hoisted(() => ({ has: vi.fn(), sample: vi.fn() }))
-vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has }) }))
+const { sample } = vi.hoisted(() => ({ sample: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn() } }))
 vi.mock('@/lib/draftTemplates', () => ({
   defaultDraftText: () => ({ subject: 'الموضوع الافتراضي', intro: 'المقدمة الافتراضية', closing: 'الخاتمة الافتراضية' }),
@@ -31,7 +30,6 @@ function mount(draftKey = 'leave:Annual') {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  has.mockReturnValue(true)
   vi.mocked(messageTemplatesApi.drafts).mockResolvedValue({ overrides: {}, tokens: { leave: ['names'] } })
   vi.mocked(messageTemplatesApi.saveDraft).mockImplementation(async (key, body) => ({ overrides: { [key]: body }, tokens: { leave: ['names'] } }))
   vi.mocked(messageTemplatesApi.resetDraft).mockResolvedValue({ overrides: {}, tokens: { leave: ['names'] } })
@@ -104,15 +102,5 @@ describe('EmailDraftEditor', () => {
     fireEvent.change(await screen.findByRole('textbox', { name: 'Subject' }), { target: { value: '<b>عنوان</b>' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save template' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('HTML is not allowed. Enter plain text only.')
-  })
-
-  it('shows defaults and preview without inputs or mutation controls in read-only mode', async () => {
-    has.mockReturnValue(false)
-    const { container } = mount()
-    expect(await screen.findByText('المقدمة الافتراضية')).toHaveAttribute('dir', 'rtl')
-    expect(container.querySelector('textarea, input')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Save template' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Reset to default' })).not.toBeInTheDocument()
-    expect(screen.getByText('نص تجريبي')).toBeVisible()
   })
 })

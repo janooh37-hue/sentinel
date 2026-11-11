@@ -45,11 +45,9 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
   const canApprove = has('books.approve')
 
   const [urgency, setUrgency] = useState<'Normal' | 'High' | 'Very High'>('Normal')
-  // The backend requires EXACTLY ONE signing manager, so the picker is
-  // single-select rather than an ordered chain. `null` = untouched (the
-  // linked manager or default manager preselects); '' = explicitly reset
-  // by the user via "Change" — never overridden after that.
+  // null = untouched linked/default project approver; '' = explicitly reset.
   const [pickedUserId, setPickedUserId] = useState<string | null>(null)
+  const [branchUserId, setBranchUserId] = useState('')
 
   // Reviewer ids selected in the checkbox list.
   const [reviewerIds, setReviewerIds] = useState<number[]>([])
@@ -68,8 +66,9 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
   const docManagerHasSignature: boolean = book?.doc_manager_has_signature ?? true
   // A Report already carries its author's signature: the manager only reviews it.
   const isReport = book?.service_id === 'Report'
+  const requiresBranch = book?.versions?.at(-1)?.template_id === 'Administrative Leave Form'
   const sendLabel = t(isReport ? 'books.approval.sendForReview' : 'books.approval.submitForApproval')
-  const managerLabel = t(isReport ? 'books.approval.reviewManager' : 'books.approval.signingManager')
+  const managerLabel = t(isReport ? 'books.approval.reviewManager' : requiresBranch ? 'books.approval.projectManager' : 'books.approval.signingManager')
 
   // --- approver candidates (for the <select> fallback) ---
   const approversQuery = useQuery({
@@ -113,7 +112,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
   // Exclude the currently selected approver from reviewer list.
   const selectedApproverIdNum = Number.parseInt(selectedUserId, 10)
   const reviewerCandidates: ApproverOptionRead[] = (reviewerQuery.data ?? []).filter(
-    (r) => r.id !== selectedApproverIdNum,
+    (r) => r.id !== selectedApproverIdNum && (!requiresBranch || r.id !== Number(branchUserId)),
   )
 
   function toggleReviewer(id: number) {
@@ -127,7 +126,8 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
       api.submitBook(bookId, {
         urgency,
         approver_user_id: Number.parseInt(selectedUserId, 10),
-        reviewer_user_ids: reviewerIds,
+        ...(requiresBranch ? { branch_approver_user_id: Number(branchUserId) } : {}),
+        reviewer_user_ids: reviewerIds.filter((id) => id !== selectedApproverIdNum && (!requiresBranch || id !== Number(branchUserId))),
       }),
     onSuccess: (submitted) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
@@ -144,6 +144,14 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'APPROVER_REQUIRED') {
         toast.error(t('books.approval.managerNotLinked'))
+      } else if (err instanceof ApiError && err.code === 'BRANCH_APPROVER_REQUIRED') {
+        toast.error(t('books.approval.branchApproverRequired'))
+      } else if (err instanceof ApiError && err.code === 'BRANCH_APPROVER_SAME_AS_PROJECT') {
+        toast.error(t('books.approval.branchApproverDistinct'))
+      } else if (err instanceof ApiError && err.code === 'BRANCH_STAGE_WORD_REVISION_UNSUPPORTED') {
+        toast.error(t('books.approval.branchStageWordRevision'))
+      } else if (err instanceof ApiError && err.code === 'APPROVER_NOT_ELIGIBLE') {
+        toast.error(t('books.approval.approverNotEligible'))
       } else {
         toast.error(apiErrorMessage(err))
       }
@@ -152,7 +160,9 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
 
   // submit is enabled as soon as a valid approver id is chosen or the linked
   // manager is in place. No-signature warning does NOT disable submit (lenient).
-  const canSubmit = canManage && Number.isFinite(Number.parseInt(selectedUserId, 10))
+  const branchMissing = requiresBranch && !branchUserId
+  const branchSame = requiresBranch && branchUserId === selectedUserId
+  const canSubmit = canManage && Number.isFinite(Number.parseInt(selectedUserId, 10)) && !branchMissing && !branchSame
 
   if (!canSubmitCap || (book != null && !book.can_write)) return <></>
 
@@ -240,7 +250,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
               </div>
             </div>
 
-            {/* Signing manager — exactly one (the backend rejects more). */}
+            {/* Project signing manager (or the report review manager). */}
             <div>
               <p className="mb-2 text-[0.78em] font-semibold uppercase tracking-wider text-muted-foreground">
                 {managerLabel}
@@ -315,10 +325,31 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
                       <option key={a.id} value={a.id}>{pickEmployeeName({ name_en: a.name ?? '', name_ar: a.name_ar }, i18n.language)}</option>
                     ))}
                   </select>
-                  <p className="mt-2 text-[0.76em] text-muted-foreground">{t(isReport ? 'books.approval.reviewHint' : 'books.approval.singleSignerHint')}</p>
+                  <p className="mt-2 text-[0.76em] text-muted-foreground">{t(isReport ? 'books.approval.reviewHint' : requiresBranch ? 'books.approval.sequentialSignerHint' : 'books.approval.singleSignerHint')}</p>
                 </>
               )}
             </div>
+
+            {requiresBranch && (
+              <div>
+                <label htmlFor={`${submitReasonId}-branch`} className="mb-2 block text-[0.78em] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t('books.approval.branchManager')}
+                </label>
+                <select
+                  id={`${submitReasonId}-branch`}
+                  required
+                  value={branchUserId}
+                  onChange={(e) => setBranchUserId(e.target.value)}
+                  aria-invalid={branchSame || undefined}
+                  className="w-full rounded-lg border border-hairline bg-background px-3 py-2 text-[0.84em] text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+                >
+                  <option value="">{t('books.approval.selectBranchManager')}</option>
+                  {approvers.map((a) => (
+                    <option key={a.id} value={a.id}>{pickEmployeeName({ name_en: a.name ?? '', name_ar: a.name_ar }, i18n.language)}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Reviewers multi-select (optional) */}
             {canSubmit && reviewerCandidates.length > 0 && (
@@ -360,7 +391,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
                   id={submitReasonId}
                   className="me-auto text-[0.78em] leading-snug text-muted-foreground"
                 >
-                  {t('books.reason.submitNoApprover')}
+                  {t(branchSame ? 'books.approval.branchApproverDistinct' : branchMissing ? 'books.approval.branchApproverRequired' : 'books.reason.submitNoApprover')}
                 </span>
               )}
               <button

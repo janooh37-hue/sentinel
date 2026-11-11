@@ -59,6 +59,8 @@ export interface BooksMobileListProps {
   onSubmit: (id: number) => void
   /** Clear every list filter (search, drafts, "Created by me" included). */
   onClearFilters: () => void
+  /** Search box rendered beside "Select", above the cards. */
+  search?: React.ReactNode
 }
 
 const FLASH_MS = 1800
@@ -76,6 +78,7 @@ export function BooksMobileList({
   highlightedId,
   onSubmit: submitBook,
   onClearFilters,
+  search,
 }: BooksMobileListProps): React.JSX.Element {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -175,21 +178,24 @@ export function BooksMobileList({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {showSelectToggle ? (
-        <div className="flex shrink-0 justify-end px-6 pb-2">
-          <button
-            type="button"
-            aria-pressed={selectMode}
-            onClick={() => setMode(!selectMode)}
-            className={cn(
-              'inline-flex min-h-11 items-center rounded-full border px-4 text-[0.85em] font-semibold transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              selectMode
-                ? 'border-primary bg-primary-soft text-primary'
-                : 'border-hairline bg-surface-tinted text-foreground',
-            )}
-          >
-            {selectMode ? t('common.done') : t('books.list.select')}
-          </button>
+      {search || showSelectToggle ? (
+        <div className="flex shrink-0 items-center gap-2 px-6 pb-2">
+          {search}
+          {showSelectToggle ? (
+            <button
+              type="button"
+              aria-pressed={selectMode}
+              onClick={() => setMode(!selectMode)}
+              className={cn(
+                'ms-auto inline-flex min-h-11 shrink-0 items-center rounded-full border px-4 text-[0.85em] font-semibold transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                selectMode
+                  ? 'border-primary bg-primary-soft text-primary'
+                  : 'border-hairline bg-surface-tinted text-foreground',
+              )}
+            >
+              {selectMode ? t('common.done') : t('books.list.select')}
+            </button>
+          ) : null}
         </div>
       ) : null}
 

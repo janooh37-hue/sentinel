@@ -8,16 +8,22 @@ import { api } from '@/lib/api'
 import type { BookRead, IncludedPaperRead, IncludedPapersPreviewRead } from '@/lib/api'
 import { registerPdfCachePurger } from '@/lib/pdfCachePurge'
 
+import en from '@/locales/en.json'
+import ar from '@/locales/ar.json'
 import { IncludedPapersDialog } from './IncludedPapersDialog'
 
+const language = vi.hoisted(() => ({ current: 'en' }))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: Record<string, unknown> & { defaultValue?: string }) =>
-      (options?.defaultValue ?? key).replace(
+    t: (key: string, options?: Record<string, unknown> & { defaultValue?: string }) => {
+      const attachments = language.current === 'ar' ? ar.application.attachments : en.application.attachments
+      const attachmentKey = key.replace('application.attachments.', '') as keyof typeof attachments
+      return (options?.defaultValue ?? attachments[attachmentKey] ?? key).replace(
         /\{\{(\w+)\}\}/g,
         (_, name: string) => String(options?.[name] ?? `{{${name}}}`),
-      ),
-    i18n: { language: 'en' },
+      )
+    },
+    i18n: { language: language.current },
   }),
 }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'loading-toast'), dismiss: vi.fn() } }))
@@ -84,6 +90,65 @@ function wrapper({ children }: { children: ReactNode }): React.JSX.Element {
 afterEach(() => vi.restoreAllMocks())
 
 describe('IncludedPapersDialog', () => {
+  it.each([
+    { width: 1440, lang: 'en', source: 'record_document' },
+    { width: 390, lang: 'en', source: 'record_attachment' },
+    { width: 1440, lang: 'ar', source: 'record_attachment' },
+    { width: 390, lang: 'ar', source: 'record_document' },
+  ] as const)('adds $source from Records at $width px in $lang', async ({ width, lang, source }) => {
+    const originalWidth = window.innerWidth
+    const originalDir = document.documentElement.dir
+    window.innerWidth = width
+    language.current = lang
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'
+    const strings = lang === 'ar' ? ar.application.attachments : en.application.attachments
+    const paperId = '33333333-3333-4333-8333-333333333333'
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(paperId)
+    vi.spyOn(api, 'listBooks').mockResolvedValue({
+      items: [
+        { ...book, versions: [{ version_no: 1, document_id: 4 }] },
+        { id: 10, ref_number: 'REF-10', subject: 'Source record', approval_state: 'approved', versions: [{ version_no: 1, document_id: 5 }], attachment_paths: ['scans/proof.pdf'] },
+      ],
+      total: 2,
+    } as never)
+    const staged = { token: 'record-token', filename: source === 'record_document' ? 'REF-10.pdf' : 'proof.pdf', size: 200 }
+    const stageSpy = vi.spyOn(api, 'stageAttachmentFromRecord').mockResolvedValue(staged)
+    const previewSpy = vi.spyOn(api, 'previewIncludedPapers').mockResolvedValue({
+      revision: 3, fixed_page_count: 2, total_page_count: 5,
+      papers: [embedded], pdf_base64: 'JVBERi0=',
+    })
+    const user = userEvent.setup()
+    try {
+      render(<IncludedPapersDialog open onOpenChange={vi.fn()} book={book} currentPdfUrl="/current.pdf" />, { wrapper })
+      await user.click(screen.getByRole('button', { name: 'PDF order' }))
+      const fromRecords = screen.getByRole('button', { name: strings.fromRecords })
+      expect(fromRecords).toHaveClass('min-h-11')
+      expect(fromRecords.parentElement).toHaveClass('flex-wrap')
+      await user.click(fromRecords)
+      const picker = screen.getByRole('dialog', { name: strings.pickerTitle })
+      expect(within(picker).queryByText(book.ref_number)).not.toBeInTheDocument()
+      await user.click(await within(picker).findByRole('button', { name: /REF-10/ }))
+      await user.click(within(picker).getByRole('button', {
+        name: source === 'record_document' ? strings.pickerGenerated : 'proof.pdf',
+      }))
+      expect(await screen.findByText(staged.filename)).toBeVisible()
+      expect(screen.queryByRole('dialog', { name: strings.pickerTitle })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'PDF order' })).toHaveAttribute('aria-pressed', 'true')
+      expect(stageSpy).toHaveBeenCalledWith({
+        book_id: 10, source, attachment_index: source === 'record_attachment' ? 0 : null,
+      })
+      await user.click(screen.getByRole('button', { name: 'Review PDF' }))
+      expect(previewSpy).toHaveBeenCalledWith(book.id, {
+        revision: 3,
+        items: [{ id: embedded.id }, { id: paperId, staged_token: staged.token, original_name: staged.filename }],
+      })
+    } finally {
+      window.innerWidth = originalWidth
+      document.documentElement.dir = originalDir
+      language.current = 'en'
+    }
+  })
+
   it('keeps the form and embedded paper fixed, then reviews and saves one ordered package', async () => {
     const paperId = '33333333-3333-4333-8333-333333333333'
     vi.spyOn(crypto, 'randomUUID').mockReturnValue(paperId)

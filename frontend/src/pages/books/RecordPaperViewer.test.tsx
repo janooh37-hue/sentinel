@@ -102,23 +102,21 @@ describe('RecordPaperViewer', () => {
     resize(392)
     expect(img).toHaveStyle({ width: '360px' })
     expect(screen.getByText('60%')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Scan 2' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Attachment 2' })).toBeInTheDocument()
   })
 
-  it('selects by key and reports key picks', async () => {
-    const onSelectKey = vi.fn()
+  it('shows the selected key in the version dropdown', () => {
     render(
       <RecordPaperViewer
         papers={[scan(0), scan(3)]}
         selectedKey="scan-3"
-        onSelectKey={onSelectKey}
+        onSelectKey={() => undefined}
         mode="pane"
       />,
     )
     resize(400)
     expect(screen.getByRole('img', { name: 'scan-3.png' })).toBeInTheDocument()
-    await userEvent.click(screen.getAllByRole('button', { pressed: false })[0])
-    expect(onSelectKey).toHaveBeenCalledWith('scan-0')
+    expect(screen.getByRole('combobox')).toHaveTextContent('Attachment 2')
   })
 
   it('falls back to the first paper when the selected key is gone', () => {
@@ -129,40 +127,45 @@ describe('RecordPaperViewer', () => {
     expect(screen.getByRole('img', { name: 'scan-0.png' })).toBeInTheDocument()
   })
 
-  it('hides the strip for a single paper unless there is something to add', () => {
-    const { unmount } = render(
+  it('a single read-only paper shows neither the version bar nor the page strip', () => {
+    render(
       <RecordPaperViewer papers={[scan(0)]} selectedKey="scan-0" onSelectKey={() => undefined} mode="pane" />,
     )
     resize(500)
-    expect(screen.queryByRole('button', { pressed: true })).not.toBeInTheDocument()
-    unmount()
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Page 1' })).not.toBeInTheDocument()
+  })
 
+  it('uploaded versions get Upload file, their pages and Add page; the only page has no delete', async () => {
+    const onUpload = vi.fn()
+    const onAddPages = vi.fn()
     render(
       <RecordPaperViewer
         papers={[scan(0)]}
         selectedKey="scan-0"
         onSelectKey={() => undefined}
         mode="pane"
-        addScanSlot={<button type="button">Add scan</button>}
+        onUpload={onUpload}
+        onAddPages={onAddPages}
+        onDeletePage={() => undefined}
       />,
     )
     resize(500)
-    expect(screen.getByRole('button', { pressed: true })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add scan' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Upload file' }))
+    expect(onUpload).toHaveBeenCalledTimes(1)
+    expect(await screen.findByRole('button', { name: 'Page 1' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete page 1' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Add page' }))
+    expect(onAddPages).toHaveBeenCalledWith(scan(0))
   })
 
-  it('names scans "Scan N" in the strip, with the filename as their hint', () => {
+  it('the generated original never offers Add page', () => {
+    const original: Paper = { ...scan(0), kind: 'generated', attachmentIndex: undefined }
     render(
-      <RecordPaperViewer
-        papers={[scan(0), scan(3)]}
-        selectedKey="scan-0"
-        onSelectKey={() => undefined}
-        mode="pane"
-      />,
+      <RecordPaperViewer papers={[original]} selectedKey="generated" onSelectKey={() => undefined} mode="pane" onAddPages={() => undefined} onUpload={() => undefined} />,
     )
     resize(500)
-    expect(screen.getByRole('button', { name: 'Scan 1' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Scan 2' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add page' })).not.toBeInTheDocument()
   })
 
   it('the overlay toolbar carries the paper switcher', async () => {
@@ -171,7 +174,7 @@ describe('RecordPaperViewer', () => {
       <RecordPaperViewer papers={[scan(0), scan(3)]} selectedKey="scan-0" onSelectKey={onSelectKey} mode="overlay" />,
     )
     resize(500)
-    await userEvent.click(screen.getByRole('button', { name: 'Scan 2' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Attachment 2' }))
     expect(onSelectKey).toHaveBeenCalledWith('scan-3')
   })
 
@@ -187,7 +190,7 @@ describe('RecordPaperViewer', () => {
       />,
     )
     resize(600)
-    expect(screen.getByRole('button', { name: 'Delete this scan' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete version' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument()
     unmount()
 
@@ -202,7 +205,7 @@ describe('RecordPaperViewer', () => {
       />,
     )
     resize(380)
-    expect(screen.queryByRole('button', { name: 'Delete this document' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete version' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'More' })).toBeInTheDocument()
   })
 

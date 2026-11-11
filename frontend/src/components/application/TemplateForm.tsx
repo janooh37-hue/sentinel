@@ -177,8 +177,10 @@ function renderField(
       return <ManagerPickerField key={field.id} {...common} />
 
     case 'submitter_picker':
-    case 'interviewer_picker':
       return <SubmitterPickerField key={field.id} {...common} />
+
+    case 'interviewer_picker':
+      return <SubmitterPickerField key={field.id} {...common} kind="interviewer" />
 
     case 'recipient_picker':
       return <RecipientPickerField key={field.id} {...common} />
@@ -264,6 +266,7 @@ function renderField(
           {...common}
           columns={field.columns}
           maxRows={field.max_rows}
+          itemCatalog={field.item_catalog}
         />
       )
 

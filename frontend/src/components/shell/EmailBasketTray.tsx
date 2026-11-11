@@ -6,8 +6,9 @@
  * Uses DropdownMenu (Radix, portals to body) instead of a hand-rolled popover
  * so the tray escapes overflow/transform stacking contexts. Per-item ✕ and
  * "Clear" are plain <button>s (not DropdownMenuItems) so they do NOT auto-close
- * the menu on click. "Send" navigates away, so closing there is fine.
+ * the menu on click. "Send" closes it explicitly before routing to compose.
  */
+import { useState } from 'react'
 import { Mail, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -33,6 +34,8 @@ export function EmailBasketTray(): React.JSX.Element | null {
   const navigate = useNavigate()
   const { baskets, remove, clear, totalCount } = useEmailBasket()
   const draftOverrides = useDraftTemplates().data?.overrides
+  // Controlled so "Send" can close it: the compose page opens underneath.
+  const [open, setOpen] = useState(false)
 
   if (totalCount === 0) return null
 
@@ -58,11 +61,12 @@ export function EmailBasketTray(): React.JSX.Element | null {
     // Keep the basket's stored key so the correct (possibly mis-keyed, stale)
     // basket is the one cleared on a successful send.
     prefill.basketKey = key
+    setOpen(false)
     navigate('/ledger?tab=email', { state: { composePrefill: prefill } })
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"

@@ -10,21 +10,21 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import type { VehiclePhotoRead } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { localized } from '@/lib/language'
 
 import {
   IMAGE_ACCEPT,
   VEHICLE_QUERY_KEYS,
-  localized,
   vehicleErrorMessage,
 } from '../vehicleUtils'
 import {
+  DialogBody,
+  DialogFooter,
+  DialogShell,
+  Field,
+  FormAlert,
   UploadSlot,
-  VehicleDialogBody,
-  VehicleDialogFooter,
-  VehicleDialogShell,
-  VehicleField,
-  VehicleFormAlert,
-} from './VehicleDialogShell'
+} from '@/components/forms/DialogShell'
 
 export interface VehiclePhotoPickerProps {
   open: boolean
@@ -50,7 +50,7 @@ export function VehiclePhotoPicker({
   const [busy, setBusy] = useState(false)
 
   return (
-    <VehicleDialogShell
+    <DialogShell
       open={open}
       onOpenChange={onOpenChange}
       title={t('vehicles.photoLibrary.title')}
@@ -70,7 +70,7 @@ export function VehiclePhotoPicker({
           }}
         />
       ) : null}
-    </VehicleDialogShell>
+    </DialogShell>
   )
 }
 
@@ -131,7 +131,7 @@ function VehiclePhotoPickerForm({
       setLabelAr('')
       setLabelEn('')
     },
-    onError: (cause) => setError(vehicleErrorMessage(cause, t)),
+    onError: (cause) => setError(vehicleErrorMessage(cause)),
     onSettled: () => onBusyChange(false),
   })
 
@@ -141,7 +141,7 @@ function VehiclePhotoPickerForm({
       setError(null)
       onBusyChange(true)
     },
-    onError: (cause) => setError(vehicleErrorMessage(cause, t)),
+    onError: (cause) => setError(vehicleErrorMessage(cause)),
     onSettled: () => onBusyChange(false),
   })
 
@@ -149,8 +149,8 @@ function VehiclePhotoPickerForm({
 
   return (
     <>
-      <VehicleDialogBody className="gap-5">
-        <VehicleFormAlert id="vehicle-photo-library-error" message={error} />
+      <DialogBody className="gap-5">
+        <FormAlert id="vehicle-photo-library-error" message={error} />
 
         <section aria-labelledby="vehicle-photo-current" className="space-y-2">
           <h3 id="vehicle-photo-current" className="text-sm font-semibold text-foreground">
@@ -243,12 +243,12 @@ function VehiclePhotoPickerForm({
             {t('vehicles.photoLibrary.uploadNew')}
           </h3>
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-            <VehicleField id="vehicle-photo-label-ar" label={t('vehicles.photoLibrary.labelAr')} required>
+            <Field id="vehicle-photo-label-ar" label={t('vehicles.photoLibrary.labelAr')} required>
               <Input id="vehicle-photo-label-ar" dir="rtl" value={labelAr} disabled={busy} onChange={(event) => setLabelAr(event.target.value)} />
-            </VehicleField>
-            <VehicleField id="vehicle-photo-label-en" label={t('vehicles.photoLibrary.labelEn')} required>
+            </Field>
+            <Field id="vehicle-photo-label-en" label={t('vehicles.photoLibrary.labelEn')} required>
               <Input id="vehicle-photo-label-en" dir="ltr" value={labelEn} disabled={busy} onChange={(event) => setLabelEn(event.target.value)} />
-            </VehicleField>
+            </Field>
           </div>
           <UploadSlot
             label={t('vehicles.photoLibrary.file')}
@@ -278,9 +278,9 @@ function VehiclePhotoPickerForm({
             </Button>
           </div>
         </section>
-      </VehicleDialogBody>
+      </DialogBody>
 
-      <VehicleDialogFooter>
+      <DialogFooter>
         <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>
           {t('vehicles.cancel')}
         </Button>
@@ -301,7 +301,7 @@ function VehiclePhotoPickerForm({
         >
           {save.isPending ? t('common.saving') : t('vehicles.photoLibrary.saveSelection')}
         </Button>
-      </VehicleDialogFooter>
+      </DialogFooter>
     </>
   )
 }

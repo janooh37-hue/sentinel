@@ -291,7 +291,7 @@ def test_summary_and_list_match_zone_membership_and_visible_approval_states(env:
     viewer = User(email="summary-viewer@x.ae", password_hash="x", role="manager", status="active")
     env.add(viewer)
     env.flush()
-    env.add(UserPermission(user_id=viewer.id, capability="books.category.GS", effect="deny"))
+    env.add(UserPermission(user_id=viewer.id, capability="books.category.15/1", effect="deny"))
     env.commit()
     response = _client(env, viewer).get("/api/v1/item-permits/summary", params={"zone": "red"})
     assert response.status_code == 200, response.text

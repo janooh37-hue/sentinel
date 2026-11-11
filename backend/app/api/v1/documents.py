@@ -19,7 +19,6 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
-from urllib.parse import quote
 
 import anyio
 from fastapi import (
@@ -35,7 +34,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.orm import Session
 
-from app.api._responses import maybe_base64
+from app.api._responses import content_disposition, maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
@@ -44,7 +43,7 @@ from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import Book, Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
-from app.schemas.book import BookGrade
+from app.schemas.book import BookGrade, GenerateAttachmentSpec
 from app.schemas.signature_placement import (
     LegacyCandidateRead,
     SignatureEditorRead,
@@ -65,6 +64,7 @@ from app.services import (
     signature_placement_service,
     staging_service,
 )
+from app.services import notify_format as nf
 from app.services.job_registry import (
     JobDocumentItem as RegistryDocItem,
 )
@@ -84,14 +84,17 @@ def _should_autosend(
     commit: bool,
     revise_of_book_id: int | None,
     book_id: int | None,
-    notify_employee: bool = True,
+    notify_employee: nf.NotifyChoice = None,
 ) -> bool:
-    """Autosend only for a committed, non-revision generation that produced a
-    book, and only when the operator left the per-book notify switch on.
-
-    ``notify_employee`` defaults True so existing callers that predate the
-    per-book switch keep notifying; the generate route passes the request flag."""
-    return bool(commit) and revise_of_book_id is None and book_id is not None and notify_employee
+    """Attempt the automatic notification (a send, or a skipped row when the
+    switch or event default is off) only for a committed, non-revision generation
+    that produced a book. A system suppression ("silent") attempts nothing."""
+    return (
+        bool(commit)
+        and revise_of_book_id is None
+        and book_id is not None
+        and notify_employee != "silent"
+    )
 
 
 documents_router = APIRouter(prefix="/documents", tags=["documents"])
@@ -103,30 +106,18 @@ jobs_router = APIRouter(prefix="/jobs", tags=["jobs"])
 # ---------------------------------------------------------------------------
 
 
-class GenerateAttachmentSpec(BaseModel):
-    """One attachment to merge into the generated PDF (spec 2026-06-11 §6).
-
-    ``source`` discriminates which locator fields apply: ``staged`` reads
-    ``staged_token`` (from ``POST /documents/attachments/stage``);
-    ``record_document`` reads ``book_id`` (that book's current generated PDF);
-    ``record_attachment`` reads ``book_id`` + ``attachment_index`` (one of the
-    book's film-strip scans). ``slot_key=None`` means a free-form extra.
-    """
-
-    slot_key: str | None = None
-    source: Literal["staged", "record_document", "record_attachment"]
-    staged_token: str | None = None
-    original_name: str | None = None
-    book_id: int | None = None
-    attachment_index: int | None = None
-
-
 class StagedAttachmentRead(BaseModel):
     """Response of ``POST /documents/attachments/stage``."""
 
     token: str
     filename: str
     size: int
+
+
+class StageFromRecordRequest(BaseModel):
+    book_id: int
+    source: Literal["record_document", "record_attachment"]
+    attachment_index: int | None = None
 
 
 class DocumentGenerateRequest(BaseModel):
@@ -153,8 +144,8 @@ class DocumentGenerateRequest(BaseModel):
     # When set, regenerate a new version of this existing book (reuse its ref)
     # instead of allocating a fresh ref + Book row. Requires commit=True.
     revise_of_book_id: int | None = None
-    # Attachments validated/persisted/merged into the combined PDF on commit
-    # (slots per core.form_policy; see document_service.generate_document).
+    # Attachments are merged into previews without consuming uploads; committed
+    # saves validate required slots and persist the same sources on the book.
     attachments: list[GenerateAttachmentSpec] | None = None
     # General Book only: government classification (التبويب) code, e.g. "5/1".
     # Required on commit — every General Book ref is now allocated from the
@@ -162,12 +153,11 @@ class DocumentGenerateRequest(BaseModel):
     # is retired for this form.
     classification_code: str | None = None
     grade: BookGrade = "unclassified"
-    # Per-book notify opt-out (2026-07-20). The generation preview shows an
-    # On-by-default switch for notifier-backed forms; sending False suppresses
-    # the notification for THIS book only. Default True keeps every existing
-    # caller's behaviour unchanged. ANDed with the global
-    # `sms_autosend_enabled` setting inside notify_dispatch.
-    notify_employee: bool = True
+    # Per-book notify switch. The generation preview shows it seeded from the
+    # event's default (`msgdefault.<event>`); True/False is the operator's
+    # explicit choice for THIS book, None applies the event default. ANDed
+    # with the global `sms_autosend_enabled` setting inside notify_dispatch.
+    notify_employee: bool | None = None
 
 
 class DocumentGenerateResponse(BaseModel):
@@ -282,9 +272,9 @@ def _run_generation(
         # while this job sat queued is respected, not a stale detached read.
         actor = db.get(User, current_user.id) if current_user is not None else None
         # inmate_reporter's private saves never notify regardless of the request
-        # flag (server-enforced, not just a UI default).
-        notify_employee = (
-            False
+        # flag (server-enforced, not just a UI default), and log no skipped row.
+        notify_employee: nf.NotifyChoice = (
+            "silent"
             if actor is not None and actor.role == INMATE_REPORTER_ROLE
             else request.notify_employee
         )
@@ -314,7 +304,12 @@ def _run_generation(
             notify_employee=notify_employee,
         ):
             try:
-                notify_dispatch.auto_send_for_book(db, result.book_id, sent_by=None)  # type: ignore[arg-type]
+                notify_dispatch.auto_send_for_book(
+                    db,
+                    result.book_id,  # type: ignore[arg-type]
+                    sent_by=actor.id if actor is not None else None,
+                    choice=notify_employee,
+                )
             except Exception:
                 log.exception("auto SMS failed for book %s", result.book_id)
         registry_docs = [
@@ -417,6 +412,30 @@ async def stage_attachment(
     """
     data = await upload.read()
     staged = staging_service.stage(data, upload.filename or "")
+    return StagedAttachmentRead(token=staged.token, filename=staged.filename, size=staged.size)
+
+
+@documents_router.post("/attachments/stage-from-record", response_model=StagedAttachmentRead)
+def stage_attachment_from_record(
+    payload: StageFromRecordRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("documents.generate"))],
+) -> StagedAttachmentRead:
+    """Copy a readable record's generated PDF or scan into upload staging."""
+    spec = GenerateAttachmentSpec(
+        source=payload.source,
+        book_id=payload.book_id,
+        attachment_index=payload.attachment_index,
+    )
+    [(_, path)] = document_service._resolve_attachment_sources(db, [spec], record_access_user=user)
+    book = db.get(Book, payload.book_id)
+    assert book is not None
+    filename = (
+        book.ref_number.replace("/", "-") + ".pdf"
+        if payload.source == "record_document"
+        else path.name
+    )
+    staged = staging_service.stage(path.read_bytes(), filename)
     return StagedAttachmentRead(token=staged.token, filename=staged.filename, size=staged.size)
 
 
@@ -554,21 +573,13 @@ def get_document(
 
 
 def _inline_pdf_response(content: bytes, filename: str) -> Response:
-    """Serve PDF bytes inline with an RFC 5987 Content-Disposition.
-
-    A raw ``Response`` header must be latin-1 encodable, so a bilingual filename
-    (Arabic employee name) needs an ASCII fallback plus a percent-encoded
-    ``filename*`` — the same shape ``FileResponse`` builds for us automatically.
-    """
-    ascii_name = (
-        filename.encode("ascii", "ignore").decode().translate({0x0D: None, 0x0A: None}).strip()
-        or "document.pdf"
-    )
-    disposition = f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
+    """Serve PDF bytes inline with an RFC 5987 Content-Disposition."""
     return Response(
         content=content,
         media_type="application/pdf",
-        headers={"Content-Disposition": disposition},
+        headers={
+            "Content-Disposition": content_disposition("inline", filename, fallback="document.pdf")
+        },
     )
 
 

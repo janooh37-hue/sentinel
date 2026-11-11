@@ -22,7 +22,7 @@ PX_PER_PT = 4.0 / 3.0  # 96dpi
 
 
 def main() -> None:
-    import fitz  # PyMuPDF
+    import pymupdf  # PyMuPDF
     from docx2pdf import convert
 
     from app.core.docx_engine import DocxEngine
@@ -44,7 +44,7 @@ def main() -> None:
         DocxEngine(BACKEND / "templates").fill("General Book", data, docx_path)
         convert(str(docx_path), str(pdf_path))
 
-        pdf = fitz.open(str(pdf_path))
+        pdf = pymupdf.open(str(pdf_path))
         page1 = pdf[0]
         ph = page1.rect.height  # pt
         pw = page1.rect.width

@@ -112,7 +112,7 @@ export function DocumentViewerDialog({
     >
       {/* Header */}
       <div
-        className="mx-auto flex w-full max-w-5xl shrink-0 items-center gap-3 py-2 text-white"
+        className="mx-auto flex w-full max-w-5xl shrink-0 flex-wrap items-center gap-3 py-2 text-white"
         onClick={(e) => e.stopPropagation()}
       >
         <span className="shrink-0">
@@ -128,13 +128,14 @@ export function DocumentViewerDialog({
             </div>
           )}
         </div>
+        <div className="order-4 flex w-full flex-wrap items-center justify-between gap-2 sm:order-none sm:w-auto">
         {previewable && (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center">
           <button
             type="button"
             onClick={() => setRotation((r) => (r + 90) % 360)}
             aria-label={t('viewer.rotate', { defaultValue: 'Rotate' })}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/20"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/20"
           >
             <RotateCw className="h-5 w-5" strokeWidth={1.8} aria-hidden />
           </button>
@@ -143,7 +144,7 @@ export function DocumentViewerDialog({
             onClick={() => setZoom((z) => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))}
             disabled={zoom <= ZOOM_MIN}
             aria-label={t('viewer.zoomOut', { defaultValue: 'Zoom out' })}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/20 disabled:opacity-30"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/20 disabled:opacity-30"
           >
             <ZoomOut className="h-5 w-5" strokeWidth={1.8} aria-hidden />
           </button>
@@ -152,7 +153,7 @@ export function DocumentViewerDialog({
             onClick={() => setZoom((z) => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))}
             disabled={zoom >= ZOOM_MAX}
             aria-label={t('viewer.zoomIn', { defaultValue: 'Zoom in' })}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/20 disabled:opacity-30"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/20 disabled:opacity-30"
           >
             <ZoomIn className="h-5 w-5" strokeWidth={1.8} aria-hidden />
           </button>
@@ -160,7 +161,7 @@ export function DocumentViewerDialog({
             type="button"
             onClick={resetView}
             aria-label={t('viewer.reset', { defaultValue: 'Fit / reset' })}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/20"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/20"
           >
             <Maximize className="h-5 w-5" strokeWidth={1.8} aria-hidden />
           </button>
@@ -168,7 +169,7 @@ export function DocumentViewerDialog({
             type="button"
             onClick={() => window.open(current.openUrl ?? current.downloadUrl, '_blank', 'noopener')}
             aria-label={t('viewer.openNewTab', { defaultValue: 'Open in new tab' })}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/20"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/20"
           >
             <ExternalLink className="h-5 w-5" strokeWidth={1.8} aria-hidden />
           </button>
@@ -176,16 +177,17 @@ export function DocumentViewerDialog({
         )}
         <a
           href={current.downloadUrl}
-          className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white/10 px-3 text-sm font-medium hover:bg-white/20"
+          className="inline-flex h-11 items-center gap-1.5 rounded-full bg-white/10 px-3 text-sm font-medium hover:bg-white/20"
           download
         >
           <Download className="h-4 w-4" strokeWidth={1.7} />
           {t('common.download')}
         </a>
+        </div>
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/20"
+          className="order-3 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full hover:bg-white/20 sm:order-none"
           aria-label={t('common.close', { defaultValue: 'Close' })}
         >
           <X className="h-5 w-5" strokeWidth={1.8} />

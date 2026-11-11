@@ -31,7 +31,6 @@ import {
   PanelRightClose,
   PanelRightOpen,
   PenLine,
-  Plus,
   Send,
   Trash2,
   Upload,
@@ -180,6 +179,9 @@ export function RecordPane({
   const manage = useManagePaper(book?.id ?? null, book?.ref_number ?? undefined)
   const [deleteTarget, setDeleteTarget] = useState<Paper | null>(null)
   const [replaceTarget, setReplaceTarget] = useState<Paper | null>(null)
+  const pagesRef = useRef<HTMLInputElement | null>(null)
+  const [pagesTarget, setPagesTarget] = useState<Paper | null>(null)
+  const [deletePageTarget, setDeletePageTarget] = useState<{ paper: Paper; page: number } | null>(null)
   const [deleteRecordOpen, setDeleteRecordOpen] = useState(false)
   const [sendOpen, setSendOpen] = useState(false)
   const [levelOpen, setLevelOpen] = useState(false)
@@ -528,35 +530,23 @@ export function RecordPane({
     return <DocumentState kind="empty" body={t('books.record.noDocument')} />
   })()
 
-  const addScanSlot = !isInmateReporter && canScan ? (
-    <Hint label={t('books.pane.addScanHint')}>
-      <button
-        type="button"
-        disabled={addScan.busy}
-        onClick={() => fileInput?.click()}
-        className="flex w-14 shrink-0 flex-col items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <span className="grid aspect-[210/297] w-full place-items-center rounded-[3px] border-2 border-dashed border-border bg-surface-raised text-faint transition-colors hover:border-primary hover:text-primary motion-reduce:transition-none">
-          {addScan.busy ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
-          ) : (
-            <Plus className="h-4 w-4" aria-hidden />
-          )}
-        </span>
-        <span className="w-full truncate text-center text-[0.56em] leading-tight text-faint">{t('books.pane.addScan')}</span>
-      </button>
-    </Hint>
-  ) : undefined
-
-  const deletePaperHandlers = {
-    onDeletePaper: !isInmateReporter && canEdit ? setDeleteTarget : undefined,
-    onReplacePaper:
-      !isInmateReporter && canEdit
-        ? (p: Paper) => {
-            setReplaceTarget(p)
-            replaceRef.current?.click()
-          }
-        : undefined,
+  const canManagePapers = !isInmateReporter && canEdit
+  const paperHandlers = {
+    onDeletePaper: canManagePapers ? setDeleteTarget : undefined,
+    onReplacePaper: canManagePapers
+      ? (p: Paper) => {
+          setReplaceTarget(p)
+          replaceRef.current?.click()
+        }
+      : undefined,
+    onAddPages: canManagePapers
+      ? (p: Paper) => {
+          setPagesTarget(p)
+          pagesRef.current?.click()
+        }
+      : undefined,
+    onDeletePage: canManagePapers ? (paper: Paper, page: number) => setDeletePageTarget({ paper, page }) : undefined,
+    pagesBusy: manage.busy,
   }
 
   return (
@@ -682,9 +672,10 @@ export function RecordPane({
               onSelectKey={setPickedKey}
               mode="pane"
               onOpenFull={() => setFullOpen(true)}
-              addScanSlot={addScanSlot}
+              onUpload={!isInmateReporter && canScan ? () => fileInput?.click() : undefined}
+              uploadBusy={addScan.busy}
               emptySlot={emptyState}
-              {...deletePaperHandlers}
+              {...paperHandlers}
             />
           </Suspense>
         </div>
@@ -937,6 +928,37 @@ export function RecordPane({
         }}
       />
 
+      {/* Add pages to the chosen uploaded version: same capture-then-click pattern. */}
+      <input
+        ref={pagesRef}
+        type="file"
+        accept="application/pdf,image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          const p = pagesTarget
+          setPagesTarget(null)
+          if (f && p) void manage.addPages(p, f)
+          e.target.value = ''
+        }}
+      />
+
+      <ConfirmDialog
+        open={deletePageTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletePageTarget(null)
+        }}
+        title={t('books.pane.deletePageTitle', { n: (deletePageTarget?.page ?? 0) + 1 })}
+        description={t('books.pane.deletePageBody')}
+        confirmLabel={t('common.delete')}
+        destructive
+        onConfirm={() => {
+          const target = deletePageTarget
+          setDeletePageTarget(null)
+          if (target) void manage.deletePage(target.paper, target.page)
+        }}
+      />
+
       <AlertDialog open={draftScan !== null} onOpenChange={(o) => { if (!o) setDraftScan(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -992,7 +1014,7 @@ export function RecordPane({
                   onSelectKey={setPickedKey}
                   mode="overlay"
                   onClose={() => setFullOpen(false)}
-                  {...deletePaperHandlers}
+                  {...paperHandlers}
                 />
               </Suspense>
             </div>,

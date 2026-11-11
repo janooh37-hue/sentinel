@@ -20,6 +20,7 @@ from app.db.models import User
 from app.db.session import get_db
 from app.schemas.notify import (
     MessageRenderRead,
+    MessageTemplateDefaultWrite,
     MessageTemplateRead,
     MessageTextWrite,
     NotifyMessageRead,
@@ -120,6 +121,18 @@ def reset_template(
 ) -> dict[str, Any]:
     return message_template_service.save_template(
         db, event, None, actor=user.employee_id or user.email
+    )
+
+
+@router.put("/templates/{event}/default", response_model=MessageTemplateRead)
+def update_template_default(
+    event: str,
+    payload: MessageTemplateDefaultWrite,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("messages.templates"))],
+) -> dict[str, Any]:
+    return message_template_service.save_default(
+        db, event, payload.enabled, actor=user.employee_id or user.email
     )
 
 

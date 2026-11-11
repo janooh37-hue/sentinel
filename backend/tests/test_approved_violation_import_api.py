@@ -5,7 +5,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -71,7 +71,7 @@ def _client(db: Session, user: User) -> TestClient:
 
 
 def _pdf_bytes() -> bytes:
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text((72, 100), "Approved inmate report")
     data = doc.tobytes()

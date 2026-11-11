@@ -1,4 +1,4 @@
-"""Migration 0111 adds private drafts and Revision saves without breaking FTS."""
+"""Migration 0120 adds private drafts and Revision saves without breaking FTS."""
 
 from collections.abc import Iterator
 from pathlib import Path
@@ -11,8 +11,8 @@ from sqlalchemy import Engine, create_engine, event, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0111_ledger_book_drafts"
-PARENT = "0110_record_grade"
+HEAD = "0120_ledger_book_drafts"
+PARENT = "0119_record_grade"
 DRAFT_INSERT = (
     "INSERT INTO book_drafts (owner_user_id, created_at, updated_at{columns}) "
     "VALUES (7, '2026-10-01 00:00:00', '2026-10-01 00:00:00'{values})"
@@ -199,6 +199,15 @@ def test_downgrade_and_reupgrade_preserve_books_and_fts(at_parent: tuple[Engine,
     assert "ledger_book_saves" not in inspector.get_table_names()
     assert "source_draft_id" not in {column["name"] for column in inspector.get_columns("books")}
     assert_seed_and_fts_survive(engine)
+    with engine.begin() as c:
+        c.execute(text("UPDATE books SET search_text = 'downgradefts' WHERE id = 1"))
+        assert c.execute(
+            text("SELECT rowid FROM books_fts WHERE books_fts MATCH 'downgradefts'")
+        ).scalars().all() == [1]
+        assert not c.execute(
+            text("SELECT rowid FROM books_fts WHERE books_fts MATCH 'zebraledger'")
+        ).all()
+        c.execute(text("UPDATE books SET search_text = 'zebraledger' WHERE id = 1"))
     command.upgrade(config, HEAD)
     assert {"book_drafts", "ledger_book_saves"} <= set(inspect(engine).get_table_names())
     with engine.begin() as c:

@@ -23,8 +23,9 @@ vi.mock('@/lib/api', async (original) => {
   }
 })
 
+const caps = vi.hoisted((): { has: (capability: string) => boolean } => ({ has: () => true }))
 vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({ capabilities: new Set(['leaves.create', 'leaves.view']), isLoading: false, has: () => true }),
+  useCapabilities: () => ({ capabilities: new Set(['leaves.create', 'leaves.view']), isLoading: false, has: (capability: string) => caps.has(capability) }),
 }))
 vi.mock('@/components/notify/SendButton', () => ({ SendButton: () => null }))
 vi.mock('@/components/notify/NotifyEmployeeToggle', () => ({ NotifyEmployeeToggle: () => null }))
@@ -59,7 +60,10 @@ function renderLeaves(initialEntry: string): void {
   )
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  caps.has = () => true
+})
 
 describe('Leaves URL state', () => {
   it('opens the National Service dialog from action and closes without leaving Leaves', async () => {
@@ -105,5 +109,14 @@ describe('Leaves URL state', () => {
     renderLeaves('/leaves?tab=email-draft')
     expect(screen.getByRole('tab', { name: 'Email draft' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByTestId('draft-templates')).toHaveAttribute('data-service', 'leaves')
+  })
+
+  it('has no template tabs without messages.templates, even from a shared URL', () => {
+    caps.has = (capability) => capability !== 'messages.templates'
+    renderLeaves('/leaves?tab=email-draft')
+    expect(screen.queryByRole('tab', { name: 'Notification' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Email draft' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('draft-templates')).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /records/i })).toHaveAttribute('aria-selected', 'true')
   })
 })

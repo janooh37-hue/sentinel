@@ -12,23 +12,36 @@ import json
 import logging
 import re
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path, PurePath
-from typing import Any, Final, Literal, NamedTuple
-from zoneinfo import ZoneInfo
+from typing import Any, Final, Literal, NamedTuple, cast
 
-from sqlalchemy import Integer, and_, case, exists, false, func, not_, or_, select, text, true
+from sqlalchemy import (
+    Integer,
+    and_,
+    case,
+    exists,
+    false,
+    func,
+    not_,
+    or_,
+    select,
+    text,
+    true,
+    update,
+)
 from sqlalchemy.orm import Session, aliased, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import grades
+from app.core.classifications import CLASSIFICATIONS, get_classification
+from app.core.clock import ORGANIZATION_TIMEZONE
 from app.core.constants import (
     ALLOWED_DOC_EXTS,
-    CLASSIFIED_BOOK_FORMS,
     LEDGER_BOOK_TEMPLATE_ID,
     STAMP_STYLES,
 )
@@ -40,7 +53,15 @@ from app.core.form_kind import (
     subject_prefixes,
     word_draft_service,
 )
+from app.core.form_policy import BRANCH_MANAGER_STAGE_FORMS
 from app.core.fts_query import and_prefix_query, has_nul
+from app.core.record_categories import (
+    LEGACY_CATEGORY_RECORD_CATEGORY,
+    SERVICE_RECORD_CATEGORY,
+    record_gate_categories,
+    record_services,
+    service_filing_category,
+)
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import (
     AuditLog,
@@ -58,6 +79,7 @@ from app.db.models import (
     Leave,
     Manager,
     OutboundMessage,
+    ScanInbox,
     User,
 )
 from app.db.repos._locking import begin_immediate_if_idle
@@ -83,11 +105,10 @@ _UNSAFE_CHARS = re.compile(r"[\\/:\*\?\"<>\|\x00-\x1f]")
 
 LIST_DEFAULT_LIMIT = 100
 LIST_MAX_LIMIT = 500
-_ORGANIZATION_TIMEZONE = ZoneInfo("Asia/Dubai")
 
 
 def count_my_generated_documents(db: Session, *, user_id: int) -> dict[str, int]:
-    now_local = datetime.now(_ORGANIZATION_TIMEZONE)
+    now_local = datetime.now(ORGANIZATION_TIMEZONE)
     day_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start_local = day_start_local - timedelta(days=now_local.weekday())
     day_start_utc = day_start_local.astimezone(UTC).replace(tzinfo=None)
@@ -188,12 +209,12 @@ def _fts_query_books(db: Session, q: str) -> dict[int, str]:
 def _active_word_draft_clause() -> ColumnElement[bool]:
     return and_(
         Book.category_id == "GS",
-        Book.id.not_in(select(BookVersion.book_id)),
+        Book.id.not_in(select(BookVersion.book_id).correlate(Book)),
         or_(Book.ref_number.like("REPORT-%"), Book.classification_code.is_not(None)),
         exists(
-            select(BookEditSession.id).where(
-                BookEditSession.book_id == Book.id, BookEditSession.state == "active"
-            )
+            select(BookEditSession.id)
+            .where(BookEditSession.book_id == Book.id, BookEditSession.state == "active")
+            .correlate(Book)
         ),
     )
 
@@ -238,6 +259,7 @@ def service_clause(service_id: str) -> ColumnElement[bool]:
         .where(BookVersion.book_id == Book.id)
         .order_by(BookVersion.version_no.desc())
         .limit(1)
+        .correlate(Book)
         .scalar_subquery()
     )
     is_newest_version_of = and_(
@@ -259,7 +281,7 @@ def service_clause(service_id: str) -> ColumnElement[bool]:
         is_newest_version_of,
         draft_match,
         and_(
-            Book.id.not_in(select(BookVersion.book_id)),
+            Book.id.not_in(select(BookVersion.book_id).correlate(Book)),
             not_(word_draft),
             Book.subject.is_not(None),
             or_(*[Book.subject.ilike(f"{p}%") for p in prefixes]),
@@ -343,32 +365,88 @@ def _inmate_reporter_book_visible(book: Book, user_id: int) -> bool:
     return False
 
 
-# Records numbered in the classified register: the DOCX forms plus Ledger Books
-# (HTML, so not in CLASSIFIED_BOOK_FORMS). A denied التبويب hides them all.
-_CLASSIFIED_REGISTER_TEMPLATE_IDS: Final[frozenset[str]] = CLASSIFIED_BOOK_FORMS | {
-    LEDGER_BOOK_TEMPLATE_ID
-}
-
-
-def _classified_under_clause(category_ids: set[str]) -> ColumnElement[bool]:
-    """A classified-register book (General Book / Security Permit / Ledger Book, or
-    version-less or template-less) filed under one of these classifications.
-    Auto-classified papers from other forms (leave, resignation) carry a code too
-    but are never matched."""
-    newest_template_id = (
-        select(BookVersion.template_id)
-        .where(BookVersion.book_id == Book.id)
-        .order_by(BookVersion.version_no.desc())
-        .limit(1)
-        .scalar_subquery()
+def _stray_record_clause() -> ColumnElement[bool]:
+    """SQL mirror of ``record_categories.is_stray_record`` for the correlated Book."""
+    services_by_filing: dict[str, list[str]] = {}
+    for service_id in SERVICE_IDS:
+        services_by_filing.setdefault(service_filing_category(service_id), []).append(service_id)
+    classification_codes = [classification.code for classification in CLASSIFICATIONS]
+    return or_(
+        *[
+            and_(
+                Book.category_id.is_not(None),
+                Book.category_id.not_in(sorted([*classification_codes, filing_category])),
+                or_(*[service_clause(service_id) for service_id in service_ids]),
+            )
+            for filing_category, service_ids in sorted(services_by_filing.items())
+        ]
     )
-    return and_(
-        Book.classification_code.is_not(None),
-        Book.classification_code.in_(sorted(category_ids)),
-        or_(
-            newest_template_id.is_(None),
-            newest_template_id.in_(sorted(_CLASSIFIED_REGISTER_TEMPLATE_IDS)),
+
+
+def record_service_clause(service_id: str) -> ColumnElement[bool]:
+    """SQL mirror of ``record_categories.record_services``: the correlated Book
+    answers to ``service_id``'s ``books.servicerecords.*`` gate."""
+    if service_id == OTHER_SERVICE_ID:
+        return or_(service_clause(OTHER_SERVICE_ID), _stray_record_clause())
+    return service_clause(service_id)
+
+
+def _stored_category_in_clause(code_set: set[str]) -> ColumnElement[bool]:
+    """SQL: the correlated Book's stored ``category_id`` maps into ``code_set``."""
+    classification_codes = {classification.code for classification in CLASSIFICATIONS}
+    stored_ids = (classification_codes & code_set) | {
+        category_id
+        for category_id, code in LEGACY_CATEGORY_RECORD_CATEGORY.items()
+        if code in code_set
+    }
+    stored: ColumnElement[bool] = Book.category_id.in_(sorted(stored_ids))
+    if "15/1" in code_set:
+        known_ids = classification_codes | set(LEGACY_CATEGORY_RECORD_CATEGORY)
+        stored = or_(
+            stored,
+            Book.category_id.is_(None),
+            Book.category_id.not_in(sorted(known_ids)),
+        )
+    return stored
+
+
+def record_category_in_clause(codes: Collection[str]) -> ColumnElement[bool]:
+    """SQL mirror of ``record_categories.record_category`` for the correlated Book."""
+    if not codes:
+        return false()
+    code_set = set(codes)
+    unclassified = [
+        service_clause(service_id)
+        for service_id, code in SERVICE_RECORD_CATEGORY.items()
+        if code in code_set
+    ]
+    unclassified.append(
+        and_(service_clause(OTHER_SERVICE_ID), _stored_category_in_clause(code_set))
+    )
+    return or_(
+        and_(
+            Book.classification_code.is_not(None),
+            Book.classification_code.in_(sorted(code_set)),
         ),
+        and_(Book.classification_code.is_(None), or_(*unclassified)),
+    )
+
+
+def record_gate_category_in_clause(codes: Collection[str]) -> ColumnElement[bool]:
+    """SQL mirror of ``record_categories.record_gate_categories``: one of the
+    correlated Book's gate categories is in ``codes``."""
+    if not codes:
+        return false()
+    code_set = set(codes)
+    live_categories = {service_filing_category(service_id) for service_id in SERVICE_IDS}
+    classification_codes = {classification.code for classification in CLASSIFICATIONS}
+    retired = and_(
+        Book.category_id.is_not(None),
+        Book.category_id.not_in(sorted(classification_codes | live_categories)),
+    )
+    return or_(
+        record_category_in_clause(code_set),
+        and_(retired, _stored_category_in_clause(code_set)),
     )
 
 
@@ -495,11 +573,12 @@ def _record_type_clause(db: Session, user: User) -> ColumnElement[bool] | None:
     denied_services, denied_categories = perm_service.denied_record_types(db, user)
     clauses: list[ColumnElement[bool]] = []
     if denied_categories:
-        clauses.append(Book.category_id.not_in(denied_categories))
-        clauses.append(not_(_classified_under_clause(denied_categories)))
+        clauses.append(not_(record_gate_category_in_clause(denied_categories)))
     if denied_services:
         clauses.append(
-            not_(or_(*[service_clause(service_id) for service_id in sorted(denied_services)]))
+            not_(
+                or_(*[record_service_clause(service_id) for service_id in sorted(denied_services)])
+            )
         )
     if user.role == INMATE_REPORTER_ROLE:
         clauses.append(_inmate_reporter_visibility_clause(user))
@@ -559,21 +638,21 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
                 for template_id in service_template_ids(service_id)
             }
             clauses.append(Document.template_id.in_(sorted(named_template_ids)))
+    # Stray records answer to Other, but their documents carry a named template.
+    linked_hidden: list[ColumnElement[bool]] = []
+    if OTHER_SERVICE_ID in denied_services:
+        linked_hidden.append(_stray_record_clause())
     if denied_categories:
+        linked_hidden.append(record_gate_category_in_clause(denied_categories))
+    if linked_hidden:
         linked_document = aliased(Document)
-        linked_to_denied_category = exists(
+        linked_to_hidden_record = exists(
             select(BookVersion.id)
             .select_from(BookVersion)
             .join(Book, Book.id == BookVersion.book_id)
             .join(linked_document, linked_document.id == BookVersion.document_id)
             .where(
-                or_(
-                    Book.category_id.in_(sorted(denied_categories)),
-                    and_(
-                        Book.classification_code.in_(sorted(denied_categories)),
-                        linked_document.template_id.in_(sorted(CLASSIFIED_BOOK_FORMS)),
-                    ),
-                ),
+                or_(*linked_hidden),
                 or_(
                     linked_document.id == Document.id,
                     and_(
@@ -585,7 +664,7 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
             )
             .correlate(Document)
         )
-        clauses.append(not_(linked_to_denied_category))
+        clauses.append(not_(linked_to_hidden_record))
     if user.role == INMATE_REPORTER_ROLE:
         current_version_id = (
             select(BookVersion.id)
@@ -654,12 +733,17 @@ def require_record_type_access(
             category_id=category_id,
         )
     caps = perm_service.effective_caps(db, user)
-    category_denied = category_id is not None and f"books.category.{category_id}" not in caps
-    service_denied = service_id is not None and f"books.service.{service_id}" not in caps
-    classification_denied = (
-        classification_code is not None and f"books.category.{classification_code}" not in caps
+    gate_categories = record_gate_categories(
+        service_id=service_id or OTHER_SERVICE_ID,
+        classification_code=classification_code,
+        category_id=category_id,
     )
-    if category_denied or service_denied or classification_denied:
+    category_denied = any(f"books.category.{code}" not in caps for code in gate_categories)
+    service_denied = service_id is not None and any(
+        f"books.service.{gate}" not in caps
+        for gate in record_services(service_id=service_id, category_id=category_id)
+    )
+    if category_denied or service_denied:
         raise AppError(
             "RECORD_TYPE_FORBIDDEN",
             "You don't have access to this record type.",
@@ -684,14 +768,14 @@ def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
             newest.template_id if newest is not None else None,
             versioned=newest is not None,
         )
-    newest_template_id = newest.template_id if newest is not None else None
-    classification_denied = row.classification_code in denied_categories and (
-        newest_template_id is None or newest_template_id in _CLASSIFIED_REGISTER_TEMPLATE_IDS
+    gate_categories = record_gate_categories(
+        service_id=service_id,
+        classification_code=row.classification_code,
+        category_id=row.category_id,
     )
-    if (
-        row.category_id in denied_categories
-        or classification_denied
-        or service_id in denied_services
+    gate_services = record_services(service_id=service_id, category_id=row.category_id)
+    if not denied_categories.isdisjoint(gate_categories) or not denied_services.isdisjoint(
+        gate_services
     ):
         raise AppError(
             "RECORD_TYPE_FORBIDDEN",
@@ -1337,8 +1421,10 @@ def list_books(
         count_stmt = count_stmt.where(inbox_filter)
 
     if category_id is not None:
-        category_clause = or_(
-            Book.category_id == category_id, _classified_under_clause({category_id})
+        category_clause = (
+            record_category_in_clause({category_id})
+            if get_classification(category_id) is not None
+            else Book.category_id == category_id
         )
         stmt = stmt.where(category_clause)
         count_stmt = count_stmt.where(category_clause)
@@ -1361,6 +1447,15 @@ def list_books(
         branches: list[ColumnElement[bool]] = [
             Book.subject.ilike(needle),
             Book.ref_number.ilike(needle),
+            # The employee the record is about: G-number, name as filed, and the
+            # live employee's English/Arabic names.
+            Book.employee_id.ilike(needle),
+            Book.employee_name_snapshot.ilike(needle),
+            Book.employee_id.in_(
+                select(Employee.id).where(
+                    or_(Employee.name_en.ilike(needle), Employee.name_ar.ilike(needle))
+                )
+            ),
         ]
         # Union: ilike OR FTS body match (fts_ids empty = ilike only).
         if fts_ids:
@@ -1715,7 +1810,7 @@ def _received_step_kind(book: Book, kind: str | None) -> str:
 
 
 def _approver_steps(version: BookVersion | None) -> list[BookApprovalStep]:
-    """Steps that gate approval_state — the single signing manager (kind=approver).
+    """Steps that gate approval_state — the ordered signing approvers.
     Legacy rows created before migration 0039 default to 'approver'; in-memory
     steps whose kind hasn't been written yet also default to 'approver'."""
     if version is None:
@@ -1830,11 +1925,11 @@ def _commit_approval_state(
     the leave (``leave_owner``). A voided or deleted record cancels its leave.
 
     An enrolled chain form's employee message is held from save to the first
-    approval, and sent then if the operator kept the "notify employee" switch
-    on. Rejection and return send nothing.
+    approval, then sent, or logged as skipped when the operator's switch or the
+    event default is off. Rejection and return send nothing.
     """
     from app.core import form_policy
-    from app.services import leave_service, notify_dispatch
+    from app.services import document_service, leave_service, notify_dispatch
 
     version = _current_version(book)
     template_id = version.template_id if version is not None else None
@@ -1890,7 +1985,12 @@ def _commit_approval_state(
     ):
         return
     try:
-        notify_dispatch.auto_send_for_book(db, book.id, sent_by=user_id)
+        notify_dispatch.auto_send_for_book(
+            db,
+            book.id,
+            sent_by=user_id,
+            choice=document_service.inherited_notify_employee(book),
+        )
     except Exception:
         db.rollback()
         log.exception("auto notification failed for approved book %s", book.id)
@@ -1903,8 +2003,8 @@ def _current_pending_step(book: Book) -> BookApprovalStep | None:
     if version is None:
         return None
     for step in sorted(_approver_steps(version), key=lambda s: s.step_order):
-        if step.state == "pending":
-            return step
+        if step.state != "approved":
+            return step if step.state == "pending" else None
     return None
 
 
@@ -2026,15 +2126,27 @@ def submit_for_approval(
     approver_user_id: int | None,
     reviewer_user_ids: Sequence[int],
     submitted_by_user_id: int,
+    branch_approver_user_id: int | None = None,
 ) -> Book:
-    """Fresh chain: one approver step (the signing manager) + 0..N advisory
-    reviewer steps. The approver defaults to the doc's linked manager
-    (Book.doc_manager_id → Manager.user_id) when ``approver_user_id`` is None."""
+    """Replace assignments with ordered signing stages and advisory reviewers.
+
+    The project approver defaults to the document's linked manager account.
+    """
     book = _get_book_with_versions(db, book_id)
     require_not_ledger_book(book)
     version = _current_version(book)
     if version is None:
         raise ValidationFailedError("NO_VERSION", "Book has no version to submit")
+    branch_stage = version.template_id in BRANCH_MANAGER_STAGE_FORMS
+    if branch_stage and not version.fields:
+        raise ValidationFailedError(
+            "BRANCH_STAGE_WORD_REVISION_UNSUPPORTED",
+            "Word-authored revisions of this form cannot be submitted for staged approval.",
+        )
+    if branch_stage and branch_approver_user_id is None:
+        raise ValidationFailedError(
+            "BRANCH_APPROVER_REQUIRED", "Choose a branch manager before submitting this form."
+        )
     caller = db.get(User, submitted_by_user_id)
     report = is_report(book)
     inmate_report = bool(caller is not None and caller.role == INMATE_REPORTER_ROLE and report)
@@ -2097,17 +2209,37 @@ def submit_for_approval(
     # BookApprovalStep.assignee_user_id is a NOT-NULL FK (ondelete=RESTRICT), so a
     # stale/deleted id would otherwise blow up as an opaque 500 at db.commit().
     approver = db.get(User, approver_id)
-    if approver is None or approver.status != "active":
+    if (
+        approver is None
+        or approver.status != "active"
+        or (branch_stage and not perm_service.has_capability(db, approver, "books.approve"))
+    ):
         raise ValidationFailedError(
             "APPROVER_NOT_ELIGIBLE",
             "The chosen signing manager is not an active user account.",
         )
+    if branch_stage:
+        if branch_approver_user_id == approver_id:
+            raise ValidationFailedError(
+                "BRANCH_APPROVER_SAME_AS_PROJECT",
+                "The branch manager and project manager must be different accounts.",
+            )
+        branch_approver = db.get(User, branch_approver_user_id)
+        if (
+            branch_approver is None
+            or branch_approver.status != "active"
+            or not perm_service.has_capability(db, branch_approver, "books.approve")
+        ):
+            raise ValidationFailedError(
+                "APPROVER_NOT_ELIGIBLE",
+                "The chosen branch manager must be an active account allowed to approve.",
+            )
 
     # Reviewers: active accounts, deduped, never the approver.
     seen: set[int] = set()
     reviewers: list[int] = []
     for uid in reviewer_user_ids:
-        if uid == approver_id or uid in seen:
+        if uid in (approver_id, branch_approver_user_id if branch_stage else None) or uid in seen:
             continue
         u = db.get(User, uid)
         if u is None or u.status != "active":
@@ -2120,17 +2252,28 @@ def submit_for_approval(
     for step in version.approval_steps:
         retain_revision_access(db, version, step)
     version.approval_steps.clear()
+    if branch_stage:
+        version.approval_steps.append(
+            BookApprovalStep(
+                book_id=book.id,
+                step_order=0,
+                stage_label="branch_manager",
+                assignee_user_id=branch_approver_user_id,
+                kind="approver",
+                state="pending",
+            )
+        )
     version.approval_steps.append(
         BookApprovalStep(
             book_id=book.id,
-            step_order=0,
-            stage_label="Approve",
+            step_order=1 if branch_stage else 0,
+            stage_label="project_manager" if branch_stage else "Approve",
             assignee_user_id=approver_id,
             kind="approver",
             state="pending",
         )
     )
-    for i, rev_id in enumerate(reviewers, start=1):
+    for i, rev_id in enumerate(reviewers, start=2 if branch_stage else 1):
         version.approval_steps.append(
             BookApprovalStep(
                 book_id=book.id,
@@ -2330,6 +2473,7 @@ def _align_chain_to(
             step.state = "pending"
             step.note = None
             step.decided_at = None
+            step.outcome_seen_at = None
         return
     if target_state == "approved":
         # Administrative approval — the steps stop contradicting the state; no
@@ -2431,7 +2575,9 @@ def override_state(
     return book
 
 
-def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Book:
+def sign_book(
+    db: Session, book_id: int, *, user_id: int, version_id: int, note: str | None = None
+) -> Book:
     """Approve by signing: verify the caller is the pending signer, embed their
     signature into the current version's document, store the signed PDF, mark
     the book (and current version) approved.
@@ -2457,6 +2603,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     report_version = _current_version(book)
     if report_version is not None and is_report(book):
         current.state = "approved"
+        current.note = note
         current.decided_at = datetime.now(UTC).replace(tzinfo=None)
         retain_revision_access(db, report_version, current)
         _recompute_approval_state(book)
@@ -2479,6 +2626,14 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     version = _current_version(book)
     if version is None:
         raise ValidationFailedError("NO_VERSION", "Book has no version to sign")
+    stage = current.stage_label if version.template_id in BRANCH_MANAGER_STAGE_FORMS else None
+    signing_snapshot = (
+        document_service.freeze_stage_signature(
+            version, stage=stage, signature_path=abs_sig, user_id=user_id, note=note
+        )
+        if stage in {"branch_manager", "project_manager"}
+        else None
+    )
     # Anchor candidates for the word-authored path: a delegated approver may
     # have typed their OWN closing name in Word, not the doc manager's.
     signer_names: list[str] = [n for n in (signer.display_name,) if n]
@@ -2492,6 +2647,8 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
         signer_signature_path=str(abs_sig),
         signer_names=signer_names,
         signer_user_id=user_id,
+        signing_snapshot=signing_snapshot,
+        approval_stage=stage,
     )
     _require_current_revision(db, book, version_id)
     db.refresh(book, attribute_names=["approval_state", "voided_at", "deleted_at"])
@@ -2514,6 +2671,37 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
             "INCLUDED_PAPERS_SIGNED_PDF_REQUIRED",
             "The signed PDF could not be created; the record was not approved",
         )
+    if signing_snapshot is not None:
+        version.fields = {
+            **(version.fields or {}),
+            document_service._SIGNING_KEY: signing_snapshot,
+        }
+    if stage == "branch_manager":
+        document = db.get(Document, version.document_id) if version.document_id else None
+        if document is None:
+            raise ValidationFailedError("SOURCE_DOCX_MISSING", "The generated document is missing.")
+        settings = get_settings()
+        document.docx_path = str(artifact.docx_path.relative_to(settings.data_dir))
+        book.doc_path = document.docx_path
+        if artifact.conversion.pdf_path is not None:
+            included_papers_service.publish_generated_package(
+                db,
+                book,
+                version,
+                document,
+                artifact.conversion.pdf_path,
+                invalidate_revision=True,
+            )
+        else:
+            document.pdf_path = None
+            document.base_pdf_path = None
+        current.state = "approved"
+        current.note = note
+        current.decided_at = datetime.now(UTC).replace(tzinfo=None)
+        retain_revision_access(db, version, current)
+        _recompute_approval_state(book)
+        _commit_approval_state(db, book, user_id=user_id)
+        return book
     published_pdf_abs: Path | None = None
     if signed_primary.suffix.lower() == ".pdf":
         signed_rel = included_papers_service.publish_signed_package(
@@ -2537,6 +2725,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     version.signed_by_user_id = user_id
     version.signed_at = datetime.now(UTC).replace(tzinfo=None)
     current.state = "approved"
+    current.note = note
     current.decided_at = version.signed_at
     retain_revision_access(db, version, current)
     _recompute_approval_state(book)  # mirrors version.status + book.approval_state -> approved
@@ -2765,6 +2954,13 @@ def awaiting_count(db: Session, *, user_id: int, reviewer_only: bool) -> int:
     # Per version: does this user hold a pending approver / reviewer step?
     # Mirrors `(s.kind or "approver") == "approver"` in your_step_kind.
     is_approver = func.coalesce(func.nullif(BookApprovalStep.kind, ""), "approver") == "approver"
+    earlier = aliased(BookApprovalStep)
+    active_approver = ~exists().where(
+        earlier.version_id == BookApprovalStep.version_id,
+        func.coalesce(func.nullif(earlier.kind, ""), "approver") == "approver",
+        earlier.state != "approved",
+        earlier.step_order < BookApprovalStep.step_order,
+    )
     mine = (
         select(
             BookApprovalStep.version_id,
@@ -2774,6 +2970,7 @@ def awaiting_count(db: Session, *, user_id: int, reviewer_only: bool) -> int:
         .where(
             BookApprovalStep.assignee_user_id == user_id,
             BookApprovalStep.state == "pending",
+            or_(~is_approver, active_approver),
         )
         .group_by(BookApprovalStep.version_id)
         .subquery()
@@ -2858,7 +3055,12 @@ def your_step_kind(book: Book, user_id: int) -> str | None:
     version = _current_version(book)
     if version is None:
         return None
-    pending = [s for s in version.approval_steps if s.state == "pending"]
+    active_approver = _current_pending_step(book)
+    pending = [
+        s
+        for s in version.approval_steps
+        if s.state == "pending" and ((s.kind or "approver") != "approver" or s is active_approver)
+    ]
     if any(
         _received_step_kind(book, s.kind) == "approver" and s.assignee_user_id == user_id
         for s in pending
@@ -2906,6 +3108,7 @@ def _current_pending_step_of_kind(
             _received_step_kind(book, step.kind) == kind
             and step.assignee_user_id == user_id
             and step.state == "pending"
+            and ((step.kind or "approver") != "approver" or step is _current_pending_step(book))
         ):
             return step
     return None
@@ -3012,6 +3215,8 @@ def _approval_worklist(db: Session, user: User, *, kind: str, status: str) -> li
         pending_step = _current_pending_step_of_kind(book, user.id, kind)
         if pending_step is not None and kind == "approver" and not can_sign:
             pending_step = None
+        if status == "pending" and pending_step is None:
+            continue
         history_version_no = _history_assignment_version_no(book, user.id, kind)
         if pending_step is None and history_version_no is None:
             continue  # the capability gate above removed the caller's only claim
@@ -3235,6 +3440,87 @@ def _worklist_names(
     return resolve_names_by_ids(db, user_ids), resolve_names_ar_by_ids(db, user_ids)
 
 
+def _unseen_decisions_query(db: Session, user: User) -> Any:
+    """One SQL definition shared by the list, count and acknowledgement paths."""
+    # Visibility subqueries use BookVersion themselves; keep this joined version
+    # aliased so SQLAlchemy cannot correlate their FROM clause away.
+    version = aliased(BookVersion)
+    outcome_step = aliased(BookApprovalStep)
+    current_version_no = (
+        select(func.max(BookVersion.version_no))
+        .where(BookVersion.book_id == Book.id)
+        .correlate(Book)
+        .scalar_subquery()
+    )
+    stmt = (
+        select(Book, version, BookApprovalStep)
+        .join(version, version.book_id == Book.id)
+        .join(BookApprovalStep, BookApprovalStep.version_id == version.id)
+        .where(
+            Book.deleted_at.is_(None),
+            Book.voided_at.is_(None),
+            Book.submitted_by_user_id == user.id,
+            version.version_no == current_version_no,
+            BookApprovalStep.book_id == Book.id,
+            BookApprovalStep.kind == "approver",
+            BookApprovalStep.state.in_(("approved", "rejected", "returned")),
+            or_(
+                BookApprovalStep.state != "approved",
+                and_(
+                    Book.approval_state == "approved",
+                    BookApprovalStep.step_order
+                    == select(func.max(outcome_step.step_order))
+                    .where(
+                        outcome_step.version_id == version.id,
+                        outcome_step.kind == "approver",
+                    )
+                    .correlate(version)
+                    .scalar_subquery(),
+                ),
+            ),
+            BookApprovalStep.decided_at.is_not(None),
+            BookApprovalStep.outcome_seen_at.is_(None),
+            BookApprovalStep.assignee_user_id != user.id,
+        )
+    )
+    visibility = user_visibility_clause(db, user)
+    return stmt.where(visibility) if visibility is not None else stmt
+
+
+def unseen_decisions(
+    db: Session, user: User, *, limit: int | None = None
+) -> list[tuple[Book, BookVersion, BookApprovalStep]]:
+    stmt = _unseen_decisions_query(db, user).order_by(
+        BookApprovalStep.decided_at.desc(), BookApprovalStep.id.desc()
+    )
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    # is_report reads the current version; load it in one batch, not per record.
+    stmt = stmt.options(selectinload(Book.versions))
+    rows = cast(
+        Sequence[tuple[Book, BookVersion, BookApprovalStep]], db.execute(stmt).tuples().all()
+    )
+    return list(rows)
+
+
+def unseen_decision_count(db: Session, user: User) -> int:
+    return int(
+        db.scalar(select(func.count()).select_from(_unseen_decisions_query(db, user).subquery()))
+        or 0
+    )
+
+
+def mark_decisions_seen(db: Session, user: User) -> None:
+    ids = _unseen_decisions_query(db, user).with_only_columns(BookApprovalStep.id)
+    db.execute(
+        update(BookApprovalStep)
+        .where(BookApprovalStep.id.in_(ids))
+        .values(outcome_seen_at=datetime.now(UTC).replace(tzinfo=None)),
+        execution_options={"synchronize_session": "fetch"},
+    )
+    db.commit()
+
+
 def _sent_worklist_rows(
     db: Session,
     user: User,
@@ -3295,6 +3581,20 @@ def approval_log_sent(
     )[offset : offset + limit]
     names_by_id = _worklist_names(db, ordered)
     items = [_build_worklist_item(db, row, names_by_id=names_by_id) for row in ordered]
+    for item, row in zip(items, ordered, strict=True):
+        final_order = max((step.step_order for step in _approver_steps(row.version)), default=-1)
+        item.outcome_unseen = row.book.voided_at is None and any(
+            step.kind == "approver"
+            and step.state in ("approved", "rejected", "returned")
+            and (
+                step.state != "approved"
+                or (row.book.approval_state == "approved" and step.step_order == final_order)
+            )
+            and step.decided_at is not None
+            and step.outcome_seen_at is None
+            and step.assignee_user_id != user.id
+            for step in row.version.approval_steps
+        )
     return items, total
 
 
@@ -3607,18 +3907,30 @@ def record_review(
 
 
 def mark_seen(db: Session, book_id: int, *, user_id: int) -> bool:
-    """Stamp seen_at on the caller's step (either kind) the first time they open
-    the record. Idempotent; no-op (False) if the caller has no step."""
+    """Acknowledge the assignee's first view and the submitter's current outcome."""
     book = _get_book_with_versions(db, book_id)
     version = _current_version(book)
     if version is None:
         return False
-    for s in version.approval_steps:
-        if s.assignee_user_id == user_id and s.seen_at is None:
-            s.seen_at = datetime.now(UTC).replace(tzinfo=None)
-            db.commit()
-            return True
-    return False
+    now = datetime.now(UTC).replace(tzinfo=None)
+    changed = False
+    for step in version.approval_steps:
+        if step.assignee_user_id == user_id and step.seen_at is None:
+            step.seen_at = now
+            changed = True
+            break
+    if book.submitted_by_user_id == user_id and (user := db.get(User, user_id)) is not None:
+        stmt = _unseen_decisions_query(db, user).where(Book.id == book_id)
+        outcomes = cast(
+            Sequence[BookApprovalStep],
+            db.scalars(stmt.with_only_columns(BookApprovalStep)).all(),
+        )
+        for outcome in outcomes:
+            outcome.outcome_seen_at = now
+            changed = True
+    if changed:
+        db.commit()
+    return changed
 
 
 def add_reviewers(db: Session, book_id: int, *, user_ids: Sequence[int]) -> Book:
@@ -3855,10 +4167,10 @@ def _image_to_pdf_bytes(data: bytes, ext: str) -> bytes:
     download as a corrupt renamed ``.pdf`` and fail pdf.js. Raises 422 when
     the bytes are not a readable image.
     """
-    import fitz  # PyMuPDF — heavyweight; only the scan-back flip pays for it
+    import pymupdf  # PyMuPDF — heavyweight; only the scan-back flip pays for it
 
     try:
-        with fitz.open(stream=data, filetype=ext.lstrip(".")) as img:
+        with pymupdf.open(stream=data, filetype=ext.lstrip(".")) as img:
             pdf_bytes: bytes = img.convert_to_pdf()
     except Exception as exc:
         raise ValidationFailedError(
@@ -4125,8 +4437,14 @@ def replace_attachment(db: Session, book_id: int, index: int, filename: str, dat
         )
     dest.write_bytes(data)
     old_rel = paths[index]
-    paths[index] = dest_resolved.relative_to(data_dir).as_posix()
+    new_rel = dest_resolved.relative_to(data_dir).as_posix()
+    paths[index] = new_rel
     book.attachment_paths = paths  # reassign so the JSON column dirties
+    # An auto-filed scan's drawer Undo detaches by stored path: follow the file to
+    # its new name, or Undo would silently detach nothing and re-offer the scan.
+    old_token = f"book:{book_id}:{old_rel}"
+    for item in db.scalars(select(ScanInbox).where(ScanInbox.undo_token == old_token)):
+        item.undo_token = f"book:{book_id}:{new_rel}"
     old_abs = resolve_attachment_path(old_rel)
     if old_abs is not None:
         try:
@@ -4230,6 +4548,138 @@ def replace_signed_copy(
     return book
 
 
+def _upload_pdf_bytes(filename: str, data: bytes) -> bytes:
+    """Validate one uploaded page file like ``add_attachment`` and return it as PDF bytes."""
+    if len(data) == 0:
+        raise ValidationFailedError("BOOK_EMPTY_FILE", "Uploaded file is empty")
+    if len(data) > MAX_ATTACHMENT_BYTES:
+        raise ValidationFailedError(
+            "BOOK_FILE_TOO_LARGE",
+            f"File exceeds {MAX_ATTACHMENT_BYTES} bytes",
+            max_bytes=MAX_ATTACHMENT_BYTES,
+            size=len(data),
+        )
+    ext = Path(_safe_filename(filename)).suffix.lower()
+    if ext not in ALLOWED_DOC_EXTS:
+        raise ValidationFailedError(
+            "BOOK_BAD_EXTENSION",
+            f"File type {ext!r} is not allowed",
+            allowed=sorted(ALLOWED_DOC_EXTS),
+        )
+    return data if ext == ".pdf" else _image_to_pdf_bytes(data, ext)
+
+
+def _stored_pdf_bytes(rel_path: str) -> bytes:
+    """Read a stored paper as PDF bytes (an image attachment becomes one page)."""
+    abs_path = resolve_attachment_path(rel_path)
+    if abs_path is None:
+        raise NotFoundError("ATTACHMENT_FILE_MISSING", "attachment file missing")
+    data = abs_path.read_bytes()
+    ext = abs_path.suffix.lower()
+    return data if ext == ".pdf" else _image_to_pdf_bytes(data, ext)
+
+
+def _pdf_page_count(data: bytes) -> int:
+    import pymupdf
+
+    try:
+        with pymupdf.open(stream=data, filetype="pdf") as doc:
+            return int(doc.page_count)
+    except Exception as exc:
+        raise ValidationFailedError("BOOK_PDF_UNREADABLE", "Could not read the PDF") from exc
+
+
+def _append_pdf_pages(base: bytes, extra: bytes) -> bytes:
+    """``base`` followed by every page of ``extra``."""
+    import pymupdf
+
+    try:
+        with (
+            pymupdf.open(stream=base, filetype="pdf") as doc,
+            pymupdf.open(stream=extra, filetype="pdf") as add,
+        ):
+            doc.insert_pdf(add)
+            merged: bytes = doc.tobytes(garbage=3, deflate=True)
+    except Exception as exc:
+        raise ValidationFailedError(
+            "BOOK_PDF_UNREADABLE", "Could not read the PDF; upload a valid PDF, PNG or JPEG"
+        ) from exc
+    return merged
+
+
+def _drop_pdf_page(base: bytes, page: int) -> bytes:
+    """``base`` without its zero-based ``page``. The only page cannot be removed:
+    deleting the whole version is the separate, explicit action."""
+    import pymupdf
+
+    with pymupdf.open(stream=base, filetype="pdf") as doc:
+        if page < 0 or page >= doc.page_count:
+            raise NotFoundError("PAGE_NOT_FOUND", "page not found", page=page)
+        if doc.page_count == 1:
+            raise ValidationFailedError(
+                "BOOK_LAST_PAGE", "This is the only page; delete the version instead"
+            )
+        doc.delete_page(page)
+        trimmed: bytes = doc.tobytes(garbage=3, deflate=True)
+    return trimmed
+
+
+def _attachment_rel(book: Book, index: int) -> str:
+    paths = book.attachment_paths or []
+    if index < 0 or index >= len(paths):
+        raise NotFoundError("ATTACHMENT_NOT_FOUND", "attachment not found", index=index)
+    return paths[index]
+
+
+def append_attachment_pages(
+    db: Session, book_id: int, index: int, filename: str, data: bytes
+) -> Book:
+    """Append the uploaded file's pages to attachment ``index`` (kept at its index)."""
+    rel = _attachment_rel(get_book(db, book_id), index)
+    merged = _append_pdf_pages(_stored_pdf_bytes(rel), _upload_pdf_bytes(filename, data))
+    return replace_attachment(db, book_id, index, f"{PurePath(rel).stem}.pdf", merged)
+
+
+def delete_attachment_page(db: Session, book_id: int, index: int, page: int) -> Book:
+    """Remove one page from attachment ``index``."""
+    rel = _attachment_rel(get_book(db, book_id), index)
+    trimmed = _drop_pdf_page(_stored_pdf_bytes(rel), page)
+    return replace_attachment(db, book_id, index, f"{PurePath(rel).stem}.pdf", trimmed)
+
+
+def _signed_base_rel(book: Book) -> str:
+    version = _current_version(book)
+    rel = version and (version.signed_base_pdf_path or version.signed_pdf_path)
+    if not rel:
+        raise ValidationFailedError("NO_SIGNED_COPY", "This record has no signed copy")
+    return rel
+
+
+def append_signed_copy_pages(
+    db: Session, book_id: int, filename: str, data: bytes, *, user: User | None = None
+) -> Book:
+    """Append pages to the signed scan (its base, before included papers), keeping
+    the approval — the "the signed paper had a second sheet" fix."""
+    rel = _signed_base_rel(get_book(db, book_id))
+    merged = _append_pdf_pages(_stored_pdf_bytes(rel), _upload_pdf_bytes(filename, data))
+    return replace_signed_copy(db, book_id, "signed.pdf", merged, user=user)
+
+
+def delete_signed_copy_page(
+    db: Session, book_id: int, page: int, *, user: User | None = None
+) -> Book:
+    """Remove one page of the signed scan. Pages after the scan come from included
+    papers and are managed there, not here."""
+    base = _stored_pdf_bytes(_signed_base_rel(get_book(db, book_id)))
+    if page >= _pdf_page_count(base):
+        raise ValidationFailedError(
+            "BOOK_PAGE_FROM_INCLUDED_PAPER",
+            "This page comes from an included paper; remove it from Add to PDF",
+        )
+    trimmed = _drop_pdf_page(base, page)
+    return replace_signed_copy(db, book_id, "signed.pdf", trimmed, user=user)
+
+
 def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -> Book:
     """Undo a filed signed copy: delete the artifact and revert the record to its
     pre-signed state. A scan-path form returns to ``awaiting_scan``; otherwise the
@@ -4276,6 +4726,7 @@ def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -
             if step.state == "approved" and step.decided_at in (None, flip_at):
                 step.state = "pending"
                 step.decided_at = None
+                step.outcome_seen_at = None
         _recompute_approval_state(book)
     db.add(
         AuditLog(
@@ -4451,7 +4902,10 @@ __all__ = [
     "list_revision_access",
     "mark_seen",
     "messages_for_book",
+    "record_category_in_clause",
+    "record_gate_category_in_clause",
     "record_review",
+    "record_service_clause",
     "remove_reviewer",
     "replace_attachment",
     "replace_signed_copy",

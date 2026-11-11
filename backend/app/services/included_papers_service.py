@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
-import fitz
+import pymupdf
 from fastapi import status
 from sqlalchemy import select, update
 from sqlalchemy.engine import CursorResult
@@ -218,10 +218,10 @@ def inspect_paper(path: Path, *, display_name: str | None = None) -> tuple[str, 
         )
     try:
         if ext in _IMAGE_EXTS:
-            with fitz.open(path) as image:
+            with pymupdf.open(path) as image:
                 image.convert_to_pdf()
             return _MIME_TYPES[ext], 1
-        with fitz.open(path) as pdf:
+        with pymupdf.open(path) as pdf:
             if pdf.page_count < 1:
                 raise ValueError("PDF has no pages")
             return _MIME_TYPES[ext], pdf.page_count
@@ -260,11 +260,13 @@ def _physical_signed_scan(version: BookVersion) -> bool:
     return source.replace("\\", "/").startswith("book_attachments/")
 
 
-def _effective_metadata(book: Book, version: BookVersion) -> list[dict[str, Any]]:
+def _effective_metadata(book: Book, version: BookVersion | None = None) -> list[dict[str, Any]]:
     """Return full metadata without mutating legacy JSON."""
     entries: list[dict[str, Any]] = []
-    legacy_embedded = bool(version.signed_pdf_path and version.signed_base_pdf_path is None)
-    explicit_embedded = set(version.signed_embedded_paper_ids or [])
+    legacy_embedded = bool(
+        version is not None and version.signed_pdf_path and version.signed_base_pdf_path is None
+    )
+    explicit_embedded = set(version.signed_embedded_paper_ids or []) if version else set()
     creator_id = original_creator_user_id(book)
     for position, raw in enumerate(book.merged_attachment_paths or []):
         stored_path = str(raw.get("path") or "")
@@ -588,7 +590,7 @@ def describe_package(db: Session, book: Book) -> PackageState:
     if published is None:
         raise NotFoundError("INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available")
     try:
-        with fitz.open(published) as pdf:
+        with pymupdf.open(published) as pdf:
             total_pages = pdf.page_count
     except Exception as exc:
         raise ValidationFailedError(
@@ -619,6 +621,12 @@ def _write_bytes_atomic(path: Path, data: bytes) -> None:
     finally:
         with contextlib.suppress(OSError):
             temp.unlink()
+
+
+def build_word_preview(book: Book, letter: Path) -> bytes:
+    """Build the live package without a version or changes to the letter cache."""
+    papers = _resolve_existing(_effective_metadata(book))
+    return _build_result(book.included_papers_revision, letter.read_bytes(), papers).pdf_bytes
 
 
 def publish_generated_package(
@@ -700,7 +708,7 @@ def publish_signed_package(
             "The signed form is not a readable PDF",
         )
     try:
-        with fitz.open(signed_primary) as pdf:
+        with pymupdf.open(signed_primary) as pdf:
             if pdf.page_count < 1:
                 raise ValueError("PDF has no pages")
     except Exception as exc:

@@ -18,6 +18,14 @@ import i18n from 'i18next'
 import type { components, paths } from './api.types'
 import type { ExtractedFieldOut } from './extraction'
 import type { LockLayout } from './useLockState'
+// Employee-file statements (Activity statement view, Activity / Attendance prints).
+export type ActivityStatement = components['schemas']['ActivityStatementRead']
+export type ActivityStatementItem = components['schemas']['ActivityStatementItemRead']
+export type StatementLinkedDocument = components['schemas']['LinkedDocumentRead']
+export type StatementKind = ActivityStatementItem['kind']
+export type StatementPrintCreate = components['schemas']['StatementPrintCreate']
+export type StatementPrint = components['schemas']['StatementPrintRead']
+export type StatementPrintKind = StatementPrint['kind']
 
 // Passport OCR extract (Task 8).
 // Re-exported from the generated schema; declared here so consumers import from
@@ -245,9 +253,8 @@ export type LeaveListItem = components['schemas']['LeaveListItem'] & {
 export type LeaveListResponse = components['schemas']['LeaveListResponse']
 export type LeaveAwaitingReturnCount = components['schemas']['LeaveAwaitingReturnCount']
 export type LeaveCreate = components['schemas']['LeaveCreate']
-// notify_employee is server-defaulted (True) and openapi-typescript emits it as
-// required; make it optional for the client so status/date-only callers needn't
-// pass it — only the Approve action sets it (to suppress that one notification).
+// notify_employee is optional (null/omitted = the event's default-send setting);
+// only the Approve action sets it, and only when the operator departs from that default.
 export type LeaveUpdate = Omit<components['schemas']['LeaveUpdate'], 'notify_employee'> & {
   notify_employee?: boolean
 }
@@ -349,11 +356,69 @@ export type EvgPreviewJobStatus = components['schemas']['EvgPreviewJobStatus']
 export type EvgPreviewRow = components['schemas']['EvgPreviewRow']
 export type EvgConfirmRequest = components['schemas']['EvgConfirmRequest']
 export type EvgConfirmResult = components['schemas']['EvgConfirmResult']
+export type StoreCategoryRead = components['schemas']['StoreCategoryRead']
+export type StoreCategoryCreate = components['schemas']['StoreCategoryCreate']
+export type StoreCategoryUpdate = components['schemas']['StoreCategoryUpdate']
+export type StoreItemRead = components['schemas']['StoreItemRead']
+export type StoreItemCreate = components['schemas']['StoreItemCreate']
+export type StoreItemUpdate = components['schemas']['StoreItemUpdate']
+export type StorePickerItem = components['schemas']['StorePickerItem']
+export type StoreBatchRead = components['schemas']['StoreBatchRead']
+export type StoreDeliveryLineInput = components['schemas']['StoreDeliveryLineInput']
+export type StoreCountLineInput = components['schemas']['StoreCountLineInput']
+export type StoreLineRead = components['schemas']['StoreLineRead']
+export type StoreDeliveryCreate = components['schemas']['StoreDeliveryCreate']
+export type StoreDeliveryRead = components['schemas']['StoreDeliveryRead']
+export type StoreDeliveryNoteFile = components['schemas']['StoreDeliveryNoteFile']
+export type StoreDeliveryScan = components['schemas']['StoreDeliveryScan']
+export type StoreScanLine = components['schemas']['StoreScanLine']
+export type StoreHandoverCreate = components['schemas']['StoreHandoverCreate']
+export type StoreHandoverRead = components['schemas']['StoreHandoverRead']
+export type StoreMovementRead = components['schemas']['StoreMovementRead']
+export type StoreMovementKind = StoreMovementRead['kind']
+export type StoreCountWrite = components['schemas']['StoreCountWrite']
+export type StoreCountRead = components['schemas']['StoreCountRead']
+export type StoreExpectedBatch = components['schemas']['StoreExpectedBatch']
+export type StoreDisposalCreate = components['schemas']['StoreDisposalCreate']
+export type StoreDisposalRead = components['schemas']['StoreDisposalRead']
+export type StoreDisposalReason = StoreDisposalRead['reason']
+export type StoreDashboard = components['schemas']['StoreDashboard']
+export type StoreDashboardBatch = components['schemas']['StoreDashboardBatch']
+export type StoreDashboardLowStock = components['schemas']['StoreDashboardLowStock']
+export type StoreUsage = components['schemas']['StoreUsage']
+export type StoreUsageRow = components['schemas']['StoreUsageRow']
+export type StoreSuggestion = components['schemas']['StoreSuggestion']
+
+export type UniformAdjustmentCreate = components['schemas']['UniformAdjustmentCreate']
+export type UniformAdjustmentLine = components['schemas']['UniformAdjustmentLine']
+export type UniformAdjustmentRead = components['schemas']['UniformAdjustmentRead']
+export type UniformEmployeeRead = components['schemas']['UniformEmployeeRead']
+export type UniformHolder = components['schemas']['UniformHolder']
+export type UniformHolding = components['schemas']['UniformHolding']
+export type UniformIssueCreate = components['schemas']['UniformIssueCreate']
+export type UniformIssueLine = components['schemas']['UniformIssueLine']
+export type UniformIssueRead = components['schemas']['UniformIssueRead']
+export type UniformItemCreate = components['schemas']['UniformItemCreate']
+export type UniformItemRead = components['schemas']['UniformItemRead']
+export type UniformItemUpdate = components['schemas']['UniformItemUpdate']
+export type UniformReceiptCreate = components['schemas']['UniformReceiptCreate']
+export type UniformReceiptLine = components['schemas']['UniformReceiptLine']
+export type UniformReceiptRead = components['schemas']['UniformReceiptRead']
+export type UniformRecipient = components['schemas']['UniformRecipient']
+export type UniformReturnCreate = components['schemas']['UniformReturnCreate']
+export type UniformReturnLine = components['schemas']['UniformReturnLine']
+export type UniformReturnRead = components['schemas']['UniformReturnRead']
+export type UniformSizeCreate = components['schemas']['UniformSizeCreate']
+export type UniformSizeRead = components['schemas']['UniformSizeRead']
+export type UniformSizeUpdate = components['schemas']['UniformSizeUpdate']
+export type UniformSummary = components['schemas']['UniformSummary']
+export type UniformVoid = components['schemas']['UniformVoid']
 
 export interface LeaveReturnBody {
   resumption_date: string // ISO yyyy-mm-dd
   delay_reason?: string
   manager_id?: number | null
+  submitter_id?: number | null
 }
 
 // ─── Signature placement editor (approval-signature-placement plan §8) ────────
@@ -774,6 +839,8 @@ export interface ScanInboxCount {
 
 // Phase 4 LAN — Notification counts (SSE + JSON safety-poll).
 export type NotificationCounts = components['schemas']['NotificationCounts']
+export type DecisionNotice = components['schemas']['DecisionNotice']
+export type DecisionNoticesResponse = components['schemas']['DecisionNoticesResponse']
 
 // Phase 05 — Books
 // ``attachment_paths`` (Task 1 / migration 0023) is not yet in api.types.ts;
@@ -894,6 +961,7 @@ export interface BookAnnotationRead {
 export interface BookSubmitRequest {
   urgency: 'Normal' | 'High' | 'Very High'
   approver_user_id?: number | null
+  branch_approver_user_id?: number | null
   reviewer_user_ids?: number[]
 }
 // Approval == signing: the `/approve` endpoint is gone (replaced by `/sign`),
@@ -971,6 +1039,7 @@ export type SigningPath = components['schemas']['TemplateMeta']['signing_path']
 export type AttachmentSlotRead = components['schemas']['AttachmentSlotRead']
 export type GenerateAttachmentSpec = components['schemas']['GenerateAttachmentSpec']
 export type StagedAttachmentRead = components['schemas']['StagedAttachmentRead']
+export type StageFromRecordRequest = components['schemas']['StageFromRecordRequest']
 
 // Phase 12 — Dashboard
 // Dashboard responses come from the generated backend contract.
@@ -1103,12 +1172,13 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   IMAGE_TYPE_UNSUPPORTED: 'errors.ledger.imageTypeUnsupported',
 }
 
-/** Localized user-facing error text. A code in `CODE_MESSAGE_KEYS` uses its
- * translated message; any other 403 uses the shared permission message; other
- * server details pass through unless an Arabic UI receives text without Arabic
- * letters. Network TypeErrors and unexpected thrown values use localized
- * network and generic messages respectively. */
-export function apiErrorMessage(err: unknown): string {
+/** Localized user-facing error text. A module's own `codeKey` mapping wins
+ * when it names an existing translation; then a code in `CODE_MESSAGE_KEYS`
+ * uses its translated message; any other 403 uses the shared permission
+ * message; other server details pass through unless an Arabic UI receives text
+ * without Arabic letters. Network TypeErrors and unexpected thrown values use
+ * localized network and generic messages respectively. */
+export function apiErrorMessage(err: unknown, codeKey?: (code: string) => string | null | undefined): string {
   if (!(err instanceof ApiError)) {
     return i18n.t(err instanceof TypeError ? 'errors.network' : 'errors.generic')
   }
@@ -1116,6 +1186,8 @@ export function apiErrorMessage(err: unknown): string {
   if (err.code === 'GRADE_BELOW_FLOOR' && (minimum === 'unclassified' || minimum === 'secret' || minimum === 'top_secret' || minimum === 'addressee_only')) {
     return i18n.t('ledgerBook.composer.errors.gradeBelowFloor', { min: i18n.t(`books.grade.levels.${minimum}`) })
   }
+  const moduleKey = codeKey?.(err.code)
+  if (moduleKey && i18n.exists(moduleKey)) return i18n.t(moduleKey)
   if (Object.hasOwn(CODE_MESSAGE_KEYS, err.code)) return i18n.t(CODE_MESSAGE_KEYS[err.code])
   if (err.status === 403) return i18n.t('common.forbiddenError')
   // ponytail: Arabic users lose specific server detail until err.code maps to locale keys.
@@ -1199,9 +1271,9 @@ function requireEtag(etag: string): string {
 }
 
 
-async function multipart<T>(path: string, form: FormData, method = 'POST'): Promise<T> {
+async function multipart<T>(path: string, form: FormData, method = 'POST', signal?: AbortSignal): Promise<T> {
   return unwrap<T>(
-    await fetch(`${BASE}${path}`, { method, body: form, credentials: 'same-origin' }),
+    await fetch(`${BASE}${path}`, { method, body: form, credentials: 'same-origin', signal }),
   )
 }
 
@@ -1429,6 +1501,14 @@ export const api = {
     ),
   getEmployeeDetail: (id: string) =>
     request<EmployeeDetailRead>('GET', `/employees/${encodeURIComponent(id)}/detail`),
+  /** Omit `from_date` for "from the start of the record". */
+  getActivityStatement: (employeeId: string, params: { from_date?: string; to_date?: string }) =>
+    request<ActivityStatement>(
+      'GET',
+      `/employees/${encodeURIComponent(employeeId)}/statement/activity${qs({ ...params })}`,
+    ),
+  createStatementPrint: (employeeId: string, payload: StatementPrintCreate) =>
+    request<StatementPrint>('POST', `/employees/${encodeURIComponent(employeeId)}/statement/prints`, payload),
   getEmployeesCompleteness: () =>
     request<CompletenessSummaryOut>('GET', '/employees/completeness'),
   createEmployee: (payload: EmployeeCreate) =>
@@ -1809,6 +1889,106 @@ export const api = {
     request<VehicleMaintenanceRead>('POST', '/vehicles/maintenance', body),
   deleteVehicleMaintenance: (vehicleId: number, maintenanceId: number) =>
     request<void>('DELETE', `/vehicles/${vehicleId}/maintenance/${maintenanceId}`),
+  // --- assets: store ---
+  listStoreCategories: () => request<StoreCategoryRead[]>('GET', '/store/categories'),
+  createStoreCategory: (body: StoreCategoryCreate) =>
+    request<StoreCategoryRead>('POST', '/store/categories', body),
+  updateStoreCategory: (id: number, body: StoreCategoryUpdate) =>
+    request<StoreCategoryRead>('PATCH', `/store/categories/${id}`, body),
+  listStoreItems: (includeArchived = false) =>
+    request<StoreItemRead[]>(
+      'GET',
+      `/store/items${qs({ include_archived: includeArchived ? true : undefined })}`,
+    ),
+  listStorePickerItems: () => request<StorePickerItem[]>('GET', '/store/items/picker'),
+  createStoreItem: (body: StoreItemCreate) => request<StoreItemRead>('POST', '/store/items', body),
+  updateStoreItem: (id: number, body: StoreItemUpdate, ifMatch: string) =>
+    requestWithIfMatch<StoreItemRead>('PATCH', `/store/items/${id}`, ifMatch, body),
+  archiveStoreItem: (id: number) => request<StoreItemRead>('POST', `/store/items/${id}/archive`),
+  restoreStoreItem: (id: number) => request<StoreItemRead>('POST', `/store/items/${id}/restore`),
+  listStoreBatches: (itemId?: number) =>
+    request<StoreBatchRead[]>('GET', `/store/batches${qs({ item_id: itemId })}`),
+  listStoreDeliveries: () => request<StoreDeliveryRead[]>('GET', '/store/deliveries'),
+  getStoreDelivery: (id: number) => request<StoreDeliveryRead>('GET', `/store/deliveries/${id}`),
+  createStoreDelivery: (body: StoreDeliveryCreate) =>
+    request<StoreDeliveryRead>('POST', '/store/deliveries', body),
+  deleteStoreDelivery: (id: number) => request<void>('DELETE', `/store/deliveries/${id}`),
+  scanStoreDelivery: (file: File, signal?: AbortSignal): Promise<StoreDeliveryScan> => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<StoreDeliveryScan>('/store/deliveries/scan', form, 'POST', signal)
+  },
+  uploadStoreDeliveryNote: (id: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<StoreDeliveryRead>(`/store/deliveries/${id}/note-file`, form, 'PUT')
+  },
+  deleteStoreDeliveryNote: (id: number) =>
+    request<StoreDeliveryRead>('DELETE', `/store/deliveries/${id}/note-file`),
+  storeDeliveryNoteUrl: (id: number) => `${BASE}/store/deliveries/${id}/note-file`,
+  listStoreCounts: () => request<StoreCountRead[]>('GET', '/store/counts'),
+  getStoreCount: (id: number) => request<StoreCountRead>('GET', `/store/counts/${id}`),
+  getStoreCountExpected: (countedOn: string) =>
+    request<StoreExpectedBatch[]>('GET', `/store/counts/expected${qs({ counted_on: countedOn })}`),
+  createStoreCount: (body: StoreCountWrite) =>
+    request<StoreCountRead>('POST', '/store/counts', body),
+  updateStoreCount: (id: number, body: StoreCountWrite) =>
+    request<StoreCountRead>('PUT', `/store/counts/${id}`, body),
+  listStoreDisposals: () => request<StoreDisposalRead[]>('GET', '/store/disposals'),
+  createStoreDisposal: (body: StoreDisposalCreate) =>
+    request<StoreDisposalRead>('POST', '/store/disposals', body),
+  deleteStoreDisposal: (id: number) => request<void>('DELETE', `/store/disposals/${id}`),
+  listStoreHandovers: () => request<StoreHandoverRead[]>('GET', '/store/handovers'),
+  createStoreHandover: (body: StoreHandoverCreate) =>
+    request<StoreHandoverRead>('POST', '/store/handovers', body),
+  getStoreHandover: (id: number) => request<StoreHandoverRead>('GET', `/store/handovers/${id}`),
+  deleteStoreHandover: (id: number) => request<void>('DELETE', `/store/handovers/${id}`),
+  listStoreHandoverTakers: () => request<string[]>('GET', '/store/handovers/takers'),
+  listStoreMovements: (params: { kind?: StoreMovementKind; q?: string; from?: string; to?: string } = {}) =>
+    request<StoreMovementRead[]>('GET', `/store/movements${qs(params)}`),
+  getStoreDashboard: () => request<StoreDashboard>('GET', '/store/dashboard'),
+  // --- assets: uniform ---
+  listUniformItems: (includeArchived = false) =>
+    request<UniformItemRead[]>('GET', `/uniform/items${qs({ include_archived: includeArchived })}`),
+  createUniformItem: (body: UniformItemCreate) =>
+    request<UniformItemRead>('POST', '/uniform/items', body),
+  updateUniformItem: (id: number, body: UniformItemUpdate, ifMatch: string) =>
+    requestWithIfMatch<UniformItemRead>('PATCH', `/uniform/items/${id}`, ifMatch, body),
+  archiveUniformItem: (id: number) =>
+    request<UniformItemRead>('POST', `/uniform/items/${id}/archive`),
+  deleteUniformItem: (id: number) => request<void>('DELETE', `/uniform/items/${id}`),
+  addUniformSize: (itemId: number, body: UniformSizeCreate) =>
+    request<UniformSizeRead>('POST', `/uniform/items/${itemId}/sizes`, body),
+  updateUniformSize: (id: number, body: UniformSizeUpdate) =>
+    request<UniformSizeRead>('PATCH', `/uniform/sizes/${id}`, body),
+  removeUniformSize: (id: number) => request<void>('DELETE', `/uniform/sizes/${id}`),
+  listUniformReceipts: () => request<UniformReceiptRead[]>('GET', '/uniform/receipts'),
+  createUniformReceipt: (body: UniformReceiptCreate) =>
+    request<UniformReceiptRead>('POST', '/uniform/receipts', body),
+  listUniformIssues: (employeeId?: string) =>
+    request<UniformIssueRead[]>('GET', `/uniform/issues${qs({ employee_id: employeeId })}`),
+  createUniformIssue: (body: UniformIssueCreate) =>
+    request<UniformIssueRead>('POST', '/uniform/issues', body),
+  listUniformReturns: (employeeId?: string) =>
+    request<UniformReturnRead[]>('GET', `/uniform/returns${qs({ employee_id: employeeId })}`),
+  createUniformReturn: (body: UniformReturnCreate) =>
+    request<UniformReturnRead>('POST', '/uniform/returns', body),
+  listUniformAdjustments: () => request<UniformAdjustmentRead[]>('GET', '/uniform/adjustments'),
+  createUniformAdjustments: (body: UniformAdjustmentCreate) =>
+    request<UniformAdjustmentRead[]>('POST', '/uniform/adjustments', body),
+  voidUniformReceipt: (id: number, body: UniformVoid) =>
+    request<UniformReceiptRead>('POST', `/uniform/receipts/${id}/void`, body),
+  voidUniformIssue: (id: number, body: UniformVoid) =>
+    request<UniformIssueRead>('POST', `/uniform/issues/${id}/void`, body),
+  voidUniformReturn: (id: number, body: UniformVoid) =>
+    request<UniformReturnRead>('POST', `/uniform/returns/${id}/void`, body),
+  voidUniformAdjustment: (id: number, body: UniformVoid) =>
+    request<UniformAdjustmentRead>('POST', `/uniform/adjustments/${id}/void`, body),
+  listUniformRecipients: (q = '') =>
+    request<UniformRecipient[]>('GET', `/uniform/recipients${qs({ q })}`),
+  getUniformEmployee: (employeeId: string) =>
+    request<UniformEmployeeRead>('GET', `/uniform/employees/${encodeURIComponent(employeeId)}`),
+  getUniformSummary: () => request<UniformSummary>('GET', '/uniform/summary'),
   uploadLeaveCertificate: (id: number, file: File) => {
     const form = new FormData()
     form.append('file', file)
@@ -2313,8 +2493,8 @@ export const api = {
    * signature and marks the book approved. `versionId` must be the record's
    * current revision; a stale target raises REVISION_CHANGED (409). Error
    * codes: NO_SIGNATURE, SIGNATURE_MISSING, NOT_YOUR_STEP. */
-  signBook: (id: number, versionId: number) =>
-    request<BookRead>('POST', `/books/${id}/sign`, { version_id: versionId }),
+  signBook: (id: number, versionId: number, note?: string) =>
+    request<BookRead>('POST', `/books/${id}/sign`, { version_id: versionId, ...(note !== undefined ? { note } : {}) }),
   /** POST /books/{id}/review — submit a reviewer decision (`reviewed` or
    * `changes_requested`) with an optional note. `versionId` must be the
    * assigned revision; a stale target raises REVISION_CHANGED (409). */
@@ -2447,6 +2627,24 @@ export const api = {
     form.append('file', file)
     return multipart<BookRead>(`/books/${bookId}/signed-copy`, form, 'PUT')
   },
+  /** POST /books/{id}/attachments/{index}/pages — append a PDF/image's pages. books.edit. */
+  appendBookAttachmentPages: (bookId: number, index: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<BookRead>(`/books/${bookId}/attachments/${index}/pages`, form)
+  },
+  /** DELETE /books/{id}/attachments/{index}/pages/{page} — drop one zero-based page. books.edit. */
+  deleteBookAttachmentPage: (bookId: number, index: number, page: number) =>
+    request<BookRead>('DELETE', `/books/${bookId}/attachments/${index}/pages/${page}`),
+  /** POST /books/{id}/signed-copy/pages — append pages to the signed scan, keeping approval. books.edit. */
+  appendSignedCopyPages: (bookId: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<BookRead>(`/books/${bookId}/signed-copy/pages`, form)
+  },
+  /** DELETE /books/{id}/signed-copy/pages/{page} — drop one page of the signed scan. books.edit. */
+  deleteSignedCopyPage: (bookId: number, page: number) =>
+    request<BookRead>('DELETE', `/books/${bookId}/signed-copy/pages/${page}`),
   /** DELETE /books/{id}/signed-copy — unfile the signed copy and revert the
    * record's approval state. books.edit. */
   unfileSignedCopy: (bookId: number) =>
@@ -2885,6 +3083,8 @@ export const api = {
     form.append('file', file)
     return multipart<StagedAttachmentRead>('/documents/attachments/stage', form)
   },
+  stageAttachmentFromRecord: (body: StageFromRecordRequest) =>
+    request<StagedAttachmentRead>('POST', '/documents/attachments/stage-from-record', body),
   inspectApprovedViolation: (file: File) => {
     const form = new FormData()
     form.append('file', file)
@@ -3138,6 +3338,10 @@ export const api = {
   /** JSON safety-poll fallback; used when EventSource is unavailable. */
   getNotificationCounts: () =>
     request<NotificationCounts>('GET', '/notifications/counts'),
+  getDecisionNotices: () =>
+    request<DecisionNoticesResponse>('GET', '/notifications/decisions'),
+  markDecisionsSeen: () =>
+    request<void>('POST', '/notifications/decisions/seen'),
 
   // --- web push (Phase 5 LAN) ---
   getVapidPublicKey: () => request<{ public_key: string }>('GET', '/push/vapid-public-key'),
@@ -3157,7 +3361,8 @@ export interface NotifyStatus {
   event_ref: string
   language: string
   channel: 'whatsapp' | 'sms' | null
-  status: 'queued' | 'sent' | 'failed'
+  status: 'queued' | 'sent' | 'failed' | 'skipped'
+  skip_reason?: 'default_off' | 'user_off' | null
   delivery_state: string | null
   fell_back: boolean
   fallback_reason: string | null

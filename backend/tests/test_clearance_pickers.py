@@ -7,8 +7,13 @@ two fields in the schema is the whole change. Regression guard."""
 
 from __future__ import annotations
 
+import pytest
+
 from app.services import template_service
-from app.services.document_service import _submitter_signs_employee_cell
+from app.services.document_service import (
+    _replayed_submitter_signs,
+    _submitter_signs_employee_cell,
+)
 
 
 def _fields_by_type(template_id: str) -> dict[str, str]:
@@ -26,26 +31,61 @@ def test_clearance_has_submitter_picker():
     assert by_type.get("submitter_picker") == "submitter_id"
 
 
+def test_clearance_offers_the_employee_signature():
+    by_type = _fields_by_type("Employee Clearance Form")
+    assert by_type.get("hand_sign_checkbox") == "hand_sign_employee"
+    assert by_type.get("signature") == "employee_sig_path"
+
+
 # --- Submitter signs the employee cell ---------------------------------------
-# The Clearance Form has no employee-signature checkbox in its schema, so the
-# picked submitter must ALWAYS sign the employee cell (auto-embed). The sig is
-# resolved from the submitter's linked-employee vault signature downstream.
+# The submitter is optional on every form with a Submitter box: picked, their
+# signature fills the employee cell; empty, the employee's own signature does.
+
+SUBMITTER_FORMS = [
+    "Leave Application Form",
+    "Duty Resumption Form",
+    "Employee Clearance Form",
+    "Leave Undertaking",
+    "Employee Performance Appraisal Form",
+    "Leave Encashment Form",
+    "Loan Request Form",
+    "Salary Advance Request Form",
+    "Breach of Discipline Form",
+    "Expense Claim Form",
+    "Employee Exit Form",
+    "Employee Exit Form – Project or Contract",  # noqa: RUF001 - the real template id
+]
 
 
-def test_clearance_submitter_auto_signs_without_checkbox():
-    # No embed_signature.employee flag (clearance has no such field) — still signs.
-    assert _submitter_signs_employee_cell("Employee Clearance Form", 5, {})
+@pytest.mark.parametrize("template_id", SUBMITTER_FORMS)
+def test_picked_submitter_signs_without_employee_opt_in(template_id):
+    assert _submitter_signs_employee_cell(template_id, 5)
+    assert not _submitter_signs_employee_cell(template_id, None)
 
 
-def test_clearance_no_submitter_does_not_sign():
-    assert not _submitter_signs_employee_cell("Employee Clearance Form", None, {})
+def test_form_without_submitter_box_never_swaps():
+    assert not _submitter_signs_employee_cell("General Book", 5)
 
 
-def test_leave_form_still_requires_embed_checkbox():
-    # Leave forms keep the opt-in checkbox gate — no swap without it.
-    assert not _submitter_signs_employee_cell("Leave Application Form", 5, {})
-    assert _submitter_signs_employee_cell("Leave Application Form", 5, {"employee": True})
+@pytest.mark.parametrize(
+    ("template_id", "employee_embed", "expected"),
+    [
+        ("Employee Clearance Form", False, True),
+        ("Leave Application Form", True, True),
+        ("Leave Application Form", False, False),
+        ("Loan Request Form", True, False),
+    ],
+)
+def test_snapshot_without_flag_replays_the_rules_it_was_rendered_under(
+    template_id, employee_embed, expected
+):
+    assert _replayed_submitter_signs(template_id, {}, 5, {"employee": employee_embed}) is expected
 
 
-def test_unrelated_form_never_swaps():
-    assert not _submitter_signs_employee_cell("General Book", 5, {"employee": True})
+@pytest.mark.parametrize("recorded", [True, False])
+def test_snapshot_flag_wins_on_replay(recorded):
+    signing = {"submitter_signs": recorded}
+    assert (
+        _replayed_submitter_signs("Loan Request Form", signing, 5, {"employee": not recorded})
+        is recorded
+    )

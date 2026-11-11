@@ -9,9 +9,17 @@ the two channels can never drift in how they format the same data.
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
 from app.core.constants import ARABIC_MONTHS, ARABIC_WEEKDAYS
 from app.db.models import Employee
+
+# A record's automatic-notification choice: True/False is the operator's explicit
+# switch, None follows the event default (``msgdefault.<event>``), and "silent" is
+# a system suppression (no notification and no skipped row).
+NotifyChoice = bool | None | Literal["silent"]
+SKIP_DEFAULT_OFF = "default_off"
+SKIP_USER_OFF = "user_off"
 
 EVENT_LEAVE_REQUESTED = "leave_requested"
 EVENT_LEAVE_APPROVED = "leave_approved"

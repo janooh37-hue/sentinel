@@ -51,7 +51,7 @@ function importErrorMessage(error: unknown, t: Translate): string {
     const key = IMPORT_ERROR_KEYS[error.code]
     if (key) return t(`vehicles.import.requestErrors.${key}`)
   }
-  return vehicleErrorMessage(error, t)
+  return vehicleErrorMessage(error)
 }
 
 export function VehicleImportPage(): React.JSX.Element {

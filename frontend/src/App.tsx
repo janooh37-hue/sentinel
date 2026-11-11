@@ -22,6 +22,7 @@ import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 import { AuthProvider } from '@/lib/AuthProvider'
 import { useAuth } from '@/lib/authContext'
 import { AppLockContext } from '@/lib/appLockContext'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { DEFAULT_IDLE_LOCK_SECONDS, useLockState } from '@/lib/useLockState'
 import { type Page, PAGE_PATHS, buildPagePath } from '@/lib/pageNav'
@@ -29,9 +30,11 @@ import { serviceHref } from '@/lib/quickActions'
 import { INMATE_REPORTER_ALLOWED_DESTINATIONS } from '@/components/shell/navItems'
 import {
   loadAccessRequestsPage,
+  loadActivityPrintPage,
   loadApplicationPage,
   loadApprovalsPage,
   loadAttendancePage,
+  loadAttendancePrintPage,
   loadBookRecordPage,
   loadBooksPage,
   loadDashboardPage,
@@ -45,6 +48,14 @@ import {
   loadLeavesPage,
   loadLedgerPage,
   loadPermitsPage,
+  loadStoreCountPage,
+  loadStoreCountsPage,
+  loadStoreDashboardPage,
+  loadStoreDeliveriesPage,
+  loadStoreDeliveryScanPage,
+  loadStoreDisposalsPage,
+  loadStoreMovementsPage,
+  loadStoreItemsPage,
   loadVehicleAccidentLetterPage,
   loadVehicleAccidentsPage,
   loadVehicleEditPage,
@@ -92,6 +103,15 @@ const VehicleFinesReportPage = lazy(loadVehicleFinesReportPage)
 const VehicleAccidentsPage = lazy(loadVehicleAccidentsPage)
 const VehicleAccidentLetterPage = lazy(loadVehicleAccidentLetterPage)
 const VehicleMaintenancePage = lazy(loadVehicleMaintenancePage)
+const StoreDashboardPage = lazy(loadStoreDashboardPage)
+const StoreItemsPage = lazy(loadStoreItemsPage)
+const StoreDeliveriesPage = lazy(loadStoreDeliveriesPage)
+const StoreDeliveryScanPage = lazy(loadStoreDeliveryScanPage)
+const StoreCountsPage = lazy(loadStoreCountsPage)
+const StoreCountPage = lazy(loadStoreCountPage)
+const StoreDisposalsPage = lazy(loadStoreDisposalsPage)
+const StoreMovementsPage = lazy(loadStoreMovementsPage)
+const UniformPage = lazy(() => import('@/pages/assets/uniform/UniformPage').then(m => ({ default: m.UniformPage })))
 const LedgerPage = lazy(loadLedgerPage)
 const LedgerComposerPage = lazy(() =>
   import('@/pages/ledger/composer/LedgerComposerPage').then((m) => ({ default: m.LedgerComposerPage })),
@@ -107,6 +127,9 @@ const AbsencesPage = lazy(() =>
 )
 const EmployeesOrgTreePage = lazy(loadEmployeesOrgTreePage)
 const EmployeeDetailPage = lazy(loadEmployeeDetailPage)
+// Statement print setups: full pages beside the file, so Back leaves the preview.
+const ActivityPrintPage = lazy(loadActivityPrintPage)
+const AttendancePrintPage = lazy(loadAttendancePrintPage)
 // The monthly time sheet is a subpage of Employees, not a top-nav entry, so it
 // is code-split here and routed beside the employee routes below.
 const TimesheetPage = lazy(loadTimesheetPage)
@@ -166,6 +189,18 @@ function DashboardRoute(): React.JSX.Element {
 function LedgerRoute(): React.JSX.Element {
   const navigatePage = useNavigatePage()
   return <LedgerPage onNavigate={navigatePage} />
+}
+
+function AssetsRedirect(): React.JSX.Element {
+  const { has, isLoading } = useCapabilities()
+  if (isLoading) return <PageSuspenseFallback />
+
+  // Store stays the default, including its existing denial/request flow when
+  // neither section is viewable. Each child route enforces its own capability.
+  const destination = !has('store.view') && has('uniform.view')
+    ? '/holdings/uniform'
+    : '/holdings/store'
+  return <Navigate to={destination} replace />
 }
 
 /** `/application?form=x&…` links already went out by SMS/push/bookmark. */
@@ -322,6 +357,22 @@ function Shell(): React.JSX.Element {
                 element={
                   <RequireCapability cap="employees.view">
                     <EmployeeDetailPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/employees/:id/activity/print"
+                element={
+                  <RequireCapability cap="employees.view">
+                    <ActivityPrintPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/employees/:id/attendance/print"
+                element={
+                  <RequireCapability cap="employees.view">
+                    <AttendancePrintPage />
                   </RequireCapability>
                 }
               />
@@ -497,6 +548,85 @@ function Shell(): React.JSX.Element {
                     <VehicleFinesLetterPage />
                   </RequireCapability>
                 }
+              />
+              <Route path="/holdings" element={<AssetsRedirect />} />
+              <Route
+                path="/holdings/uniform"
+                element={<RequireCapability cap="uniform.view"><UniformPage /></RequireCapability>}
+              />
+              <Route
+                path="/holdings/store"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreDashboardPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/items"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreItemsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/deliveries"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreDeliveriesPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/deliveries/scan"
+                element={
+                  <RequireCapability cap="store.view">
+                    <RequireCapability cap="store.edit">
+                      <StoreDeliveryScanPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/counts"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreCountsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/counts/new"
+                element={
+                  <RequireCapability cap="store.view">
+                    <RequireCapability cap="store.edit">
+                      <StoreCountPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/counts/:id"
+                element={
+                  <RequireCapability cap="store.view">
+                    <RequireCapability cap="store.edit">
+                      <StoreCountPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/disposals"
+                element={
+                  <RequireCapability cap="store.view">
+                    <StoreDisposalsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/holdings/store/movements"
+                element={<RequireCapability cap="store.view"><StoreMovementsPage /></RequireCapability>}
               />
               <Route
                 path="/ledger"

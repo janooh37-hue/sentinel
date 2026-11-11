@@ -1,4 +1,5 @@
-from app.db.models import BookCategory
+from dataclasses import replace
+
 from app.services import admin_notify
 from app.services import capability_catalog_service as catalog_service
 from tests.conftest import make_user
@@ -56,16 +57,9 @@ def test_notify_uses_catalog_labels_and_request_link(db_session, monkeypatch):
 def test_notify_falls_back_from_arabic_to_english_then_id(db_session, monkeypatch):
     make_user(db_session, role="admin", email="fallback-admin@x.ae")
     requester = make_user(db_session, email="fallback-requester@x.ae")
-    category = BookCategory(
-        id="NOAR",
-        name_en="Operations",
-        name_ar=None,
-        prefix="NOAR",
-    )
-    db_session.add(category)
-    db_session.commit()
-    entry = catalog_service.get_catalog_entry(db_session, "books.category.NOAR")
+    entry = catalog_service.get_catalog_entry(db_session, "books.category.12/1")
     assert entry is not None
+    entry = replace(entry, label_en="Operations", label_ar=None)
     messages_sent: list[dict[str, tuple[str, str]]] = []
     monkeypatch.setattr(
         admin_notify.push_service,

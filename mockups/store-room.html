@@ -1,0 +1,851 @@
+<title>Pantry Store Board</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap">
+<style>
+/* Store dashboard redesign for GSSG Manager (Assets → Store). Two views:
+   Dashboard = store room (category shelves, hand-out flow), In & out = movement records.
+   Tokens mirror frontend/src/index.css. */
+:root {
+  --bg: #f5f4f1; --surface: #ffffff; --raised: #fafaf6; --tinted: #f0eee8;
+  --primary: #0d2845; --primary-hover: #1d3a5e; --primary-soft: #e8edf3; --on-primary: #ffffff;
+  --accent: #c8102e; --accent-soft: #fbe5e8;
+  --success: #047857; --success-soft: #d6f0e4;
+  --warning: #b45309; --warning-soft: #fbedd8;
+  --caution: #a16207; --caution-soft: #fef3c7;
+  --text: #1c1f24; --muted: #5a6068; --faint: #8b9098;
+  --border: #e6e4dd; --border-strong: #d4d1c8; --hairline: #efece5;
+  --shelf: #c9c3b4;
+  --hero-grad: linear-gradient(135deg, #0a1f3a 0%, #0d2845 50%, #1d3a5e 100%);
+  --focus: 0 0 0 3px color-mix(in oklab, var(--primary) 35%, transparent);
+  --shadow: 0 1px 2px rgba(13,40,69,.06), 0 8px 24px -12px rgba(13,40,69,.18);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-ar: "Noto Sans Arabic", "Inter", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0a0e18; --surface: #131826; --raised: #1a2034; --tinted: #1f263b;
+  --primary: #5778cf; --primary-hover: #7491db; --primary-soft: #1c2849; --on-primary: #0a0e18;
+  --accent: #ef4858; --accent-soft: #3a1820;
+  --success: #34d399; --success-soft: #142d23;
+  --warning: #fbbf24; --warning-soft: #3a2a10;
+  --caution: #facc15; --caution-soft: #3b2f11;
+  --text: #e6e9f2; --muted: #8a93a7; --faint: #5f6678;
+  --border: #2a3148; --border-strong: #3a4360; --hairline: #1f263b;
+  --shelf: #4a5370;
+  --hero-grad: linear-gradient(135deg, #050816 0%, #0d1428 50%, #1a2540 100%);
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -12px rgba(0,0,0,.6);
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0a0e18; --surface: #131826; --raised: #1a2034; --tinted: #1f263b;
+  --primary: #5778cf; --primary-hover: #7491db; --primary-soft: #1c2849; --on-primary: #0a0e18;
+  --accent: #ef4858; --accent-soft: #3a1820;
+  --success: #34d399; --success-soft: #142d23;
+  --warning: #fbbf24; --warning-soft: #3a2a10;
+  --caution: #facc15; --caution-soft: #3b2f11;
+  --text: #e6e9f2; --muted: #8a93a7; --faint: #5f6678;
+  --border: #2a3148; --border-strong: #3a4360; --hairline: #1f263b;
+  --shelf: #4a5370;
+  --hero-grad: linear-gradient(135deg, #050816 0%, #0d1428 50%, #1a2540 100%);
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -12px rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; font-feature-settings: "ss01", "cv11"; }
+[dir="rtl"] body, [dir="rtl"] button, [dir="rtl"] input { font-family: var(--font-ar); }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: none; box-shadow: var(--focus); }
+::selection { background: color-mix(in oklab, var(--primary) 22%, transparent); }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.gut { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.in { max-width: 1240px; margin-inline: auto; }
+
+/* ---------- app chrome (existing StoreShell) ---------- */
+.band { background: var(--hero-grad); color: #fff; padding-block: 16px 0; }
+.band .in { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 20px; align-items: flex-start; }
+.band .t { font-size: .74rem; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.7); }
+[dir="rtl"] .band .t { letter-spacing: 0; }
+.band .tag { font-size: .84rem; color: rgba(255,255,255,.82); margin-top: 2px; }
+.band .sec-tabs { margin-top: 12px; display: flex; gap: 4px; }
+.band .sec-tabs span { padding: 8px 12px; font-size: .86rem; font-weight: 600; border-bottom: 2px solid #fff; }
+.mockctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mockctl .lbl { font-size: .7rem; color: rgba(255,255,255,.6); }
+.seg { display: inline-flex; background: rgba(255,255,255,.12); border-radius: 99px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 5px 11px; border-radius: 99px; font-size: .78rem; font-weight: 500; color: rgba(255,255,255,.8); white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: #fff; color: #0d2845; font-weight: 600; }
+.subtabs { border-bottom: 1px solid var(--border); background: var(--bg); }
+.subtabs .in { display: flex; gap: 4px; overflow-x: auto; }
+.subtabs button { flex: none; min-height: 44px; border: 0; border-bottom: 2px solid transparent; background: none; padding: 0 12px; font-size: .86rem; font-weight: 500; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.subtabs button:hover { color: var(--text); }
+.subtabs button[aria-current="page"] { border-color: var(--primary); color: var(--primary); font-weight: 600; }
+.subtabs .new { font-size: .62rem; font-weight: 700; padding: 1px 6px; border-radius: 99px; background: var(--accent); color: #fff; letter-spacing: .02em; }
+.subtabs .same { color: var(--faint); }
+
+.page { padding-block: 18px 56px; }
+.page .in { display: flex; flex-direction: column; gap: 16px; }
+.phead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.phead h1 { margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+[dir="rtl"] .phead h1 { letter-spacing: 0; }
+.phead p { margin: 4px 0 0; color: var(--muted); font-size: .88rem; max-width: 62ch; }
+.phead .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.btn { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); border-radius: 12px; min-height: 40px; padding: 7px 13px; font-size: .86rem; font-weight: 600; display: inline-flex; gap: 7px; align-items: center; justify-content: center; }
+.btn:hover { background: var(--tinted); }
+.btn.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.btn.primary:hover { background: var(--primary-hover); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.btn svg { width: 16px; height: 16px; flex: none; }
+.link { border: 0; background: none; padding: 0; color: var(--primary); font-weight: 600; font-size: .84rem; text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- month cycle ---------- */
+.cycle { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; }
+.step { padding: 13px 15px; display: flex; gap: 11px; align-items: flex-start; min-width: 0; }
+.step + .step { border-inline-start: 1px solid var(--hairline); }
+.step .mark { flex: none; width: 26px; height: 26px; border-radius: 99px; display: grid; place-items: center; border: 1.5px solid var(--border-strong); color: var(--faint); }
+.step .mark svg { width: 14px; height: 14px; }
+.step.done .mark { background: var(--success); border-color: var(--success); color: var(--surface); }
+.step.next { background: color-mix(in oklab, var(--primary-soft) 55%, var(--surface)); }
+.step.next .mark { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+.step.blocked .mark { border-style: dashed; }
+.step .k { font-size: .76rem; color: var(--muted); font-weight: 500; }
+.step .v { font-size: .94rem; font-weight: 600; }
+.step .s { font-size: .74rem; color: var(--muted); margin-top: 1px; }
+
+/* ---------- status chips ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 99px; padding: 5px 11px; font-size: .8rem; font-weight: 500; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.chip svg { width: 14px; height: 14px; }
+.chip .n { font-weight: 700; }
+.chip.zero { color: var(--faint); }
+.chip.t-expired:not(.zero) { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.chip.t-expiring:not(.zero) { color: var(--warning); background: var(--warning-soft); border-color: transparent; }
+.chip.t-low:not(.zero) { color: var(--caution); background: var(--caution-soft); border-color: transparent; }
+.chip[aria-pressed="true"] { border-color: currentColor; box-shadow: inset 0 0 0 1px currentColor; }
+.chips .note { font-size: .76rem; color: var(--muted); }
+
+/* ---------- drawings + badges ---------- */
+.pic { position: relative; aspect-ratio: 1; width: 100%; max-width: 100%; }
+.pic > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.pic.tile { background: #ebe9e3; border-radius: 10px; overflow: hidden; }
+.badge { display: inline-flex; align-items: center; gap: 4px; font-size: .7rem; font-weight: 600; padding: 2px 7px; border-radius: 99px; white-space: nowrap; line-height: 1.4; }
+.badge svg { width: 12px; height: 12px; flex: none; }
+.b-expired { background: var(--accent); color: var(--surface); }
+.b-expiring { background: var(--warning-soft); color: var(--warning); }
+.b-low { background: var(--caution-soft); color: var(--caution); }
+.b-ok { background: var(--success-soft); color: var(--success); }
+.meter { position: relative; height: 6px; border-radius: 99px; background: var(--tinted); }
+.meter i { position: absolute; inset-block: 0; inset-inline-start: 0; border-radius: 99px; background: var(--primary); }
+.meter.low i { background: var(--caution); }
+.meter b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); opacity: .55; border-radius: 1px; }
+
+/* ---------- store room ---------- */
+.pickbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; border: 1px solid var(--primary); background: var(--primary-soft); border-radius: 14px; padding: 10px 14px; font-size: .84rem; font-weight: 500; }
+.unit { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 16px 16px; }
+.unit header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.unit h2 { margin: 0; font-size: 1rem; font-weight: 700; }
+.unit header .meta { font-size: .76rem; color: var(--muted); }
+.plank { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); row-gap: 22px; padding-top: 24px; }
+.on-shelf { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; border: 0; background: none; padding: 0 8px 10px; border-bottom: 7px solid var(--shelf); transition: background .15s; }
+.on-shelf .pic { width: 100%; max-width: 104px; transition: transform .2s cubic-bezier(.2,.8,.2,1); }
+.on-shelf:hover .pic { transform: translateY(-4px); }
+.on-shelf .flag { position: absolute; top: -14px; inset-inline-start: 50%; transform: translateX(-50%); z-index: 1; }
+[dir="rtl"] .on-shelf .flag { transform: translateX(50%); }
+.on-shelf .lbl { font-size: .74rem; font-weight: 600; text-align: center; line-height: 1.22; max-width: 100%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.44em; }
+.on-shelf .q { font-size: .72rem; color: var(--muted); }
+.on-shelf .q .num { color: var(--text); font-weight: 600; font-size: .86rem; }
+.on-shelf.dim { opacity: .22; }
+.picking .on-shelf:hover { background: var(--primary-soft); }
+.picking .on-shelf.nogive { opacity: .32; cursor: not-allowed; }
+.on-shelf .pc { position: absolute; top: 0; inset-inline-end: 8px; z-index: 2; min-width: 26px; height: 26px; padding: 0 7px; border-radius: 99px; display: grid; place-items: center; font-weight: 700; font-size: .8rem; background: var(--surface); color: var(--primary); border: 1.5px dashed color-mix(in oklab, var(--primary) 55%, transparent); }
+.on-shelf .pc.has { background: var(--primary); color: var(--on-primary); border: 1.5px solid var(--primary); animation: pop .22s ease-out; }
+@keyframes pop { from { transform: scale(.7); } to { transform: scale(1); } }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 16px; }
+.panel > header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 12px; margin-bottom: 6px; }
+.panel h2 { margin: 0; font-size: 1rem; font-weight: 700; }
+.panel header p { margin: 2px 0 0; font-size: .78rem; color: var(--muted); }
+.empty { font-size: .84rem; color: var(--muted); padding: 12px; border: 1px dashed var(--border-strong); border-radius: 12px; margin: 6px 0 0; }
+.tbl-wrap { overflow-x: auto; }
+table.usage { border-collapse: collapse; width: 100%; font-size: .84rem; }
+table.usage th { text-align: start; font-size: .72rem; color: var(--faint); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--hairline); white-space: nowrap; }
+table.usage td { padding: 8px 10px; border-bottom: 1px solid var(--hairline); white-space: nowrap; }
+table.usage td.it { display: flex; gap: 10px; align-items: center; white-space: normal; min-width: 200px; }
+table.usage td.it .pic { width: 30px; flex: none; }
+table.usage .sug { font-weight: 700; color: var(--primary); }
+
+/* ---------- records (In & out) ---------- */
+.rtools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.search { width: min(300px, 100%); border: 1px solid var(--border-strong); background: var(--surface); border-radius: 10px; padding: 8px 11px; font-size: .88rem; min-height: 38px; }
+.search::placeholder, .field input::placeholder { color: var(--faint); }
+.month { font-size: .78rem; font-weight: 700; color: var(--muted); margin: 10px 2px 6px; }
+.recs { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+.rec { width: 100%; border: 0; background: none; text-align: start; display: grid; grid-template-columns: 36px 64px 52px minmax(0, 1fr) auto 18px; gap: 12px; align-items: center; padding: 11px 14px; }
+.rec + .rec { border-top: 1px solid var(--hairline); }
+.rec:hover { background: var(--raised); }
+.rec.fresh { animation: fresh 1.6s ease-out; }
+@keyframes fresh { from { background: var(--primary-soft); } to { background: transparent; } }
+.kind { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+.kind svg { width: 17px; height: 17px; }
+.k-in { background: var(--success-soft); color: var(--success); }
+.k-out { background: var(--primary-soft); color: var(--primary); }
+.k-disposed { background: var(--accent-soft); color: var(--accent); }
+.rec .date { font-size: .74rem; color: var(--muted); line-height: 1.25; }
+.rec .date strong { display: block; color: var(--text); font-size: .9rem; }
+.stack { position: relative; width: 48px; height: 44px; }
+.stack .pic { position: absolute; width: 32px; background: #ebe9e3; border: 2px solid var(--surface); border-radius: 8px; overflow: hidden; }
+.stack .pic:nth-child(1) { top: 0; inset-inline-start: 0; }
+.stack .pic:nth-child(2) { top: 6px; inset-inline-start: 8px; }
+.stack .pic:nth-child(3) { top: 12px; inset-inline-start: 16px; }
+.rec .body { min-width: 0; }
+.rec .what { font-size: .86rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rec .what .x { color: var(--muted); font-weight: 500; }
+.rec .who { font-size: .76rem; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rec .who strong { color: var(--text); font-weight: 600; }
+.rec .tot { text-align: end; font-size: .74rem; color: var(--muted); white-space: nowrap; }
+.rec .tot .num { display: block; font-size: .88rem; font-weight: 700; color: var(--text); }
+.rec .chev { color: var(--faint); display: grid; }
+[dir="rtl"] .rec .chev { transform: scaleX(-1); }
+
+/* ---------- drawer ---------- */
+.scrim { position: fixed; inset: 0; background: rgba(5,10,20,.42); z-index: 30; opacity: 0; transition: opacity .2s; }
+.scrim.open { opacity: 1; }
+.drawer { position: fixed; z-index: 31; top: 0; bottom: 0; inset-inline-end: 0; width: min(440px, 100%); background: var(--bg); padding: max(14px, env(safe-area-inset-top, 0px)) 14px max(14px, env(safe-area-inset-bottom, 0px)); overflow-y: auto; transform: translateX(100%); transition: transform .28s cubic-bezier(.2,.8,.2,1); }
+[dir="rtl"] .drawer { transform: translateX(-100%); }
+.drawer.open, [dir="rtl"] .drawer.open { transform: none; }
+.drawer .close { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.hero { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 14px; align-items: start; }
+.card h3 { margin: 0; font-size: 1.08rem; font-weight: 700; line-height: 1.25; text-wrap: balance; }
+.code { font-size: .74rem; color: var(--muted); margin-top: 3px; }
+.big { display: flex; align-items: baseline; gap: 6px; margin-top: 10px; }
+.big .num { font-size: 2.1rem; font-weight: 600; letter-spacing: -0.03em; line-height: 1; }
+.big span:last-child { color: var(--muted); font-size: .85rem; }
+.sec { border-top: 1px solid var(--hairline); padding-top: 12px; }
+.sec h4 { margin: 0 0 8px; font-size: .78rem; font-weight: 600; color: var(--muted); }
+.kv { display: flex; justify-content: space-between; gap: 12px; font-size: .84rem; padding: 3px 0; }
+.kv > span:first-child { color: var(--muted); }
+.kv strong { font-weight: 600; text-align: end; }
+.why { font-size: .76rem; color: var(--muted); margin: 6px 0 0; line-height: 1.4; }
+.runway { position: relative; height: 54px; margin: 4px 0 2px; }
+.runway .track { position: absolute; inset-inline: 0; top: 26px; height: 4px; background: var(--tinted); border-radius: 99px; }
+.runway .zone { position: absolute; top: 26px; height: 4px; inset-inline-start: 0; background: var(--warning); opacity: .5; border-radius: 99px; }
+.runway .tick { position: absolute; top: 34px; font-size: .64rem; color: var(--faint); transform: translateX(-50%); white-space: nowrap; }
+[dir="rtl"] .runway .tick { transform: translateX(50%); }
+.runway .pin { position: absolute; top: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+[dir="rtl"] .runway .pin { transform: translateX(50%); }
+.runway .pin .q { font-size: .68rem; font-weight: 700; padding: 1px 6px; border-radius: 99px; background: var(--primary); color: var(--on-primary); white-space: nowrap; }
+.runway .pin .dot { width: 10px; height: 10px; border-radius: 99px; background: var(--primary); border: 2px solid var(--surface); margin-top: 3px; }
+.runway .pin.w .q, .runway .pin.w .dot { background: var(--warning); color: var(--surface); }
+.batches { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.batch { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; font-size: .8rem; padding: 6px 8px; border-radius: 8px; background: var(--raised); }
+.batch .when { color: var(--muted); }
+.lines { display: flex; flex-direction: column; }
+.line { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; }
+.line + .line { border-top: 1px solid var(--hairline); }
+.line .pic { background: #ebe9e3; border-radius: 8px; overflow: hidden; }
+.line .n { font-size: .84rem; font-weight: 600; }
+.line .e { font-size: .72rem; color: var(--muted); }
+.line .qq { font-weight: 700; font-size: .9rem; white-space: nowrap; }
+.file { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; color: var(--primary); border: 1px solid var(--border-strong); border-radius: 10px; padding: 5px 10px; background: var(--surface); }
+.file svg { width: 15px; height: 15px; }
+
+/* forms */
+.give { display: flex; flex-direction: column; gap: 10px; }
+.give h4 { color: var(--text); font-size: .9rem; font-weight: 700; margin: 0; }
+.row2 { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: end; }
+.field { min-width: 0; }
+.field label { display: block; font-size: .74rem; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+.field input[type="text"] { width: 100%; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); border-radius: 10px; padding: 7px 10px; font-size: .88rem; min-height: 36px; }
+.field input:focus-visible { border-color: var(--primary); }
+.field input[aria-invalid="true"] { border-color: var(--accent); }
+.err { color: var(--accent); font-size: .74rem; margin-top: 4px; }
+.byline { display: flex; align-items: center; gap: 8px; font-size: .76rem; color: var(--muted); }
+.av { width: 22px; height: 22px; border-radius: 99px; background: var(--primary-soft); color: var(--primary); font-weight: 700; font-size: .64rem; display: grid; place-items: center; flex: none; }
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.stepper button { border: 0; background: transparent; width: 34px; height: 34px; font-size: 1.05rem; color: var(--primary); font-weight: 600; }
+.stepper button:hover { background: var(--tinted); }
+.stepper output { min-width: 32px; text-align: center; font-weight: 700; font-size: .95rem; }
+.hist { display: flex; flex-direction: column; gap: 4px; }
+.hist button { border: 0; background: var(--raised); border-radius: 8px; padding: 6px 8px; font-size: .78rem; display: flex; justify-content: space-between; gap: 10px; text-align: start; }
+.hist button:hover { background: var(--tinted); }
+.hist span:last-child { color: var(--muted); white-space: nowrap; }
+
+/* multi-item tray */
+body.picking .page { padding-bottom: 300px; }
+#tray { position: fixed; z-index: 25; inset-inline: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--border); box-shadow: 0 -12px 32px -14px rgba(13,40,69,.3); padding-top: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+.tray-in { max-width: 1240px; margin-inline: auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 400px); gap: 10px 22px; align-items: end; }
+.tray-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.tray-head strong { font-size: .95rem; }
+.tray-head span { font-size: .76rem; color: var(--muted); }
+.tray-items { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; min-height: 58px; align-items: stretch; }
+.tray-empty { font-size: .82rem; color: var(--muted); align-self: center; }
+.bitem { flex: none; display: grid; grid-template-columns: 40px auto; gap: 3px 8px; align-items: center; border: 1px solid var(--border); border-radius: 12px; padding: 6px 8px; background: var(--raised); }
+.bitem .pic { grid-row: span 2; width: 40px; }
+.bitem .nm { font-size: .74rem; font-weight: 600; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bitem .stepper button { width: 26px; height: 24px; font-size: .95rem; }
+.bitem .stepper output { min-width: 24px; font-size: .82rem; }
+.tray-form { display: flex; flex-direction: column; gap: 8px; }
+.tray-form .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.tray-form .go { display: flex; gap: 8px; }
+.tray-form .go .primary { flex: 1; }
+
+.toast { position: fixed; z-index: 40; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); inset-inline-start: 50%; transform: translate(-50%, 20px); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: .84rem; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; max-width: calc(100% - 32px); }
+[dir="rtl"] .toast { transform: translate(50%, 20px); }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+[dir="rtl"] .toast.show { transform: translate(50%, 0); }
+body.picking .toast { bottom: calc(320px + env(safe-area-inset-bottom, 0px)); }
+.foot { font-size: .74rem; color: var(--faint); }
+
+@media (max-width: 760px) {
+  .cycle { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .step:nth-child(3) { border-inline-start: 0; }
+  .step:nth-child(n+3) { border-top: 1px solid var(--hairline); }
+  .plank { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .on-shelf { padding-inline: 4px; }
+  .tray-in, .tray-form .two { grid-template-columns: minmax(0, 1fr); }
+  body.picking .page { padding-bottom: 400px; }
+  body.picking .toast { bottom: calc(420px + env(safe-area-inset-bottom, 0px)); }
+  .rec { grid-template-columns: 32px minmax(0, 1fr) auto; grid-template-areas: "k w t" "k d t"; gap: 2px 10px; }
+  .rec .kind { grid-area: k; align-self: start; }
+  .rec .stack, .rec .chev { display: none; }
+  .rec .body { grid-area: w; }
+  .rec .date { grid-area: d; display: flex; gap: 6px; }
+  .rec .date strong { display: inline; font-size: .74rem; color: var(--muted); font-weight: 500; }
+  .rec .tot { grid-area: t; }
+  .phead h1 { font-size: 1.3rem; }
+  .hero { grid-template-columns: 96px minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+</style>
+
+<header class="band gut">
+  <div class="in">
+    <div><div class="t" data-t="assets"></div><div class="tag" data-t="tagline"></div></div>
+    <div class="mockctl">
+      <span class="lbl" data-t="sampleLabel"></span>
+      <div class="seg" id="stateSeg"><button type="button" data-state="first" data-t="stateFirst"></button><button type="button" data-state="mature" data-t="stateMature"></button></div>
+      <div class="seg" id="langSeg"><button type="button" data-lang="en">English</button><button type="button" data-lang="ar" lang="ar">العربية</button></div>
+    </div>
+  </div>
+  <div class="in sec-tabs"><span data-t="storeTab"></span></div>
+</header>
+<nav class="subtabs gut" id="subtabs"></nav>
+<main class="page gut"><div class="in" id="view"></div></main>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" hidden>
+  <div class="close"><button class="btn" type="button" id="drawerClose"></button></div>
+  <div id="drawerBody"></div>
+</aside>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+const TODAY = new Date('2026-10-31T00:00:00');
+const daysTo = iso => Math.round((new Date(iso + 'T00:00:00') - TODAY) / 86400000);
+const WINDOW = 60;
+
+/* ---------------- copy ---------------- */
+const T = {
+  en: {
+    assets: 'Assets', tagline: 'HQ-supplied consumables: quantity and expiry.', storeTab: 'Store',
+    sampleLabel: 'Sample data', stateFirst: 'Today (1 count)', stateMature: 'After 3 months',
+    tabs: { dashboard: 'Dashboard', moves: 'In & out', items: 'Items', deliveries: 'Deliveries', counts: 'Stock counts', disposals: 'Disposals' },
+    newTag: 'NEW', existing: 'Existing page. It stays as it is.',
+    title: 'Store', desc: 'Find each item on its shelf, hand items out, and prepare the next HQ material request.',
+    handOut: 'Hand out items', createRequest: 'Create HQ request',
+    cDelivery: 'Monthly delivery', cCount: 'Stock count', cUsage: 'Monthly usage', cRequest: 'HQ material request',
+    none: 'None yet', deliverySub: 'Record it on the Deliveries tab when it arrives.',
+    countsOf: n => `${n} of 2 counts recorded`, needSecond: 'Needs a second count', usageReady: 'Calculated',
+    usageFrom: (a, b) => `From the counts of ${a} and ${b}`, nextCount: d => `Next count due ${d}`, ago: n => `${n} days ago`,
+    reqNone: 'No suggestions yet', reqNoneSub: 'Suggestions need monthly usage.', reqReady: n => `${n} items suggested`,
+    all: 'All items', expired: 'Expired', expiring: 'Expiring soon', low: 'Below minimum', ok: 'In stock',
+    shortExpiring: d => `${d}d`, shortLow: 'Low', note60: `Expiring soon = within ${WINDOW} days`,
+    shelfMeta: (n, a) => `${n} items${a ? ` · ${a} need attention` : ''}`,
+    pickOn: 'Tap each item the person is taking. Tap again to add one more.',
+    usageTitle: 'Monthly usage and suggested request', usageSub: 'Usage is worked out from stock counts. The suggestion is average usage less what is on hand.',
+    noUsage: 'Monthly usage will be available after two stock counts. Record them on the Stock counts tab.',
+    colItem: 'Store item', colAvg: 'Average', colOnHand: 'On hand', colSug: 'Suggested',
+    recentTitle: 'Recent handovers', recentSub: 'The last items handed out from the store.', seeAll: 'See all in In & out',
+    minLevel: 'Minimum level', batches: 'Batches and expiry', noExpiry: 'No expiry date.',
+    daysLeft: n => n === 0 ? 'expires today' : `${n} day${n === 1 ? '' : 's'} left`,
+    usage: 'Used per month', usageNone: 'Available after the second stock count', suggested: 'Suggested request', nothing: 'Nothing to request',
+    give: 'Hand out', qty: 'Quantity', takenBy: 'Taken by', takenByPh: 'Name of the person taking it', note: 'Note (optional)', notePh: 'e.g. Board meeting, 3rd floor',
+    recordedBy: n => `Recorded by ${n}`, you: 'you', giveBtn: 'Record handover', addMulti: 'Add to a multi-item handover',
+    giveFrom: d => `Taken from the batch expiring ${d} first.`, giveNone: 'Nothing on hand to hand out.', nameErr: 'Enter the name of the person taking it.',
+    given: (q, n) => `Recorded: ${q} handed to ${n}.`, givenMany: (n, to) => `Recorded: ${n} items handed to ${to}.`, maxReached: 'No more stock of this item on hand.',
+    recentFor: 'Recent handovers of this item', noneGiven: 'No handovers of this item yet.', disposal: 'Record disposal', count: 'Record count',
+    trayTitle: 'Handover', trayEmpty: 'Nothing added yet. Tap an item on a shelf.', cancel: 'Cancel',
+    recordAll: n => `Record handover · ${n} ${n === 1 ? 'item' : 'items'}`, itemsN: n => `${n} ${n === 1 ? 'item' : 'items'}`, unitsN: n => `${n} ${n === 1 ? 'unit' : 'units'}`,
+    close: 'Close', mock: 'Mockup only: nothing is saved.',
+    movesTitle: 'In & out', movesDesc: 'Everything received into the store and everything that left it. Select a row for its details.',
+    fAll: 'All', fIn: 'Received', fOut: 'Handed out', fDisposed: 'Disposed', search: 'Search by name or item',
+    kIn: 'Monthly delivery', kOut: 'Handover', kDisposed: 'Disposal',
+    toWho: n => `To ${n}`, byWho: n => `recorded by ${n}`, fromHQ: 'From HQ', reasonExpired: 'Expired', reasonDamaged: 'Damaged',
+    noRecords: 'No records match this filter.',
+    dWhen: 'Date and time', dTakenBy: 'Taken by', dRecordedBy: 'Recorded by', dNote: 'Note', dReason: 'Reason', dFile: 'Delivery note', dItems: 'Items',
+    dReceived: 'Received on', batchExp: d => `Batch expiring ${d}`, undated: 'Undated batch',
+    foot: 'Real item list from the opening count of 29 Oct 2026. Minimum levels, usage, handovers and deliveries are sample values. Nothing here is saved.',
+  },
+  ar: {
+    assets: 'الأصول', tagline: 'رصيد المواد المستهلكة الواردة من القيادة وتواريخ انتهائها.', storeTab: 'المخزن',
+    sampleLabel: 'بيانات تجريبية', stateFirst: 'اليوم (جرد واحد)', stateMature: 'بعد 3 أشهر',
+    tabs: { dashboard: 'لوحة المعلومات', moves: 'الوارد والصادر', items: 'الأصناف', deliveries: 'الاستلام الشهري', counts: 'الجرد الشهري', disposals: 'الإتلاف' },
+    newTag: 'جديد', existing: 'صفحة حالية تبقى كما هي.',
+    title: 'المخزن', desc: 'اعثر على كل صنف في رفّه، واصرف الأصناف، وجهّز طلب المواد التالي من القيادة.',
+    handOut: 'صرف أصناف', createRequest: 'إنشاء طلب للقيادة',
+    cDelivery: 'الاستلام الشهري', cCount: 'الجرد الشهري', cUsage: 'الاستهلاك الشهري', cRequest: 'طلب مواد من القيادة',
+    none: 'لا يوجد بعد', deliverySub: 'سجّله في تبويب الاستلام الشهري عند وصوله.',
+    countsOf: n => `تم تسجيل ${n} من 2 عمليات جرد`, needSecond: 'يحتاج إلى جرد ثانٍ', usageReady: 'تم الحساب',
+    usageFrom: (a, b) => `من جرد ${a} وجرد ${b}`, nextCount: d => `الجرد التالي في ${d}`, ago: n => `قبل ${arDays(n)}`,
+    reqNone: 'لا توجد اقتراحات بعد', reqNoneSub: 'تحتاج الاقتراحات إلى الاستهلاك الشهري.', reqReady: n => `${arItems(n)} مقترحة`,
+    all: 'كل الأصناف', expired: 'منتهي الصلاحية', expiring: 'قارب على الانتهاء', low: 'أقل من الحد الأدنى', ok: 'متوفر',
+    shortExpiring: d => arDays(d), shortLow: 'منخفض', note60: `قارب على الانتهاء = خلال ${WINDOW} يومًا`,
+    shelfMeta: (n, a) => `${arItems(n)}${a ? ` · ${a} تحتاج إلى متابعة` : ''}`,
+    pickOn: 'اضغط على كل صنف يستلمه الشخص، واضغط مرة أخرى لزيادة الكمية.',
+    usageTitle: 'الاستهلاك الشهري والكمية المقترحة', usageSub: 'يُحسب الاستهلاك من عمليات الجرد. الاقتراح هو متوسط الاستهلاك ناقص الموجود.',
+    noUsage: 'سيتوفر الاستهلاك الشهري بعد عمليتي جرد. سجّلهما في تبويب الجرد الشهري.',
+    colItem: 'الصنف', colAvg: 'المتوسط', colOnHand: 'الموجود', colSug: 'المقترح',
+    recentTitle: 'آخر عمليات الصرف', recentSub: 'آخر الأصناف التي صُرفت من المخزن.', seeAll: 'عرض الكل في الوارد والصادر',
+    minLevel: 'الحد الأدنى', batches: 'الدفعات وتواريخ الانتهاء', noExpiry: 'ليس له تاريخ انتهاء.',
+    daysLeft: n => n === 0 ? 'ينتهي اليوم' : `متبقٍ ${arDays(n)}`,
+    usage: 'الاستهلاك الشهري', usageNone: 'يتوفر بعد الجرد الثاني', suggested: 'الكمية المقترحة', nothing: 'لا حاجة للطلب',
+    give: 'صرف', qty: 'الكمية', takenBy: 'المستلم', takenByPh: 'اسم الشخص المستلم', note: 'ملاحظة (اختياري)', notePh: 'مثال: اجتماع مجلس الإدارة، الطابق الثالث',
+    recordedBy: n => `يسجّله ${n}`, you: 'أنت', giveBtn: 'تسجيل الصرف', addMulti: 'إضافة إلى صرف متعدد',
+    giveFrom: d => `يُصرف أولًا من الدفعة التي تنتهي في ${d}.`, giveNone: 'لا يوجد مخزون للصرف.', nameErr: 'أدخل اسم الشخص المستلم.',
+    given: (q, n) => `تم التسجيل: صرف ${q} إلى ${n}.`, givenMany: (n, to) => `تم التسجيل: صرف ${arItems(n)} إلى ${to}.`, maxReached: 'لا يوجد مخزون إضافي من هذا الصنف.',
+    recentFor: 'آخر عمليات صرف هذا الصنف', noneGiven: 'لم يُصرف هذا الصنف بعد.', disposal: 'تسجيل إتلاف', count: 'تسجيل جرد',
+    trayTitle: 'صرف', trayEmpty: 'لم تتم إضافة شيء بعد. اضغط على صنف في الرف.', cancel: 'إلغاء',
+    recordAll: n => `تسجيل الصرف · ${arItems(n)}`, itemsN: n => arItems(n), unitsN: n => n === 1 ? 'وحدة واحدة' : n === 2 ? 'وحدتان' : n <= 10 ? `${n} وحدات` : `${n} وحدة`,
+    close: 'إغلاق', mock: 'نموذج تجريبي: لا يتم حفظ أي شيء.',
+    movesTitle: 'الوارد والصادر', movesDesc: 'كل ما دخل إلى المخزن وكل ما خرج منه. اختر أي سطر لعرض تفاصيله.',
+    fAll: 'الكل', fIn: 'وارد', fOut: 'مصروف', fDisposed: 'متلف', search: 'ابحث بالاسم أو الصنف',
+    kIn: 'استلام شهري', kOut: 'صرف', kDisposed: 'إتلاف',
+    toWho: n => `إلى ${n}`, byWho: n => `سجّله ${n}`, fromHQ: 'من القيادة', reasonExpired: 'منتهي الصلاحية', reasonDamaged: 'تالف',
+    noRecords: 'لا توجد سجلات مطابقة.',
+    dWhen: 'التاريخ والوقت', dTakenBy: 'المستلم', dRecordedBy: 'سجّله', dNote: 'ملاحظة', dReason: 'السبب', dFile: 'إشعار التسليم', dItems: 'الأصناف',
+    dReceived: 'تاريخ الاستلام', batchExp: d => `دفعة تنتهي في ${d}`, undated: 'دفعة بلا تاريخ انتهاء',
+    foot: 'قائمة الأصناف حقيقية من جرد الافتتاح بتاريخ 29 أكتوبر 2026. الحدود الدنيا والاستهلاك وعمليات الصرف والاستلام قيم تجريبية. لا يُحفظ شيء هنا.',
+  },
+};
+function arItems(n) { return n === 1 ? 'صنف واحد' : n === 2 ? 'صنفان' : n <= 10 ? `${n} أصناف` : `${n} صنفًا`; }
+function arDays(n) { return n === 1 ? 'يوم واحد' : n === 2 ? 'يومان' : n <= 10 ? `${n} أيام` : `${n} يومًا`; }
+
+/* ---------------- data: real items from scripts/store_opening_2026-10-29.json ---------------- */
+// min / use are sample values; categories act as shelves.
+const CATS = [{ id: 'pantry', en: 'Pantry', ar: 'ضيافة' }, { id: 'protective', en: 'Protective', ar: 'وقاية' }];
+const UNITS = { carton: ['carton', 'cartons', 'كرتون'], packet: ['packet', 'packets', 'علبة'] };
+const ITEMS = [
+  { id: 'ST-0001', en: 'Nescafe Classic 12×190g', ar: 'نسكافيه كلاسيك 12×190غ', cat: 'pantry', unit: 'carton', min: 4, use: 3, b: [[6, '2027-10-31'], [5, '2027-11-30'], [3, '2028-03-31']], art: ['jar', '#3a2216', '#c8102e', 'NESCAFE'] },
+  { id: 'ST-0002', en: 'Coffee-mate 15×400g', ar: 'كوفي ميت 15×400غ', cat: 'pantry', unit: 'carton', min: 6, use: 5, b: [[2, '2026-11-30'], [3, '2026-12-02'], [1, '2027-03-25'], [1, '2027-04-12'], [1, '2027-04-25'], [5, '2027-04-26'], [3, '2028-02-13'], [1, '2028-02-23'], [4, '2028-03-19']], art: ['canister', '#f4efe6', '#7a4a2a', 'CREAMER'] },
+  { id: 'ST-0003', en: 'Lipton Yellow Label Tea 24×400g', ar: 'شاي ليبتون العلامة الصفراء 24×400غ', cat: 'pantry', unit: 'carton', min: 4, use: 2, b: [[10, '2028-09-30']], art: ['box', '#f2c230', '#c8102e', 'TEA'] },
+  { id: 'ST-0004', en: 'Green tea', ar: 'شاي أخضر', cat: 'pantry', unit: 'packet', min: 4, use: 3, b: [[9, null]], art: ['box', '#3f7d3a', '#eef3e3', 'GREEN'] },
+  { id: 'ST-0005', en: 'Lipton Red Label 36×100 teabags', ar: 'ليبتون العلامة الحمراء 36×100 كيس', cat: 'pantry', unit: 'carton', min: 3, use: 2, b: [[9, '2029-01-31']], art: ['box', '#b3121f', '#f6d34a', 'RED'] },
+  { id: 'ST-0006', en: 'Rainbow milk 96×170g', ar: 'حليب رينبو 96×170غ', cat: 'pantry', unit: 'carton', min: 3, use: 3, b: [[8, '2027-05-31']], art: ['tins', '#d0312d', '#ffffff', 'MILK'] },
+  { id: 'ST-0007', en: 'Liwa Water', ar: 'مياه ليوا', cat: 'pantry', unit: 'carton', min: 40, use: 35, b: [[88, null]], art: ['water', '#2f7fc1', '#ffffff', ''] },
+  { id: 'ST-0008', en: 'Coffee cup 50×40pc', ar: 'أكواب قهوة 50×40 قطعة', cat: 'pantry', unit: 'carton', min: 4, use: 4, b: [[12, null]], art: ['cups', '#ffffff', '#0d2845', ''] },
+  { id: 'ST-0009', en: 'Big coffee cup', ar: 'أكواب قهوة كبيرة', cat: 'pantry', unit: 'carton', min: 3, use: 3, b: [[9, null]], art: ['bigcups', '#ffffff', '#7a4a2a', ''] },
+  { id: 'ST-0010', en: 'Masafi Pure Soft café tissues 150×2', ar: 'مناديل مسافي بيور سوفت 150×2', cat: 'pantry', unit: 'carton', min: 3, use: 3, b: [[8, null]], art: ['tissue', '#5aa9d6', '#ffffff', ''] },
+  { id: 'ST-0011', en: 'Nitrile gloves', ar: 'قفازات نتريل', cat: 'protective', unit: 'carton', min: 3, use: 2, b: [[10, null]], art: ['gloves', '#2b5fb4', '#7fb0ff', 'NITRILE'] },
+  { id: 'ST-0012', en: 'Vinyl gloves 10×100', ar: 'قفازات فينيل 10×100', cat: 'protective', unit: 'carton', min: 4, use: 2, b: [[3, null]], art: ['gloves', '#e9eef2', '#9fb3c2', 'VINYL'] },
+  { id: 'ST-0013', en: 'Face mask 3-ply blue', ar: 'كمامات وجه زرقاء 3 طبقات', cat: 'protective', unit: 'carton', min: 10, use: 6, b: [[26, null]], art: ['mask', '#eaf3fa', '#6fb3e0', 'MASK'] },
+];
+const USERS = { me: { en: 'Saeed Al Mansoori', ar: 'سعيد المنصوري', ini: 'SM' }, fatima: { en: 'Fatima Al Hammadi', ar: 'فاطمة الحمادي', ini: 'FH' } };
+const P = { rashid: { en: 'Rashid (reception)', ar: 'راشد (الاستقبال)' }, mona: { en: 'Mona, HR pantry', ar: 'منى، مطبخ الموارد البشرية' }, abdullah: { en: 'Abdullah (cleaning)', ar: 'عبدالله (النظافة)' } };
+const HANDOVERS = [
+  { kind: 'out', at: '2026-10-31T08:40', lines: [{ id: 'ST-0007', q: 3 }, { id: 'ST-0008', q: 1 }, { id: 'ST-0009', q: 1 }], to: P.rashid, by: 'me', note: { en: 'Weekly reception restock', ar: 'تزويد الاستقبال الأسبوعي' } },
+  { kind: 'out', at: '2026-10-30T14:05', lines: [{ id: 'ST-0007', q: 2 }], to: P.rashid, by: 'fatima', note: { en: 'Visitors lounge', ar: 'صالة الزوار' } },
+  { kind: 'out', at: '2026-10-30T09:20', lines: [{ id: 'ST-0002', q: 1, exp: '2026-11-30' }, { id: 'ST-0001', q: 1, exp: '2027-10-31' }], to: P.mona, by: 'me' },
+  { kind: 'out', at: '2026-10-30T07:50', lines: [{ id: 'ST-0011', q: 1 }, { id: 'ST-0013', q: 2 }], to: P.abdullah, by: 'me' },
+];
+const MATURE_EXTRA = [
+  { kind: 'in', at: '2026-10-05T10:15', lines: [{ id: 'ST-0002', q: 6, exp: '2027-04-26' }, { id: 'ST-0001', q: 4, exp: '2027-11-30' }, { id: 'ST-0007', q: 40 }, { id: 'ST-0013', q: 10 }, { id: 'ST-0008', q: 4 }], by: 'fatima', file: 'HQ-delivery-note-Oct.pdf' },
+  { kind: 'disposed', at: '2026-10-12T12:30', lines: [{ id: 'ST-0002', q: 1, exp: '2026-10-10' }], by: 'me', reason: 'expired', note: { en: 'Found during the weekly check', ar: 'وُجد أثناء الفحص الأسبوعي' } },
+  { kind: 'out', at: '2026-09-21T11:00', lines: [{ id: 'ST-0003', q: 1 }, { id: 'ST-0006', q: 1 }], to: P.mona, by: 'fatima' },
+  { kind: 'in', at: '2026-09-03T09:40', lines: [{ id: 'ST-0003', q: 4, exp: '2028-09-30' }, { id: 'ST-0006', q: 3, exp: '2027-05-31' }, { id: 'ST-0010', q: 3 }, { id: 'ST-0012', q: 2 }], by: 'me', file: 'HQ-delivery-note-Sep.pdf' },
+];
+
+/* ---------------- state ---------------- */
+const keep = { get(k, d) { try { return localStorage.getItem('pantry2:' + k) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem('pantry2:' + k, v); } catch {} } };
+const S = {
+  lang: keep.get('lang', 'en'), data: keep.get('data', 'first'),
+  view: location.hash === '#moves' ? 'moves' : 'room',
+  filter: 'all', rFilter: 'all', rQ: '', give: 1, pick: false, basket: {}, fresh: null,
+  log: HANDOVERS.map(h => ({ ...h, lines: h.lines.map(l => ({ ...l })) })),
+};
+const L = () => T[S.lang];
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const loc = v => v == null ? '' : typeof v === 'string' ? v : v[S.lang];
+const item = id => ITEMS.find(x => x.id === id);
+const name = it => it[S.lang];
+const unitWord = (it, q) => S.lang === 'ar' ? UNITS[it.unit][2] : (q === 1 ? UNITS[it.unit][0] : UNITS[it.unit][1]);
+const qtyStr = (it, q) => `${q} ${unitWord(it, q)}`;
+const locale = () => S.lang === 'ar' ? 'ar-u-nu-latn' : 'en-GB';
+const asDate = iso => new Date(iso.length > 10 ? iso : iso + 'T00:00:00');
+const fmtD = iso => asDate(iso).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtDay = iso => asDate(iso).toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
+const fmtTime = iso => asDate(iso).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', hour12: false });
+const fmtMonth = iso => asDate(iso).toLocaleDateString(locale(), { month: 'long', year: 'numeric' });
+
+function info(it) {
+  const batches = it.b.filter(([q]) => q > 0).map(([q, exp]) => ({ q, exp, d: exp ? daysTo(exp) : null }));
+  const onHand = batches.reduce((s, x) => s + x.q, 0);
+  const expired = batches.filter(x => x.d != null && x.d < 0).reduce((s, x) => s + x.q, 0);
+  const soon = batches.filter(x => x.d != null && x.d >= 0 && x.d <= WINDOW);
+  const low = it.min != null && onHand < it.min;
+  const usage = S.data === 'mature' ? it.use : null;
+  const suggest = usage != null ? Math.max(0, Math.ceil(usage) - onHand) : null;
+  const flags = [];
+  if (expired) flags.push('expired');
+  if (soon.length) flags.push('expiring');
+  if (low) flags.push('low');
+  return { batches, onHand, expired, soon, low, usage, suggest, flags };
+}
+const I = {};
+const recompute = () => ITEMS.forEach(it => { I[it.id] = info(it); });
+
+/* ---------------- icons ---------------- */
+const ic = {
+  check: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>',
+  truck: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M1.5 4h8v7h-8zM9.5 6.5h3l2 2.5V11h-5z"/><circle cx="4.5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg>',
+  clip: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 2.5h8v11H4z"/><path d="M6 6h4M6 8.5h4M6 11h2.5" stroke-linecap="round"/></svg>',
+  chart: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 13V9M8 13V4M13 13V7"/></svg>',
+  send: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M2 8l11.5-5.5L10 14l-2-4.5z"/></svg>',
+  x: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>',
+  stop: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M5.2 1.5h5.6l3.7 3.7v5.6l-3.7 3.7H5.2l-3.7-3.7V5.2z"/></svg>',
+  clock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="8" r="5.8"/><path d="M8 4.8V8l2.2 1.4"/></svg>',
+  down: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v9.5M4 8.8l4 3.7 4-3.7"/></svg>',
+  inbox: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8v7.4M5 6.4l3 3 3-3"/><path d="M2 9.5h3l1 2h4l1-2h3V14H2z"/></svg>',
+  outbox: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9.2V1.8M5 4.6l3-3 3 3"/><path d="M2 9.5h3l1 2h4l1-2h3V14H2z"/></svg>',
+  trash: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5h11M6 4.5V2.8h4v1.7M4 4.5l.7 9h6.6l.7-9"/></svg>',
+  chev: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg>',
+  file: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 1.8h5l3 3v9.4H4z"/><path d="M9 1.8v3h3"/></svg>',
+};
+const KIND = { in: ['k-in', ic.inbox], out: ['k-out', ic.outbox], disposed: ['k-disposed', ic.trash] };
+const FLAG = { expired: ['b-expired', ic.stop], expiring: ['b-expiring', ic.clock], low: ['b-low', ic.down], ok: ['b-ok', ic.check] };
+const badge = (f, label) => `<span class="badge ${FLAG[f][0]}">${FLAG[f][1]}${label ?? L()[f]}</span>`;
+function shelfBadge(id) {
+  const x = I[id]; const f = x.flags[0]; if (!f) return '';
+  if (f === 'expiring') return badge(f, L().shortExpiring(x.soon[0].d));
+  if (f === 'low') return badge(f, L().shortLow);
+  return badge(f);
+}
+
+/* ---------------- drawings ---------------- */
+// Flat item drawings from simple shapes: light, instant and consistent (chosen over photos).
+function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16); const f = v => Math.max(0, Math.min(255, Math.round(amt < 0 ? v * (1 + amt) : v + (255 - v) * amt)));
+  return '#' + [n >> 16, (n >> 8) & 255, n & 255].map(f).map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function draw(it) {
+  const [kind, c, c2, word] = it.art; const d = shade(c, -0.22), l = shade(c, 0.18);
+  const txt = (x, y, s, col, w = word) => w ? `<text x="${x}" y="${y}" font-family="Inter,Arial,sans-serif" font-weight="800" font-size="${s}" fill="${col}" text-anchor="middle">${w}</text>` : '';
+  const box = label => `<path d="M28 46l12-10h50l-12 10z" fill="${l}"/><path d="M78 46l12-10v58l-12 10z" fill="${d}"/><rect x="28" y="46" width="50" height="58" fill="${c}"/>${label}`;
+  let g = '';
+  switch (kind) {
+    case 'jar': g = `<rect x="33" y="40" width="54" height="62" rx="9" fill="${c}"/><rect x="36" y="28" width="48" height="15" rx="3" fill="${c2}"/><rect x="33" y="58" width="54" height="24" fill="${c2}"/>${txt(60, 74, 8.5, '#fff')}<rect x="38" y="44" width="6" height="52" rx="3" fill="#fff" opacity=".18"/>`; break;
+    case 'canister': g = `<rect x="38" y="30" width="44" height="72" rx="6" fill="${c}" stroke="#d9d2c4"/><rect x="36" y="24" width="48" height="10" rx="3" fill="${c2}"/><path d="M38 70h44v14H38z" fill="${c2}"/>${txt(60, 60, 7.5, c2)}<rect x="42" y="36" width="5" height="62" rx="2.5" fill="#fff" opacity=".4"/>`; break;
+    case 'box': g = box(`<rect x="28" y="64" width="50" height="20" fill="${c2}"/>${txt(53, 78, 9, c)}`); break;
+    case 'tins': g = `${[38, 60, 82].map(x => `<rect x="${x - 10}" y="52" width="20" height="44" rx="3" fill="${c}"/><ellipse cx="${x}" cy="52" rx="10" ry="3" fill="#dcdcdc"/><rect x="${x - 10}" y="66" width="20" height="14" fill="${c2}"/>`).join('')}${txt(60, 44, 9, c)}`; break;
+    case 'water': g = `${[34, 48, 62, 76, 90].map(x => `<rect x="${x - 6}" y="44" width="12" height="54" rx="4" fill="#cfe9f7"/><rect x="${x - 3}" y="38" width="6" height="7" rx="1.5" fill="${c}"/><rect x="${x - 6}" y="62" width="12" height="12" fill="${c}"/>`).join('')}<rect x="25" y="50" width="72" height="44" rx="5" fill="#fff" opacity=".22"/>`; break;
+    case 'cups': g = `${[0, 1, 2, 3, 4].map(i => `<path d="M46 ${44 + i * 9}h28l-2 ${i === 4 ? 26 : 9}H48z" fill="${i % 2 ? '#f7f7f4' : '#fff'}" stroke="#d9d6cc"/>`).join('')}<path d="M46 44h28" stroke="${c2}" stroke-width="3"/><rect x="51" y="84" width="18" height="4" rx="1" fill="${c2}"/>`; break;
+    case 'bigcups': g = `${[0, 1, 2, 3].map(i => `<path d="M40 ${36 + i * 11}h40l-3 ${i === 3 ? 34 : 11}H43z" fill="${i % 2 ? '#f7f7f4' : '#fff'}" stroke="#d9d6cc"/>`).join('')}<path d="M40 36h40" stroke="${c2}" stroke-width="3.5"/><rect x="48" y="84" width="24" height="6" rx="1" fill="${c2}"/>`; break;
+    case 'tissue': g = `<path d="M28 52l10-8h52l-10 8z" fill="${shade(c, .3)}"/><path d="M80 52l10-8v46l-10 8z" fill="${d}"/><rect x="28" y="52" width="52" height="46" fill="${c}"/><path d="M47 50q7-16 14 0q-3 4-7 2q-4 2-7-2z" fill="#fff"/><path d="M28 80q26-10 52 0v18H28z" fill="${shade(c, -.1)}"/>`; break;
+    case 'gloves': g = box(`<g fill="${c2}" transform="translate(40 52)"><rect x="4" y="16" width="18" height="22" rx="5"/><rect x="4" y="2" width="4" height="18" rx="2"/><rect x="9" y="0" width="4" height="20" rx="2"/><rect x="14" y="1" width="4" height="19" rx="2"/><rect x="19" y="5" width="3.6" height="15" rx="1.8"/><rect x="-3" y="20" width="10" height="4" rx="2" transform="rotate(-35 2 22)"/></g>${txt(53, 100, 6.5, shade(c2, -.5))}`); break;
+    case 'mask': g = box(`<path d="M36 64q17-8 34 0v16q-17 8-34 0z" fill="${c2}"/><path d="M36 68q-6 4 0 10M70 68q6 4 0 10" stroke="${c2}" stroke-width="2" fill="none"/><path d="M38 70h30M38 74h30" stroke="#fff" stroke-width="1" opacity=".6"/>${txt(53, 97, 7, shade(c2, -.45))}`); break;
+  }
+  return `<svg viewBox="0 0 120 120" aria-hidden="true"><ellipse cx="60" cy="105" rx="36" ry="5" fill="#000" opacity=".12"/>${g}</svg>`;
+}
+const pic = (it, cls = '') => `<div class="pic ${cls}">${draw(it)}</div>`;
+
+/* ---------------- shared bits ---------------- */
+let toastTimer;
+function toast(m) { const el = $('#toast'); el.textContent = m; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2400); }
+function meter(it) {
+  const x = I[it.id]; const cap = Math.max((it.min || 1) * 2.5, x.onHand, 1);
+  return `<div class="meter ${x.low ? 'low' : ''}" aria-hidden="true"><i style="width:${Math.max(4, x.onHand / cap * 100)}%"></i>${it.min != null ? `<b style="inset-inline-start:${it.min / cap * 100}%"></b>` : ''}</div>`;
+}
+const records = () => [...S.log, ...(S.data === 'mature' ? MATURE_EXTRA : [])].sort((a, b) => b.at.localeCompare(a.at));
+const lineTotal = r => r.lines.reduce((s, l) => s + l.q, 0);
+
+/* ---------------- chrome ---------------- */
+function renderChrome() {
+  const t = L();
+  document.documentElement.lang = S.lang; document.documentElement.dir = S.lang === 'ar' ? 'rtl' : 'ltr';
+  document.querySelectorAll('[data-t]').forEach(el => { el.textContent = t[el.dataset.t]; });
+  document.querySelectorAll('#langSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.lang === S.lang));
+  document.querySelectorAll('#stateSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.state === S.data));
+  const tabs = [['dashboard', 'room'], ['moves', 'moves'], ['items'], ['deliveries'], ['counts'], ['disposals']];
+  $('#subtabs').innerHTML = `<div class="in">${tabs.map(([k, v]) => `<button type="button" ${v ? `data-view="${v}"` : 'data-existing'} class="${v ? '' : 'same'}" ${S.view === v ? 'aria-current="page"' : ''}>${t.tabs[k]}${k === 'moves' ? `<span class="new">${t.newTag}</span>` : ''}</button>`).join('')}</div>`;
+  $('#drawerClose').innerHTML = `${ic.x}${t.close}`;
+}
+
+function cycle() {
+  const t = L(); const m = S.data === 'mature';
+  const nSug = m ? ITEMS.filter(it => I[it.id].suggest > 0).length : 0;
+  const steps = [
+    m ? { st: 'done', i: ic.truck, k: t.cDelivery, v: fmtD('2026-10-05'), s: t.ago(26) } : { st: 'next', i: ic.truck, k: t.cDelivery, v: t.none, s: t.deliverySub },
+    { st: 'done', i: ic.clip, k: t.cCount, v: fmtD('2026-10-29'), s: m ? t.nextCount(fmtD('2026-11-28')) : t.countsOf(1) },
+    m ? { st: 'done', i: ic.chart, k: t.cUsage, v: t.usageReady, s: t.usageFrom(fmtD('2026-09-29'), fmtD('2026-10-29')) } : { st: 'blocked', i: ic.chart, k: t.cUsage, v: t.needSecond, s: t.countsOf(1) },
+    m ? { st: 'next', i: ic.send, k: t.cRequest, v: t.reqReady(nSug), s: '' } : { st: 'blocked', i: ic.send, k: t.cRequest, v: t.reqNone, s: t.reqNoneSub },
+  ];
+  return `<section class="cycle">${steps.map(x => `<div class="step ${x.st}"><span class="mark">${x.st === 'done' ? ic.check : x.i}</span><div style="min-width:0"><div class="k">${x.k}</div><div class="v">${x.v}</div>${x.s ? `<div class="s">${x.s}</div>` : ''}</div></div>`).join('')}</section>`;
+}
+
+/* ---------------- Dashboard: store room ---------------- */
+function viewRoom() {
+  const t = L(); const m = S.data === 'mature';
+  const count = f => ITEMS.filter(it => I[it.id].flags.includes(f)).length;
+  const chips = `<div class="chips">${[['all', ITEMS.length], ['expired', count('expired')], ['expiring', count('expiring')], ['low', count('low')]].map(([f, n]) =>
+    `<button type="button" class="chip t-${f} ${n === 0 ? 'zero' : ''}" data-filter="${f}" aria-pressed="${S.filter === f}">${f === 'all' ? '' : FLAG[f][1]}<span class="n num">${n}</span>${t[f]}</button>`).join('')}<span class="note">${t.note60}</span></div>`;
+  const shelves = CATS.map(c => {
+    const list = ITEMS.filter(it => it.cat === c.id); const attn = list.filter(it => I[it.id].flags.length).length;
+    return `<section class="unit"><header><h2>${c[S.lang]}</h2><span class="meta">${t.shelfMeta(list.length, attn)}</span></header>
+      <div class="plank">${list.map(it => {
+        const x = I[it.id]; const inB = S.basket[it.id] || 0; const can = x.onHand - x.expired > 0;
+        const dim = S.filter !== 'all' && !x.flags.includes(S.filter);
+        return `<button type="button" class="on-shelf ${dim ? 'dim' : ''} ${S.pick && !can ? 'nogive' : ''}" data-item="${it.id}">
+          ${S.pick && can ? `<span class="pc ${inB ? 'has num' : ''}">${inB || '+'}</span>` : ''}
+          ${x.flags.length && !S.pick ? `<span class="flag">${shelfBadge(it.id)}</span>` : ''}
+          ${pic(it)}<span class="lbl">${esc(name(it))}</span>
+          <span class="q"><span class="num">${x.onHand}</span> ${unitWord(it, x.onHand)}</span></button>`;
+      }).join('')}</div></section>`;
+  }).join('');
+  const usage = `<section class="panel"><header><div><h2>${t.usageTitle}</h2><p>${t.usageSub}</p></div></header>
+    ${m ? `<div class="tbl-wrap"><table class="usage"><thead><tr><th>${t.colItem}</th><th>${t.colAvg}</th><th>${t.colOnHand}</th><th>${t.colSug}</th></tr></thead><tbody>
+      ${ITEMS.map(it => { const x = I[it.id]; return `<tr><td class="it">${pic(it, 'tile')}<span>${esc(name(it))} <span class="num" style="color:var(--faint);font-size:.72rem">${it.id}</span></span></td><td class="num">${x.usage}</td><td class="num">${x.onHand}</td><td class="num ${x.suggest ? 'sug' : ''}">${x.suggest ? qtyStr(it, x.suggest) : '—'}</td></tr>`; }).join('')}
+    </tbody></table></div>` : `<p class="empty">${t.noUsage}</p>`}</section>`;
+  const recent = records().filter(r => r.kind === 'out').slice(0, 4);
+  return `<div class="phead"><div><h1>${t.title}</h1><p>${t.desc}</p></div>
+      <div class="acts">${m ? `<button type="button" class="btn" data-mock>${t.createRequest}</button>` : ''}${S.pick ? '' : `<button type="button" class="btn primary" id="pickStart">${ic.outbox}${t.handOut}</button>`}</div></div>
+    ${cycle()}${chips}
+    ${S.pick ? `<div class="pickbar">${t.pickOn}</div>` : ''}
+    <div class="${S.pick ? 'picking' : ''}" style="display:flex;flex-direction:column;gap:14px">${shelves}</div>
+    <section class="panel"><header><div><h2>${t.recentTitle}</h2><p>${t.recentSub}</p></div><button type="button" class="link" data-view="moves">${t.seeAll}</button></header>
+      <div class="recs" style="border:0;border-radius:0">${recent.map(recRow).join('')}</div></section>
+    ${usage}
+    <p class="foot">${t.foot}</p>`;
+}
+
+/* ---------------- In & out ---------------- */
+function recRow(r) {
+  const t = L();
+  // one entry per item in the row; the detail keeps the per-batch lines
+  const per = []; r.lines.forEach(l => { const g = per.find(x => x.id === l.id); g ? g.q += l.q : per.push({ id: l.id, q: l.q }); });
+  const its = per.map(l => item(l.id)); const one = per.length === 1;
+  const what = one ? esc(name(its[0])) : its.map((it, i) => `${esc(name(it))} <span class="x num">×${per[i].q}</span>`).join(S.lang === 'ar' ? '، ' : ', ');
+  const by = USERS[r.by][S.lang];
+  const who = r.kind === 'out' ? `${t.toWho(`<strong>${esc(loc(r.to))}</strong>`)} · ${t.byWho(by)}`
+    : r.kind === 'in' ? `${t.fromHQ} · ${t.byWho(by)}`
+    : `${r.reason === 'expired' ? t.reasonExpired : t.reasonDamaged} · ${t.byWho(by)}`;
+  const sign = r.kind === 'in' ? '+' : '−';
+  const tot = one ? `<bdi dir="ltr">${sign}${per[0].q}</bdi> ${unitWord(its[0], per[0].q)}` : t.itemsN(per.length);
+  return `<button type="button" class="rec ${r === S.fresh ? 'fresh' : ''}" data-rec="${records().indexOf(r)}">
+    <span class="kind ${KIND[r.kind][0]}" title="${r.kind === 'in' ? t.kIn : r.kind === 'out' ? t.kOut : t.kDisposed}">${KIND[r.kind][1]}</span>
+    <span class="date"><strong>${fmtDay(r.at)}</strong>${fmtTime(r.at)}</span>
+    <span class="stack">${its.slice(0, 3).map(it => pic(it)).join('')}</span>
+    <span class="body"><span class="what" style="display:block">${what}</span><span class="who" style="display:block">${who}</span></span>
+    <span class="tot"><span class="num">${tot}</span>${one ? '' : t.unitsN(lineTotal(r))}</span>
+    <span class="chev">${ic.chev}</span></button>`;
+}
+function viewMoves() {
+  const t = L(); const all = records(); const q = S.rQ.trim().toLowerCase();
+  const n = k => all.filter(r => k === 'all' || r.kind === k).length;
+  const rows = all.filter(r => (S.rFilter === 'all' || r.kind === S.rFilter) && (!q || [loc(r.to), USERS[r.by][S.lang], loc(r.note), ...r.lines.flatMap(l => [name(item(l.id)), l.id])].some(v => v && v.toLowerCase().includes(q))));
+  const groups = []; rows.forEach(r => { const m = fmtMonth(r.at); const g = groups.find(x => x.m === m); g ? g.rows.push(r) : groups.push({ m, rows: [r] }); });
+  return `<div class="phead"><div><h1>${t.movesTitle}</h1><p>${t.movesDesc}</p></div>
+      <div class="acts"><button type="button" class="btn primary" id="pickStart">${ic.outbox}${t.handOut}</button></div></div>
+    <div class="rtools"><div class="chips">${[['all', t.fAll], ['in', t.fIn], ['out', t.fOut], ['disposed', t.fDisposed]].map(([k, lbl]) =>
+      `<button type="button" class="chip" data-rfilter="${k}" aria-pressed="${S.rFilter === k}">${k === 'all' ? '' : KIND[k][1]}<span class="n num">${n(k)}</span>${lbl}</button>`).join('')}</div>
+      <input type="text" class="search" id="rQ" placeholder="${t.search}" aria-label="${t.search}" value="${esc(S.rQ)}" autocomplete="off"></div>
+    <div id="recList">${groups.length ? groups.map(g => `<div class="month">${g.m}</div><div class="recs">${g.rows.map(recRow).join('')}</div>`).join('') : `<p class="empty">${t.noRecords}</p>`}</div>
+    <p class="foot">${t.foot}</p>`;
+}
+function recDetail(r) {
+  const t = L(); const kindLabel = r.kind === 'in' ? t.kIn : r.kind === 'out' ? t.kOut : t.kDisposed;
+  const kv = (k, v) => v ? `<div class="kv"><span>${k}</span><strong>${v}</strong></div>` : '';
+  const facts = [
+    kv(r.kind === 'in' ? t.dReceived : t.dWhen, `${fmtD(r.at)} · <span class="num">${fmtTime(r.at)}</span>`),
+    r.kind === 'out' ? kv(t.dTakenBy, esc(loc(r.to))) : '',
+    r.kind === 'disposed' ? kv(t.dReason, r.reason === 'expired' ? t.reasonExpired : t.reasonDamaged) : '',
+    kv(t.dRecordedBy, `<span class="byline" style="display:inline-flex;color:var(--text)"><span class="av">${USERS[r.by].ini}</span>${USERS[r.by][S.lang]}</span>`),
+    kv(t.dNote, esc(loc(r.note))),
+  ].join('');
+  return `<article class="card">
+    <div style="display:flex;gap:12px;align-items:center"><span class="kind ${KIND[r.kind][0]}">${KIND[r.kind][1]}</span>
+      <div><h3>${kindLabel}</h3><div class="code">${t.itemsN(new Set(r.lines.map(l => l.id)).size)} · ${t.unitsN(lineTotal(r))}</div></div></div>
+    <div class="sec">${facts}${r.file ? `<div class="kv" style="align-items:center"><span>${t.dFile}</span><button type="button" class="file" data-mock>${ic.file}${r.file}</button></div>` : ''}</div>
+    <div class="sec"><h4>${t.dItems}</h4><div class="lines">${r.lines.map(l => { const it = item(l.id); return `
+      <div class="line">${pic(it)}<div style="min-width:0"><div class="n">${esc(name(it))}</div><div class="e"><span class="num">${it.id}</span> · ${l.exp ? t.batchExp(fmtD(l.exp)) : t.undated}</div></div>
+      <span class="qq"><bdi dir="ltr" class="num">${r.kind === 'in' ? '+' : '−'}${l.q}</bdi> ${unitWord(it, l.q)}</span></div>`; }).join('')}</div></div>
+  </article>`;
+}
+
+/* ---------------- item card ---------------- */
+function fefo(it) { return it.b.map(([q, exp]) => ({ q, exp, d: exp ? daysTo(exp) : 1e9 })).filter(b => b.q > 0 && b.d >= 0).sort((a, b) => a.d - b.d)[0]; }
+function runway(x) {
+  const SPAN = 180; const pos = d => Math.min(100, Math.max(0, d / SPAN * 100));
+  const pins = [];
+  x.batches.filter(b => b.d != null && b.d >= 0).sort((a, b) => a.d - b.d).forEach(b => {
+    const p = b.d > SPAN ? 100 : pos(b.d); const last = pins[pins.length - 1];
+    if (last && p - last.p < 7) { last.q += b.q; last.w = last.w || b.d <= WINDOW; } else pins.push({ p, q: b.q, w: b.d <= WINDOW });
+  });
+  if (!pins.length) return '';
+  return `<div class="runway" aria-hidden="true"><div class="track"></div><div class="zone" style="width:${pos(WINDOW)}%"></div>
+    <span class="tick" style="inset-inline-start:0%">${S.lang === 'ar' ? 'اليوم' : 'Today'}</span><span class="tick" style="inset-inline-start:${pos(WINDOW)}%">${WINDOW}</span><span class="tick" style="inset-inline-start:${pos(120)}%">120</span><span class="tick" style="inset-inline-start:96%">180+</span>
+    ${pins.map(p => `<span class="pin ${p.w ? 'w' : ''}" style="inset-inline-start:${Math.min(p.p, 95)}%"><span class="q num">${p.q}</span><span class="dot"></span></span>`).join('')}</div>`;
+}
+function itemCard(id) {
+  const t = L(); const it = item(id); const x = I[id]; const cat = CATS.find(c => c.id === it.cat);
+  const giveable = x.onHand - x.expired; S.give = Math.min(Math.max(1, S.give), Math.max(1, giveable));
+  const first = fefo(it); const names = [...new Set(records().filter(r => r.kind === 'out').map(r => loc(r.to)))];
+  const dated = x.batches.filter(b => b.d != null).sort((a, b) => a.d - b.d);
+  const all = records();
+  const hist = all.filter(r => r.kind === 'out' && r.lines.some(l => l.id === id)).slice(0, 3);
+  return `<article class="card">
+    <div class="hero">${pic(it, 'tile')}<div style="min-width:0">
+      <h3>${esc(name(it))}</h3><div class="code"><span class="num">${it.id}</span> · ${cat[S.lang]}</div>
+      <div class="big"><span class="num">${x.onHand}</span><span>${unitWord(it, x.onHand)}</span></div>
+      <div style="margin-top:8px">${meter(it)}</div>
+      <div class="kv"><span>${t.minLevel}</span><strong class="num">${it.min != null ? qtyStr(it, it.min) : '—'}</strong></div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">${(x.flags.length ? x.flags : ['ok']).map(f => badge(f)).join('')}</div></div></div>
+    <form class="sec give" data-give="${id}" novalidate><h4>${t.give}</h4>
+      ${giveable ? `<div class="row2">
+        <div class="field"><label for="gq">${t.qty}</label><span class="stepper"><button type="button" data-gstep="-1" aria-label="−">−</button><output class="num" id="gq">${S.give}</output><button type="button" data-gstep="1" aria-label="+">+</button></span></div>
+        <div class="field"><label for="gTo">${t.takenBy}</label><input type="text" id="gTo" name="to" list="people" placeholder="${t.takenByPh}" autocomplete="off"><div class="err" id="gErr" hidden>${t.nameErr}</div></div></div>
+        <div class="field"><label for="gNote">${t.note}</label><input type="text" id="gNote" name="note" placeholder="${t.notePh}" autocomplete="off"></div>
+        <datalist id="people">${names.map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
+        ${first && first.exp ? `<p class="why" style="margin:0">${t.giveFrom(fmtD(first.exp))}</p>` : ''}
+        <div class="byline"><span class="av">${USERS.me.ini}</span>${t.recordedBy(`<strong style="color:var(--text)">${USERS.me[S.lang]}</strong> (${t.you})`)}</div>
+        <button type="submit" class="btn primary">${ic.outbox}${t.giveBtn}</button>
+        <button type="button" class="btn" data-addmulti="${id}">+ ${t.addMulti}</button>` : `<p class="why" style="margin:0">${t.giveNone}</p>`}
+    </form>
+    <div class="sec"><h4>${t.batches}</h4>${runway(x)}${dated.length ? `<div class="batches">${dated.map(b => `<div class="batch"><span class="num" style="font-weight:600">${qtyStr(it, b.q)}</span><span class="when">${fmtD(b.exp)}</span>${b.d <= WINDOW ? badge('expiring', t.daysLeft(b.d)) : `<span class="when">${t.daysLeft(b.d)}</span>`}</div>`).join('')}</div>` : `<p class="why" style="margin:0">${t.noExpiry}</p>`}</div>
+    <div class="sec"><div class="kv"><span>${t.usage}</span><strong class="${x.usage != null ? 'num' : ''}" style="${x.usage != null ? '' : 'color:var(--muted);font-weight:500'}">${x.usage != null ? qtyStr(it, x.usage) : t.usageNone}</strong></div>
+      ${x.usage != null ? `<div class="kv"><span>${t.suggested}</span><strong>${x.suggest ? qtyStr(it, x.suggest) : t.nothing}</strong></div>` : ''}</div>
+    <div class="sec"><h4>${t.recentFor}</h4>${hist.length ? `<div class="hist">${hist.map(r => `<button type="button" data-rec="${all.indexOf(r)}"><span>${qtyStr(it, r.lines.filter(l => l.id === id).reduce((s, l) => s + l.q, 0))} · ${t.toWho(esc(loc(r.to)))}</span><span>${fmtDay(r.at)} · ${fmtTime(r.at)}</span></button>`).join('')}</div>` : `<p class="why" style="margin:0">${t.noneGiven}</p>`}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn" data-mock>${ic.clip}${t.count}</button><button type="button" class="btn" data-mock>${ic.trash}${t.disposal}</button></div>
+  </article>`;
+}
+
+/* ---------------- recording ---------------- */
+// First-expiring batch goes out first; undated stock after dated. Returns per-batch lines.
+function deduct(id, q) {
+  const it = item(id); let left = q; const taken = [];
+  const order = it.b.map((b, i) => ({ i, d: b[1] ? daysTo(b[1]) : 1e9 })).filter(o => o.d >= 0).sort((a, b) => a.d - b.d);
+  for (const o of order) { const n = Math.min(left, it.b[o.i][0]); if (n) { it.b[o.i][0] -= n; taken.push({ id, q: n, exp: it.b[o.i][1] }); left -= n; } if (!left) break; }
+  return taken;
+}
+function record(list, to, note) {
+  const lines = list.flatMap(l => deduct(l.id, l.q));
+  const now = new Date(); const at = `2026-10-31T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const r = { kind: 'out', at, lines, to, by: 'me', note: note || null };
+  S.log.unshift(r); S.fresh = r; recompute();
+}
+
+/* ---------------- tray ---------------- */
+function renderTray() {
+  let tr = $('#tray'); document.body.classList.toggle('picking', S.pick);
+  if (!S.pick) { if (tr) tr.remove(); return; }
+  const t = L(); const ids = Object.keys(S.basket); const units = ids.reduce((a, id) => a + S.basket[id], 0);
+  const kept = tr ? { to: tr.querySelector('#bTo')?.value || '', note: tr.querySelector('#bNote')?.value || '' } : { to: '', note: '' };
+  const names = [...new Set(records().filter(r => r.kind === 'out').map(r => loc(r.to)))];
+  const html = `<div class="tray-in"><div style="min-width:0">
+      <div class="tray-head"><strong>${t.trayTitle}</strong><span>${ids.length ? `${t.itemsN(ids.length)} · ${t.unitsN(units)}` : ''}</span></div>
+      <div class="tray-items">${ids.length ? ids.map(id => { const it = item(id); return `<div class="bitem">${pic(it, 'tile')}<span class="nm" title="${esc(name(it))}">${esc(name(it))}</span>
+        <span class="stepper"><button type="button" data-bstep="-1" data-bid="${id}" aria-label="−">−</button><output class="num">${S.basket[id]}</output><button type="button" data-bstep="1" data-bid="${id}" aria-label="+">+</button></span></div>`; }).join('') : `<span class="tray-empty">${t.trayEmpty}</span>`}</div></div>
+    <form class="tray-form" data-tray novalidate>
+      <div class="two"><div class="field"><label for="bTo">${t.takenBy}</label><input type="text" id="bTo" name="to" list="bPeople" placeholder="${t.takenByPh}" autocomplete="off" value="${esc(kept.to)}"><datalist id="bPeople">${names.map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist></div>
+        <div class="field"><label for="bNote">${t.note}</label><input type="text" id="bNote" name="note" placeholder="${t.notePh}" autocomplete="off" value="${esc(kept.note)}"></div></div>
+      <div class="err" id="bErr" hidden>${t.nameErr}</div>
+      <div class="byline"><span class="av">${USERS.me.ini}</span>${t.recordedBy(`<strong style="color:var(--text)">${USERS.me[S.lang]}</strong> (${t.you})`)}</div>
+      <div class="go"><button type="button" class="btn" id="trayCancel">${t.cancel}</button><button type="submit" class="btn primary" ${ids.length ? '' : 'disabled'}>${ic.outbox}${t.recordAll(ids.length)}</button></div>
+    </form></div>`;
+  if (!tr) { tr = document.createElement('div'); tr.id = 'tray'; tr.className = 'gut'; tr.setAttribute('role', 'region'); document.body.appendChild(tr); }
+  tr.setAttribute('aria-label', t.trayTitle);
+  const f = document.activeElement && tr.contains(document.activeElement) ? document.activeElement.id : null;
+  tr.innerHTML = html; if (f && document.getElementById(f)) document.getElementById(f).focus();
+}
+function addToBasket(id, n = 1) {
+  const x = I[id]; const max = x.onHand - x.expired; const have = S.basket[id] || 0;
+  if (have >= max) { toast(L().maxReached); return false; }
+  S.basket[id] = Math.min(max, have + n); return true;
+}
+function refreshPick() {
+  document.querySelectorAll('.on-shelf').forEach(el => { const pc = el.querySelector('.pc'); if (!pc) return; const n = S.basket[el.dataset.item] || 0; pc.textContent = n || '+'; pc.classList.toggle('has', !!n); pc.classList.toggle('num', !!n); });
+  renderTray();
+}
+
+/* ---------------- render + drawer ---------------- */
+let drawer = null, lastFocus = null;
+const drawerHtml = d => d.type === 'item' ? itemCard(d.id) : recDetail(records()[d.i]);
+function render() {
+  renderChrome();
+  $('#view').innerHTML = S.view === 'moves' ? viewMoves() : viewRoom();
+  if (drawer) $('#drawerBody').innerHTML = drawerHtml(drawer);
+  renderTray();
+}
+function openDrawer(d) {
+  if (!drawer) lastFocus = document.activeElement;
+  drawer = d; $('#drawerBody').innerHTML = drawerHtml(d);
+  const sc = $('#scrim'), dr = $('#drawer'); sc.hidden = false; dr.hidden = false; dr.scrollTop = 0;
+  requestAnimationFrame(() => { sc.classList.add('open'); dr.classList.add('open'); $('#drawerClose').focus(); });
+}
+function closeDrawer() {
+  if (!drawer) return; drawer = null;
+  const sc = $('#scrim'), dr = $('#drawer'); sc.classList.remove('open'); dr.classList.remove('open');
+  setTimeout(() => { if (!drawer) { sc.hidden = true; dr.hidden = true; } }, 280);
+  if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+}
+function setView(v) { S.view = v; try { history.replaceState(null, '', v === 'moves' ? '#moves' : '#'); } catch {} closeDrawer(); render(); window.scrollTo({ top: 0 }); }
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('button'); if (!el) return;
+  const t = L();
+  if (el.dataset.lang) { S.lang = el.dataset.lang; keep.set('lang', S.lang); render(); return; }
+  if (el.dataset.state) { S.data = el.dataset.state; keep.set('data', S.data); recompute(); render(); return; }
+  if (el.dataset.view) { setView(el.dataset.view); return; }
+  if (el.hasAttribute('data-existing')) { toast(t.existing); return; }
+  if (el.hasAttribute('data-mock')) { toast(t.mock); return; }
+  if (el.dataset.filter) { S.filter = S.filter === el.dataset.filter ? 'all' : el.dataset.filter; render(); return; }
+  if (el.dataset.rfilter) { S.rFilter = el.dataset.rfilter; render(); return; }
+  if (el.id === 'pickStart') { S.view = 'room'; S.pick = true; closeDrawer(); render(); return; }
+  if (el.id === 'trayCancel') { S.pick = false; S.basket = {}; render(); return; }
+  if (el.id === 'drawerClose') { closeDrawer(); return; }
+  if (el.dataset.bstep) { const id = el.dataset.bid; const n = (S.basket[id] || 0) + Number(el.dataset.bstep); const x = I[id];
+    if (n > x.onHand - x.expired) { toast(t.maxReached); return; } if (n <= 0) delete S.basket[id]; else S.basket[id] = n; refreshPick(); return; }
+  if (el.dataset.addmulti) { const id = el.dataset.addmulti; S.view = 'room'; S.pick = true; if (addToBasket(id, S.give)) { closeDrawer(); render(); } return; }
+  if (el.dataset.gstep) { const id = el.closest('form').dataset.give; const x = I[id]; S.give = Math.min(x.onHand - x.expired, Math.max(1, S.give + Number(el.dataset.gstep))); $('#gq').textContent = S.give; return; }
+  if (el.dataset.item) { if (S.pick) { if (!el.classList.contains('nogive') && addToBasket(el.dataset.item)) refreshPick(); } else { S.give = 1; openDrawer({ type: 'item', id: el.dataset.item }); } return; }
+  if (el.dataset.rec != null) { openDrawer({ type: 'rec', i: Number(el.dataset.rec) }); return; }
+});
+document.addEventListener('submit', e => {
+  e.preventDefault(); const f = e.target; const t = L();
+  const to = f.elements.to.value.trim(); const note = f.elements.note.value.trim();
+  const err = f.matches('[data-tray]') ? $('#bErr') : $('#gErr');
+  if (!to) { f.elements.to.setAttribute('aria-invalid', 'true'); err.hidden = false; f.elements.to.focus(); return; }
+  if (f.matches('[data-tray]')) {
+    const list = Object.keys(S.basket).map(id => ({ id, q: S.basket[id] })); if (!list.length) return;
+    record(list, to, note); S.basket = {}; S.pick = false;
+    toast(list.length === 1 ? t.given(qtyStr(item(list[0].id), list[0].q), to) : t.givenMany(list.length, to));
+    render(); return;
+  }
+  const id = f.dataset.give; const q = S.give; record([{ id, q }], to, note); S.give = 1;
+  toast(t.given(qtyStr(item(id), q), to)); render();
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'rQ') { S.rQ = e.target.value; const box = document.createElement('div'); box.innerHTML = viewMoves(); $('#recList').replaceWith(box.querySelector('#recList')); }
+  if (e.target.matches('#gTo, #bTo') && e.target.value.trim()) { e.target.removeAttribute('aria-invalid'); const er = e.target.id === 'gTo' ? $('#gErr') : $('#bErr'); if (er) er.hidden = true; }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+$('#scrim').addEventListener('click', closeDrawer);
+window.addEventListener('hashchange', () => { const v = location.hash === '#moves' ? 'moves' : 'room'; if (v !== S.view) setView(v); });
+
+recompute(); render();
+})();
+</script>

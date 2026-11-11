@@ -85,6 +85,33 @@ describe('Annual Leave still returns', () => {
   })
 })
 
+describe('actionsFor edit', () => {
+  it('prepends edit to Pending request-group actions', () => {
+    for (const kind of ['Annual Leave', 'Annual', ...NOT_RETURNABLE]) {
+      expect(actionsFor(kind, 'Pending', OVERDUE, TODAY), kind)
+        .toEqual(['edit', 'approve', 'reject', 'cancel'])
+    }
+    expect(actionsFor('Annual Leave - إجازة سنوية', 'Pending - قيد الانتظار', OVERDUE, TODAY))
+      .toEqual(['edit', 'approve', 'reject', 'cancel'])
+  })
+
+  it('never offers edit outside Pending request-group leaves', () => {
+    const kinds = [
+      'Annual Leave', ...NOT_RETURNABLE, 'Sick Leave', 'Leave Permit',
+      'Administrative Leave', 'Passport Release', 'Duty Resumption', 'National Service',
+    ]
+    for (const kind of kinds) {
+      for (const status of ['Approved', 'Generated', 'Rejected', 'Cancelled', 'Completed', 'Unknown']) {
+        expect(actionsFor(kind, status, OVERDUE, TODAY), `${kind}: ${status}`)
+          .not.toContain('edit')
+      }
+    }
+    for (const kind of kinds.slice(1 + NOT_RETURNABLE.length)) {
+      expect(actionsFor(kind, 'Pending', OVERDUE, TODAY), kind).not.toContain('edit')
+    }
+  })
+})
+
 describe('actionsFor amend', () => {
   it('offers amend only on approved annual leaves', () => {
     expect(actionsFor('Annual Leave', 'Approved', '2026-08-25', '2026-07-15')).toContain('amend')

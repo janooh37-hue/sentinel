@@ -417,6 +417,38 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "حذف المخالفات والحوادث وسجلات الصيانة وصور المعرض.",
     ),
     Capability(
+        "store.view",
+        "store",
+        "View store",
+        "عرض المخزن",
+        "See Store items, deliveries, stock counts, disposals, and the Store dashboard.",
+        "عرض أصناف المخزن والاستلامات والجرد الشهري والإتلاف ولوحة المخزن.",
+    ),
+    Capability(
+        "store.edit",
+        "store",
+        "Manage store",
+        "إدارة المخزن",
+        "Add and archive Store items, log deliveries, record stock counts and disposals.",
+        "إضافة أصناف المخزن وأرشفتها وتسجيل الاستلامات والجرد الشهري والإتلاف.",
+    ),
+    Capability(
+        "uniform.view",
+        "uniform",
+        "View uniforms",
+        "عرض الملابس",
+        "View uniform stock, holdings, and history.",
+        "عرض رصيد الملابس والعهد والسجل.",
+    ),
+    Capability(
+        "uniform.edit",
+        "uniform",
+        "Manage uniforms",
+        "إدارة الملابس",
+        "Manage uniform items and stock transactions.",
+        "إدارة أصناف الملابس وحركات المخزون.",
+    ),
+    Capability(
         "ledger.view",
         "ledger",
         "View ledger",
@@ -667,6 +699,8 @@ _MANAGER_EXTRA: Final[frozenset[str]] = frozenset(
         "submitters.manage",
         "editor_templates.manage",
         "timesheet.edit",
+        "store.view",
+        "uniform.view",
     }
 )
 
@@ -684,10 +718,9 @@ INMATE_REPORTER_CAPS: Final[frozenset[str]] = frozenset(
         "books.submit",
         f"{SERVICE_CAP_PREFIX}Inmate Conduct Violations",
         f"{SERVICE_RECORDS_CAP_PREFIX}Inmate Conduct Violations",
-        f"{CATEGORY_CAP_PREFIX}INV",
+        f"{CATEGORY_CAP_PREFIX}13/1",
         f"{SERVICE_CAP_PREFIX}Report",
         f"{SERVICE_RECORDS_CAP_PREFIX}Report",
-        f"{CATEGORY_CAP_PREFIX}GS",
     }
 )
 ROLE_DEFAULTS: Final[dict[str, frozenset[str]]] = {

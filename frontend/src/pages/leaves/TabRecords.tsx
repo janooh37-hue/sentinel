@@ -31,15 +31,18 @@ import { FilterSheet } from '@/components/ui/filter-sheet'
 import { Input } from '@/components/ui/input'
 import { SkeletonRow } from '@/components/ui/skeleton'
 import { actionsFor, canonStatus, displayState, lifecycleGroup } from './lifecycle'
+import { leaveApprovalEvent, useApprovalNotify } from './approvalNotify'
 import { useLeaveDecisionActions } from './useLeaveDecisionActions'
 import { NationalServiceDialog } from './NationalServiceDialog'
 import { NsControls } from './NsControls'
 import { AmendLeaveDialog } from './AmendLeaveDialog'
+import { EditLeaveDialog } from './EditLeaveDialog'
 import { ReturnFormDialog } from './ReturnFormDialog'
 import { StatusBadge } from './StatusBadge'
 import { LeaveEmployeePicker } from './LeaveEmployeePicker'
 import { leaveEmployeeName } from './leaveEmployeeName'
 import { LeavesReport } from './report/LeavesReport'
+import { dateLocale, fmtDayMonthYear } from './report/fmt'
 import { SendButton } from '@/components/notify/SendButton'
 
 // ─── types ──────────────────────────────────────────────────────────────────
@@ -310,23 +313,25 @@ function LeaveDetailDrawer({
   onMutated: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const queryClient = useQueryClient()
   const [notes, setNotes] = useState('')
-  // Approve-only notify opt-out (On by default); reject/cancel always notify.
-  const [notifyEmployee, setNotifyEmployee] = useState(true)
+  // Approve-only notify switch, seeded from the approval event's default.
+  // Reject/cancel send no choice: the backend applies their event default.
   const [seededId, setSeededId] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
   const [amendOpen, setAmendOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
 
   const today = new Date().toISOString().slice(0, 10)
 
   useEffect(() => {
     function onKey(e: KeyboardEvent): void {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && !editOpen) onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, editOpen])
 
   const detailQuery = useQuery({
     queryKey: ['leave', leaveId],
@@ -334,6 +339,7 @@ function LeaveDetailDrawer({
   })
 
   const leave: LeaveRead | undefined = detailQuery.data
+  const approvalNotify = useApprovalNotify(leave?.leave_type ?? '')
 
   // Seed notes from the loaded leave once per leave id.
   // Uses React's "setState-during-render" pattern (guarded by seededId) so a
@@ -356,10 +362,7 @@ function LeaveDetailDrawer({
   const acts = leave ? actionsFor(leave.leave_type, leave.status, leave.end_date, today, hasCertificate) : []
   const hasRequestActions =
     acts.includes('approve') || acts.includes('reject') || acts.includes('cancel')
-  // Sick-leave approvals use the sick_leave_registered event; all others use leave_approved.
-  const sendEvent = leave != null && lifecycleGroup(leave.leave_type) === 'sick'
-    ? 'sick_leave_registered'
-    : 'leave_approved'
+  const sendEvent = leaveApprovalEvent(leave?.leave_type ?? '')
   const awaitingCert =
     leave != null &&
     isNs &&
@@ -406,6 +409,22 @@ function LeaveDetailDrawer({
           <div className="flex flex-1 flex-col gap-5 p-5">
             {/* Fields */}
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <div className="col-span-2 flex flex-col gap-0.5">
+                <dt className="text-[0.7em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
+                  {t('leaves.report.filed')}
+                </dt>
+                <dd className="flex flex-col items-start gap-2 text-[0.9em]">
+                  <bdi dir="ltr" className="font-mono tabular-nums">
+                    {fmtDayMonthYear(leave.created_at, dateLocale(i18n.language))}
+                  </bdi>
+                  {leave.submitted_by_g ? (
+                    <span className="inline-flex items-baseline gap-1 text-muted-foreground">
+                      <span>{t('leaves.report.submittedBy')}</span>
+                      <bdi dir="ltr" className="font-mono tabular-nums">{leave.submitted_by_g}</bdi>
+                    </span>
+                  ) : null}
+                </dd>
+              </div>
               {([
                 ['leaves.columns.employee', leaveEmployeeName(leave, i18n.language)],
                 ['leaves.columns.leaveType', t(`leaves.type.${leave.leave_type}`, { defaultValue: splitBilingual(leave.leave_type, i18n.language) })],
@@ -452,20 +471,31 @@ function LeaveDetailDrawer({
             {/* Approve-only notify opt-out */}
             {acts.includes('approve') && (
               <NotifyEmployeeToggle
-                checked={notifyEmployee}
-                onChange={setNotifyEmployee}
+                checked={approvalNotify.checked}
+                onChange={approvalNotify.onChange}
                 label={t('leaves.notify.label')}
               />
             )}
 
-            {/* Request action buttons: Approve / Reject / Cancel */}
+            {/* Request action buttons: Edit / Approve / Reject / Cancel */}
             {hasRequestActions && (
               <div className="flex flex-wrap gap-2">
+                {acts.includes('edit') && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setEditOpen(true)}
+                    disabled={updateMutation.isPending}
+                    className="rounded-full"
+                  >
+                    {t('leaves.edit.action')}
+                  </Button>
+                )}
                 {acts.includes('approve') && (
                   <Button
                     size="sm"
                     onClick={() =>
-                      updateMutation.mutate({ status: 'Approved', n: notes, notify: notifyEmployee })
+                      updateMutation.mutate({ status: 'Approved', n: notes, notify: approvalNotify.field })
                     }
                     disabled={updateMutation.isPending}
                     className="rounded-full"
@@ -596,6 +626,19 @@ function LeaveDetailDrawer({
     )}
     {leave && (
       <AmendLeaveDialog open={amendOpen} leave={leave} onOpenChange={setAmendOpen} onAmended={onMutated} />
+    )}
+    {leave && (
+      <EditLeaveDialog
+        open={editOpen}
+        leave={leave}
+        onOpenChange={setEditOpen}
+        onEdited={() => {
+          const updatedNotes = queryClient.getQueryData<LeaveRead>(['leave', leaveId])?.notes ?? ''
+          // A date-only edit must not discard an unsaved decision reason.
+          if (updatedNotes !== (leave.notes ?? '')) setNotes(updatedNotes)
+          onMutated()
+        }}
+      />
     )}
     </>
   )

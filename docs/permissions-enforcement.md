@@ -1,13 +1,14 @@
 # Permissions — how enforcement actually works
 
-**Date:** 2026-08-12 · updated 2026-08-24 for the granular capability split (§7)
+**Date:** 2026-08-12 · updated 2026-08-24 for the granular capability split (§7) · 2026-11-09 for the single record-category axis (§8)
 **Scope:** how a capability check reaches a request, and which routes are gated by what.
 **Audit tool:** `backend/scripts/audit_capability_gates.py` (re-run any time; it reads the
 tree, so it can't go stale).
 
-This is an enforcement map, not a feature design. For the request/approval feature
-built on top of this model see
-`docs/superpowers/specs/2026-06-25-permissions-overhaul-design.md`.
+This is an enforcement map, not a feature design. The rules for adding a gated feature,
+capability, or role preset — and the UI visibility rule — live in
+`.agents/skills/permissions/SKILL.md`. For the request/approval feature built on top of
+this model see `docs/superpowers/specs/2026-06-25-permissions-overhaul-design.md`.
 
 ---
 
@@ -15,7 +16,7 @@ built on top of this model see
 
 `backend/app/core/permissions.py`
 
-- `CAPABILITIES` — the catalog: 60 `Capability(id, group, label, description)` tuples.
+- `CAPABILITIES` — the catalog: 63 `Capability(id, group, label, description)` tuples.
   The `description` is user-facing (it drives the admin permission editor and the
   request UI). Since the 2026-08-23 granular split (§7) every id is atomic — the six
   old bundled ids (`employees.edit` in its old wide sense, `leaves.edit`,
@@ -28,9 +29,9 @@ built on top of this model see
 
 | Role | Resolves to | Contents |
 | --- | --- | --- |
-| `operator` | 17 caps | read-only across the app (`app.access`, `employees.view`, `leaves.view`, `timesheet.view`, `violations.view`, `books.view`, `permits.view`, `ledger.view`, `settings.view`) plus the daily-work writes: `documents.generate`, `documents.scan`, `ledger.create`/`ledger.edit`/`ledger.send`/`ledger.delete` (deletion restored post-split review — operators held it pre-split), and `email.manage` for the user's own mailbox, plus `workforce.self.view` for their own record |
-| `manager` | 39 caps | operator preset minus `workforce.self.view`, plus the atomic management writes: `employees.create`/`employees.edit`/`employees.vault.manage`/`employees.notify`, `leaves.create`/`leaves.edit`/`leaves.delete`, `violations.create`/`violations.edit`/`violations.delete`, `books.create`/`books.edit`/`books.submit`/`books.templates`/`books.approve`/`books.delete`, `permits.create`/`permits.edit`/`permits.revoke`/`permits.delete`, `ledger.delete`, `timesheet.edit`, `submitters.manage`, `editor_templates.manage`. The literal `frozenset` of additions lists 24 ids; unioned with operator's 17 minus the dropped self-view that resolves to 39. Workforce administration still needs an explicit grant + scope |
-| `admin` | all 60 | `ALL_CAPABILITIES` |
+| `operator` | 19 caps | read-only across the app (`app.access`, `employees.view`, `expiry.view`, `leaves.view`, `timesheet.view`, `violations.view`, `books.view`, `permits.view`, `ledger.view`, `settings.view`) plus the daily-work writes: `documents.generate`, `documents.duty_transfer`, `documents.scan`, `ledger.create`/`ledger.edit`/`ledger.send`/`ledger.delete` (deletion restored post-split review — operators held it pre-split), and `email.manage` for the user's own mailbox, plus `workforce.self.view` for their own record |
+| `manager` | 44 caps | operator preset minus `workforce.self.view`, plus the atomic management writes: `inmate_statistics.review`/`inmate_statistics.approve`, `employees.create`/`employees.edit`/`employees.vault.manage`/`employees.notify`, `leaves.create`/`leaves.edit`/`leaves.delete`, `violations.create`/`violations.edit`/`violations.delete`, `books.create`/`books.edit`/`books.submit`/`books.templates`/`books.approve`/`books.delete`, `permits.create`/`permits.edit`/`permits.revoke`/`permits.delete`, `ledger.delete`, `timesheet.edit`, `submitters.manage`, `editor_templates.manage`, and the read-only `store.view`. The literal `frozenset` of additions lists 27 ids; unioned with operator's 19 (sharing `ledger.delete`) minus the dropped self-view that resolves to 44. Workforce administration still needs an explicit grant + scope |
+| `admin` | all 63 | `ALL_CAPABILITIES` |
 
 **Admin-only by default, but delegable.** `books.override_state` (added 2026-08-14) is
 in no preset except `admin`'s `ALL_CAPABILITIES`, so only an admin holds it out of the
@@ -333,3 +334,52 @@ discard keep `books.edit`; (4) the two word-template GETs (`/books/word-template
 read the library without holding template-admin; rename/delete/save-as-template stay on
 `books.templates`. A bulk-endpoint hardening collapses duplicate capability items in one
 batch (last occurrence wins) so autoflush=False sessions can't double-insert.
+
+## 8. One record-category axis (2026-11-09)
+
+The permission page used to show two category lists: the 15 record categories
+(`books.category.1/1`…`15/1`, General Book classifications) and "legacy categories"
+(`books.category.GS`, `HR`, `NAT`, `SC`, `INV`, `VF`, `VA`, old-only `1`/`2`/`12`,
+imported ids). Most "legacy" ids were still live filing categories. Now the 15 record
+categories are the only category capabilities.
+
+- **Resolution.** `backend/app/core/record_categories.py::record_category` maps every
+  record to one category: its `classification_code` if set (General Books, Security
+  Permit `5/1`, Mileage Log `11/1`, annual/sick leave `3/1`/`4/1`, resignation `12/1`),
+  else its service through `SERVICE_RECORD_CATEGORY` (total over `SERVICE_IDS`, enforced by
+  `test_record_categories.py`), else — for the Other bucket — its persisted
+  `category_id` through `LEGACY_CATEGORY_RECORD_CATEGORY` (unknown ids → `15/1`).
+  `book_service.record_category_in_clause` is the SQL mirror used by the register's
+  category filter.
+- **Stray records answer to extra gates.** A record stored in a legacy category its
+  service never files into (a form revised into a General Book keeps its HR or INV
+  category; hand-filed and imported records) must also pass the `other` records gate
+  (`record_categories.record_services`). A record stored in a retired category (old-only
+  `1`/`2`/`12`, imported ids) must also pass the category that one maps to, whatever its
+  service or classification (`record_gate_categories`). SQL mirrors:
+  `book_service.record_service_clause` / `record_gate_category_in_clause`. The register,
+  documents, detail checks, and creation all use these gates. Everything else answers
+  only to its own service and its one record category.
+- **Unchanged:** reference numbers and prefixes, `Book.category_id`,
+  `Book.classification_code`, `BookCategory` rows, ledger/correspondence rules. Per-service
+  visibility (`books.servicerecords.*`) stays beside per-category visibility; both must
+  allow a record.
+- **Migration `0117_merge_legacy_record_categories` — nobody sees more.** A deny on a live
+  legacy category becomes a deny on both `books.service.<service>` (create) and
+  `books.servicerecords.<service>` (see) for every service that files there, plus `other`,
+  so the user can neither create nor see those records, exactly as before; a deny on an
+  old-only category becomes a deny on its mapped record category. Records already filed
+  in the denied legacy category outside those services are stray records, which the
+  `other` deny or the mapped category deny still hides. 0117 originally also added a
+  deny on a stray record's whole classification or service (an HR-filed `5/1` General
+  Book denied every `5/1` record, so HR-denied users lost every entry-permit letter);
+  `0118_drop_record_category_overreach` removes those denies and restores any row they
+  tightened. A deny wins over an existing grant; a deny meeting an existing deny keeps the
+  later expiry, a permanent one winning. A legacy grant
+  never opens an opt-in service, and a temporary legacy grant narrows an existing target
+  grant to its expiry. Legacy rows are then deleted; the inmate reporter's ceiling is
+  `books.category.13/1`. Pending requests for legacy ids are refused with a note. A
+  journal table makes `downgrade()` restore the prior rows.
+- **Drift, fail-closed only.** Where exactness was impossible the migration hides more:
+  the Other-service deny covers unclaimed and stray records from every category, and an
+  old-only deny covers its whole merged category.

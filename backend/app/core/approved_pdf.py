@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import io
 import math
+from typing import cast
 
-import fitz
+import pymupdf
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.core.extraction.ocr import _MAX_PIXELS, _MAX_RASTER_AXIS, InvalidImageError
@@ -80,10 +81,10 @@ class ApprovedPdfError(ValueError):
     """The uploaded artifact cannot be filed as an approved PDF."""
 
 
-def _open_pdf(data: bytes) -> fitz.Document:
+def _open_pdf(data: bytes) -> pymupdf.Document:
     try:
-        doc = fitz.open(stream=data, filetype="pdf")
-    except (fitz.EmptyFileError, fitz.FileDataError, RuntimeError) as exc:
+        doc = pymupdf.open(stream=data, filetype="pdf")
+    except (pymupdf.EmptyFileError, pymupdf.FileDataError, RuntimeError) as exc:
         raise ApprovedPdfError("Upload a valid PDF, PNG or JPEG") from exc
     if doc.needs_pass or doc.page_count < 1:
         doc.close()
@@ -115,29 +116,30 @@ def normalize_upload_to_pdf(data: bytes) -> bytes:
         image.close()
 
     try:
-        with fitz.open() as doc:
+        with pymupdf.open() as doc:
             page = doc.new_page(width=width, height=height)
             page.insert_image(page.rect, stream=png_bytes, overlay=True)
             pdf_bytes: bytes = doc.tobytes()
         with _open_pdf(pdf_bytes):
             return pdf_bytes
-    except (fitz.EmptyFileError, fitz.FileDataError, RuntimeError, ValueError) as exc:
+    except (pymupdf.EmptyFileError, pymupdf.FileDataError, RuntimeError, ValueError) as exc:
         raise ApprovedPdfError("Upload a valid PDF, PNG or JPEG") from exc
 
 
-def _derotated_point(page: fitz.Page, point: fitz.Point) -> fitz.Point:
-    return point * page.derotation_matrix
+def _derotated_point(page: pymupdf.Page, point: pymupdf.Point) -> pymupdf.Point:
+    # Point.__mul__ is unannotated in PyMuPDF; it returns a Point.
+    return cast(pymupdf.Point, point * page.derotation_matrix)
 
 
-def _derotated_rect(page: fitz.Page, rect: fitz.Rect) -> fitz.Rect:
+def _derotated_rect(page: pymupdf.Page, rect: pymupdf.Rect) -> pymupdf.Rect:
     matrix = page.derotation_matrix
     points = (
-        fitz.Point(rect.x0, rect.y0) * matrix,
-        fitz.Point(rect.x1, rect.y0) * matrix,
-        fitz.Point(rect.x1, rect.y1) * matrix,
-        fitz.Point(rect.x0, rect.y1) * matrix,
+        pymupdf.Point(rect.x0, rect.y0) * matrix,
+        pymupdf.Point(rect.x1, rect.y0) * matrix,
+        pymupdf.Point(rect.x1, rect.y1) * matrix,
+        pymupdf.Point(rect.x0, rect.y1) * matrix,
     )
-    return fitz.Rect(
+    return pymupdf.Rect(
         min(point.x for point in points),
         min(point.y for point in points),
         max(point.x for point in points),
@@ -155,9 +157,9 @@ def stamp_approved_pdf(pdf_bytes: bytes, ref_number: str) -> bytes:
         with _open_pdf(pdf_bytes) as doc:
             page = doc[0]
             ref_text = f"Ref: {ref_number}"
-            ref_width = fitz.get_text_length(ref_text, fontname="helv", fontsize=10)
+            ref_width = pymupdf.get_text_length(ref_text, fontname="helv", fontsize=10)
             page.insert_textbox(
-                _derotated_rect(page, fitz.Rect(18, 9, 20 + ref_width, 30)),
+                _derotated_rect(page, pymupdf.Rect(18, 9, 20 + ref_width, 30)),
                 ref_text,
                 fontsize=10,
                 fontname="helv",
@@ -168,7 +170,7 @@ def stamp_approved_pdf(pdf_bytes: bytes, ref_number: str) -> bytes:
             code_size = min(48.0, page.rect.width * 0.2, page.rect.height * 0.2)
             code_rect = _derotated_rect(
                 page,
-                fitz.Rect(
+                pymupdf.Rect(
                     page.rect.width - code_size - 9,
                     9,
                     page.rect.width - 9,
@@ -184,5 +186,5 @@ def stamp_approved_pdf(pdf_bytes: bytes, ref_number: str) -> bytes:
             return stamped
     except ApprovedPdfError:
         raise
-    except (fitz.EmptyFileError, fitz.FileDataError, RuntimeError, ValueError) as exc:
+    except (pymupdf.EmptyFileError, pymupdf.FileDataError, RuntimeError, ValueError) as exc:
         raise ApprovedPdfError("Could not stamp the approved PDF") from exc

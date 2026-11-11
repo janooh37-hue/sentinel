@@ -206,6 +206,12 @@ function ApprovalRow({ item, tab, dfLocale, onOpen, onPreview }: RowProps): Reac
         )}
       </div>
       <span className="col-start-2 row-start-1 flex items-center gap-1.5 justify-self-end md:col-start-6 md:row-start-1">
+        {tab === 'sent' && item.outcome_unseen && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[0.65em] font-semibold text-primary">
+            <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+            {t('nav.bell.decisionNew')}
+          </span>
+        )}
         {late && (
           <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[0.65em] font-semibold text-warning">
             {t('books.approvals.lateAdvisory')}
@@ -329,10 +335,11 @@ export function ApprovalsPage(): React.JSX.Element {
 
   function openRow(item: ApprovalLogItem): void {
     if (!context) return
+    const queueUrl = approvalQueueUrl(context)
     const scrollY = listRef.current?.scrollTop ?? 0
     // Stash scroll + focus on THIS history entry before navigating away, so
     // browser-back restores them.
-    navigate(location.pathname + location.search, {
+    navigate(queueUrl, {
       replace: true,
       state: { scrollY, focusBookId: item.book_id },
     })
@@ -340,7 +347,7 @@ export function ApprovalsPage(): React.JSX.Element {
     // status/sort/page) and gets the list it came from, so Back returns here
     // focused on this row (the restore effect above reads the same state shape).
     const nav: RecordNavState = {
-      from: location.pathname + location.search,
+      from: queueUrl,
       queue: rows.map((row) => row.book_id),
       scrollY,
     }

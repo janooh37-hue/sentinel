@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-import fitz  # PyMuPDF
+import pymupdf  # PyMuPDF
 
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
 
@@ -32,10 +32,10 @@ def build_pdf_package(
     """Return a fixed-base-first PDF package without modifying any input."""
     if not fixed_base.is_file():
         raise FileNotFoundError(fixed_base)
-    output = fitz.open()
+    output = pymupdf.open()
     page_counts: list[int] = []
     try:
-        with fitz.open(fixed_base) as base:
+        with pymupdf.open(fixed_base) as base:
             output.insert_pdf(base)
             fixed_pages = base.page_count
         for source, display_name in sources:
@@ -43,13 +43,13 @@ def build_pdf_package(
                 raise FileNotFoundError(display_name)
             try:
                 if source.suffix.lower() in _IMAGE_EXTS:
-                    with fitz.open(source) as image:
+                    with pymupdf.open(source) as image:
                         converted = image.convert_to_pdf()
-                    with fitz.open("pdf", converted) as source_pdf:
+                    with pymupdf.open("pdf", converted) as source_pdf:
                         output.insert_pdf(source_pdf)
                         page_counts.append(source_pdf.page_count)
                 else:
-                    with fitz.open(source) as source_pdf:
+                    with pymupdf.open(source) as source_pdf:
                         if source_pdf.page_count < 1:
                             raise ValueError("PDF has no pages")
                         output.insert_pdf(source_pdf)
@@ -74,18 +74,18 @@ def merge_pdfs_to_bytes(base_pdf: Path, sources: Sequence[Path]) -> bytes:
     companion pages (Leave Undertaking, etc.) appended, without mutating the
     stored original. Missing sources are skipped (serve-time must not 500).
     """
-    out = fitz.open(base_pdf)
+    out = pymupdf.open(base_pdf)
     try:
         for src in sources:
             if not src.is_file():
                 continue
             if src.suffix.lower() in _IMAGE_EXTS:
-                with fitz.open(src) as img:
+                with pymupdf.open(src) as img:
                     pdf_bytes = img.convert_to_pdf()
-                with fitz.open("pdf", pdf_bytes) as img_pdf:
+                with pymupdf.open("pdf", pdf_bytes) as img_pdf:
                     out.insert_pdf(img_pdf)
             else:
-                with fitz.open(src) as src_doc:
+                with pymupdf.open(src) as src_doc:
                     out.insert_pdf(src_doc)
         return bytes(out.tobytes())
     finally:
@@ -103,16 +103,16 @@ def merge_attachments_into_pdf(base_pdf: Path, sources: Sequence[Path]) -> None:
     for src in sources:
         if not src.is_file():
             raise FileNotFoundError(src)
-    out = fitz.open(base_pdf)
+    out = pymupdf.open(base_pdf)
     try:
         for src in sources:
             if src.suffix.lower() in _IMAGE_EXTS:
-                with fitz.open(src) as img:
+                with pymupdf.open(src) as img:
                     pdf_bytes = img.convert_to_pdf()
-                with fitz.open("pdf", pdf_bytes) as img_pdf:
+                with pymupdf.open("pdf", pdf_bytes) as img_pdf:
                     out.insert_pdf(img_pdf)
             else:
-                with fitz.open(src) as src_doc:
+                with pymupdf.open(src) as src_doc:
                     out.insert_pdf(src_doc)
         tmp = base_pdf.with_suffix(".merge.tmp.pdf")
         out.save(tmp)

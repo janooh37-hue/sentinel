@@ -401,6 +401,8 @@ def create_word_session(
             date=payload.date,
             sign=True,
             grade=payload.grade,
+            attachments=payload.attachments,
+            record_access_user=user,
         )
     else:
         _require_word_capability(db, user, "books.create")
@@ -425,6 +427,8 @@ def create_word_session(
                 date=payload.date,
                 sign=payload.sign,
                 grade=payload.grade,
+                attachments=payload.attachments,
+                record_access_user=user,
             )
         else:
             info = word_book_service.create_word_book(
@@ -438,6 +442,8 @@ def create_word_session(
                 template_name=payload.template_name,
                 table_rows=payload.table_rows,
                 grade=payload.grade,
+                attachments=payload.attachments,
+                record_access_user=user,
             )
     return WordSessionRead(
         book_id=info.book_id,
@@ -673,8 +679,15 @@ def word_session_preview(
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id)
     pdf = word_book_service.render_session_preview(db, book_id=book_id)
-    if (b64 := maybe_base64(pdf.read_bytes(), encoding)) is not None:
+    data = pdf if isinstance(pdf, bytes) else pdf.read_bytes()
+    if (b64 := maybe_base64(data, encoding)) is not None:
         return b64
+    if isinstance(pdf, bytes):
+        return Response(
+            content=pdf,
+            media_type="application/pdf",
+            headers={"Cache-Control": "no-store"},
+        )
     return FileResponse(
         str(pdf),
         media_type="application/pdf",
@@ -1510,7 +1523,8 @@ def _action_flags(
         for step in selected.approval_steps
         if step.assignee_user_id == user.id and step.state == "pending"
     ]
-    approver_pending = any((step.kind or "approver") == "approver" for step in pending)
+    active_approver = book_service._current_pending_step(row)
+    approver_pending = any(step is active_approver for step in pending)
     reviewer_pending = any(step.kind == "reviewer" for step in pending)
     can_sign = (
         row.approval_state == "pending"
@@ -2089,6 +2103,7 @@ def submit_for_approval(
         book_id,
         urgency=payload.urgency,
         approver_user_id=payload.approver_user_id,
+        branch_approver_user_id=payload.branch_approver_user_id,
         reviewer_user_ids=payload.reviewer_user_ids,
         submitted_by_user_id=user.id,
     )
@@ -2109,6 +2124,7 @@ def sign_book(
         book_id,
         user_id=user.id,
         version_id=payload.version_id,
+        note=payload.note,
     )
     return _build_book_response(
         db,
@@ -2429,6 +2445,64 @@ async def replace_signed_copy(
     row = book_service.replace_signed_copy(
         db, book_id, upload.filename or "signed", data, user=user
     )
+    return _build_book_response(db, row, user)
+
+
+@router.post("/{book_id}/attachments/{index}/pages", response_model=BookRead)
+async def append_book_attachment_pages(
+    book_id: int,
+    index: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> BookRead:
+    """Append the uploaded PDF/image pages to one attachment, keeping its index."""
+    _require_full_book(db, user, book_id, write=True)
+    data = await upload.read()
+    row = book_service.append_attachment_pages(db, book_id, index, upload.filename or "page", data)
+    return _build_book_response(db, row, user)
+
+
+@router.delete("/{book_id}/attachments/{index}/pages/{page}", response_model=BookRead)
+def delete_book_attachment_page(
+    book_id: int,
+    index: int,
+    page: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
+) -> BookRead:
+    """Remove one zero-based page from an attachment (never its only page)."""
+    _require_full_book(db, user, book_id, write=True)
+    row = book_service.delete_attachment_page(db, book_id, index, page)
+    return _build_book_response(db, row, user)
+
+
+@router.post("/{book_id}/signed-copy/pages", response_model=BookRead)
+async def append_signed_copy_pages(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> BookRead:
+    """Append pages to the signed scan, keeping the record approved."""
+    _require_full_book(db, user, book_id, write=True)
+    data = await upload.read()
+    row = book_service.append_signed_copy_pages(
+        db, book_id, upload.filename or "page", data, user=user
+    )
+    return _build_book_response(db, row, user)
+
+
+@router.delete("/{book_id}/signed-copy/pages/{page}", response_model=BookRead)
+def delete_signed_copy_page(
+    book_id: int,
+    page: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
+) -> BookRead:
+    """Remove one zero-based page of the signed scan (never its only page)."""
+    _require_full_book(db, user, book_id, write=True)
+    row = book_service.delete_signed_copy_page(db, book_id, page, user=user)
     return _build_book_response(db, row, user)
 
 

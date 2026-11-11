@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { BookApprovalStepRead, BookRead } from '@/lib/api'
+import { approverStep, isApproverAssignee } from '@/components/books/reviewers'
 
 import {
   recordNextStep,
@@ -108,6 +109,54 @@ describe('recordNextStep — screen-language names', () => {
     })
     expect(recordNextStep(editor, ar).status.vars.name).toBe('مريم')
     expect(recordNextStep(bookOf('pending', { steps: [stepOf({})] }), ar).status.vars.name).toBe('Khalid')
+  })
+})
+
+describe('sequential approval stages', () => {
+  const branch = stepOf({ id: 1, step_order: 0, stage_label: 'branch_manager', assignee_user_id: 8, assignee_name: 'Ali' })
+  const project = stepOf({ id: 2, step_order: 1, stage_label: 'project_manager', assignee_user_id: 7 })
+
+  it('selects the lowest unfinished approver independent of array order', () => {
+    expect(approverStep([project, branch])).toBe(branch)
+    expect(isApproverAssignee([project, branch], 7)).toBe(false)
+    expect(isApproverAssignee([project, branch], 8)).toBe(true)
+    expect(approverStep([{ ...branch, state: 'approved' }, project])).toBe(project)
+    expect(isApproverAssignee([{ ...branch, state: 'approved' }, project], 7)).toBe(true)
+    expect(approverStep([{ ...branch, state: 'approved' }, { ...project, state: 'approved' }])).toBeUndefined()
+  })
+
+  it('shows the active stage and advances to Project Manager after branch signing', () => {
+    const pending = recordNextStep(bookOf('pending', { steps: [project, branch] }), ctxOf())
+    expect(pending.status).toMatchObject({ key: 'pendingStageOther', vars: { stage: 'books.approval.branchManager', name: 'Ali' } })
+    const next = bookOf('pending', { steps: [{ ...branch, state: 'approved' }, project] })
+    expect(recordNextStep(next, ctxOf()).status).toMatchObject({ vars: { stage: 'books.approval.projectManager', name: 'Khalid' } })
+    expect(recordNextStep(next, ctxOf({ locale: 'ar' })).status.vars.stage).toBe('books.approval.projectManager')
+    expect(recordNextStep(next, ctxOf({ isAssignee: true })).status).toMatchObject({ key: 'pendingStageMine', vars: { stage: 'books.approval.projectManager' } })
+  })
+
+  it('names the project manager (final signer) once both stages approve', () => {
+    const done = bookOf('approved', {
+      signedPdfUrl: '/signed.pdf',
+      steps: [
+        { ...branch, state: 'approved', decided_at: '2026-09-20T08:00:00' },
+        { ...project, state: 'approved', decided_at: '2026-09-22T09:00:00', assignee_name: 'Saeed' },
+      ],
+    })
+    expect(recordNextStep(done, ctxOf()).status).toEqual({
+      key: 'approved',
+      vars: { name: 'Saeed', date: '2026-09-22' },
+    })
+  })
+
+  it.each([undefined, 'future_stage'])('uses the generic pending status for unknown stage %s', (stage_label) => {
+    const pending = recordNextStep(bookOf('pending', { steps: [stepOf({ stage_label })] }), ctxOf({ isAssignee: true }))
+    expect(pending.status).toMatchObject({ key: 'pendingMine', vars: {} })
+  })
+
+  it('never skips a rejected or returned earlier stage', () => {
+    for (const state of ['rejected', 'returned']) {
+      expect(isApproverAssignee([{ ...branch, state }, project], 7)).toBe(false)
+    }
   })
 })
 
@@ -445,8 +494,14 @@ describe('reviseBlockReason', () => {
     expect(reviseBlockReason(noFields, ok)).toBe('noTemplate')
   })
 
-  it('noPermission without documents.generate', () => {
-    expect(reviseBlockReason(book, ctxOf({ canGenerate: false }))).toBe('noPermission')
+  it('is not offered at all without documents.generate', () => {
+    const noGenerate = ctxOf({ canGenerate: false })
+    const returned = recordNextStep(book, noGenerate)
+    expect(returned.primary).not.toBe('revise')
+    expect(returned.disabled?.revise).toBeUndefined()
+    const draft = recordNextStep(bookOf('none'), noGenerate)
+    expect([draft.primary, ...draft.secondary]).not.toContain('continueEditing')
+    expect(draft.disabled?.continueEditing).toBeUndefined()
   })
 
   it('notCurrent when the live revision is not being viewed', () => {
@@ -475,7 +530,6 @@ describe('reviseBlockReason', () => {
 
   it('maps to books.reason keys', () => {
     expect(reviseReasonKey('noTemplate')).toBe('books.reason.reviseNoTemplate')
-    expect(reviseReasonKey('noPermission')).toBe('books.reason.reviseNoPermission')
     expect(reviseReasonKey('notCurrent')).toBe('books.reason.reviseNotCurrent')
     expect(reviseReasonKey('reporterLocked')).toBe('books.reason.reviseReporterLocked')
     expect(reviseReasonKey(null)).toBeNull()

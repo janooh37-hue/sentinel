@@ -8,8 +8,8 @@ from sqlalchemy.exc import IntegrityError
 
 from tests.test_migration_ledger_book_importance import _config, assert_seed_and_fts_survive
 
-HEAD = "0115_ledger_paper_preset"
-PARENT = "0114_ledger_addressees_signer"
+HEAD = "0124_ledger_paper_preset"
+PARENT = "0123_ledger_addressees_signer"
 
 
 def _columns(engine, table):

@@ -322,7 +322,8 @@ def test_send_leave_status_swaps_sick_to_registered(db_session, monkeypatch):
         "send_for_event",
         lambda db, event, rid, *, sent_by: captured.append(event),
     )
-    nd._send_leave_status(db_session, leave.id, sent_by=None)
+    monkeypatch.setattr(nd, "_autosend_enabled", lambda db: True)
+    nd.auto_send_leave_status(db_session, leave.id)
     assert captured == ["sick_leave_registered"]
 
 
@@ -354,7 +355,8 @@ def test_send_leave_status_annual_stays_leave_approved(db_session, monkeypatch):
         "send_for_event",
         lambda db, event, rid, *, sent_by: captured.append(event),
     )
-    nd._send_leave_status(db_session, leave.id, sent_by=None)
+    monkeypatch.setattr(nd, "_autosend_enabled", lambda db: True)
+    nd.auto_send_leave_status(db_session, leave.id)
     assert captured == ["leave_approved"]
 
 
@@ -597,7 +599,8 @@ def test_send_leave_status_admin_leave_swaps_to_admin_leave(db_session, monkeypa
     monkeypatch.setattr(
         nd, "send_for_event", lambda db, event, rid, *, sent_by: captured.append(event)
     )
-    nd._send_leave_status(db_session, leave.id, sent_by=None)
+    monkeypatch.setattr(nd, "_autosend_enabled", lambda db: True)
+    nd.auto_send_leave_status(db_session, leave.id)
     assert captured == ["admin_leave"]
 
 

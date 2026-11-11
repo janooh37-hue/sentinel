@@ -84,13 +84,17 @@ def test_material_request_papers_share_their_printed_fields():
     assert by_id[arabic].signing_path == by_id[english].signing_path == "in_app"
     arabic_fields = template_service.get_template_fields(arabic).fields
     assert {field.key for field in arabic_fields} == {"delivery_date", "items", "manager_id"}
+    english_fields = template_service.get_template_fields(english).fields
     assert [field.model_copy(update={"max_rows": None}) for field in arabic_fields] == [
-        field
-        for field in template_service.get_template_fields(english).fields
+        field.model_copy(update={"item_catalog": None})
+        for field in english_fields
         if field.key in {"delivery_date", "items", "manager_id"}
     ]
     items = next(field for field in arabic_fields if field.key == "items")
     assert items.max_rows == 17
+    # Only the HQ (English) paper offers Store items; the client paper stays free text.
+    assert items.item_catalog is None
+    assert next(field for field in english_fields if field.key == "items").item_catalog == "store"
 
 
 def test_every_listed_template_fields_endpoint_loads():

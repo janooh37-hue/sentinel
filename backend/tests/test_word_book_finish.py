@@ -9,7 +9,7 @@ import os
 import secrets
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from docx import Document as DocxFile
 
@@ -50,7 +50,7 @@ def _settings(tmp_path):
 
 
 def _pdf(path: Path) -> Path:
-    document = fitz.open()
+    document = pymupdf.open()
     try:
         document.new_page()
         document.save(path)
@@ -544,7 +544,7 @@ def test_finish_only_reuses_current_live_preview(db_session, tmp_path, monkeypat
         assert calls and document.pdf_path is None
     else:
         assert not calls and document.pdf_path is not None
-        with fitz.open(_settings(tmp_path).data_dir / document.pdf_path) as pdf:
+        with pymupdf.open(_settings(tmp_path).data_dir / document.pdf_path) as pdf:
             assert pdf.page_count == 1
 
 

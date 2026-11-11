@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input'
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { api, type OdometerMonthRead, type OdometerRowRead, type OdometerUpsert } from '@/lib/api'
 import { normalizeDigits } from '@/lib/utils'
-import { EMPTY_VALUE, formatAed, formatNumber, invalidateVehicleQueries, localized, vehicleErrorMessage } from '../vehicleUtils'
+import { formatNumber, localized } from '@/lib/language'
+import { EMPTY_VALUE, formatAed, invalidateVehicleQueries, vehicleErrorMessage } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'
 
 export function OdometerLog({ data, canEdit, isMobile }: {
@@ -95,7 +96,7 @@ function OdometerRow({ row, canEdit, mobile }: { row: OdometerRowRead; canEdit: 
       setOpening(saved.opening_km == null ? '' : String(saved.opening_km))
       invalidateVehicleQueries(queryClient, { vehicleId: row.vehicle_id, registers: ['odometer'] })
     },
-    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+    onError: (err) => toast.error(vehicleErrorMessage(err)),
   })
   const submit = () => {
     if (opening === '' && closing === '') return

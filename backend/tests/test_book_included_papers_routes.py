@@ -4,7 +4,7 @@ import base64
 import uuid
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -54,7 +54,7 @@ def api_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Session:
 
 
 def _pdf(path: Path, labels: list[str]) -> Path:
-    doc = fitz.open()
+    doc = pymupdf.open()
     try:
         for label in labels:
             page = doc.new_page(width=300, height=400)
@@ -66,7 +66,7 @@ def _pdf(path: Path, labels: list[str]) -> Path:
 
 
 def _texts(data: bytes) -> list[str]:
-    with fitz.open("pdf", data) as doc:
+    with pymupdf.open("pdf", data) as doc:
         return [page.get_text().strip() for page in doc]
 
 
@@ -302,3 +302,46 @@ def test_save_notifies_each_approver_after_an_approved_package_change(
 
     assert response.status_code == 200, response.text
     assert sent == [manager.id]
+
+
+@pytest.mark.parametrize("source", ["record_document", "record_attachment"])
+def test_stage_from_record_copies_readable_source(api_db, tmp_path, source):
+    book, _version, document, creator, _viewer = _record(api_db, tmp_path)
+    scan = _pdf(tmp_path / "original-scan.pdf", ["SCAN"])
+    book.attachment_paths = [scan.name]
+    api_db.commit()
+    response = _client(api_db, creator).post(
+        "/api/v1/documents/attachments/stage-from-record",
+        json={"book_id": book.id, "source": source, "attachment_index": 0},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    staged = staging_service.resolve(body["token"])
+    assert staged is not None
+    expected = tmp_path / document.pdf_path if source == "record_document" else scan
+    assert staged.read_bytes() == expected.read_bytes()
+    assert body["filename"] == ("HR-1.pdf" if source == "record_document" else "original-scan.pdf")
+    assert body["size"] == expected.stat().st_size
+
+
+def test_stage_from_record_rejects_unreadable_record(api_db, tmp_path):
+    book, _version, _document, creator, _viewer = _record(api_db, tmp_path)
+    book.grade = "secret"
+    api_db.commit()
+    response = _client(api_db, creator).post(
+        "/api/v1/documents/attachments/stage-from-record",
+        json={"book_id": book.id, "source": "record_document"},
+    )
+    assert response.status_code == 404, response.text
+    assert response.json()["error"]["code"] == "BOOK_NOT_FOUND"
+
+
+@pytest.mark.parametrize("index", [None, -1, 4])
+def test_stage_from_record_rejects_bad_scan_index(api_db, tmp_path, index):
+    book, _version, _document, creator, _viewer = _record(api_db, tmp_path)
+    response = _client(api_db, creator).post(
+        "/api/v1/documents/attachments/stage-from-record",
+        json={"book_id": book.id, "source": "record_attachment", "attachment_index": index},
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "ATTACHMENT_NOT_FOUND"

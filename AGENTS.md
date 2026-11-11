@@ -29,7 +29,7 @@ pnpm -C frontend run build
 pnpm -C frontend run e2e
 ```
 
-Use the narrowest relevant check while iterating. The full backend suite takes about 25 minutes on `GSSGLT`: run it once, in the background, with no timeout. Combined frontend checks can exhaust memory on this host. `main` is not format-clean, so format only the files you change; `ruff format .` rewrites about 190 unrelated files. CI (`.github/workflows/checks.yml`) runs `ruff check`, `scripts/check_numbering.py`, and a format check of changed files on every pull request.
+Use the narrowest relevant check while iterating. The full backend suite takes about 25 minutes on `GSSGLT`: run it once, in the background, with no timeout. Combined frontend checks can exhaust memory on this host. `main` is not format-clean, so format only the files you change; `ruff format .` rewrites about 190 unrelated files. CI (`.github/workflows/checks.yml`) runs `ruff check`, `scripts/check_numbering.py`, a format check of changed files, and the frontend `tsc -b --noEmit` type check on every pull request.
 
 Service operations:
 
@@ -46,6 +46,7 @@ scripts/mng.ps1 logs
 - Generated API contract: FastAPI -> `backend/openapi.json` -> `frontend/src/lib/api.types.ts`. After route or Pydantic schema changes, use the `sync-api-types` skill and commit the generated TypeScript types.
 - Frontend server state uses React Query; forms use react-hook-form and Zod.
 - Record actions often have desktop and mobile surfaces. Update and verify both.
+- Permissions: a user without the capability never sees the feature; no disabled, read-only, or locked copies of things they cannot do. Read the `permissions` skill before adding a gated feature, a capability, or a role preset, or before changing record visibility.
 - DOCX rendering uses templates in `backend/templates/`; PDF conversion depends on Word COM running as the interactive `Admin` user.
 
 ## Required reviews
@@ -61,6 +62,7 @@ scripts/mng.ps1 logs
 - `deploy`: commit, push, build, restart, and verify the live service.
 - `sync-api-types`: regenerate and validate the frontend API contract.
 - `new-migration`: create one reversible, SQLite-safe migration on the current head.
+- `permissions`: the one way to add capabilities, role presets, and capability-gated UI.
 
 ## Planning artifacts
 

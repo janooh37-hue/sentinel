@@ -1,4 +1,4 @@
-"""Migration 0112: Ledger Book Importance replaces draft urgency without breaking FTS."""
+"""Migration 0121: Ledger Book Importance replaces draft urgency without breaking FTS."""
 
 from collections.abc import Iterator
 from pathlib import Path
@@ -11,8 +11,8 @@ from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0112_ledger_book_importance"
-PARENT = "0111_ledger_book_drafts"
+HEAD = "0121_ledger_book_importance"
+PARENT = "0120_ledger_book_drafts"
 DRAFT_INSERT = (
     "INSERT INTO book_drafts (owner_user_id, created_at, updated_at{columns}) "
     "VALUES (7, '2026-10-01 00:00:00', '2026-10-01 00:00:00'{values})"

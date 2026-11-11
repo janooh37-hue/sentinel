@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from docx import Document
 
@@ -243,7 +243,7 @@ def test_converter_returning_foreign_pdf_is_an_error_and_never_touches_it(tmp_pa
     Document().save(source)
     foreign = tmp_path / "foreign" / "other.pdf"
     foreign.parent.mkdir()
-    pdf = fitz.open()
+    pdf = pymupdf.open()
     pdf.new_page()
     pdf.save(foreign)
     pdf.close()

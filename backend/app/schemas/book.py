@@ -147,6 +147,7 @@ class BookSubmitRequest(BaseModel):
     # When None, the server routes to the doc's linked manager
     # (Book.doc_manager_id → Manager.user_id). An explicit id wins.
     approver_user_id: int | None = None
+    branch_approver_user_id: int | None = None
     reviewer_user_ids: list[int] = Field(default_factory=list)
 
 
@@ -168,6 +169,7 @@ class BookDecisionRequest(BaseModel):
 
 class BookSignRequest(BaseModel):
     version_id: int = Field(gt=0)
+    note: str | None = Field(default=None, max_length=1000)
 
 
 class BookStateOverrideRequest(BaseModel):
@@ -331,6 +333,17 @@ class ClassificationListResponse(BaseModel):
     items: list[ClassificationRead]
 
 
+class GenerateAttachmentSpec(BaseModel):
+    """A staged upload, generated record PDF, or record scan to include."""
+
+    slot_key: str | None = None
+    source: Literal["staged", "record_document", "record_attachment"]
+    staged_token: str | None = None
+    original_name: str | None = None
+    book_id: int | None = None
+    attachment_index: int | None = None
+
+
 class WordBookCreate(BaseModel):
     classification_code: str | None = None
     recipient_id: int | None = None
@@ -340,6 +353,7 @@ class WordBookCreate(BaseModel):
     template_name: str | None = None
     table_rows: list[dict[str, str]] | None = None
     grade: BookGrade = "unclassified"
+    attachments: list[GenerateAttachmentSpec] | None = None
     # Report path only: present ⇒ create a Report (no classification/ref). `sign`
     # embeds the signer's signature at Finish; `date` is the report's document date.
     signer_employee_id: str | None = None
@@ -806,6 +820,7 @@ class ApprovalLogItem(ORMBase):
     # When the final verdict landed (None while still in flight).
     decided_at: datetime | None = None
     verdict: Literal["approved", "rejected", "returned"] | None = None
+    outcome_unseen: bool = False
     # Selected revision's generated document — thumbnail source; None for
     # drafts and v3-imported records.
     document_id: int | None = None

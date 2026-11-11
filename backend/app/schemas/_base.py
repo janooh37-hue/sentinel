@@ -16,7 +16,7 @@ class ORMBase(BaseModel):
 
     Also tags naive datetimes with their real zone on the way in, so Pydantic
     serializes them with an offset. Timestamp columns store naive **UTC**
-    (``models._utcnow``) and Pydantic emitted them with no offset at all —
+    (``app.core.clock.utcnow``) and Pydantic emitted them with no offset at all —
     ``"2026-08-04T05:51:31"``. JS ``new Date()`` reads an offset-less datetime
     as LOCAL, so every timestamp the frontend rendered was 4h behind on this
     UTC+4 box: a message sent 09:51 displayed as 05:51. Tagging the instant

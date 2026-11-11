@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-import fitz
+import pymupdf
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -33,7 +33,7 @@ from app.services import document_service, permit_service
 
 def _valid_pdf_for(docx_path: Path) -> Path:
     pdf_path = docx_path.with_suffix(".pdf")
-    pdf = fitz.open()
+    pdf = pymupdf.open()
     pdf.new_page()
     pdf.save(pdf_path)
     pdf.close()

@@ -38,6 +38,17 @@ _LABELS = {
     "leave_permit": ("Leave permit", "تصريح مغادرة"),
 }
 
+# Events sent without a per-record "Notify employee" switch: their default is a
+# plain automatic on/off. Every other event's default seeds that switch.
+AUTO_ONLY_EVENTS = frozenset(
+    {
+        nf.EVENT_LEAVE_REJECTED,
+        nf.EVENT_LEAVE_CANCELLED,
+        nf.EVENT_LEAVE_AMENDED,
+        nf.EVENT_LEAVE_ENDING,
+    }
+)
+
 _GSM_BASIC = frozenset(
     "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&'()*+,-./"
     "0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà"
@@ -117,6 +128,8 @@ def read_template(db: Session, event: str) -> dict[str, Any]:
             }
             for var in sms_templates.VARIABLES[event]
         ],
+        "default_enabled": sms_templates.default_send_enabled(db, event),
+        "default_mode": "auto" if event in AUTO_ONLY_EVENTS else "prefill",
     }
 
 
@@ -147,6 +160,20 @@ def save_template(
     return read_template(db, event)
 
 
+def save_default(db: Session, event: str, enabled: bool, *, actor: str) -> dict[str, Any]:
+    require_event(event)
+    settings_service.set_audited_setting(
+        db,
+        f"{sms_templates.DEFAULT_SEND_PREFIX}{event}",
+        None if enabled else False,
+        actor=actor,
+        action="message_template.default_changed",
+        entity_type="message_template",
+        entity_id=event,
+    )
+    return read_template(db, event)
+
+
 def rendered(text: dict[str, str]) -> dict[str, Any]:
     return {"text": text, "segments": {lang: segment_count(body) for lang, body in text.items()}}
 
@@ -170,7 +197,14 @@ def preview(db: Session, payload: NotifyPreviewRequest) -> dict[str, Any]:
         employee = Employee(id="", name_en="Ahmed Ali", name_ar="أحمد علي", msg_language="ar")
     language = "ar" if (employee.msg_language or "ar") == "ar" else "en"
     timing = notify_dispatch.send_timing(payload.template_id)
-    result = {"event": None, "language": language, "timing": timing, "text": None, "segments": None}
+    result = {
+        "event": None,
+        "language": language,
+        "timing": timing,
+        "text": None,
+        "segments": None,
+        "default_enabled": True,
+    }
     if payload.template_id not in nf.AUTO_NOTIFY_TEMPLATE_IDS:
         return result
     revise_book = None
@@ -227,18 +261,27 @@ def preview(db: Session, payload: NotifyPreviewRequest) -> dict[str, Any]:
     )
     if event is None:
         return result
-    if revise_book is not None and not notify_dispatch.approval_notification_eligible(
-        db,
-        revise_book,
-        template_id=payload.template_id,
-        target=(event, record_id),
-        gated=gated,
-        # Saving/submitting an enrolled gated revision resets its leave to Pending.
-        status_changed=gated,
+    # A revision keeps the original's choice: an explicit "off" sends nothing.
+    if revise_book is not None and (
+        document_service.inherited_notify_employee(revise_book) is False
+        or not notify_dispatch.approval_notification_eligible(
+            db,
+            revise_book,
+            template_id=payload.template_id,
+            target=(event, record_id),
+            gated=gated,
+            # Saving/submitting an enrolled gated revision resets its leave to Pending.
+            status_changed=gated,
+        )
     ):
         return result
     text = {
         lang: sms_templates.render_text(event, lang, record, employee, db=db)
         for lang in ("ar", "en")
     }
-    return {**result, "event": event, **rendered(text)}
+    return {
+        **result,
+        "event": event,
+        "default_enabled": sms_templates.default_send_enabled(db, event),
+        **rendered(text),
+    }

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_current_user
 from app.db import session as session_mod
-from app.db.models import Base, Book, BookCategory, BookVersion, User
+from app.db.models import Base, Book, BookCategory, BookVersion, ScanInbox, User
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
 from app.services import perm_service
@@ -125,3 +125,91 @@ def test_replace_attachment_out_of_range_404(api_db, tmp_path) -> None:
         files={"file": ("new.pdf", b"%PDF-NEW", "application/pdf")},
     )
     assert resp.status_code == 404
+
+
+def _pdf(pages: int) -> bytes:
+    import pymupdf
+
+    with pymupdf.open() as doc:
+        for i in range(pages):
+            doc.new_page().insert_text((72, 72), f"page {i}")
+        data: bytes = doc.tobytes()
+    return data
+
+
+def _page_texts(data: bytes) -> list[str]:
+    import pymupdf
+
+    with pymupdf.open(stream=data, filetype="pdf") as doc:
+        return [page.get_text().strip() for page in doc]
+
+
+def test_append_pages_merges_upload_after_existing_pages(api_db, tmp_path) -> None:
+    _book_with_attachments(api_db, tmp_path)
+    (tmp_path / "book_attachments" / "1" / "a.pdf").write_bytes(_pdf(1))
+    c = _client(api_db, _user(api_db))
+    resp = c.post(
+        "/api/v1/books/1/attachments/0/pages",
+        files={"file": ("more.pdf", _pdf(2), "application/pdf")},
+    )
+    assert resp.status_code == 200, resp.text
+    paths = resp.json()["attachment_paths"]
+    assert paths[1] == "book_attachments/1/b.pdf"
+    assert _page_texts(c.get("/api/v1/books/1/attachments/0").content) == [
+        "page 0",
+        "page 0",
+        "page 1",
+    ]
+
+
+def test_delete_page_removes_that_page_only(api_db, tmp_path) -> None:
+    _book_with_attachments(api_db, tmp_path)
+    (tmp_path / "book_attachments" / "1" / "a.pdf").write_bytes(_pdf(3))
+    c = _client(api_db, _user(api_db))
+    resp = c.request("DELETE", "/api/v1/books/1/attachments/0/pages/1")
+    assert resp.status_code == 200, resp.text
+    assert _page_texts(c.get("/api/v1/books/1/attachments/0").content) == ["page 0", "page 2"]
+
+
+def test_delete_only_page_is_refused(api_db, tmp_path) -> None:
+    _book_with_attachments(api_db, tmp_path)
+    (tmp_path / "book_attachments" / "1" / "a.pdf").write_bytes(_pdf(1))
+    c = _client(api_db, _user(api_db))
+    assert c.request("DELETE", "/api/v1/books/1/attachments/0/pages/0").status_code == 422
+    assert c.request("DELETE", "/api/v1/books/1/attachments/0/pages/5").status_code == 404
+
+
+def test_scan_drawer_undo_follows_an_emailed_scan_after_a_page_is_added(api_db, tmp_path) -> None:
+    """An emailed scan auto-filed onto the record keeps a working drawer Undo
+    after someone adds a page to it (the file is rewritten under a new name)."""
+    from app.services import scan_inbox_service
+
+    _book_with_attachments(api_db, tmp_path)
+    (tmp_path / "book_attachments" / "1" / "a.pdf").write_bytes(_pdf(1))
+    owner = _user(api_db)
+    item = ScanInbox(
+        source="email_attachment",
+        owner_user_id=owner.id,
+        file_path="mail.pdf",
+        filename="mail.pdf",
+        state="auto_filed",
+        undo_token="book:1:book_attachments/1/a.pdf",
+        resolution="auto_filed",
+        proposed_route="book_attach",
+        proposed_book_id=1,
+    )
+    api_db.add(item)
+    api_db.commit()
+
+    c = _client(api_db, owner)
+    resp = c.post(
+        "/api/v1/books/1/attachments/0/pages",
+        files={"file": ("sheet2.pdf", _pdf(1), "application/pdf")},
+    )
+    assert resp.status_code == 200, resp.text
+    merged = resp.json()["attachment_paths"][0]
+
+    scan_inbox_service.undo(api_db, item.id, user=owner)
+    api_db.expire_all()
+    assert api_db.get(Book, 1).attachment_paths == ["book_attachments/1/b.pdf"]  # type: ignore[union-attr]
+    assert not (tmp_path / merged).exists()

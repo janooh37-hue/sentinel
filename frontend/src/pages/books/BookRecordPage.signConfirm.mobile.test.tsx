@@ -175,4 +175,20 @@ describe('BookRecordPage — unified sign confirmation (mobile)', () => {
     await waitFor(() => expect(api.signBook).toHaveBeenCalledTimes(1))
     expect(api.signBook).toHaveBeenCalledWith(48, 5)
   })
+
+  it.each(['inline', 'dock'])('the mobile %s confirmation collects branch notes', async (surface) => {
+    const branch = { id: 1, step_order: 0, stage_label: 'branch_manager', assignee_user_id: 7, state: 'pending', note: null, kind: 'approver' }
+    const project = { id: 2, step_order: 1, stage_label: 'project_manager', assignee_user_id: 8, state: 'pending', note: null, kind: 'approver' }
+    vi.mocked(api.getBook).mockResolvedValue(pendingFixture({
+      versions: [{ id: 5, version_no: 1, status: 'pending', template_id: 'Administrative Leave Form', document_id: 900, created_at: '2026-08-01T09:00:00Z', approval_steps: [branch, project] }],
+    }) as never)
+    vi.mocked(api.signBook).mockResolvedValue(pendingFixture() as never)
+    renderRecord(makeQc())
+    const triggers = await screen.findAllByRole('button', { name: 'Sign & approve' })
+    await userEvent.click(surface === 'inline' ? triggers[0] : triggers[triggers.length - 1])
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /Branch Manager notes/ }), 'Branch consent')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Sign & approve' }))
+    await waitFor(() => expect(api.signBook).toHaveBeenCalledWith(48, 5, 'Branch consent'))
+  })
 })

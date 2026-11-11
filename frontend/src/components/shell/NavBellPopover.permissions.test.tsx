@@ -18,6 +18,7 @@ const scanBack = vi.hoisted(() => vi.fn((_scope: string, enabled: boolean) => ({
 vi.mock('@/lib/api', () => ({
   api: {
     getLedgerUnreadRecent: vi.fn().mockResolvedValue({ items: [], total_unread: 0 }),
+    getDecisionNotices: vi.fn().mockResolvedValue({ items: [], total: 0 }),
     listAuthUsers: vi.fn().mockResolvedValue([]),
     getExpirySummary: vi.fn().mockResolvedValue({ urgent: 1 }),
     getApprovalSummary: vi.fn().mockResolvedValue({

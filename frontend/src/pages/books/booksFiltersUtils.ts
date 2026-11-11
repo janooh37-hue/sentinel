@@ -75,7 +75,9 @@ export function matchesBookFilters(row: BookRead, filters: BooksFilters): boolea
   if (filters.fromDate && day < filters.fromDate) return false
   if (filters.toDate && day > filters.toDate) return false
   const q = filters.q.trim().toLowerCase()
-  if (q && !`${row.ref_number} ${row.subject ?? ''}`.toLowerCase().includes(q)) return false
+  const haystack =
+    `${row.ref_number} ${row.subject ?? ''} ${row.employee_id ?? ''} ${row.employee_name_snapshot ?? ''}`.toLowerCase()
+  if (q && !haystack.includes(q)) return false
   return true
 }
 

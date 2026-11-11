@@ -1,4 +1,4 @@
-"""Migration 0110: record grade + distribution replace confidentiality; urgency."""
+"""Migration 0119: record grade + distribution replace confidentiality; urgency."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0110_record_grade"
-PARENT = "0109_book_folder_shares"
+HEAD = "0119_record_grade"
+PARENT = "0118_drop_record_category_overreach"
 
 LEGACY = {
     1: ("general", "Normal", "unclassified", "organization"),
@@ -157,6 +157,8 @@ def test_upgrade_backfills_grade_distribution_and_urgency(tmp_path: Path) -> Non
 
 def test_downgrade_restores_levels_and_priority(tmp_path: Path) -> None:
     engine, config = _at_parent(tmp_path)
+    with engine.begin() as c:
+        c.execute(text("DELETE FROM book_recipients WHERE book_id = 3"))
     command.upgrade(config, HEAD)
     with engine.begin() as c:
         c.execute(
@@ -165,8 +167,7 @@ def test_downgrade_restores_levels_and_priority(tmp_path: Path) -> None:
                 "created_at) VALUES (2, 7, 3, 'info', '2026-10-01 00:00:00')"
             )
         )
-        c.execute(text("UPDATE books SET grade = 'top_secret', urgency = 'Very High' WHERE id = 1"))
-        c.execute(text("UPDATE books SET distribution = 'named' WHERE id = 1"))
+        c.execute(text("UPDATE books SET urgency = 'Very High' WHERE id = 1"))
 
     command.downgrade(config, PARENT)
 
@@ -178,7 +179,7 @@ def test_downgrade_restores_levels_and_priority(tmp_path: Path) -> None:
         }
     assert {"grade", "distribution", "urgency"}.isdisjoint(columns)
     assert rows == {
-        1: ("secret", "High"),
+        1: ("general", "High"),
         2: ("directed", "High"),
         3: ("personal", "Normal"),
         4: ("secret", "High"),
@@ -194,4 +195,88 @@ def test_downgrade_restores_levels_and_priority(tmp_path: Path) -> None:
     command.upgrade(config, HEAD)
     with engine.connect() as c:
         assert c.execute(text("SELECT grade FROM books WHERE id = 4")).scalar_one() == "secret"
+    engine.dispose()
+
+
+@pytest.mark.parametrize(
+    "grade,distribution",
+    [
+        ("top_secret", "organization"),
+        ("top_secret", "named"),
+        ("addressee_only", "named"),
+        ("secret", "named"),
+    ],
+)
+def test_downgrade_refuses_visibility_broadening_before_mutation(
+    tmp_path: Path, grade: str, distribution: str
+) -> None:
+    engine, config = _at_parent(tmp_path)
+    command.upgrade(config, HEAD)
+    with engine.begin() as c:
+        c.execute(
+            text("UPDATE books SET grade = :grade, distribution = :distribution WHERE id = 1"),
+            {"grade": grade, "distribution": distribution},
+        )
+    with pytest.raises(RuntimeError, match="visibility"):
+        command.downgrade(config, PARENT)
+    with engine.connect() as c:
+        assert "confidentiality" not in {col["name"] for col in inspect(c).get_columns("books")}
+        assert c.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == HEAD
+    engine.dispose()
+
+
+@pytest.mark.parametrize("later_change", [False, True])
+def test_downgrade_preserves_personal_revocation_journal(
+    tmp_path: Path, later_change: bool
+) -> None:
+    engine, config = _at_parent(tmp_path)
+    command.upgrade(config, HEAD)
+    with engine.begin() as c:
+        if later_change:
+            c.execute(
+                text("UPDATE book_recipients SET revoked_at = '2030-01-01' WHERE book_id = 3")
+            )
+        before = c.execute(
+            text("SELECT revoked_at FROM book_recipients WHERE book_id = 3")
+        ).scalar_one()
+    with pytest.raises(RuntimeError, match="Personal recipient"):
+        command.downgrade(config, PARENT)
+    with engine.connect() as c:
+        assert (
+            c.execute(text("SELECT revoked_at FROM book_recipients WHERE book_id = 3")).scalar_one()
+            == before
+        )
+        assert c.execute(
+            text("SELECT payload FROM audit_log WHERE action = 'book_legacy_personal'")
+        ).scalar_one()
+        assert "confidentiality" not in {col["name"] for col in inspect(c).get_columns("books")}
+    engine.dispose()
+
+
+def test_downgrade_refuses_malformed_personal_journal(tmp_path: Path) -> None:
+    engine, config = _at_parent(tmp_path)
+    command.upgrade(config, HEAD)
+    for payload in (
+        '{"revoked_recipient_user_ids": 9}',
+        '{"revoked_recipient_user_ids": {}}',
+        "{}",
+        "invalid json",
+    ):
+        with engine.begin() as c:
+            c.execute(
+                text(
+                    "UPDATE audit_log SET payload = :payload WHERE action = 'book_legacy_personal'"
+                ),
+                {"payload": payload},
+            )
+        with pytest.raises(RuntimeError, match="Personal recipient"):
+            command.downgrade(config, PARENT)
+        with engine.connect() as c:
+            assert (
+                c.execute(
+                    text("SELECT payload FROM audit_log WHERE action = 'book_legacy_personal'")
+                ).scalar_one()
+                == payload
+            )
+            assert "confidentiality" not in {col["name"] for col in inspect(c).get_columns("books")}
     engine.dispose()

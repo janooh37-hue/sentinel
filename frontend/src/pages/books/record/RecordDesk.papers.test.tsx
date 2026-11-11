@@ -149,7 +149,7 @@ describe('RecordDesk papers', () => {
     const names = within(switcher()!)
       .getAllByRole('button')
       .map((b) => b.textContent)
-    expect(names).toEqual(['Signed copy', 'Original (unsigned)', 'Scan 1'])
+    expect(names).toEqual(['Signed copy', 'Original (unsigned)', 'Attachment 1'])
     expect(within(switcher()!).getByRole('button', { name: 'Signed copy' })).toHaveAttribute('aria-pressed', 'true')
     expect((await screen.findByTestId('doc-pdf-canvas')).dataset.url).toBe(SIGNED_URL)
     // the signed copy says when it was signed, in words
@@ -212,7 +212,7 @@ describe('RecordDesk papers', () => {
     // signed only: one paper, so no switcher, and the viewer shows the signed copy
     expect(switcher()).toBeNull()
     expect((await screen.findByTestId('doc-pdf-canvas')).dataset.url).toBe(SIGNED_URL)
-    expect(screen.queryByText('Scan 1')).not.toBeInTheDocument()
+    expect(screen.queryByText('Attachment 1')).not.toBeInTheDocument()
   })
 
   it('pins an older revision to just that revision’s document', async () => {
@@ -298,7 +298,7 @@ describe('RecordDesk Word banner', () => {
     await user.click(screen.getByRole('button', { name: 'Show live draft' }))
     expect((await screen.findByTestId('doc-pdf-canvas')).dataset.url).toContain('/word-sessions/preview')
 
-    await user.click(within(switcher()!).getByRole('button', { name: 'Scan 1' }))
+    await user.click(within(switcher()!).getByRole('button', { name: 'Attachment 1' }))
     expect(screen.getByTestId('doc-pdf-canvas').dataset.url).not.toContain('/word-sessions/preview')
     expect(screen.getByRole('button', { name: 'Show live draft' })).toBeInTheDocument()
   })

@@ -13,7 +13,7 @@ Plus Personnel-Affairs form subfolders (acknowledgment, salary_transfer, …)
 created on demand by :meth:`Vault.form_output_dir`.
 
 This module is pure file-system mechanics — no thumbnail rendering, no PDF
-preview, no PIL/fitz imports. Those concerns belong in services (the React
+preview, no PIL/pymupdf imports. Those concerns belong in services (the React
 client requests rendered pages from a dedicated endpoint).
 """
 
@@ -134,9 +134,7 @@ class Vault:
         if not src.exists():
             raise FileNotFoundError(str(src))
         if src.suffix.lower() not in ALLOWED_DOC_EXTS:
-            raise ValueError(
-                f"File type not allowed - نوع الملف غير مسموح: {src.suffix}"
-            )
+            raise ValueError(f"File type not allowed - نوع الملف غير مسموح: {src.suffix}")
         tgt_dir = self.path(g_number, kind)
         tgt_dir.mkdir(parents=True, exist_ok=True)
         dest = self.collision_safe_name(tgt_dir, src.name)
@@ -148,9 +146,7 @@ class Vault:
         if not d.exists():
             return []
         return sorted(
-            p
-            for p in d.iterdir()
-            if p.is_file() and p.suffix.lower() in ALLOWED_DOC_EXTS
+            p for p in d.iterdir() if p.is_file() and p.suffix.lower() in ALLOWED_DOC_EXTS
         )
 
     @staticmethod

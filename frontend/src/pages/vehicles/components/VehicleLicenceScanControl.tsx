@@ -4,17 +4,17 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import type { VehicleProfileScan } from '@/lib/api'
+import { localized } from '@/lib/language'
 
 import { CUSTOM_CLASS, resolveVehicleClass, type VehicleFormValues } from '../vehicleForm'
 import {
   DOCUMENT_ACCEPT,
   EMPTY_VALUE,
   VEHICLE_CLASSES,
-  localized,
   plateLabel,
   vehicleErrorMessage,
 } from '../vehicleUtils'
-import { UploadSlot } from './VehicleDialogShell'
+import { UploadSlot } from '@/components/forms/DialogShell'
 
 export interface VehicleLicenceScanControlProps {
   currentValues: Partial<VehicleFormValues>
@@ -200,7 +200,7 @@ export function VehicleLicenceScanControl({
       setWarnings(result.warnings ?? [])
     } catch (err) {
       if (requestFileRef.current !== nextFile) return
-      setError(vehicleErrorMessage(err, t))
+      setError(vehicleErrorMessage(err))
     } finally {
       if (requestFileRef.current === nextFile) setScanning(false)
     }

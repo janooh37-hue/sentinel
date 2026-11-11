@@ -32,16 +32,18 @@ class LeaveCreate(BaseModel):
 
 class LeaveUpdate(BaseModel):
     """PATCH payload. Dates are accepted only where the lifecycle allows date
-    edits (National Service while Pending — delay/extend)."""
+    edits (request kinds and National Service while Pending). A date change
+    also writes a new version of the owning record's form."""
 
     status: LeaveStatus | None = None
     notes: str | None = None
     start_date: date | None = None
     end_date: date | None = None
-    # Per-decision employee-notification opt-out (2026-07-20). Default True keeps
-    # today's behaviour. The UI only exposes it on Approve, so Reject/Cancel keep
-    # notifying; sending False on an approval suppresses that one notification.
-    notify_employee: bool = True
+    # Per-decision employee-notification choice. True/False is the operator's
+    # explicit choice for this status change; None applies the event default
+    # (`msgdefault.<event>`). The UI exposes the switch on Approve only, so
+    # Reject/Cancel send None and follow their event's automatic on/off.
+    notify_employee: bool | None = None
 
 
 class LeaveAmend(BaseModel):
@@ -68,6 +70,7 @@ class LeaveReturnRequest(BaseModel):
     resumption_date: date
     delay_reason: str | None = None
     manager_id: int | None = None
+    submitter_id: int | None = None
 
 
 class LeaveRead(ORMBase):
@@ -87,6 +90,8 @@ class LeaveRead(ORMBase):
     return_doc_path: str | None = None
     return_date: date | None = None
     created_at: datetime
+    # Original logged-in filer's linked G-number; absent provenance stays unknown.
+    submitted_by_g: str | None = None
     updated_at: datetime | None = None
     linked_documents: list[LinkedDocumentRead] = Field(default_factory=list)
 
@@ -112,6 +117,7 @@ class LeaveListItem(ORMBase):
     # Filed return (Duty Resumption) date; the single-employee report lists it.
     return_date: date | None = None
     created_at: datetime
+    submitted_by_g: str | None = None
 
 
 class LeaveListResponse(BaseModel):

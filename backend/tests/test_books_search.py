@@ -176,3 +176,51 @@ def test_fts_error_fallback_ilike(db_session):
     found = [r for r in rows if r.id == book.id]
     assert found, "ilike fallback should find the book by subject"
     assert snippets == {}, "FTS errored → snippet map should be empty"
+
+
+def _make_employee_book(db, *, ref_number: str, employee_id: str, name_ar: str, snapshot: str):
+    from app.db.models import Book, Employee
+
+    if db.get(Employee, employee_id) is None:
+        db.add(Employee(id=employee_id, name_en=f"Name {employee_id}", name_ar=name_ar))
+        db.commit()
+    book = Book(
+        category_id="GS",
+        ref_number=ref_number,
+        subject="Leave Application Form",
+        approval_state="none",
+        employee_id=employee_id,
+        employee_name_snapshot=snapshot,
+    )
+    db.add(book)
+    db.commit()
+    db.refresh(book)
+    return book
+
+
+def test_search_matches_linked_employee_gnumber_and_name(db_session):
+    """Employee-linked records are found by the employee's G-number (any case,
+    digits only), name snapshot, or Arabic name; another employee's record is not."""
+    from app.services.book_service import list_books
+
+    _make_category(db_session)
+    mine = _make_employee_book(
+        db_session,
+        ref_number="GS-0100",
+        employee_id="G3082",
+        name_ar="سالم الكعبي",
+        snapshot="Salem Kaabi",
+    )
+    other = _make_employee_book(
+        db_session,
+        ref_number="GS-0101",
+        employee_id="G4455",
+        name_ar="خالد المنصوري",
+        snapshot="Khalid Mansoori",
+    )
+
+    for q in ("G3082", "g3082", "3082", "Salem Kaabi", "الكعبي"):
+        rows, _total, _snips = list_books(db_session, q=q)
+        ids = {r.id for r in rows}
+        assert mine.id in ids, f"q={q!r} should find the linked employee's record"
+        assert other.id not in ids, f"q={q!r} must not return another employee's record"

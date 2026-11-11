@@ -25,7 +25,7 @@ export const TEMPLATE_ERROR_CODES = [
   'UNKNOWN_KEY',
 ] as const
 
-/** Capability that unlocks editing; viewing needs none. */
+/** Shows every message/email template surface; without it none renders. */
 export const TEMPLATES_CAP = 'messages.templates'
 
 const enc = encodeURIComponent
@@ -35,6 +35,8 @@ export const messageTemplatesApi = {
   save: (event: string, body: Bilingual) =>
     request<MessageTemplateRead>('PUT', `/notify/templates/${enc(event)}`, body),
   reset: (event: string) => request<MessageTemplateRead>('DELETE', `/notify/templates/${enc(event)}`),
+  setDefault: (event: string, enabled: boolean) =>
+    request<MessageTemplateRead>('PUT', `/notify/templates/${enc(event)}/default`, { enabled }),
   render: (event: string, body: Bilingual) =>
     request<Schemas['MessageRenderRead']>('POST', `/notify/templates/${enc(event)}/render`, body),
   preview: (body: NotifyPreviewRequest) =>
@@ -71,6 +73,22 @@ export function useResetMessageTemplate() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (event: string) => messageTemplatesApi.reset(event),
+    onSuccess: (next) => {
+      qc.setQueryData<MessageTemplateRead[]>(MESSAGE_TEMPLATES_KEY, (l) =>
+        l?.map((t) => (t.event === next.event ? next : t)),
+      )
+      void qc.invalidateQueries({ queryKey: ['notify-preview'] })
+    },
+  })
+}
+
+/** Per-event default: whether the employee message is sent unless a record
+ *  says otherwise (`prefill`), or at all (`auto`). Saves immediately. */
+export function useSetMessageTemplateDefault() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ event, enabled }: { event: string; enabled: boolean }) =>
+      messageTemplatesApi.setDefault(event, enabled),
     onSuccess: (next) => {
       qc.setQueryData<MessageTemplateRead[]>(MESSAGE_TEMPLATES_KEY, (l) =>
         l?.map((t) => (t.event === next.event ? next : t)),

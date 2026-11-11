@@ -17,6 +17,7 @@
 import type { BookRead, BookVersionRead, EmployeeRead } from '@/lib/api'
 import { api } from '@/lib/api'
 import type { EmailBasketItem } from '@/lib/emailBasket'
+import { violationDetailsAr } from '@/lib/violationTypes'
 import { subjectEmployeePart } from './formKind'
 
 // ---------------------------------------------------------------------------
@@ -92,6 +93,8 @@ export function deriveRecordItem({
       ? `${startDate} → ${endDate}`
       : (book.subject ?? book.ref_number)
 
+  const { violations, notes: violationNotes } = violationDetailsAr(formKind, fields)
+
   return {
     bookId: book.id,
     docId: cur.document_id,
@@ -120,6 +123,8 @@ export function deriveRecordItem({
           ? fields['last_working_day']
           : undefined,
     bookDate: typeof book.created_at === 'string' ? book.created_at.slice(0, 10) : undefined,
+    ...(violations.length > 0 && { violations }),
+    ...(violationNotes && { violationNotes }),
   }
 }
 

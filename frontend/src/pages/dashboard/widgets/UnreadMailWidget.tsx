@@ -54,8 +54,8 @@ export function UnreadMailWidget({ tier, rows }: WidgetProps): React.JSX.Element
         </>}
         <footer className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-[0.75em] leading-tight text-muted-foreground">
           <span className="min-w-0"><span aria-hidden="true" className={`me-1 inline-block size-1.5 rounded-full ${emailSync.enabled ? 'bg-success' : 'bg-warning'}`} />{!emailSync.enabled ? t('dashboard.widgets.ledger.syncOff') : emailSync.last_synced_at ? t('dashboard.widgets.ledger.synced', { age: recordAge(emailSync.last_synced_at, isAr) }) : t('dashboard.widgets.ledger.neverSynced')}</span>
-          {emailSync.enabled && canReadMail ? <button type="button" className={`${INLINE_LINK} text-primary disabled:opacity-50`} disabled={sync.isPending} onClick={() => sync.mutate()}>{t(sync.isPending ? 'dashboard.widgets.ledger.syncing' : 'dashboard.widgets.ledger.syncNow')}</button> : has('settings.view') && <Link to="/settings" className={`${INLINE_LINK} text-primary`}>{t('dashboard.widgets.ledger.configure')}</Link>}
-          {sync.isError && canReadMail && <span role="alert">{t('dashboard.widgets.ledger.syncError')} <button type="button" className={`${INLINE_LINK} text-primary`} onClick={() => sync.mutate()}>{t('common.retry')}</button></span>}
+          {emailSync.enabled && canReadMail ? <button type="button" className={`${INLINE_LINK} text-primary-text disabled:opacity-50`} disabled={sync.isPending} onClick={() => sync.mutate()}>{t(sync.isPending ? 'dashboard.widgets.ledger.syncing' : 'dashboard.widgets.ledger.syncNow')}</button> : has('settings.view') && <Link to="/settings" className={`${INLINE_LINK} text-primary-text`}>{t('dashboard.widgets.ledger.configure')}</Link>}
+          {sync.isError && canReadMail && <span role="alert">{t('dashboard.widgets.ledger.syncError')} <button type="button" className={`${INLINE_LINK} text-primary-text`} onClick={() => sync.mutate()}>{t('common.retry')}</button></span>}
         </footer>
       </>}
     </WidgetFrame>

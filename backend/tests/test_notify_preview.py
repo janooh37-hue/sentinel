@@ -186,6 +186,7 @@ def test_non_notifying_or_revision_has_no_message(preview_client, template, revi
         "timing": timing,
         "text": None,
         "segments": None,
+        "default_enabled": True,
     }
 
 
@@ -313,7 +314,9 @@ def test_revision_preview_matches_approval_send(
     assert book.approval_state == "approved"
     sent = api_db.scalar(select(OutboundMessage))
     if notify_employee is False:
-        assert sent is None
+        # The revision keeps the original's explicit "off": logged, never sent.
+        assert sent is not None and (sent.status, sent.skip_reason) == ("skipped", "user_off")
+        assert sent.body is None
         assert preview["event"] is None and preview["text"] is None
     else:
         assert sent is not None and sent.status == "sent"
@@ -349,6 +352,9 @@ def test_approved_revision_preview_matches_deduplicated_send(
     if original_status == "settled_leave" and template != "Leave Application Form":
         pytest.skip("Only Annual Leave has a later Leaves-page verdict")
     employee, signer, manager = revision_env
+    branch = User(email="branch@preview.test", password_hash="x", role="manager", status="active")
+    api_db.add(branch)
+    api_db.commit()
 
     def generate(**kwargs):
         result = document_service.generate_document(
@@ -369,9 +375,14 @@ def test_approved_revision_preview_matches_deduplicated_send(
             book.id,
             submitted_by_user_id=signer.id,
             approver_user_id=signer.id,
+            branch_approver_user_id=branch.id,
             urgency="Normal",
             reviewer_user_ids=[],
         )
+        if template == "Administrative Leave Form":
+            book_service.sign_book(
+                api_db, book.id, user_id=branch.id, version_id=book.versions[-1].id
+            )
         book_service.sign_book(api_db, book.id, user_id=signer.id, version_id=book.versions[-1].id)
         assert book.approval_state == "approved"
 
@@ -446,7 +457,7 @@ def test_preview_employee_language_rule(api_db, preview_client, language, expect
         ("HR Request Form", "books.service.HR Request Form"),
         ("Violation Form", "books.service.Violation Form"),
         ("Leave Application Form", "books.service.Leave Application Form"),
-        ("HR Request Form", "books.category.HR"),
+        ("HR Request Form", "books.category.8/1"),
     ],
 )
 def test_real_employee_preview_requires_save_screen_access(
@@ -479,7 +490,7 @@ def test_real_employee_preview_requires_save_screen_access(
     [
         "books.edit",
         "books.view",
-        "books.category.HR",
+        "books.category.12/1",
         "books.servicerecords.Employee Clearance Form",
     ],
 )

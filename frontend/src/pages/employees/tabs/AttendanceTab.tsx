@@ -16,11 +16,14 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
+import { Printer } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 
 import { api } from '@/lib/api'
 import type { EmployeeAttendanceDay, EmployeeAttendanceHistoryDay } from '@/lib/api'
+import { lastDayOfMonth } from '@/lib/monthEnd'
 import { useCapabilities } from '@/lib/useCapabilities'
 import {
   graceFor,
@@ -31,6 +34,7 @@ import {
   siteTime,
 } from '@/pages/employees/attendance/attendanceModel'
 import type { RowState } from '@/pages/employees/attendance/attendanceModel'
+import { attendancePrintPath } from '@/pages/employees/statement/statementModel'
 
 interface Props {
   employeeId: string
@@ -94,7 +98,7 @@ const RECORD_FROM = `${new Date().getUTCFullYear()}-01-01`
 /** First and last day of the month containing `iso`, as ISO dates. */
 function monthBounds(iso: string): { from: string; to: string; year: number; month: number } {
   const [year, month] = iso.split('-').map(Number)
-  const last = new Date(year, month, 0).getDate()
+  const last = lastDayOfMonth(year, month)
   const pad = (value: number): string => String(value).padStart(2, '0')
   return {
     from: `${year}-${pad(month)}-01`,
@@ -415,6 +419,13 @@ export function AttendanceTab({
             })}
           </h3>
           <div className="ms-auto flex gap-1.5">
+            <Link
+              to={attendancePrintPath(employeeId, `mode=month&y=${bounds.year}&m=${bounds.month}`)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-[0.78em] text-primary hover:bg-primary-soft"
+            >
+              <Printer className="size-3.5" aria-hidden="true" />
+              {t('statementPrint.attendanceAction')}
+            </Link>
             <button
               type="button"
               onClick={() => setMonth(shiftMonth(month, -1))}

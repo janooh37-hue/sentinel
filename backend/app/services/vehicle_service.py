@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 import uuid
 from calendar import monthrange
 from collections.abc import Sequence
-from datetime import UTC, date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -19,9 +18,18 @@ from sqlalchemy.orm import Session, object_session, selectinload, with_expressio
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
+from app.core.clock import utcnow
+from app.core.expiry import expiry_status
+from app.core.uploads import (
+    MEDIA_TYPES_BY_EXTENSION,
+    SniffedUploadPolicy,
+    normalize_media_type,
+    resolve_under,
+    safe_filename,
+    validate_sniffed_upload,
+)
 from app.core.vehicle_certificates import Profile
 from app.db.models import (
-    AuditLog,
     Book,
     Employee,
     Vehicle,
@@ -35,6 +43,7 @@ from app.db.models import (
     VehiclePhotoAsset,
     VehicleSite,
 )
+from app.db.repos.audit_repo import append_audit
 from app.schemas.vehicle import (
     MONTH_PATTERN,
     LicenseRenewalRead,
@@ -77,38 +86,19 @@ _PHOTO_KINDS = frozenset({"photo", "gallery"})
 _FILE_KINDS = frozenset({"photo", "license", "gallery", "accident", "receipt", "certificate"})
 _CERTIFICATE_LABEL_MAX_LENGTH = 128
 _CERTIFICATE_PROCESSING_TIMEOUT = 120
-_ALLOWED_MEDIA_BY_EXTENSION: dict[str, frozenset[str]] = {
-    ".pdf": frozenset({"application/pdf"}),
-    ".png": frozenset({"image/png"}),
-    ".jpg": frozenset({"image/jpeg", "image/jpg"}),
-    ".jpeg": frozenset({"image/jpeg", "image/jpg"}),
-    ".webp": frozenset({"image/webp"}),
-}
-_UNSAFE_CHARS = re.compile('[\\\\/:*?"<>|\x00-\x1f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]')
 
 # Fine receipts use a narrower policy than the generic vehicle-file upload:
 # no WebP, a lower size cap, and a magic-byte sniff so a renamed file cannot
 # masquerade as one of the three accepted formats.
 FINE_RECEIPT_MAX_BYTES = 10 * 1024 * 1024
-_FINE_RECEIPT_SIGNATURES: dict[str, bytes] = {
-    ".pdf": b"%PDF-",
-    ".png": b"\x89PNG\r\n\x1a\n",
-    ".jpg": b"\xff\xd8\xff",
-    ".jpeg": b"\xff\xd8\xff",
-}
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
-
-
-def expiry_status(expiry: date, *, today: date, notify_days: int) -> str:
-    days = (expiry - today).days
-    if days < 0:
-        return "expired"
-    if days <= notify_days:
-        return "due"
-    return "valid"
+_FINE_RECEIPT_POLICY = SniffedUploadPolicy(
+    code_prefix="VEHICLE_FINE_RECEIPT",
+    noun="receipt",
+    extensions=frozenset({".pdf", ".png", ".jpg", ".jpeg"}),
+    bad_format_message="Receipts must be a PDF, PNG, or JPEG file.",
+    fallback_name="vehicle-file",
+    max_bytes=FINE_RECEIPT_MAX_BYTES,
+)
 
 
 def due_state(next_due: date | None, *, today: date, notify_days: int) -> str | None:
@@ -537,9 +527,17 @@ def archive_vehicle(db: Session, vehicle_id: int, *, actor: str | None = None) -
     row = get_vehicle(db, vehicle_id)
     if row.archived_at is not None:
         return row
-    row.archived_at = _utcnow()
-    row.updated_at = _utcnow()
-    _add_audit(db, "vehicle.archived", row.id, actor, {"plate_number": row.plate_number})
+    row.archived_at = utcnow()
+    row.updated_at = utcnow()
+    append_audit(
+        db,
+        action="vehicle.archived",
+        entity_type="vehicle",
+        entity_id=row.id,
+        actor=actor,
+        payload={"plate_number": row.plate_number},
+        ensure_ascii=True,
+    )
     db.commit()
     return get_vehicle(db, row.id)
 
@@ -555,8 +553,16 @@ def restore_vehicle(db: Session, vehicle_id: int, *, actor: str | None = None) -
             site_id=row.site_id,
         )
     row.archived_at = None
-    row.updated_at = _utcnow()
-    _add_audit(db, "vehicle.restored", row.id, actor, {"plate_number": row.plate_number})
+    row.updated_at = utcnow()
+    append_audit(
+        db,
+        action="vehicle.restored",
+        entity_type="vehicle",
+        entity_id=row.id,
+        actor=actor,
+        payload={"plate_number": row.plate_number},
+        ensure_ascii=True,
+    )
     db.commit()
     return get_vehicle(db, row.id)
 
@@ -804,7 +810,7 @@ def _update_vehicle_record(db: Session, row: Vehicle, payload: VehicleUpdate) ->
         row.expiry_reminder_sent_for = None
     if insurance_changed:
         row.insurance_reminder_sent_for = None
-    row.updated_at = _utcnow()
+    row.updated_at = utcnow()
 
 
 def update_vehicle(
@@ -963,7 +969,7 @@ def renew_license(
     if payload.scan_file_id is not None:
         row.license_file_id = payload.scan_file_id
     row.expiry_reminder_sent_for = None
-    row.updated_at = _utcnow()
+    row.updated_at = utcnow()
     db.commit()
     _audit(
         db,
@@ -1073,7 +1079,7 @@ def update_fine(
         )
     for field, value in data.items():
         setattr(row, field, value)
-    row.updated_at = _utcnow()
+    row.updated_at = utcnow()
     db.commit()
     _audit(
         db,
@@ -1119,29 +1125,6 @@ def delete_fine(
     return get_vehicle(db, vehicle_id)
 
 
-def _validate_fine_receipt(*, filename: str, data: bytes, media_type: str) -> None:
-    if not data:
-        raise ValidationFailedError("VEHICLE_FINE_RECEIPT_EMPTY", "Uploaded receipt is empty.")
-    if len(data) > FINE_RECEIPT_MAX_BYTES:
-        raise ValidationFailedError(
-            "VEHICLE_FINE_RECEIPT_TOO_LARGE",
-            f"Receipt exceeds {FINE_RECEIPT_MAX_BYTES // (1024 * 1024)} MiB.",
-            size=len(data),
-        )
-    safe_name = _safe_filename(filename)
-    extension = Path(safe_name).suffix.lower()
-    signature = _FINE_RECEIPT_SIGNATURES.get(extension)
-    normalized_media = media_type.partition(";")[0].strip().lower()
-    allowed_media = _ALLOWED_MEDIA_BY_EXTENSION.get(extension, frozenset())
-    if signature is None or not data.startswith(signature) or normalized_media not in allowed_media:
-        raise ValidationFailedError(
-            "VEHICLE_FINE_RECEIPT_BAD_FORMAT",
-            "Receipts must be a PDF, PNG, or JPEG file.",
-            extension=extension,
-            media_type=media_type,
-        )
-
-
 def record_payment(
     db: Session,
     vehicle_id: int,
@@ -1172,7 +1155,12 @@ def record_payment(
     receipt_file: VehicleFile | None = None
     destination: Path | None = None
     if data:
-        _validate_fine_receipt(filename=filename or "", data=data, media_type=media_type or "")
+        validate_sniffed_upload(
+            _FINE_RECEIPT_POLICY,
+            filename=filename or "",
+            data=data,
+            media_type=media_type or "",
+        )
         receipt_file, destination = _store_file_record(
             db,
             vehicle_id,
@@ -1185,7 +1173,7 @@ def record_payment(
         row.payment_status = "paid"
         if receipt_file is not None:
             row.receipt_file_id = receipt_file.id
-        row.updated_at = _utcnow()
+        row.updated_at = utcnow()
         db.commit()
     except Exception:
         db.rollback()
@@ -1241,13 +1229,15 @@ def attach_receipt(
             "This fine already has a receipt.",
             fine_id=fine_id,
         )
-    _validate_fine_receipt(filename=filename, data=data, media_type=media_type)
+    validate_sniffed_upload(
+        _FINE_RECEIPT_POLICY, filename=filename, data=data, media_type=media_type
+    )
     receipt_file, destination = _store_file_record(
         db, vehicle_id, kind="receipt", filename=filename, data=data, media_type=media_type
     )
     try:
         row.receipt_file_id = receipt_file.id
-        row.updated_at = _utcnow()
+        row.updated_at = utcnow()
         db.commit()
     except Exception:
         db.rollback()
@@ -1305,7 +1295,7 @@ def archive_fines(
                 fine_id=fine.id,
                 payment_status=fine.payment_status,
             )
-    now = _utcnow()
+    now = utcnow()
     by_vehicle: dict[int, list[int]] = {}
     for fine, _version in fines:
         fine.archived_at = now
@@ -1334,7 +1324,7 @@ def restore_fines(
                 "Only an archived fine can be restored.",
                 fine_id=fine.id,
             )
-    now = _utcnow()
+    now = utcnow()
     by_vehicle: dict[int, list[int]] = {}
     for fine, _version in fines:
         fine.archived_at = None
@@ -1424,7 +1414,7 @@ def set_accident_status(
             status=status,
         )
     row.status = status
-    row.updated_at = _utcnow()
+    row.updated_at = utcnow()
     db.commit()
     _audit(
         db,
@@ -1503,7 +1493,7 @@ def create_maintenance(
                 VehicleMaintenanceRequest.vehicle_id == vehicle.id,
                 VehicleMaintenanceRequest.status == "open",
             )
-            .values(status="done", completed_at=_utcnow())
+            .values(status="done", completed_at=utcnow())
         )
         if cast(CursorResult[Any], claimed).rowcount != 1:
             db.rollback()
@@ -1802,7 +1792,7 @@ def upsert_odometer(
         reading = VehicleOdometerReading(vehicle_id=vehicle_id, month=month)
         db.add(reading)
     else:
-        reading.updated_at = _utcnow()
+        reading.updated_at = utcnow()
     reading.opening_km = None if carried is not None else opening
     reading.closing_km = closing
     db.commit()
@@ -1882,12 +1872,6 @@ def summary(db: Session) -> VehiclesSummary:
     )
 
 
-def _safe_filename(filename: str) -> str:
-    name = filename.replace("\\", "/").rsplit("/", 1)[-1]
-    name = _UNSAFE_CHARS.sub("_", name).strip().strip(".")
-    return name or "vehicle-file"
-
-
 def _validate_upload(
     kind: str, filename: str, data: bytes, media_type: str
 ) -> tuple[str, str, str]:
@@ -1911,7 +1895,7 @@ def _validate_upload(
             f"File exceeds {MAX_FILE_BYTES // (1024 * 1024)} MiB.",
             size=len(data),
         )
-    safe_name = _safe_filename(filename)
+    safe_name = safe_filename(filename, fallback="vehicle-file")
     extension = Path(safe_name).suffix.lower()
     if extension not in _ALLOWED_EXTENSIONS:
         raise ValidationFailedError(
@@ -1925,8 +1909,8 @@ def _validate_upload(
             f"{kind} files must be images.",
             kind=kind,
         )
-    normalized_media = media_type.partition(";")[0].strip().lower()
-    if normalized_media not in _ALLOWED_MEDIA_BY_EXTENSION[extension]:
+    normalized_media = normalize_media_type(media_type)
+    if normalized_media not in MEDIA_TYPES_BY_EXTENSION[extension]:
         raise ValidationFailedError(
             "VEHICLE_FILE_MEDIA_MISMATCH",
             "The upload media type does not match its extension.",
@@ -2213,17 +2197,19 @@ def store_file(
                     "This certificate already has a replacement.",
                     file_id=predecessor.id,
                 )
-            _add_audit(
+            append_audit(
                 db,
-                "certificate.replaced",
-                vehicle_id,
-                actor,
-                {
+                action="certificate.replaced",
+                entity_type="vehicle",
+                entity_id=vehicle_id,
+                actor=actor,
+                payload={
                     "old_file_id": predecessor.id,
                     "new_file_id": row.id,
                     "old_size": predecessor.size,
                     "stored_size": update_values.get("size", predecessor.size),
                 },
+                ensure_ascii=True,
             )
 
         db.commit()
@@ -2312,12 +2298,14 @@ def update_certificate(
 
     after = _snapshot()
     if before != after:
-        _add_audit(
+        append_audit(
             db,
-            "certificate.updated",
-            vehicle_id,
-            actor,
-            {"file_id": file_id, "before": before, "after": after},
+            action="certificate.updated",
+            entity_type="vehicle",
+            entity_id=vehicle_id,
+            actor=actor,
+            payload={"file_id": file_id, "before": before, "after": after},
+            ensure_ascii=True,
         )
     db.commit()
     db.refresh(row)
@@ -2325,9 +2313,8 @@ def update_certificate(
 
 
 def _resolve_file_path(row: VehicleFile) -> Path:
-    data_dir = get_settings().data_dir.resolve()
-    path = (data_dir / row.path).resolve()
-    if not path.is_relative_to(data_dir):
+    path = resolve_under(get_settings().data_dir, row.path)
+    if path is None:
         raise ValidationFailedError(
             "VEHICLE_FILE_INVALID_PATH",
             "The stored vehicle file path is outside the data directory.",
@@ -2420,27 +2407,6 @@ def delete_file(
     _audit(db, "file.deleted", vehicle_id, actor, {"file_id": file_id})
 
 
-def _add_audit(
-    db: Session,
-    action: str,
-    vehicle_id: int,
-    actor: str | None,
-    payload: dict[str, Any],
-    *,
-    entity_type: str = "vehicle",
-) -> None:
-    """Add an audit entry without owning the caller's transaction."""
-    db.add(
-        AuditLog(
-            actor=actor,
-            action=action,
-            entity_type=entity_type,
-            entity_id=str(vehicle_id),
-            payload=json.dumps(payload),
-        )
-    )
-
-
 def _audit(
     db: Session,
     action: str,
@@ -2450,12 +2416,14 @@ def _audit(
     *,
     entity_type: str = "vehicle",
 ) -> None:
-    _add_audit(
+    """Append an audit entry and commit the caller's whole transaction."""
+    append_audit(
         db,
-        action,
-        vehicle_id,
-        actor,
-        payload,
+        action=action,
         entity_type=entity_type,
+        entity_id=vehicle_id,
+        actor=actor,
+        payload=payload,
+        ensure_ascii=True,
     )
     db.commit()

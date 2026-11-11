@@ -12,6 +12,7 @@ import json
 import logging
 import re
 import time
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -24,9 +25,9 @@ from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import leave_lifecycle
 from app.core.leave_calc import TOTAL_AVAILABLE_CAP, LeaveBalance
-from app.db.models import AuditLog, Document, Employee, Leave, Manager, User
+from app.db.models import AuditLog, Book, BookVersion, Document, Employee, Leave, Manager, User
 from app.schemas.leave import LeaveBalanceRead, LeaveCreate, LeaveStatus, LeaveUpdate
-from app.services import book_service, document_service, user_signature_service
+from app.services import book_service, document_service, leave_record_sync, user_signature_service
 
 # ---------------------------------------------------------------------------
 _WORKFORCE_TIMEZONE = ZoneInfo("Asia/Dubai")
@@ -243,6 +244,81 @@ def list_leaves(
     return rows, total
 
 
+def submitter_g_numbers(db: Session, leaves: Sequence[Leave]) -> dict[int, str | None]:
+    """Original logged-in filer, never the employee or picked signature representative.
+
+    Use the first primary generation's record creator, not a later revision,
+    approval, or return-form actor. New manual leaves record a stable user id
+    in their creation audit payload. Historical email text is not an identity.
+    Resolve the whole page with batched queries.
+    """
+    if not leaves:
+        return {}
+    rows = db.execute(
+        select(Document.leave_id, User.employee_id)
+        .join(Leave, Leave.id == Document.leave_id)
+        .outerjoin(BookVersion, BookVersion.document_id == Document.id)
+        .outerjoin(Book, Book.id == BookVersion.book_id)
+        .outerjoin(User, User.id == Book.created_by_user_id)
+        .where(
+            Document.leave_id.in_([leave.id for leave in leaves]),
+            Document.role == "primary",
+            or_(
+                Document.template_id != "Duty Resumption Form",
+                Leave.leave_type == "Duty Resumption",
+            ),
+        )
+        .order_by(Document.id, BookVersion.id)
+    )
+    submitters: dict[int, str | None] = {}
+    for leave_id, employee_id in rows:
+        if leave_id is not None:
+            submitters.setdefault(leave_id, employee_id)
+    manual = [
+        leave
+        for leave in leaves
+        if leave.id not in submitters
+        and leave_lifecycle.classify_group(leave.leave_type) == "national_service"
+    ]
+    if not manual:
+        return submitters
+    actors: dict[int, int | None] = {}
+    for entity_id, raw_payload in db.execute(
+        select(AuditLog.entity_id, AuditLog.payload)
+        .where(
+            AuditLog.entity_type == "leave",
+            AuditLog.action == "leave.created",
+            AuditLog.entity_id.in_([str(leave.id) for leave in manual]),
+            # Creation audits are appended after the leave is inserted. Bound
+            # by the earliest candidate to use the existing timestamp index.
+            AuditLog.ts >= min(leave.created_at for leave in manual),
+        )
+        .order_by(AuditLog.id)
+    ):
+        if entity_id is None:
+            continue
+        try:
+            payload = json.loads(raw_payload or "{}")
+        except (TypeError, ValueError):
+            payload = {}
+        user_id = payload.get("actor_user_id") if isinstance(payload, dict) else None
+        actors.setdefault(int(entity_id), user_id if type(user_id) is int else None)
+    user_ids = {user_id for user_id in actors.values() if user_id is not None}
+    if user_ids:
+        employees: dict[int, str | None] = {
+            user_id: employee_id
+            for user_id, employee_id in db.execute(
+                select(User.id, User.employee_id).where(User.id.in_(user_ids))
+            )
+        }
+        submitters.update(
+            (leave_id, employees.get(user_id))
+            for leave_id, user_id in actors.items()
+            if user_id is not None
+        )
+    return submitters
+
+
 def awaiting_return_count(db: Session) -> int:
     """Live leaves in lifecycle.ts's ``AwaitingReturn`` display state.
 
@@ -301,11 +377,32 @@ def _refuse_sign_gated(db: Session, row: Leave) -> None:
         )
 
 
+def _refuse_duplicate_dates(db: Session, row: Leave, start: date, end: date) -> None:
+    """Moving ``row`` onto another live leave's natural key (ux_leaves_natural_key)."""
+    clash = db.execute(
+        select(Leave.id).where(
+            Leave.employee_id == row.employee_id,
+            Leave.leave_type == row.leave_type,
+            Leave.start_date == start,
+            Leave.end_date == end,
+            Leave.deleted_at.is_(None),
+            Leave.id != row.id,
+        )
+    ).scalar()
+    if clash is not None:
+        raise ValidationFailedError(
+            "LEAVE_DUPLICATE",
+            f"Another {row.leave_type!r} leave already covers {start} to {end}",
+            leave_id=clash,
+        )
+
+
 def update_leave(
     db: Session, leave_id: int, payload: LeaveUpdate, *, actor: str | None = None
 ) -> Leave:
     """Apply a PATCH payload with per-kind lifecycle enforcement."""
     row = get_leave(db, leave_id)
+    old_start, old_end, old_days = row.start_date, row.end_date, row.days
     before = _workforce_leave_snapshot(row)
     status_changed = False
     if payload.status is not None:
@@ -339,11 +436,12 @@ def update_leave(
                 "LEAVE_DATES_INVALID",
                 "end_date must be on or after start_date",
             )
+        _refuse_duplicate_dates(db, row, new_start, new_end)
         old = {"start": str(row.start_date), "end": str(row.end_date), "days": row.days}
         row.start_date = new_start
         row.end_date = new_end
         row.days = (new_end - new_start).days + 1
-        dates_changed = True
+        dates_changed = new_start != old_start or new_end != old_end
         _audit(
             db,
             "leave.dates_changed",
@@ -367,18 +465,22 @@ def update_leave(
                 else "LEAVE_DATES_AMENDED"
             ),
         )
+    if dates_changed:
+        leave_record_sync.sync_leave_record(
+            db, row, old_start=old_start, old_end=old_end, old_days=old_days, actor=actor
+        )
     db.commit()
     db.refresh(row)
     _cache_invalidate_employee(row.employee_id)
     # Notify the employee of the new step (approved / rejected / cancelled).
     # Best-effort — a gateway hiccup must never fail the status change.
-    # notify_employee (default True) lets the approver suppress this one
-    # notification; the UI only offers the opt-out on Approve.
-    if status_changed and payload.notify_employee:
+    # notify_employee: True/False is the operator's explicit choice; None follows
+    # the event default. A suppressed send logs a skipped row.
+    if status_changed:
         try:
             from app.services import notify_dispatch
 
-            notify_dispatch.auto_send_leave_status(db, leave_id)
+            notify_dispatch.auto_send_leave_status(db, leave_id, choice=payload.notify_employee)
         except Exception:
             log.exception("auto leave-status SMS failed for leave %s", leave_id)
     return row
@@ -391,6 +493,7 @@ def amend_approved_leave(
     (start fixed), reason required. Notifies the employee (best-effort) with
     old vs new duration and the reason. Spec 2026-07-15."""
     row = get_leave(db, leave_id)
+    old_start, old_end = row.start_date, row.end_date
     before = _workforce_leave_snapshot(row)
     if not leave_lifecycle.can_amend(row.leave_type, row.status):
         raise ValidationFailedError(
@@ -402,6 +505,7 @@ def amend_approved_leave(
         raise ValidationFailedError(
             "LEAVE_DATES_INVALID", "end_date must be on or after start_date"
         )
+    _refuse_duplicate_dates(db, row, row.start_date, end_date)
     old = {"end": str(row.end_date), "days": row.days}
     old_days = row.days
     row.end_date = end_date
@@ -421,6 +525,10 @@ def amend_approved_leave(
         after=row,
         reason_code="LEAVE_AMENDED",
     )
+    if end_date != old_end:
+        leave_record_sync.sync_leave_record(
+            db, row, old_start=old_start, old_end=old_end, old_days=old_days, actor=actor
+        )
     db.commit()
     db.refresh(row)
     _cache_invalidate_employee(row.employee_id)
@@ -434,7 +542,13 @@ def amend_approved_leave(
     return row
 
 
-def create_leave(db: Session, payload: LeaveCreate, *, actor: str | None = None) -> Leave:
+def create_leave(
+    db: Session,
+    payload: LeaveCreate,
+    *,
+    actor: str | None = None,
+    actor_user_id: int | None = None,
+) -> Leave:
     """Manual record creation. v1 is National-Service-only — every other kind
     is born from form generation (document_service)."""
     if leave_lifecycle.classify_group(payload.leave_type) != "national_service":
@@ -466,7 +580,13 @@ def create_leave(db: Session, payload: LeaveCreate, *, actor: str | None = None)
     )
     db.add(row)
     db.flush()
-    _audit(db, "leave.created", row.id, actor, {"leave_type": row.leave_type})
+    _audit(
+        db,
+        "leave.created",
+        row.id,
+        actor,
+        {"leave_type": row.leave_type, "actor_user_id": actor_user_id},
+    )
     _enqueue_leave_reevaluation(
         db,
         before=None,
@@ -553,13 +673,16 @@ def file_return(
     resumption_date: date,
     delay_reason: str | None = None,
     manager_id: int | None = None,
+    submitter_id: int | None = None,
     actor: str | None = None,
     current_user: User | None = None,
 ) -> Leave:
     """File the Duty Resumption (return) form for a returnable leave.
 
-    Generates the Duty Resumption document with the employee's saved vault
-    signature when present; the manager signs through the book approval chain.
+    Generates the Duty Resumption document with the picked submitter's
+    signature in the employee cell, else the employee's saved vault signature
+    when present (an unknown submitter id raises ``SUBMITTER_NOT_FOUND``); the
+    manager signs through the book approval chain.
     Attaches the result to THIS leave (no standalone register row), records
     the return date, and sets status -> Completed.
     NS requires a certificate already on file.
@@ -599,11 +722,12 @@ def file_return(
         template_id="Duty Resumption Form",
         fields=fields,
         manager_id=manager_id,
+        submitter_id=submitter_id,
         embed_signature={"employee": True},
         current_user=current_user,
         return_for_leave_id=leave_id,
         # The return dialog never notified the employee; its approval doesn't either.
-        notify_employee=False,
+        notify_employee="silent",
     )
 
     # generate_document already linked the doc + committed. Now complete the leave.

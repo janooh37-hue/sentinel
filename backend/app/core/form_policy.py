@@ -43,6 +43,9 @@ SIGNING_PATHS: dict[str, SigningPath] = {
     "Passport Release List": "scan",
 }
 
+# These chain forms require a branch approval before the project manager.
+BRANCH_MANAGER_STAGE_FORMS = frozenset({"Administrative Leave Form"})
+
 # Generated leave forms whose Leave row can stay Pending (and its employee
 # message held) until the manager signs through the approval chain. Whether a
 # given record is gated depends on its leave type: ``is_sign_gated_leave``.

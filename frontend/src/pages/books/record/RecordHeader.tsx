@@ -138,6 +138,7 @@ export function StatusText({ status }: { status: NextStep['status'] }): React.JS
         if (!match) return part
         const key = match[1]
         const value = status.vars[key] ?? ''
+        if (key === 'stage') return <bdi key={i}>{t(value)}</bdi>
         return key === 'name' ? (
           <bdi key={i}>{value}</bdi>
         ) : (

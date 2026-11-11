@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 
 from app.config import get_settings
@@ -23,7 +23,7 @@ def test_resolve_book_pdf_missing_raises(db_session):
 
 def _pdf(path: Path, pages: int) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    document = fitz.open()
+    document = pymupdf.open()
     try:
         for _ in range(pages):
             document.new_page()
@@ -78,6 +78,6 @@ def test_resolve_managed_package_does_not_duplicate_companion(
 
     _filename, pdf_bytes = announce_service.resolve_book_pdf(db_session, book.id)
 
-    with fitz.open("pdf", pdf_bytes) as result:
+    with pymupdf.open("pdf", pdf_bytes) as result:
         assert result.page_count == 3
     get_settings.cache_clear()

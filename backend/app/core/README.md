@@ -108,6 +108,7 @@ edit — no code change required for most forms.
 ```python
 DocxEngine(templates_dir: Path | str)
     .fill(form_type, data, output_path) -> Path
+    .has_manager_signature_slot(form_type) -> bool
     .stamp_ref_number(docx_path, ref_number, style) -> bool  # @staticmethod
 
 # Lower-level generic renderer:
@@ -128,6 +129,13 @@ docx_render.render(
   converts present-and-existing paths to `InlineImage`, missing/blank
   paths to `""`. Use token `{{ employee_sig }}` for data key
   `employee_sig_path`.
+
+`has_manager_signature_slot` checks the template's `manager_sig` token and
+the registered code-placed manager blocks (General Book-style and leave forms).
+Approval of a form without such a slot copies its retained original DOCX and
+converts that copy to PDF; it does not re-render signatures from current profile
+images or stamp a manager signature into an unrelated position. The source DOCX
+is required, including for older papers without signature-role markers.
 
 **Jinja globals registered for templates:**
 

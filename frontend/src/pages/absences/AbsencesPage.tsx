@@ -14,6 +14,7 @@
  * as /application).
  */
 
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -34,7 +35,7 @@ import type { AbsenceRegisterRowRead } from '@/lib/api'
 import { copyTable } from '@/lib/copyTable'
 import { computeEndDate, todayIso } from '@/lib/leaveDateMath'
 import { useCapabilities } from '@/lib/useCapabilities'
-import { useDraftTemplates } from '@/lib/messageTemplates'
+import { TEMPLATES_CAP, useDraftTemplates } from '@/lib/messageTemplates'
 import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
 import { Button } from '@/components/ui/button'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
@@ -64,6 +65,7 @@ export function AbsencesPage(): React.JSX.Element {
   const draftOverrides = useDraftTemplates().data?.overrides
   const { has, isLoading: capabilitiesLoading } = useCapabilities()
   const canEdit = has('leaves.edit')
+  const canManageTemplates = has(TEMPLATES_CAP)
 
   const [employeeId, setEmployeeId] = useState<string | null>(
     () => searchParams.get('employee_id'),
@@ -106,6 +108,7 @@ export function AbsencesPage(): React.JSX.Element {
     })
     void qc.invalidateQueries({ queryKey: ['employee-absences', targetEmployeeId] })
     void qc.invalidateQueries({ queryKey: ['employee-detail', targetEmployeeId] })
+    void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
   }
 
   const createMutation = useMutation({
@@ -181,7 +184,7 @@ export function AbsencesPage(): React.JSX.Element {
   })
 
   const canSubmit =
-    !!employeeId && !!start && !!end && start <= end && canEdit && !createMutation.isPending
+    !!employeeId && !!start && !!end && start <= end && !createMutation.isPending
   const rows = registerQuery.data?.rows ?? []
   const editKey = searchParams.get('open')
   const editing = rows.find((row) => rowKey(row) === editKey) ?? null
@@ -243,20 +246,25 @@ export function AbsencesPage(): React.JSX.Element {
               </div>
             </div>
           </header>
-          <Tabs value={tab === 'email-draft' ? 'email-draft' : 'records'} onValueChange={setTab}>
+          <Tabs value={tab === 'email-draft' && canManageTemplates ? 'email-draft' : 'records'} onValueChange={setTab}>
             <TabsList className="mb-5 flex w-full justify-start overflow-x-auto">
               <TabsTrigger value="records" className="shrink-0 whitespace-nowrap">
                 {t('leaves.tabs.records')}
               </TabsTrigger>
-              <TabsTrigger value="email-draft" className="shrink-0 whitespace-nowrap">
-                {t('msgTemplates.tabs.emailDraft')}
-              </TabsTrigger>
+              {canManageTemplates && (
+                <TabsTrigger value="email-draft" className="shrink-0 whitespace-nowrap">
+                  {t('msgTemplates.tabs.emailDraft')}
+                </TabsTrigger>
+              )}
             </TabsList>
-            <TabsContent value="email-draft" className="min-w-0">
-              <ServiceDraftTab service="absences" />
-            </TabsContent>
+            {canManageTemplates && (
+              <TabsContent value="email-draft" className="min-w-0">
+                <ServiceDraftTab service="absences" />
+              </TabsContent>
+            )}
             <TabsContent value="records">
 
+          {canEdit && (
           <div className="mx-auto w-full max-w-2xl">
             <div className="rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
               <div className="flex flex-col gap-1.5">
@@ -321,6 +329,7 @@ export function AbsencesPage(): React.JSX.Element {
             </div>
 
           </div>
+          )}
 
           <section className="mt-8" aria-label={t('absences.list.title')}>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-3">

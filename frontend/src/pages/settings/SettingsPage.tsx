@@ -17,6 +17,7 @@ import {
 import { CapabilityGate } from '@/components/shell/CapabilityGate'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { TEMPLATES_CAP } from '@/lib/messageTemplates'
 import { copyToClipboard } from '@/lib/clipboard'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -893,7 +894,7 @@ export function SettingsPage(): React.JSX.Element {
       panels: [
         ...(has('email.manage') ? [panels.email] : []),
         ...(has('settings.edit') ? [panels.sms] : []),
-        panels.messageTemplates,
+        ...(has(TEMPLATES_CAP) ? [panels.messageTemplates] : []),
       ],
     },
     {

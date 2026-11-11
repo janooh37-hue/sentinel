@@ -1,6 +1,6 @@
 """Signature identity primitives.
 
-Every RENDERED manager/employee/submitter signature occurrence — not every
+Every RENDERED manager/branch-manager/employee/submitter signature occurrence — not every
 signature image FILE — gets a stable identity independent of its embedded
 bytes: ``wp:docPr/@name = "GSSG_SIG_<uuid32>"`` and
 ``wp:docPr/@descr = "gssg-signature:v1:<role>:<uuid32>"``.
@@ -65,10 +65,12 @@ _PROBE_GRID_STEP = 32
 
 # Bump when the measurement algorithm or serialized layout meaning changes.
 SIGNATURE_LAYOUT_SCHEMA_VERSION = 1
-SignatureRole = Literal["manager", "employee", "submitter"]
+SignatureRole = Literal["manager", "branch_manager", "employee", "submitter"]
 
 _MARKER_PREFIX = "GSSG_SIG_"
-_DESCR_RE = re.compile(r"^gssg-signature:v1:(manager|employee|submitter):([0-9a-f]{32})$")
+_DESCR_RE = re.compile(
+    r"^gssg-signature:v1:(manager|branch_manager|employee|submitter):([0-9a-f]{32})$"
+)
 
 # Context keys `app.core.docx_render.render` resolves into inline images,
 # after `docx_engine._adapt_common` (and the other per-form adapters that
@@ -77,6 +79,7 @@ _DESCR_RE = re.compile(r"^gssg-signature:v1:(manager|employee|submitter):([0-9a-
 # unmarked image — see `role_for_sig_key`.
 ROLE_BY_SIG_KEY: dict[str, SignatureRole] = {
     "manager_sig_path": "manager",
+    "branch_manager_sig_path": "branch_manager",
     "employee_sig_path": "employee",
     "submitter_sig_path": "submitter",
     "interviewer_sig_path": "submitter",
@@ -113,7 +116,7 @@ def parse_marker_descr(descr: str | None) -> tuple[SignatureRole, str] | None:
     if not match:
         return None
     role = match.group(1)
-    assert role in ("manager", "employee", "submitter")
+    assert role in ("manager", "branch_manager", "employee", "submitter")
     return role, match.group(2)  # type: ignore[return-value]
 
 
@@ -366,12 +369,12 @@ def _find_probe(
     box's center pixel at `_SAMPLE_DPI` (a render-resolution 72 dpi sample
     is too coarse for a probe this small — proven empirically). Returns
     ``(0-based page index, bbox)`` or None."""
-    import fitz
+    import pymupdf
 
     for page_index in range(document.page_count):
         page = document[page_index]
         for info in page.get_image_info(hashes=True):
-            rect = fitz.Rect(info["bbox"])
+            rect = pymupdf.Rect(info["bbox"])
             if rect.width <= 0 or rect.height <= 0:
                 continue
             pix = page.get_pixmap(clip=rect, dpi=_SAMPLE_DPI)
@@ -409,7 +412,7 @@ def measure_signature_layout(
     on a malformed/duplicate marker, and `SignatureRenderFailedError` when
     *converter* fails to produce a PDF.
     """
-    import fitz
+    import pymupdf
     from docx import Document
     from docx.oxml.ns import qn
 
@@ -480,7 +483,7 @@ def measure_signature_layout(
         if pdf_path is None or not pdf_path.exists():
             raise SignatureRenderFailedError(f"Word conversion failed while measuring {docx_path}")
 
-        pdf = fitz.open(str(pdf_path))
+        pdf = pymupdf.open(str(pdf_path))
         try:
             page_dims = {
                 i: (pdf[i].bound().width, pdf[i].bound().height) for i in range(pdf.page_count)
@@ -733,17 +736,17 @@ def validate_move(
     construction), and ordered document text is the strong content-loss
     signal the plan requires.
     """
-    import fitz
+    import pymupdf
 
-    before_pdf_doc = fitz.open(str(before_pdf))
-    after_pdf_doc = fitz.open(str(after_pdf))
+    before_pdf_doc = pymupdf.open(str(before_pdf))
+    after_pdf_doc = pymupdf.open(str(after_pdf))
     try:
         if before_pdf_doc.page_count != after_pdf_doc.page_count:
             raise SignatureLayoutChangedError(
                 f"page count changed: {before_pdf_doc.page_count} -> {after_pdf_doc.page_count}"
             )
-        before_text = "".join(page.get_text() for page in before_pdf_doc)
-        after_text = "".join(page.get_text() for page in after_pdf_doc)
+        before_text = "".join(page.get_text() for page in before_pdf_doc.pages())
+        after_text = "".join(page.get_text() for page in after_pdf_doc.pages())
         if before_text != after_text:
             raise SignatureLayoutChangedError("document text changed")
     finally:

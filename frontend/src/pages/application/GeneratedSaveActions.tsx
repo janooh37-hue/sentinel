@@ -12,12 +12,15 @@ export interface GeneratedSaveActionsProps {
   signingPath: SigningPath | undefined
   showNotify: boolean
   notifyEmployee: boolean
+  /** The switch sits at the event's "off by default" setting, untouched. */
+  notifyOffByDefault?: boolean
   notifyDisabled: boolean
   saveDisabled: boolean
   saving: boolean
   hint: string
   previewBody: NotifyPreviewRequest | null
   onNotifyChange: (checked: boolean) => void
+  onNotifyDefault?: (enabled: boolean) => void
   onSave: () => void
   /** Record grade picker; omitted (e.g. revise mode) when the grade is fixed. */
   grade?: Grade
@@ -28,12 +31,14 @@ export function GeneratedSaveActions({
   signingPath,
   showNotify,
   notifyEmployee,
+  notifyOffByDefault = false,
   notifyDisabled,
   saveDisabled,
   saving,
   hint,
   previewBody,
   onNotifyChange,
+  onNotifyDefault,
   onSave,
   grade,
   onGradeChange,
@@ -45,7 +50,7 @@ export function GeneratedSaveActions({
       : 'application.notify.hintOn'
   const notificationHint = notifyEmployee
     ? `${t(hintOn)} ${t('application.actions.notificationChannel')}`
-    : t('application.notify.hintOff')
+    : t(notifyOffByDefault ? 'application.notify.hintOffByDefault' : 'application.notify.hintOff')
 
   return (
     <section
@@ -73,6 +78,7 @@ export function GeneratedSaveActions({
               key={`${previewBody.template_id}:${previewBody.employee_id}`}
               body={previewBody}
               notifyEmployee={notifyEmployee}
+              onDefaultEnabled={onNotifyDefault}
             />
           )}
           {grade && onGradeChange && (

@@ -10,6 +10,7 @@
  * Calls recordRecentEmployee when data loads.
  */
 
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -47,6 +48,7 @@ import { LeavesTab } from './tabs/LeavesTab'
 import { MessagesTab } from './tabs/MessagesTab'
 import { ProfileTab } from './tabs/ProfileTab'
 import { ViolationsTab } from './tabs/ViolationsTab'
+import { UniformTab } from './tabs/UniformTab'
 
 const VALID_TABS = new Set<Tab>([
   'profile',
@@ -57,6 +59,7 @@ const VALID_TABS = new Set<Tab>([
   'activity',
   'attendance',
   'violations',
+  'uniform',
 ])
 
 function tabFromSearch(params: URLSearchParams): Tab {
@@ -74,7 +77,10 @@ export function EmployeeDetailPage(): React.JSX.Element {
   const action = searchParams.get('action')
   const editOverlay = useUrlOverlay('action')
   const docOverlay = useUrlOverlay('doc')
-  const tab = tabFromSearch(searchParams)
+  const canViewUniform = has('uniform.view')
+  // A shared ?tab=uniform link opens the profile for users without uniform.view.
+  const requestedTab = tabFromSearch(searchParams)
+  const tab = requestedTab === 'uniform' && !canViewUniform ? 'profile' : requestedTab
   const rawOpenId = searchParams.get('open')
   const parsedOpenId = rawOpenId && /^\d+$/.test(rawOpenId) ? Number(rawOpenId) : null
   const violationOpenId =
@@ -163,6 +169,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employee-detail', id] })
+      void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
       void qc.invalidateQueries({ queryKey: ['employees'] })
       setInitialExtraction(undefined)
       editOverlay.close()
@@ -363,6 +370,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
                 profileGaps: data.missing_fields.length,
               }}
               onChange={handleTabChange}
+              showUniform={canViewUniform}
             />
             {tab === 'profile' && (
               <ProfileTab
@@ -400,15 +408,14 @@ export function EmployeeDetailPage(): React.JSX.Element {
             )}
             {tab === 'activity' && (
               <ActivityTab
-                activity={data.recent_activity}
-                leaves={data.recent_leaves}
-                violations={data.recent_violations}
+                employeeId={data.employee.id}
                 onPreviewDocs={openDocPreview}
                 onOpenViolation={openViolation}
                 onOpenTab={handleTabChange}
               />
             )}
             {tab === 'attendance' && id && <AttendanceTab employeeId={id} />}
+            {tab === 'uniform' && <UniformTab employeeId={data.employee.id} />}
             {tab === 'messages' && (
               <MessagesTab
                 messages={data.recent_sms}

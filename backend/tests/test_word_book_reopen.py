@@ -9,7 +9,7 @@ import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from docx import Document as DocxFile
 
@@ -39,7 +39,7 @@ def _isolated_artifact_settings(monkeypatch, tmp_path):
 
 
 def _pdf(path: Path) -> Path:
-    document = fitz.open()
+    document = pymupdf.open()
     try:
         document.new_page()
         document.save(path)

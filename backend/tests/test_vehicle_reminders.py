@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 from sqlalchemy.orm import Session
 
+from app.core.clock import utcnow
 from app.db.models import (
     User,
     UserPermission,
@@ -474,7 +475,7 @@ def test_null_insurance_date_and_archived_vehicle_never_notify(
         insurance_expiry=_TODAY,
         plate_number="58217",
     )
-    archived.archived_at = vehicle_service._utcnow()
+    archived.archived_at = utcnow()
     db_session.commit()
     _make_user(db_session, email="viewer@test.ae", can_view_vehicles=True)
     pushes = _capture_pushes(monkeypatch)
@@ -672,7 +673,7 @@ def test_no_expiry_historical_and_archived_certificates_never_notify(
     archived_vehicle = _make_vehicle(
         db_session, expiry=_TODAY + timedelta(days=365), plate_number="58217"
     )
-    archived_vehicle.archived_at = vehicle_service._utcnow()
+    archived_vehicle.archived_at = utcnow()
     db_session.commit()
 
     no_expiry_cert = _make_certificate(db_session, vehicle, expiry=None, label_en="Open-ended")

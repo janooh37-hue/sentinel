@@ -58,10 +58,16 @@ export function ConfirmDialog({
 }: ConfirmDialogProps): React.JSX.Element {
   const { t } = useTranslation()
   const label = confirmLabel ?? t('common.confirm')
+  const cancelId = React.useId()
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent
+        onOpenAutoFocus={(event) => {
+          if (!destructive) return
+          event.preventDefault()
+          document.getElementById(cancelId)?.focus()
+        }}
         onCloseAutoFocus={
           returnFocusRef
             ? (event) => {
@@ -88,15 +94,11 @@ export function ConfirmDialog({
               onOpenChange(false)
               onConfirm()
             }}
-            className={
-              destructive
-                ? 'bg-accent text-white hover:bg-accent/90'
-                : undefined
-            }
+            className={`pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] ${destructive ? 'bg-destructive text-destructive-foreground hover:bg-destructive active:bg-destructive hover:underline' : ''}`}
           >
             {label}
           </AlertDialogAction>
-          <AlertDialogCancel onClick={() => onOpenChange(false)}>
+          <AlertDialogCancel id={cancelId} className="pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px]" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </AlertDialogCancel>
         </AlertDialogFooter>

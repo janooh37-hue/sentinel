@@ -26,12 +26,12 @@ import type { VehicleFineRead } from '@/lib/api'
 import { FINE_RECEIPT_ACCEPT, invalidateVehicleQueries, vehicleErrorMessage } from '../vehicleUtils'
 import { FineAmount } from './FineAmount'
 import {
+  DialogBody,
+  DialogFooter,
+  DialogShell,
+  FormAlert,
   UploadSlot,
-  VehicleDialogBody,
-  VehicleDialogFooter,
-  VehicleDialogShell,
-  VehicleFormAlert,
-} from './VehicleDialogShell'
+} from '@/components/forms/DialogShell'
 import { Button } from '@/components/ui/button'
 
 export type FinePaymentMode = 'payment' | 'receipt'
@@ -54,7 +54,7 @@ export function FinePaymentDialog({
   const { t } = useTranslation()
   const [busy, setBusy] = useState(false)
   return (
-    <VehicleDialogShell
+    <DialogShell
       open={open}
       onOpenChange={onOpenChange}
       title={t(mode === 'payment' ? 'vehicles.fines.recordPayment' : 'vehicles.fines.attachReceipt')}
@@ -71,7 +71,7 @@ export function FinePaymentDialog({
         onOpenChange={onOpenChange}
         onBusyChange={setBusy}
       />
-    </VehicleDialogShell>
+    </DialogShell>
   )
 }
 
@@ -115,7 +115,7 @@ function PaymentForm({
         invalidateVehicleQueries(queryClient, { vehicleId: fine.vehicle_id, registers: ['fines'] })
         return
       }
-      const message = vehicleErrorMessage(err, t)
+      const message = vehicleErrorMessage(err)
       setServerError(message)
       toast.error(message)
     },
@@ -136,8 +136,8 @@ function PaymentForm({
         mutation.mutate()
       }}
     >
-      <VehicleDialogBody>
-        <VehicleFormAlert id="fine-payment-alert" message={alert} />
+      <DialogBody>
+        <FormAlert id="fine-payment-alert" message={alert} />
 
         <div className="flex flex-col gap-1 rounded-lg border border-border bg-surface-raised p-3">
           <span className="text-[0.72rem] text-muted-foreground" dir="auto">
@@ -158,9 +158,9 @@ function PaymentForm({
           disabled={mutation.isPending}
           hint={t('vehicles.fines.receiptHint')}
         />
-      </VehicleDialogBody>
+      </DialogBody>
 
-      <VehicleDialogFooter>
+      <DialogFooter>
         <Button
           type="button"
           variant="ghost"
@@ -174,7 +174,7 @@ function PaymentForm({
             ? t('common.saving')
             : t(mode === 'payment' ? 'vehicles.fines.recordPayment' : 'vehicles.fines.attachReceipt')}
         </Button>
-      </VehicleDialogFooter>
+      </DialogFooter>
     </form>
   )
 }

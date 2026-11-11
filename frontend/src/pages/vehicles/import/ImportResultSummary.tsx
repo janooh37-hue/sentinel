@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import type { VehicleImportCounts, VehicleImportResult } from '@/lib/api'
 import { isolateBidi } from '@/lib/useCapabilityCatalog'
+import { formatNumber } from '@/lib/language'
 
-import { formatNumber } from '../vehicleUtils'
 
 const PREVIEW_COUNT_KEYS: readonly (keyof VehicleImportCounts)[] = [
   'create',

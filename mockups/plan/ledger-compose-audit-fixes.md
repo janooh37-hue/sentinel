@@ -59,3 +59,12 @@
 - Preserve main's ordered Administrative Leave approvals, outcome unread tracking, attachment/Word flows, optional submitter, notification defaults and unified category permissions alongside Ledger grade/distribution and chain-only rules.
 - Preserve all published main migration identities through `0118_drop_record_category_overreach`. Renumber the unpublished Ledger chain to `0119_record_grade` through `0124_ledger_paper_preset`, update test references, and verify on disposable databases only. Existing sandbox stamps require separate reconciliation before a future restart/upgrade.
 - Regenerate OpenAPI and TypeScript after resolving routes/schemas. Validate migration chain, affected backend/frontend tests, i18n/RTL and Alembic review. No merge into main or deployment is authorized.
+
+## Round 1 integration evidence
+
+- Backend bot fixes committed in `7d198ffc`: signed grade snapshots, historical access/image filtering, and write-lock serialization. Four snapshot/locking regressions plus access/image regression passed before main integration.
+- Resolved 20 conflicts with `origin/main` at `4d57ea01`; preserved ordered Administrative Leave approvals, attachments, notification defaults and grade privacy. API regenerated (447 paths). Backend Ruff, 92 changed-file format checks, and migration numbering pass.
+- Required migration review prompted fail-closed downgrade guards for visibility and unrecoverable recipient journals; batch downgrade preserves FTS triggers. Two migration modules: 20 passed; malformed-journal regression: 1 passed. Published main migration identities unchanged. Existing dev stamps need separate reconciliation; no services/data migrated.
+- Fable isolated correction-editor commit `f219e8ed` applied for integration. Parent reproduced/fixed loss of edits typed during pending save and discard-dialog return focus. i18n/RTL re-review clean. Composer: 77 passed; App permission tests: 101 passed after adapting main's new test navigation to the data router. Initial overloaded parallel run had timing failures; single-worker rerun passed composer.
+- Main integration exposed canonical approval queue navigation race; fixed without weakening regression. Approvals: 31 passed; Application generated handoff: 18 passed; service navigation: 6 passed. Notification reviewer found no remaining integration defects.
+- Full merged backend suite running in background; final build/lint and PR push/review remain pending. Latest external score remains 1/5.

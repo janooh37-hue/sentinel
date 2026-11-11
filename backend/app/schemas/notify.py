@@ -14,7 +14,7 @@ class NotifySendRequest(BaseModel):
 
 
 class NotifySendResponse(BaseModel):
-    status: str  # queued | sent | failed
+    status: str  # queued | sent | failed | skipped
     channel: str | None  # whatsapp | sms | None
     fell_back: bool
     fallback_reason: str | None = None
@@ -28,7 +28,9 @@ class NotifyStatusItem(ORMBase):
     event_ref: str
     language: str
     channel: str | None
-    status: str
+    status: str  # queued | sent | failed | skipped
+    # Why an automatic message was not sent; set only when status == "skipped".
+    skip_reason: Literal["default_off", "user_off"] | None = None
     delivery_state: str | None
     fell_back: bool
     fallback_reason: str | None
@@ -79,6 +81,15 @@ class MessageTemplateRead(BaseModel):
     default: MessageText
     override: MessageText | None
     variables: list[MessageVariable]
+    # Whether this event sends by default. "prefill" events seed the per-record
+    # "Notify employee" switch; "auto" events have no switch and send or not
+    # automatically.
+    default_enabled: bool
+    default_mode: Literal["prefill", "auto"]
+
+
+class MessageTemplateDefaultWrite(BaseModel):
+    enabled: bool
 
 
 class MessageRenderRead(BaseModel):
@@ -99,3 +110,5 @@ class NotifyPreviewRead(BaseModel):
     timing: Literal["on_approval", "on_save", "on_status_change", "scheduled", "manual"]
     text: MessageText | None
     segments: MessageSegments | None
+    # Event default, used to seed the save screen's "Notify employee" switch.
+    default_enabled: bool

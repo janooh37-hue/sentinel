@@ -32,15 +32,13 @@ import { api } from '@/lib/api'
 import type { LedgerEntryRead, LedgerListItem, LedgerSearchResponse } from '@/lib/api'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import { OutlookHandoffDialog } from '../OutlookHandoffDialog'
-import type { ComposeReference } from '@/components/ledger/ReferencePicker'
+import { OutlookComposePage, type OutlookComposePrefill } from '../OutlookComposePage'
 import { ContextPanel } from './ContextPanel'
 import { useContextSource } from './useContextSource'
 import { useSyncStatus } from './useSyncStatus'
 import { FolderRail } from './FolderRail'
 import { MessageList, type MessageListTab } from './MessageList'
 import { ReadingPaneSlot } from './ReadingPaneSlot'
-import { ComposeWindow } from './ComposeWindow'
 import { SuggestionBanner } from './SuggestionBanner'
 import { ReviewSuggestionsSheet } from './ReviewSuggestionsSheet'
 import { CreateSmartFolderDialog } from './CreateSmartFolderDialog'
@@ -80,15 +78,7 @@ interface ComposeState {
   source?: LedgerEntryRead
   /** Optional prefill for `new`-mode composes (e.g. from Leaves batch confirm,
    *  the email basket, or a record's "Email via Outlook" action). */
-  prefill?: {
-    to?: string[]
-    cc?: string[]
-    subject?: string
-    bodyHtml?: string
-    references?: ComposeReference[]
-    attachRefPdf?: boolean
-    basketKey?: string
-  }
+  prefill?: OutlookComposePrefill
 }
 
 /**
@@ -282,28 +272,18 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   // are resolved above via useContextSource, near the list query.)
   const selectedKind: 'mail' | null = selectedId == null ? null : 'mail'
 
-  // ONE compose window at a time (spec: keep the existing compose instead of
-  // replacing it — replacing silently destroys an in-progress draft).
-  // Guard directly on `compose` state; put it in deps so the closure is always
-  // fresh (these are user-event callbacks, never batched render-phase calls).
+  // Compose replaces the mailbox while open, so the entry points that call this
+  // are only reachable when no compose is in progress.
   const openCompose = useCallback(
     (next: ComposeState) => {
-      if (activeCompose) {
-        toast(
-          t('ledger.outlook.composeBusy', {
-            defaultValue: 'Finish or close your current draft first.',
-          }),
-        )
-        return
-      }
       setCompose(next)
       composePage.open('compose')
       setFolderDrawerOpen(false)
     },
-    [activeCompose, composePage.open, t],
+    [composePage.open],
   )
 
-  // Reply / Reply All / Forward open the compose over the pane.
+  // Reply / Reply All / Forward open the full-page compose.
   const handleReply = useCallback(
     (entry: LedgerEntryRead) => openCompose({ mode: 'reply', source: entry }),
     [openCompose],
@@ -325,7 +305,7 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
   // mount (or when the shell re-renders after a navigate-with-state from
   // another page, e.g. the Absences email dialog). The ref guard
   // makes repeated renders harmless; `navigate` clears the state so Back/F5
-  // don't re-open the compose window.
+  // don't re-open the compose page.
   const consumedPrefill = useRef(false)
   useEffect(() => {
     if (consumedPrefill.current) return
@@ -546,24 +526,24 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
     </>
   )
 
-  // Desktop: a non-modal Outlook-style window docked bottom-right (the mailbox
-  // behind stays clickable); the render-prop hands min/max/restore controls to
-  // the handoff surface. Mobile: full-screen page chrome (header + Back).
-  const composeOverlay = activeCompose && (
-    <ComposeWindow fullScreen={isMobile}>
-      {(win) => (
-        <OutlookHandoffDialog
+  // Compose is a full page: while `?action=compose` is open it takes the whole
+  // ledger area in place of the mailbox (desktop and mobile alike). The shell's
+  // own state (folder, search, open mail) lives above this branch, so closing
+  // compose returns to the mailbox exactly as it was left.
+  if (activeCompose) {
+    return (
+      <div className="relative flex flex-1 flex-col overflow-hidden bg-background">
+        <OutlookComposePage
           mode={activeCompose.mode}
           source={activeCompose.source}
           prefill={activeCompose.prefill}
-          chrome={isMobile ? 'page' : 'window'}
-          windowControls={win}
           onClose={handleComposeClose}
           onHandedOff={handleComposeSent}
         />
-      )}
-    </ComposeWindow>
-  )
+        {smartOverlays}
+      </div>
+    )
+  }
 
   // ── Mobile (< md): list is full-bleed; the folder rail lives behind a Sheet
   // drawer opened from a "Folders" header button (the prior Ledger mobile
@@ -648,15 +628,12 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
             )}
           </div>
           <div className="flex min-h-0 flex-1">{readingPaneSlot}</div>
-          {composeOverlay}
           {smartOverlays}
         </div>
       )
     }
 
     return (
-      // `relative` so a `new`-mode compose overlay (absolute inset-0) anchors
-      // here even with no row selected.
       <div className="relative flex flex-1 flex-col overflow-hidden bg-background">
         <div className="flex flex-none items-center gap-2 border-b border-border bg-surface px-3 py-2">
           {switcher && <div className="min-w-0 max-w-[236px] flex-1">{switcher}</div>}
@@ -678,7 +655,6 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
           </Sheet>
         </div>
         {messageList}
-        {composeOverlay}
         {smartOverlays}
       </div>
     )
@@ -706,9 +682,6 @@ export function LedgerOutlookShell({ onNavigate, switcher }: LedgerOutlookShellP
         onNavigate={handleContextNavigate}
         onEmail={handleContextEmail}
       />
-
-      {/* Reply / Forward compose floats over the whole shell. */}
-      {composeOverlay}
 
       {/* Smart-folder review sheet + create dialog (portal to body). */}
       {smartOverlays}

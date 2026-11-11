@@ -5,7 +5,7 @@ Pipeline (in order):
   2. Determine output directory (personnel vault vs. global output).
   3. Allocate reference number via RefAllocator persisted through refs_repo.
   4. Apply manager override.
-  5. Resolve submitter (Leave Undertaking only).
+  5. Resolve submitter (optional on every form).
   6. Merge caller-supplied fields into the data dict.
   7. Strip signature paths for hand-sign slots.
   8. Fill template via DocxEngine.
@@ -25,11 +25,11 @@ import json
 import logging
 import shutil
 import uuid
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Literal
+from typing import Any, Final, Literal
 
 from sqlalchemy import ColumnElement, and_, case, exists, func, not_, or_, select
 from sqlalchemy.orm import InstrumentedAttribute, Session, aliased
@@ -48,7 +48,7 @@ from app.core.constants import (
     VEHICLE_LETTER_FORMS,
 )
 from app.core.dateutils import excel_date_to_datetime
-from app.core.docx_engine import aztec_corner_for, syncs_general_book_footer
+from app.core.docx_engine import DocxEngine, aztec_corner_for, syncs_general_book_footer
 from app.core.docx_render import _arabic_clock, _arabic_weekday
 from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_ALIASES, SERVICE_IDS
 from app.core.html_text import html_to_text
@@ -75,7 +75,7 @@ from app.db.models import (
 from app.db.repos._locking import begin_immediate_if_idle
 from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
-from app.schemas.book import BookGrade
+from app.schemas.book import BookGrade, GenerateAttachmentSpec
 from app.schemas.employee import EMPLOYEE_STATUS_RESIGNED, WORKING_STATUSES
 from app.schemas.linked_document import LinkedDocumentRead
 from app.services import (
@@ -83,6 +83,7 @@ from app.services import (
     artifact_service,
     inmate_violation_whatsapp,
     manager_service,
+    notify_format,
 )
 from app.services._pdf_executor import convert_docx_to_pdf as convert_docx_to_pdf
 from app.services.employee_status_history import (
@@ -95,11 +96,6 @@ from app.services.employee_status_history import (
 _build_docx_filename = artifact_service.build_docx_filename
 _output_dir_for_admin = artifact_service.output_dir_for_admin
 
-if TYPE_CHECKING:
-    # Type-only: app.api.v1.documents imports this module at runtime, so a
-    # real import here would be circular. The specs are plain pydantic value
-    # objects — only their attributes are read.
-    from app.api.v1.documents import GenerateAttachmentSpec
 
 log = logging.getLogger(__name__)
 _INTERVIEWER_FORMS: Final[frozenset[str]] = frozenset(
@@ -380,26 +376,15 @@ _LEAVE_FORM_IDS: frozenset[str] = frozenset(
 # Forms that log into the shared Violation records (Warning mirrors Violation)
 _VIOLATION_FORM_IDS: frozenset[str] = frozenset({"Violation Form", "Warning Form"})
 
-# Forms that require a submitter
-_SUBMITTER_REQUIRED_IDS: frozenset[str] = frozenset({"Leave Undertaking"})
-
-# Forms where a chosen submitter signs the employee cell in the applicant's
-# place (their signature replaces ``employee_sig_path`` on the primary fill).
-# Leave-related forms only — kept explicit so adding a submitter picker to an
-# unrelated form doesn't silently swap its employee signature.
-_SUBMITTER_SIGN_FORMS: frozenset[str] = frozenset(
+# Snapshots written before every Submitter form let the submitter sign carry no
+# ``submitter_signs`` flag. Their papers were rendered under these rules, and
+# approval / leave-date sync must reproduce them unchanged.
+_LEGACY_SUBMITTER_SIGN_FORMS: frozenset[str] = frozenset(
     {"Leave Application Form", "Duty Resumption Form"}
 )
+_LEGACY_SUBMITTER_AUTO_SIGN_FORMS: frozenset[str] = frozenset({"Employee Clearance Form"})
 
-# Forms where the picked submitter ALWAYS signs the employee cell — no
-# employee-signature opt-in checkbox exists in their schema, so the submitter's
-# signature auto-embeds (mirrors the manager auto-embed on ``auto``-path forms).
-# The Employee Clearance Form is submitted on the leaving employee's behalf and
-# carries only manager + submitter pickers (no signature field), so the
-# submitter's signature is the only one available for the employee slot.
-_SUBMITTER_AUTO_SIGN_FORMS: frozenset[str] = frozenset({"Employee Clearance Form"})
-
-# Reserved ``BookVersion.fields`` key holding a chain form's generation-time
+# Reserved ``BookVersion.fields`` key holding a chain/in-app form's generation-time
 # signing snapshot (issue date, employee/submitter embed, notify choice).
 _SIGNING_KEY = "_signing"
 
@@ -416,38 +401,58 @@ _MANAGER_SIGN_DATE_FORMS: frozenset[str] = frozenset(
 )
 
 
-def inherited_notify_employee(book: Book) -> bool:
-    """Revision saves and previews inherit the newest generated snapshot's choice.
+def inherited_notify_employee(book: Book) -> notify_format.NotifyChoice:
+    """Revision saves, previews and approvals use the newest generated snapshot's choice.
 
-    Missing flags default on; records without any snapshot never notified revisions.
+    The snapshot stores True/False (operator's explicit switch), None (event
+    default, resolved at send time) or "silent" (system suppression). Snapshots
+    from before the flag count as an explicit True; records without any snapshot
+    never notified revisions ("silent").
     """
-    return next(
-        (
-            snapshot.get("notify_employee") is not False
-            for version in reversed(book.versions)
-            if isinstance(snapshot := (version.fields or {}).get(_SIGNING_KEY), dict)
-        ),
-        False,
-    )
+    for version in reversed(book.versions):
+        snapshot = (version.fields or {}).get(_SIGNING_KEY)
+        if isinstance(snapshot, dict):
+            choice = snapshot.get("notify_employee", True)
+            return choice if choice in (True, False, None, "silent") else True
+    return "silent"
 
 
-def _submitter_signs_employee_cell(
+def _has_submitter_picker(template_id: str) -> bool:
+    """Whether the form's schema offers a Submitter box."""
+    fields = load_fields_meta().get(template_id, {}).get("fields", [])
+    return any(field.get("type") == "submitter_picker" for field in fields)
+
+
+def _submitter_signs_employee_cell(template_id: str, submitter_id: int | None) -> bool:
+    """Whether a picked submitter's signature fills the employee cell.
+
+    The submitter is optional on every form with a Submitter box: picked, they
+    sign the employee cell on the employee's behalf (no employee signature and
+    no ``embed_signature.employee`` opt-in needed); left empty, the employee's
+    own signature applies.
+    """
+    return submitter_id is not None and _has_submitter_picker(template_id)
+
+
+def _replayed_submitter_signs(
     template_id: str,
+    signing: Mapping[str, Any],
     submitter_id: int | None,
-    embed_signature: dict[str, bool],
+    embed_signature: Mapping[str, bool],
 ) -> bool:
-    """Whether a picked submitter's signature replaces the employee cell.
+    """The generation-time answer of ``_submitter_signs_employee_cell``, replayed.
 
-    Auto-sign forms (``_SUBMITTER_AUTO_SIGN_FORMS``) embed whenever a submitter
-    is picked — they carry no employee-signature checkbox. Regular
-    submitter-sign forms (``_SUBMITTER_SIGN_FORMS``) still require the
-    ``embed_signature.employee`` opt-in. Everything else never swaps.
+    New snapshots record it as ``submitter_signs``; older ones fall back to the
+    rules their paper was rendered under.
     """
     if submitter_id is None:
         return False
-    if template_id in _SUBMITTER_AUTO_SIGN_FORMS:
+    recorded = signing.get("submitter_signs")
+    if isinstance(recorded, bool):
+        return recorded
+    if template_id in _LEGACY_SUBMITTER_AUTO_SIGN_FORMS:
         return True
-    return template_id in _SUBMITTER_SIGN_FORMS and bool(embed_signature.get("employee"))
+    return template_id in _LEGACY_SUBMITTER_SIGN_FORMS and bool(embed_signature.get("employee"))
 
 
 _TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates"
@@ -1484,6 +1489,26 @@ def _build_template_data(
                 key == "today" and template_id in _MANAGER_SIGN_DATE_FORMS
             ):
                 data[key] = issued
+    if template_id in form_policy.BRANCH_MANAGER_STAGE_FORMS:
+        # Only a completed server-owned approval snapshot can author this section.
+        data.pop("branch_manager_notes", None)
+        data.pop("branch_manager_sig_path", None)
+        stages = signing.get("stages", {}) if isinstance(signing, dict) else {}
+        branch = stages.get("branch_manager") if isinstance(stages, dict) else None
+        if isinstance(branch, dict):
+            data["branch_manager_notes"] = branch.get("note") or ""
+            raw_path = branch.get("signature_path")
+            if isinstance(raw_path, str):
+                path = Path(raw_path)
+                path = path if path.is_absolute() else get_settings().data_dir / path
+                if not path.is_file():
+                    raise AppError(
+                        "SIGNATURE_SOURCE_UNAVAILABLE",
+                        "The frozen branch-manager signature is unavailable.",
+                        http_status=409,
+                    )
+                data["branch_manager_sig_path"] = str(path)
+            data["today"] = branch.get("signed_on") or data.get("today")
 
     # The exit forms use an independent interviewer selection. The UI sends
     # picker IDs as strings; resolve to a Submitter without affecting the
@@ -1682,13 +1707,7 @@ def _build_template_data(
     # ------------------------------------------------------------------
     # 5. Resolve submitter
     # ------------------------------------------------------------------
-    if template_id in _SUBMITTER_REQUIRED_IDS and submitter_id is None:
-        raise AppError(
-            "SUBMITTER_REQUIRED",
-            f"Template {template_id!r} requires a submitter",
-            details={"template_id": template_id},
-        )
-
+    # A submitter is optional on every form; an unknown id is still an error.
     if submitter_id is not None:
         sub_row: Submitter | None = db.get(Submitter, submitter_id)
         if sub_row is None:
@@ -1735,10 +1754,11 @@ def _submitter_sign_path(db: Session, submitter_id: int) -> str | None:
     `stored_sig_path`. Returns None when neither applies — the cell then
     prints blank.
 
-    Used by the leave-related forms in ``_SUBMITTER_SIGN_FORMS``: a picked
-    submitter signs the employee cell in the applicant's place. The Leave
-    Application Form's companion Leave Undertaking keeps the applicant's own
-    signature (it re-uses the untouched ``data``).
+    Used on every form with a Submitter box: a picked submitter signs the
+    employee cell in the applicant's place (see
+    ``_submitter_signs_employee_cell``). The Leave Application Form's companion
+    Leave Undertaking keeps the applicant's own signature (it re-uses the
+    untouched ``data``).
     """
     sub_row = db.get(Submitter, submitter_id)
     if sub_row is None:
@@ -1824,6 +1844,19 @@ def _resolve_attachment_sources(
                         attachment_index=idx,
                         slot_key=spec.slot_key,
                     )
+        original_name = Path(spec.original_name or path.name).name
+        if spec.original_name and (
+            original_name != spec.original_name
+            or Path(original_name).suffix.lower() != path.suffix.lower()
+        ):
+            raise ValidationFailedError(
+                "INVALID_ATTACHMENT_NAME",
+                "An attachment requires its original safe filename",
+                filename=spec.original_name,
+            )
+        from app.services import included_papers_service
+
+        included_papers_service.inspect_paper(path, display_name=original_name)
         resolved.append((spec, path))
     return resolved
 
@@ -1840,6 +1873,80 @@ def _ordered_attachment_specs(
     )
     extras = [item for item in resolved if not item[0].slot_key]
     return [*keyed, *extras]
+
+
+def _validate_attachment_slots(
+    template_id: str,
+    specs: Sequence[GenerateAttachmentSpec],
+    *,
+    require_slots: bool,
+) -> list[form_policy.AttachmentSlot]:
+    slots = form_policy.attachment_slots_of(template_id)
+    slot_keys = {slot.key for slot in slots}
+    for spec in specs:
+        if spec.slot_key and spec.slot_key not in slot_keys:
+            raise ValidationFailedError(
+                "UNKNOWN_ATTACHMENT_SLOT",
+                f"Template {template_id!r} has no attachment slot {spec.slot_key!r}",
+                slot_key=spec.slot_key,
+                template_id=template_id,
+            )
+    if require_slots:
+        missing = [
+            slot.key
+            for slot in slots
+            if slot.required and not any(spec.slot_key == slot.key for spec in specs)
+        ]
+        if missing:
+            raise ValidationFailedError(
+                "REQUIRED_ATTACHMENT_MISSING", ", ".join(missing), slots=missing
+            )
+    return slots
+
+
+def persist_attachment_sources(
+    book: Book,
+    resolved: Sequence[tuple[GenerateAttachmentSpec, Path]],
+    slots: Sequence[form_policy.AttachmentSlot],
+    *,
+    current_user: User | None,
+    data_dir: Path,
+) -> list[Path]:
+    """Copy ordered sources using one metadata convention; return staged files.
+
+    The caller owns the transaction and unlinks returned files only after commit.
+    """
+    from app.services import included_papers_service
+
+    att_dir = data_dir / "book_attachments" / str(book.id)
+    att_dir.mkdir(parents=True, exist_ok=True)
+    persisted: list[dict[str, Any]] = []
+    consumed: list[Path] = []
+    added_at = datetime.now(UTC).isoformat()
+    for spec, src in _ordered_attachment_specs(resolved, slots):
+        original_name = Path(spec.original_name or src.name).name
+        dest = Vault.collision_safe_name(att_dir, f"{spec.slot_key or 'extra'}_{original_name}")
+        shutil.copyfile(src, dest)
+        media_type, page_count = included_papers_service.inspect_paper(
+            dest, display_name=original_name
+        )
+        persisted.append(
+            {
+                "id": str(uuid.uuid4()),
+                "path": dest.relative_to(data_dir).as_posix(),
+                "original_name": original_name,
+                "slot_key": spec.slot_key,
+                "media_type": media_type,
+                "size": dest.stat().st_size,
+                "page_count": page_count,
+                "added_by_user_id": current_user.id if current_user is not None else None,
+                "added_at": added_at,
+            }
+        )
+        if spec.source == "staged":
+            consumed.append(src)
+    book.merged_attachment_paths = persisted
+    return consumed
 
 
 def _freeze_legacy_current_approval_context(db: Session, book: Book, version: BookVersion) -> None:
@@ -1894,7 +2001,7 @@ def generate_document(
     grade: BookGrade = "unclassified",
     converter: artifact_service.PdfConverter | None = None,
     defer_commit: bool = False,
-    notify_employee: bool = True,
+    notify_employee: notify_format.NotifyChoice = None,
 ) -> GenerationResult:
     """Orchestrate the v4 doc generation pipeline.
 
@@ -1938,14 +2045,12 @@ def generate_document(
     actually embedded), scan → ``awaiting_scan``, in_app → auto-submitted
     ``pending`` when a default manager exists.
 
-    ``attachments`` (spec §6): per-slot / free-form sources merged into the
-    combined primary PDF on a committed save. Required slots
-    (``form_policy.attachment_slots_of``) block the commit when absent;
-    sources are resolved before ref allocation (fail fast), persisted under
-    ``book_attachments/{book_id}/``, recorded on
-    ``Book.merged_attachment_paths`` and appended to the primary PDF in slot
-    order then request order. A revise with ``attachments=None`` re-merges
-    the book's existing set; a provided list replaces it.
+    ``attachments`` are appended to previews without consuming staged files.
+    Required slots (``form_policy.attachment_slots_of``) block only commits.
+    Sources resolve before ref allocation, and committed saves persist them under
+    ``book_attachments/{book_id}/`` with metadata on ``Book.merged_attachment_paths``.
+    Both paths append papers in slot order then request order. A revise with
+    ``attachments=None`` re-merges the existing set; a provided list replaces it.
 
     ``return_for_leave_id`` (return-form filing): when set for a Duty Resumption
     generation, the standalone "Duty Resumption" register row is NOT created;
@@ -2123,34 +2228,17 @@ def generate_document(
     # 1c. Attachments (spec §6) — validate slots + resolve sources BEFORE
     # ref allocation so a bad payload fails fast with nothing to roll back.
     # ------------------------------------------------------------------
-    slots = form_policy.attachment_slots_of(template_id)
     attachment_specs = list(attachments or [])
-    slot_keys = {s.key for s in slots}
-    for spec in attachment_specs:
-        if spec.slot_key and spec.slot_key not in slot_keys:
-            raise ValidationFailedError(
-                "UNKNOWN_ATTACHMENT_SLOT",
-                f"Template {template_id!r} has no attachment slot {spec.slot_key!r}",
-                slot_key=spec.slot_key,
-                template_id=template_id,
-            )
-    # Revise with attachments=None reuses the book's stored merged set —
-    # required slots were satisfied when the book was first committed.
     reuse_merged: list[dict[str, Any]] = []
     if revise_book is not None and attachments is None:
         reuse_merged = list(revise_book.merged_attachment_paths or [])
-    elif commit:
-        missing = [
-            s.key
-            for s in slots
-            if s.required and not any(x.slot_key == s.key for x in attachment_specs)
-        ]
-        if missing:
-            raise ValidationFailedError(
-                "REQUIRED_ATTACHMENT_MISSING", ", ".join(missing), slots=missing
-            )
+    slots = _validate_attachment_slots(
+        template_id,
+        attachment_specs,
+        require_slots=commit and not (revise_book is not None and attachments is None),
+    )
     resolved_attachments: list[tuple[GenerateAttachmentSpec, Path]] = []
-    if commit and attachment_specs:
+    if attachment_specs:
         resolved_attachments = _resolve_attachment_sources(
             db,
             attachment_specs,
@@ -2237,19 +2325,33 @@ def generate_document(
         revise_book=revise_book,
     )
 
-    # Chain forms are re-rendered when the manager signs, possibly days later:
-    # freeze the issue date and the employee/submitter signature and notify
-    # choices so the signed copy reproduces this paper (render_signed_artifact).
+    # Forms re-rendered into a manager slot need frozen generation-time issue
+    # dates and employee/submitter choices. Auto forms without a manager slot
+    # retain their authoritative original DOCX when approved instead.
     fields = {k: v for k, v in fields.items() if k != _SIGNING_KEY}
-    if commit and signing_path == "chain" and template_id != "Inmate Conduct Violations":
+    if template_id in form_policy.BRANCH_MANAGER_STAGE_FORMS:
+        fields = {
+            k: v
+            for k, v in fields.items()
+            if k not in {"branch_manager_notes", "branch_manager_sig_path"}
+        }
+    if (
+        commit
+        and signing_path in {"chain", "in_app"}
+        and template_id != "Inmate Conduct Violations"
+    ):
         if revise_book is not None:
             # The revise screen hides the notify switch, so the request flag carries
-            # no choice: keep the newest snapshot's (none: revisions never notified).
+            # no choice: keep the newest snapshot's ("silent" when none: revisions
+            # never notified).
             notify_employee = inherited_notify_employee(revise_book)
+        # True/False: the operator's explicit switch; None: the event default,
+        # resolved by notify_dispatch when the approval sends (or skips) the message.
         fields[_SIGNING_KEY] = {
             "issued": datetime.now().strftime("%d/%m/%Y"),
             "employee": bool(embed_signature.get("employee")),
             "submitter_id": submitter_id,
+            "submitter_signs": _submitter_signs_employee_cell(template_id, submitter_id),
             "notify_employee": notify_employee,
         }
 
@@ -2307,14 +2409,13 @@ def generate_document(
         if resolved:
             data["recipient_name"] = resolved
 
-    # Submitter-sign forms: when a submitter is picked, their signature replaces
-    # the applicant's in the employee-signature cell. Leave forms gate on the
-    # embed checkbox; the Clearance Form (no such checkbox) auto-embeds. See
+    # Submitter forms: a picked submitter's signature replaces the applicant's in
+    # the employee-signature cell, with no employee opt-in needed. See
     # _submitter_signs_employee_cell. The Leave Application Form's companion
     # Leave Undertaking re-uses the shared `data` untouched below, so it keeps
     # the applicant's own signature.
     primary_data = data
-    if _submitter_signs_employee_cell(template_id, submitter_id, embed_signature):
+    if _submitter_signs_employee_cell(template_id, submitter_id):
         assert submitter_id is not None  # _submitter_signs_employee_cell requires it
         primary_data = {
             **data,
@@ -2353,7 +2454,7 @@ def generate_document(
         # pending (fresh specs or a revise reuse) but there is no PDF to merge
         # into. Abort the generation — the transaction rolls back and staged
         # files stay on disk for retry / the 24h TTL purge.
-        if commit and (resolved_attachments or reuse_merged):
+        if resolved_attachments or (commit and reuse_merged):
             artifact_service.cleanup_created(primary_artifact, allowed_root=out_dir)
             raise ValidationFailedError(
                 "GENERATION_PDF_FAILED",
@@ -2674,72 +2775,32 @@ def generate_document(
     # all carry the combined PDF with zero further changes. Consumed staged
     # files are unlinked only after the commit (alongside the B1 loop).
     # ------------------------------------------------------------------
-    merge_sources: list[Path] = []
+    if not commit and resolved_attachments and pdf_path is not None:
+        from app.core.pdf_merge import build_pdf_package
+
+        built = build_pdf_package(
+            pdf_path,
+            [
+                (path, spec.original_name or path.name)
+                for spec, path in _ordered_attachment_specs(resolved_attachments, slots)
+            ],
+        )
+        pdf_path.write_bytes(built.pdf_bytes)
     if commit and _logged_book is not None and pdf_path is not None:
         if resolved_attachments:
-            from app.services import included_papers_service
-
-            att_dir = settings.data_dir / "book_attachments" / str(_logged_book.id)
-            att_dir.mkdir(parents=True, exist_ok=True)
-            persisted: list[dict[str, Any]] = []
-            added_at = datetime.now(UTC).isoformat()
-            for spec, src in _ordered_attachment_specs(resolved_attachments, slots):
-                original_name = Path(spec.original_name or src.name).name
-                if spec.original_name and (
-                    original_name != spec.original_name
-                    or Path(original_name).suffix.lower() != src.suffix.lower()
-                ):
-                    raise ValidationFailedError(
-                        "INVALID_ATTACHMENT_NAME",
-                        "An attachment requires its original safe filename",
-                        filename=spec.original_name,
-                    )
-                dest = Vault.collision_safe_name(
-                    att_dir, f"{spec.slot_key or 'extra'}_{original_name}"
+            superseded_files.extend(
+                str(path)
+                for path in persist_attachment_sources(
+                    _logged_book,
+                    resolved_attachments,
+                    slots,
+                    current_user=current_user,
+                    data_dir=settings.data_dir,
                 )
-                shutil.copyfile(src, dest)
-                media_type, page_count = included_papers_service.inspect_paper(
-                    dest, display_name=original_name
-                )
-                persisted.append(
-                    {
-                        "id": str(uuid.uuid4()),
-                        "path": dest.relative_to(settings.data_dir).as_posix(),
-                        "original_name": original_name,
-                        "slot_key": spec.slot_key,
-                        "media_type": media_type,
-                        "size": dest.stat().st_size,
-                        "page_count": page_count,
-                        "added_by_user_id": (current_user.id if current_user is not None else None),
-                        "added_at": added_at,
-                    }
-                )
-                merge_sources.append(dest)
-                if spec.source == "staged":
-                    # Consumed — unlink post-commit (B1 pattern below).
-                    superseded_files.append(str(src))
-            # A provided list replaces the stored set (old files stay on disk
-            # — earlier versions may reference them; cheap and safe).
-            _logged_book.merged_attachment_paths = persisted
+            )
         elif attachments is not None and revise_book is not None:
             # Explicit empty list on revise clears the stored set.
             _logged_book.merged_attachment_paths = []
-        elif reuse_merged:
-            # Revise with attachments=None: re-merge the existing set into
-            # the freshly generated PDF; the column is left untouched.
-            from app.services import book_service
-
-            for item in reuse_merged:
-                rel_path = item.get("path")
-                src_path = book_service.resolve_attachment_path(rel_path) if rel_path else None
-                if src_path is None:
-                    log.warning(
-                        "merged attachment %s missing for book %s — skipped on re-merge",
-                        rel_path,
-                        _logged_book.id,
-                    )
-                    continue
-                merge_sources.append(src_path)
         db.flush()
 
     # ------------------------------------------------------------------
@@ -2879,10 +2940,8 @@ def generate_document(
         if companion_template_id is not None:
             # NOTE: companions reuse the primary's `data`, so a submitter is only
             # present if one was picked on the primary form. The Leave Undertaking
-            # companion (which lists a submitter when generated standalone) is
-            # rendered WITHOUT enforcing _SUBMITTER_REQUIRED_IDS here — its
-            # adapter (_adapt_leave_undertaking) degrades gracefully, leaving the
-            # submitter block blank rather than failing the whole leave packet.
+            # companion's adapter (_adapt_leave_undertaking) degrades gracefully
+            # without one, leaving the submitter block blank.
             comp_filename = _build_docx_filename(companion_template_id, primary_name, ts)
             companion_artifact = artifact_service.produce_from_template(
                 template_id=companion_template_id,
@@ -3152,6 +3211,44 @@ def _sign_authored_docx(
     return artifact
 
 
+def freeze_stage_signature(
+    version: BookVersion, *, stage: str, signature_path: Path, user_id: int, note: str | None
+) -> dict[str, Any]:
+    """Retain immutable image bytes and facts, independent of later profile edits."""
+    fields = version.fields or {}
+    raw_signing = fields.get(_SIGNING_KEY)
+    if not isinstance(raw_signing, dict):
+        raw_signing = next(
+            (
+                snapshot
+                for earlier in reversed(version.book.versions)
+                if earlier.version_no < version.version_no
+                and isinstance(snapshot := (earlier.fields or {}).get(_SIGNING_KEY), dict)
+            ),
+            None,
+        )
+    signing: dict[str, Any] = dict(raw_signing) if isinstance(raw_signing, dict) else {}
+    raw_stages = signing.get("stages")
+    stages = dict(raw_stages) if isinstance(raw_stages, dict) else {}
+    root = get_settings().data_dir
+    destination = (
+        root
+        / "approval_signatures"
+        / str(version.id)
+        / f"{uuid.uuid4().hex}{signature_path.suffix}"
+    )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(signature_path, destination)
+    stages[stage] = {
+        "signature_path": destination.relative_to(root).as_posix(),
+        "user_id": user_id,
+        "note": note,
+        "signed_on": datetime.now().strftime("%d/%m/%Y"),
+    }
+    signing["stages"] = stages
+    return signing
+
+
 def render_signed_artifact(
     db: Session,
     *,
@@ -3161,13 +3258,14 @@ def render_signed_artifact(
     signer_user_id: int | None = None,
     output_dir: Path | None = None,
     converter: artifact_service.PdfConverter | None = None,
+    signing_snapshot: Mapping[str, Any] | None = None,
+    approval_stage: str | None = None,
 ) -> artifact_service.ArtifactResult:
-    """Re-render ``version``'s document with the signer's signature embedded in
-    the manager slot (``sig1_path``); return the retained ``ArtifactResult``
-    (DOCX path + PDF conversion outcome) — callers select
-    ``.conversion.pdf_path`` or ``.docx_path`` for their existing publication
-    behavior; ``signature_placement_service`` retains BOTH for its paired
-    artifact registry.
+    """Produce the approved artifact, adding the signer's manager signature only
+    when the form has a slot. Forms without one copy the retained original
+    DOCX unchanged, preserving all signatures and generation-time content.
+    Return the retained ``ArtifactResult`` (DOCX + PDF conversion outcome);
+    callers keep their existing publication and paired-artifact behavior.
 
     Reuses the version's stored ``template_id`` + ``fields`` + the book's
     employee. Does NOT allocate a ref, Book, or new version — this is a derived
@@ -3205,8 +3303,28 @@ def render_signed_artifact(
             f"Unknown template {template_id!r}",
             details={"template_id": template_id},
         )
+    if not DocxEngine(get_settings().templates_dir).has_manager_signature_slot(template_id):
+        # Approval adds no drawing to a paper without a manager slot. Its retained
+        # DOCX is authoritative, including pre-snapshot/unmarked signatures and
+        # signatures whose saved profile image has since changed or disappeared.
+        source = _authored_docx_of(db, version)
+        if source is None:
+            raise AppError(
+                "SOURCE_DOCX_MISSING",
+                "ملف الكتاب الأصلي غير موجود على القرص — لا يمكن التوقيع",
+                http_status=409,
+            )
+        out_dir = output_dir or _output_dir_for_admin(template_id)
+        return artifact_service.produce_from_docx(
+            source_path=source,
+            destination=out_dir / f"{source.stem}_signed.docx",
+            converter=converter or convert_docx_to_pdf,
+        )
     employee = db.get(Employee, book.employee_id) if book.employee_id else None
     fields = dict(version.fields or {})
+    if signing_snapshot is not None:
+        # A pre-snapshot paper's recovered choices, render-only (leave_record_sync).
+        fields[_SIGNING_KEY] = dict(signing_snapshot)
     signing = fields.get(_SIGNING_KEY)
     signing = signing if isinstance(signing, dict) else {}
     # Replay the generation's employee/submitter signature choice.
@@ -3241,10 +3359,18 @@ def render_signed_artifact(
         signer_manager_id = db.scalar(select(Manager.id).where(Manager.user_id == signer_user_id))
         if signer_manager_id is not None:
             data = _data(signer_manager_id)
-    if _submitter_signs_employee_cell(template_id, submitter_id, embed_signature):
-        assert submitter_id is not None  # _submitter_signs_employee_cell requires it
+    if _replayed_submitter_signs(template_id, signing, submitter_id, embed_signature):
+        assert submitter_id is not None  # _replayed_submitter_signs requires it
         data["employee_sig_path"] = _submitter_sign_path(db, submitter_id)
-    if template_id in _MANAGER_SIGN_DATE_FORMS:
+    # Administrative Leave's ``today`` is the branch section's date: once the
+    # branch stage is frozen, keep its own signing day (restored by
+    # _build_template_data) rather than the project manager's.
+    branch_date_frozen = (
+        template_id in form_policy.BRANCH_MANAGER_STAGE_FORMS
+        and approval_stage != "branch_manager"
+        and bool(data.get("branch_manager_sig_path"))
+    )
+    if template_id in _MANAGER_SIGN_DATE_FORMS and not branch_date_frozen:
         signed_on = (
             version.signed_at.replace(tzinfo=UTC).astimezone()
             if version.signed_at is not None
@@ -3252,7 +3378,7 @@ def render_signed_artifact(
         )
         data["today"] = signed_on.strftime("%d/%m/%Y")
     # Inject the approver's signature into the manager signature slot.
-    data["sig1_path"] = signer_signature_path
+    data["sig1_path"] = "" if approval_stage == "branch_manager" else signer_signature_path
     if template_id in CLASSIFIED_BOOK_FORMS:
         # No current_user here: the footer keeps the submitter's G-number, as
         # printed on the unsigned paper.

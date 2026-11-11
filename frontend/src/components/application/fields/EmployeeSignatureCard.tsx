@@ -69,11 +69,13 @@ export function EmployeeSignatureCard({
     | boolean
     | undefined)
 
-  // Submitter swap (Leave Application Form, page 1): when a submitter is picked,
-  // their signature (their linked employee's saved signature) replaces the
-  // applicant's in the page-1 employee cell. This card keeps managing the
-  // APPLICANT's signature (page 2 / the undertaking + the no-submitter case);
-  // here we only surface a notice so the operator knows what page 1 will print.
+  // Submitter swap (every form with a Submitter box): when a submitter is
+  // picked, their signature (their linked employee's saved signature, or a
+  // standalone submitter's upload) fills the employee cell instead of the
+  // applicant's, with no applicant signature or embed tick needed. This card
+  // keeps managing the APPLICANT's signature only where it still prints: the
+  // no-submitter case and a companion page (Leave Application → page-2
+  // undertaking).
   const submitterId = useWatch({ control, name: 'submitter_id' }) as
     | string
     | undefined
@@ -87,12 +89,8 @@ export function EmployeeSignatureCard({
     ? submitters.find((s) => String(s.id) === submitterId)
     : undefined
   const submitterEmpId = chosenSubmitter?.employee_id ?? null
-  // Active only when the submitter changes who signs page 1: a different linked
-  // employee, or none at all (→ blank). Self-submit (same employee) is a no-op.
-  const submitterActive =
-    embedOn &&
-    !!chosenSubmitter &&
-    (submitterEmpId === null || submitterEmpId !== employeeId)
+  const submitterActive = !!chosenSubmitter
+  const showEmployeeControls = !submitterActive || hasCompanion
 
   const submitterSigQuery = useQuery({
     queryKey: ['employee-signature', submitterEmpId],
@@ -144,7 +142,8 @@ export function EmployeeSignatureCard({
     <Card className="col-span-1 sm:col-span-2">
       <CardHeader>
         <CardTitle>{t('empSig.title')}</CardTitle>
-        {!query.isLoading &&
+        {showEmployeeControls &&
+          !query.isLoading &&
           (isLoaded ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2.5 py-0.5 text-xs font-semibold text-success">
               ✓ {t('empSig.loaded')}
@@ -205,7 +204,8 @@ export function EmployeeSignatureCard({
             )}
           </div>
         )}
-        {query.isLoading ? (
+        {showEmployeeControls &&
+          (query.isLoading ? (
           <div
             className="h-16 animate-pulse rounded-md bg-surface-tinted"
             data-testid="emp-sig-loading"
@@ -321,7 +321,7 @@ export function EmployeeSignatureCard({
               void onUse(dataUrl, saveToProfile)
             }
           />
-        )}
+          ))}
       </CardContent>
     </Card>
   )

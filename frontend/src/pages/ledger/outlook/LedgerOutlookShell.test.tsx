@@ -69,22 +69,6 @@ vi.mock('./MessageList', () => ({ MessageList: ({ items, onSelect, onBulkTrash, 
     </span>)}
   </div>
 ) }))
-// (the retired SMTP composer is no longer rendered by the shell)
-// Render-prop passthrough: the frame's drag/minimize chrome is not under test,
-// but the compose surface it hosts is.
-vi.mock('./ComposeWindow', () => ({
-  ComposeWindow: ({ children }: { children: (win: unknown) => React.ReactNode }) => (
-    <div data-testid="compose-window">
-      {children({
-        state: 'maximized',
-        minimize: () => {},
-        maximize: () => {},
-        restore: () => {},
-        dragHandleProps: { onPointerDown: () => {} },
-      })}
-    </div>
-  ),
-}))
 vi.mock('./SuggestionBanner', () => ({ SuggestionBanner: () => null }))
 vi.mock('./ReviewSuggestionsSheet', () => ({ ReviewSuggestionsSheet: () => null }))
 vi.mock('./CreateSmartFolderDialog', () => ({ CreateSmartFolderDialog: () => null }))
@@ -252,12 +236,16 @@ describe('LedgerOutlookShell Outlook handoff surface', () => {
     expect(screen.queryByRole('button', { name: 'compose.send' })).not.toBeInTheDocument()
   })
 
-  it('opens compose from ?action=compose and keeps one compose window', async () => {
+  it('opens compose from ?action=compose as a page in place of the mailbox', async () => {
     renderShell('/ledger?action=compose')
-    expect(await screen.findByTestId('compose-window')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('region', { name: 'compose.title.new' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByTestId('message-list')).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'ledger.outlook.newEmail' }))
-    expect(screen.getAllByTestId('compose-window')).toHaveLength(1)
+    await userEvent.click(screen.getByRole('button', { name: 'ledger.outlook.back' }))
+    expect(await screen.findByTestId('message-list')).toBeInTheDocument()
+    expect(screen.getByTestId('location').textContent).toBe('')
   })
 
   it('consumes a route-state basket prefill into the handoff surface', async () => {

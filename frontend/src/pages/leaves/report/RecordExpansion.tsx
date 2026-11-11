@@ -5,25 +5,28 @@
  * status transitions + two-step delete).
  *
  * Available actions are driven by the lifecycle module (actionsFor), so every
- * kind gets the right controls: request rows → Approve/Reject/Cancel; NS rows
+ * kind gets the right controls: request rows → Edit/Approve/Reject/Cancel; NS rows
  * → Delay / Extend / Add certificate (via NsControls); all others → none
  * except delete.
  */
 import { useEffect, useId, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/lib/api'
-import type { LeaveListItem } from '@/lib/api'
+import type { LeaveListItem, LeaveRead } from '@/lib/api'
+import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 
 import { SendButton } from '@/components/notify/SendButton'
 import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
 
 import { actionsFor, canonStatus, displayState, lifecycleGroup } from '../lifecycle'
-import { useLeaveDecisionActions } from '../useLeaveDecisionActions'
+import { leaveApprovalEvent, useApprovalNotify } from '../approvalNotify'
+import { leaveErrorToast, useLeaveDecisionActions } from '../useLeaveDecisionActions'
 import { NsControls } from '../NsControls'
 import { AmendLeaveDialog } from '../AmendLeaveDialog'
+import { EditLeaveDialog } from '../EditLeaveDialog'
 import { ReturnFormDialog } from '../ReturnFormDialog'
 import { StatusBadge } from '../StatusBadge'
 import { BalanceMeters } from './BalanceMeters'
@@ -53,14 +56,16 @@ export function RecordExpansion({
   onRequestClose,
 }: RecordExpansionProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const queryClient = useQueryClient()
   const notesId = useId()
   const [notes, setNotes] = useState('')
-  // Approve-only: notify the employee of the approval (On by default). Reject
-  // and Cancel always notify, so this rides only the Approve mutation.
-  const [notifyEmployee, setNotifyEmployee] = useState(true)
+  // Approve-only notify switch, seeded from the approval event's default.
+  // Reject/Cancel send no choice: the backend applies their event default.
+  const approvalNotify = useApprovalNotify(row.leave_type)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
   const [amendOpen, setAmendOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const cancelDeleteRef = useRef<HTMLButtonElement>(null)
 
   // When the two-step delete swaps to confirm mode, the Delete button that
@@ -76,7 +81,7 @@ export function RecordExpansion({
   // two-step delete confirm strip is showing, Escape backs out of the confirm
   // (the safe choice) instead of collapsing the whole expansion.
   useEffect(() => {
-    if (!onRequestClose) return
+    if (!onRequestClose || editOpen) return
     const close = onRequestClose
     function onKey(e: KeyboardEvent): void {
       if (e.defaultPrevented) return
@@ -91,18 +96,18 @@ export function RecordExpansion({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onRequestClose, confirmDelete])
+  }, [onRequestClose, confirmDelete, editOpen])
 
   const locale = dateLocale(i18n.language)
 
   // Lifecycle-driven actions.
   const isNs = lifecycleGroup(row.leave_type) === 'ns'
 
-  // Fetch NS detail (certificate_path) only for NS rows.
+  // NS needs certificate detail; editing needs notes absent from list rows.
   const nsDetailQuery = useQuery({
     queryKey: ['leave', row.id],
     queryFn: () => api.getLeave(row.id),
-    enabled: isNs,
+    enabled: isNs || editOpen,
   })
 
   const hasCertificate = !!nsDetailQuery.data?.certificate_path
@@ -120,8 +125,7 @@ export function RecordExpansion({
     isNs &&
     displayState(row.leave_type, row.status, row.end_date, today, hasCertificate) === 'AwaitingCertificate'
 
-  // Sick-leave approvals use the sick_leave_registered wording; all others use leave_approved.
-  const sendEvent = lifecycleGroup(row.leave_type) === 'sick' ? 'sick_leave_registered' : 'leave_approved'
+  const sendEvent = leaveApprovalEvent(row.leave_type)
 
   return (
     <>
@@ -131,10 +135,16 @@ export function RecordExpansion({
         <dl className="grid grid-cols-2 content-start gap-x-4 gap-y-3">
           <div className="flex flex-col gap-0.5">
             <dt className={MICRO_LABEL}>{t('leaves.report.filed')}</dt>
-            <dd>
+            <dd className="flex flex-col items-start gap-2">
               <bdi dir="ltr" className="font-mono text-[0.82em] text-foreground">
                 {fmtDayMonthYear(row.created_at, locale)}
               </bdi>
+              {row.submitted_by_g ? (
+                <span className="inline-flex items-baseline gap-1 text-[0.82em] text-muted-foreground">
+                  <span>{t('leaves.report.submittedBy')}</span>
+                  <bdi dir="ltr" className="font-mono tabular-nums">{row.submitted_by_g}</bdi>
+                </span>
+              ) : null}
             </dd>
           </div>
           <div className="flex flex-col gap-0.5">
@@ -189,20 +199,41 @@ export function RecordExpansion({
           {/* Approve-only notify opt-out */}
           {acts.includes('approve') && (
             <NotifyEmployeeToggle
-              checked={notifyEmployee}
-              onChange={setNotifyEmployee}
+              checked={approvalNotify.checked}
+              onChange={approvalNotify.onChange}
               label={t('leaves.notify.label')}
             />
           )}
 
-          {/* Request actions: Approve / Reject / Cancel */}
+          {/* Request actions: Edit / Approve / Reject / Cancel */}
           {hasRequestActions && (
             <div className="flex flex-wrap items-center gap-2">
+              {acts.includes('edit') && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      await queryClient.fetchQuery({
+                        queryKey: ['leave', row.id],
+                        queryFn: () => api.getLeave(row.id),
+                      })
+                      setEditOpen(true)
+                    } catch (err) {
+                      toast.error(...leaveErrorToast(t, err))
+                    }
+                  }}
+                  disabled={updateMutation.isPending || nsDetailQuery.isFetching}
+                  className="rounded-full"
+                >
+                  {t('leaves.edit.action')}
+                </Button>
+              )}
               {acts.includes('approve') && (
                 <Button
                   size="sm"
                   onClick={() =>
-                    updateMutation.mutate({ status: 'Approved', n: notes, notify: notifyEmployee })
+                    updateMutation.mutate({ status: 'Approved', n: notes, notify: approvalNotify.field })
                   }
                   disabled={updateMutation.isPending}
                   className="rounded-full"
@@ -328,6 +359,18 @@ export function RecordExpansion({
       onFiled={onMutated}
     />
     <AmendLeaveDialog open={amendOpen} leave={row} onOpenChange={setAmendOpen} onAmended={onMutated} />
+    {nsDetailQuery.data && (
+      <EditLeaveDialog
+        open={editOpen}
+        leave={nsDetailQuery.data}
+        onOpenChange={setEditOpen}
+        onEdited={() => {
+          const updatedNotes = queryClient.getQueryData<LeaveRead>(['leave', row.id])?.notes ?? ''
+          if (updatedNotes !== (nsDetailQuery.data?.notes ?? '')) setNotes(updatedNotes)
+          onMutated()
+        }}
+      />
+    )}
     </>
   )
 }

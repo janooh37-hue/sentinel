@@ -1,13 +1,13 @@
 import React from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
+const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>(), isLoading: false }))
 
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
     capabilities: capabilityState.allowed,
-    isLoading: false,
+    isLoading: capabilityState.isLoading,
     has: (capability: string) => capabilityState.allowed.has(capability),
   }),
 }))
@@ -25,8 +25,20 @@ vi.mock('@/lib/api', () => ({
         requestable: false,
         default_roles: ['admin'],
       },
+      ...['store.view', 'uniform.view'].map((id) => ({
+        id,
+        domain: id.split('.')[0],
+        label_en: id,
+        label_ar: null,
+        description_en: '',
+        description_ar: null,
+        sensitive: false,
+        requestable: true,
+        default_roles: ['admin'],
+      })),
     ]),
     postCrashReport: vi.fn().mockResolvedValue(undefined),
+    requestPermission: vi.fn().mockResolvedValue({}),
   },
 }))
 vi.mock('@/lib/AuthProvider', () => ({ AuthProvider: ({ children }: { children: React.ReactNode }) => children }))
@@ -56,6 +68,9 @@ vi.mock('@/lib/keyboardShortcuts', () => ({ KeyboardShortcutsProvider: ({ childr
 
 vi.mock('@/pages/books/WordSessionPage', () => ({ WordSessionPage: () => <div>word-session-page</div> }))
 vi.mock('@/pages/books/WordTemplateSessionPage', () => ({ WordTemplateSessionPage: () => <div>word-template-session-page</div> }))
+vi.mock('@/pages/assets/uniform/UniformPage', () => ({
+  UniformPage: () => <div>uniform-page</div>,
+}))
 vi.mock('@/lib/routeLoaders', () => ({
   loadAccessRequestsPage: () => Promise.resolve({ default: () => <div>access-page</div> }),
   loadApplicationPage: () => Promise.resolve({ default: () => <div>application-page</div> }),
@@ -67,6 +82,8 @@ vi.mock('@/lib/routeLoaders', () => ({
   loadDashboardPage: () => Promise.resolve({ default: () => <div>dashboard-page</div> }),
   loadDutyLocationsPage: () => Promise.resolve({ default: () => <div>duty-page</div> }),
   loadEmployeeDetailPage: () => Promise.resolve({ default: () => <div>employee-detail-page</div> }),
+  loadActivityPrintPage: () => Promise.resolve({ default: () => <div>activity-print-page</div> }),
+  loadAttendancePrintPage: () => Promise.resolve({ default: () => <div>attendance-print-page</div> }),
   loadEmployeesOrgTreePage: () => Promise.resolve({ default: () => <div>org-tree-page</div> }),
   loadExpiryPage: () => Promise.resolve({ default: () => <div>expiry-page</div> }),
   loadIntakePage: () => Promise.resolve({ default: () => <div>intake-page</div> }),
@@ -84,6 +101,14 @@ vi.mock('@/lib/routeLoaders', () => ({
   loadVehicleFinesReportPage: () => Promise.resolve({ default: () => <div>vehicle-fines-report-page</div> }),
   loadVehicleMaintenancePage: () => Promise.resolve({ default: () => <div>vehicle-maintenance-page</div> }),
   loadVehiclesHubPage: () => Promise.resolve({ default: () => <div>vehicles-hub-page</div> }),
+  loadStoreDashboardPage: () => Promise.resolve({ default: () => <div>store-dashboard-page</div> }),
+  loadStoreItemsPage: () => Promise.resolve({ default: () => <div>store-items-page</div> }),
+  loadStoreDeliveriesPage: () => Promise.resolve({ default: () => <div>store-deliveries-page</div> }),
+  loadStoreDeliveryScanPage: () => Promise.resolve({ default: () => <div>store-delivery-scan-page</div> }),
+  loadStoreCountsPage: () => Promise.resolve({ default: () => <div>store-counts-page</div> }),
+  loadStoreCountPage: () => Promise.resolve({ default: () => <div>store-count-page</div> }),
+  loadStoreDisposalsPage: () => Promise.resolve({ default: () => <div>store-disposals-page</div> }),
+  loadStoreMovementsPage: () => Promise.resolve({ default: () => <div>store-movements-page</div> }),
   loadScanBackPage: () => Promise.resolve({ default: () => <div>scanback-page</div> }),
   loadSignaturePlacementPage: () =>
     Promise.resolve({ default: () => <div>signature-placement-page</div> }),
@@ -94,6 +119,7 @@ vi.mock('@/lib/routeLoaders', () => ({
 }))
 
 import App from './App'
+import { api } from '@/lib/api'
 
 const routes = [
   ['/employees', ['employees.view'], 'employees-page'],
@@ -121,6 +147,17 @@ const routes = [
   ['/vehicles/edit', ['vehicles.view', 'vehicles.edit'], 'vehicle-edit-page'],
   ['/vehicles/edit/42', ['vehicles.view', 'vehicles.edit'], 'vehicle-edit-page'],
   ['/vehicles/import', ['vehicles.view', 'vehicles.edit'], 'vehicle-import-page'],
+  ['/holdings', ['store.view'], 'store-dashboard-page'],
+  ['/holdings/store', ['store.view'], 'store-dashboard-page'],
+  ['/holdings/uniform', ['uniform.view'], 'uniform-page'],
+  ['/holdings/store/movements', ['store.view'], 'store-movements-page'],
+  ['/holdings/store/items', ['store.view'], 'store-items-page'],
+  ['/holdings/store/deliveries', ['store.view'], 'store-deliveries-page'],
+  ['/holdings/store/deliveries/scan', ['store.view', 'store.edit'], 'store-delivery-scan-page'],
+  ['/holdings/store/counts', ['store.view'], 'store-counts-page'],
+  ['/holdings/store/counts/new', ['store.view', 'store.edit'], 'store-count-page'],
+  ['/holdings/store/counts/7', ['store.view', 'store.edit'], 'store-count-page'],
+  ['/holdings/store/disposals', ['store.view'], 'store-disposals-page'],
 ] as const
 
 function visit(path: string): void {
@@ -130,6 +167,8 @@ function visit(path: string): void {
 
 beforeEach(() => {
   capabilityState.allowed = new Set()
+  capabilityState.isLoading = false
+  vi.mocked(api.requestPermission).mockClear()
 })
 
 afterEach(() => {
@@ -212,6 +251,30 @@ describe('App route capability gates', () => {
     },
   )
 
+  it.each(['store.view', 'store.edit', 'documents.generate'])(
+    'denies delivery scan when %s is the only granted capability',
+    async (capability) => {
+      capabilityState.allowed = new Set([capability])
+      visit('/holdings/store/deliveries/scan')
+      render(<App />)
+
+      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+      expect(screen.queryByText('store-delivery-scan-page')).not.toBeInTheDocument()
+    },
+  )
+
+  it.each(['store.view', 'store.edit'])(
+    'denies /assets/store/counts/new when %s is the only granted capability',
+    async (capability) => {
+      capabilityState.allowed = new Set([capability])
+      visit('/holdings/store/counts/new')
+      render(<App />)
+
+      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+      expect(screen.queryByText('store-count-page')).not.toBeInTheDocument()
+    },
+  )
+
   it('renders /books/approvals for an authenticated user with no capabilities — plain authenticated, not capability-gated', async () => {
     visit('/books/approvals')
     render(<App />)
@@ -242,6 +305,68 @@ describe('App route capability gates', () => {
 
     expect(await screen.findByText("You don't have access to this page")).toBeVisible()
     expect(screen.queryByText('books-page')).not.toBeInTheDocument()
+  })
+})
+
+describe('App Assets landing route', () => {
+  it.each([
+    { caps: ['uniform.view'], pathname: '/holdings/uniform', page: 'uniform-page' },
+    { caps: ['store.view'], pathname: '/holdings/store', page: 'store-dashboard-page' },
+    { caps: ['store.view', 'uniform.view'], pathname: '/holdings/store', page: 'store-dashboard-page' },
+    { caps: [], pathname: '/holdings/store', page: "You don't have access to this page" },
+  ])('chooses the viewable default section for $caps', async ({ caps, pathname, page }) => {
+    capabilityState.allowed = new Set(caps)
+    visit('/holdings')
+    render(<App />)
+
+    expect(await screen.findByText(page)).toBeVisible()
+    expect(window.location.pathname).toBe(pathname)
+    if (caps.length === 0) {
+      expect(screen.queryByText('store-dashboard-page')).not.toBeInTheDocument()
+      expect(screen.queryByText('uniform-page')).not.toBeInTheDocument()
+    } else {
+      expect(screen.queryByRole('button', { name: 'Request access' })).not.toBeInTheDocument()
+    }
+  })
+
+  it('waits for capabilities before choosing the Uniform-only destination', async () => {
+    capabilityState.isLoading = true
+    visit('/holdings')
+    render(<App />)
+
+    expect(window.location.pathname).toBe('/holdings')
+    capabilityState.allowed = new Set(['uniform.view'])
+    capabilityState.isLoading = false
+    visit('/holdings')
+
+    expect(await screen.findByText('uniform-page')).toBeVisible()
+    expect(window.location.pathname).toBe('/holdings/uniform')
+  })
+
+  it.each([
+    { caps: ['uniform.view'], pathname: '/holdings/store', page: 'store-dashboard-page' },
+    { caps: ['store.view'], pathname: '/holdings/uniform', page: 'uniform-page' },
+  ])('keeps the other child protected for $caps', async ({ caps, pathname, page }) => {
+    capabilityState.allowed = new Set(caps)
+    visit(pathname)
+    render(<App />)
+
+    expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+    expect(screen.queryByText(page)).not.toBeInTheDocument()
+    expect(window.location.pathname).toBe(pathname)
+  })
+
+  it('preserves the default Store access request when neither section is viewable', async () => {
+    visit('/holdings')
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Request access' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Request' }))
+
+    await waitFor(() => expect(api.requestPermission).toHaveBeenCalledExactlyOnceWith('store.view'))
+    expect(window.location.pathname).toBe('/holdings/store')
+    expect(screen.queryByText('store-dashboard-page')).not.toBeInTheDocument()
+    expect(screen.queryByText('uniform-page')).not.toBeInTheDocument()
   })
 })
 

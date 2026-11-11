@@ -18,7 +18,7 @@ import {
   canSendForApproval,
   type InmateReporterAction,
 } from '@/components/books/book-detail-drawer-utils'
-import { approverStep } from '@/components/books/reviewers'
+import { approvalStageLabel, approverStep } from '@/components/books/reviewers'
 import { parseUtcMs } from '@/lib/time'
 import { pickEmployeeName } from '@/lib/employeeName'
 
@@ -75,25 +75,26 @@ export type StatusKey =
   | 'reportSeen'
   | 'reportReviewMine'
   | 'reportReviewed'
+  | 'pendingStageMine'
+  | 'pendingStageOther'
 
 /** Full i18n key of a disabled-action explanation. */
 export type ReasonKey =
   | 'books.reason.inFlight'
   | 'books.reason.wordSession'
   | 'books.reason.reviseNoTemplate'
-  | 'books.reason.reviseNoPermission'
   | 'books.reason.reviseNotCurrent'
   | 'books.reason.reviseReporterLocked'
   | 'books.reason.emailNoDoc'
 
-export type ReviseBlockReason = 'noTemplate' | 'noPermission' | 'notCurrent' | 'reporterLocked'
+export type ReviseBlockReason = 'noTemplate' | 'notCurrent' | 'reporterLocked'
 
 export interface NextStepContext {
   /** The user's capability check (`useCapabilities().has`). */
   has: (cap: string) => boolean
   /** `has('books.edit') && book.can_write`. */
   canEdit: boolean
-  /** `has('documents.generate') && book.can_write` — needed for Revise. */
+  /** `has('documents.generate') && book.can_write` — without it Revise and Continue are not offered. */
   canGenerate: boolean
   /** Writable full access AND the live revision (BRP `canMutateCurrent`). */
   canMutateCurrent: boolean
@@ -116,7 +117,7 @@ export interface NextStepContext {
 
 export type ReviseContext = Pick<
   NextStepContext,
-  'canGenerate' | 'canMutateCurrent' | 'isInmateReporter' | 'inmateAction'
+  'canMutateCurrent' | 'isInmateReporter' | 'inmateAction'
 >
 
 export interface NextStep {
@@ -144,13 +145,13 @@ function currentVersionOf(book: BookRead): BookVersionRead | undefined {
 
 /**
  * Why Revise cannot run, or `null` when it can. Splits BRP's `canRevise`:
- * no form template / no generate permission / not the live revision / an
- * inmate reporter whose record has not been returned to them.
+ * no form template / not the live revision / an inmate reporter whose record
+ * has not been returned to them. A user without generate permission is never
+ * offered Revise, so that is not a reason here.
  */
 export function reviseBlockReason(book: BookRead, ctx: ReviseContext): ReviseBlockReason | null {
   const current = currentVersionOf(book)
   if (!current?.template_id || !current.has_fields) return 'noTemplate'
-  if (!ctx.canGenerate) return 'noPermission'
   if (!ctx.canMutateCurrent) return 'notCurrent'
   if (ctx.isInmateReporter && ctx.inmateAction !== 'correct-resubmit') return 'reporterLocked'
   return null
@@ -158,7 +159,6 @@ export function reviseBlockReason(book: BookRead, ctx: ReviseContext): ReviseBlo
 
 const REVISE_REASON_KEYS: Record<ReviseBlockReason, ReasonKey> = {
   noTemplate: 'books.reason.reviseNoTemplate',
-  noPermission: 'books.reason.reviseNoPermission',
   notCurrent: 'books.reason.reviseNotCurrent',
   reporterLocked: 'books.reason.reviseReporterLocked',
 }
@@ -185,13 +185,19 @@ export function relativeAgo(iso: string | null | undefined, now: number, locale:
   return new Date(then).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+// The step that decided the record: the LAST decided approver by step_order
+// (in a branch → project chain the project manager gives final approval).
 function decisionStep(
   steps: BookApprovalStepRead[],
   states: string[],
 ): BookApprovalStepRead | undefined {
   const decided = steps.filter((s) => states.includes(s.state))
-  const approver = decided.find((s) => s.kind !== 'reviewer')
-  return approver ?? decided[0]
+  const approvers = decided.filter((s) => s.kind !== 'reviewer')
+  const last = approvers.reduce<BookApprovalStepRead | undefined>(
+    (acc, s) => (acc === undefined || s.step_order >= acc.step_order ? s : acc),
+    undefined,
+  )
+  return last ?? decided[0]
 }
 
 function step(
@@ -280,10 +286,11 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
     book.can_write &&
     !book.is_word_book &&
     !isInmateReport &&
+    ctx.canGenerate &&
     ctx.canMutateCurrent &&
     (inmate ? ctx.inmateAction === 'edit-submit' : ctx.canEdit)
-  // The same template / permission reasons as Revise; "reporter locked" is
-  // moot here — `canContinue` already requires the reporter's edit rights.
+  // The same template reason as Revise; "reporter locked" is moot here —
+  // `canContinue` already requires the reporter's edit rights.
   const continueBlock = reviseBlockReason(book, ctx)
   const continueKey = continueBlock === 'reporterLocked' ? null : reviseReasonKey(continueBlock)
   const continueDisabled: Partial<Record<ActionId, ReasonKey>> =
@@ -365,9 +372,11 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
     }
 
     case 'pending': {
+      const approver = approverStep(steps)
+      const stage = approvalStageLabel(approver?.stage_label)
       if (deciding) {
         return step(
-          { key: review ? 'reportReviewMine' : 'pendingMine', vars: {} },
+          { key: review ? 'reportReviewMine' : stage ? 'pendingStageMine' : 'pendingMine', vars: stage ? { stage } : {} },
           {
             primary: 'sign',
             decide: true,
@@ -381,12 +390,11 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
           },
         )
       }
-      const approver = approverStep(steps)
-      const vars = { name: name(approver), ago: relativeAgo(book.submitted_at, ctx.now, ctx.locale) }
+      const vars = { name: name(approver), ...(stage ? { stage } : {}), ago: relativeAgo(book.submitted_at, ctx.now, ctx.locale) }
       return step(
         review && vars.name
           ? { key: approver?.seen_at ? 'reportSeen' : 'reportPending', vars }
-          : { key: 'pendingOther', vars },
+          : { key: stage ? 'pendingStageOther' : 'pendingOther', vars },
         {
           secondary: pick([['reroute', canReroute]]),
           overflow: pick([
@@ -446,13 +454,13 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
         { key: state, vars: { name: name(decider) } },
         {
           quote: decider?.note?.trim() ? decider.note : undefined,
-          primary: book.can_write && (inmate || ctx.canEdit) ? 'revise' : undefined,
+          primary: book.can_write && ctx.canGenerate && (inmate || ctx.canEdit) ? 'revise' : undefined,
           overflow: pick([
             ['print', true],
             ['deleteRecord', deleteVisible],
           ]),
           disabled: {
-            ...(book.can_write && reviseKey && (inmate || ctx.canEdit) ? { revise: reviseKey } : {}),
+            ...(book.can_write && ctx.canGenerate && reviseKey && (inmate || ctx.canEdit) ? { revise: reviseKey } : {}),
             ...deleteDisabled('deleteRecord'),
           },
         },

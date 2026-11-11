@@ -1,5 +1,5 @@
 /**
- * Shared leave decision mutations (update status / soft-delete) for the two
+ * Shared leave decision mutations (edit / amend / status / soft-delete) for the two
  * leave-detail surfaces — the desktop `RecordExpansion` and the mobile
  * `LeaveDetailDrawer` (TabRecords). Both previously hand-rolled these and had
  * drifted on cache invalidation (the drawer forgot `leave-balance`, the
@@ -7,13 +7,14 @@
  * stay consistent.
  */
 
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { toast } from '@/lib/toast'
 
 import { api, ApiError, apiErrorMessage } from '@/lib/api'
-import type { LeaveStatus } from '@/lib/api'
+import type { LeaveRead, LeaveStatus, LeaveUpdate } from '@/lib/api'
 
 /** A sign-gated leave keeps its deciding record in the toast's reference chip. */
 export function leaveErrorToast(t: TFunction, err: unknown): Parameters<typeof toast.error> {
@@ -22,6 +23,11 @@ export function leaveErrorToast(t: TFunction, err: unknown): Parameters<typeof t
       reference: String(err.details.ref_number ?? ''),
       description: t('leaves.signGated'),
     }]
+  }
+  if (err instanceof ApiError) {
+    if (err.code === 'LEAVE_DATES_FORBIDDEN') return [t('leaves.edit.errors.datesForbidden')]
+    if (err.code === 'LEAVE_DATES_INVALID') return [t('leaves.edit.errors.datesInvalid')]
+    if (err.code === 'LEAVE_DUPLICATE') return [t('leaves.edit.errors.duplicate')]
   }
   return [apiErrorMessage(err)]
 }
@@ -43,6 +49,7 @@ interface Decisions {
   >
   deleteMutation: UseMutationResult<unknown, Error, void>
   amendMutation: UseMutationResult<unknown, Error, { end_date: string; reason: string }>
+  editMutation: UseMutationResult<LeaveRead, Error, Pick<LeaveUpdate, 'start_date' | 'end_date' | 'notes'>>
 }
 
 export function useLeaveDecisionActions({
@@ -58,13 +65,15 @@ export function useLeaveDecisionActions({
     void qc.invalidateQueries({ queryKey: ['leave', leaveId] })
     void qc.invalidateQueries({ queryKey: ['leaves-list'] })
     void qc.invalidateQueries({ queryKey: ['leave-balance', employeeId] })
+    void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
   }
 
   const updateMutation = useMutation({
     mutationFn: ({ status, n, notify }: { status: LeaveStatus; n: string; notify?: boolean }) =>
-      // notify defaults True — only the Approve action passes False to suppress
-      // that one notification; reject/cancel keep notifying.
-      api.updateLeave(leaveId, { status, notes: n || undefined, notify_employee: notify ?? true }),
+      // Only the Approve action passes an explicit choice, and only when the
+      // operator flipped it away from the event default; reject/cancel omit it
+      // so the backend applies their event default.
+      api.updateLeave(leaveId, { status, notes: n || undefined, notify_employee: notify }),
     onSuccess: (_data, { status }) => {
       invalidate()
       if (status === 'Approved') toast.success(t('leaves.toast.approved'))
@@ -91,11 +100,25 @@ export function useLeaveDecisionActions({
       api.amendLeave(leaveId, { end_date, reason }),
     onSuccess: () => {
       invalidate()
+      void qc.invalidateQueries({ queryKey: ['books'] })
       toast.success(t('leaves.amend.toast'))
       onMutated()
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
-  return { updateMutation, deleteMutation, amendMutation }
+  const editMutation = useMutation({
+    mutationFn: (changes: Pick<LeaveUpdate, 'start_date' | 'end_date' | 'notes'>) =>
+      api.updateLeave(leaveId, changes),
+    onSuccess: (leave) => {
+      qc.setQueryData(['leave', leaveId], leave)
+      invalidate()
+      void qc.invalidateQueries({ queryKey: ['books'] })
+      toast.success(t('leaves.edit.toast'))
+      onMutated()
+    },
+    onError: (err) => toast.error(...leaveErrorToast(t, err)),
+  })
+
+  return { updateMutation, deleteMutation, amendMutation, editMutation }
 }

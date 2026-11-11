@@ -9,7 +9,10 @@
  *   - Each row navigates to `/ledger?mail=ID` and closes the popover so the
  *     destination page can auto-open the entry in its detail drawer.
  *   - The "Mark all read" affordance uses the existing POST endpoint and
- *     invalidates both the unread-count and unread-recent queries.
+ *     invalidates both the unread-count and unread-recent queries. It also
+ *     clears the caller's unseen approval decisions.
+ *   - `GET /api/v1/notifications/decisions` lists approve/reject/return
+ *     decisions on records the caller submitted; opening one marks it seen.
  *
  * There is no shadcn `Popover` primitive in this project; the panel is hand-
  * rolled with the same outside-click / Escape handling used by `AccountMenu`.
@@ -19,14 +22,16 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, CalendarClock, ClipboardCheck, FileInput, Flag, Inbox, Paperclip, Printer, ScanLine, ShieldCheck, Stamp } from 'lucide-react'
+import { ArrowRight, CalendarClock, Check, ClipboardCheck, FileInput, Flag, Inbox, Paperclip, Printer, ScanLine, ShieldCheck, Stamp, Undo2, X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
-import { approvalQueueUrl, defaultApprovalContext } from '@/lib/approvals'
+import { useDecisionNotices } from '@/lib/useDecisionNotices'
+import { pickEmployeeName } from '@/lib/employeeName'
+import { approvalQueueUrl, approvalRecordUrl, defaultApprovalContext } from '@/lib/approvals'
 import { isApprovalsSignalAvailable } from './navCustomization'
 import { useIdentity } from '@/lib/useIdentity'
 import { useAwaitingReturnCount } from '@/pages/leaves/useAwaitingReturnCount'
@@ -55,9 +60,9 @@ function initialsOf(name: string | null | undefined, fallback: string): string {
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
 }
 
-function shortDateLabel(iso: string): string {
-  // Mail-app stamp: time if today, "dd MMM" if older. `Intl.DateTimeFormat` is
-  // locale-aware via the document's html[lang], but we keep it terse here.
+function shortDateLabel(iso: string, locale: string): string {
+  // Mail-app stamp: time if today, "dd MMM" if older, in the selected UI
+  // language (not the browser default).
   try {
     const d = new Date(iso)
     const now = new Date()
@@ -66,9 +71,9 @@ function shortDateLabel(iso: string): string {
       d.getMonth() === now.getMonth() &&
       d.getDate() === now.getDate()
     ) {
-      return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+      return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
     }
-    return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' })
+    return d.toLocaleDateString(locale, { day: '2-digit', month: 'short' })
   } catch {
     return iso.slice(0, 10)
   }
@@ -150,12 +155,35 @@ function DefaultNavBellPopover({ phone }: { phone: boolean }): React.JSX.Element
   const approvalSummary = approvalSummaryQuery.data
   const awaitingApproval = approvalSummary?.actionable_count ?? 0
   const approvalsAvailable = isApprovalsSignalAvailable(approvalSummary)
+  const decisionsQuery = useDecisionNotices()
+  const decisions = decisionsQuery.data?.items ?? []
+  const decisionTotal = decisionsQuery.data?.total ?? 0
+  const moreDecisions = Math.max(0, decisionTotal - decisions.length)
+
+  const openDecision = (item: (typeof decisions)[number]): void => {
+    setOpen(false)
+    navigate(approvalRecordUrl(item.book_id, item.version_id, {
+      tab: 'sent', status: 'all', sort: 'newest', page: 1,
+    }))
+    api
+      .markBookSeen(item.book_id)
+      .then(() => {
+        void qc.invalidateQueries({ queryKey: ['notifications', 'decisions'] })
+        void qc.invalidateQueries({ queryKey: ['books', 'approval-log'] })
+      })
+      .catch((err: unknown) => toast.error(apiErrorMessage(err)))
+  }
 
   const markAllMutation = useMutation({
-    mutationFn: () => api.markAllLedgerRead(),
+    mutationFn: () => Promise.all([
+      ...(canViewLedger ? [api.markAllLedgerRead()] : []),
+      api.markDecisionsSeen(),
+    ]),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['ledger', 'unread-recent'] })
       void qc.invalidateQueries({ queryKey: ['ledger'] })
+      void qc.invalidateQueries({ queryKey: ['notifications', 'decisions'] })
+      void qc.invalidateQueries({ queryKey: ['books', 'approval-log'] })
     },
     onError: (err) =>
       toast.error(apiErrorMessage(err)),
@@ -193,6 +221,7 @@ function DefaultNavBellPopover({ phone }: { phone: boolean }): React.JSX.Element
     awaitingReturn === 0 &&
     scanInbox === 0 &&
     awaitingApproval === 0 &&
+    decisionTotal === 0 &&
     followUps === 0 &&
     scanBackCount === 0 &&
     awaitingViolationMonths === 0 &&
@@ -208,6 +237,7 @@ function DefaultNavBellPopover({ phone }: { phone: boolean }): React.JSX.Element
           awaitingReturn +
           scanInbox +
           awaitingApproval +
+          decisionTotal +
           followUps +
           scanBackCount +
           awaitingViolationMonths +
@@ -231,7 +261,7 @@ function DefaultNavBellPopover({ phone }: { phone: boolean }): React.JSX.Element
             <h3 className="min-w-0 text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
               {t('appBar.notifications', { defaultValue: 'Notifications' })}
             </h3>
-            {totalUnread > 0 && (
+            {(totalUnread > 0 || decisionTotal > 0) && (
               <button
                 type="button"
                 onClick={() => markAllMutation.mutate()}
@@ -361,6 +391,67 @@ function DefaultNavBellPopover({ phone }: { phone: boolean }): React.JSX.Element
               </div>
               <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180 @max-[13rem]:ms-auto" strokeWidth={1.8} />
             </button>
+          )}
+
+          {decisions.length > 0 && (
+            <ul>
+              {decisions.map((item) => {
+                const Icon = item.verdict === 'approved' ? Check : item.verdict === 'returned' ? Undo2 : X
+                const tone = item.verdict === 'approved'
+                  ? 'bg-success-soft text-success'
+                  : item.verdict === 'returned'
+                    ? 'bg-warning-soft text-warning'
+                    : 'bg-accent-soft text-accent'
+                const verdictKey = item.verdict === 'approved' && item.is_report
+                  ? 'books.approval.stateReviewed'
+                  : `books.approval.state${item.verdict[0].toUpperCase()}${item.verdict.slice(1)}`
+                const decider = pickEmployeeName({
+                  name_en: item.decider_name ?? '', name_ar: item.decider_name_ar,
+                }, i18n.language)
+                return (
+                  <li key={`${item.book_id}:${item.version_id}`} className="border-b border-hairline">
+                    <button
+                      type="button"
+                      onClick={() => openDecision(item)}
+                      className="flex w-full items-start gap-3 px-4 py-3 @max-[13rem]:flex-wrap @max-[13rem]:px-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring pointer-coarse:min-h-[44px]"
+                    >
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${tone}`}>
+                        <Icon className="h-4 w-4" strokeWidth={1.8} aria-hidden />
+                      </span>
+                      <span className="flex min-w-0 flex-1 flex-col @max-[13rem]:order-last @max-[13rem]:basis-full">
+                        <span className="truncate text-[0.9em] font-semibold text-foreground">
+                          {t(verdictKey)} · <bdi dir="ltr">{item.ref_number}</bdi>
+                        </span>
+                        {item.subject && (
+                          <span className="mt-0.5 truncate text-xs text-foreground" dir="auto">{item.subject}</span>
+                        )}
+                        <span className="mt-0.5 flex min-w-0 items-center justify-between gap-2 @max-[13rem]:flex-wrap">
+                          <span className="min-w-0 truncate text-xs text-muted-foreground">
+                            {t('nav.bell.decisionBy')} <bdi dir="auto">{decider || t('nav.bell.decisionManager')}</bdi>
+                          </span>
+                          <span className="shrink-0 font-mono text-[0.7em] text-muted-foreground">
+                            {shortDateLabel(item.decided_at, i18n.language)}
+                          </span>
+                        </span>
+                        {item.verdict !== 'approved' && item.note && (
+                          <span className="mt-0.5 truncate text-xs text-muted-foreground/80" dir="auto">{item.note}</span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          {moreDecisions > 0 && (
+            <Link
+              to="/books/approvals?tab=sent"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 border-b border-hairline px-4 py-2.5 text-xs font-medium text-primary hover:bg-surface-tinted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring pointer-coarse:min-h-[44px]"
+            >
+              {t('nav.bell.moreDecisions', { count: moreDecisions })}
+              <ArrowRight className="ms-auto h-3.5 w-3.5 shrink-0 rtl:rotate-180" strokeWidth={1.8} aria-hidden />
+            </Link>
           )}
 
           {/* Signed copy never filed — books.view + books.edit gated */}
@@ -567,7 +658,7 @@ function DefaultNavBellPopover({ phone }: { phone: boolean }): React.JSX.Element
                             )}
                           </div>
                           <span className="shrink-0 font-mono text-[0.7em] text-muted-foreground">
-                            {shortDateLabel(item.entry_date)}
+                            {shortDateLabel(item.entry_date, i18n.language)}
                           </span>
                         </div>
                         <span

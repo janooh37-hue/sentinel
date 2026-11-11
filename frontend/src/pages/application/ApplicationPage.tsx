@@ -30,6 +30,7 @@
  * The RHF useForm instance is reset whenever the selected template changes.
  */
 
+import { ACTIVITY_STATEMENT_QUERY } from '@/pages/employees/statement/statementModel'
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -39,6 +40,7 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import { ChevronLeft, ChevronRight, Eye, Mail, Pencil, QrCode, RotateCcw, Search, ArrowRight, ArrowLeft } from 'lucide-react'
 import { toast } from '@/lib/toast'
 
+import { effectiveNotify, notifyEmployeeField } from '@/lib/notifyChoice'
 import { shouldShowNotifyToggle } from './notifyToggle'
 import { GeneratedSaveActions } from './GeneratedSaveActions'
 import { savedGenerationFromJob, type SavedGeneration } from './savedGeneration'
@@ -70,7 +72,7 @@ import { TemplateForm } from '@/components/application/TemplateForm'
 import { AttachmentsBlock } from '@/components/application/AttachmentsBlock'
 import { ServiceNotificationTab } from '@/components/templates/ServiceNotificationTab'
 import { ServiceDraftTab } from '@/components/templates/ServiceDraftTab'
-import { useMessageTemplates } from '@/lib/messageTemplates'
+import { TEMPLATES_CAP, useMessageTemplates } from '@/lib/messageTemplates'
 import { draftKeysForService, useDraftVariants } from '@/lib/draftTemplates'
 import {
   attachmentsWithSeed,
@@ -85,6 +87,7 @@ import type { AttachmentsState } from '@/components/application/attachmentsState
 import { ApiError } from '@/lib/api'
 import { clearAllDrafts, clearDraft, loadDraft, saveDraft } from '@/lib/formDrafts'
 import { addToBasket, basketLabel, countByFormKind, type EmailBasketItem } from '@/lib/emailBasket'
+import { violationDetailsAr } from '@/lib/violationTypes'
 import { useEmailBasket } from '@/hooks/useEmailBasket'
 import { isQuickActionAllowed } from '@/lib/dashboardLayout'
 import { useCapabilities } from '@/lib/useCapabilities'
@@ -261,9 +264,12 @@ function StandardApplicationPage(): React.JSX.Element {
   const [bodyMode, setBodyMode] = useState<'editor' | 'word'>('word')
   // General Book Word mode: selected boilerplate template (or null for blank).
   const [templateName, setTemplateName] = useState<string | null>(null)
-  // Per-book notify opt-out — On by default; resets per form. Only surfaced for
-  // the 8 notifying forms when global autosend is on (see notifyToggle.ts).
-  const [notifyEmployee, setNotifyEmployee] = useState(true)
+  // Per-book notify switch: the operator's choice (null = untouched) over the
+  // event's default-send setting reported by the message preview. Resets per
+  // form. Only surfaced for notifying forms when global autosend is on (see notifyToggle.ts).
+  const [notifyChoice, setNotifyChoice] = useState<boolean | null>(null)
+  const [notifyDefault, setNotifyDefault] = useState<boolean | undefined>(undefined)
+  const notifyEmployee = effectiveNotify(notifyChoice, notifyDefault)
   // Draft/Save split: tracks which mode the in-flight job is in. The toast +
   // localStorage-clear in JobStatus.onDone branch on this. Stored in a ref
   // (not state) so we don't re-render the form just to flip the flag.
@@ -342,11 +348,13 @@ function StandardApplicationPage(): React.JSX.Element {
   const selectedMeta = templates.find((tpl) => tpl.id === selectedTemplate) ?? null
   const messageTemplates = useMessageTemplates()
   const draftVariants = useDraftVariants()
-  const hasNotificationTab = selectedTemplate !== null && (
+  // Template tabs exist only for users who may edit them (see the permissions skill).
+  const canManageTemplates = has(TEMPLATES_CAP)
+  const hasNotificationTab = canManageTemplates && selectedTemplate !== null && (
     messageTemplates.data?.some((template) => template.services.includes(selectedTemplate)) ||
     selectedMeta?.notifies_employee === true
   )
-  const hasDraftTab = selectedTemplate !== null &&
+  const hasDraftTab = canManageTemplates && selectedTemplate !== null &&
     draftKeysForService(draftVariants, selectedTemplate).length > 0
   const activeTab =
     (requestedTab === 'notification' && hasNotificationTab) ||
@@ -432,7 +440,7 @@ function StandardApplicationPage(): React.JSX.Element {
   )
 
   // Save-book gating: every required slot must be filled before commit.
-  // Preview stays available regardless (it renders the form only).
+  // Preview stays available regardless and includes every attachment supplied.
   const missingSlotKeys = missingRequired(visibleSlots, attachmentsState)
   const firstMissingSlot =
     visibleSlots.find((s) => s.key === missingSlotKeys[0]) ?? null
@@ -513,6 +521,8 @@ function StandardApplicationPage(): React.JSX.Element {
       // (sign=false) from persisting and silently defaulting every later report
       // to unsigned. Mirrors the non-word path (handleJobDone → clearDraft).
       if (selectedTemplate) clearDraft(selectedTemplate)
+      attachmentsDirtyRef.current = false
+      setAttachmentsState(emptyAttachmentsState())
       // NO auto-launch: navigating to ms-word: outside a user gesture raises
       // Chrome's tab-modal protocol prompt that silently swallows every click
       // in the tab while it lingers. The Word page's «Open in Word»
@@ -576,10 +586,9 @@ function StandardApplicationPage(): React.JSX.Element {
       }
     }
 
-    // Attachments ride the committed save only (spec §6: preview stays
-    // attachment-free). An empty list is sent as undefined so a revise with
-    // untouched attachments reuses the book's existing merged set (backend
-    // treats None as "keep").
+    // Preview and Save use the same attachment set. Keep empty lists undefined
+    // so a revise with untouched attachments reuses the book's merged set
+    // (the backend treats None as "keep").
     const attachmentSpecs = toGenerateSpecs(filterStateToSlots(attachmentsState, visibleSlots))
 
     return {
@@ -592,11 +601,11 @@ function StandardApplicationPage(): React.JSX.Element {
       embed_signature:
         Object.keys(embedSignature).length > 0 ? embedSignature : undefined,
       commit,
-      // Per-book notify opt-out — only meaningful on the committed save of a
-      // notifying form; the backend ignores it otherwise.
-      notify_employee: notifyEmployee,
-      attachments:
-        commit && attachmentSpecs.length > 0 ? attachmentSpecs : undefined,
+      // Per-book notify choice — only when the switch is shown, and then only when
+      // it departs from the event default (or the default is unknown); omitted,
+      // the backend applies the default.
+      notify_employee: showNotifyEmployee ? notifyEmployeeField(notifyChoice, notifyDefault) : undefined,
+      attachments: attachmentSpecs.length > 0 ? attachmentSpecs : undefined,
       // Revise mode: only the committed save regenerates a new version under
       // the existing book's ref (the backend requires commit=True for it).
       revise_of_book_id: commit ? reviseBookId ?? undefined : undefined,
@@ -630,6 +639,11 @@ function StandardApplicationPage(): React.JSX.Element {
           toast.error(t('books.word.subjectRequired'))
           return
         }
+        if (missingSlotKeys.length > 0) {
+          toast.error(t('application.attachments.requiredHint', { slot: firstMissingSlotLabel }))
+          return
+        }
+        const attachmentSpecs = toGenerateSpecs(filterStateToSlots(attachmentsState, visibleSlots))
         const managerField = schema?.fields.find((f) => f.type === 'manager_picker')
         const recipientField = schema?.fields.find((f) => f.type === 'recipient_picker')
         const ccField = schema?.fields.find((f) => f.type === 'recipient_multi_picker')
@@ -646,6 +660,7 @@ function StandardApplicationPage(): React.JSX.Element {
           table_rows,
           sign: true,
           grade,
+          attachments: attachmentSpecs.length > 0 ? attachmentSpecs : undefined,
         })
       }
     }
@@ -653,6 +668,11 @@ function StandardApplicationPage(): React.JSX.Element {
     // Report form: author body in Word — route through the Word handoff, same as General Book word mode.
     if (isReportForm) {
       return form.handleSubmit((values) => {
+        if (missingSlotKeys.length > 0) {
+          toast.error(t('application.attachments.requiredHint', { slot: firstMissingSlotLabel }))
+          return
+        }
+        const attachmentSpecs = toGenerateSpecs(filterStateToSlots(attachmentsState, visibleSlots))
         wordSessionMutation.mutate({
           subject: String(values.subject ?? '').trim(),
           recipient_id: (values.recipient_id as number | null | undefined) ?? null,
@@ -661,6 +681,7 @@ function StandardApplicationPage(): React.JSX.Element {
           date: (values.report_date as string | undefined) ?? null,
           cc: [],
           grade,
+          attachments: attachmentSpecs.length > 0 ? attachmentSpecs : undefined,
         })
       })
     }
@@ -744,6 +765,7 @@ function StandardApplicationPage(): React.JSX.Element {
         )
         void qc.invalidateQueries({ queryKey: ['employee-absences'] })
         void qc.invalidateQueries({ queryKey: ['employee-detail'] })
+        void qc.invalidateQueries({ queryKey: [ACTIVITY_STATEMENT_QUERY] })
         void qc.invalidateQueries({ queryKey: ['absence-register'] })
       }
       if (pendingCommitRef.current && selectedTemplate) {
@@ -791,8 +813,9 @@ function StandardApplicationPage(): React.JSX.Element {
     setInmateEntryMode('create')
     setApprovedImport(null)
     pendingNotificationRef.current = undefined
-    // Per-book notify switch is not remembered — each newly-picked form starts On.
-    setNotifyEmployee(true)
+    // Per-book notify switch is not remembered — each newly-picked form starts at its default.
+    setNotifyChoice(null)
+    setNotifyDefault(undefined)
     setSubmitError(null)
     setClassificationCode(null)
     setGrade('unclassified')
@@ -962,8 +985,9 @@ function StandardApplicationPage(): React.JSX.Element {
     setInmateEntryMode('create')
     setApprovedImport(null)
     pendingNotificationRef.current = undefined
-    // Per-book notify switch is not remembered — each newly-picked form starts On.
-    setNotifyEmployee(true)
+    // Per-book notify switch is not remembered — each newly-picked form starts at its default.
+    setNotifyChoice(null)
+    setNotifyDefault(undefined)
     setSubmitError(null)
     setClassificationCode(null)
     setGrade('unclassified')
@@ -983,12 +1007,14 @@ function StandardApplicationPage(): React.JSX.Element {
     }
     if (id === selectedTemplate) return
     // A two-paper service opens on the UI language's paper, unless the user is
-    // switching from its other paper or revising a book.
+    // switching from its other paper, revising a book, or the link asks for the
+    // English paper explicitly (?paper=en, e.g. the Store's HQ material request).
     const pair = PAPER_LANGUAGES.find((p) => p.en === id)
     if (
       pair &&
       isAr &&
       reviseBookId === null &&
+      searchParams.get('paper') !== 'en' &&
       selectedTemplate !== pair.ar &&
       templates.some((tpl) => tpl.id === pair.ar)
     ) {
@@ -1006,6 +1032,7 @@ function StandardApplicationPage(): React.JSX.Element {
     isAr,
     reviseBookId,
     location.search,
+    searchParams,
     handleSelectTemplate,
     resetToGallery,
     navigate,
@@ -1189,6 +1216,7 @@ function StandardApplicationPage(): React.JSX.Element {
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
+      <h1 className="sr-only">{t('nav.services')}</h1>
       <div className="mx-auto w-full max-w-[1320px] flex-1 px-4 pb-10 pt-6 sm:px-8">
         {selectedTemplate === null ? (
           /* ───────────────── Services gallery ───────────────── */
@@ -1557,7 +1585,8 @@ function StandardApplicationPage(): React.JSX.Element {
 
                       {/* Attachments — named slots from the form policy plus
                           free-form extras, on EVERY form (spec 2026-06-11 §6).
-                          Required slots gate Save book (not Preview). */}
+                          Preview includes supplied papers; required slots gate
+                          Save book and Create & open in Word, not Preview. */}
                       <AttachmentsBlock
                         slots={visibleSlots}
                         state={attachmentsState}
@@ -1660,6 +1689,8 @@ function StandardApplicationPage(): React.JSX.Element {
                       signingPath={schemaQuery.data?.signing_path}
                       showNotify={showNotifyEmployee}
                       notifyEmployee={notifyEmployee}
+                      notifyOffByDefault={notifyChoice === null && notifyDefault === false}
+                      onNotifyDefault={setNotifyDefault}
                       previewBody={notifyPayload ? {
                         template_id: notifyPayload.template_id,
                         employee_id: notifyPayload.employee_id ?? null,
@@ -1680,7 +1711,7 @@ function StandardApplicationPage(): React.JSX.Element {
                             })
                           : t('application.saveReadyHint')
                       }
-                      onNotifyChange={setNotifyEmployee}
+                      onNotifyChange={setNotifyChoice}
                       onSave={() => void handleSave()}
                       grade={reviseBookId == null ? grade : undefined}
                       onGradeChange={setGrade}
@@ -1726,6 +1757,10 @@ function StandardApplicationPage(): React.JSX.Element {
                             v.start_date && v.end_date
                               ? `${String(v.start_date)} → ${String(v.end_date)}`
                               : selectedTemplate
+                          const { violations, notes: violationNotes } = violationDetailsAr(
+                            selectedTemplate,
+                            v,
+                          )
                           const item: EmailBasketItem = {
                             bookId: lastSaved.bookId,
                             docId: lastSaved.docId,
@@ -1742,6 +1777,8 @@ function StandardApplicationPage(): React.JSX.Element {
                                 ? leaveType
                                 : undefined,
                             detail,
+                            ...(violations.length > 0 && { violations }),
+                            ...(violationNotes && { violationNotes }),
                           }
                           const { added, key } = addToBasket(item)
                           const kind = basketLabel(key, (k: string) => t(k))
@@ -1972,7 +2009,7 @@ function TabButton({
       className={[
         'relative inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 py-1.5 text-[0.78em] font-medium transition-colors md:min-h-0',
         active
-          ? 'bg-primary-soft text-primary'
+          ? 'bg-primary-soft text-primary-text'
           : 'text-muted-foreground hover:bg-surface-tinted hover:text-foreground',
         disabled ? 'cursor-not-allowed opacity-40' : '',
       ]

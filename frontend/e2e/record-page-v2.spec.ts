@@ -42,6 +42,7 @@ import { fileURLToPath } from 'node:url'
 import type { Locator, Page, Route, TestInfo } from '@playwright/test'
 import { expect, test as base } from '@playwright/test'
 
+import type * as PdfJs from 'pdfjs-dist'
 import type { components } from '../src/lib/api.types'
 
 // ─────────────────────────────── constants ────────────────────────────────
@@ -77,7 +78,6 @@ const PDF_BYTES = readFileSync(
     new URL('../../backend/tests/fixtures/scan_triage/returned-form-text.pdf', import.meta.url),
   ),
 )
-const PDF_BASE64 = PDF_BYTES.toString('base64')
 
 function loadLocale(lang: Lang): Record<string, unknown> {
   return JSON.parse(
@@ -265,6 +265,7 @@ class RecordBackend {
   lang: Lang = 'en'
   aa = 16
   persona: Persona = 'admin'
+  pdfBytes: Buffer = PDF_BYTES
   readonly deleted = new Set<number>()
   readonly deleteRequests: string[] = []
   readonly signRequests: string[] = []
@@ -499,9 +500,9 @@ class RecordBackend {
 
   private pdf(route: Route, url: URL): Promise<void> {
     if (url.searchParams.get('encoding') === 'base64') {
-      return route.fulfill({ status: 200, contentType: 'text/plain; charset=utf-8', body: PDF_BASE64 })
+      return route.fulfill({ status: 200, contentType: 'text/plain; charset=utf-8', body: this.pdfBytes.toString('base64') })
     }
-    return route.fulfill({ status: 200, contentType: 'application/pdf', body: PDF_BYTES })
+    return route.fulfill({ status: 200, contentType: 'application/pdf', body: this.pdfBytes })
   }
 
   private async handle(route: Route): Promise<void> {
@@ -561,6 +562,13 @@ class RecordBackend {
       return void (await this.json(route, { documents_today: 0, documents_week: 0 }))
     }
     if (method === 'GET' && path === '/email/account') return void (await this.json(route, null))
+    if (method === 'GET' && path === '/email/draft-templates') return void (await this.json(route, []))
+    if (method === 'GET' && path === '/books/inbox/summary') {
+      return void (await this.json(route, {
+        unread: 0, received: 0, sent: 0, archived: 0,
+        by_purpose: { info: 0, action: 0, reply: 0, circulate: 0 },
+      }))
+    }
     if (method === 'GET' && path === '/notifications/counts') {
       return void (await this.json(route, { approvals: 0, leaves: 0, scans: 0, emails: 0, monthly_reviews: 0, monthly_approvals: 0 }))
     }
@@ -711,6 +719,7 @@ class RecordBackend {
       if (method === 'GET' && /^versions\/\d+\/signed-document$/.test(rest)) return void (await this.pdf(route, url))
       if (method === 'GET' && /^attachments\/\d+$/.test(rest)) return void (await this.pdf(route, url))
       if (method === 'GET' && rest === 'revision-access') return void (await this.json(route, []))
+      if (method === 'GET' && /^(recipients|thread)$/.test(rest)) return void (await this.json(route, []))
     }
     if (method === 'GET' && /^\/documents\/\d+\/download$/.test(path)) return void (await this.pdf(route, url))
 
@@ -1799,5 +1808,167 @@ test.describe('14: list keys (J / Enter / Ctrl+Enter)', () => {
       await expect(drawer).toContainText(specOf(next).ref)
       await expect(drawer).not.toContainText(specOf(clicked).ref)
     })
+  }
+})
+
+/**
+ * Small, valid PDFs with page-specific coloured corner marks. These are actual
+ * PDF bytes, parsed and painted by the production pdf.js viewer, not canvases
+ * injected by the test. Opposite corners catch clipping as well as blank sheets.
+ */
+function printFixture(landscape: readonly boolean[]): Buffer {
+  const objects: string[] = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Count ${landscape.length} /Kids [${landscape.map((_, i) => `${3 + i * 2} 0 R`).join(' ')}] >>`,
+  ]
+  for (const [i, wide] of landscape.entries()) {
+    const [w, h] = wide ? [842, 595] : [595, 842]
+    const mark = i % 2 === 0 ? '1 0 0' : '0 0.7 0'
+    const content = `${mark} rg 20 ${h - 60} 40 40 re f\n0 0 1 rg ${w - 60} 20 40 40 re f\n`
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] /Resources << >> /Contents ${4 + i * 2} 0 R >>`,
+      `<< /Length ${content.length} >>\nstream\n${content}endstream`,
+    )
+  }
+  let pdf = '%PDF-1.4\n'
+  const offsets = [0]
+  for (const [i, object] of objects.entries()) {
+    offsets.push(Buffer.byteLength(pdf))
+    pdf += `${i + 1} 0 obj\n${object}\nendobj\n`
+  }
+  const xref = Buffer.byteLength(pdf)
+  pdf += `xref\n0 ${offsets.length}\n0000000000 65535 f \n`
+  pdf += offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')
+  pdf += `trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return Buffer.from(pdf)
+}
+
+/** Read and rasterise the browser's PRINT OUTPUT, not the on-screen canvas. */
+async function printedMarks(page: Page, bytes: Buffer): Promise<{ red: number; green: number; blue: number }[]> {
+  return page.evaluate(async (base64) => {
+    const moduleUrl = '/node_modules/pdfjs-dist/build/pdf.mjs'
+    // page.evaluate runs in Chromium, not the Node test module: this loads
+    // the browser-only PDF module and its real worker at that boundary.
+    const pdfjs = await import(moduleUrl) as typeof PdfJs
+    pdfjs.GlobalWorkerOptions.workerSrc = '/node_modules/pdfjs-dist/build/pdf.worker.min.mjs'
+    const loading = pdfjs.getDocument({ data: Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)) })
+    const doc = await loading.promise
+    const marks = []
+    try {
+      for (let i = 1; i <= doc.numPages; i += 1) {
+        const sheet = await doc.getPage(i)
+        const viewport = sheet.getViewport({ scale: 0.5 })
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.ceil(viewport.width)
+        canvas.height = Math.ceil(viewport.height)
+        const ctx = canvas.getContext('2d')!
+        await sheet.render({ canvas, canvasContext: ctx, viewport }).promise
+        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+        const ink = { red: 0, green: 0, blue: 0 }
+        for (let p = 0; p < pixels.length; p += 4) {
+          const [r, g, b] = [pixels[p], pixels[p + 1], pixels[p + 2]]
+          if (r > 180 && g < 80 && b < 80) ink.red += 1
+          if (g > 100 && r < 80 && b < 80) ink.green += 1
+          if (b > 180 && r < 80 && g < 80) ink.blue += 1
+        }
+        marks.push(ink)
+      }
+    } finally {
+      await loading.destroy()
+    }
+    return marks
+  }, bytes.toString('base64'))
+}
+
+test.describe('print output: real record PDF pagination', () => {
+  test.describe.configure({ timeout: 30_000 })
+  for (const lang of LANGS) {
+    for (const cell of [DESKTOP, PHONE]) {
+      for (const fixture of [
+        { name: 'one-page generated', landscape: [false], id: 48, paper: 'generated' },
+        { name: 'multipage generated', landscape: [false, false, false, false], id: 48, paper: 'generated' },
+        { name: 'mixed landscape attachment', landscape: [true, false, true], id: 45, paper: 'scan-0' },
+        ...(lang === 'en' && cell === DESKTOP ? [{
+          name: 'eight-page generated',
+          landscape: Array<boolean>(8).fill(false),
+          id: 48,
+          paper: 'generated',
+        }] : []),
+        ...[1, 1.5, 2].map((zoom) => ({
+          name: `one-page at ${zoom * 100}%`,
+          landscape: [false],
+          id: 48,
+          paper: 'generated',
+          zoom,
+        })),
+      ]) {
+        if ('zoom' in fixture && cell.w < 768) continue
+        test(`${cell.w} ${lang}: ${fixture.name}`, async ({ page, backend }, testInfo) => {
+          backend.pdfBytes = printFixture(fixture.landscape)
+          const outputs: Promise<Buffer>[] = []
+          // Keep window.print real: beforeprint fires from Chromium's own print
+          // pipeline. The callback captures the same document using PrintToPDF,
+          // avoiding an unattended native printer dialog.
+          await page.exposeFunction('captureRecordPrint', () => {
+            const output = page.pdf({
+              path: testInfo.outputPath('printed-record.pdf'),
+              preferCSSPageSize: true,
+              printBackground: true,
+            })
+            outputs.push(output)
+          })
+          await page.addInitScript(() => {
+            window.addEventListener('beforeprint', () => {
+              // Playwright installs this binding before any app script runs.
+              const captureWindow = window as Window & { captureRecordPrint: () => Promise<void> }
+              void captureWindow.captureRecordPrint()
+            }, { once: true })
+          })
+          await boot(page, backend, { lang, cell, aa: 24, path: `/books/${fixture.id}?paper=${fixture.paper}` })
+          await page.waitForLoadState('networkidle')
+          await page.locator('[data-record-paper] canvas').first().waitFor()
+          if (fixture.name === 'one-page generated') {
+            await testInfo.attach('record-before-print.png', {
+              body: await page.screenshot({ animations: 'disabled' }),
+              contentType: 'image/png',
+            })
+          }
+          if ('zoom' in fixture && typeof fixture.zoom === 'number') {
+            await page.getByRole('button', { name: tr(lang, 'books.paper.actualSize'), exact: true }).click()
+            for (let step = 1; step < fixture.zoom; step += 0.25) {
+              await page.getByRole('button', { name: tr(lang, 'books.pane.zoomIn'), exact: true }).click()
+            }
+          }
+          if (cell.w < 768) {
+            await page.locator('[data-dock-more]').click()
+            await page.getByRole('button', {
+              name: `${tr(lang, 'books.record.print')} ${tr(lang, 'books.record.hint.print')}`,
+              exact: true,
+            }).click()
+          } else {
+            await page.getByRole('button', { name: tr(lang, 'books.record.tools'), exact: true }).click()
+            await page.getByRole('menuitem', { name: tr(lang, 'books.record.print'), exact: true }).click()
+          }
+          await expect.poll(() => outputs.length, 'one real window.print call').toBe(1)
+          const pdf = await outputs[0]!
+          await testInfo.attach('printed-record.pdf', { body: pdf, contentType: 'application/pdf' })
+          const marks = await printedMarks(page, pdf)
+          await testInfo.attach('printed-page-marks.json', {
+            body: JSON.stringify(marks),
+            contentType: 'application/json',
+          })
+          expect(marks, 'exactly one sheet per source PDF page, no blank trailing sheet').toHaveLength(fixture.landscape.length)
+          for (const [i, ink] of marks.entries()) {
+            // Phone landscape pages retain a smaller intrinsic raster. Equal
+            // corner marks must both survive, without assuming magnification.
+            const top = i % 2 === 0 ? ink.red : ink.green
+            expect(top, `page ${i + 1} top corner retained in order`).toBeGreaterThan(5)
+            expect(ink.blue, `page ${i + 1} opposite bottom corner retained`).toBeGreaterThan(5)
+            expect(ink.blue / top, `page ${i + 1} neither corner clipped`).toBeGreaterThan(0.7)
+            expect(ink.blue / top, `page ${i + 1} neither corner clipped`).toBeLessThan(1.3)
+          }
+        })
+      }
+    }
   }
 })

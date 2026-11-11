@@ -17,6 +17,15 @@ application only. It is pulled to the office server.
 - Shared vehicle-photo library with reusable named images and lightweight WebP previews
 - Runs as an always-on Windows service on the office LAN
 
+Expanded leave details show the original filer's G-number beside the submission
+date in English and Arabic, including the mobile detail drawer. For generated
+leaves this comes from the first primary document's Record creator, not the
+employee taking leave, the chosen signature representative, or a later approver
+or editor. New manually entered National Service leaves retain the authenticated
+creator's stable user id in their creation audit payload. Legacy/imported leaves,
+older manual entries, and creators without a linked employee show only the date;
+the app does not infer an identity from historical email text.
+
 Email messages, drafts, attachments, and employee-linked mail metadata are private
 to their mailbox owner. Admins can explicitly select **All mail** to read other
 mailboxes (including legacy messages without an owner); editing, deleting,
@@ -36,12 +45,66 @@ designation/contact, and manager signing date do not print because its design
 has no slots. The selected manager fills the center-manager approval; the
 contract-manager and final approvals stay blank for hand signing.
 
+Approval preserves the original generated paper when its form has no manager
+signature slot (including salary-transfer and salary-deduction requests): employee
+signatures, blank signature choices, dates, and other content stay unchanged.
+The manager's approval is recorded without adding a signature to an arbitrary
+position. This also applies to pending older papers without signing snapshots
+or signature markers; the original DOCX must still be available.
+New Material Requests retain their employee-signature choice when the manager
+signs. Existing manager-slot papers without a generation-time signing snapshot
+are not automatically recovered or repaired by this change.
+
+Record printing uses the displayed PDF-canvas surface and waits for every source
+page to paint, including attached and landscape PDF pages. Print media removes
+the viewer's inter-page flex gap, which otherwise creates a blank trailing sheet
+on multipage records. It also resets paper width independently of screen zoom:
+an oversized page box can add a blank sheet and clip content even for a one-page
+record. On-screen spacing and zoom are unchanged.
+The regression runs the actual record Print controls and reads Chromium's printed
+PDF back, checking page count and opposite-corner content in Arabic/English,
+desktop/mobile, and at Fit/100%/150%/200% zoom:
+`pnpm -C frontend exec playwright test e2e/record-page-v2.spec.ts -g "print output"`.
+
 Employee identity links are assigned by administrators during registration
 approval or through user management; accounts cannot claim employee records.
 Linked accounts and manager aliases share the employee's canonical signature.
 Manager settings editors also need `employees.edit` to assign/change an
 employee-linked account or replace/delete its signature; standalone manager
 signatures require only `settings.edit`.
+
+Assets includes bilingual Uniform stock, hand-outs, returns, and employee holdings.
+Users with `uniform.edit` can maintain catalogue metadata and size order, remove
+empty sizes, archive items with history, and delete unused items. Physical counts
+send each size's opening balance with the adjustment; concurrent stock changes
+reject the whole request with `409 uniform_stale_count`. Reopen the item to review
+fresh balances before retrying. Each submitted adjustment line retains its own
+ledger and audit row. Receipt voids reverse the entire receipt, and their history
+shows every affected item and size before confirmation.
+Uniform posting and archive timestamps are serialized with an explicit UTC offset,
+so the browser does not interpret stored UTC values as local wall-clock time.
+Voids cannot change archived items or sizes. History retains archived size labels.
+Background refresh failures keep cached Uniform lists, employee history, search
+results, and every open dialog mounted, with inline errors and Retry actions.
+Draft entries are retained through failures and successful retries. Losing
+`uniform.edit` closes edit drafts and releases pinned recipients and records;
+restoring access does not reopen those discarded drafts.
+The shared Assets entry accepts Store or Uniform view access and opens a permitted
+section. Return deep links identify the exact ledger entry independently of list
+search, and an open void confirmation stays bound to the entry originally chosen.
+Recipient panels stay pinned while a hand-out, return or void draft is open, even
+when a successful refresh removes or reorders the recipient. Posting forms retain
+requested quantities and unavailable selected lines across successful refreshes;
+changed availability blocks submission until the user explicitly revises or clears
+those selections. Removing and re-adding an editor size restores its existing
+draft values and saved identity. Replacing a one-size item with named sizes, or
+named sizes with one size, removes the old empty sizes before creating replacements.
+Saving with a typed, unstaged size validates and stages it without posting changes;
+the keeper reviews the resulting sizes before saving again.
+Uniform catalogue and posting IDs are never reused in SQLite, so open drafts and
+void confirmations cannot silently target a replacement record after deletion.
+Voided employee-history badges retain full opacity and theme-safe text contrast
+on both desktop and phone layouts.
 
 ## Requirements
 
@@ -75,6 +138,42 @@ TypeScript 6 for ESLint and API generation, overrides FortuneSheet's vulnerable
 UUID dependency, and applies the Sileo patch. Run
 `pnpm -C frontend install --frozen-lockfile` to reproduce the dependency set.
 
+### Migration history recovery (0110–0114)
+
+Keep both merged `0110` identities: `0110_employee_statement_prints` and
+`0110_step_outcome_seen` independently follow `0109_book_folder_shares`.
+`0111_step_outcome_seen` reconciles them without DDL; `0112_store` and
+`0113_store_room` retain their IDs and parents. PR #273 had renamed
+the original outcome revision, leaving historical databases unable to resolve
+their version. Restoring that revision, rather than stamping or replaying its
+backfill, preserves unread redecisions and later acknowledgement timestamps.
+Databases already at `0111`, `0112` or `0113` already contain the outcome
+schema and do not rerun the restored ancestor.
+`0114_store_count` now follows `0113_store_room` as the sole head, adding
+nullable item-presentation fields and delivery-only carton contents. It
+backfills only the 13 exact approved item names; official names, recorded
+conversions and existing count/delivery/handover/disposal values are unchanged.
+Downgrading to `0113_store_room` removes only this new presentation/annotation
+schema, not the retained historical revisions or Store ledger.
+
+
+Rehearse recovery only with an explicit isolated Alembic URL. For a production
+schema-only rehearsal, first compare every reconstructed `sqlite_schema`
+object (including FTS shadow objects) with the read-only capture, then seed
+synthetic rows; never export business rows or copy credentials. A database
+whose recorded revision disagrees with its schema needs separate assessment,
+not a stamp, `upgrade heads`, or ad-hoc production DDL. Deployment and live
+database mutations require a separate operator safety decision.
+
+The migration regressions cover empty databases, each historical branch,
+both branch versions, already-reconciled/store versions, preservation of
+existing approval and statement data, integrity/foreign keys and downgrade.
+Downgrading the reconciliation itself retains both historical versions and
+their schema, even when either parent is the named downgrade target. Relative
+`-1` from this merge is ambiguous; use an explicit revision. Downgrading below
+a feature's owning revision removes that feature's columns/tables and data:
+it is not a production rollback strategy.
+
 ## Employee picker permissions
 
 Service forms can look up employee names with `documents.generate` even when
@@ -95,6 +194,19 @@ Dashboard correspondence includes only the caller's email and shared non-email
 entries, even for admins; draft counts are owner-scoped. Employee detail and
 activity also honor `violations.view`, and linked document metadata inherits the
 owning record's exact-revision read policy, including deleted-record restrictions.
+
+## Employee activity statements
+
+Activity print setup excludes leave and absence sections without `leaves.view`,
+and violation sections without `violations.view`, including categories supplied
+directly in the URL or selected with **All**. The same readable selection drives
+the paper, summary, result totals, and issued print's recorded categories.
+Excluded sections appear in the paper's **Not included** scope, never as zero
+entries or **No records**.
+
+Switching employee activity from **All** to **Custom** seeds the current year
+start and retains editable, URL-backed custom dates through printing. Switching
+from a bounded preset preserves its existing dates.
 
 ## Authorization lifecycle
 
